@@ -4,6 +4,9 @@ set -e
 
 IMAGE_NAME=${1:-backend:1.0}
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
+
 # Fail before changing a slot when an image has not been transferred yet.
 docker image inspect "$IMAGE_NAME" >/dev/null
 exec 9>/home/ubuntu/.ody-backend-deploy.lock
@@ -29,6 +32,11 @@ echo "======================================"
 echo " Blue-Green Deployment"
 echo " Image: $IMAGE_NAME"
 echo "======================================"
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "ERROR: $ENV_FILE not found. Create it on this host before deploying."
+    exit 1
+fi
 
 # --------------------------------------------------
 # 1. 현재 활성 포트 확인

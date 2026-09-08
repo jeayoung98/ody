@@ -1,12 +1,6 @@
 server:
   port: 8080
 
-spring:
-  profiles:
-    default: standalone
-    group:
-      local: db
-
 management:
   endpoints:
     web:
@@ -21,10 +15,31 @@ management:
       percentiles-histogram:
         http.server.requests: true
 
+spring:
+  datasource:
+    url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+  data:
+    redis:
+      host: ${REDIS_HOST}
+      port: ${REDIS_PORT}
+      password: ${REDIS_PASSWORD}
+  neo4j:
+    uri: bolt://${NEO4J_HOST}:${NEO4J_PORT}
+    authentication:
+      username: neo4j
+      password: ${NEO4J_PASSWORD}
+
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
+
+#app:
+#  cors:
+#    allowed-origins: ${CORS_ALLOWED_ORIGINS}
 
 ---
 spring:
@@ -36,3 +51,17 @@ spring:
     username: sa
     password:
     driver-class-name: org.h2.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password:
+  neo4j:
+    uri: bolt://localhost:7687
+    authentication:
+      username: neo4j
+      password: test
+
+app:
+  cors:
+    allowed-origins: "*"

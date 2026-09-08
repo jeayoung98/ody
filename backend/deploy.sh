@@ -84,6 +84,8 @@ docker run -d \
     --name "$TARGET_CONTAINER" \
     --restart unless-stopped \
     -p "127.0.0.1:${TARGET_PORT}:8080" \
+    --env-file "$ENV_FILE" \
+    --network ody-internal \
     "$IMAGE_NAME"
 
 # --------------------------------------------------

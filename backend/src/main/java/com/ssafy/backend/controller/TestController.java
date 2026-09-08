@@ -24,4 +24,14 @@ public class TestController {
 	public ApiResponse<List<TestDto>> getTest() {
 		return ApiResponse.success(testService.getAll());
 	}
+
+	@GetMapping("/test/redis")
+	public ApiResponse<String> getTestRedis() {
+		return ApiResponse.success(testService.pingRedis());
+	}
+
+	@GetMapping("/test/neo4j")
+	public ApiResponse<String> getTestNeo4j() {
+		return ApiResponse.success(testService.pingNeo4j());
+	}
 }

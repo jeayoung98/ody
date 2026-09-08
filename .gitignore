@@ -1,6 +1,6 @@
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
+!backend/gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
 
@@ -40,7 +40,7 @@ out/
 .env.*
 !.env.example
 !.env.local.example
-src/main/resources/application-secret.yml
+backend/src/main/resources/application-secret.yml
 
 ### Logs and operating-system files ###
 *.log

@@ -1,50 +1,212 @@
-# [PROJECT_NAME] Constitution
-<!-- Example: Spec Constitution, TaskFlow Constitution, etc. -->
+<!--
+동기화 영향 보고서
+- 버전: 미설정 템플릿 → 1.0.0 (최초 헌법 작성본; 팀 비준 완료를 의미하지 않음)
+- 원칙: 템플릿의 예시 원칙 5개를 사용자 제공 원칙 10개로 교체.
+  명세 우선 / 계약 우선 / 완료 전 검증 / 데이터 재현성 / 좌표 안정성 /
+  탐색 일관성 / 실험 격리 / 관측 가능성 / 암묵적 가정 금지 / 아키텍처 경계.
+- 추가 절: 기존 결정과 문서 충돌, 개발 및 검토 흐름, 거버넌스와 미결정 사항.
+- 삭제: 미확정 템플릿 예시 및 자리표시자. 기존 프로젝트 정책 삭제 없음.
+- 후속 TODO: RATIFICATION_DATE, APPROVAL_PROCESS, AMENDMENT_PROCESS,
+  COORDINATE_MIGRATION, PROMOTION_GATE, ARCHITECTURE_CONTRACTS,
+  FEATURE_DECISIONS, VERIFICATION_PLAN, SOURCE_LINEAGE.
+- 변경 범위: 이 파일만. 템플릿·명세·구현·테스트·기존 문서는 변경하지 않음.
+- 참조 범위: 저장소 문서 스냅샷 및 로컬 검토용 초안. Notion/ERD 정본은 확인하지 않음.
+-->
 
-## Core Principles
+# ODY 엔지니어링 헌법
 
-### [PRINCIPLE_1_NAME]
-<!-- Example: I. Library-First -->
-[PRINCIPLE_1_DESCRIPTION]
-<!-- Example: Every feature starts as a standalone library; Libraries must be self-contained, independently testable, documented; Clear purpose required - no organizational-only libraries -->
+이 문서는 사용자가 제시한 10개 원칙과 저장소에 기록된 팀 결정을 정리한 최초 작성본이다.
+팀 비준 여부와 날짜는 미확인이다. 아래 미결정 사항과 제안은 승인된 정책이 아니다.
+MUST는 의무, MUST NOT은 금지, SHOULD는 권고, MAY는 허용을 뜻한다.
 
-### [PRINCIPLE_2_NAME]
-<!-- Example: II. CLI Interface -->
-[PRINCIPLE_2_DESCRIPTION]
-<!-- Example: Every library exposes functionality via CLI; Text in/out protocol: stdin/args → stdout, errors → stderr; Support JSON + human-readable formats -->
+## 핵심 원칙
 
-### [PRINCIPLE_3_NAME]
-<!-- Example: III. Test-First (NON-NEGOTIABLE) -->
-[PRINCIPLE_3_DESCRIPTION]
-<!-- Example: TDD mandatory: Tests written → User approved → Tests fail → Then implement; Red-Green-Refactor cycle strictly enforced -->
+### I. 명세 우선 (Spec First)
 
-### [PRINCIPLE_4_NAME]
-<!-- Example: IV. Integration Testing -->
-[PRINCIPLE_4_DESCRIPTION]
-<!-- Example: Focus areas requiring integration tests: New library contract tests, Contract changes, Inter-service communication, Shared schemas -->
+- 새 기능과 외부에서 관찰 가능한 동작 변경은 구현 전에 승인된 기능 명세가 있어야 한다(MUST).
+- 기능 명세는 범위와 검증 가능한 인수 기준을 포함해야 한다(MUST).
+- 명세된 동작을 복구하는 버그 수정은 새 명세 대신 기존 명세를 참조할 수 있다(MAY).
 
-### [PRINCIPLE_5_NAME]
-<!-- Example: V. Observability, VI. Versioning & Breaking Changes, VII. Simplicity -->
-[PRINCIPLE_5_DESCRIPTION]
-<!-- Example: Text I/O ensures debuggability; Structured logging required; Or: MAJOR.MINOR.BUILD format; Or: Start simple, YAGNI principles -->
+### II. 계약 우선 (Contract First)
 
-## [SECTION_2_NAME]
-<!-- Example: Additional Constraints, Security Requirements, Performance Standards, etc. -->
+- 프론트엔드·백엔드·데이터 파이프라인·실시간 경계를 넘는 변경은
+  구현 전에 관련 계약을 정의하거나 갱신해야 한다(MUST).
+- 해당하는 API 스키마, 이벤트 페이로드, 데이터 스키마를 계약에 포함해야 한다(MUST).
+- 호환성을 깨는 변경은 영향받는 소비자와 합의된 마이그레이션 또는
+  동시 전환 방식을 문서화해야 한다(MUST).
 
-[SECTION_2_CONTENT]
-<!-- Example: Technology stack requirements, compliance standards, deployment policies, etc. -->
+### III. 완료 전 검증 (Test Before Done)
 
-## [SECTION_3_NAME]
-<!-- Example: Development Workflow, Review Process, Quality Gates, etc. -->
+- 적용 대상 자동화 검사가 통과하기 전에는 작업을 완료로 표시해서는 안 된다(MUST NOT).
+- 변경된 동작은 인수 기준에 따라 검증해야 한다(MUST).
+- 버그 수정에는 실용적으로 가능한 경우 회귀 테스트를 포함하는 것이 좋다(SHOULD).
+- 검증 보고서는 통과·실패·미실행을 구분해야 하며(MUST),
+  미실행 검사를 통과로 보고해서는 안 된다(MUST NOT).
 
-[SECTION_3_CONTENT]
-<!-- Example: Code review requirements, testing gates, deployment approval process, etc. -->
+### IV. 데이터 재현성 (Data Reproducibility)
 
-## Governance
-<!-- Example: Constitution supersedes all other practices; Amendments require documentation, approval, migration plan -->
+- 릴리스한 데이터 산출물에는 식별 가능한 버전과 생성 과정을 재현할 수 있는
+  충분한 계보가 있어야 한다(MUST).
+- 원본 스냅샷 또는 원본 식별자, 처리 코드 버전, 설정, 스키마, 모델 버전을
+  기록해야 한다(MUST).
+- 무작위성을 사용하는 경우 시드를 기록하고, 남아 있는 비결정성을 문서화해야 한다(MUST).
+- 대용량 데이터셋을 Git에 저장할 필요는 없다. 저장 위치와 별개로 재현성 의무는 적용된다.
 
-[GOVERNANCE_RULES]
-<!-- Example: All PRs/reviews must verify compliance; Complexity must be justified; Use [GUIDANCE_FILE] for runtime development guidance -->
+### V. 좌표 안정성 (Coordinate Stability)
 
-**Version**: [CONSTITUTION_VERSION] | **Ratified**: [RATIFICATION_DATE] | **Last Amended**: [LAST_AMENDED_DATE]
-<!-- Example: Version: 2.1.1 | Ratified: 2025-06-13 | Last Amended: 2025-07-16 -->
+- 서빙 좌표는 공개된 동일 좌표계 버전 안에서 일관되게 유지되어야 한다(MUST).
+- 각 버전은 입력 특성 스키마, 학습된 전처리 파이프라인과 차원 축소 모델을
+  식별할 수 있어야 한다(MUST).
+- 서빙 및 실시간 요청 경로에서 해당 모델을 다시 학습해서는 안 된다(MUST NOT).
+- 호환되지 않는 좌표계 버전을 조용히 혼합해서는 안 된다(MUST NOT).
+- 좌표 변경은 합의된 버전 관리 및 마이그레이션 절차를 따라야 한다(MUST).
+  해당 절차가 미정이면 관련 변경 구현 전에 합의가 필요하다.
+
+### VI. 탐색 일관성 (Exploration Consistency)
+
+- 탐색 동작은 현재 적용되는 승인된 기능 명세를 따라야 한다(MUST).
+- 명세는 해당되는 후보 선택·조건 누적·초기화·뒤로 가기 동작을 정의해야 한다(MUST).
+- 백엔드 결과와 프론트엔드 상태는 동일한 규칙을 적용해야 한다(MUST).
+- 구현은 사용자가 선택한 제약을 조용히 확장·폐기·재해석해서는 안 된다(MUST NOT).
+
+### VII. 실험 격리 (Experiment Isolation)
+
+- 실험 데이터셋·모델·설정은 서빙 기준선과 구분할 수 있어야 한다(MUST).
+- 실험이 서빙 기준선을 자동으로 대체해서는 안 된다(MUST NOT).
+- 승격에는 문서화된 평가, 책임 있는 팀원의 명시적 승인,
+  롤백 방안이 필요하다(MUST).
+
+### VIII. 관측 가능성 (Observability)
+
+- 핵심 API·검색·실시간 경로는 측정 가능한 운영 신호를 제공해야 한다(MUST).
+- 관련 기능 계획은 요청량·지연·오류율·전달 지연 등 적용할 지표와
+  그 지표를 확인하는 방법을 명시해야 한다(MUST).
+- 로그와 지표에 비밀정보 또는 불필요한 개인정보를 노출해서는 안 된다(MUST NOT).
+
+### IX. 암묵적 가정 금지 (No Silent Assumption)
+
+- 에이전트는 중요한 제품 동작·공개 계약·아키텍처 결정을 지어내서는 안 된다(MUST NOT).
+- 이 영역에 영향을 주는 미결정 사항은 의존 구현을 진행하기 전에
+  명확화를 요청해야 한다(MUST).
+- 중요한 아키텍처 결정은 합의 후 ADR에 기록해야 한다(MUST).
+  ADR 작성 자체가 승인을 대신하지 않는다.
+- 기존 명세와 아키텍처 경계 안의 일상적인 구현 선택은 자율적으로 할 수 있다(MAY).
+
+### X. 아키텍처 경계 (Architecture Boundaries)
+
+- 코드는 문서화된 모듈 책임과 의존 방향을 지켜야 한다(MUST).
+- 경계를 넘는 접근은 합의된 인터페이스를 사용해야 한다(MUST).
+- 필요한 경계 변경은 의존 구현 전에 문서화하고 합의해야 한다(MUST).
+- 경계가 문서화되지 않았다면 계획 단계에서 해소할 공백으로 식별해야 하며(MUST),
+  임의로 만든 경계를 기존 정책으로 취급해서는 안 된다(MUST NOT).
+
+## 기존 결정과 문서 충돌
+
+### 근거와 보존한 결정
+
+- [문서 안내](../../docs/README.md)는 Notion을 정본, 저장소 문서를 스냅샷으로 규정한다.
+  이 헌법은 그 관계를 변경하거나 Notion의 최신 상태를 확인했다고 주장하지 않는다.
+- [팀 역할 §10](../../docs/team-roles.md)에 기록된 서빙 기준선은
+  `v2.1-pca16`, 6,624,399곡이다. 실험은 별도 후보 버전에서 평가 후 승격한다.
+  이 값은 현재 문서상 기준이며 영구 고정된 버전명이나 실측 검증 결과가 아니다.
+- 팀 역할 §5의 PC 탐색은 PC1–PC2부터 두 축씩 진행하며 이전 선택 조건을 누적한다.
+  다음 단계 후보는 이전 후보의 부분집합이다: `candidate(N+1) ⊆ candidate(N)`.
+  탐색 도중 PCA를 재계산하지 않는다. 공개 단계 수와 복귀·초기화 세부 정책은 별도 합의 대상이다.
+- 팀 역할 §2~9의 담당 체계를 유지한다: BE4 재영은 Data/Retrieval/Platform,
+  BE1 준서는 Core, BE2 효정은 Discovery, BE3 지원은 Realtime,
+  FE1 주하는 Exploration, FE2 유진은 Service/Realtime을 담당한다.
+  Primary Owner는 설계·계약·구현 상태를 파악하고 변경 시 관련 팀원과 협의한다.
+- BE4의 검색 엔진·거리·인덱스·평가와 BE2의 탐색 업무 규칙·필터·검색 호출·API 책임을 보존한다.
+  이 업무 분담만으로 코드 모듈 구조나 내부 호출 프로토콜이 확정된 것은 아니다.
+- [요구사항 §6](../../docs/requirements.md)의 확정 항목인 지도 조회·렌더링 2초,
+  유사곡 검색 응답 1초, 경로 생성 응답 3초 목표를 보존한다.
+  백분위·부하·측정 환경은 미정이며 따라가기 1초 목표는 아직 논의 필요 상태다.
+- 같은 절의 토큰 기반 접근 제어, 비공개 계정 좌표·접속 상태 비노출,
+  모든 통신 암호화, 반응 비영속 보존, 실패 요청·배치 결과 기록 결정을 보존한다.
+- [API 명세](../../docs/api-spec.md)의 문서상 계약은 camelCase,
+  `success/data/error` 응답, 본인 식별 시 토큰 주체 사용이다.
+  아래 충돌과 공백은 이 작성 작업에서 계약 변경으로 해결하지 않는다.
+
+### 발견된 충돌·불일치
+
+| 항목 | 근거와 차이 | 이번 작성의 처리 |
+| --- | --- | --- |
+| 로그인 제공자 | 요구사항 §4 AUTH-01은 Spotify 소셜 로그인 확정, API §1.1은 Google 로그인 | 제공자를 임의 선택하지 않고 정본 간 합의 확인 대상으로 기록 |
+| 소셜 MVP 범위 | 기획서 §7.2·요구사항 §3.2는 프로필·팔로우 제외, 요구사항 §4는 프로필·팔로우 표시를 포함하며 API §2는 SNS 팔로우 제공 | 범위 확장 승인으로 간주하지 않음. 실시간 따라가기와 SNS 팔로우를 구분 |
+| 페이지 크기 | API §0.3 본문은 10 고정, 공통 및 목록 응답 예시는 size 20 | 계약 내 불일치로 기록; 예시나 본문을 임의 수정하지 않음 |
+| 좌표 변경 범위 | 요구사항 §1.3·§6은 좌표 불변을 버전 한정 없이 서술, 새 원칙은 버전 안의 불변과 합의된 버전 전환 허용 | 새 원칙을 반영하되 기존 문서와 버전 전환의 관계를 합의할 항목으로 남김 |
+| PC·축 설명 | 요구사항 §1.3은 주성분을 하나씩 적용, 팀 역할 §5는 두 축씩 탐색; 기획서 §9는 원측정값 두 축을 설명 | 두 축씩 탐색하는 팀 결정 보존. 레이어·표시축·라벨 의미의 정본 정합화 필요 |
+| 데이터 규모 | 기획서·요구사항 개요는 약 920만 곡, 팀 역할 §10의 서빙 기준선은 6,624,399곡 | 현재 서빙 기준선 기록을 보존. 모집단과 서빙 집합 차이인지 확인 필요 |
+| 확정 상태 | 기획서·요구사항 부록의 여정 단위는 미정이나 요구사항 JOURNEY-01·API §3.3은 곡→곡·최대 30곡 | 구체적으로 일치하는 결정을 보존하고 오래된 부록의 상태 정리 필요를 기록 |
+| 식별자 | 요구사항 §4에서 USER-04와 SOCIAL-10이 서로 다른 기능에 중복 사용 | 기능 추적 시 ID만으로 동일 기능을 가정하지 않음; 정본 ID 정리 필요 |
+
+로컬 `local-api-drafts/ODY-map-api-v0.1.md`는 팀 검토용 계약 제안이다.
+정본 스냅샷과 경로·ID 타입·페이지네이션 등이 다르지만 승인된 대체 계약이 아니다.
+사각형 선택, 반열린 구간, 커서, 공개 8단계, 상태 복원 방식 등 초안의 세부 제안은
+이 헌법의 확정 정책으로 채택하지 않는다. 기획서의 '운영 정책 (초안)' 및 기술 가능성에
+열거된 기술 역시 별도 근거 없이 확정 아키텍처로 승격하지 않는다.
+
+## 개발 및 검토 흐름
+
+- 팀 역할 §11의 작은 종단 간 흐름을 연결하는 Vertical Slice 방식을 유지한다.
+  첫 흐름은 로그인 → 온보딩 → 장르 → PC1–PC2 → 영역 선택 → PC3–PC4 → 곡 선택이며,
+  이후 Nearby → Journey → Realtime 순으로 확장한다. 이는 각 기능 명세 승인을 대체하지 않는다.
+- 계약 협의 조합은 팀 역할 §12를 유지한다:
+  Core는 BE1·FE2, Discovery는 BE2·FE1·BE4, Realtime은 BE3·FE2·FE1이다.
+  문서의 `contracts/openapi/`, `contracts/websocket/`, `contracts/data/`는 예시 경로다.
+- PR 검토는 팀 역할 §13의 Primary Reviewer 체계를 유지한다.
+
+| 변경 영역 | 기존 Primary Reviewer |
+| --- | --- |
+| Core Backend | 다른 Backend 1명 |
+| Discovery Backend | BE4 재영 |
+| Data / Search | BE2 효정 |
+| Realtime | BE1 준서 또는 BE4 재영 |
+| Map Frontend | FE2 유진 |
+| Service Frontend | FE1 주하 |
+
+- 계획과 검토에서는 해당하는 헌법 의무의 충족 근거와 미해결 사항을 확인해야 한다(MUST).
+  명세 승인·계약 합의·인수 기준 검증·운영 지표와 데이터/좌표 변경 영향이 확인 대상이다.
+- 팀 역할 §14의 정량 평가 방향을 유지한다. 적용 가능한 검색 Recall@K·지연·메모리,
+  API 지연·TPS, 실시간 연결 수·이벤트 지연·재연결 지표를 남기는 것이 좋다(SHOULD).
+  임의의 도구, 커버리지 수치 또는 성능 백분위 기준을 새 필수 정책으로 정하지 않는다.
+
+## 거버넌스
+
+이 헌법의 범위는 엔지니어링 원칙이다. 제품 요구사항·공개 계약의 충돌을 자동 해결하거나
+기존 정본의 우선순위를 변경하지 않는다. 본문에 보존한 결정도 새 자료와 충돌하면
+원칙 IX에 따라 확인하며, 미결정 사항에 의존하지 않는 작업은 계속할 수 있다.
+
+헌법 개정은 변경 내용·사유·영향과 관련 합의를 기록한 후 반영하는 것이 좋다(SHOULD).
+정확한 승인권자·승인 수단·정족수는 미정이며 기존 PR Reviewer가 헌법이나 기능 명세의
+최종 승인권자라고 추정하지 않는다.
+
+이 작성본의 문서 버전은 `1.0.0`이다. 이전 파일은 값이 없는 템플릿이므로 최초 버전으로 표시했다.
+후속 개정은 의미적 버전 관리(MAJOR: 비호환 원칙 변경·삭제, MINOR: 원칙·의무 확장,
+PATCH: 의미 변화 없는 문구 정정)를 사용하는 것이 좋다(SHOULD).
+이는 좌표계·데이터·API의 버전 규칙을 정하는 것이 아니다.
+
+### 미결정 사항 — 승인된 정책 아님
+
+- TODO(RATIFICATION_DATE): 팀 비준 여부와 최초 비준 날짜를 확인한다. 작성 날짜를 비준일로 대체하지 않는다.
+- TODO(APPROVAL_PROCESS): 기능 명세의 승인권자, 승인 기록 위치·방식,
+  현재 적용되는 승인 명세를 식별하는 방법을 합의한다.
+- TODO(AMENDMENT_PROCESS): 헌법 개정의 승인권자와 절차, 문서 충돌 조정 방법을 합의한다.
+- TODO(COORDINATE_MIGRATION): 좌표계 버전 식별·전달 방식, 데이터 버전과의 관계,
+  호환성 판정, 전환·기존 탐색 상태 처리·구버전 지원·롤백 절차를 합의한다.
+- TODO(PROMOTION_GATE): 실험 승격 평가 기준과 명시적 승인 담당자·기록 방식,
+  서빙 기준선 복구 방법을 합의한다. BE4의 영역 책임만으로 단독 승인권을 추정하지 않는다.
+- TODO(ARCHITECTURE_CONTRACTS): 업무 분담을 바탕으로 실제 모듈 책임·의존 방향,
+  데이터/검색 접근 및 실시간 이벤트 계약, ADR 위치를 계획 단계에서 문서화·합의한다.
+- TODO(FEATURE_DECISIONS): 위 충돌을 정리하고 온보딩 입력·초기 좌표,
+  장르 계층·공개 PC 단계·축 라벨·후보 선택·초기화·복귀·주변 탐색 장르 조건,
+  따라가기 조작 범위·인원 상한·지연·모바일 범위를 관련 명세에서 확정한다.
+  `/music/major` 계약은 누적 조건·복귀·버전 의미를 충분히 정의하지 않는다.
+  곡→곡 여정과 최대 30곡은 기존 일치 결정으로 보존하되 세부 경로 정책은 확인한다.
+- TODO(VERIFICATION_PLAN): 각 기능의 자동화 검사 목록·실행 환경·인수 기준 대응,
+  운영 지표 확인 방법·부하·측정 구간·백분위·성능 예산을 계획에 정의한다.
+- TODO(SOURCE_LINEAGE): 원본 순차 처리 후 삭제 정책과 재현성을 함께 만족하도록
+  원본 식별자의 재취득 가능성, 필요한 스냅샷·학습 모델·설정의 보관 위치와 보존 방법을 확인한다.
+  원본 삭제 자체를 금지하거나 식별자만으로 재현 가능하다고 가정하지 않는다.
+
+**버전**: 1.0.0 | **비준일**: TODO(RATIFICATION_DATE): 미확인 | **최종 개정일**: 2026-09-08

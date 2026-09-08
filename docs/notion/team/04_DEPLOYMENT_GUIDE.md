@@ -47,7 +47,7 @@ curl -fsS https://j15a405.p.ssafy.io/actuator/health/dependencies
 ## 실패했다면
 
 Jenkins에서 실패 Stage와 build number를 기록합니다. app-node에서 target container log와 Nginx active port를
-확인합니다. `deploy.sh`는 새 버전 health/Nginx 검증 실패 시 기존 port로 되돌리도록 구성돼 있습니다.
+확인합니다. `backend/deploy.sh`는 새 버전 health/Nginx 검증 실패 시 기존 port로 되돌리도록 구성돼 있습니다.
 
 원인을 모른 채 같은 배포를 반복하거나 container를 전부 삭제하지 않습니다. 직전 정상 image로 수동 rollback은
 인프라 담당자와 image tag를 확인한 뒤 수행합니다.
@@ -57,5 +57,5 @@ Jenkins에서 실패 Stage와 build number를 기록합니다. app-node에서 ta
 Frontend는 별도 Jenkins job이 `npm ci`, lint, test, build를 수행한 뒤 정적 artifact를 app-node에 전달합니다.
 `/var/www/ody/releases/<BUILD_NUMBER>`는 배포 후 수정하지 않고, `current` symlink만 원자적으로 바꿉니다.
 
-Frontend rollback은 app-node에서 `sudo ./deploy-frontend.sh rollback`으로 직전 `previous` release를 다시
+Frontend rollback은 app-node에서 `sudo ./frontend/deploy.sh rollback`으로 직전 `previous` release를 다시
 가리키게 합니다. 이 과정은 Backend Blue-Green container나 DB volume을 변경하지 않습니다.

@@ -14,7 +14,7 @@ Client -> Nginx -> active container
 
 8081/8082는 loopback bind이며 public에 열지 않는다.
 
-## deploy.sh 변수
+## backend/deploy.sh 변수
 
 | 변수 | 역할 |
 |---|---|
@@ -51,7 +51,7 @@ Client -> Nginx -> active container
 ## Nginx 원본과의 계약
 
 Nginx template은 upstream에 정확한 형식 `server 127.0.0.1:8081;`을 유지한다. 이 형식을 바꾸면
-deploy.sh의 grep/sed 계약을 함께 검증해야 한다. live Nginx를 변경할 때는 active port와 rollback
+`backend/deploy.sh`의 grep/sed 계약을 함께 검증해야 한다. live Nginx를 변경할 때는 active port와 rollback
 가능한 이전 설정을 먼저 기록한다. Repository는 Nginx provisioning template을 더 이상 보관하지 않는다.
 
 ## 수동 진단

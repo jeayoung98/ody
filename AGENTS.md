@@ -86,6 +86,10 @@ docker ps
 
 ```text
 backend/Dockerfile
+backend/Jenkinsfile
+backend/deploy.sh
+frontend/Jenkinsfile
+frontend/deploy.sh
 infra/local/
 infra/k6/
 ops/

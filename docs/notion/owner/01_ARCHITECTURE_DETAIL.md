@@ -8,7 +8,7 @@
 ```text
 GitLab -> master HTTPS webhook -> Jenkins
        -> Java 17 test/build -> Docker save/SSH/load
-       -> app deploy.sh -> inactive health -> Nginx switch
+       -> app backend/deploy.sh -> inactive health -> Nginx switch
 
 Client HTTPS -> active Backend -> PostgreSQL source of truth
                               -> Neo4j graph projection

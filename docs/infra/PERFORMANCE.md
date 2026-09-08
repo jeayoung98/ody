@@ -14,7 +14,7 @@ sudo bash ops/performance/run.sh zero-downtime backend:<tested-tag>
 
 runner는 k6 2.2.0을 고정하고 private app URL을 기본으로 사용한다. API_PATH/BASE_URL은 환경변수다.
 smoke(1 VU/15s), baseline(2 VU/30s), load(10->30 VU/11m), zero-downtime(10 req/s/60s).
-zero-downtime은 Jenkins 사용자 기존 SSH key로 deploy.sh를 호출한다. k6에는 credential을 전달하지 않는다.
+zero-downtime은 Jenkins 사용자 기존 SSH key로 `backend/deploy.sh`를 호출한다. k6에는 credential을 전달하지 않는다.
 배포 전후 upstream 포트 변경을 검사하고 image ID, container state와 로그를 기록한다.
 failed requests=0, checks=100%, dropped iterations=0를 무중단 합격 기준으로 사용한다.
 

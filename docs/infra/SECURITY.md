@@ -19,7 +19,7 @@ PEM/SSH private key, GitLab/Jenkins credential, DB/Neo4j/Grafana password, TLS p
 |---|---|---|
 | `/etc/ody/postgres.env` | root 0600 | PostgreSQL Compose/backup scripts |
 | `/etc/ody/neo4j.env` | root 0600 | Neo4j Compose/backup scripts |
-| `/etc/ody/backend.env` | root:ubuntu 0640 | deploy.sh의 Backend container |
+| `/etc/ody/backend.env` | root:ubuntu 0640 | `backend/deploy.sh`의 Backend container |
 | `/etc/ody/monitoring.env` | root 0600 | master monitoring Compose |
 
 운영 secret은 서버에서만 관리하며 Repository 도구는 생성·회전·출력하지 않는다.

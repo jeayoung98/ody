@@ -17,19 +17,24 @@
 | Monitoring | Prometheus, Grafana, Node Exporter | Node Exporter | targets/dashboard VERIFIED |
 | TLS | webhook HTTPS | Backend HTTPS | Certbot renew dry-run VERIFIED |
 | Recovery | control plane/monitoring | worker/backend/DB | sequential reboot VERIFIED |
-| Frontend CI/CD | separate Jenkinsfile prepared | static release deploy prepared | SERVER ROLLOUT PENDING |
+| Backend Pipeline path | Jenkins job uses existing root path | Repository target is `backend/Jenkinsfile` | JENKINS UPDATE PENDING |
+| Frontend CI/CD | `frontend/Jenkinsfile` prepared | static release deploy prepared | SERVER ROLLOUT PENDING |
 
 ## Repository 역할
 
 Repository는 서버 최초 provisioning 원본을 더 이상 보관하지 않는다. 계속 사용하는 항목만 유지한다.
 
-- CI/CD: `Jenkinsfile`, `deploy.sh`, `backend/Dockerfile`
-- Frontend CI/CD: `Jenkinsfile.frontend`, `deploy-frontend.sh`, `frontend`
+- Backend CI/CD: `backend/Jenkinsfile`, `backend/deploy.sh`, `backend/Dockerfile`
+- Frontend CI/CD: `frontend/Jenkinsfile`, `frontend/deploy.sh`
 - Local dependencies: `infra/local`, `.env.local.example`, `scripts/local`
 - Performance scenarios: `infra/k6`, `ops/performance`
 - Runtime operations: `ops/backup`, `ops/restore`, `ops/verify`
 - Dashboard reference: `observability/dashboards`
 - Backend environment contract: `application*.yml`
+
+Backend Jenkins job의 Script Path를 `backend/Jenkinsfile`로 바꾸고 app-node checkout에
+`backend/deploy.sh`가 도착한 뒤 실제 build를 재검증해야 한다. Frontend job 생성과 app-node Nginx static
+routing도 아직 실제 서버에 반영되지 않았다.
 
 Hadoop/Spark/systemd/Nginx/production DB/Monitoring의 실제 설정은 각 서버 경로에 적용 완료된 운영 상태다.
 Repository에서 재설치하거나 자동 동기화하지 않는다.

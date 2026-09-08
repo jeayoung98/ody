@@ -76,7 +76,7 @@ ssh \
     -o BatchMode=yes \
     -o StrictHostKeyChecking=yes \
     "${DEPLOY_USER}@${DEPLOY_HOST}" \
-    "cd '${APP_DIR}' && test -x ./deploy.sh && ./deploy.sh '${IMAGE_NAME}:${BUILD_NUMBER}'"
+    "cd '${APP_DIR}' && test -x ./backend/deploy.sh && ./backend/deploy.sh '${IMAGE_NAME}:${BUILD_NUMBER}'"
 '''
             }
         }

@@ -3,7 +3,8 @@
 /.gitattributes text eol=lf
 /.gitignore text eol=lf
 /backend/Dockerfile text eol=lf
-/Jenkinsfile text eol=lf
+/backend/Jenkinsfile text eol=lf
+/frontend/Jenkinsfile text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 *.js text eol=lf

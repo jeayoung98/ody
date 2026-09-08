@@ -24,7 +24,7 @@ if [[ "$scenario" == zero-downtime ]]; then
     k6run >"$result/k6.log" 2>&1 &
     load_pid=$!
     sleep 10
-    if ! "${sshcmd[@]}" "cd /home/ubuntu/S15P21A405 && ./deploy.sh '$image'" >"$result/deploy.log" 2>&1; then
+    if ! "${sshcmd[@]}" "cd /home/ubuntu/S15P21A405 && ./backend/deploy.sh '$image'" >"$result/deploy.log" 2>&1; then
         wait "$load_pid" || true
         echo "FAIL: deployment; inspect $result"; exit 1
     fi

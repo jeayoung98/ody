@@ -1,17 +1,17 @@
 # Backend Deployment
 
-루트 `Jenkinsfile`, `deploy.sh`와 `backend/Dockerfile`이 지속적으로 사용하는 배포 원본이다.
+`backend/Jenkinsfile`, `backend/deploy.sh`, `backend/Dockerfile`이 Backend 배포 원본이다.
 
 ```text
 Git push -> GitLab webhook -> Jenkins
 -> Java 17 Gradle test -> backend:<BUILD_NUMBER> image
--> docker save/SSH/load -> app deploy.sh
+-> docker save/SSH/load -> app backend/deploy.sh
 -> inactive Blue/Green slot + ody-internal + /etc/ody/backend.env
 -> health/dependencies -> Nginx test/reload -> public HTTPS health
 -> old slot remove
 ```
 
-Blue는 `127.0.0.1:8081`, Green은 `127.0.0.1:8082`에 bind한다. `deploy.sh`는 exclusive lock을
+Blue는 `127.0.0.1:8081`, Green은 `127.0.0.1:8082`에 bind한다. `backend/deploy.sh`는 exclusive lock을
 사용하고 image/network/env를 preflight한다. Nginx 전환이나 최종 health가 실패하면 이전 upstream을
 복원한다.
 
@@ -19,7 +19,7 @@ Blue는 `127.0.0.1:8081`, Green은 `127.0.0.1:8082`에 bind한다. `deploy.sh`�
 
 ```bash
 docker image inspect backend:<previous-build>
-./deploy.sh backend:<previous-build>
+./backend/deploy.sh backend:<previous-build>
 sudo bash ops/verify/backend.sh
 ```
 
@@ -37,7 +37,7 @@ Frontend는 Backend container와 분리해 `/var/www/ody`에 배포한다.
 └── previous -> releases/<PREVIOUS_BUILD_NUMBER>
 ```
 
-`deploy-frontend.sh deploy <artifact.tar.gz> <BUILD_NUMBER>`는 archive path와 marker를 검증하고 새 release를
+`frontend/deploy.sh deploy <artifact.tar.gz> <BUILD_NUMBER>`는 archive path와 marker를 검증하고 새 release를
 완성한 뒤 `current` symlink를 `mv -T`로 원자 교체한다. `nginx -t`, Frontend root, 새 build marker,
 `/api/hello`, 외부 Actuator 차단을 확인한다. 실패하면 기존 `current`/`previous` symlink를 복원한다.
 최신 release 외에도 current, previous와 추가 과거 release를 보존한다.
@@ -50,8 +50,8 @@ reload한다. 현재 Repository에서 live Nginx를 자동 덮어쓰지 않는�
 수동 rollback:
 
 ```bash
-sudo ./deploy-frontend.sh status
-sudo ./deploy-frontend.sh rollback
+sudo ./frontend/deploy.sh status
+sudo ./frontend/deploy.sh rollback
 # 또는 검증된 release 지정
-sudo ./deploy-frontend.sh rollback <BUILD_NUMBER>
+sudo ./frontend/deploy.sh rollback <BUILD_NUMBER>
 ```

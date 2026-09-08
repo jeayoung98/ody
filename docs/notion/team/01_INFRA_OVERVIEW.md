@@ -61,7 +61,7 @@ master branch push
 -> Java 17 Gradle Test
 -> backend:<build-number> Docker image
 -> app-node docker load
--> deploy.sh
+-> backend/deploy.sh
 -> inactive Backend health
 -> Nginx switch
 -> 최종 health

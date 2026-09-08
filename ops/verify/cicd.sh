@@ -35,7 +35,7 @@ ssh \
     -o BatchMode=yes \
     -o StrictHostKeyChecking=yes \
     "${DEPLOY_TARGET}" \
-    "test \"\$(hostname -s)\" = app-node && command -v docker >/dev/null && test -x '${APP_DIR}/deploy.sh'"
+    "test \"\$(hostname -s)\" = app-node && command -v docker >/dev/null && test -x '${APP_DIR}/backend/deploy.sh'"
 
 echo "CI/CD prerequisites passed for the current user."
 echo "Run this script as Jenkins to validate Jenkins permissions: sudo -u jenkins $0"

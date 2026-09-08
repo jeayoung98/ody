@@ -19,7 +19,7 @@ sudo python3 scripts/verify.py --app
 
 ```bash
 docker image inspect backend:<previous-build>
-./deploy.sh backend:<previous-build>
+./backend/deploy.sh backend:<previous-build>
 sudo bash ops/verify/backend.sh
 ```
 

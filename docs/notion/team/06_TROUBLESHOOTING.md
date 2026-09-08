@@ -16,7 +16,7 @@ active container의 `docker logs --tail 200 <name>`을 확인합니다. image ta
 - Java 17 Test 실패인지
 - Docker build인지
 - SSH/image load인지
-- app `deploy.sh`인지
+- app `backend/deploy.sh`인지
 - 최종 Verify인지
 
 를 구분합니다.

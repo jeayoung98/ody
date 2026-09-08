@@ -22,9 +22,9 @@ fail() {
 usage() {
     cat <<'EOF'
 Usage:
-  deploy-frontend.sh deploy <artifact.tar.gz> <release-id>
-  deploy-frontend.sh rollback [release-id]
-  deploy-frontend.sh status
+  deploy.sh deploy <artifact.tar.gz> <release-id>
+  deploy.sh rollback [release-id]
+  deploy.sh status
 EOF
 }
 

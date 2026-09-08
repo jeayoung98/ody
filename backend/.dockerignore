@@ -18,3 +18,7 @@ src/main/resources/application-secret.yml
 # Local operating-system files
 .DS_Store
 Thumbs.db
+
+# CI/CD entry points are not runtime image inputs
+Jenkinsfile
+deploy.sh

@@ -44,7 +44,7 @@ if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
 fi
 
 if git diff --quiet "${base}" "${GIT_COMMIT}" -- \
-    frontend Jenkinsfile.frontend deploy-frontend.sh infra/k6/frontend-zero-downtime.js \
+    frontend infra/k6/frontend-zero-downtime.js \
     docs/infra/examples/frontend-nginx.locations.conf; then
     exit 1
 fi
@@ -118,7 +118,7 @@ scp "${ssh_options[@]}" \
     "${ARTIFACT_NAME}" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/${ARTIFACT_NAME}"
 scp "${ssh_options[@]}" \
-    deploy-frontend.sh \
+    frontend/deploy.sh \
     "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/deploy-frontend-${BUILD_NUMBER}.sh"
 '''
             }

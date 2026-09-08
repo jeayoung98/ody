@@ -3,9 +3,9 @@
 ```text
 GitLab -> master HTTPS Nginx -> Jenkins
        -> Gradle test -> Docker build/save/SSH
-       -> app deploy.sh -> inactive slot health -> Nginx switch
+       -> app backend/deploy.sh -> inactive slot health -> Nginx switch
        -> npm ci/lint/test/build -> dist archive/SSH
-       -> app deploy-frontend.sh -> release validation -> atomic symlink switch
+       -> app frontend/deploy.sh -> release validation -> atomic symlink switch
 
 Client HTTPS -> app Nginx -> /                 -> /var/www/ody/current (SPA)
                           -> /api              -> backend-blue/green

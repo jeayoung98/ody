@@ -6,9 +6,9 @@
 |---|---|---|---|
 | both | `/opt/hadoop/etc/hadoop`, `/etc/systemd/system` | HDFS/YARN 설정과 boot recovery | 서버 운영 상태, Git 재설치 없음 |
 | master | `/opt/spark/conf` | Spark on YARN client | 서버 운영 상태 |
-| app | `/etc/nginx/sites-available/backend` | HTTPS와 active Blue-Green upstream | `deploy.sh`가 port만 전환 |
-| master | Jenkins workspace / webhook Nginx | CI/CD | `Jenkinsfile` |
-| app | `/home/ubuntu/S15P21A405/deploy.sh` | Blue-Green 배포 | 루트 `deploy.sh` |
+| app | `/etc/nginx/sites-available/backend` | HTTPS와 active Blue-Green upstream | `backend/deploy.sh`가 port만 전환 |
+| master | Jenkins workspace / webhook Nginx | CI/CD | `backend/Jenkinsfile`, `frontend/Jenkinsfile` |
+| app | `/home/ubuntu/S15P21A405/backend/deploy.sh` | Blue-Green 배포 | Repository의 `backend/deploy.sh` |
 | app | `/etc/ody/backend.env` | Backend DB environment | Git 저장 금지 |
 | app | `/etc/ody/postgres.env`, `neo4j.env` | DB credential | Git 저장 금지 |
 | master | `/etc/ody/monitoring.env` | Grafana credential | Git 저장 금지 |
@@ -20,7 +20,8 @@
 
 | Path | 지속 용도 |
 |---|---|
-| `Jenkinsfile`, `deploy.sh`, `backend/Dockerfile` | CI/CD와 배포 |
+| `backend/Jenkinsfile`, `backend/deploy.sh`, `backend/Dockerfile` | Backend CI/CD와 배포 |
+| `frontend/Jenkinsfile`, `frontend/deploy.sh` | Frontend CI/CD와 배포 |
 | `infra/local`, `.env.local.example` | 로컬 PostgreSQL/Neo4j |
 | `infra/k6` | 성능 회귀 시나리오 |
 | `ops/backup`, `ops/restore` | 운영 DB backup/restore drill |

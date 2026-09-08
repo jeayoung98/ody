@@ -65,7 +65,7 @@ def files_under(*roots):
 
 def local():
     shell_files = sorted(
-        list(files_under("deploy.sh", "deploy-frontend.sh", "ops", "infra/local")),
+        list(files_under("backend/deploy.sh", "frontend/deploy.sh", "ops", "infra/local")),
         key=lambda path: str(path),
     )
     for path in (item for item in shell_files if item.suffix == ".sh"):
@@ -117,17 +117,18 @@ def local():
             r"infra/(?:hadoop|spark|systemd|nginx|monitoring|database|scripts)(?:/|\b)"
         )
         for path in files_under(
-            "Jenkinsfile", "Jenkinsfile.frontend", "deploy.sh", "deploy-frontend.sh", "scripts", "backend/src"
+            "backend/Jenkinsfile", "frontend/Jenkinsfile", "backend/deploy.sh", "frontend/deploy.sh",
+            "scripts", "backend/src"
         ):
             assert not removed.search(path.read_text(errors="replace").replace("\\", "/")), (
                 "removed provisioning path referenced by " + str(path.relative_to(ROOT))
             )
     check("CI/CD and application reference contract", reference_contract)
 
-    for jenkinsfile in (ROOT / "Jenkinsfile", ROOT / "Jenkinsfile.frontend"):
+    for jenkinsfile in (BACKEND / "Jenkinsfile", ROOT / "frontend/Jenkinsfile"):
         for index, block in enumerate(re.findall(r"'''(.*?)'''", jenkinsfile.read_text(encoding="utf-8"), re.S), 1):
             run(
-                f"{jenkinsfile.name} shell block {index}",
+                f"{jenkinsfile.relative_to(ROOT)} shell block {index}",
                 [BASH or "bash", "-n"],
                 input_text=block,
             )

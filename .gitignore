@@ -40,6 +40,7 @@ out/
 .env.*
 !.env.example
 !.env.local.example
+!backend/.env.example
 backend/src/main/resources/application-secret.yml
 
 ### Logs and operating-system files ###

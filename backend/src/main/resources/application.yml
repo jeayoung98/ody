@@ -20,3 +20,19 @@ management:
     distribution:
       percentiles-histogram:
         http.server.requests: true
+
+mybatis:
+  mapper-locations: classpath:mapper/**/*.xml
+  configuration:
+    map-underscore-to-camel-case: true
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL
+    username: sa
+    password:
+    driver-class-name: org.h2.Driver

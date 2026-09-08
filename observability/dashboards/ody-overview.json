@@ -1,0 +1,167 @@
+{
+  "annotations": {"list": []},
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 0},
+      "id": 1,
+      "targets": [{"expr": "100 * (1 - avg by (node) (rate(node_cpu_seconds_total{mode=\"idle\"}[5m])))", "legendFormat": "{{node}}", "refId": "A"}],
+      "title": "Server CPU Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 0},
+      "id": 2,
+      "targets": [{"expr": "100 * (1 - node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)", "legendFormat": "{{node}}", "refId": "A"}],
+      "title": "Server Memory Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 0},
+      "id": 3,
+      "targets": [{"expr": "100 * (1 - node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay|squashfs\"})", "legendFormat": "{{node}} {{mountpoint}}", "refId": "A"}],
+      "title": "Server Disk Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "Bps"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 8},
+      "id": 4,
+      "targets": [
+        {"expr": "sum by (node) (rate(node_network_receive_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m]))", "legendFormat": "{{node}} RX", "refId": "A"},
+        {"expr": "sum by (node) (rate(node_network_transmit_bytes_total{device!~\"lo|veth.*|docker.*|br-.*\"}[5m]))", "legendFormat": "{{node}} TX", "refId": "B"}
+      ],
+      "title": "Server Network Throughput",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 8},
+      "id": 5,
+      "targets": [{"expr": "node_load1", "legendFormat": "{{node}}", "refId": "A"}],
+      "title": "Server Load (1m)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 16},
+      "id": 6,
+      "targets": [
+        {"expr": "sum(jvm_memory_used_bytes{service=\"backend\",area=\"heap\"})", "legendFormat": "used", "refId": "A"},
+        {"expr": "sum(jvm_memory_max_bytes{service=\"backend\",area=\"heap\"})", "legendFormat": "max", "refId": "B"}
+      ],
+      "title": "Spring JVM Heap",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 16},
+      "id": 7,
+      "targets": [
+        {"expr": "sum(rate(jvm_gc_pause_seconds_sum{service=\"backend\"}[5m]))", "legendFormat": "pause seconds/s", "refId": "A"},
+        {"expr": "sum(rate(jvm_gc_pause_seconds_count{service=\"backend\"}[5m]))", "legendFormat": "collections/s", "refId": "B"}
+      ],
+      "title": "Spring GC",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short"}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 16},
+      "id": 8,
+      "targets": [
+        {"expr": "jvm_threads_live_threads{service=\"backend\"}", "legendFormat": "live", "refId": "A"},
+        {"expr": "jvm_threads_peak_threads{service=\"backend\"}", "legendFormat": "peak", "refId": "B"}
+      ],
+      "title": "Spring JVM Threads",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "reqps", "min": 0}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 24},
+      "id": 9,
+      "targets": [{"expr": "sum(rate(http_server_requests_seconds_count{service=\"backend\"}[5m]))", "legendFormat": "requests/s", "refId": "A"}],
+      "title": "Spring HTTP Request Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "s", "min": 0}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 24},
+      "id": 10,
+      "targets": [
+        {"expr": "histogram_quantile(0.95, sum by (le) (rate(http_server_requests_seconds_bucket{service=\"backend\"}[5m])))", "legendFormat": "p95", "refId": "A"},
+        {"expr": "histogram_quantile(0.50, sum by (le) (rate(http_server_requests_seconds_bucket{service=\"backend\"}[5m])))", "legendFormat": "p50", "refId": "C"},
+        {"expr": "histogram_quantile(0.99, sum by (le) (rate(http_server_requests_seconds_bucket{service=\"backend\"}[5m])))", "legendFormat": "p99", "refId": "D"},
+        {"expr": "sum(rate(http_server_requests_seconds_sum{service=\"backend\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{service=\"backend\"}[5m])), 1e-9)", "legendFormat": "average", "refId": "B"}
+      ],
+      "title": "Spring HTTP Latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percent", "min": 0, "max": 100}, "overrides": []},
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 24},
+      "id": 11,
+      "targets": [{"expr": "100 * sum(rate(http_server_requests_seconds_count{service=\"backend\",status=~\"5..\"}[5m])) / clamp_min(sum(rate(http_server_requests_seconds_count{service=\"backend\"}[5m])), 1e-9)", "legendFormat": "5xx rate", "refId": "A"}],
+      "title": "Spring HTTP 5xx Error Rate",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "percentunit", "min": 0, "max": 1}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 32},
+      "id": 12,
+      "targets": [
+        {"expr": "process_cpu_usage{service=\"backend\"}", "legendFormat": "process CPU", "refId": "A"},
+        {"expr": "system_cpu_usage{service=\"backend\"}", "legendFormat": "system CPU", "refId": "B"}
+      ],
+      "title": "Spring CPU",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "bytes", "min": 0}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 40},
+      "id": 13,
+      "targets": [
+        {"expr": "sum by (area) (jvm_memory_used_bytes{service=\"backend\"})", "legendFormat": "{{area}} used", "refId": "A"}
+      ],
+      "title": "Spring JVM Memory by Area",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0}, "overrides": []},
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 48},
+      "id": 14,
+      "targets": [
+        {"expr": "hikaricp_connections_active{service=\"backend\"}", "legendFormat": "active", "refId": "A"},
+        {"expr": "hikaricp_connections_pending{service=\"backend\"}", "legendFormat": "pending", "refId": "B"}
+      ],
+      "title": "PostgreSQL Hikari Connections",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "15s",
+  "schemaVersion": 41,
+  "tags": ["ody", "infrastructure", "spring"],
+  "templating": {"list": []},
+  "time": {"from": "now-1h", "to": "now"},
+  "timezone": "browser",
+  "title": "ODY Infrastructure Overview",
+  "uid": "ody-infra-overview",
+  "version": 1
+}

@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.util.Map;
 
+import com.ssafy.backend.common.ApiResponse;
+import com.ssafy.backend.controller.HelloController;
 import org.junit.jupiter.api.Test;
 
 class HelloControllerTests {
@@ -12,6 +14,6 @@ class HelloControllerTests {
 
 	@Test
 	void returnsHelloMessage() {
-		assertEquals(Map.of("message", "hello"), controller.hello());
+		assertEquals(ApiResponse.success(Map.of("message", "hello")), controller.hello());
 	}
 }

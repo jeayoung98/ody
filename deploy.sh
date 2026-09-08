@@ -4,6 +4,9 @@ set -e
 
 IMAGE_NAME=${1:-backend:1.0}
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+ENV_FILE="${SCRIPT_DIR}/.env"
+
 NGINX_CONFIG="/etc/nginx/sites-available/backend"
 
 BLUE_PORT=8081
@@ -16,6 +19,11 @@ echo "======================================"
 echo " Blue-Green Deployment"
 echo " Image: $IMAGE_NAME"
 echo "======================================"
+
+if [ ! -f "$ENV_FILE" ]; then
+    echo "ERROR: $ENV_FILE not found. Create it on this host before deploying."
+    exit 1
+fi
 
 # --------------------------------------------------
 # 1. 현재 활성 포트 확인
@@ -70,6 +78,7 @@ docker run -d \
     --name "$TARGET_CONTAINER" \
     --restart unless-stopped \
     -p "127.0.0.1:${TARGET_PORT}:8080" \
+    --env-file "$ENV_FILE" \
     "$IMAGE_NAME"
 
 # --------------------------------------------------

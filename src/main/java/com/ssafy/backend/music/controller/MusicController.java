@@ -8,9 +8,12 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.common.response.ApiResponse;
 import com.ssafy.backend.music.dto.MajorResponse;
+import com.ssafy.backend.music.dto.MusicSummary;
+import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.service.MusicService;
 
 import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
 
 @RestController
 @RequestMapping("/music")
@@ -49,5 +52,15 @@ public class MusicController {
 		Double[] center = { pc1, pc2, pc3, pc4, pc5, pc6, pc7, pc8,
 				pc9, pc10, pc11, pc12, pc13, pc14, pc15, pc16 };
 		return ApiResponse.ok(musicService.getMajor(level, center));
+	}
+
+	/**
+	 * 노래 검색 (정본 §3.1). query 부분일치, page 0-based. 결과 없음은 빈 content + 200.
+	 */
+	@GetMapping("/search")
+	public ApiResponse<PageResponse<MusicSummary>> search(
+			@RequestParam @NotBlank String query,
+			@RequestParam @Min(0) int page) {
+		return ApiResponse.ok(musicService.search(query, page));
 	}
 }

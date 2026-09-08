@@ -17,7 +17,7 @@
 | Monitoring | Prometheus, Grafana, Node Exporter | Node Exporter | targets/dashboard VERIFIED |
 | TLS | webhook HTTPS | Backend HTTPS | Certbot renew dry-run VERIFIED |
 | Recovery | control plane/monitoring | worker/backend/DB | sequential reboot VERIFIED |
-| Backend Pipeline path | 작업 브랜치와 `backend/Jenkinsfile`로 전환 | `backend/deploy.sh` 배치 | BUILD VALIDATION IN PROGRESS |
+| Backend Pipeline path | `backend/Jenkinsfile`, build 7 | `backend:7`, port 8082 | VERIFIED |
 | Frontend CI/CD | `frontend/Jenkinsfile` prepared | release `manual-e5bce3e`, Nginx static routing | STATIC ROLLOUT VERIFIED, JOB PENDING |
 
 ## Repository 역할
@@ -32,8 +32,8 @@ Repository는 서버 최초 provisioning 원본을 더 이상 보관하지 않�
 - Dashboard reference: `observability/dashboards`
 - Backend environment contract: `application*.yml`
 
-Backend Jenkins job은 작업 브랜치와 `backend/Jenkinsfile`을 사용하도록 전환했으며 실제 build를
-재검증한다. app-node에는 `backend/deploy.sh`와 `frontend/deploy.sh`를 배치했다. Frontend 정적 release와
+Backend Jenkins job은 작업 브랜치의 `backend/Jenkinsfile`로 build 7 전체 Stage를 통과했고 app-node의
+`backend:7`으로 Blue-Green 전환했다. app-node에는 `backend/deploy.sh`와 `frontend/deploy.sh`를 배치했다. Frontend 정적 release와
 Nginx SPA/API routing은 검증됐고, 별도 Frontend Jenkins job 및 GitLab webhook 연결이 남아 있다.
 
 Hadoop/Spark/systemd/Nginx/production DB/Monitoring의 실제 설정은 각 서버 경로에 적용 완료된 운영 상태다.

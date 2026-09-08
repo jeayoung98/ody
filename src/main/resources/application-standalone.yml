@@ -1,0 +1,6 @@
+# Keeps the existing no-DB smoke application and unit tests runnable.
+spring:
+  autoconfigure:
+    exclude:
+      - org.springframework.boot.jdbc.autoconfigure.DataSourceAutoConfiguration
+      - org.springframework.boot.neo4j.autoconfigure.Neo4jAutoConfiguration

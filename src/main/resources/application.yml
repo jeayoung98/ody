@@ -1,6 +1,12 @@
 server:
   port: 8080
 
+spring:
+  profiles:
+    default: standalone
+    group:
+      local: db
+
 management:
   endpoints:
     web:
@@ -10,3 +16,7 @@ management:
     health:
       probes:
         enabled: false
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true

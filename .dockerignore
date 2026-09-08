@@ -13,9 +13,18 @@ target
 .env
 .env.*
 !.env.example
-src/main/resources/application-local.yml
 src/main/resources/application-secret.yml
 
 # Local operating-system files
 .DS_Store
 Thumbs.db
+
+# Infrastructure is deployed separately and must not enter the backend image context
+AGENTS.md
+Jenkinsfile
+deploy.sh
+docs
+infra
+observability
+ops
+scripts

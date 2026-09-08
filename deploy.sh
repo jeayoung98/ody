@@ -4,6 +4,19 @@ set -e
 
 IMAGE_NAME=${1:-backend:1.0}
 
+# Fail before changing a slot when an image has not been transferred yet.
+docker image inspect "$IMAGE_NAME" >/dev/null
+exec 9>/home/ubuntu/.ody-backend-deploy.lock
+flock -n 9 || { echo 'ERROR: Another Blue-Green deployment is running'; exit 1; }
+
+# Optional DB rollout: a root-managed env file opts both slots into the same network.
+DOCKER_RUNTIME_ARGS=()
+if [ -e /etc/ody/backend.env ]; then
+    test -r /etc/ody/backend.env || { echo 'ERROR: backend.env is not readable'; exit 1; }
+    docker network inspect ody-internal >/dev/null
+    DOCKER_RUNTIME_ARGS=(--network ody-internal --env-file /etc/ody/backend.env)
+fi
+
 NGINX_CONFIG="/etc/nginx/sites-available/backend"
 
 BLUE_PORT=8081
@@ -67,6 +80,7 @@ fi
 echo "Starting new container..."
 
 docker run -d \
+    "${DOCKER_RUNTIME_ARGS[@]}" \
     --name "$TARGET_CONTAINER" \
     --restart unless-stopped \
     -p "127.0.0.1:${TARGET_PORT}:8080" \
@@ -146,7 +160,12 @@ fi
 # 7. Nginx Reload
 # --------------------------------------------------
 
-sudo systemctl reload nginx
+if ! sudo systemctl reload nginx; then
+    sudo sed -i "s/server 127.0.0.1:${TARGET_PORT};/server 127.0.0.1:${CURRENT_PORT};/" "$NGINX_CONFIG"
+    sudo nginx -t && sudo systemctl reload nginx
+    echo 'ERROR: Reload failed; previous upstream restored and both containers retained.'
+    exit 1
+fi
 
 echo "Nginx switched to port $TARGET_PORT."
 

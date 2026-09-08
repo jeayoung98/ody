@@ -1,6 +1,6 @@
 # Backend Deployment
 
-루트 `Jenkinsfile`, `Dockerfile`, `deploy.sh`가 지속적으로 사용하는 배포 원본이다.
+루트 `Jenkinsfile`, `deploy.sh`와 `backend/Dockerfile`이 지속적으로 사용하는 배포 원본이다.
 
 ```text
 Git push -> GitLab webhook -> Jenkins

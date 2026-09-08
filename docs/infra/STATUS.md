@@ -23,7 +23,7 @@
 
 Repository는 서버 최초 provisioning 원본을 더 이상 보관하지 않는다. 계속 사용하는 항목만 유지한다.
 
-- CI/CD: `Jenkinsfile`, `deploy.sh`, `Dockerfile`
+- CI/CD: `Jenkinsfile`, `deploy.sh`, `backend/Dockerfile`
 - Frontend CI/CD: `Jenkinsfile.frontend`, `deploy-frontend.sh`, `frontend`
 - Local dependencies: `infra/local`, `.env.local.example`, `scripts/local`
 - Performance scenarios: `infra/k6`, `ops/performance`

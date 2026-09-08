@@ -12,6 +12,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[1]
+BACKEND = ROOT / "backend"
 RESULTS = []
 EXCLUDED_PARTS = {".git", ".gradle", "build", "dist", "node_modules", "coverage", "__pycache__"}
 BASH = shutil.which("bash")
@@ -24,14 +25,14 @@ def record(name, status, detail=""):
     print(f"{status}: {name}" + (f" ({detail})" if detail else ""))
 
 
-def run(name, args, env=None, timeout=180, input_text=None):
+def run(name, args, env=None, timeout=180, input_text=None, cwd=ROOT):
     executable = str(args[0])
     if not shutil.which(executable) and not Path(executable).exists():
         record(name, "NOT RUN", "tool unavailable")
         return
     try:
         result = subprocess.run(
-            args, cwd=ROOT, env=env, capture_output=True,
+            args, cwd=cwd, env=env, capture_output=True,
             encoding="utf-8", errors="replace", timeout=timeout, input=input_text,
         )
         status = "PASS" if result.returncode == 0 else "FAIL"
@@ -91,15 +92,20 @@ def local():
         assert len(dashboard.get("panels", [])) >= 14, "expected at least 14 panels"
     check("Grafana dashboard contract", dashboard_contract)
 
-    wrapper = ROOT / ("gradlew.bat" if os.name == "nt" else "gradlew")
-    run("Gradle tests and Spring YAML", [str(wrapper), "test", "--no-daemon"], timeout=300)
+    wrapper = BACKEND / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    run(
+        "Gradle tests and Spring YAML",
+        [str(wrapper), "test", "--no-daemon"],
+        timeout=300,
+        cwd=BACKEND,
+    )
 
     def secret_scan():
         bad = re.compile(
             r"-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----|"
             r"glpat-[A-Za-z0-9_-]{15,}|AKIA[A-Z0-9]{16}"
         )
-        for path in files_under("src", "frontend", "infra", "ops", "scripts", "docs", "observability"):
+        for path in files_under("backend/src", "frontend", "infra", "ops", "scripts", "docs", "observability"):
             if "__pycache__" not in path.parts:
                 assert not bad.search(path.read_text(errors="replace")), (
                     "credential pattern in " + str(path.relative_to(ROOT))
@@ -111,7 +117,7 @@ def local():
             r"infra/(?:hadoop|spark|systemd|nginx|monitoring|database|scripts)(?:/|\b)"
         )
         for path in files_under(
-            "Jenkinsfile", "Jenkinsfile.frontend", "deploy.sh", "deploy-frontend.sh", "scripts", "src"
+            "Jenkinsfile", "Jenkinsfile.frontend", "deploy.sh", "deploy-frontend.sh", "scripts", "backend/src"
         ):
             assert not removed.search(path.read_text(errors="replace").replace("\\", "/")), (
                 "removed provisioning path referenced by " + str(path.relative_to(ROOT))

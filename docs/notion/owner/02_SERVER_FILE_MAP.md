@@ -20,7 +20,7 @@
 
 | Path | 지속 용도 |
 |---|---|
-| `Jenkinsfile`, `Dockerfile`, `deploy.sh` | CI/CD와 배포 |
+| `Jenkinsfile`, `deploy.sh`, `backend/Dockerfile` | CI/CD와 배포 |
 | `infra/local`, `.env.local.example` | 로컬 PostgreSQL/Neo4j |
 | `infra/k6` | 성능 회귀 시나리오 |
 | `ops/backup`, `ops/restore` | 운영 DB backup/restore drill |

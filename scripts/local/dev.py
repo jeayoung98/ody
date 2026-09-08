@@ -9,6 +9,7 @@ import subprocess
 import sys
 
 ROOT = Path(__file__).resolve().parents[2]
+BACKEND = ROOT / "backend"
 ENV_FILE = ROOT / ".env.local"
 EXAMPLE = ROOT / ".env.local.example"
 COMPOSE = ROOT / "infra" / "local" / "docker-compose.yml"
@@ -123,9 +124,9 @@ def reset(values):
 
 def run_backend(values):
     validate_services(values)
-    wrapper = ROOT / ("gradlew.bat" if os.name == "nt" else "gradlew")
+    wrapper = BACKEND / ("gradlew.bat" if os.name == "nt" else "gradlew")
     command = [str(wrapper), "bootRun", "--args=--spring.profiles.active=local"]
-    subprocess.run(command, cwd=ROOT, env={**os.environ, **values}, check=True)
+    subprocess.run(command, cwd=BACKEND, env={**os.environ, **values}, check=True)
 
 
 def main():

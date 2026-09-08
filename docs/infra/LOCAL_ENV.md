@@ -41,6 +41,8 @@ local/production 모두 `VITE_API_BASE_URL=/api`를 사용한다.
 Repository 전체 점검:
 
 ```bash
+cd backend
 ./gradlew test build
+cd ..
 python scripts/verify.py --local --infra
 ```

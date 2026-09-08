@@ -85,7 +85,7 @@ docker ps
 관련 파일이 존재하면 먼저 읽는다.
 
 ```text
-Dockerfile
+backend/Dockerfile
 infra/local/
 infra/k6/
 ops/
@@ -103,8 +103,10 @@ scripts/
 
 ### Backend
 ```bash
+cd backend
 ./gradlew test
 ./gradlew build
+cd ..
 ```
 
 ### Docker

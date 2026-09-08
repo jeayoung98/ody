@@ -1,8 +1,8 @@
-/gradlew text eol=lf
-/.dockerignore text eol=lf
+/backend/gradlew text eol=lf
+/backend/.dockerignore text eol=lf
 /.gitattributes text eol=lf
 /.gitignore text eol=lf
-/Dockerfile text eol=lf
+/backend/Dockerfile text eol=lf
 /Jenkinsfile text eol=lf
 *.sh text eol=lf
 *.py text eol=lf

@@ -1,4 +1,4 @@
-# ODY Backend
+# ODY
 
 Spring Boot 4.1.1 / Java 17 기반 ODY Backend다. PostgreSQL을 transactional Source of Truth로,
 Neo4j를 graph projection으로 사용하며 Redis를 로컬 개발 의존 서비스로 함께 제공한다. Jenkins는
@@ -44,15 +44,18 @@ Environment variables에 `.env.local`의 `SPRING_DATASOURCE_*`, `SPRING_DATA_RED
 터미널에서 `python scripts/local/dev.py backend`를 실행하면 이 설정을 자동으로 적용할 수 있다.
 
 ```bash
+cd backend
 ./gradlew test build
+cd ..
 python scripts/verify.py --local --infra
 ```
 
 ## Repository map
 
-- `Jenkinsfile`, `Dockerfile`, `deploy.sh`: CI/CD와 Blue-Green
-- `Jenkinsfile.frontend`, `deploy-frontend.sh`: Frontend 정적 artifact CI/CD와 symlink rollback
+- `backend`: Spring Boot, Gradle Wrapper, Backend Dockerfile
 - `frontend`: React/TypeScript/Vite SPA
+- `Jenkinsfile`, `deploy.sh`: Backend CI/CD와 Blue-Green
+- `Jenkinsfile.frontend`, `deploy-frontend.sh`: Frontend 정적 artifact CI/CD와 symlink rollback
 - `infra/local`: local PostgreSQL/Redis/Neo4j
 - `infra/k6`: 성능 회귀 시나리오
 - `ops`: runtime verify, backup/restore, performance runner

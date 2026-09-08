@@ -24,7 +24,8 @@ pipeline {
 
         stage('Test') {
             steps {
-                sh '''#!/usr/bin/env bash
+                dir('backend') {
+                    sh '''#!/usr/bin/env bash
 set -euo pipefail
 export PATH="${JAVA_HOME}/bin:${PATH}"
 
@@ -33,16 +34,19 @@ java -version 2>&1 | grep -Eq 'version "17([.]|")'
 chmod +x gradlew
 ./gradlew clean test --no-daemon
 '''
+                }
             }
         }
 
         stage('Build Docker Image') {
             steps {
-                sh '''#!/usr/bin/env bash
+                dir('backend') {
+                    sh '''#!/usr/bin/env bash
 set -euo pipefail
 
 docker build -t "${IMAGE_NAME}:${BUILD_NUMBER}" .
 '''
+                }
             }
         }
 

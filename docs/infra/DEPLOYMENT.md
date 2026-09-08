@@ -45,7 +45,8 @@ Frontend는 Backend container와 분리해 `/var/www/ody`에 배포한다.
 app-node Nginx의 기존 TLS server block에는
 `docs/infra/examples/frontend-nginx.locations.conf`를 기준으로 static location을 반영한다. 기존 `/api/` proxy,
 `/actuator/` 접근 제어, upstream, Certbot block은 그대로 둔다. 변경 전후 `sudo nginx -t`를 통과한 경우에만
-reload한다. 현재 Repository에서 live Nginx를 자동 덮어쓰지 않는다.
+reload한다. 이 routing은 2026-09-08 app-node에 적용해 root, SPA fallback, build marker, Backend API와
+Actuator 차단을 검증했다. Repository에서 live Nginx를 자동 덮어쓰지는 않는다.
 
 수동 rollback:
 

@@ -1,8 +1,8 @@
 # Infrastructure Status
 
-- 기준일: 2026-09-07
+- 기준일: 2026-09-08
 - 이 문서는 사용자가 확인한 운영 상태를 기록한다.
-- 이번 Repository 정리 작업에서는 서버에 접속하거나 운영 구성을 변경하지 않았다.
+- Repository 변경과 Frontend 정적 배포/Nginx routing을 실제 서버에서 검증했다.
 
 ## 운영 상태
 
@@ -17,8 +17,8 @@
 | Monitoring | Prometheus, Grafana, Node Exporter | Node Exporter | targets/dashboard VERIFIED |
 | TLS | webhook HTTPS | Backend HTTPS | Certbot renew dry-run VERIFIED |
 | Recovery | control plane/monitoring | worker/backend/DB | sequential reboot VERIFIED |
-| Backend Pipeline path | Jenkins job uses existing root path | Repository target is `backend/Jenkinsfile` | JENKINS UPDATE PENDING |
-| Frontend CI/CD | `frontend/Jenkinsfile` prepared | static release deploy prepared | SERVER ROLLOUT PENDING |
+| Backend Pipeline path | 작업 브랜치와 `backend/Jenkinsfile`로 전환 | `backend/deploy.sh` 배치 | BUILD VALIDATION IN PROGRESS |
+| Frontend CI/CD | `frontend/Jenkinsfile` prepared | release `manual-e5bce3e`, Nginx static routing | STATIC ROLLOUT VERIFIED, JOB PENDING |
 
 ## Repository 역할
 
@@ -32,9 +32,9 @@ Repository는 서버 최초 provisioning 원본을 더 이상 보관하지 않�
 - Dashboard reference: `observability/dashboards`
 - Backend environment contract: `application*.yml`
 
-Backend Jenkins job의 Script Path를 `backend/Jenkinsfile`로 바꾸고 app-node checkout에
-`backend/deploy.sh`가 도착한 뒤 실제 build를 재검증해야 한다. Frontend job 생성과 app-node Nginx static
-routing도 아직 실제 서버에 반영되지 않았다.
+Backend Jenkins job은 작업 브랜치와 `backend/Jenkinsfile`을 사용하도록 전환했으며 실제 build를
+재검증한다. app-node에는 `backend/deploy.sh`와 `frontend/deploy.sh`를 배치했다. Frontend 정적 release와
+Nginx SPA/API routing은 검증됐고, 별도 Frontend Jenkins job 및 GitLab webhook 연결이 남아 있다.
 
 Hadoop/Spark/systemd/Nginx/production DB/Monitoring의 실제 설정은 각 서버 경로에 적용 완료된 운영 상태다.
 Repository에서 재설치하거나 자동 동기화하지 않는다.

@@ -1,0 +1,108 @@
+{
+  "bundle_version": "v2.1-pca16-2026-09-06",
+  "status": "PROMOTED (v2.1 = v2 + 카탈로그 정제, fit·트리 동일)",
+  "k": 16,
+  "n_features": 270,
+  "seed": 42,
+  "songs": 6624399,
+  "fit_sample": 1000000,
+  "explained_variance": 0.6989059712605815,
+  "explained_variance_per_axis": [
+    0.1691150821880441,
+    0.1509981491312781,
+    0.06287746523079517,
+    0.04991977886971172,
+    0.047746886898294386,
+    0.03746045577160857,
+    0.031955688059669994,
+    0.02240544481668655,
+    0.020747758117836447,
+    0.018227122926917083,
+    0.01645381569802729,
+    0.015298888132306194,
+    0.015201017400850995,
+    0.014221331036984338,
+    0.013473447306961915,
+    0.01280363967460867
+  ],
+  "extractor_version": "essentia 2.1-beta2 / music 1.0 (지문 9개)",
+  "cohort_fingerprints": [
+    71,
+    72,
+    73,
+    74,
+    76,
+    87,
+    99,
+    101,
+    103
+  ],
+  "correction": "M1 global offset, applied to lossy rows, post-skew-transform / pre-scaling",
+  "pipeline": [
+    "skew_transform(feature_list.json)",
+    "M1 delta (lossy only)",
+    "impute_median",
+    "RobustScaler",
+    "winsorize +-20.0 IQR",
+    "PCA-16"
+  ],
+  "note": "All components of this bundle are fit together and must be versioned/replaced together.",
+  "map_tree": {
+    "max_depth": 6,
+    "min_node": 300,
+    "n_leaves": 4096,
+    "songs_per_leaf_median": 1799
+  },
+  "promoted_at": "2026-09-04 08:44:39",
+  "promotion_gate": {
+    "gate_id": "v2_validation_gate_v2",
+    "results": {
+      "G1p": {
+        "v1": 0.6097779464660682,
+        "v2": 0.6563860818103066,
+        "diff": 0.046608135344238355,
+        "ci95": [
+          0.03695481101347105,
+          0.056448638515636765
+        ],
+        "n_boot": 1000,
+        "criterion": "v2 >= v1 - 0.01",
+        "pass": true,
+        "ci_excludes_zero": true
+      },
+      "G1pp": {
+        "value": 0.6458441451782015,
+        "criterion": ">= 0.60",
+        "pass": true
+      },
+      "G2": {
+        "value": 21.553281689274915,
+        "pass": true
+      },
+      "G3": {
+        "value": 0.49654399999139,
+        "pass": true
+      },
+      "G4": {
+        "lift_d5": 4.442048517520216,
+        "pmi_lift_d5": {
+          "low": 3.5902964959568733,
+          "mid": 4.160722932978689,
+          "high": 5.576384193794324
+        },
+        "monotone": true,
+        "pass": true
+      }
+    },
+    "original_G1": {
+      "value": 0.6458441451782015,
+      "pass": false,
+      "preserved": true
+    }
+  },
+  "songs_before_exclusion": 7404506,
+  "exclusion_rules_hash": "7854e999ee3f14d1",
+  "exclusion_rules": "pipeline/exclusion_rules.json",
+  "excluded_total": 780107,
+  "catalog": "work/catalog_v2.parquet"
+}

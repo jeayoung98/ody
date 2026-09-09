@@ -1,0 +1,8 @@
+{
+  "bundle": "v2.1-pca16",
+  "strict": false,
+  "switched_at": "2026-09-07T21:00:00+09:00",
+  "by": "재영",
+  "reason": "초기 포인터. 09-08 길이 규칙(60s~6min) 반영 v2.2-pca16 생성 후 strict:true 로 전환 예정",
+  "history": []
+}

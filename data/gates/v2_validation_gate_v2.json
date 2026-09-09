@@ -1,0 +1,39 @@
+{
+  "gate_id": "v2_validation_gate_v2",
+  "supersedes": "v2_validation_gate",
+  "purpose": "serving/v2-pca16-candidate 의 서빙 승격 판정 (재등록).",
+  "registered_at": "2026-09-05",
+  "registered_with_v2_measurement_in_hand": true,
+  "original_g1_result_preserved": {
+    "gate": "v2_validation_gate.G1",
+    "criterion": "same_artist=false 보정 AUC >= 0.65 AND >= 0.674 - 0.02",
+    "value": 0.6458,
+    "result": "FAIL",
+    "note": "원 판정은 HOLD 였고 그 기록(output/validation_v2.md)은 그대로 둔다."
+  },
+  "why_reregister": [
+    "원 G1 기준선 0.674 는 저장소에서 재현 불가했다. 동일한 인기도 보정 샘플러로 v1 을 v1 풀에서 재채점한 결과 same_artist=false AUC = 0.6530 (output/validation_v1_corrected.json). 원 기준선은 재현값보다 0.021 높은, 출처 미상의 수치였다.",
+    "설계 결함: 곡 구성이 다른 풀(v1 15,387곡 vs v2 67,536곡, 한국 곡·롱테일 포함)에 절대 문턱 하나를 적용했다. v2 풀의 negative 는 더 이질적이고 positive 는 더 niche 해서 AUC 가 같은 지도라도 낮게 나온다. 같은 곡·같은 쌍·같은 negative 로 두 지도를 채점하는 쌍대 비교가 지도 품질 비교의 올바른 통계량이다.",
+    "등록 시점에 v2 측정치가 존재한다. 그래서 (a) 기준을 데이터에 맞추지 않고 '비열등성 + 절대 바닥' 이라는 사전에 정당화되는 두 구조로 정하고, (b) 부트스트랩 CI 로 노이즈 크기를 함께 판정하며, (c) 원 G1 FAIL 기록을 보존한다."
+  ],
+  "baseline_v1_reproduced": {
+    "sampler": "popularity_corrected (v2 와 동일 구현, scripts/validate_v2_melon.Scorer)",
+    "pool": 15387, "pairs": 10024,
+    "auc_same_artist_false_corrected": 0.6530,
+    "auc_all_corrected": 0.6875,
+    "source": "output/validation_v1_corrected.json (scripts/validate_v1_corrected.py)"
+  },
+  "gates": [
+    {"id": "G1p", "name": "공통 곡 풀 쌍대 비열등성",
+     "criterion": "same_artist=false 보정 AUC: v2 >= v1 - 0.01, 같은 공통 풀·같은 쌍·같은 negative(seed 42/43/44 평균)",
+     "ci": "쌍 단위 부트스트랩 1,000회(seed 42)로 AUC 차이(v2 - v1)의 95% CI 병기. CI 는 판정 조건이 아니라 노이즈 크기 명시용이다.",
+     "pool_definition": "bridge_v2 곡 중 v1·v2 양쪽 지도에 수록된 곡 (validation_v2_melon.json 의 common)"},
+    {"id": "G1pp", "name": "v2 풀 절대 바닥",
+     "criterion": "v2 전체 풀 same_artist=false 보정 AUC >= 0.60"},
+    {"id": "G2", "name": "이웃 품질 Hit@10 lift (멜론 풀, closed-world)", "criterion": "lift >= 3", "unchanged": true},
+    {"id": "G3", "name": "섞기 검정", "criterion": "0.48 <= 가짜 AUC <= 0.52", "unchanged": true},
+    {"id": "G4", "name": "depth-5 lift > 1 AND PMI 3분위 lift 단조", "criterion": "원안 그대로", "unchanged": true}
+  ],
+  "promotion_rule": "G1p, G1pp, G2, G3, G4 전부 통과 시 candidate -> serving/v2-pca16 (manifest PROMOTED), v1 은 serving/v1-pca16 보존 + ARCHIVED 표시. 하나라도 실패하면 HOLD, 이동 없음.",
+  "no_retro_tuning_statement": "임계값(-0.01, 0.60)은 v2 측정치(공통 풀 Δ+0.045, 절대 0.6458)와 무관하게 '비열등성 관용 1pt' 와 '유의미 구간 하한 0.60' 이라는 통상 기준에서 왔다. 두 값 모두 v2 가 여유 있게 통과하거나 못 하는 위치가 아니라는 점을 리포트에 함께 적는다."
+}

@@ -1,0 +1,65 @@
+{
+  "gate_id": "v2_validation_gate",
+  "purpose": "serving/v2-pca16-candidate 를 v1 과 같은 정답지·같은 프로토콜로 채점해 서빙 승격 여부를 판정한다.",
+  "registered_at": "2026-09-03",
+  "registered_before_measurement": true,
+  "note": "실행 전 확정. 사후 수정 금지. 실패 게이트를 '보고 항목'으로 재분류 금지.",
+
+  "candidate": "serving/v2-pca16-candidate (7,404,506 곡, PCA-16, depth-6 tree)",
+  "baseline_v1": {
+    "bundle": "serving/v1-pca16 (491,028 곡, depth-4 tree, 256 리프)",
+    "melon_auc_same_artist_false_uncorrected": 0.6656,
+    "melon_auc_same_artist_false_popularity_corrected": 0.674,
+    "mlhd_auc_popularity_corrected": 0.566,
+    "bridge_funnel": {"matched": 19780, "in_map": 15387},
+    "provenance_note": "보정값 0.674 / 0.566 은 프롬프트가 제시한 v1 강건성 분석 수치다. 이 저장소의 리포트(validation_melon_v1, validation_cross)에는 비보정 수치(0.666 / 0.624)만 있고 보정 분석 산출물은 없다. 게이트는 프롬프트 수치를 그대로 쓴다."
+  },
+
+  "negative_sampler": {
+    "name": "popularity_corrected",
+    "definition": "negative 쌍의 두 곡을 각각 플레이리스트 등장 빈도(cnt)에 비례하는 확률로 뽑는다 (degree-proportional). positive 쌍의 곡 인기도 주변분포를 negative 가 그대로 따르게 하여 '인기곡은 서로 가깝다' 류의 인기도 효과를 상쇄한다. 동일 곡 쌍·positive 집합에 있는 쌍은 제외. seed 42 / 43 / 44.",
+    "note": "v1 강건성 분석의 '인기도 보정' 방식을 이 정의로 구현한다. 원 코드가 저장소에 없어 정의를 여기 명시한다."
+  },
+
+  "positive_labels": {
+    "melon": "data/melon/train.json 115,071 플레이리스트에서 bridge_v2 곡 간 동시수록 쌍, co_count >= 2, pmi = ln(co*N/(cnt_a*cnt_b)), same_artist = artist_id_basket 교집합 (v1 build_labels_melon_pairs 와 동일 정의, 곡 집합만 v2 브릿지로 교체)",
+    "mlhd": "work/mlhd_p2/sess_items.parquet 체크포인트(v1 in-map 242,680곡 우주)에서 세션 동시등장 쌍 재생성, co_count >= 2. 원 labels_mlhd_pairs.parquet 은 저장소에 없다."
+  },
+
+  "gates": [
+    {"id": "G1", "name": "멜론 AUC (same_artist=false, 인기도 보정)",
+     "criterion": "AUC >= 0.65 AND AUC >= 0.674 - 0.02 (= 0.654)",
+     "statistic": "seed 42/43/44 평균, same_artist=false positive vs popularity_corrected negative"},
+    {"id": "G2", "name": "이웃 품질 Hit@10 lift (멜론 풀, closed-world)",
+     "criterion": "lift >= 3",
+     "statistic": "positive 쌍 (a,b) 에 대해 b 가 브릿지 풀 안에서 a 의 10-최근접 이웃에 드는 비율 / 무작위 기대치 10/(pool-1). 양방향 평균."},
+    {"id": "G3", "name": "섞기 검정 (인기도 보정 샘플러 기준)",
+     "criterion": "0.48 <= 가짜 AUC <= 0.52",
+     "statistic": "곡 <-> 좌표 대응을 무작위 순열(seed 42)로 끊은 뒤 같은 positive/negative 로 AUC 재계산. 신호가 좌표에서 오는지 확인하는 통제군."},
+    {"id": "G4", "name": "노드 동거율 lift 와 PMI 단조성 (밀도 매칭 깊이)",
+     "criterion": "v2 depth-5 lift > 1 AND PMI 3분위 depth-5 lift 가 low < mid < high",
+     "statistic": "비교 깊이는 밀도 매칭: v1 depth-3 (64 노드, ~7.7K 곡/노드) <-> v2 depth-5 (1,024 노드, ~7.2K 곡/노드). depth 1~6 전부 산출, 헤드라인은 depth-5."}
+  ],
+
+  "promotion_rule": "G1~G4 전부 통과 시 candidate -> serving/v2-pca16 복사, manifest status PROMOTED, v1 은 serving/v1-pca16 보존(아카이브 표시). 하나라도 실패하면 아무것도 옮기지 않는다.",
+  "report_only": ["MLHD+ (v1 에서도 보류였음)", "한국 곡 채점 (기준선 없음)", "v1 vs v2 비교표 (곡 구성이 달라 직독 금지)"],
+
+  "m1_trigger": {
+    "criterion": "AUC(lossless<->lossy positive 쌍) < AUC(lossless<->lossless positive 쌍) - 0.02",
+    "action_if_true": "M1 (c) 착수 권고 — 같은 원본 두 인코딩 쌍 재정의 + 비트레이트 조건부 오프셋",
+    "encoding_source": "work/v2_manifest.parquet 의 lossless 플래그 (대표 제출본 기준)"
+  },
+
+  "korean_scoring_precondition": {
+    "criterion": "Phase 1 한국 곡 in-map >= 1,000 곡 AND 한국 곡 정답쌍 >= 1,000 쌍",
+    "action_if_false": "'표본 부족으로 채점 불가, 수율 X' 기록 후 스킵. 억지 채점 금지."
+  },
+
+  "fair_comparison": "v1·v2 공통 브릿지 곡(양쪽 지도에 모두 수록된 곡)만으로 같은 positive/negative 를 두 지도에 각각 채점 — 이것이 'v2 가 v1 보다 나쁘지 않다'의 진짜 증거. 전체 풀 비교표는 직독 금지 문구를 단다.",
+
+  "korean_matching_rules": {
+    "primary": "멜론 한글 아티스트 곡 240,307 대상, v1 과 같은 정규화(괄호 제거, 영숫자·한글만) 완전일치",
+    "secondary": "song_meta 에 영문 표기 필드가 없으므로 시도하지 않는다 (확인: 키 = album_id, album_name, artist_id_basket, artist_name_basket, id, issue_date, song_gn_dtl_gnr_basket, song_gn_gnr_basket, song_name)",
+    "forbidden": "로마자 변환 추측 매칭 (오매칭 = 라벨 오염)"
+  }
+}

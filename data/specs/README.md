@@ -25,6 +25,7 @@
 | 스펙 | `specs/*/spec.md` 수용 기준 | "끝났다"의 자의적 판정 | 작업 시작 전 등록 |
 | 게이트 | `gates/*.json` | 사후 기준 수정 (실험·승격 판정) | 승격 전 |
 | 계약 | `tests/check_contract.py`, `test_contract.py` | 스키마·해시·버전 규칙 위반 번들 승격 | 커밋 훅 + 승격 명령 |
+| fixture | `tests/conftest.py` (`root` `current` `bundle_dir` `rules`) | 번들 없는 머신에서 거짓 실패 — `bundle_dir` 가 skip | 모든 테스트 |
 | 단위 | `tests/test_*.py` | 규칙 로직 회귀(접힘·상한·길이·마스킹·폴백) | 커밋 훅 |
 | 패리티 | `tests/test_spark_parity.py`(스펙 20) | Spark 결과가 numpy 기준과 다른 것 (좌표 1e-4, 리프 100%, 제외 집합) | 표본 → 전곡, 수동 |
 | 벤치 | `tests/bench_*.py` → `output/*.json` | 성능 AC 미달 (p95 50ms / 2s / 20ms) | 배포 전, 수동 |

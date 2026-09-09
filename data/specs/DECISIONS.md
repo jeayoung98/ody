@@ -11,6 +11,7 @@
 | D4 | 2026-09-07 | 검색 서비스 = **Python FastAPI** + numpy(+faiss 선택). BE 게이트웨이가 호출 | 검증된 numpy 코드 재사용, 재구현·재검증 시간 없음. 병목은 행렬 연산 | `10/11/12` API 형태 |
 | D5 | 2026-09-07 | '오래됐고 인기 없는 곡' 은 **1차 제외 안 함**. 2차: 발매연도 = MusicBrainz `recording_first_release_date`, 인기 = MLHD 청취 합산(+ListenBrainz/Last.fm 보조). 제외가 아닌 **서빙 티어** | YouTube Data API 는 하루 100곡(할당량), 스크래핑은 약관 위반, 매칭 오염 | 2차 스펙 `40_popularity_tier`(미작성) |
 | D6 | 2026-09-07 | 서빙은 기존 아티팩트(v2.2)로 배포. **Spark 이식은 패리티 트랙**(서빙 선행조건 아님) | 6.5 작업일. 두 트랙을 묶으면 둘 다 미완 | `plan_release1.md` |
+| D7 | 2026-09-10 | 좌표 차원은 **PCA-16**. Jira S15P21A405-35 설명의 "dim 64" 는 기획 초기 값이며 **설명 쪽을 갱신**한다 | 서빙 아티팩트가 `manifest.k=16`, `coords_v2.parquet` 이 `pc1..pc16`. 64 로 가려면 재학습이 필요하고 major 버전 + 게이트 재등록이라 1차 기간에 불가(규칙 3). 사용자(재영) 확인 | `50_db_schema` `track_vector` 스키마, Jira 35 설명 갱신. 열린 질문 Q1 종료 |
 
 ---
 
@@ -20,7 +21,7 @@
 
 | # | 질문 | 상충 | 임시 진행 방식 | 관련 |
 |---|---|---|---|---|
-| Q1 | `track_vector` 차원이 16인가 64인가 | Jira S15P21A405-35 설명은 dim 64. 실제 아티팩트는 `manifest.k=16`, `coords_v2` 는 `pc1..pc16` | 아티팩트(16)를 사실로 보고 진행. 64 는 재학습이 필요하고 major 버전 + 게이트 재등록이라 1차 기간에 불가 | `50_db_schema` Q1 |
+| ~~Q1~~ | ~~`track_vector` 차원이 16인가 64인가~~ | **종결 2026-09-10 → D7 (PCA-16).** Jira 35 설명을 갱신한다 | — | `50_db_schema` |
 | Q2 | 마이그레이션 도구 (Flyway / Liquibase / 수동 SQL) | `docs/infra/DATABASE.md` 가 domain 도입 전 결정으로 유보 | 결정 전 DDL 커밋 금지 | `50_db_schema` |
 | Q3 | 멜론 소분류 코드표 확보 가능 여부 | `genre_gn_all.json` 부재(원 출처 Kakao Arena 재다운로드 필요). 대분류 21개만 보유 | 1차는 대분류만. 소분류는 보류 | `13_genre_hierarchy` |
 | Q4 | 축 라벨의 태그 출처 | Jira S15P21A405-38 은 Last.fm 태그 log-odds. 저장소에는 AcousticBrainz 자유 텍스트 태그(`work/genres_raw.parquet` 23,203,978행)만 있고 Last.fm 데이터는 없다 | 보유한 AB 태그로 진행하고 출처를 문서에 명시 | `14_axis_labels`, `13_genre_hierarchy` |

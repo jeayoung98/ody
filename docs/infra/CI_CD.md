@@ -98,3 +98,10 @@ Pipeline job을 만들고 Script Path를 `frontend/Jenkinsfile`로 지정한다.
 
 Frontend build에는 DB나 application secret이 필요하지 않다. Jenkins에 전달하는 `VITE_*` 값은 Browser에
 공개 가능한 `/api` 같은 값만 허용한다.
+
+## Jira 이슈 자동 종료
+
+파트 작업 브랜치가 같은 파트의 dev로 병합될 때 이슈를 종료하는 별도 Webhook 설계는
+[GitLab Jira 자동화](../gitlab-jira-automation.md)를 따른다.
+Jenkins 배포 조건과 독립적이다. Jira 규칙과 GitLab MR Webhook은 활성화했으며,
+실제 테스트 MR을 이용한 전환 인수 테스트는 해당 문서의 체크리스트를 완료해야 한다.

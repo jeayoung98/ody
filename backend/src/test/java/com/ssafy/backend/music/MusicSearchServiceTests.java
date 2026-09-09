@@ -12,6 +12,7 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 
+import com.ssafy.backend.music.detail.MusicDetailReader;
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.backend.music.dto.Location;
@@ -30,7 +31,8 @@ class MusicSearchServiceTests {
 			new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
 	private final MusicSearchReader reader = mock(MusicSearchReader.class);
-	private final MusicService service = new MusicService(Optional.of(reader));
+	private final MusicDetailReader detail = mock(MusicDetailReader.class);
+	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail));
 
 	@Test
 	void search_trimsQuery_passesSize10_assemblesPage() {
@@ -95,7 +97,7 @@ class MusicSearchServiceTests {
 
 	@Test
 	void search_noAdapter_throws() {
-		MusicService noReader = new MusicService(Optional.empty());
+		MusicService noReader = new MusicService(Optional.empty(), Optional.empty());
 
 		assertThrows(UnsupportedOperationException.class, () -> noReader.search("q", 0));
 	}

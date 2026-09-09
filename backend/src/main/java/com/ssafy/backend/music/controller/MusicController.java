@@ -14,6 +14,7 @@ import com.ssafy.backend.music.service.MusicService;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
+import com.ssafy.backend.music.dto.MusicDetailResponse;
 
 @RestController
 @RequestMapping("/music")
@@ -62,5 +63,13 @@ public class MusicController {
 			@RequestParam @NotBlank String query,
 			@RequestParam @Min(0) int page) {
 		return ApiResponse.success(musicService.search(query, page));
+	}
+
+	/**
+	 * 노래 상세 조회 (정본 §3.2). id로 상세 + 최근접 10곡(neighbors). 없는 곡 → 404 MUSIC_NOT_FOUND.
+	 */
+	@GetMapping("/detail")
+	public ApiResponse<MusicDetailResponse> detail(@RequestParam @Min(1) long id) {
+		return ApiResponse.success(musicService.getDetail(id));
 	}
 }

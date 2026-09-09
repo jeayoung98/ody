@@ -1,0 +1,13 @@
+{
+  "fit_sample_n": 1000000,
+  "fit_sample_mbid_sha256": "7fa11cc8d80b6eeead345f97573214e68f06d9ddd2fdb0eed216950057876a5d",
+  "seed": 42,
+  "selection": "work/v2_manifest.parquet 의 is_fit_sample (part x lossless 층화)",
+  "libraries": {
+    "python": "3.12.14",
+    "numpy": "2.5.2",
+    "pandas": "3.0.5",
+    "pca_method": "np.linalg.eigh on 270x270 covariance"
+  },
+  "generated": "2026-09-03 10:53:02"
+}

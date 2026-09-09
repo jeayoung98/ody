@@ -1,0 +1,10 @@
+numpy==2.5.2
+pandas==3.0.5
+pyarrow==25.0.1
+scikit-learn==1.9.0
+duckdb==1.5.5
+fastapi
+uvicorn[standard]
+httpx
+pytest==9.1.1
+# faiss-cpu  # ANN 인덱스 — 컷 후보, 필요 시 활성화

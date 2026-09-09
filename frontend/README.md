@@ -1,39 +1,45 @@
 # ODY Frontend
 
-React 19.2, TypeScript 6, Vite 8 기반 SPA다. Node.js `24.20.0`과 npm `11.19.0`을
-`.nvmrc`, `package.json`, lockfile, Jenkins build image에서 동일하게 고정한다.
+Next.js 16 (App Router) · React 19 · TypeScript 5 · Tailwind CSS 4 · Zustand · TanStack Query v5.
+
+서버 기능(SSR·미들웨어·서버 액션)은 쓰지 않는다. 전 화면이 클라이언트 컴포넌트라
+**정적 빌드로 내보내 nginx가 그대로 서빙한다** — 기존 배포 파이프라인(`Jenkinsfile`, `deploy.sh`)을 그대로 쓴다.
 
 ## Local development
 
-Backend와 local dependencies를 먼저 실행한다.
-
-```bash
-python scripts/local/dev.py init
-python scripts/local/dev.py up
-python scripts/local/dev.py backend
-```
-
-다른 terminal에서 Frontend를 실행한다.
-
 ```bash
 cd frontend
-nvm use
-npm ci
-npm run dev
+npm install
+npm run dev        # http://localhost:3000
 ```
 
-Vite는 `http://127.0.0.1:5173`에서 실행되며 `/api`를 기본적으로
-`http://localhost:8080`에 proxy한다. 다른 Backend 주소가 필요할 때만 `DEV_API_TARGET`을 바꾼다.
-
-## Checks
+`NEXT_PUBLIC_API_URL` 을 비워두면 `src/app/api/` 의 목 라우트로 붙고, 값을 주면 그 백엔드로 붙는다.
+`.env.example` 을 복사해 `.env.local` 을 만든다.
 
 ```bash
-npm ci
-npm run lint
-npm test
-npm run build
+npm run lint       # ESLint
+npm test           # 타입 체크 (tsc --noEmit)
+npm run build      # 프로덕션 빌드
 ```
 
-`VITE_API_BASE_URL`은 Browser bundle에 포함되는 공개 설정이다. 기본값과 운영값은 모두 `/api`다.
-`VITE_*` 변수에 credential, token, private key 또는 서명 secret을 넣지 않는다. 실제 `.env*` 파일은
-Git에서 제외하고 공개 가능한 변수 이름과 기본값만 `.env.example`에 기록한다.
+## 문서
+
+| 문서 | 내용 |
+| --- | --- |
+| [CLAUDE.md](CLAUDE.md) | 프로젝트 규칙 · 코드 컨벤션 |
+| [docs/rules/FEATURES.md](../docs/rules/FEATURES.md) | 기능 명세 (기준 문서) |
+| [docs/rules/BACKEND-NOTES.md](../docs/rules/BACKEND-NOTES.md) | ERD·API·백엔드 협의 항목 |
+| [docs/rules/CONVENTIONS.md](../docs/rules/CONVENTIONS.md) | Git 컨벤션 |
+
+## 구조
+
+```
+src/
+  app/          # 페이지·레이아웃·목 API 라우트만 (컴포넌트를 두지 않는다)
+  components/   # 용도별 폴더 (common/ layout/ map/ minimap/ player/ panels/ tutorial/ auth/)
+  hooks/        # queries/ mutations/ — 파일당 훅 하나
+  constants/    # 쿼리 키·API 경로·지도 상수·디자인 토큰
+  stores/       # Zustand
+  types/        # ERD 기반 도메인 타입
+  mocks/        # 목 데이터셋
+```

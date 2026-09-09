@@ -1,0 +1,91 @@
+/*
+ * ODY 디자인 토큰 — "별지도" 프로토타입(artifact 189966aa) 기준.
+ * 다크 우주 배경 + 글래스 HUD + 청록(teal) → 파랑(azure) → 보라(violet) 그라데이션.
+ * Tailwind 4 @theme 으로 등록되어 유틸리티(bg-glass, text-ink-2, border-line, rounded-box ...)로 쓴다.
+ * JS(canvas)에서 필요한 값은 src/constants/design-tokens.ts 에 미러링. 값이 바뀌면 양쪽을 함께 고친다.
+ */
+@theme {
+  /* ---------- 팔레트: 배경(void) ---------- */
+  --color-void: #04060d;
+  --color-void-2: #070b16;
+  --color-void-3: #0c1220;
+
+  /* ---------- 팔레트: 텍스트(ink) ---------- */
+  --color-ink: #e9f1ff;
+  --color-ink-2: #93a4c4;
+  --color-ink-3: #586a8b;
+  --color-ink-4: #3a4761;
+
+  /* ---------- 팔레트: 강조 ---------- */
+  --color-teal: #4fe3ce;
+  --color-azure: #5c9dff;
+  --color-violet: #a67cff;
+  --color-warn: #ffc46b;
+  --color-bad: #ff7a8a;
+
+  /* ---------- 글래스 / 라인 ---------- */
+  --color-glass: rgb(255 255 255 / 0.11);
+  --color-glass-2: rgb(255 255 255 / 0.15);
+  --color-glass-3: rgb(255 255 255 / 0.2);
+  --color-line: rgb(255 255 255 / 0.13);
+  --color-line-2: rgb(255 255 255 / 0.24);
+  --color-overlay: rgb(3 5 12 / 0.44);
+  --color-toast: rgb(10 14 26 / 0.82);
+
+  /* ---------- 시맨틱 별칭 (컴포넌트에서 주로 쓰는 이름) ---------- */
+  --color-bg: #04060d;
+  --color-bg-elevated: #070b16;
+  --color-surface: rgb(255 255 255 / 0.11);
+  --color-surface-2: rgb(255 255 255 / 0.15);
+  --color-surface-hover: rgb(255 255 255 / 0.2);
+  --color-border: rgb(255 255 255 / 0.13);
+  --color-border-strong: rgb(255 255 255 / 0.24);
+  --color-text: #e9f1ff;
+  --color-text-muted: #93a4c4;
+  --color-text-faint: #586a8b;
+  --color-text-dim: #3a4761;
+  --color-text-on-primary: #031018;
+  --color-primary: #5c9dff;
+  --color-accent: #a67cff;
+  --color-highlight: #4fe3ce;
+  --color-success: #4fe3ce;
+  --color-warning: #ffc46b;
+  --color-danger: #ff7a8a;
+  --color-online: #4fe3ce;
+  --color-offline: #3a4761;
+
+  /* ---------- 폰트 ---------- */
+  --font-display: "Familjen Grotesk", "IBM Plex Sans KR", system-ui, sans-serif;
+  --font-body: "IBM Plex Sans KR", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+
+  /* ---------- 박스 ---------- */
+  --radius-box: 14px;
+  --radius-box-sm: 10px;
+  --radius-box-xs: 8px;
+  --radius-pill: 999px;
+  --shadow-box: 0 18px 48px -22px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.055);
+  --shadow-glow-azure: 0 0 24px -6px rgb(92 157 255 / 0.8);
+  --shadow-glow-teal: 0 0 20px -8px rgb(79 227 206 / 0.6);
+  --shadow-glow-violet: 0 0 26px -10px rgb(166 124 255 / 0.9);
+
+  /* ---------- 레이아웃 치수 ---------- */
+  --spacing-hud: 18px;
+  --spacing-right-panel: 376px;
+  --spacing-rail: 56px;
+  --spacing-instrument: 230px;
+
+  /* ---------- 타이포 ---------- */
+  --text-2xs: 9.5px;
+  --text-xs: 10.5px;
+  --text-sm: 12px;
+  --text-md: 13px;
+  --text-lg: 15px;
+  --text-xl: 18px;
+  --text-2xl: 20px;
+
+  /* ---------- 모션 ---------- */
+  --duration-fast: 140ms;
+  --duration-normal: 320ms;
+  --ease-spring: cubic-bezier(0.2, 0.8, 0.2, 1);
+}

@@ -1,0 +1,80 @@
+import type { Email, Id, ISODateString } from "./common";
+import type { Music } from "./music";
+import type { User } from "./user";
+
+/** 피드(마이페이지/상대 프로필) 상단 + 대시보드 응답 */
+export interface UserProfile extends User {
+  isOnline: boolean;
+  followerCount: number;
+  followingCount: number;
+  /** 가입 후 며칠째인지 */
+  daysSinceJoined: number;
+  /** 지금 재생 중인 곡 */
+  nowPlaying: Pick<Music, "id" | "title" | "artist"> | null;
+  /** 상대 프로필일 때만: 나와 만난 횟수 */
+  meetingCount: number | null;
+  /** 내가 이 사람을 따라가고 있는지 */
+  isFollowing: boolean;
+  /** 이 사람이 따라가고 있는 사람 (있으면) */
+  followingTarget: Pick<User, "email" | "nickname"> | null;
+  dashboard: ProfileDashboard;
+}
+
+export interface ProfileDashboard {
+  /** 탐험한 곡 수 (재생 누른 곡 수) */
+  exploredCount: number;
+  /** 발견한 곡 수 (처음 재생한 곡) */
+  discoveredCount: number;
+  /** 선호 분위기 퍼센티지 */
+  moodPreference: { mood: string; percent: number }[];
+}
+
+/** 주변 친구 (지도 위 헬멧/우주선 + 목록 항목) */
+export interface NearbyUser {
+  email: Email;
+  nickname: string | null;
+  imageUrl: string | null;
+  isOnline: boolean;
+  isPublic: boolean;
+  /** 지금 듣고 있는 곡 = 지도상 위치 (따라가기 시 우주선·내 위치의 기준) */
+  musicId: Id;
+  /** 지금 보고 있는 상세 곡 (클릭한 곡). 따라가기 시 뷰포트 이동과 우측 패널의 기준 (SOCIAL-07) */
+  viewingMusicId: Id;
+  /** 선호 장르 (헬멧 색) */
+  genreId: Id;
+  /** 나와 만난 횟수 */
+  meetingCount: number;
+  /** 이 사람을 따라가는 인원 수. 1명 이상이면 우주선으로 그린다 */
+  riderCount: number;
+  /** 따라가기 중이면 대상 닉네임 */
+  followingNickname: string | null;
+  /** 절차적 아바타 시드 (0~1 여섯 개) */
+  avatarSeed: number[];
+}
+
+/** 랭킹 항목 (사람) */
+export interface UserRankingItem {
+  rank: number;
+  email: Email;
+  nickname: string | null;
+  imageUrl: string | null;
+  /** 지표값 (팔로워 수, 탐험 곡 수 등) */
+  score: number;
+}
+
+/** 랭킹 항목 (플레이리스트) */
+export interface PlaylistRankingItem {
+  rank: number;
+  playlistId: Id;
+  playlistName: string;
+  ownerNickname: string | null;
+  likeCnt: number;
+}
+
+/** 반응 이벤트 (수신) */
+export interface ReactionEvent {
+  id: string;
+  fromEmail: Email;
+  reactionKey: string;
+  sentAt: ISODateString;
+}

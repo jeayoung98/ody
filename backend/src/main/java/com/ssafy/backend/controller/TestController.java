@@ -30,7 +30,7 @@ public class TestController {
 		return ApiResponse.success(testService.pingRedis());
 	}
 
-	@GetMapping("/test/neo4j")
+	@GetMapping("/test/neo4j") 
 	public ApiResponse<String> getTestNeo4j() {
 		return ApiResponse.success(testService.pingNeo4j());
 	}

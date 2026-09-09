@@ -11,6 +11,7 @@
 | D4 | 2026-09-07 | 검색 서비스 = **Python FastAPI** + numpy(+faiss 선택). BE 게이트웨이가 호출 | 검증된 numpy 코드 재사용, 재구현·재검증 시간 없음. 병목은 행렬 연산 | `10/11/12` API 형태 |
 | D5 | 2026-09-07 | '오래됐고 인기 없는 곡' 은 **1차 제외 안 함**. 2차: 발매연도 = MusicBrainz `recording_first_release_date`, 인기 = MLHD 청취 합산(+ListenBrainz/Last.fm 보조). 제외가 아닌 **서빙 티어** | YouTube Data API 는 하루 100곡(할당량), 스크래핑은 약관 위반, 매칭 오염 | 2차 스펙 `40_popularity_tier`(미작성) |
 | D6 | 2026-09-07 | 서빙은 기존 아티팩트(v2.2)로 배포. **Spark 이식은 패리티 트랙**(서빙 선행조건 아님) | 6.5 작업일. 두 트랙을 묶으면 둘 다 미완 | `plan_release1.md` |
+| D8 | 2026-09-10 | **Spark 와 Hadoop 을 모두 실제로 사용한다 (프로젝트 요건).** 잡의 입출력은 `hdfs:///` 경로, 제출은 `spark-submit --master yarn`. 로컬 `pyspark local[*]` 은 개발용이며 완료 증거 아님. 컷 대상은 처리 범위(원본 630GB·전곡)이지 실행 환경이 아니다 | 사용자 확인(2026-09-10). 기존 컷 순서 1번이 S0 적재를 자르고 plan 이 로컬 `local[8]` 패리티를 허용해, 컷이 발동하면 Hadoop 사용 증거가 남지 않는 구멍이 있었다. 클러스터는 이미 준비됨(S15P21A405-46 완료: HDFS DataNode 2, YARN NodeManager 2, Spark 4.2.0 on YARN VERIFIED) | 스펙 20 **AC0** 신설(+AC5), `AGENTS.md` 규칙 10, `plan_release1.md` §4 컷 순서·절대 자르지 않는 것, `spark/README.md` 증거 수집 절차 |
 | D7 | 2026-09-10 | 좌표 차원은 **PCA-16**. Jira S15P21A405-35 설명의 "dim 64" 는 기획 초기 값이며 **설명 쪽을 갱신**한다 | 서빙 아티팩트가 `manifest.k=16`, `coords_v2.parquet` 이 `pc1..pc16`. 64 로 가려면 재학습이 필요하고 major 버전 + 게이트 재등록이라 1차 기간에 불가(규칙 3). 사용자(재영) 확인 | `50_db_schema` `track_vector` 스키마, Jira 35 설명 갱신. 열린 질문 Q1 종료 |
 
 ---

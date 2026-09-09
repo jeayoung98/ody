@@ -5,6 +5,31 @@
 ## 목적
 `Raw → Feature Selection → Preprocessing → PCA → Catalog → Serving Artifact` 를 Hadoop/Spark 잡으로 만들고, **현재 아티팩트(v2.2)를 비트 수준 가깝게 재현**한다. 재학습은 하지 않는다. 학습된 파라미터(`model_bundle.npz`, `split_axes.npz`, `feature_list.json`, `exclusion_rules.json`)를 적용만 한다.
 
+## 실행 환경 요건 (D8 — 프로젝트 요건, 협상 대상 아님)
+**Spark 와 Hadoop 을 모두 실제로 사용해야 한다.** 이 스펙에서 그 뜻은:
+
+| 구성요소 | 무엇으로 충족하나 |
+|---|---|
+| HDFS | 잡의 **입력과 출력이 `hdfs:///` 경로**다. 로컬 파일 경로로 읽고 쓰는 실행은 충족하지 않는다 |
+| YARN | `spark-submit --master yarn` 으로 제출한다. ResourceManager 가 executor 컨테이너를 띄운다 |
+| Spark | S2~S6 잡 본체 |
+
+`pyspark local[8]` 로컬 실행은 **개발·디버그 용도로만 허용**한다. HDFS 도 YARN 도 쓰지 않으므로 **완료 증거가 될 수 없다**. 표본 패리티를 로컬에서 먼저 맞추는 것은 좋지만, 그 결과만으로 작업을 완료로 표시하지 않는다.
+
+일정이 밀려도 **클러스터 실행은 자르지 않는다**(`data/AGENTS.md` 규칙 10, `docs/plan_release1.md` §4). 자르는 것은 원본 630GB 적재(S0)와 전곡 처리 범위이지, 실행 환경이 아니다.
+
+### 남길 증거
+`output/spark_run_<단계>_<날짜>.json` 에 잡마다 기록한다.
+```json
+{ "stage": "S2", "submitted": "spark-submit --master yarn ...",
+  "yarn_application_id": "application_<epoch>_<seq>", "final_status": "SUCCEEDED",
+  "input_path": "hdfs:///ody/data/raw_features_extracted", "input_rows": 0,
+  "output_path": "hdfs:///ody/data/features_pre", "output_rows": 0,
+  "executors": 2, "executor_memory": "4g", "executor_cores": 2, "driver_memory": "2g",
+  "duration_s": 0, "hdfs_du": "<hdfs dfs -du -h 출력>" }
+```
+수집 명령은 `spark/README.md` 참조.
+
 ## 단계와 계약
 | 단계 | 입력 | 출력 (HDFS Parquet) | 패리티 기준 |
 |---|---|---|---|
@@ -17,10 +42,14 @@
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
 
 ## 수용 기준
+- AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**
 - AC1 S2~S6 이 **기존 추출 Parquet 를 입력으로** 끝까지 돌고 패리티 기준 전부 통과 (`tests/test_spark_parity.py`, 표본 + 전곡 요약).
-- AC2 S0 잡이 클러스터에서 최소 1파트 완주하고 표본 값 일치. 30파트 완주는 배포 후 허용(D6).
+- AC2 S0 잡이 클러스터에서 최소 1파트 완주하고 표본 값 일치. 30파트 완주는 배포 후 허용(D6). **S0 자체는 컷 1번**이며, 잘려도 AC0 은 S2·S3 으로 충족된다.
 - AC3 각 잡은 멱등(같은 입력 → 같은 출력 해시), 파티션 단위 재시작 가능.
-- AC4 실행 문서 `spark/README.md`: 제출 명령, 자원(executor 수·메모리), 소요 시간 기록.
+- AC4 실행 문서 `spark/README.md`: 제출 명령, 자원(executor 수·메모리), 소요 시간, **증거 수집 절차** 기록.
+- AC5 HDFS 에 입력이 올라가 있고 행 수가 로컬 원본과 같다: `hdfs:///ody/data/raw_features_extracted` 7,404,506행.
+
+우선순위: 일정이 부족하면 **AC0 → AC1(표본) → AC1(전곡) → AC2** 순으로 확보한다. AC0 없이 AC1 만 로컬에서 채우는 것은 요건 미충족이다.
 
 ## 비범위
 재학습(M1·scaler·PCA·트리), ANN 인덱스 생성, 스트리밍.

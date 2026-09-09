@@ -43,4 +43,14 @@ AI 서비스는 별도 컨테이너 `ody-ai:8000`(네트워크 `ody-internal`, l
 작업 완료 = tasks.md 의 완료 조건(테스트 이름 또는 산출 파일) 통과 + 상태 갱신(⬜→✅). 보고는 팀 형식: `변경 / 검증 / 남은 위험 / 롤백`.
 
 ## 커밋 메시지
-팀 형식 `Type : 한 줄 요약`(Feat/Fix/Docs/Chore/Test/Refactor) + 핵심 수치. `Co-Authored-By: Claude Fable 5.1 <noreply@anthropic.com>`.
+형식의 단일 출처는 `.claude/rules/jira-workflow.md` 다. 이 절은 그 요약이며, 다르게 보이면 그쪽을 따르고 이 파일을 고친다.
+
+```text
+<type>: 한국어 한 줄 요약 + 핵심 수치 [S15P21A405-<번호>]
+```
+- `<type>` 은 **소문자**이고 **콜론을 바로 붙인다**: `feat` `fix` `refactor` `chore` `test` `docs` `ci` `style` `perf`. 스코프는 선택(`feat(retrieval): ...`).
+- `Docs :` / `Docs:` / `docs :` 는 훅이 차단한다.
+- Jira Key 는 대괄호로 끝에. 브랜치의 키와 같아야 한다.
+- `Co-Authored-By` 트레일러는 넣지 않는다(팀 이력과 일치).
+
+예: `feat: 이웃 검색 그래프 경로 구현, p95 32ms [S15P21A405-39]`

@@ -1,6 +1,6 @@
 .gradle
 build/
-!gradle/wrapper/gradle-wrapper.jar
+!backend/gradle/wrapper/gradle-wrapper.jar
 !**/src/main/**/build/
 !**/src/test/**/build/
 
@@ -39,10 +39,19 @@ out/
 .env
 .env.*
 !.env.example
-src/main/resources/application-local.yml
-src/main/resources/application-secret.yml
+!.env.local.example
+!backend/.env.example
+backend/src/main/resources/application-secret.yml
 
 ### Logs and operating-system files ###
 *.log
 .DS_Store
 Thumbs.db
+
+### Infrastructure secrets ###
+*.pem
+*.key
+secrets/
+credentials/
+__pycache__/
+*.pyc

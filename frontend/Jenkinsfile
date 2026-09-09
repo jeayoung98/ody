@@ -1,0 +1,192 @@
+pipeline {
+    agent any
+
+    options {
+        skipDefaultCheckout(true)
+        disableConcurrentBuilds()
+        buildDiscarder(logRotator(numToKeepStr: '20'))
+    }
+
+    environment {
+        NODE_IMAGE = 'node:24.20.0-bookworm-slim'
+        SSH_KEY = '/var/lib/jenkins/.ssh/app_deploy'
+        DEPLOY_USER = 'ubuntu'
+        DEPLOY_HOST = 'app-node'
+        PUBLIC_BASE_URL = 'https://j15a405.p.ssafy.io'
+        ARTIFACT_NAME = "ody-frontend-${BUILD_NUMBER}.tar.gz"
+        FRONTEND_CHANGED = 'true'
+        FRONTEND_DEPLOYED = 'false'
+    }
+
+    stages {
+        stage('Checkout') {
+            steps {
+                checkout scm
+            }
+        }
+
+        stage('Detect Frontend Changes') {
+            steps {
+                script {
+                    def effectiveBranch = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceFirst(/^origin\//, '')
+                    if (effectiveBranch && effectiveBranch != 'master') {
+                        env.FRONTEND_CHANGED = 'false'
+                        echo "Frontend deployment is disabled for branch: ${effectiveBranch}"
+                    } else {
+                        def changed = sh(
+                            returnStatus: true,
+                            script: '''#!/usr/bin/env bash
+set -euo pipefail
+
+base="${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}"
+if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+    exit 0
+fi
+
+if git diff --quiet "${base}" "${GIT_COMMIT}" -- \
+    frontend infra/k6/frontend-zero-downtime.js \
+    docs/infra/examples/frontend-nginx.locations.conf; then
+    exit 1
+fi
+exit 0
+'''
+                        )
+                        env.FRONTEND_CHANGED = changed == 0 ? 'true' : 'false'
+                        echo "Frontend-relevant change: ${env.FRONTEND_CHANGED}"
+                    }
+                }
+            }
+        }
+
+        stage('Install, Lint, Test, Build') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+docker run --rm \
+    --user "$(id -u):$(id -g)" \
+    -e HOME=/tmp \
+    -e npm_config_cache=/tmp/.npm \
+    -e VITE_API_BASE_URL=/api \
+    -v "${WORKSPACE}/frontend:/workspace" \
+    -w /workspace \
+    "${NODE_IMAGE}" \
+    sh -euc '
+        node --version | grep -Fx "v24.20.0"
+        npm --version | grep -Fx "11.19.0"
+        npm ci
+        npm run lint
+        npm test
+        npm run build
+    '
+
+test -s frontend/dist/index.html
+grep -Fx 'ok' frontend/dist/healthz.txt
+printf '%s\n' "${BUILD_NUMBER}" > frontend/dist/build-id.txt
+tar -C frontend/dist -czf "${ARTIFACT_NAME}" .
+'''
+            }
+        }
+
+        stage('Archive Artifact') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                archiveArtifacts artifacts: "${ARTIFACT_NAME}", fingerprint: true
+            }
+        }
+
+        stage('Transfer Artifact') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+ssh_options=(
+    -i "${SSH_KEY}"
+    -o BatchMode=yes
+    -o StrictHostKeyChecking=yes
+)
+
+scp "${ssh_options[@]}" \
+    "${ARTIFACT_NAME}" \
+    "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/${ARTIFACT_NAME}"
+scp "${ssh_options[@]}" \
+    frontend/deploy.sh \
+    "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/deploy-frontend-${BUILD_NUMBER}.sh"
+'''
+            }
+        }
+
+        stage('Deploy Frontend') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+ssh \
+    -i "${SSH_KEY}" \
+    -o BatchMode=yes \
+    -o StrictHostKeyChecking=yes \
+    "${DEPLOY_USER}@${DEPLOY_HOST}" \
+    "chmod 0755 '/tmp/deploy-frontend-${BUILD_NUMBER}.sh' && \
+     '/tmp/deploy-frontend-${BUILD_NUMBER}.sh' deploy '/tmp/${ARTIFACT_NAME}' '${BUILD_NUMBER}'"
+'''
+                script {
+                    env.FRONTEND_DEPLOYED = 'true'
+                }
+            }
+        }
+
+        stage('Verify Public Routes') {
+            when {
+                expression { env.FRONTEND_CHANGED == 'true' }
+            }
+            steps {
+                sh '''#!/usr/bin/env bash
+set -euo pipefail
+
+curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/" >/dev/null
+marker="$(curl -fsS --retry 5 --retry-delay 1 --max-time 10 \
+    "${PUBLIC_BASE_URL}/build-id.txt?release=${BUILD_NUMBER}")"
+[[ "${marker}" == "${BUILD_NUMBER}" ]]
+curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/api/hello" >/dev/null
+
+actuator_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
+    "${PUBLIC_BASE_URL}/actuator/health")"
+[[ "${actuator_status}" == "403" || "${actuator_status}" == "404" ]]
+'''
+            }
+        }
+    }
+
+    post {
+        always {
+            sh '''#!/usr/bin/env bash
+rm -f -- "${ARTIFACT_NAME}"
+if [[ "${FRONTEND_CHANGED:-false}" == "true" ]]; then
+    ssh \
+        -i "${SSH_KEY}" \
+        -o BatchMode=yes \
+        -o StrictHostKeyChecking=yes \
+        "${DEPLOY_USER}@${DEPLOY_HOST}" \
+        "rm -f -- '/tmp/${ARTIFACT_NAME}' '/tmp/deploy-frontend-${BUILD_NUMBER}.sh'" || true
+fi
+'''
+        }
+        success {
+            echo "Frontend pipeline completed. deployed=${env.FRONTEND_DEPLOYED} build=${env.BUILD_NUMBER}"
+        }
+        failure {
+            echo 'Frontend pipeline failed. The deploy script preserves or restores the previous current symlink.'
+        }
+    }
+}

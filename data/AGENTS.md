@@ -23,7 +23,7 @@
 7. 출처 표기: Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17.
 8. 한국 곡 매칭은 한글 완전일치만. 로마자 추측 매칭 금지.
 9. 후처리 임계값(τ_dup·artist_cap·τ_far·길이)은 `postprocess_rules.json` 에서 읽는다. 하드코딩 금지.
-10. 자르지 않는 것: 제외 곡 미노출, 후처리 규칙, `far` 표시, 계약 검사. 일정이 밀리면 `docs/plan_release1.md` 의 컷 순서대로 자른다.
+10. 자르지 않는 것: 제외 곡 미노출, 후처리 규칙, `far` 표시, 계약 검사, **Spark·Hadoop 클러스터 실행 증거**(D8 — HDFS 입출력 + `--master yarn` 제출, 스펙 20 AC0). 일정이 밀리면 `docs/plan_release1.md` 의 컷 순서대로 자른다. 자르는 것은 처리 범위이지 실행 환경이 아니다.
 
 ## 아티팩트
 - 서빙 번들 `serving/<version>/` 하나로 함께 버전(좌표·트리·모델·규칙·manifest). 포인터 `serving/CURRENT.json`. git 에는 json·csv 만.

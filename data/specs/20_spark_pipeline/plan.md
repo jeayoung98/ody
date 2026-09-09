@@ -23,8 +23,14 @@
 ## 패리티 테스트 (`tests/test_spark_parity.py`)
 로컬 `pyspark` (local[8]) 로 표본 10만 행 실행 → numpy 기준 파이프라인 결과와 비교. 전곡은 클러스터 결과 Parquet 를 내려받아 요약 통계(최대 오차·불일치 수)만 검사.
 
-## 자원 가정
-클러스터 사양 미확인 → 09-10 오전 확인. 로컬 pyspark 로 개발·패리티, 클러스터는 S0 와 전곡 실행.
+**로컬 실행은 개발·디버그 전용이다.** HDFS 도 YARN 도 쓰지 않으므로 스펙의 AC0(클러스터 실행)을 충족하지 않고, 완료 증거로 쓸 수 없다. 순서는 로컬에서 수치를 맞춘 뒤 **같은 잡을 클러스터에 제출해 다시 확인**하는 것이다.
+
+## 자원 (확인됨, `docs/infra/STATUS.md`)
+노드 2대 × 4 vCPU / 15GiB. HDFS DataNode 2(replication 2), YARN NodeManager 2 = 총 12GB·6 vcores. Spark 4.2.0 on YARN, master-node 에서 client 모드 제출. S15P21A405-46(Spark 실행 환경 점검) 완료.
+
+잡 자원: 입력 파티션 ≈ 100(90MB), executor 2 × 4GB × 2 cores, driver 2GB. 남는 여유가 작으므로 `collect()`·`toPandas()` 금지, 브로드캐스트는 파라미터(270 × 16 상수)까지만.
+
+로컬 pyspark 는 개발·디버그용이고, **완료 판정은 클러스터 실행으로만 한다**(스펙 AC0).
 
 ## 리스크
 - pyspark 로컬 설치·JDK 필요(venv 밖). 09-10 첫 1시간 환경.

@@ -11,7 +11,7 @@ import unittest
 
 PROJECT = "s15-bigdata-dist-sub1/S15P21A405"
 SOURCE_PATTERN = (
-    r"^(frontend|backend|ai)/[a-z][a-z0-9-]*/"
+    r"^(frontend|backend|data)/[a-z][a-z0-9-]*/"
     r"(S15P21A405-[0-9]+)-[a-z0-9]+(?:-[a-z0-9]+)*$"
 )
 
@@ -67,7 +67,7 @@ class AutomationContractTests(unittest.TestCase):
                          ("TRANSITION_REQUESTED", "S15P21A405-101"))
 
     def test_case_03_ai(self):
-        self.assertEqual(decide(event("ai/feat/S15P21A405-70-pca", "ai/dev")),
+        self.assertEqual(decide(event("data/feat/S15P21A405-70-pca", "data/dev")),
                          ("TRANSITION_REQUESTED", "S15P21A405-70"))
 
     def test_case_04_feature_to_main(self):
@@ -98,15 +98,15 @@ class AutomationContractTests(unittest.TestCase):
         self.assertEqual(decide(event(state="opened")), ("IGNORE", None))
 
     def test_all_parts_and_types(self):
-        for part in ("frontend", "backend", "ai"):
+        for part in ("frontend", "backend", "data"):
             for kind in ("feat", "fix", "refactor", "chore", "test", "docs", "perf"):
                 with self.subTest(part=part, kind=kind):
                     self.assertEqual(decide(event(f"{part}/{kind}/S15P21A405-1-demo", f"{part}/dev")),
                                      ("TRANSITION_REQUESTED", "S15P21A405-1"))
 
     def test_all_cross_parts_and_promotions(self):
-        for part in ("frontend", "backend", "ai"):
-            for other in ("frontend", "backend", "ai"):
+        for part in ("frontend", "backend", "data"):
+            for other in ("frontend", "backend", "data"):
                 if part != other:
                     self.assertEqual(decide(event(f"{part}/feat/S15P21A405-1-demo", f"{other}/dev")),
                                      ("IGNORE", None))

@@ -12,7 +12,7 @@ Automation actor 권한, 워크플로 전환은 아직 검증하지 않았으므
 
 - `backend/`: Spring Boot, `Jenkinsfile`, `deploy.sh`.
 - `frontend/`: React/Vite, `Jenkinsfile`, `deploy.sh`.
-- `ai/`: 현재 작업 폴더에 존재하는 미추적 작업. 이번 작업에서 수정하지 않는다.
+- `data/`: 현재 작업 폴더에 존재하는 미추적 작업. 이번 작업에서 수정하지 않는다.
 - `infra/`, `ops/`, `observability/`: 로컬 구성, 운영·검증 스크립트, 관측성.
 - `scripts/`, `docs/`: 개발 도구와 문서. 추적된 `.gitlab-ci.yml`이나 Jira 자동화 정의는 없다.
 - 기존 `docs/infra/CI_CD.md`는 master 배포 흐름을 설명하며, frontend Jenkinsfile도 master 배포를 제한한다.
@@ -20,7 +20,7 @@ Automation actor 권한, 워크플로 전환은 아직 검증하지 않았으므
 - 조회 시 현재 브랜치는 `infra/chore/S15P21A405-34-jenkins-pipeline`이었다.
   로컬 remote-tracking 목록에 part/dev가 없었지만 원격 부재를 의미하지는 않는다.
   최신 원격 브랜치와 보호 규칙은 적용 전에 GitLab에서 확인한다.
-- `.gitignore`, `.claude/`, `CLAUDE.md`, `ai/`의 기존 사용자 변경은 보존한다.
+- `.gitignore`, `.claude/`, `CLAUDE.md`, `data/`의 기존 사용자 변경은 보존한다.
 
 ## 선택한 방식
 
@@ -73,7 +73,7 @@ flowchart TD
 Source 정규식:
 
 ```regex
-^(frontend|backend|ai)/[a-z][a-z0-9-]*/(S15P21A405-[0-9]+)-[a-z0-9]+(?:-[a-z0-9]+)*$
+^(frontend|backend|data)/[a-z][a-z0-9-]*/(S15P21A405-[0-9]+)-[a-z0-9]+(?:-[a-z0-9]+)*$
 ```
 
 type은 소문자로 시작하는 경로 한 구간이다. feat/fix/refactor/chore/test/docs/perf 등을 허용한다.
@@ -85,10 +85,10 @@ MR 제목·본문·커밋 메시지에서 키를 찾지 않는다.
 | --- | --- | --- |
 | frontend/feat/S15P21A405-101-map | frontend/dev | 101번 이슈 전환 대상 |
 | backend/feat/S15P21A405-34-nearby | backend/dev | 34번 이슈 전환 대상 |
-| ai/refactor/S15P21A405-70-pca | ai/dev | 70번 이슈 전환 대상 |
+| data/refactor/S15P21A405-70-pca | data/dev | 70번 이슈 전환 대상 |
 | frontend/feat/S15P21A405-101-map | backend/dev | 무시 |
 | backend/dev | backend/main | 무시 |
-| ai/main | master 또는 main | 무시 |
+| data/main | master 또는 main | 무시 |
 
 ## Jira UI 설정
 
@@ -247,7 +247,7 @@ Jira의 정규식/Smart value 실행, 권한, transition 성공을 검증하는 
 | --- | --- | --- |
 | 1 | backend/feat/S15P21A405-34-nearby → backend/dev merge | 전환 요청 / 해당 이슈 완료 |
 | 2 | frontend/feat/S15P21A405-101-map → frontend/dev merge | 전환 요청 / 해당 이슈 완료 |
-| 3 | ai/feat/S15P21A405-70-pca → ai/dev merge | 전환 요청 / 해당 이슈 완료 |
+| 3 | data/feat/S15P21A405-70-pca → data/dev merge | 전환 요청 / 해당 이슈 완료 |
 | 4 | backend 기능 → backend/main | IGNORE / 상태 변경 없음 |
 | 5 | backend/dev → backend/main | IGNORE / 상태 변경 없음 |
 | 6 | frontend/feat/no-jira-key → frontend/dev | IGNORE / 상태 변경 없음 |
@@ -263,7 +263,7 @@ Jira의 정규식/Smart value 실행, 권한, transition 성공을 검증하는 
 1. 담당자 승인하에 frontend/backend/ai용 **테스트 전용 Jira 이슈 3개**를 준비한다.
    위 34/101/70은 예시이며 실제 업무 이슈를 테스트 목적으로 종료하지 않는다.
 2. 각 파트에서 `<part>/test/<실제 테스트 키>-jira-automation` 브랜치를 만들고
-   검토 가능한 테스트 변경만 MR로 올린다. 대상은 각각 frontend/dev, backend/dev, ai/dev다.
+   검토 가능한 테스트 변경만 MR로 올린다. 대상은 각각 frontend/dev, backend/dev, data/dev다.
 3. 생성·수정·승인 단계에서는 상태가 변하지 않는지 확인한다. 실제 merge 후 해당 이슈만 완료인지 확인한다.
 4. 표의 제외 사례는 실제 dev/main 승격을 강행하지 말고, 격리된 테스트 규칙에서
    비식별 payload로 검사한다. 실제 프로젝트용 규칙은 테스트 종료 후 임의 데이터로 호출하지 않는다.

@@ -1,5 +1,6 @@
 server:
   port: 8080
+  forward-headers-strategy: framework
 
 management:
   endpoints:
@@ -31,15 +32,29 @@ spring:
     authentication:
       username: neo4j
       password: ${NEO4J_PASSWORD}
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: ${GOOGLE_CLIENT_ID}
+            client-secret: ${GOOGLE_CLIENT_SECRET}
+            scope: email, profile
 
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
   configuration:
     map-underscore-to-camel-case: true
 
-#app:
-#  cors:
-#    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+app:
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS}
+  jwt:
+    secret: ${JWT_SECRET}
+    access-token-expiration-ms: 1800000
+    refresh-token-expiration-ms: 1209600000
+  oauth:
+    frontend-redirect-uri: ${FRONTEND_OAUTH_REDIRECT_URI}
 
 ---
 spring:
@@ -61,7 +76,20 @@ spring:
     authentication:
       username: neo4j
       password: test
+  security:
+    oauth2:
+      client:
+        registration:
+          google:
+            client-id: test-client-id
+            client-secret: test-client-secret
 
 app:
   cors:
     allowed-origins: "*"
+  jwt:
+    secret: test-jwt-secret-key-for-unit-tests-only-do-not-use-in-production
+    access-token-expiration-ms: 1800000
+    refresh-token-expiration-ms: 1209600000
+  oauth:
+    frontend-redirect-uri: http://localhost:5173/oauth/redirect

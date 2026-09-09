@@ -4,9 +4,9 @@
 
 **Created**: 2026-09-08
 
-**Status**: Draft — clarify 완료 (매칭 규칙·정렬 순서 확정)
+**Status**: Draft — 2026-09-09 master 인프라 기준 재베이스라인 (에러코드·공통레이어 정정)
 
-**Input**: 인증된 사용자가 검색어로 곡을 찾는다. 곡명·아티스트명으로 매칭하여 페이지네이션된 곡 목록(MusicSummary)을 반환한다. 기존 `GET /music/search` 계약(api-spec §3.1)과 공통 응답·인증·페이지네이션·고정 좌표 정책을 유지한다. (요구사항 SEARCH-01)
+**Input**: 인증된 사용자가 검색어로 곡을 찾는다. 곡명·아티스트명으로 매칭하여 페이지네이션된 곡 목록(MusicSummary)을 반환한다. `GET /music/search` (요구사항 SEARCH-01). 공통 응답·에러 계약은 **master에 통합된 실제 공통 레이어**(backend `common.ApiResponse`/`GlobalErrorCode` 등)를 기준으로 한다.
 
 ## Clarifications
 
@@ -14,6 +14,14 @@
 
 - Q: query 매칭 규칙을 어떻게 정할까? (곡명·아티스트명 대상) → A: 부분일치(substring), 대소문자 무시. 곡명 또는 아티스트명에 query가 포함되면 매칭.
 - Q: 검색 결과 정렬 순서를 무엇으로 할까? → A: youtubeCnt(유튜브 조회수) 내림차순, 동률 시 id 오름차순 tie-break.
+
+### Session 2026-09-09 (master 인프라 재베이스라인)
+
+- 결정: 어제 스펙은 우리가 정한 가정(api-spec 정본 §0.5 에러코드, 깨끗한 공통 레이어) 위에 작성됐다. master에 실제 인프라가 통합되어(backend/ 프로젝트, MyBatis, Postgres/Neo4j/Redis, BE1 공통 레이어) **master 기준으로 정정**한다.
+- 에러코드: master `GlobalErrorCode` 실제 값을 채택 — 검증 실패 `INVALID_INPUT`(400), 내부 실패 `INTERNAL_SERVER_ERROR`(500). api-spec 정본 §0.5의 `VALIDATION_ERROR`/`INTERNAL_ERROR`와 불일치 → 정본 문서 갱신 대상으로 [충돌]에 기록(어느 쪽이 옳은지는 팀 확정).
+- 공통 응답: `ApiResponse.success/fail`, `ErrorResponse(code,message)`, `ErrorCode`(인터페이스)+`GlobalErrorCode`(enum), `CustomException`.
+- 인증(401): master에 Core 인증·시큐리티 미구현, 401 코드도 `GlobalErrorCode`에 없음 → **B-A 여전히 블로커**, 코드값은 Core 확정 대기.
+- 데이터 접근: MyBatis(+Postgres). 검색 대상 저장소(Postgres vs Neo4j)·`youtubeCnt` 컬럼·pg_trgm는 plan/BE4 확인(B-D 잔여).
 
 ## User Scenarios & Testing *(mandatory)*
 
@@ -41,16 +49,16 @@
 **Acceptance Scenarios**:
 
 1. **Given** 인증된 요청이지만 매칭 곡이 없고, **When** 검색하면, **Then** 200과 빈 `content` 배열을 반환한다(오류 아님). (FR-002)
-2. **Given** `query`가 누락되었고, **When** 검색하면, **Then** 400과 `VALIDATION_ERROR`, 공통 실패 구조를 반환한다. (FR-008)
-3. **Given** 토큰이 없거나 위조·만료되었고, **When** 검색하면, **Then** 401을 반환한다(위조·무효 `INVALID_TOKEN`, 만료 `TOKEN_EXPIRED`). (FR-003, FR-008)
-4. **Given** 검색 중 서버 내부 실패가 발생했고, **When** 응답하면, **Then** 500과 `INTERNAL_ERROR`, 공통 실패 구조를 반환한다(성공 목록으로 응답하지 않음). (FR-008)
+2. **Given** `query`가 누락/공백이거나 `page`가 음수·비정수고, **When** 검색하면, **Then** 400과 `INVALID_INPUT`, 공통 실패 구조를 반환한다. (FR-008)
+3. **Given** 토큰이 없거나 위조·만료되었고, **When** 검색하면, **Then** 401을 반환한다. 세부 코드는 Core 인증(B-A) 확정 후(master `GlobalErrorCode`에 401 코드 미등록). (FR-003, FR-008)
+4. **Given** 검색 중 서버 내부 실패가 발생했고, **When** 응답하면, **Then** 500과 `INTERNAL_SERVER_ERROR`, 공통 실패 구조를 반환한다(성공 목록으로 응답하지 않음). (FR-008)
 
 ### Edge Cases
 
 | 상황 | 동작 |
 | --- | --- |
-| `query` 공백/빈 문자열 | 400 `VALIDATION_ERROR` (required, 공백만인 값 불허) |
-| `page` 음수/비정수 | 400 `VALIDATION_ERROR` (타입·범위 위반) |
+| `query` 공백/빈 문자열 | 400 `INVALID_INPUT` (required, 공백만인 값 불허) |
+| `page` 음수/비정수 | 400 `INVALID_INPUT` (타입·범위 위반) |
 | `page`가 총 페이지 수 초과 | 빈 `content` + 200 (오류 아님) |
 | 정렬 동률 (youtubeCnt 같음) | id 오름차순 tie-break로 페이지 간 순서 안정 |
 | 곡명·아티스트명 동시 매칭 | 한 번만 결과에 포함(곡 단위 중복 없음) |
@@ -66,8 +74,8 @@
 - **FR-005 — 곡 정보**: 각 항목은 MusicSummary 필드(id, title, artist, album, genres, youtubeUrl, location)를 유지해야 한다(MUST). 기존 타입·null 허용 범위를 임의로 좁히지 않는다. **근거**: api-spec §0.6.
 - **FR-006 — 고정 좌표**: 곡 좌표는 서빙 baseline `v2.1-pca16` 기준으로 진입 경로와 무관하게 동일해야 한다(MUST). 검색이 좌표·모델을 변경해서는 안 된다(MUST NOT). **근거**: 요구사항 §6 데이터-일관성.
 - **FR-007 — 재생 불가 곡 표시**: `youtubeUrl`이 null인 곡도 결과에서 제외하지 않고 `youtubeUrl:null`을 유지해야 한다(MUST). **근거**: 요구사항 SONG-04; api-spec §0.6.
-- **FR-008 — 오류 구조**: 검증 실패는 400 `VALIDATION_ERROR`, 인증 실패는 401, 내부 실패는 500 `INTERNAL_ERROR`로 응답하고, 실패 본문은 `success:false`, `data:null`, `error.code/message`를 제공해야 한다(MUST). **근거**: api-spec §0.2·§0.4·§0.5.
-- **FR-009 — 매칭 규칙**: 시스템은 `query`가 곡명 **또는** 아티스트명에 부분일치(substring)로 포함되는 곡을 매칭해야 한다(MUST). 대소문자를 구분하지 않는다(MUST). 앞뒤 공백은 무시하고, 공백만이거나 빈 `query`는 `VALIDATION_ERROR`로 거절한다(MUST). 곡명·아티스트명 양쪽에 매칭되어도 곡은 결과에 한 번만 포함한다(MUST). **근거**: 2026-09-08 clarify; api-spec §2.7 사용자검색 부분일치 선례.
+- **FR-008 — 오류 구조**: 검증 실패는 400 `INVALID_INPUT`, 내부 실패는 500 `INTERNAL_SERVER_ERROR`(master `GlobalErrorCode` 기준), 인증 실패는 401(코드는 B-A 확정)로 응답하고, 실패 본문은 `success:false`, `data:null`, `error:{code,message}`(master `ErrorResponse`)를 제공해야 한다(MUST). **근거**: master `common.GlobalErrorCode`/`GlobalExceptionHandler`; api-spec §0.2·§0.4. **[충돌]**: api-spec 정본 §0.5는 `VALIDATION_ERROR`/`INTERNAL_ERROR`를 명시 — master 구현과 코드명 불일치. 본 스펙은 master 기준을 채택하고 정본 §0.5 갱신을 충돌 항목으로 남긴다.
+- **FR-009 — 매칭 규칙**: 시스템은 `query`가 곡명 **또는** 아티스트명에 부분일치(substring)로 포함되는 곡을 매칭해야 한다(MUST). 대소문자를 구분하지 않는다(MUST). 앞뒤 공백은 무시하고, 공백만이거나 빈 `query`는 400 `INVALID_INPUT`으로 거절한다(MUST). 곡명·아티스트명 양쪽에 매칭되어도 곡은 결과에 한 번만 포함한다(MUST). **근거**: 2026-09-08 clarify; api-spec §2.7 사용자검색 부분일치 선례.
 - **FR-010 — 정렬 순서**: 검색 결과는 `youtubeCnt` 내림차순으로 정렬하고, 동률 시 `id` 오름차순으로 tie-break해야 한다(MUST). 이 정렬은 페이지 간 순서 안정성을 보장한다. **근거**: 2026-09-08 clarify.
 
 ### Key Entities *(include if feature involves data)*
@@ -86,14 +94,17 @@
 - **SC-004**: query가 곡명·아티스트명에 부분일치(대소문자 무시)하는 곡을 빠짐없이 찾고, 결과는 youtubeCnt 내림차순·id 오름차순으로 정렬되어 같은 query·page 재요청 시 동일 순서를 반환한다. **근거**: FR-009·FR-010.
 
 **plan 단계로 미루는 사항**:
-- 응답 시간 예산 — 요구사항 §6의 "유사곡 검색 1초"는 좌표 기반 검색 대상이므로 임의 전용하지 않음.
-- substring 매칭의 인덱스 전략(pg_trgm 등).
-- **아키텍처 경계 (헌법 X)** — 텍스트 검색(곡명·아티스트명 substring)이 BE4 "검색 엔진·인덱스" 책임인지 BE2 "검색 호출·API" 책임인지 미문서화. 헌법 X에 따라 plan에서 해소할 공백으로 식별하고 임의 경계를 만들지 않는다.
-- **관측 지표 (헌법 VIII)** — plan은 요청량·지연·오류율 지표와 그 확인 방법을 명시해야 한다(MUST).
+- 검색 대상 저장소 확정(Postgres vs Neo4j) 및 `youtubeCnt`·`title`·`artist` 스키마 — BE4 확인.
+- MyBatis 매퍼 기반 substring 매칭·정렬·페이징 구현과 인덱스 전략(Postgres면 pg_trgm).
+- 테스트 인프라: master `@MapperScan`+`@WebMvcTest` 충돌 대응(슬라이스 방식 결정).
+- 응답 시간 예산 — §6 "유사곡 검색 1초"는 좌표 검색 대상이라 전용 안 함.
+- **관측 지표 (헌법 VIII)** — plan은 요청량·지연·오류율 지표와 확인 방법을 명시해야 한다(MUST).
+- **아키텍처 경계 (헌법 X)** — 텍스트 검색이 BE2 API·규칙 / BE4 인덱스·실행. port 계약으로 분리.
 
 ## Assumptions
 
-- `GET /music/search` 계약과 공통 응답·인증·페이지네이션은 api-spec 정본을 기준으로 하며, 새 제품 정책을 가정하지 않는다.
-- 곡 데이터·좌표는 기존 서빙 baseline(`v2.1-pca16`)에서 조회한다. 코드 골격 존재가 작동·검증 완료를 의미하지 않는다.
-- BE4 검색 인터페이스 경계를 존중한다. 매칭·정렬 구현은 그 경계와 clarify 결과에 따라 plan 단계에서 정한다.
-- 매칭 규칙·정렬 순서 미정 항목은 clarify로 확정한 뒤 규범으로 승격한다.
+- **기준 인프라 = master 통합본**: backend/ 단일 Gradle 프로젝트, 공통 레이어 `common.ApiResponse/ErrorCode/GlobalErrorCode/CustomException/GlobalExceptionHandler`, MyBatis + Postgres(+Neo4j/Redis). 어제의 임시 공통(`common.response`/`common.exception`)·가정은 폐기.
+- 공통 응답·에러 계약은 master 실물을 기준으로 하되, api-spec 정본 §0.5와의 에러코드 불일치는 정본 갱신 대상으로 남긴다(FR-008 [충돌]).
+- 곡 데이터·좌표는 서빙 baseline(`v2.1-pca16`)에서 조회한다. 검색 대상 저장소(Postgres/Neo4j)·`youtubeCnt` 컬럼·인덱스는 BE4 확인(B-D 잔여).
+- BE4 검색 인터페이스 경계를 존중한다(port 계약). 어댑터는 MyBatis 매퍼로 plan에서 설계.
+- 인증(B-A)은 Core 미구현이라 검증(E4)·401 코드는 Core 도착 후.

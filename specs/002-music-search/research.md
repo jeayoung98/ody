@@ -1,48 +1,41 @@
-# Research: 음악 검색
+# Research: 음악 검색 (2026-09-09 master 재베이스라인)
 
-Phase 0. spec/헌법이 남긴 결정 가능한 항목을 해소하고, 진짜 막힌 것만 보류로 넘긴다.
+## R1. 검색 대상 저장소
 
-## R1. 아키텍처 경계 — 텍스트 검색은 BE2인가 BE4인가 (헌법 X)
+- **Decision**: 텍스트 검색은 **Postgres + MyBatis**로 구현(어댑터=MyBatis 매퍼).
+- **Rationale**: master에 postgres 드라이버·jdbc·mybatis-starter·datasource(application-db.yml) 통합됨. Neo4j는 Journey(그래프 경로)용으로 추정, 텍스트 검색엔 부적합. Redis는 캐시/실시간용.
+- **Blocker (B-D)**: 곡 데이터가 실제로 Postgres에 있는지(Neo4j 가능성), `title/artist/youtubeCnt` 컬럼·`pc1~pc16` 저장 형태는 BE4 스키마 확정 후. 그전엔 매퍼 SQL 확정 불가.
 
-- **Decision**: BE2가 API·입력검증·응답조립과 매칭/정렬 **계약**을 소유. 실제 인덱스·쿼리 **실행**은
-  BE4 조회 port(`MusicSearchReader`) 뒤로 분리.
-- **Rationale**: 헌법 "BE4=검색 엔진·인덱스·평가, BE2=검색 호출·API·업무 규칙". 001이 이미
-  `MajorTrackReader`로 같은 분리를 확립 → 새 경계 발명 아님(헌법 X: 임의 경계 금지). substring/정렬은
-  업무 규칙이라 port **계약**에 명시하고, 인덱스 선택은 BE4 실행 재량.
-- **Alternatives**: BE2가 직접 DB 쿼리 → BE4 인덱스·거리 책임과 충돌, 경계 위반. 기각.
+## R2. 테스트 인프라 — @WebMvcTest vs master @MapperScan ⚠️
 
-## R2. 관측 지표 (헌법 VIII)
+- **Problem**: `BackendApplication`에 `@MapperScan("...mapper")`. `@WebMvcTest` 슬라이스엔 SqlSessionFactory가 없어 매퍼 빈 생성 실패 → 컨텍스트 로드 실패(어제 이전 후 11개 테스트 red). master 자체 테스트는 `@WebMvcTest`를 안 씀(HelloControllerTests = 순수 유닛).
+- **Decision**: 내 컨트롤러 테스트를 **standalone MockMvc**로 전환(`MockMvcBuilders.standaloneSetup(new MusicController(mockService)).setControllerAdvice(new GlobalExceptionHandler())`). Spring 컨텍스트 미로드 → @MapperScan 지뢰 회피, master 패턴과 정합.
+- **Caveat**: standalone은 `@Validated` @RequestParam 검증(@NotBlank/@Min)을 기본 트리거 안 할 수 있음. 검증(E1/E2)이 standalone에서 안 걸리면 → 해당 검증은 유닛/명시 매핑으로 보완하고, **프로젝트 전역 @WebMvcTest 지원은 BE-infra 과제로 플래그**(아래).
+- **Alternatives**: (a) 메인 `@MapperScan`을 별도 @Configuration으로 분리해 슬라이스에서 제외 → 근본 해결·전 팀 이득이나 **BE1/BE4 소유 파일, 합의 필요**(권고: 팀 이슈로 제기). (b) @WebMvcTest에 mock SqlSessionFactory 주입 → 해킹성, 기각.
+- **권고**: 이 기능은 standalone MockMvc로 자립 검증, 동시에 (a)를 BE-infra 이슈로 올려 전역 @WebMvcTest 복구.
 
-- **Decision**: 기존 actuator + micrometer-prometheus의 `http.server.requests` 재사용 →
-  엔드포인트별 요청량·지연(백분위)·오류율 무료 수집. 실패 시 구조화 로그(코드·상태),
-  `query` 원문은 로그에 truncate/해시(PII·검색어 과다 노출 방지).
-- **Rationale**: build.gradle에 이미 있음 → 신규 의존성 0(YAGNI). 헌법 VIII "지표·확인 방법 명시" 충족.
-- **Alternatives**: 커스텀 메트릭 카운터 → 초기엔 불필요. 필요 시 추가.
+## R3. 검증 예외 → 400 매핑 ⚠️
 
-## R3. substring 매칭 인덱스 전략 (B-D 의존)
+- **Problem**: master `GlobalExceptionHandler`는 `CustomException`과 generic `Exception`만 처리. 검증 예외(HandlerMethodValidationException 등)가 generic으로 떨어져 **500 INTERNAL_SERVER_ERROR** 반환 → spec FR-008(검증→400 INVALID_INPUT) 위반.
+- **Decision(권고)**: 공통 `GlobalExceptionHandler`에 검증 예외 핸들러 추가 → 400 `GlobalErrorCode.INVALID_INPUT`. 이는 전 엔드포인트가 겪는 갭이라 공통에서 고치는 게 근본(ponytail: 루트 원인·공유 함수).
+- **경계(헌법 X)**: 해당 파일은 BE1 소유 → **BE1 합의 후 반영**(B-Common). 합의 전 임시로 music 스코프 @RestControllerAdvice를 둘 수 있으나 중복이라 비권장.
 
-- **Decision(조건부)**: 저장소가 Postgres면 title·artist에 `pg_trgm` GIN 인덱스로 `ILIKE %q%` 가속.
-- **Rationale**: 양끝 wildcard substring은 B-tree 불가. clarify에서 전문검색이 아닌 substring으로
-  확정 → tsvector 도입 안 함. team memory상 서빙 baseline이 pgvector(Postgres) → pg_trgm 자연스러움.
-- **Alternatives**: tsvector 전문검색(clarify와 불일치, 기각), 애플리케이션 필터(662만 곡 JVM 적재 불가, 기각).
-- **Blocker**: build.gradle에 DB 드라이버 없음, 실제 스키마·컬럼(youtubeCnt) 미확인 → BE4(B-D) 확정 후 DDL.
+## R4. 에러코드·공통 응답
 
-## R4. 성능 예산
+- **Decision**: master `common` 채택. `ApiResponse.success/fail`, `ErrorResponse(code,message)`, `GlobalErrorCode.INVALID_INPUT`(400)/`INTERNAL_SERVER_ERROR`(500).
+- **[충돌]**: api-spec 정본 §0.5는 `VALIDATION_ERROR`/`INTERNAL_ERROR`. master와 코드명 불일치 → 정본 갱신 대상(스펙 FR-008에 기록). 어느 쪽이 옳은지 팀 확정, 임의 단정 안 함(헌법 IX).
 
-- **Decision(제안)**: p95 < 300ms 목표로 제안, 팀 확인 대상.
-- **Rationale**: 인덱스된 substring+정렬+limit 10은 통상 수십 ms. 요구사항 §6 "유사곡 검색 1초"는
-  좌표 기반 검색 대상이므로 텍스트 검색에 전용하지 않음(헌법 IX 추정 금지).
-- **Blocker**: 실제 데이터 분포·트래픽 미검증 → B-D 후 벤치마크로 확정.
+## R5. substring 인덱스 (B-D 후)
 
-## R5. 페이지네이션 방식
+- **Decision(조건부)**: Postgres면 `title`·`artist`에 `pg_trgm` GIN 인덱스로 `ILIKE %q%` 가속.
+- **Rationale**: 양끝 wildcard는 B-tree 불가. substring 확정(전문검색 아님)이라 tsvector 미도입.
+- **Blocker**: 실제 DB·스키마 B-D 확정 후 DDL/실행계획.
 
-- **Decision**: offset/limit(page*10, 10) 유지.
-- **Rationale**: 검색 UX상 깊은 페이지 희소 → offset 깊이 비용 실질 무해(YAGNI). 정렬이 youtubeCnt DESC·id ASC로
-  안정적이라 페이지 경계 중복/누락 없음.
-- **Alternatives**: keyset 페이징 → 깊은 페이지·무한스크롤 필요 시 도입. 현재 불필요.
+## R6. 성능 예산
 
-## 미해결 (보류)
+- **Decision(제안)**: p95 < 300ms, 팀 확인. §6 "유사곡 1초"는 좌표 검색용이라 전용 안 함. B-D 후 벤치.
 
-- **B-A**: Core 인증 미구현. `INVALID_TOKEN`/`TOKEN_EXPIRED` ErrorCode 미등록, 토큰 subject 추출 경로 없음.
-- **B-D**: BE4 검색 인터페이스·저장소·스키마·곡 데이터·youtubeCnt 컬럼·pg_trgm 가용성 미제공.
-- **B-Field**: genres 다형(list/string/null) 실제 계약 표현(§0.6 미명시분).
+## 미해결
+- **B-A**: Core 인증(401 코드·토큰 subject) 미구현.
+- **B-D**: 검색 저장소·스키마·youtubeCnt·pg_trgm.
+- **B-Common**: 공통 핸들러 검증→400 매핑(BE1 합의) + 전역 @WebMvcTest 지원(BE-infra).

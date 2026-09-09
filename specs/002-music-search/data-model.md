@@ -1,12 +1,12 @@
-# Data Model: 음악 검색
+# Data Model: 음악 검색 (2026-09-09 master 기준)
 
-논리 모델만 정의. 물리 스키마·DDL은 B-D(BE4 저장소) 확정 후.
+논리 모델. 물리 스키마·컬럼은 B-D(BE4) 확정 후.
 
 ## 검색 요청
 
 | 필드 | 타입 | 제약 |
 | --- | --- | --- |
-| query | String | required, 공백만/빈값 거절(@NotBlank), 앞뒤 공백 trim |
+| query | String | required, 공백만/빈값 거절(@NotBlank), 앞뒤 trim |
 | page | int | required, 0-based, @Min(0) |
 | size | int | 서버 고정 10 (요청 파라미터 아님) |
 
@@ -14,36 +14,31 @@
 
 | 필드 | 타입 | 비고 |
 | --- | --- | --- |
-| id | Long(int) | 곡 ID |
-| title | String | |
-| artist | String | |
+| id | Long | 곡 ID |
+| title / artist | String | 매칭 대상 |
 | album | String \| null | |
-| genres | list \| string \| null | 다형 표현은 B-Field에서 확정 |
-| youtubeUrl | String \| null | null이면 재생 불가, 결과에서 제외 안 함(FR-007) |
-| location | Location(pc1~pc16, 각 float) | baseline v2.1-pca16 고정값 |
+| genres | List<String> \| null | 다형 표현은 B-Field |
+| youtubeUrl | String \| null | null이면 재생 불가, 제외 안 함 |
+| location | Location(pc1~pc16 float) | baseline v2.1-pca16 고정 |
 
-기존 `music/dto/Location.java` 재사용. `MusicSummary.java`는 신규(현재 MusicDetail만 존재).
-MusicDetail = MusicSummary + mbid·bpm·duration·playCnt·youtubeCnt (검색은 Summary만 반환).
+`music/dto/Location.java`, `MusicSummary.java`, `PageResponse.java` — 이미 backend/src로 이전됨.
 
-## PageResponse<T> (목록 래퍼, §0.3)
+## PageResponse<T> (§0.3)
 
-| 필드 | 타입 | 비고 |
-| --- | --- | --- |
-| content | List<T> | 결과 없으면 빈 배열 |
-| page | int | 요청 page |
-| size | int | 10(참고값) |
-| totalElements | long | 총 매칭 수 |
-| totalPages | int | |
-| hasNext | boolean | |
+content, page, size(=10), totalElements, totalPages, hasNext.
 
-user/search·playlist 등 다른 목록 API와 공유 가능한 공통 래퍼.
+## 공통 응답/에러 (master 실물)
 
-## 정렬·매칭 규칙 (port 계약)
+- 성공: `ApiResponse.success(data)` → `{success:true, data, error:null}`.
+- 실패: `ApiResponse.fail(errorCode)` → `{success:false, data:null, error:{code,message}}` (`ErrorResponse`).
+- 에러코드: `GlobalErrorCode` — `INVALID_INPUT`(400), `INTERNAL_SERVER_ERROR`(500). 401은 B-A 후 추가.
+- `ErrorCode`는 인터페이스 → 필요 시 도메인 enum이 구현(현재 검색은 GlobalErrorCode로 충분).
 
-- 매칭: `title ILIKE %query% OR artist ILIKE %query%` (대소문자 무시, substring).
-- 정렬: youtubeCnt DESC, 동률 id ASC.
-- 곡 단위 유일(title·artist 동시 매칭 시 1회).
+## MyBatis 매핑 (어댑터, B-D 후)
 
-## 데이터 계보 (B-D 확인 대상)
+- 매퍼 `MusicSearchMapper` (port `MusicSearchReader` 어댑터). `@MapperScan` 범위에 포함되게 배치.
+- 쿼리: `WHERE title ILIKE #{q} OR artist ILIKE #{q}` (q = `%query%`), `ORDER BY youtube_cnt DESC, id ASC`, `LIMIT 10 OFFSET #{page}*10`, 별도 count.
+- 컬럼명·pc 저장 형태·youtube_cnt는 BE4 스키마 확정 후 매핑.
 
-- youtubeCnt 컬럼 출처·갱신 계보, location pc1~pc16 baseline 버전 식별, 곡 ID 매핑 — BE4 스키마 확정 시 기록.
+## 데이터 계보 (B-D)
+- youtube_cnt 출처·갱신, pc1~pc16 baseline 버전, 곡 ID 매핑 — BE4 스키마 확정 시 기록.

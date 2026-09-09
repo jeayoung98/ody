@@ -35,6 +35,13 @@
 - 그 외 항목은 api-spec §3.1 계약으로 이미 확정되어 있어 스펙을 짧게 유지함.
 - 남은 NEEDS CLARIFICATION 0건 → `/speckit-plan` 진행 가능.
 
+## master 인프라 재베이스라인 (2026-09-09)
+
+- 에러코드 `VALIDATION_ERROR`/`INTERNAL_ERROR` → master `GlobalErrorCode.INVALID_INPUT`/`INTERNAL_SERVER_ERROR`로 정정 (FR-008, US2, Edge, FR-009).
+- 공통 레이어 기준을 master 실물(`common.ApiResponse.success` 등)로 전환. api-spec §0.5 불일치는 FR-008 [충돌]로 기록(정본 갱신 대상).
+- 스택: MyBatis + Postgres/Neo4j/Redis 실재 → B-D 대부분 해소, 잔여(저장소 선택·스키마)는 plan/BE4.
+- B-A 인증 여전히 블로커. NEEDS CLARIFICATION 마커 0건 유지(충돌은 문서화됨, 마커 아님).
+
 ## 헌법 재검증 (2026-09-08, constitution v1.0.0 반영 후)
 
 - [x] 원칙 II 계약 우선 — api-spec §3.1 기존 계약 유지, 계약 변경 없음

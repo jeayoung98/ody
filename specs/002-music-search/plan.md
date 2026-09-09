@@ -1,116 +1,93 @@
 # Implementation Plan: 음악 검색
 
-**Branch**: `002-music-search` | **Date**: 2026-09-08 | **Spec**: [spec.md](spec.md)
+**Branch**: `feat/music-search` | **Date**: 2026-09-09 (master 인프라 재베이스라인) | **Spec**: [spec.md](spec.md)
 
-**Input**: spec.md (clarify 완료: 매칭=substring 대소문자 무시, 정렬=youtubeCnt DESC·id ASC)
+**Input**: spec.md (2026-09-09 재베이스라인: 에러코드 master 기준, 매칭·정렬 불변)
 
-**Status**: 조건부 설계. 검색 고유 정책은 확정됐고, 공유 인프라(인증·저장소/BE4) 2건에 구현이 게이트됨.
+**Status**: master 통합 후 재설계. B-D 대부분 해소(Postgres·MyBatis in), **B-A(인증) 여전히 블로커**.
 
 ## Summary
 
-`GET /music/search`에서 `query`를 곡명·아티스트명에 대소문자 무시 부분일치(substring)로 매칭하고,
-youtubeCnt 내림차순·id 오름차순으로 정렬하여 서버 고정 10건 페이지로 반환한다.
-좌표는 baseline `v2.1-pca16` 고정값을 그대로 싣는다.
+`GET /music/search`에서 곡명·아티스트명 substring(대소문자 무시) 매칭, youtubeCnt DESC·id ASC,
+서버 고정 10건 페이지 반환. 좌표는 baseline `v2.1-pca16` 고정값 그대로.
 
-기존 MVC → MusicService → 조회 port 경계를 유지한다. 텍스트 검색의 **인덱스·쿼리 실행은 BE4 조회 port**
-뒤로 분리하고(헌법 X), **API·입력검증·응답조립·매칭/정렬 계약은 BE2**가 소유한다. 001의 MajorTrackReader
-분리와 동일 패턴이라 새 경계를 발명하지 않는다.
+master 공통 레이어(`common.ApiResponse.success`, `GlobalErrorCode`, `CustomException`, `GlobalExceptionHandler`)
+위에서 동작한다. 검색 실행은 **MyBatis 매퍼**(`MusicSearchReader` port의 어댑터)로 분리(헌법 X: BE2 계약 / BE4 실행).
 
 ## Technical Context
 
-**Language/Version**: Java 17 (`build.gradle`).
-**Primary Dependencies**: Spring Boot 4.1.1 (webmvc, validation, actuator), micrometer-registry-prometheus.
-**Storage**: **NEEDS CLARIFICATION (B-D)** — DB 의존성·datasource·엔티티·리포지토리 전무. 서빙 baseline은
-Postgres/pgvector로 추정(team memory)되나 build.gradle에 드라이버 없음. 곡 데이터·검색 인터페이스는 BE4 제공.
-**Testing**: JUnit Platform + webmvc-test(MockMvc) + MockitoBean. 순수 검증·컨트롤러 슬라이스는 지금 작성 가능,
-실데이터 통합은 B-D 후.
-**Target Platform**: Java17 Linux 컨테이너, HTTP 8080.
-**Project Type**: 단일 Gradle Spring MVC backend.
-**Performance Goals**: 제안 p95 < 300ms(팀 확인 대상). 요구사항 §6 "유사곡 검색 1초"는 좌표 검색 대상이라 전용 안 함.
-**Constraints**: substring 대소문자 무시 매칭, youtubeCnt DESC·id ASC, 페이지 10 고정, 고정 좌표 보존, 재생불가 곡 유지.
-**Scale/Scope**: baseline v2.1-pca16 6,624,399곡(team-roles §10). 실제 적재·분포·트래픽 미검증.
+**Language/Version**: Java 17 (`backend/build.gradle`).
+**Primary Dependencies**: Spring Boot 4.1.1 (webmvc, validation, actuator), **MyBatis**(mybatis-spring-boot-starter), spring-boot-starter-jdbc, micrometer-prometheus, lombok, dotenv. (Neo4j·Redis·websocket도 스택에 있으나 텍스트 검색엔 미사용.)
+**Storage**: **Postgres**(org.postgresql, HikariCP, `application-db.yml`). 검색 대상 곡 데이터가 Postgres인지 Neo4j인지, `title/artist/youtubeCnt` 스키마·`pc1~pc16` 저장 형태는 **B-D(BE4 확인)**. `application-db.yml`은 env(SPRING_DATASOURCE_*) 주입, `sql.init.mode: never`(스키마 외부 관리).
+**Testing**: JUnit Platform, H2(test), MockMvc. ⚠️ `@WebMvcTest`는 master `@MapperScan`과 충돌(아래 R2) → standalone MockMvc 채택.
+**Target Platform**: Java17 컨테이너(backend/Dockerfile), HTTP 8080.
+**Project Type**: 단일 Gradle backend (`backend/`).
+**Performance Goals**: 제안 p95 < 300ms(팀 확인). §6 "유사곡 1초"는 좌표 검색용이라 전용 안 함.
+**Constraints**: substring 대소문자 무시, youtubeCnt DESC·id ASC, 페이지 10 고정, 고정 좌표, 재생불가 곡 유지, 공통 레이어(GlobalErrorCode) 준수.
+**Scale/Scope**: baseline v2.1-pca16 6,624,399곡. 실제 적재·트래픽 미검증.
 
 ## Constitution Check
 
-*GATE: Phase 0 전 통과 필요. Phase 1 후 재확인.*
-
 | 원칙 | 판단 | 근거 |
 | --- | --- | --- |
-| I 명세 우선 | 충족(설계) / 구현 게이트 | spec clarify 완료. 구현은 B-A·B-D 의존 |
-| II 계약 우선 | 부분 | api-spec §3.1 기존 계약 유지. BE4 검색 port 계약은 합의 필요 |
-| III 완료 전 검증 | 설계 충족 / 실행 미검증 | quickstart에 A1~A4·US2 검사 정의. 코드 통과 주장 없음 |
+| I 명세 우선 | 충족 | spec 재베이스라인 완료. 구현은 B-A 잔여 |
+| II 계약 우선 | 부분 | master 공통 계약 채택. api-spec §0.5 에러코드 불일치는 spec [충돌]로 기록, 정본 갱신 대상 |
+| III 완료 전 검증 | 설계 충족 | quickstart 시나리오, standalone MockMvc·유닛으로 검증 |
 | IV 데이터 재현성 | N/A | 검색 조회는 데이터 산출물 생성 없음 |
-| V 좌표 안정성 | 충족 | 응답은 고정 좌표 그대로. 검색이 좌표·모델 변경 없음 |
-| VI 탐색 일관성 | N/A | 텍스트 검색은 계층 탐색·조건 누적 아님. 결과 선택 후 지도 이동은 FE 상태(범위 밖) |
-| VII 실험 격리 | N/A | 실험 인덱스·모델 도입 없음 |
-| VIII 관측 | 설계 충족 / 미검증 | actuator+micrometer의 http.server.requests 재사용 + 실패 로그(PII 제외) |
-| IX 추정 금지 | 충족 | 매칭·정렬 clarify 확정. 경계는 기존 패턴 준용. perf·인덱스는 발명 않고 이월 |
-| X 경계 | 설계 제안 / 합의 전 | BE2 API·규칙 / BE4 인덱스·실행 분리. port 계약 BE4 합의 필요 |
+| V 좌표 안정성 | 충족 | 응답은 고정 좌표 그대로 |
+| VI 탐색 일관성 | N/A | 텍스트 검색은 계층 탐색 아님 |
+| VII 실험 격리 | N/A | — |
+| VIII 관측 | 설계 충족 | actuator `http.server.requests` + 실패 로그(master handler에 이미 log.error). PII 미노출 |
+| IX 추정 금지 | 충족 | 에러코드·저장소 미확정을 임의 확정 안 함. 정본 불일치·저장소는 명시 |
+| X 경계 | 설계 | BE2 API·규칙 / BE4 인덱스·실행(MyBatis 매퍼 = port 어댑터) |
 
-미해결 게이트를 통과로 표시하지 않는다. B-A·B-D 확정 전 의존 구현은 금지한다.
+B-A(인증)·B-D(저장소 확정) 미해결 게이트를 통과로 표시하지 않는다.
 
 ## Project Structure
 
-### Documentation (this feature)
+### Documentation
 
-- [research.md](research.md): 경계(X)·관측(VIII)·인덱스·성능 결정과 대안.
-- [data-model.md](data-model.md): MusicSummary·페이지 응답·검색 요청 논리 모델.
-- [contracts/music-search.md](contracts/music-search.md): 확정 API + BE4 검색 port 계약.
-- [quickstart.md](quickstart.md): A1~A4·US2 검증 절차.
+- [research.md](research.md): 저장소·MyBatis·테스트 인프라·검증매핑·인덱스 결정.
+- [data-model.md](data-model.md): MusicSummary·PageResponse·검색요청, MyBatis 매핑.
+- [contracts/music-search.md](contracts/music-search.md): API + port + master 공통 계약.
+- [quickstart.md](quickstart.md): 검증 시나리오(standalone MockMvc·유닛).
 
-### Source Code (repository root)
+### Source (backend/, master 구조)
 
-기존 루트 `src/main/java/com/ssafy/backend/`. 아래는 설계 제안이며 파일 미생성.
-
-| 위치 | 설계 | 책임 |
+| 위치 | 설계 | 상태 |
 | --- | --- | --- |
-| music/controller/MusicController.java | `GET /music/search` 핸들러 추가. `@Validated`, `@RequestParam query`(@NotBlank), `page`(@Min 0) | HTTP 바인딩·검증, 업무 로직 없음 |
-| music/dto/MusicSummary.java (신규) | id,title,artist,album,genres,youtubeUrl,location record | 검색 결과 wire 모델(§0.6) |
-| music/dto/PageResponse.java (신규) | content + page,size,totalElements,totalPages,hasNext | 목록 페이지 래퍼(§0.3). 다른 목록 API도 재사용 |
-| music/service/MusicService.java | `search(query, page)` 추가 → port 호출·응답 조립 | orchestration |
-| music/search/MusicSearchReader.java (신규 port) | `search(query, page, size)` → 페이지 결과 | BE4 합의 조회 계약: substring·정렬·페이징 실행 |
-| music/search/ 어댑터 (B-D 후) | Postgres 등 실제 구현 | 인덱스·쿼리 실행 |
-| common/response, common/exception | ApiResponse·GlobalExceptionHandler 재사용 | BE1 공통(교체 시 협의) |
-| common/exception/ErrorCode.java | `INVALID_TOKEN`·`TOKEN_EXPIRED` 추가(인증 연동 시) | 현재 미등록 |
-| src/test/java/.../music/ | 컨트롤러 슬라이스(검증·에러)·port mock 테스트 | 계약 검증 |
+| `backend/.../music/controller/MusicController.java` | GET /music/search 핸들러(@NotBlank/@Min) | 이전됨, ApiResponse.success 재배선 완료 |
+| `backend/.../music/dto/{MusicSummary,PageResponse,...}` | 검색 DTO | 이전됨 |
+| `backend/.../music/service/MusicService.java` | search 오케스트레이션(Optional<port>) | 이전됨 |
+| `backend/.../music/search/MusicSearchReader.java` | 조회 port | 이전됨 |
+| `backend/.../music/search/MusicSearchMapper.java` (신규) | **MyBatis 매퍼 = port 어댑터** | B-D 후 구현(T203) |
+| `backend/.../music/search/MusicSearchMapper.xml` 또는 애노테이션 | substring·정렬·페이징 SQL | B-D 후 |
+| `backend/.../common/*` | master 공통 레이어 재사용 | 손대지 않음(BE1) |
+| `backend/.../common/GlobalExceptionHandler.java` | 검증 예외→400 매핑 **추가 필요**(R5) | BE1 합의 |
+| `backend/src/test/.../music/*` | standalone MockMvc + 유닛 | R2 반영 재작성 필요 |
 
-**Structure Decision**: 기존 music/common 패키지 유지. 검색 실행을 `music/search` port로 분리(헌법 X).
-페이지 래퍼는 재사용 가능하게 공통 위치(dto)에 둠 — 향후 user/search·playlist 등 목록 API 공유.
+**Structure Decision**: master `backend/` 구조·공통 레이어 채택. 검색 실행은 `music/search` port + MyBatis 어댑터.
+검색 전용 공통 클래스 신규 생성 없음(BE1 재사용).
 
 ## 처리 흐름
 
-1. Core 인증 경계에서 Bearer 검증 (B-A: 현재 인증 미구현, 통합은 Core 도착 후).
-2. MVC가 `query`·`page` 바인딩. `@NotBlank`(공백·빈값 거절)·`@Min(0)`. 위반 시 기존 handler 400 VALIDATION_ERROR.
-3. MusicService.search가 port에 `(query.trim(), page, size=10)` 위임.
-4. port는 곡명 OR 아티스트명 ILIKE 부분일치 후보를 youtubeCnt DESC·id ASC 정렬, page*10 offset에서 10건 + 총계 반환.
-5. MusicSummary로 조립(좌표 고정값 그대로, youtubeUrl null 유지), PageResponse에 담아 ApiResponse.ok.
-6. 매칭 0건 → 빈 content + 200. 예외 → 기존 공통 오류 매핑(데이터 장애를 빈 성공으로 바꾸지 않음).
-7. http.server.requests(actuator)로 지연·오류율·요청량 관측. 실패는 구조화 로그(PII·query 원문 과다 노출 주의).
+1. (B-A) Core 인증 경계에서 Bearer 검증 — 미구현, 통합 대기.
+2. MVC가 `query`·`page` 바인딩(@NotBlank/@Min). 검증 위반 → GlobalExceptionHandler(검증 매핑 추가 후) 400 INVALID_INPUT.
+3. MusicService.search → port.search(query.trim(), page, 10).
+4. MyBatis 매퍼: `title ILIKE %q% OR artist ILIKE %q%` → youtubeCnt DESC, id ASC → offset page*10 limit 10 + count.
+5. MusicSummary 조립(좌표 그대로, youtubeUrl null 유지) → PageResponse → ApiResponse.success.
+6. 매칭 0건 → 빈 content + 200. 예외 → GlobalExceptionHandler 500 INTERNAL_SERVER_ERROR(이미 log.error).
+7. 관측: actuator http.server.requests.
 
-## 조회·인덱스 및 성능 설계 (B-D 후 확정)
+## 보류 항목
 
-기준 의미: `(title ILIKE %q% OR artist ILIKE %q%)` 필터 → youtubeCnt DESC, id ASC → offset/limit 10.
-
-- **substring(양끝 wildcard) ILIKE는 B-tree 인덱스 불가.** Postgres라면 `pg_trgm` GIN 인덱스가 title/artist에 필요.
-  전문검색(tsvector)은 clarify에서 substring으로 확정했으므로 도입 안 함.
-- youtubeCnt 정렬 + 662만 곡: 매칭 후보가 클 때 정렬 비용 주의. trgm 필터로 후보를 줄인 뒤 정렬이 일반적.
-- offset 페이징은 깊은 page에서 비용 증가하나, 검색 UX상 깊은 페이지 희소 → 초기엔 offset 유지(YAGNI). keyset은 필요 시.
-- 캐시는 초기 설계 제외. 도입 시 (query, page, 데이터 revision)을 키에 포함.
-
-실제 DB·드라이버·DDL은 B-D(BE4 인터페이스·스키마) 확정 후. 상세는 research.md.
-
-## 보류 항목과 진행 조건
-
-| ID | 미결정 / 필요한 확인 | 의존 구간 |
+| ID | 내용 | 의존 |
 | --- | --- | --- |
-| B-A | Core 인증 연동, 토큰 없음/만료 코드(INVALID_TOKEN·TOKEN_EXPIRED 미등록), 토큰 subject | 인증 통합·401 인수 기준 |
-| B-D | BE4 검색 인터페이스·실제 저장소·스키마·곡 데이터·youtubeCnt 컬럼·pg_trgm 가용성·데이터 분포 | port 어댑터·인덱스·성능 측정 |
-| B-Field | genres 다형(list/string/null) 및 null 표현 범위(§0.6 미명시분) | 역직렬화·DTO 타입 확정 |
-
-B-A·B-D는 공유 인프라 의존(검색 고유 아님). 검색 고유 정책 블로커는 clarify로 0건.
-새 경계·아키텍처 필요 시 팀 합의 후 ADR. research 제안 자체는 승인 ADR이 아니다.
+| B-A | Core 인증·401 코드(GlobalErrorCode에 없음)·토큰 subject | 인증 통합·E4 |
+| B-D | 검색 대상 저장소(Postgres/Neo4j)·곡 스키마·youtubeCnt 컬럼·pg_trgm 가용성 | 매퍼 SQL·인덱스·실데이터 테스트 |
+| B-Common | 검증 예외→400 매핑을 공통 GlobalExceptionHandler에 추가(BE1 소유) | E1/E2 통과·전 엔드포인트 이득 |
 
 ## Complexity Tracking
 
-신규 의존성 없음(기존 스타터로 충분). 페이지 래퍼 1개·검색 port 1개만 추가.
-ORM·캐시·검색엔진 신규 채택 없음. 미해결 게이트(B-A·B-D)를 예외 면제하지 않는다.
+신규 의존성 없음(master 스택으로 충분). 추가 = MyBatis 매퍼 1개(어댑터) + 검증 예외 매핑.
+검색 전용 공통·ORM·캐시 신규 없음. 미해결 게이트(B-A/B-D/B-Common) 면제 안 함.

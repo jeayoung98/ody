@@ -16,6 +16,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.ssafy.backend.mapper.TestMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicSummary;
@@ -23,7 +24,10 @@ import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.service.MusicService;
 
 /**
- * 검색 컨트롤러 슬라이스 테스트 (quickstart A1/A5/A6·E1/E2/E3/E5). 서비스는 mock.
+ * 검색 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler 동작 검증.
+ * 에러코드는 master GlobalErrorCode 기준.
+ * ponytail: master @MapperScan이 슬라이스에 testMapper를 끌어와 SqlSessionFactory 부재로 실패 →
+ * 해당 매퍼만 @MockitoBean으로 대체(BE-infra 소스 무수정). 근본 해결은 T301(@MapperScan 분리).
  */
 @WebMvcTest(MusicController.class)
 class MusicSearchControllerTests {
@@ -34,6 +38,9 @@ class MusicSearchControllerTests {
 	@MockitoBean
 	private MusicService musicService;
 
+	@MockitoBean
+	private TestMapper testMapper;
+
 	private static MusicSummary song(long id, String title, String artist, String youtubeUrl) {
 		return new MusicSummary(id, title, artist, "The Winning", List.of("K-Pop"), youtubeUrl,
 				new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123));
@@ -41,7 +48,6 @@ class MusicSearchControllerTests {
 
 	@Test
 	void search_success_returnsPagedEnvelope() throws Exception {
-		// A1: 성공 응답 구조 + 페이지 정보
 		PageResponse<MusicSummary> page = new PageResponse<>(
 				List.of(song(10234L, "Love wins all", "IU", "https://youtu.be/x")),
 				0, 10, 137, 14, true);
@@ -61,7 +67,6 @@ class MusicSearchControllerTests {
 
 	@Test
 	void search_preservesServiceOrder() throws Exception {
-		// A5: 서비스가 준 순서(youtubeCnt DESC·id ASC 결과)를 컨트롤러가 그대로 전달
 		PageResponse<MusicSummary> page = new PageResponse<>(
 				List.of(song(1L, "A", "x", "https://y/1"), song(2L, "B", "y", "https://y/2")),
 				0, 10, 2, 1, false);
@@ -75,7 +80,6 @@ class MusicSearchControllerTests {
 
 	@Test
 	void search_emptyResult_returns200EmptyContent() throws Exception {
-		// E3: 매칭 0건 → 200 + 빈 content (오류 아님)
 		when(musicService.search(anyString(), anyInt()))
 				.thenReturn(new PageResponse<>(List.of(), 0, 10, 0, 0, false));
 
@@ -87,47 +91,42 @@ class MusicSearchControllerTests {
 	}
 
 	@Test
-	void search_blankQuery_returnsValidationError() throws Exception {
-		// E1: 공백 query → 400 VALIDATION_ERROR
+	void search_blankQuery_returnsInvalidInput() throws Exception {
 		mockMvc.perform(get("/music/search").param("query", "   ").param("page", "0"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
-				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test
-	void search_missingQuery_returnsValidationError() throws Exception {
-		// E1: query 누락 → 400 VALIDATION_ERROR
+	void search_missingQuery_returnsInvalidInput() throws Exception {
 		mockMvc.perform(get("/music/search").param("page", "0"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test
-	void search_negativePage_returnsValidationError() throws Exception {
-		// E2: page 음수 → 400
+	void search_negativePage_returnsInvalidInput() throws Exception {
 		mockMvc.perform(get("/music/search").param("query", "IU").param("page", "-1"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test
-	void search_nonNumericPage_returnsValidationError() throws Exception {
-		// E2: page 비정수 → 400
+	void search_nonNumericPage_returnsInvalidInput() throws Exception {
 		mockMvc.perform(get("/music/search").param("query", "IU").param("page", "abc"))
 				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.error.code").value("VALIDATION_ERROR"));
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test
 	void search_internalFailure_returns500() throws Exception {
-		// E5: 서비스/port 예외 → 500 INTERNAL_ERROR + 공통 실패 구조
 		when(musicService.search(anyString(), anyInt())).thenThrow(new RuntimeException("boom"));
 
 		mockMvc.perform(get("/music/search").param("query", "IU").param("page", "0"))
 				.andExpect(status().isInternalServerError())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.data").doesNotExist())
-				.andExpect(jsonPath("$.error.code").value("INTERNAL_ERROR"));
+				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));
 	}
 }

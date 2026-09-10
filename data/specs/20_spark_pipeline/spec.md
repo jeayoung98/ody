@@ -39,7 +39,52 @@
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
 | S4 트리 배정 | coords + `map_tree/tree.json` + `split_axes.npz` | `node_paths/` `mbid` + `leaf_id` + `node_d1` + `node_d2` | 말단 노드 일치 100%. 표본 5,000곡 실측 완료. 잡은 `spark/jobs/tree_assign.py` |
 | S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
-| S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
+| S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | 원래 문장: `check_contract.py --strict --prev` 통과. **`--prev` 는 적용 불가 — 아래 S6 절 참조.** 대체 기준은 `--strict` 통과 + 내용 대조. 잡은 `spark/jobs/artifact_export.py` |
+
+## S6 serving 번들 내보내기 — 파이프라인의 끝
+
+```text
+S5 카탈로그 + S3 좌표 + S4 말단 노드
+  → Spark      excluded=false 만 남기고 세 표를 mbid 오름차순으로 정렬해 내보낸다
+  → 드라이버   동결 파일 7개 복사 + manifest.json 생산
+  → serving/<v>/  계약 v1 파일 10개
+```
+
+### 왜 mbid 오름차순인가 — 정렬 불변식
+서빙은 **`coords` 의 i번째 행 = 카탈로그에서 `excluded == False` 인 i번째 행**이라는 불변식에 의존한다(`retrieval/artifact.py`). 이 하나로 좌표·메타데이터·kNN 그래프를 정수 색인 하나로 다룬다.
+
+분산 환경에서 "입력 파일에 적힌 순서"는 보장되지 않는다. 그래서 S6 은 세 표를 **같은 키로 명시적으로 정렬**해 불변식을 성립시킨다. `mbid` 는 유일하므로 정렬이 완전히 결정적이다.
+
+같은 이유로 이 잡은 **카탈로그도 다시 쓴다**. 좌표만 정렬하고 카탈로그를 입력 그대로 두면 불변식이 깨진다.
+
+### 동결 파일은 만들지 않고 복사한다 (규칙 3)
+`model_bundle.npz`, `feature_list.json`, `fit_manifest.json`, `postprocess_rules.json`, `map_tree/tree.json`, `map_tree/split_axes.npz`, `map_tree/quality_by_depth.csv` 일곱 개다. `promotion_gate` 도 이전 manifest 기록을 그대로 싣는다. 게이트를 다시 돌리는 것은 별도 결정이다. 번들 승격과 `CURRENT.json` 교체는 이 잡의 범위가 아니다(사람 승인).
+
+### `--prev` 기준은 적용할 수 없다 (규칙 1 — 원래 문장을 지우지 않고 남긴다)
+위 표의 원래 완료 조건은 `check_contract.py --strict --prev` 통과였다. 그런데 `--prev` 는 `coords_v2.parquet`·`node_paths_v2.parquet`·`split_axes.npz`·`model_bundle.npz` 의 sha256 이 이전 번들과 **바이트 단위로** 같기를 요구한다(minor 버전 규칙). **Spark 가 쓴 parquet 는 numpy 파이프라인이 쓴 parquet 와 바이트가 같을 수 없다** — 압축기·행 그룹 크기·정렬이 다르다. 즉 이 기준은 Spark 산출물에 대해 통과가 원리적으로 불가능하다.
+
+그래서 판정 기준을 다음 둘로 **새로 등록**한다. 원래 문장은 위 표에 그대로 남긴다.
+
+| 새 기준 | 무엇을 본다 |
+|---|---|
+| S6-AC-a | `check_contract.py <번들> --strict` 가 FAIL 0 으로 끝난다 |
+| S6-AC-b | 기존 번들과 **내용 대조**(`compare_bundle`): mbid 집합 동일, 좌표 최대 절대 오차 < 1e-4, 말단 노드 일치 100% |
+
+`--prev` 해시 대조는 **같은 도구가 만든 minor 승격**(v2.1 → v2.2)에서는 그대로 유효하다. 폐기가 아니라 적용 범위를 좁힌 것이다.
+
+### 전수 조립 실측 (2026-09-10)
+`output/artifact_export_2026-09-10.json`. 임시 디렉터리에 조립했고 **승격은 하지 않았다**.
+
+| 항목 | 값 |
+|---|---|
+| 곡 수 | 6,624,399 |
+| 계약 검사 `--strict` | **FAIL 0, WARN 0** |
+| 내용 대조 mbid 집합 | 동일 |
+| 좌표 최대 절대 오차 | 0.0 |
+| 말단 노드 일치 | 6,624,399 / 6,624,399 = **100%** |
+| 소요 | 107초 (정렬·쓰기 45초, 계약 검사 11초, 대조 51초) |
+
+⚠️ **이 실측이 무엇을 증명하고 무엇을 증명하지 않는가.** 좌표를 기존 번들에서 가져와 정렬·조립했으므로 오차 0 은 당연하다. 이 실측이 증명하는 것은 **조립 경로**(정렬, 동결 파일 복사, manifest 해시, 계약 준수)다. 좌표 계산의 정확성은 S2·S3 패리티(최대 오차 1.86e-06), 말단 노드는 S4 패리티(100%)가 증명한다. 클러스터에서 S2~S6 을 이어 돌린 뒤 같은 대조를 다시 해야 AC1 이 채워진다.
 
 ## S4 트리 배정 — 16차원 좌표에서 말단 노드 4,096개
 

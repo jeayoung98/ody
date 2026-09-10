@@ -37,14 +37,23 @@ spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-mem
 yarn application -list -all
 ```
 ```bash
-# S4 트리 배정 — 트리 두 파일을 올리고 경로를 직접 지정한다
+# S6 내보내기 — Spark 로 세 표를 정렬해 쓴 뒤, 로컬로 내려 번들을 조립한다
 spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
-  --files serving/v2.1-pca16/map_tree/tree.json,serving/v2.1-pca16/map_tree/split_axes.npz \
-  spark/jobs/tree_assign.py --in hdfs:///ody/data/coords --out hdfs:///ody/data/node_paths \
-  --tree-json tree.json --split-axes split_axes.npz
+  spark/jobs/artifact_export.py --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords \
+  --node-paths hdfs:///ody/data/node_paths --out hdfs:///ody/data/bundle_stage
+hdfs dfs -get /ody/data/bundle_stage /home/ubuntu/stage/bundle_stage
+python -c "import sys; sys.path.insert(0,'spark/jobs'); import artifact_export as S6; \
+  print(S6.assemble_bundle('serving/v2.2-pca16-candidate',
+    S6.single_parquet('/home/ubuntu/stage/bundle_stage/coords'),
+    S6.single_parquet('/home/ubuntu/stage/bundle_stage/node_paths'),
+    'serving/v2.1-pca16', 'work/catalog_v2.parquet', 780107, '<규칙 해시>',
+    'v2.2-pca16-YYYY-MM-DD')['songs'])"
+python tests/check_contract.py serving/v2.2-pca16-candidate --strict
 ```
 
-S4 는 깊이 한 단계마다 같은 노드의 행을 모아 계산한다. 재학습은 없다(규칙 3). 표본 5,000곡 말단 노드 일치율 100%(`tests/test_tree_assign.py`).
+S6 은 세 표를 모두 `mbid` 오름차순으로 정렬한다. 서빙의 정렬 불변식(좌표 i번째 = 카탈로그 excluded=false i번째)을 분산 환경에서 성립시키려면 정렬 키를 명시해야 한다. 동결 파일 7개는 복사만 한다(규칙 3).
+
+`--prev` 해시 대조는 Spark 산출물에 적용할 수 없다(바이트가 같을 수 없다). 대신 `compare_bundle` 내용 대조를 쓴다. 근거는 스펙 20 의 S6 절. 전수 조립 실측은 `output/artifact_export_2026-09-10.json`(계약 strict FAIL 0, 말단 노드 일치 100%).
 
 단계 순서: `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 

@@ -76,7 +76,10 @@ function puffsOf(id: number) {
   puffPlan.set(id, p);
   return p;
 }
-function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
+/** @param out true 면 전환 중 **나가는 겹**을 그린다 (posOut/alphaOut) */
+function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
+  const P = out ? e.posOut : e.pos;
+  const A = out ? e.alphaOut : e.alpha;
   const W = e.W;
   const H = e.H;
   const R = clamp(0.55 * e.cam.s, 60, Math.max(W, H) * 0.8);
@@ -84,11 +87,11 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
   // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
   const step = Math.max(1, Math.floor(e.N / 22));
   for (let i = 0; i < e.N; i += step) {
-    const a0 = e.alpha[i] * e.genreDim(i);
+    const a0 = A[i] * e.genreDim(i);
     if (a0 < 0.05) continue;
     const s = e.songs[i];
-    const px = e.pos[i * 2];
-    const py = e.pos[i * 2 + 1];
+    const px = P[i * 2];
+    const py = P[i * 2 + 1];
     if (px < -R * 1.7 || px > W + R * 1.7 || py < -R * 1.7 || py > H + R * 1.7) continue;
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
@@ -99,7 +102,10 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalAlpha = 1;
 }
 
-function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
+/** @param out true 면 전환 중 **나가는 겹**을 그린다 (posOut/alphaOut) */
+function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
+  const P = out ? e.posOut : e.pos;
+  const A = out ? e.alphaOut : e.alpha;
   const spr = glowSprites();
   const W = e.W;
   const H = e.H;
@@ -112,10 +118,10 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "lighter";
   for (let i = 0; i < e.N; i++) {
     // 진입 배율에서는 상위 몇 개만 떠 있고, 확대하면 아래 순위가 드러난다 (REVEAL) — 장르 필터도 여기서 걸린다
-    const a0 = e.alpha[i] * e.revealAlpha(i);
+    const a0 = A[i] * e.revealAlpha(i);
     if (a0 < 0.01) continue;
-    let px = e.pos[i * 2];
-    let py = e.pos[i * 2 + 1];
+    let px = P[i * 2];
+    let py = P[i * 2 + 1];
     if (px < -20 || px > W + 20 || py < -20 || py > H + 20) continue;
     const s = e.songs[i];
     if (pset?.has(s.musicId) || cset?.has(s.musicId)) continue; // 프로브·별자리 곡은 따로 그린다
@@ -455,7 +461,8 @@ function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: nu
  * 재생 곡이 이 겹 밖이면 자리는 그대로 두고 라벨로 그 사실을 알린다.
  */
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
-  if (e.follow || e.myId == null || e.constellationActive()) return;
+  // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
+  if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
   const elsewhere = e.playingElsewhere();
   drawMeMarker(g, px, py, e.time);
@@ -663,6 +670,11 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 /** 한 프레임 */
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
   drawBackground(g, e.W, e.H, e.time, e.layer / (LAYER_COUNT - 1));
+  if (e.anim) {
+    // 나가는 겹을 먼저 깔고 그 위에 들어오는 겹을 얹는다 (교차 확대)
+    drawNebula(g, e, true);
+    drawStars(g, e, true);
+  }
   drawNebula(g, e);
   drawStars(g, e);
   drawCovers(g, e);

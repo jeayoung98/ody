@@ -1,6 +1,6 @@
 # 18 적재 파이프라인 (music·genre·music_genre + Neo4j) — spec
 
-상태 ⬜ · Jira **S15P21A405-125** · 결정 **D11** · 선행: 스펙 17 T1(Postgres 자원 상향), 열린 질문 Q2(마이그레이션 도구)
+상태 🔶(적재 완료, HNSW 빌드 중) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · 결정 **D11**, **D13** · 선행: 스펙 17 T1(Postgres 자원 상향)
 
 ## 목적
 Spark 가 만든 좌표와 카탈로그를 서비스가 쓰는 형태로 PostgreSQL 과 Neo4j 에 적재한다.
@@ -18,6 +18,108 @@ Spark 가 만든 좌표와 카탈로그를 서비스가 쓰는 형태로 Postgre
 ```
 
 1단계와 잘라내기는 이 스펙의 범위가 아니다. 스펙 20 이 만든 `coords_v2.parquet` 을 입력으로 받고, 이 스펙은 행 수를 검증만 한다.
+
+## ⚠️ 실제 스키마가 이 스펙 초안과 다르다 (2026-09-10 확인)
+
+BE 가 `ody` DB 에 세 테이블을 **이미 만들어 뒀다**(전부 0행, pgvector 0.7.0, `location vector(16)` 확인). 이 스펙은 **실제 DDL 을 따른다**. 아래 표는 실측이다.
+
+```sql
+music        id BIGINT PK · mbid VARCHAR(64) NOT NULL · title VARCHAR(200) NOT NULL
+             artist VARCHAR(500) · release_year SMALLINT · bpm NUMERIC(5,1)
+             duration INT · album VARCHAR(200) · youtube_url TEXT
+             location VECTOR(16) · play_cnt INT NOT NULL DEFAULT 0
+             youtube_cnt INT NOT NULL DEFAULT 0
+genre        id BIGINT PK · name VARCHAR(100) NOT NULL
+music_genre  id BIGINT PK · music_id BIGINT NOT NULL · genre_id BIGINT NOT NULL
+```
+
+| 초안 | 실제 | 적재에 미치는 영향 |
+|---|---|---|
+| `mbid` 가 PK | **`id BIGINT` 가 PK**, `mbid` 는 별도 컬럼 | id 값을 우리가 넣어야 한다(D13) |
+| `music_genre(mbid, genre_id)` | **`music_genre(music_id, genre_id)`** | 장르도 mbid → id 매핑을 거친다 |
+| `duration real`(초, 소수) | `INT` | 초 단위로 반올림한다 |
+| `bpm real` | `NUMERIC(5,1)` | 소수 1자리, 범위 밖은 NULL |
+| `genre(genre_id, name, source)` | `source` 없음 | 출처 표기를 DB 에 넣지 못한다. 지금 코드는 전부 멜론이다 |
+| — | `play_cnt`·`youtube_cnt` NOT NULL | 0 으로 채운다 |
+| `title` 길이 제한 없음 | `VARCHAR(200) NOT NULL` | 200자로 자른다(실측 700곡) |
+| `artist` | `VARCHAR(500)` | 실측 자른 곡 0 |
+
+`music.id` 에 DEFAULT·IDENTITY·시퀀스가 없다(`playlist_id_seq` 만 존재). `music.mbid` UNIQUE 도 없고 `music_genre` 에 UNIQUE·FK 도 없다.
+
+### D13 — id 는 mbid 오름차순 1..N
+`mbid` 로 정렬해 **1 부터 6,624,399** 를 붙인다. mbid 가 유일하므로 같은 입력이면 항상 같은 id 다. 재적재해도 id 가 흔들리지 않는다.
+
+적재 뒤 **BE 는 새 곡을 `6,624,400` 부터** 넣어야 한다. 시퀀스를 쓰려면 `setval('music_id_seq', 6624399)`.
+
+## 적재 1단계 — CSV 만들기 (완료 2026-09-10)
+
+`ingest/build_csv.py` 가 네 파일을 만든다. 실측은 `output/db_ingest_csv_2026-09-10.json`.
+
+| 산출 | 크기 | 행 수 |
+|---|---|---|
+| `music.csv` | 2.72 GB | **6,624,399** (id 1..6,624,399) |
+| `genre.csv` | 289 B | **29** (멜론 대분류 코드) |
+| `music_genre.csv` | 1.18 MB | **71,285** (곡 66,036개) |
+| `neo4j_music.csv` | 1.43 GB | 6,624,399 (id·mbid·좌표·장르 배열) |
+
+입력은 `coords_v2.parquet`(적재 대상 정의) + `catalog_v2.parquet`(제목·아티스트·길이) + `v2_song_meta.parquet`(`gnr`) + `v2_feats`(`rhythm.bpm`).
+
+**좌표는 float32 가 그대로 오간다.** `repr(float(x))` 는 double 왕복 최단 표기이고 원값이 float32 였으므로 pgvector 의 float4 로 되돌려도 비트가 같다. 테스트가 왕복을 검사한다(AC2).
+
+### 실측이 스펙 초안 숫자와 다른 곳 둘
+1. **장르 곡 수 67,472 → 66,036.** 67,472 는 **manifest 기준**이고 그중 **1,436곡이 S5 제외 규칙에 걸려** `coords` 에 없다. 링크는 71,285개다(곡당 코드 여러 개). AC5·AC6 을 이 수치로 고쳤다.
+2. **`bpm` 이 733,146곡에서 NULL.** `v2_feats` 가 28/30 파트라 그렇다(열린 질문 Q7). `coords` 에만 있는 곡 수와 정확히 같다.
+
+## 적재 2단계 — 실제 DB 적재 (완료 2026-09-10)
+
+실측은 `output/db_ingest_bench.json`.
+
+| 무엇 | 결과 |
+|---|---|
+| `music` | **6,624,399행** (id 1..6,624,399 연속, mbid 소문자 UUID 중복 0) |
+| `genre` | **29행** |
+| `music_genre` | **71,285행** (곡 66,036개) |
+| Neo4j `(:Music)` | **6,624,399** 노드 |
+| Neo4j `(:Genre)` | 29 노드 · `HAS_GENRE` **71,285** 관계 |
+| COPY 시간 | music 66초 · music_genre 0.12초 · genre 2ms |
+| CSV 전송 | 2.72 GB, 9분 18초 |
+| 크기 | `music` 힙 1,376 MB(총 1,518 MB) · DB 2,540 MB · Neo4j 스토어 4.2 GB |
+| Neo4j 적재 | Music 노드 653초 · 장르 그래프 157초 |
+
+`location` 은 전 행 `vector(16)` 이고 세 컬럼(`release_year`·`album`·`youtube_url`)은 전 행 NULL 이다(AC4 통과).
+
+### 자원은 재시작 없이 올렸다
+```bash
+docker update --memory 4g --memory-swap 4g --cpus 2 ody-postgres   # cgroup v2, 다운타임 0
+SET maintenance_work_mem = '2GB';                                   # 세션 단위, 재시작 불필요
+```
+⚠️ **컨테이너가 재생성되면 원복된다.** compose 파일(`/home/ubuntu/ody-infra-rollout/infra/database/postgres/docker-compose.yml`)에 반영하는 것은 인프라 담당 몫이다. 되돌리기는 `docker update --memory 1g --cpus 1 ody-postgres`.
+
+### 세 번 실패하고 알아낸 것
+| 증상 | 원인 | 해결 |
+|---|---|---|
+| `syntax error at or near "/tmp/music.csv"` | inline `psql -c` 의 따옴표 중첩 | SQL 을 파일로 쓰고 `psql -f` |
+| `null value in column "title" violates not-null` | 제목이 빈 문자열인 곡 **3,977개**. CSV 빈 칸을 COPY 가 NULL 로 넣는다 | `FORCE_NOT_NULL (title)` |
+| `could not resize shared memory segment ... No space left on device` | HNSW 병렬 빌드가 컨테이너 `/dev/shm` 64 MB 를 넘김 | `SET max_parallel_maintenance_workers = 0` |
+| `Could not find command :auto` | cypher-shell 5.26 에 `:auto` 가 없다 | 빼면 된다. 기본이 auto-commit |
+
+### HNSW 인덱스는 아직 빌드 중
+662만 행에서 `maintenance_work_mem` 2 GB 로는 **2,757,295 튜플에서 그래프가 메모리를 넘긴다**. 그 뒤는 디스크 기반이라 크게 느려진다(경고 원문: `hnsw graph no longer fits into maintenance_work_mem`).
+
+선택지 둘이다.
+1. 그대로 두고 끝나기를 기다린다(수 시간 예상)
+2. 취소하고 컨테이너를 8 GB 로 올려 `maintenance_work_mem = 6GB` 로 다시 빌드한다(호스트 15.8 GB 중 가용 12.8 GB)
+
+**인덱스가 없어도 정확 거리 질의(전체 스캔)는 동작한다.** BE 통합은 막히지 않는다.
+
+### 남은 것
+| 무엇 | 상태 |
+|---|---|
+| HNSW 인덱스 | 빌드 중. 위 절의 선택지 둘 |
+| DB 왕복 좌표 표본 검증(AC2) | 인덱스 빌드가 끝난 뒤에 한다 |
+| compose 파일에 자원 반영 | 인프라 담당 |
+| `music.mbid` UNIQUE 등 제약 | BE 결정. 지금은 데이터 자체에 중복이 없다(distinct 6,624,399) |
+| BE 에 전달 | 새 곡 id 는 **6,624,400** 부터 |
 
 ## music 테이블
 
@@ -130,18 +232,18 @@ D1 이 길이 규칙을 60초~6분으로 좁히기로 정했고 그것이 v2.2 �
 스펙 17 의 측정값과 함정은 그대로 유효하다. 특히 **질의 벡터를 서브쿼리로 넘기면 HNSW 가 틀린 결과를 낸다**(실행계획에서 `InitPlan` 으로 들어가고 자기 자신이 1위에 안 나온다). 좌표를 먼저 읽어 바인드 파라미터로 넘겨야 한다. pgvector 0.7.0 은 iterative index scan 이 없어 선택도 높은 `WHERE` 를 걸면 `LIMIT` 보다 적게 반환하는 것도 같다.
 
 ## 수용 기준
-- AC1 `music` 행 수 == `manifest.songs`(6,624,399). 전 행의 `mbid` 가 소문자 UUID.
+- AC1 `music` 행 수 == `manifest.songs`(6,624,399). 전 행의 `mbid` 가 소문자 UUID, `id` 가 1..6,624,399 연속(D13).
 - AC2 `location` 이 `vector(16)` 이고, 무작위 1,000행이 `coords_v2.parquet` 과 **비트 단위로 같다**(Jira S15P21A405-35 좌표 불변성 게이트).
-- AC3 `bpm` 이 `v2_feats` 의 `rhythm.bpm` 과 같다(표본 1,000행, 상대오차 0).
+- AC3 `bpm` 이 `v2_feats` 의 `rhythm.bpm` 을 소수 1자리로 반올림한 값과 같다. **733,146곡은 NULL** 이다(파트 2개 누락, Q7). 표본 1,000행.
 - AC4 `release_year`·`album`·`youtube_url` 은 전 행 NULL. 값이 들어 있으면 실패다(출처 없는 값이 섞였다는 뜻).
-- AC5 `genre` 행 수 == 29(멜론 코드 종류), `music_genre` 행 수 == 67,472 (± bridge 재계산분).
-- AC6 `music_genre` 가 없는 곡이 6,556,927곡이고 그것이 정상임을 문서와 테스트가 함께 말한다.
+- AC5 `genre` 행 수 == **29**(멜론 코드 종류), `music_genre` 행 수 == **71,285**(곡 66,036개). 2026-09-10 CSV 실측값이다.
+- AC6 `music_genre` 가 없는 곡이 **6,558,363**곡이고 그것이 정상임을 문서와 테스트가 함께 말한다.
 - AC7 Neo4j `(:Music)` 노드 수 == `music` 행 수, `genres` 배열이 `music_genre` 와 일치.
 - AC8 적재 시간·인덱스 크기·디스크 사용량을 `output/db_ingest_bench.json` 에 기록한다.
-- AC9 `pytest tests/test_db_ingest.py` 통과 (스키마·매핑 검사. 실 DB 없으면 skip).
+- AC9 `pytest tests/test_db_ingest.py` 통과 (스키마·매핑·좌표 왕복 검사. 실 DB 없이 돈다). **2026-09-10 10건 통과.**
 
 ## 비범위
-- 실제 DDL 커밋. 열린 질문 Q2(마이그레이션 도구) 결정 전에는 만들지 않는다.
+- DDL 작성. BE 가 이미 만들었다. 우리는 데이터만 넣는다(열린 질문 Q2 는 BE 쪽에서 해소됐다).
 - `release_year`·`album` 수집. 원본 재패스가 필요하고 2차다.
 - `youtube_url` 수집. 규칙 6 으로 금지.
 - 장르 커버리지 확대. 스펙 13.

@@ -1,0 +1,102 @@
+{
+  "stage": "S18-load",
+  "date": "2026-09-10",
+  "postgres": {
+    "host": "app-node j15a405.p.ssafy.io",
+    "container": "ody-postgres",
+    "version": "PostgreSQL 17.11",
+    "pgvector": "0.7.0",
+    "database": "ody",
+    "rows": {
+      "music": 6624399,
+      "genre": 29,
+      "music_genre": 71285
+    },
+    "copy_seconds": {
+      "genre": 0.002,
+      "music": 66.28,
+      "music_genre": 0.12
+    },
+    "csv_transfer_seconds": 558,
+    "sizes": {
+      "music_heap": "1376 MB",
+      "music_total": "1518 MB",
+      "db": "2540 MB"
+    },
+    "verification": {
+      "id_min": 1,
+      "id_max": 6624399,
+      "distinct_id": 6624399,
+      "distinct_mbid": 6624399,
+      "mbid_not_lowercase_uuid": 0,
+      "location_dims": 16,
+      "location_rows": 6624399,
+      "null_release_year_album_youtube": "전 행 NULL (AC4 통과)",
+      "bpm_null": 733146,
+      "title_empty_string": 3977,
+      "songs_with_genre": 66036
+    },
+    "resource_change": {
+      "before": {
+        "memory": "1 GB",
+        "cpus": 1,
+        "maintenance_work_mem": "64 MB"
+      },
+      "after": {
+        "memory": "4 GB",
+        "cpus": 2,
+        "maintenance_work_mem": "세션에서 2 GB"
+      },
+      "how": "docker update --memory 4g --memory-swap 4g --cpus 2 ody-postgres (cgroup v2, 재시작 없음)",
+      "persistence": "컨테이너 재생성 시 원복된다. compose 파일 반영은 인프라 담당 몫: /home/ubuntu/ody-infra-rollout/infra/database/postgres/docker-compose.yml",
+      "rollback": "docker update --memory 1g --memory-swap 1g --cpus 1 ody-postgres"
+    },
+    "hnsw_index": {
+      "status": "진행 중 (2026-09-10 기록 시점 43.2%)",
+      "note": "2,757,295 튜플에서 'hnsw graph no longer fits into maintenance_work_mem' 경고. 그 뒤로는 디스크 기반이라 크게 느려진다",
+      "decision_needed": "maintenance_work_mem 을 6 GB 로 올리고 (컨테이너 8 GB) 다시 빌드할지, 지금 빌드를 그대로 둘지",
+      "workaround": "인덱스 없이도 정확 거리 질의(전체 스캔)는 동작한다"
+    }
+  },
+  "neo4j": {
+    "container": "ody-neo4j",
+    "version": "5.26.30-community",
+    "nodes": {
+      "Music": 6624399,
+      "Genre": 29
+    },
+    "relationships": {
+      "HAS_GENRE": 71285
+    },
+    "songs_with_genre": 66036,
+    "load_seconds": {
+      "music_nodes": 653,
+      "genre_graph": 157
+    },
+    "how": "LOAD CSV WITH HEADERS + CALL {} IN TRANSACTIONS OF 10000 ROWS",
+    "constraints": [
+      "music_id_unique (Music.id)",
+      "genre_name_unique (Genre.name)"
+    ],
+    "indexes": [
+      "music_mbid_idx (Music.mbid)"
+    ],
+    "store_size": "4.2 GB (/data/databases)",
+    "note": "location 은 16개 float 배열로 넣었지만 거리 계산은 하지 않는다. 그건 pgvector 담당(D9)"
+  },
+  "disk": {
+    "app_node_root": "309G 중 사용 49G, 여유 261G"
+  },
+  "acceptance": {
+    "AC1_music_rows": "통과 (6,624,399, id 1..6,624,399 연속, mbid 소문자 UUID 중복 0)",
+    "AC2_location_bit_identical": "CSV 왕복은 테스트로 통과. DB 왕복 표본 검증은 HNSW 후 별도",
+    "AC3_bpm": "733,146곡 NULL (v2_feats 28/30 파트, Q7)",
+    "AC4_null_columns": "통과 (release_year·album·youtube_url 전 행 NULL)",
+    "AC5_genre_counts": "통과 (genre 29, music_genre 71,285)",
+    "AC6_songs_without_genre": "통과 (6,558,363곡. 커버리지 1.0% 는 현재 데이터의 사실)",
+    "AC7_neo4j": "통과 (Music 6,624,399 == music 행 수, HAS_GENRE 71,285 == music_genre 행 수)",
+    "AC8_bench": "이 파일",
+    "AC9_tests": "통과 (tests/test_db_ingest.py 10건)"
+  },
+  "next_music_id_for_backend": 6624400
+}

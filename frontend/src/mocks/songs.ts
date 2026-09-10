@@ -1,14 +1,15 @@
 /**
  * 목 곡 데이터셋 — 16차원 PC 벡터를 가진 곡 N개.
  * 별지도/모프 프로토타입의 생성 규칙을 따른다: 밀도 봉우리 22개 주변에 군집, 장르는 색·성향으로만.
- * 실서비스에서는 레이어 0은 스트리밍, 게이트 이하로 좁힌 뒤 상주 집합(≤5만곡, PC 16개 포함)을 통째로 받는다.
+ * 실서비스에서는 겹마다 그 겹의 상주 집합(LAYER_SONG_COUNT 규모, PC 16개 포함)을 받는다.
  */
-import { LAYER_COUNT } from "@/constants";
+import { GENRE_NAMES, LAYER_COUNT, LAYER_SONG_COUNT } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";
 import { seeded } from "./seed";
 
-export const SONG_COUNT = 4200;
-export const GENRE_NAMES = ["앰비언트", "일렉트로닉", "클래식", "재즈", "힙합", "R&B·소울", "팝", "록", "메탈", "포크·컨트리"];
+/** 겹마다 상주하는 곡 수. 목에서는 같은 집합을 8겹이 돌려 쓰고, 겹마다 다른 두 축으로 투영한다 */
+export const SONG_COUNT = LAYER_SONG_COUNT;
+export { GENRE_NAMES };
 export const MOODS = ["몽환적", "신나는", "잔잔한", "어두운", "따뜻한", "차가운"];
 
 const TA = ["Neon", "Velvet", "Glass", "Static", "Marble", "Paper", "Salt", "Ember", "Cobalt", "Hollow", "Amber", "Sable", "Quiet", "Rust", "Linen", "Ivory", "Bitter", "Solar", "Midnight", "Pale", "Copper", "Cinder", "Frost", "Iron"];
@@ -62,19 +63,23 @@ export function allSongs(): MapPoint[] {
   const push = (x: number, y: number, gi: number) => {
     raw.push({ x, y, gi, mag: Math.pow(rnd(), 0.95), rest: Array.from({ length: PC_DIMS - 2 }, () => gauss() * 0.8) });
   };
-  // ① 구름 전체에 고르게 (55%)
-  for (let i = 0; i < Math.round(SONG_COUNT * 0.55); i++) {
+  const scatter = () => {
     const a = rnd() * Math.PI * 2;
     const r = Math.sqrt(rnd());
     const x = Math.cos(a) * r * 1.3;
     const y = Math.sin(a) * r * 0.82;
     push(x, y, pickGenre(nearestCell(x, y)));
-  }
+  };
+  // ① 구름 전체에 고르게 (55%)
+  for (let i = 0; i < Math.round(SONG_COUNT * 0.55); i++) scatter();
   // ② 봉우리 주변 (45%)
   for (const c of cells) {
     const n = Math.round(((SONG_COUNT * 0.45) / cells.length) * (0.7 + rnd() * 0.7));
     for (let i = 0; i < n; i++) push(c.x + gauss() * 0.14, c.y + gauss() * 0.12, pickGenre(c));
   }
+  // 봉우리 표본 수가 난수라 총합이 어긋난다 — 정확히 SONG_COUNT 곡으로 맞춘다
+  while (raw.length < SONG_COUNT) scatter();
+  raw.length = SONG_COUNT;
 
   // 축별 표준화 (z-score) → 모든 레이어가 같은 스케일
   const dims: number[][] = Array.from({ length: PC_DIMS }, () => []);
@@ -103,7 +108,25 @@ export function allSongs(): MapPoint[] {
       playable: rnd() > 0.115,
     };
   });
+  cache.push(ghostOnlySong());
   return cache;
+}
+
+/**
+ * 목 확인용 곡 — 어느 겹에도 상주하지 않는다. 검색해서 고르면 늘 고스트별로 뜬다 (MAP-12).
+ * 좌표는 구름 바깥이라 "저쪽 바깥에 있다"는 방향이 잘 읽힌다.
+ */
+function ghostOnlySong(): MapPoint {
+  return {
+    musicId: SONG_COUNT + 1,
+    pc: [2.6, 1.7, ...Array.from({ length: PC_DIMS - 2 }, (_, i) => (i % 2 ? -1.4 : 1.9))],
+    genreId: 2,
+    weight: 48_000,
+    title: "고스트별",
+    artist: "다른 갈래",
+    playable: true,
+    ghostOnly: true,
+  };
 }
 
 export function songById(id: number): MapPoint | undefined {
@@ -135,7 +158,7 @@ export function nearestSongs(center: MapPoint, n: number): MapPoint[] {
  * 레이어별 대표곡 (백엔드가 레이어마다 다르게 선별해 내려준다는 전제).
  * 목에서는 레이어 시드로 재생수 가중 표본을 뽑아 레이어마다 다른 곡이 커버로 뜨게 한다.
  */
-export const REPRESENTATIVES_MOCK_PER_LAYER = 90;
+export const REPRESENTATIVES_MOCK_PER_LAYER = 40;
 const repCache = new Map<number, number[]>();
 export function representativesFor(layer: number): number[] {
   let ids = repCache.get(layer);

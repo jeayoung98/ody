@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -80,6 +80,8 @@ export class MapEngine {
   W = 1;
   H = 1;
   occludedRight = 76;
+  /** 패널이 열리고 닫히면 여기가 먼저 바뀌고 occludedRight 가 프레임마다 따라간다 */
+  private occludedTarget = 76;
 
   layer = 0;
   cam: MapCamera = { cx: 0, cy: 0, s: 100 };
@@ -165,8 +167,14 @@ export class MapEngine {
     this.project();
   }
 
+  /**
+   * 우측 패널 폭 변화. 값을 바로 갈아끼우면 freeRect 를 쓰는 것들(별자리 배치·주변 탐색 고리)이
+   * 한 프레임에 순간이동한다 — 목표만 잡아두고 frame() 에서 따라가게 한다.
+   */
   setOcclusion(right: number) {
-    this.occludedRight = right;
+    this.occludedTarget = right;
+    // 첫 설정은 애니메이션 없이 바로
+    if (!this.inited) this.occludedRight = right;
   }
 
   setSongs(songs: MapPoint[]) {
@@ -931,6 +939,12 @@ export class MapEngine {
   frame(now: number) {
     this.time = now / 1000;
     if (!this.inited) return;
+
+    // 패널 폭을 부드럽게 따라간다 (사이드 패널 열고 닫을 때 화면이 끊기며 튀지 않게)
+    if (this.occludedRight !== this.occludedTarget) {
+      this.occludedRight = lerp(this.occludedRight, this.occludedTarget, OCCLUSION_EASE);
+      if (Math.abs(this.occludedRight - this.occludedTarget) < 0.5) this.occludedRight = this.occludedTarget;
+    }
 
     // 모프 진행
     if (this.anim) {

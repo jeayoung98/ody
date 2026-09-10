@@ -155,6 +155,8 @@ export const CONSTELLATION = {
    * 지금 듣는 곡만 또렷하고, 이미 들은 곡은 옅게, 아직 안 들은 곡은 더 옅게.
    */
   alpha: { current: 1, played: 0.5, unplayed: 0.24 },
+  /** 제목 라벨은 이 아래로 옅어지지 않는다 — 안 들은 곡도 읽혀야 한다 */
+  labelMinAlpha: 0.8,
   enterMs: 800,
   exitMs: 500,
 } as const;
@@ -178,3 +180,9 @@ export const FOCUS = {
   /** 카메라 배율 = 진입 배율 × 이 값 */
   zoomMul: 3.2,
 } as const;
+
+/**
+ * 우측 패널이 열리고 닫힐 때 "지도가 쓸 수 있는 폭"이 목표값으로 따라가는 비율(프레임당).
+ * 0.14 ≈ 60fps 에서 약 300ms — 패널 전환(--duration-normal)과 비슷하게 움직인다.
+ */
+export const OCCLUSION_EASE = 0.14;

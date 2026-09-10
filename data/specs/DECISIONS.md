@@ -16,6 +16,7 @@
 | D7 | 2026-09-10 | 좌표 차원은 **PCA-16**. Jira S15P21A405-35 설명의 "dim 64" 는 기획 초기 값이며 **설명 쪽을 갱신**한다 | 서빙 아티팩트가 `manifest.k=16`, `coords_v2.parquet` 이 `pc1..pc16`. 64 로 가려면 재학습이 필요하고 major 버전 + 게이트 재등록이라 1차 기간에 불가(규칙 3). 사용자(재영) 확인 | `50_db_schema` `track_vector` 스키마, Jira 35 설명 갱신. 열린 질문 Q1 종료 |
 
 | D13 | 2026-09-10 | **`music.id` 는 적재가 부여한다. `mbid` 오름차순 1..6,624,399.** BE 가 만든 실제 스키마를 따르고 스펙 18 초안(`mbid` PK)을 실제에 맞춘다 | 실측: `music.id BIGINT` 가 PK 인데 DEFAULT·IDENTITY·시퀀스가 없다(`playlist_id_seq` 만 존재). `music_genre` 도 `music_id` 를 참조한다. mbid 정렬 부여는 같은 입력에 같은 id 를 주므로 재적재가 멱등이다. 사용자 확인(2026-09-10) | `ingest/build_csv.py`, 스펙 18 실제 스키마 절·AC1, BE 전달 사항(새 곡은 6,624,400 부터) |
+| D14 | 2026-09-11 | **지도 레이어는 트리 노드가 아니라 좌표 쌍이다.** 1레이어 (pc1,pc2) … 8레이어 (pc15,pc16) 이고 앞 레이어 근처로 필터하며 내려가는 드릴다운이다. 스펙 16 의 `map_layer`·`track_position` 노드 집계 적재는 쓰지 않는다 | 사용자 확인(2026-09-11). 이 구조면 필터 사슬에 항상 (pc1,pc2) 가 들어가 인덱스 하나로 충분하다. 실측: 첫 화면 20,941 ms → 0.4 ms(미리 계산 + 조인 제거), 2레이어 82 ms, 3레이어 145 ms, 평면 최근접 0.24 ms. GiST 를 사각 범위에 둘 다 쓰면 BitmapAnd 로 355 ms 로 되레 느려진다 | 스펙 16 전면 갱신(원안 보존), `ingest/build_map_layer.sql`·`map_layer_queries.sql`·`map_grid.py`, `output/map_layer_bench_2026-09-11.json` |
 ---
 
 ## 열린 질문 (결정 대기 — 답이 나오면 위 표에 D7.. 로 옮긴다)

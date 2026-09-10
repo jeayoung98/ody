@@ -70,6 +70,44 @@ class AuthEmailServiceTests {
 	}
 
 	@Test
+	void signup_passwordTooShort_throwsInvalidPasswordFormat() {
+		assertThatThrownBy(() -> authService.signup("new@gmail.com", "abc123", "닉네임"))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(AuthErrorCode.INVALID_PASSWORD_FORMAT);
+
+		verify(authMapper, never()).insert(any());
+	}
+
+	@Test
+	void signup_passwordWithoutDigit_throwsInvalidPasswordFormat() {
+		assertThatThrownBy(() -> authService.signup("new@gmail.com", "onlyletters", "닉네임"))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(AuthErrorCode.INVALID_PASSWORD_FORMAT);
+	}
+
+	@Test
+	void signup_nicknameTooShort_throwsInvalidNicknameLength() {
+		assertThatThrownBy(() -> authService.signup("new@gmail.com", "password1234", "a"))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(AuthErrorCode.INVALID_NICKNAME_LENGTH);
+
+		verify(authMapper, never()).insert(any());
+	}
+
+	@Test
+	void signup_nicknameTooLong_throwsInvalidNicknameLength() {
+		String tooLong = "가".repeat(21);
+
+		assertThatThrownBy(() -> authService.signup("new@gmail.com", "password1234", tooLong))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(AuthErrorCode.INVALID_NICKNAME_LENGTH);
+	}
+
+	@Test
 	void signup_duplicateEmail_throwsEmailAlreadyExists() {
 		UserAuthDto existing = new UserAuthDto();
 		existing.setEmail("dup@gmail.com");
@@ -112,7 +150,7 @@ class AuthEmailServiceTests {
 	}
 
 	@Test
-	void login_wrongPassword_throwsInvalidCredentials() {
+	void login_wrongPassword_throwsPasswordMismatch() {
 		UserAuthDto user = new UserAuthDto();
 		user.setEmail("me@gmail.com");
 		user.setPasswordHash(passwordEncoder.encode("password1234"));
@@ -121,7 +159,7 @@ class AuthEmailServiceTests {
 		assertThatThrownBy(() -> authService.login("me@gmail.com", "wrong-password"))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
-				.isEqualTo(AuthErrorCode.INVALID_CREDENTIALS);
+				.isEqualTo(AuthErrorCode.PASSWORD_MISMATCH);
 	}
 
 	@Test

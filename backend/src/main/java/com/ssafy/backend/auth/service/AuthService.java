@@ -1,6 +1,8 @@
 package com.ssafy.backend.auth.service;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
+import java.util.regex.Pattern;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -28,6 +30,12 @@ public class AuthService {
 	private static final String BLACKLIST_KEY_PREFIX = "blacklist:";
 	private static final String EXCHANGE_CODE_KEY_PREFIX = "oauth:exchange:";
 
+	/** 영문+숫자 포함 8자 이상. bcrypt는 UTF-8 72바이트를 넘으면 초과분을 조용히 버리므로 바이트 길이는 별도 검사한다. */
+	private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$");
+	private static final int PASSWORD_MAX_BYTES = 72;
+	private static final int NICKNAME_MIN_LENGTH = 2;
+	private static final int NICKNAME_MAX_LENGTH = 20;
+
 	private final AuthMapper authMapper;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final StringRedisTemplate redisTemplate;
@@ -38,6 +46,12 @@ public class AuthService {
 	 * name 컬럼은 NOT NULL이라 구글 표시 이름 대신 nickname을 그대로 채운다.
 	 */
 	public TokenPair signup(String email, String rawPassword, String nickname) {
+		if (!isValidPassword(rawPassword)) {
+			throw new CustomException(AuthErrorCode.INVALID_PASSWORD_FORMAT);
+		}
+		if (nickname.length() < NICKNAME_MIN_LENGTH || nickname.length() > NICKNAME_MAX_LENGTH) {
+			throw new CustomException(AuthErrorCode.INVALID_NICKNAME_LENGTH);
+		}
 		if (authMapper.findByEmail(email) != null) {
 			throw new CustomException(AuthErrorCode.EMAIL_ALREADY_EXISTS);
 		}
@@ -57,19 +71,26 @@ public class AuthService {
 	}
 
 	/**
-	 * 이메일/비밀번호 로그인. 이메일이 없거나, 구글 OAuth로만 가입해 비밀번호가 없거나, 비밀번호가 틀린 경우
-	 * 전부 동일한 INVALID_CREDENTIALS로 응답해 계정 존재 여부가 드러나지 않게 한다.
+	 * 이메일/비밀번호 로그인. 이메일이 없거나 구글 OAuth 전용 계정(비밀번호 없음)이면 INVALID_CREDENTIALS,
+	 * 이메일은 있는데 비밀번호만 틀리면 PASSWORD_MISMATCH로 구분한다(계정 존재 여부는 응답에 드러난다).
 	 */
 	public TokenPair login(String email, String rawPassword) {
 		UserAuthDto user = authMapper.findByEmail(email);
-		if (user == null || user.getPasswordHash() == null
-				|| !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+		if (user == null || user.getPasswordHash() == null) {
 			throw new CustomException(AuthErrorCode.INVALID_CREDENTIALS);
+		}
+		if (!passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+			throw new CustomException(AuthErrorCode.PASSWORD_MISMATCH);
 		}
 
 		authMapper.touchLogin(email, user.getImageUrl());
 		log.info("[Auth] 이메일 로그인 완료 email={}", email);
 		return issueTokenPair(email);
+	}
+
+	private boolean isValidPassword(String rawPassword) {
+		return PASSWORD_PATTERN.matcher(rawPassword).matches()
+				&& rawPassword.getBytes(StandardCharsets.UTF_8).length <= PASSWORD_MAX_BYTES;
 	}
 
 	public String exchangeCode(String code) {

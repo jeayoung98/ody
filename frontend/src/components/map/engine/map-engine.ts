@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GENRE_DIM, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -83,8 +83,6 @@ export class MapEngine {
   viewportCount = 0;
   /** 이 겹 별들을 다 감싸는 반지름 (중심 기준 px). 고스트별을 그 밖에 놓는다. 프레임마다 갱신 */
   private ghostExtent = 0;
-  /** 필터에서 켜 둔 장르. 꺼진 장르는 지워지지 않고 GENRE_DIM 만큼 흐려진다 */
-  litGenres = new Set<number>();
   N = 0;
 
   W = 1;
@@ -240,16 +238,6 @@ export class MapEngine {
     // 고스트별로 띄운 곡이 아닌 다른 곡을 고르면 고스트는 사라진다 (MAP-12)
     if (this.ghost && id !== this.ghost.musicId) this.ghost = null;
     this.selectedId = id;
-  }
-
-  /** 켜 둔 장르 목록 (보기 필터). 전부 켜져 있으면 모두 1배 */
-  setLitGenres(genreIds: number[]) {
-    this.litGenres = new Set(genreIds);
-  }
-
-  /** 이 별의 장르가 필터에서 꺼져 있으면 흐리게 (형태만 남는다) */
-  genreDim(i: number) {
-    return this.litGenres.size === 0 || this.litGenres.has(this.songs[i].genreId) ? 1 : GENRE_DIM;
   }
 
   setCallbacks(cb: {
@@ -483,7 +471,7 @@ export class MapEngine {
     const f = this.freeRect();
     let max = 0;
     for (let i = 0; i < this.N; i++) {
-      if (!this.subset[i] || this.alpha[i] < 0.5 || this.genreDim(i) < 1) continue;
+      if (!this.subset[i] || this.alpha[i] < 0.5) continue;
       const d = Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy);
       if (d > max) max = d;
     }
@@ -1175,7 +1163,7 @@ export class MapEngine {
     const f = this.freeRect();
     let n = 0;
     for (let i = 0; i < this.N; i++) {
-      if (!this.subset[i] || this.genreDim(i) < 1) continue;
+      if (!this.subset[i]) continue;
       const px = this.pos[i * 2];
       const py = this.pos[i * 2 + 1];
       if (px >= f.x0 && px <= f.x1 && py >= f.y0 && py <= f.y1) n++;
@@ -1199,7 +1187,7 @@ export class MapEngine {
     const dx = this.dx();
     const dy = this.dy();
     for (const i of this.byWeight) {
-      if (!this.subset[i] || this.alpha[i] < 0.5 || this.genreDim(i) < 1) continue;
+      if (!this.subset[i] || this.alpha[i] < 0.5) continue;
       const px = this.pos[i * 2];
       const py = this.pos[i * 2 + 1];
       if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;

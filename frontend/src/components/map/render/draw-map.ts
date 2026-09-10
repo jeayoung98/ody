@@ -103,7 +103,7 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
   const step = Math.max(1, Math.floor(e.N / 22));
   for (let i = 0; i < e.N; i += step) {
-    const a0 = A[i] * e.genreDim(i);
+    const a0 = A[i];
     if (a0 < 0.05) continue;
     const s = e.songs[i];
     const px = P[i * 2];
@@ -133,8 +133,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const swy = Math.cos(t * 0.027) * 17 + Math.sin(t * 0.008 + 0.6) * 9;
   g.globalCompositeOperation = "lighter";
   for (let i = 0; i < e.N; i++) {
-    // 상주 곡은 전부 그린다 — 격자에서 이긴 별만 크고 밝다. 꺼진 장르는 형태만 남는다
-    const a0 = A[i] * e.genreDim(i);
+    // 상주 곡은 전부 그린다 — 격자에서 이긴 별만 크고 밝다
+    const a0 = A[i];
     if (a0 < 0.01) continue;
     let px = P[i * 2];
     let py = P[i * 2 + 1];
@@ -197,7 +197,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.coverAlpha < 0.01) return;
   // 커버는 이 레이어의 대표곡(백엔드 선별) 중 화면 안에 있는 곡. 부족하면 격자 대표곡으로 채운다
   const candidates = new Set<number>();
-  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId) && e.genreDim(i) >= 1) candidates.add(i);
+  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
   if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
   const list = [...candidates]
     .map((i) => ({ i, px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] }))

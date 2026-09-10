@@ -1,13 +1,11 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { GENRE_NAMES, type MapViewMode } from "@/constants";
+import type { MapViewMode } from "@/constants";
 import type { MapCamera } from "@/types";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
 const EMPTY_IDS: number[] = [];
-/** 장르 전부 켜진 상태 (같은 참조 유지) */
-const ALL_GENRES: number[] = GENRE_NAMES.map((_, i) => i);
 
 /** 엔진이 프레임마다 밀어 넣는 읽기 전용 스냅샷 (HUD 표시용) */
 export interface EngineSnapshot {
@@ -40,8 +38,6 @@ export interface EngineSnapshot {
 
 interface MapState extends EngineSnapshot {
   viewMode: MapViewMode;
-  /** 필터에서 켜 둔 장르. 꺼진 장르는 지도에서 형태만 남는다 */
-  litGenres: number[];
   selectedMusicId: number | null;
   /** 주변 탐색 모드의 기준 곡 */
   nearbyCenterMusicId: number | null;
@@ -52,9 +48,6 @@ interface MapState extends EngineSnapshot {
   constellationMusicIds: number[];
 
   setViewMode: (mode: MapViewMode) => void;
-  /** 장르 칩 토글 — 전부 켜진 상태에서 누르면 그 장르만 남기고(솔로), 마지막 하나를 끄면 전부 켜진다 */
-  toggleGenre: (genreId: number) => void;
-  showAllGenres: () => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
   enterNearby: (musicId: number) => void;
@@ -101,23 +94,11 @@ export const useMapStore = create<MapState>()(
       playingElsewhere: false,
 
       viewMode: "default",
-      litGenres: ALL_GENRES,
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
 
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
-      toggleGenre: (genreId) =>
-        set(
-          (s) => {
-            if (s.litGenres.length === ALL_GENRES.length) return { litGenres: [genreId] };
-            const next = s.litGenres.includes(genreId) ? s.litGenres.filter((g) => g !== genreId) : [...s.litGenres, genreId];
-            return { litGenres: next.length ? next : ALL_GENRES };
-          },
-          false,
-          "toggleGenre",
-        ),
-      showAllGenres: () => set({ litGenres: ALL_GENRES }, false, "showAllGenres"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
       setMyMusicId: (myMusicId) => {
         set({ myMusicId }, false, "setMyMusicId");

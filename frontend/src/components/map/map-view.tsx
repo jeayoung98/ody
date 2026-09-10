@@ -46,7 +46,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
   const { data: layout } = useConstellationLayoutQuery(constellationMusicIds);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
-  const litGenres = useMapStore((s) => s.litGenres);
   const myMusicId = useMapStore((s) => s.myMusicId);
   const selectMusic = useMapStore((s) => s.selectMusic);
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
@@ -105,7 +104,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
     else if (viewMode !== "constellation") engine.exitConstellation();
   }, [engine, viewMode, constellationMusicIds, layout]);
   useEffect(() => engine.setSelected(selectedMusicId), [engine, selectedMusicId]);
-  useEffect(() => engine.setLitGenres(litGenres), [engine, litGenres]);
 
   // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)
   useEffect(() => {

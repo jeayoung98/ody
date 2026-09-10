@@ -6,12 +6,6 @@ export const LAYER_COUNT = 8;
 /** 한 겹에 상주하는 곡 수. 겹을 옮겨도 이 규모는 그대로다 (백엔드가 겹마다 이만큼 내려준다는 전제) */
 export const LAYER_SONG_COUNT = 1000;
 
-/**
- * 필터에서 꺼진 장르의 밝기 배수 (프로토타입 값).
- * 지우지 않고 형태만 남긴다 — 한 장르가 이 겹에 어떻게 퍼져 있는지 나머지와 비교해 보이게.
- */
-export const GENRE_DIM = 0.16;
-
 /** 장르 이름. 인덱스 = genreId, 색은 GENRE_COLORS 의 같은 인덱스 */
 export const GENRE_NAMES = ["앰비언트", "일렉트로닉", "클래식", "재즈", "힙합", "R&B·소울", "팝", "록", "메탈", "포크·컨트리"] as const;
 

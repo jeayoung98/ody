@@ -28,3 +28,4 @@
 | Q4 | 축 라벨의 태그 출처 | Jira S15P21A405-38 은 Last.fm 태그 log-odds. 저장소에는 AcousticBrainz 자유 텍스트 태그(`work/genres_raw.parquet` 23,203,978행)만 있고 Last.fm 데이터는 없다 | 보유한 AB 태그로 진행하고 출처를 문서에 명시 | `14_axis_labels`, `13_genre_hierarchy` |
 | Q5 | 트리 축 할당 방식 표기 | Jira S15P21A405-37 은 "depth별 PC 축 2개". 실제는 **노드별 local PCA-2**(`split_axes.npz`) | 실제 아티팩트를 따르고 Jira 설명 갱신을 제안 | `16_map_layer_serving` |
 | Q6 | Vector DB 도입 여부 | Jira 35 는 "Vector DB 동기화" 언급. 팀 확정 기술 목록(루트 `AGENTS.md` §3)에는 없음 | 1차 미사용 | `50_db_schema` |
+| Q7 | 빠진 특징 2파트를 재추출할까 | `work/v2_feats` 는 30파트 중 **28파트**(`part10`, `part24` 없음). 6,617,603행. coords 6,624,399곡 중 **733,146곡(11.1%)에 특징이 없어** 전곡 패리티 검증 불가. 교집합 5,891,253곡(88.9%)은 가능. 원본 tar.zst 2개와 추출기(`dmadkr/scripts/extract_v2_features.py`)는 있고 파트당 약 5분 | 재추출을 제안한다. 15분이면 전곡 검증이 열리고, 안 하면 스펙 20 S3 의 "전곡" 기준을 교집합으로 낮춰야 한다 | `20_spark_pipeline` AC5·S3, `output/hdfs_ingest_2026-09-10.json` |

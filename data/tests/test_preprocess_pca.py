@@ -105,6 +105,17 @@ def test_pca_rejects_wrong_width(bundle):
         S3.project(np.zeros((2, 5)), bundle)
 
 
+def test_feature_names_are_backtick_quoted(bundle):
+    """특징 이름에 점이 있어 백틱 없이는 Spark 가 중첩 필드로 읽는다.
+
+    2026-09-10 클러스터 제출이 이것 때문에 UNRESOLVED_COLUMN 으로 실패했다.
+    """
+    dotted = [name for name in bundle["kept"] if "." in name]
+    assert len(dotted) > 200, "특징 이름 대부분에 점이 있다"
+    assert S2.quoted("lowlevel.gfcc.mean.0") == "`lowlevel.gfcc.mean.0`"
+    assert S2.quoted("a`b") == "`a``b`", "백틱 자체는 두 번 써서 escape 한다"
+
+
 def test_pca_output_columns():
     assert S3.PC_COLUMNS[0] == "pc1" and S3.PC_COLUMNS[-1] == "pc16"
 

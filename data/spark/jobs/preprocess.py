@@ -99,20 +99,41 @@ def output_schema():
     return StructType(fields)
 
 
+def quoted(name):
+    """특징 이름은 `lowlevel.gfcc.mean.0` 처럼 점을 포함한다.
+
+    그대로 `select` 에 넘기면 Spark 가 **중첩 필드 접근으로 해석**해서 컬럼을 못 찾는다
+    (2026-09-10 클러스터 제출에서 `UNRESOLVED_COLUMN.WITH_SUGGESTION` 로 실패했다).
+    백틱으로 감싸야 한 컬럼 이름으로 읽는다.
+    """
+    return "`{}`".format(name.replace("`", "``"))
+
+
+def feature_selection(bundle):
+    """select 에 넘길 컬럼식. 270개 특징을 f_000..f_269 로 바꿔 담는다.
+
+    이름을 바꾸는 이유는 점 때문에 pandas 쪽에서도 헷갈리기 쉽고, 출력 스키마가 이미
+    f_000..f_269 이기 때문이다. 순서는 feature_list.json 그대로다.
+    """
+    from pyspark.sql import functions as F
+    return [F.col(quoted(name)).alias(FEATURE_COLUMNS[j])
+            for j, name in enumerate(bundle["kept"])]
+
+
 def preprocess_df(df, bundle):
     """추출 특징 DataFrame → 전처리된 270 float32.
 
     입력에 필요한 컬럼: mbid, lossless, 그리고 feature_list 의 270개 특징 이름 그대로.
     """
     import pandas as pd
+    from pyspark.sql import functions as F
 
-    kept = bundle["kept"]
-    columns = list(CARRY_COLUMNS) + ["lossless"] + kept
     schema = output_schema()
+    columns = [F.col(name) for name in CARRY_COLUMNS] + [F.col("lossless")] + feature_selection(bundle)
 
     def run(batches):
         for batch in batches:
-            values = batch[kept].to_numpy(dtype=np.float64)
+            values = batch[FEATURE_COLUMNS].to_numpy(dtype=np.float64)
             Z = transform(values, batch["lossless"].to_numpy(), bundle)
             out = pd.DataFrame(Z.astype(np.float32), columns=FEATURE_COLUMNS,
                                index=batch.index)

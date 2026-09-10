@@ -11,6 +11,8 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.auth.dto.ExchangeRequestDto;
+import com.ssafy.backend.auth.dto.LoginRequestDto;
+import com.ssafy.backend.auth.dto.SignupRequestDto;
 import com.ssafy.backend.auth.dto.TokenResponseDto;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.RefreshTokenCookie;
@@ -21,6 +23,7 @@ import io.jsonwebtoken.Claims;
 
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
+import jakarta.validation.Valid;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -35,6 +38,30 @@ public class AuthController {
 
 	private final AuthService authService;
 	private final JwtTokenProvider jwtTokenProvider;
+
+	// 이메일/비밀번호 회원가입 (S15P21A405-121). 응답 모양은 exchange/reissue와 동일.
+	@PostMapping("/signup")
+	public ApiResponse<TokenResponseDto> signup(
+			@RequestBody @Valid SignupRequestDto request, HttpServletResponse response) {
+
+		TokenPair tokenPair = authService.signup(request.email(), request.password(), request.nickname());
+		response.addHeader(HttpHeaders.SET_COOKIE,
+				RefreshTokenCookie.issue(tokenPair.refreshToken(), jwtTokenProvider.getRefreshTokenExpirationMs()));
+
+		return ApiResponse.success(new TokenResponseDto(tokenPair.accessToken()));
+	}
+
+	// 이메일/비밀번호 로그인 (S15P21A405-121).
+	@PostMapping("/login")
+	public ApiResponse<TokenResponseDto> login(
+			@RequestBody @Valid LoginRequestDto request, HttpServletResponse response) {
+
+		TokenPair tokenPair = authService.login(request.email(), request.password());
+		response.addHeader(HttpHeaders.SET_COOKIE,
+				RefreshTokenCookie.issue(tokenPair.refreshToken(), jwtTokenProvider.getRefreshTokenExpirationMs()));
+
+		return ApiResponse.success(new TokenResponseDto(tokenPair.accessToken()));
+	}
 
 	// 프론트가 OAuth 리다이렉트에서 받은 1회용 code를 실제 access token으로 교환한다.
 	@PostMapping("/exchange")

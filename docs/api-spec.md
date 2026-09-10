@@ -63,6 +63,12 @@
 | `TOKEN_EXPIRED` | 401 | 액세스 토큰이 만료되었습니다. |
 | `REFRESH_TOKEN_INVALID` | 401 | 리프레시 토큰이 유효하지 않거나 만료되었습니다. |
 | `OAUTH_FAILED` | 401 | 구글 인증에 실패했습니다. |
+| `INVALID_CREDENTIALS` | 401 | 이메일 또는 비밀번호가 올바르지 않습니다. (§1.4, 이메일 없음/OAuth 전용 계정) |
+| `PASSWORD_MISMATCH` | 401 | 비밀번호가 올바르지 않습니다. (§1.4, 이메일은 존재하나 비밀번호 틀림) |
+| `INVALID_PASSWORD_FORMAT` | 400 | 비밀번호는 영문과 숫자를 포함해 8~72자여야 합니다. (§1.4) |
+| `INVALID_NICKNAME_LENGTH` | 400 | 닉네임은 2~20자여야 합니다. (§1.4) |
+| `EMAIL_ALREADY_EXISTS` | 409 | 이미 가입된 이메일입니다. (§1.4) |
+| `NICKNAME_ALREADY_EXISTS` | 409 | 이미 사용 중인 닉네임입니다. (§1.4) |
 | `FORBIDDEN` | 403 | 접근 권한이 없습니다. |
 | `USER_NOT_FOUND` | 404 | 존재하지 않는 사용자입니다. |
 | `USER_PRIVATE` | 403 | 비공개 사용자입니다. |
@@ -126,6 +132,47 @@ body: `idToken`(String, required).
 ### 1.3 로그아웃
 `POST /auth/logout` · 인증 필요. header: `Authorization`. res: `{ "success": true, "data": null, "error": null }`.
 - 서버는 토큰 주체의 refreshToken 폐기, 별도 body/param 없음. 에러: `INVALID_TOKEN`, `TOKEN_EXPIRED`.
+
+### 1.4 이메일/비밀번호 회원가입·로그인 (S15P21A405-121)
+> Notion 정본(AUTH-01)은 소셜 로그인만 확정돼 있다. 아래 두 API는 Notion에 없는, 백엔드 담당자 판단으로 추가한
+> 범위 변경이다(`S15P21A405-120`에 기록된 "명세 충돌 — 기획 확인 필요" 메모 참고). 실제 구현 경로 기준으로 적는다
+> (§1.1~1.3의 `/auth/*`와 달리 이 저장소의 실제 `AuthController`는 `/api/auth/*` 접두사를 쓴다 — 기존부터 있던
+> 정본과 코드의 경로 불일치이며 이번 작업 범위에서 고치지 않았다).
+
+`POST /api/auth/signup` · 인증 불필요. body: `email`(String, required), `password`(String, required, 영문+숫자
+포함 8자 이상, UTF-8 72바이트 이하), `nickname`(String, required, 2~20자).
+```json
+{ "success": true, "data": { "accessToken": "..." }, "error": null }
+```
+- 응답 모양은 1.1/1.2의 exchange·reissue와 동일(accessToken만 body, refreshToken은 httpOnly 쿠키).
+- 비밀번호는 bcrypt로 해시해 `"user".password_hash`에 저장. `name` 컬럼은 NOT NULL이라 `nickname` 값을 그대로 채운다.
+- password/nickname의 형식·길이 검증은 Bean Validation이 아니라 서비스 레이어에서 하며, 필수값 누락만 공통
+  `VALIDATION_ERROR`(400)이고 형식·길이·중복은 아래 전용 코드를 쓴다.
+- 에러: `INVALID_PASSWORD_FORMAT`(400), `INVALID_NICKNAME_LENGTH`(400), `EMAIL_ALREADY_EXISTS`(409),
+  `NICKNAME_ALREADY_EXISTS`(409), `VALIDATION_ERROR`(400, 필수값 누락).
+
+`POST /api/auth/login` · 인증 불필요. body: `email`(String, required), `password`(String, required).
+```json
+{ "success": true, "data": { "accessToken": "..." }, "error": null }
+```
+- 이메일이 없거나 구글 OAuth 전용 계정(`password_hash IS NULL`)이면 `INVALID_CREDENTIALS`(401) — 계정 존재
+  여부를 노출하지 않는다. 이메일은 존재하는데 비밀번호만 틀리면 `PASSWORD_MISMATCH`(401)로 구분한다.
+- 에러: `INVALID_CREDENTIALS`(401), `PASSWORD_MISMATCH`(401), `VALIDATION_ERROR`(400).
+- 선행 조건: `"user".password_hash` 컬럼 추가 필요(아래 쿼리 참고, 아직 실행 안 됨).
+  ```sql
+  ALTER TABLE "user" ADD COLUMN IF NOT EXISTS password_hash varchar(60);
+  ```
+
+`GET /api/users/nickname-available` · 인증 불필요(가입 전 호출). param: `nickname`(String, required).
+```json
+{ "success": true, "data": { "available": true }, "error": null }
+```
+- `signup`과 같은 길이 규칙(2~20자, `NicknamePolicy`)과 같은 중복 검사(`existsByNickname`)를 그대로 재사용한다.
+  이 API가 `available:true`를 반환해도 그 사이 다른 요청이 먼저 가입하면 `signup`에서 `NICKNAME_ALREADY_EXISTS`가
+  날 수 있다(TOCTOU, 최종 검증은 signup 쪽).
+- 에러: `INVALID_NICKNAME_LENGTH`(400), `VALIDATION_ERROR`(400, 필수값 누락).
+- 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/music/detail`)나
+  `/api/auth/*`와도 다른 세 번째 네이밍이다. 사용자가 지정한 경로를 그대로 따랐다.
 
 ---
 

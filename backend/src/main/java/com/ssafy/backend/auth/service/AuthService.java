@@ -92,8 +92,7 @@ public class AuthService {
 
 	/**
 	 * 구글 idToken 로그인/가입 (S15P21A405-122, AUTH-01 본안). 서명 위조·audience 불일치·만료·
-	 * email_verified=false는 전부 OAUTH_FAILED로 뭉뚱그린다. isNewUser는 신규 가입이거나
-	 * 기존 계정이 아직 온보딩(tutorial_completed)을 안 끝냈으면 true.
+	 * email_verified=false는 전부 OAUTH_FAILED로 뭉뚱그린다.
 	 */
 	public GoogleLoginResult loginWithGoogleIdToken(String idToken) {
 		GoogleIdTokenVerifierPort.GoogleIdentity identity = googleIdTokenVerifierPort.verify(idToken)
@@ -101,7 +100,6 @@ public class AuthService {
 				.orElseThrow(() -> new CustomException(AuthErrorCode.OAUTH_FAILED));
 
 		UserAuthDto user = authMapper.findByEmail(identity.email());
-		boolean isNewUser;
 
 		if (user == null) {
 			user = new UserAuthDto();
@@ -109,11 +107,9 @@ public class AuthService {
 			user.setName(identity.name());
 			user.setImageUrl(identity.imageUrl());
 			authMapper.insert(user);
-			isNewUser = true;
 			log.info("[Auth] 구글 idToken 신규 회원가입 완료 email={}", identity.email());
 		} else {
 			authMapper.touchLogin(identity.email(), identity.imageUrl());
-			isNewUser = !user.isTutorialCompleted();
 			log.info("[Auth] 구글 idToken 로그인 완료 email={}", identity.email());
 		}
 
@@ -121,7 +117,7 @@ public class AuthService {
 		GoogleLoginResult.UserInfo userInfo =
 				new GoogleLoginResult.UserInfo(user.getEmail(), user.getName(), user.getNickname(), identity.imageUrl());
 
-		return new GoogleLoginResult(tokenPair, isNewUser, userInfo);
+		return new GoogleLoginResult(tokenPair, userInfo);
 	}
 
 	private boolean isValidPassword(String rawPassword) {

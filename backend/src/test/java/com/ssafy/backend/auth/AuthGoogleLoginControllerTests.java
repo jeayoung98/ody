@@ -60,11 +60,10 @@ class AuthGoogleLoginControllerTests {
 	private UserMapper userMapper;
 
 	@Test
-	void loginWithGoogle_newUser_returnsIsNewUserTrue() throws Exception {
+	void loginWithGoogle_success_returnsAccessTokenAndUser() throws Exception {
 		when(jwtTokenProvider.getRefreshTokenExpirationMs()).thenReturn(1_209_600_000L);
 		when(authService.loginWithGoogleIdToken(eq("valid-token"))).thenReturn(new GoogleLoginResult(
 				new TokenPair("access-token", "refresh-token"),
-				true,
 				new GoogleLoginResult.UserInfo("new@gmail.com", "홍길동", null, "https://lh3.example/pic.png")));
 
 		mockMvc.perform(post("/api/auth/login/google")
@@ -73,7 +72,6 @@ class AuthGoogleLoginControllerTests {
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.accessToken").value("access-token"))
-				.andExpect(jsonPath("$.data.isNewUser").value(true))
 				.andExpect(jsonPath("$.data.user.email").value("new@gmail.com"))
 				.andExpect(jsonPath("$.data.user.nickname").doesNotExist());
 	}

@@ -6,6 +6,5 @@ package com.ssafy.backend.auth.dto;
  */
 public record GoogleLoginResponseDto(
 		String accessToken,
-		boolean isNewUser,
 		GoogleLoginResult.UserInfo user) {
 }

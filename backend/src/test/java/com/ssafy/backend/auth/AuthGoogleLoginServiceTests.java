@@ -53,7 +53,7 @@ class AuthGoogleLoginServiceTests {
 	}
 
 	@Test
-	void loginWithGoogleIdToken_newUser_createsAccountWithIsNewUserTrue() {
+	void loginWithGoogleIdToken_newUser_createsAccount() {
 		stubRedis();
 		when(googleIdTokenVerifierPort.verify("valid-token")).thenReturn(
 				Optional.of(new GoogleIdentity("new@gmail.com", true, "홍길동", "https://lh3.example/pic.png")));
@@ -61,7 +61,6 @@ class AuthGoogleLoginServiceTests {
 
 		GoogleLoginResult result = authService.loginWithGoogleIdToken("valid-token");
 
-		assertThat(result.isNewUser()).isTrue();
 		assertThat(result.user().email()).isEqualTo("new@gmail.com");
 		assertThat(result.user().name()).isEqualTo("홍길동");
 		assertThat(result.user().nickname()).isNull();
@@ -75,39 +74,21 @@ class AuthGoogleLoginServiceTests {
 	}
 
 	@Test
-	void loginWithGoogleIdToken_existingUserTutorialNotCompleted_isNewUserTrue() {
+	void loginWithGoogleIdToken_existingUser_touchesLoginAndReturnsProfile() {
 		stubRedis();
 		when(googleIdTokenVerifierPort.verify("valid-token")).thenReturn(
 				Optional.of(new GoogleIdentity("me@gmail.com", true, "홍길동", "https://lh3.example/new.png")));
 		UserAuthDto existing = new UserAuthDto();
 		existing.setEmail("me@gmail.com");
 		existing.setName("홍길동");
-		existing.setTutorialCompleted(false);
+		existing.setNickname("길동무");
 		when(authMapper.findByEmail("me@gmail.com")).thenReturn(existing);
 
 		GoogleLoginResult result = authService.loginWithGoogleIdToken("valid-token");
 
-		assertThat(result.isNewUser()).isTrue();
+		assertThat(result.user().nickname()).isEqualTo("길동무");
 		verify(authMapper).touchLogin("me@gmail.com", "https://lh3.example/new.png");
 		verify(authMapper, never()).insert(any());
-	}
-
-	@Test
-	void loginWithGoogleIdToken_existingUserTutorialCompleted_isNewUserFalse() {
-		stubRedis();
-		when(googleIdTokenVerifierPort.verify("valid-token")).thenReturn(
-				Optional.of(new GoogleIdentity("me@gmail.com", true, "홍길동", "https://lh3.example/pic.png")));
-		UserAuthDto existing = new UserAuthDto();
-		existing.setEmail("me@gmail.com");
-		existing.setName("홍길동");
-		existing.setNickname("길동무");
-		existing.setTutorialCompleted(true);
-		when(authMapper.findByEmail("me@gmail.com")).thenReturn(existing);
-
-		GoogleLoginResult result = authService.loginWithGoogleIdToken("valid-token");
-
-		assertThat(result.isNewUser()).isFalse();
-		assertThat(result.user().nickname()).isEqualTo("길동무");
 	}
 
 	@Test

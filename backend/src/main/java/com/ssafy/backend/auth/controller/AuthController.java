@@ -76,7 +76,7 @@ public class AuthController {
 				RefreshTokenCookie.issue(result.tokenPair().refreshToken(), jwtTokenProvider.getRefreshTokenExpirationMs()));
 
 		return ApiResponse.success(new GoogleLoginResponseDto(
-				result.tokenPair().accessToken(), result.isNewUser(), result.user()));
+				result.tokenPair().accessToken(), result.user()));
 	}
 
 	// 프론트가 OAuth 리다이렉트에서 받은 1회용 code를 실제 access token으로 교환한다.

@@ -38,7 +38,13 @@ export type SpecErrorCode =
   | "FILE_TOO_LARGE"
   | "INTERNAL_ERROR";
 
-export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode;
+/**
+ * 이메일 가입·로그인·닉네임에 필요한데 양쪽 목록에 **아직 없는** 코드 (BACKEND-NOTES B-13).
+ * 목 라우트가 이 이름으로 답하고 있고, 백엔드와 이름을 맞출 때 여기부터 정리한다.
+ */
+export type ProposedAuthErrorCode = "EMAIL_DUPLICATED" | "INVALID_CREDENTIALS" | "NICKNAME_DUPLICATED";
+
+export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | ProposedAuthErrorCode;
 
 export interface ApiErrorBody {
   code: ApiErrorCode;

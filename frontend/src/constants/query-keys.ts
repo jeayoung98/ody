@@ -8,6 +8,8 @@ export const QUERY_KEYS = {
 
   auth: {
     me: ["auth", "me"] as const,
+    /** 닉네임 중복 확인 */
+    nicknameAvailable: (nickname: string) => ["auth", "nickname-available", nickname] as const,
   },
 
   /** 별자리 배치 (곡 집합이 같으면 같은 모양) */

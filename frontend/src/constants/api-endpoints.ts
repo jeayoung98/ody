@@ -6,6 +6,12 @@ export const API_ENDPOINTS = {
     me: "/api/auth/me",
     logout: "/api/auth/logout",
     googleLogin: "/api/auth/google",
+    /** 이메일·비밀번호 가입 (BACKEND-NOTES A-10) */
+    signup: "/api/auth/signup",
+    /** 이메일·비밀번호 로그인 (A-11) */
+    login: "/api/auth/login",
+    /** 가입 직후 닉네임 확정 (A-13) */
+    nickname: "/api/auth/nickname",
     /** OAuth 콜백 code → accessToken 교환. refresh token 은 httpOnly 쿠키로 이미 심겨 있다 */
     exchange: "/api/auth/exchange",
     completeTutorial: "/api/auth/tutorial/complete",
@@ -26,6 +32,8 @@ export const API_ENDPOINTS = {
 
   user: {
     profile: (email: string) => `/api/users/${encodeURIComponent(email)}`,
+    /** 닉네임 중복 확인 (A-12) */
+    nicknameAvailable: (nickname: string) => `/api/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
     nearby: (layer: number) => `/api/users/nearby?layer=${layer}`,
     follow: (email: string) => `/api/users/${encodeURIComponent(email)}/follow`,
     reaction: (email: string) => `/api/users/${encodeURIComponent(email)}/reactions`,

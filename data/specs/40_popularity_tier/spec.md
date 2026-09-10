@@ -34,7 +34,7 @@ tier_reason     string   "old_unheard" | "low_listen" | null
 - AC2 티어 2 비율이 사전 등록 게이트 `gates/tier_gate_v1.json` 의 상한 이하. 상한을 넘으면 경계를 다시 등록하지 않고 판정을 보존한 뒤 새 id 로 재등록(규칙 1).
 - AC3 티어 2 곡이 `/songs/{mbid}` 로 직접 조회하면 정상 응답한다(숨기는 것이 아니다).
 - AC4 이웃 검색에서 티어 2 는 동률일 때 뒤로 간다. `include_tier2=true` 면 순서 보정 없음.
-- AC5 티어 부여 전후로 브릿지 풀 Hit@10 이 유의하게 나빠지지 않는다(스펙 10 AC3 과 같은 ±5% 기준).
+- AC5 티어 부여 전후로 브릿지 풀 Hit@10 이 유의하게 나빠지지 않는다(±5% 기준. 측정은 2차에 별도 스크립트로 한다 — 예전 서빙 코드는 D12 로 삭제됐다).
 - AC6 `pytest tests/test_tier.py`.
 
 ## 비범위

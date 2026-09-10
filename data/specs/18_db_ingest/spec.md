@@ -147,7 +147,7 @@ SET maintenance_work_mem = '2GB';                                   # 세션 단
 
 **`youtube_url`** — **채울 방법이 없다.** 규칙 6 이 음원 재생·다운로드·임베드를 금지하고 검색 URL 만 허용한다. D5 기록으로 YouTube Data API 는 하루 100곡 할당량이고 스크래핑은 약관 위반이다. 662만 곡이면 66,000일이 걸린다.
 
-대신 조회 시 **검색 URL 을 만들어 응답에 담는다.** 저장하는 값이 아니라 계산 필드다. `retrieval/common.py` 가 그 함수를 갖는다. 컬럼은 나중을 위해 남긴다.
+대신 조회 시 **검색 URL 을 만들어 응답에 담는다.** 저장하는 값이 아니라 계산 필드이고, 만드는 쪽은 Backend 다(D12). 규칙 6 상 검색 URL 만 허용한다: `https://www.youtube.com/results?search_query=<아티스트>+<제목>` (URL 인코딩). 컬럼은 나중을 위해 남긴다.
 
 ## genre 테이블
 

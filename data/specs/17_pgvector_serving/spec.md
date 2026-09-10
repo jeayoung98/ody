@@ -4,7 +4,7 @@
 
 ## 목적
 곡 좌표(PCA-16)를 PostgreSQL 에 두고 Backend 가 직접 유사도 검색을 할 수 있게 한다.
-기존 numpy 서빙 경로(스펙 10)를 대체하지 않는다. 당분간 병행하고, 어느 쪽을 남길지는 실사용 후에 정한다.
+**이것이 유일한 이웃 검색 경로다**(D12). 질의는 Backend(Spring)가 직접 던진다. 예전 numpy 서빙 경로는 삭제했다.
 
 ## 왜 pgvector 인가 (D9)
 2026-09-10 에 app-node 실물에서 Neo4j 와 pgvector 를 둘 다 측정했다. 근거는 `output/pgvector_bench_2026-09-10.json`.
@@ -22,7 +22,7 @@ pgvector 를 고른 이유는 속도가 아니다. 셋이다.
 2. **사용자·플레이리스트와 같은 DB** — 조인과 트랜잭션이 하나로 묶이고 별도 동기화 잡이 없다.
 3. **재현율이 기존 그래프보다 높다** — 0.9995 대 0.912.
 
-Neo4j 의 강점인 다중 홉 탐색은 우리 여정(스펙 11)이 좌표 보간이라 쓰지 않는다.
+Neo4j 의 강점인 다중 홉 탐색은 여정이 좌표 보간이라 쓰지 않는다(여정 구현은 BE 담당, D12).
 
 ## 실측값 (500,000행, `vector(16)`, HNSW 기본 파라미터)
 | 항목 | 측정 | 662만 행 외삽 |
@@ -106,7 +106,7 @@ app-node 호스트 여유는 13.3 GB 다(2026-09-10 측정). PostgreSQL·Redis·
 - AC1 `track_vector` 에 `manifest.songs` 와 같은 행 수가 들어가고, 전 행의 `bundle` 이 `CURRENT.json` 의 번들과 같다.
 - AC2 무작위 곡 200개의 top-10 을 numpy 정확 kNN 과 대조해 **recall@10 평균 ≥ 0.99**. 측정 코드는 `tests/bench_pgvector.py`, 결과는 `output/pgvector_recall_<번들>.json`.
 - AC3 같은 200개 질의의 **p95 ≤ 50ms**(Backend 커넥션 풀 기준, psql 기동 시간 제외).
-- AC4 이웃 결과에 `excluded` 곡이 0건, 길이 규칙 위반 0건. 후처리는 스펙 10 의 `postprocess.apply_rules` 와 같은 판정을 낸다.
+- AC4 이웃 결과에 `excluded` 곡이 0건, 길이 규칙 위반 0건. `music` 에 `excluded=false` 인 곡만 적재하므로 적재 단계에서 보장된다. 후처리 임계값 적용은 BE 담당이다(D12).
 - AC5 인덱스 빌드가 끝나고 `pg_relation_size('track_vector_hnsw')` 가 기록된다. 소요 시간도 함께.
 - AC6 서브쿼리 금지와 필터 제약이 Backend 연동 문서에 들어가 있다.
 - AC7 좌표 불변성: 적재 전후로 같은 mbid 의 좌표가 비트 단위로 같다(Jira S15P21A405-35 게이트).

@@ -1,6 +1,6 @@
 # ODY AI/Data 트랙 (BE4) — 에이전트 규칙
 
-`data/` 는 AcousticBrainz 음악 지도(PCA-16, 깊이 6 사분할 트리)의 검색 서비스·카탈로그 규칙·Spark 이식·평가 코드다.
+`data/` 는 AcousticBrainz 음악 지도(PCA-16, 깊이 6 사분할 트리)의 **Spark 파이프라인·카탈로그 규칙·DB 적재·평가** 코드다. 검색 서비스는 Backend 담당이다(D12).
 팀 루트 `AGENTS.md` 는 인프라 전용이다. `data/` 안 작업은 이 파일을 따른다. 충돌 시 인프라 문서(`docs/infra/STATUS.md`)가 서버 사실을, 이 파일이 AI 코드 규칙을 결정한다.
 
 ## 개발 방식 — SDD
@@ -37,7 +37,7 @@
 루트 `.claude/`(git 밖, 팀 배포 키트 `ody-jira-kit` 로 설치)의 훅: Jira-first — 브랜치에 `S15P21A405-\d+` 없으면 파일 수정·commit·push 차단(규칙 `.claude/rules/jira-workflow.md`, data 브랜치는 `data/<type>/<KEY>-<desc>`) · pytest 게이트 — `git commit` 이고 `data/` 변경이 있으면 `pytest -q -x data/tests` 를 먼저 돌린다. 실패 시 커밋 차단(exit 2). 우회하지 말고 테스트를 고친다. 비상용 `SKIP_COMMIT_GATE=1` 은 stderr 에 남는다.
 
 ## Backend 통합
-AI 서비스는 별도 컨테이너 `ody-ai:8000`(네트워크 `ody-internal`, loopback). Backend 가 `/api/ai/...` 를 프록시. 모든 응답에 `bundle` 포함, 오류 404/422/503. 곡 식별자는 MusicBrainz recording MBID(소문자 UUID). AI 는 좌표·이웃·여정·트리만 책임진다. 상세 `docs/HANDOVER_TEAM.md` §6.
+**이웃 검색·여정·트리 탐색은 Backend(Spring) 담당이다**(D12, 2026-09-10 사용자 결정). data 는 서빙 API 를 제공하지 않는다. data 가 넘기는 것은 **DB 에 적재된 데이터**다: `music`(좌표 `location` 포함)·`genre`·`music_genre`(스펙 18), pgvector 인덱스(스펙 17), map_layer·track_position(스펙 16). 곡 식별자는 MusicBrainz recording MBID(소문자 UUID). 후처리 임계값은 서빙 번들의 `postprocess_rules.json` 이 유일한 출처다(τ_dup 1.6624 · artist_cap 3 · τ_far 4.912 · 길이 30~1200s, 전부 L2 거리 기준).
 
 ## 검증·완료 보고
 작업 완료 = tasks.md 의 완료 조건(테스트 이름 또는 산출 파일) 통과 + 상태 갱신(⬜→✅). 보고는 팀 형식: `변경 / 검증 / 남은 위험 / 롤백`.
@@ -48,9 +48,9 @@ AI 서비스는 별도 컨테이너 `ody-ai:8000`(네트워크 `ody-internal`, l
 ```text
 <type>: 한국어 한 줄 요약 + 핵심 수치 [S15P21A405-<번호>]
 ```
-- `<type>` 은 **소문자**이고 **콜론을 바로 붙인다**: `feat` `fix` `refactor` `chore` `test` `docs` `ci` `style` `perf`. 스코프는 선택(`feat(retrieval): ...`).
+- `<type>` 은 **소문자**이고 **콜론을 바로 붙인다**: `feat` `fix` `refactor` `chore` `test` `docs` `ci` `style` `perf`. 스코프는 선택(`feat(spark): ...`).
 - `Docs :` / `Docs:` / `docs :` 는 훅이 차단한다.
 - Jira Key 는 대괄호로 끝에. 브랜치의 키와 같아야 한다.
 - `Co-Authored-By` 트레일러는 넣지 않는다(팀 이력과 일치).
 
-예: `feat: 이웃 검색 그래프 경로 구현, p95 32ms [S15P21A405-39]`
+예: `feat: S5 카탈로그 제외 규칙 Spark 이식, 제외 780,107 [S15P21A405-128]`

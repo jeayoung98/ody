@@ -27,8 +27,8 @@
 | 계약 | `tests/check_contract.py`, `test_contract.py` | 스키마·해시·버전 규칙 위반 번들 승격 | 커밋 훅 + 승격 명령 |
 | fixture | `tests/conftest.py` (`root` `current` `bundle_dir` `rules`) | 번들 없는 머신에서 거짓 실패 — `bundle_dir` 가 skip | 모든 테스트 |
 | 단위 | `tests/test_*.py` | 규칙 로직 회귀(접힘·상한·길이·마스킹·폴백) | 커밋 훅 |
-| 패리티 | `tests/test_spark_parity.py`(스펙 20) | Spark 결과가 numpy 기준과 다른 것 (좌표 1e-4, 리프 100%, 제외 집합) | 표본 → 전곡, 수동 |
-| 벤치 | `tests/bench_*.py` → `output/*.json` | 성능 AC 미달 (p95 50ms / 2s / 20ms) | 배포 전, 수동 |
+| 패리티 | `tests/test_manifest_rows.py`·`test_catalog_rules.py`·`test_preprocess_pca.py`·`test_tree_assign.py`(스펙 20) | Spark 결과가 numpy 기준과 다른 것 (좌표 1e-4, 리프 100%, 제외 집합) | 표본 → 전곡, 수동 |
+| 벤치 | `output/*.json` | 적재·클러스터 실측 기록 (행 수·소요·자원) | 실행 직후 |
 | 훅 | `.claude/settings.json`(git 밖, 키트 설치) → `data/scripts/hooks/pre_commit_gate.sh` | 테스트 실패 커밋 | `git commit` 직전 |
 | Jira | `.claude/hooks/require-jira*.sh`(git 밖, 키트 설치) | Jira Key 없는 브랜치의 파일 수정·commit·push | 파일 수정·`git commit` 직전 |
 | 운영 검증 | `ops/verify/ai.sh`(2차), `/health` | 번들 버전·로드 상태 불일치 | 배포 후 |
@@ -43,9 +43,6 @@
 |---|---|---|---|---|
 | `00_artifact_contract` | 서빙 아티팩트 스키마·버전·해시 계약 — 모든 트랙의 기준 | — | 필수 | 09-09 (v2.2 strict) |
 | `01_mock_artifact` | 목업 번들 — FE·BE 선행 개발 잠금 해제 | S15P21A405-32 | 필수 | 09-10 |
-| `10_retrieval_neighbors` | 이웃 검색 라이브러리 + API | S15P21A405-39 | 필수 | 09-10 |
-| `11_journey` | 여정(직선 기본 / 축 우선 옵션 / 먼 곡 처리) | — | 필수 | 09-11 |
-| `12_tree_explore` | 트리 탐색 API (읽기) | — | 필수 | 09-11 |
 | `13_genre_hierarchy` | 장르 대분류·미분류 격리 (소분류는 코드표 부재로 보류) | S15P21A405-36 | 컷 후보 | 미정 |
 | `14_axis_labels` | PC1~PC4 축 라벨 + 사람 검수 (노드별 축은 보류) | S15P21A405-38 | 컷 후보 | 미정 |
 | `15_playability` | 외부 서비스 매핑률 실측 · playable 컬럼 | S15P21A405-40 | 컷 후보 | 미정 |
@@ -56,6 +53,6 @@
 | `40_popularity_tier` | 비인기 티어(D5) | — | ⛔ 2차 | 배포 후 |
 | `50_db_schema` | data 소유 테이블 DDL·마이그레이션 | S15P21A405-90 | 팀 결정 대기 | 미정 |
 
-12 와 16 의 경계: **12 는 읽기 API, 16 은 적재**다. 같은 값을 두 경로로 계산하므로 16 의 AC7 이 두 값의 일치를 검사한다.
+**이웃 검색·여정·트리 탐색 스펙(10·11·12)은 2026-09-10 에 삭제했다.** Backend(Spring)가 담당한다(D12). data 는 DB 적재까지만 책임진다.
 
 일정·컷 순서는 `../docs/plan_release1.md`, 팀 통합은 `../docs/HANDOVER_TEAM.md`.

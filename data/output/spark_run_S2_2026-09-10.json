@@ -1,0 +1,62 @@
+{
+  "cluster": {
+    "master_node": "j15a405a.p.ssafy.io",
+    "app_node": "j15a405.p.ssafy.io",
+    "yarn_nodemanagers": 2,
+    "yarn_total": "12GB / 6 vcores"
+  },
+  "runtime_deps_installed_2026-09-10": {
+    "python": "3.12.3",
+    "spark": "4.2.0",
+    "hadoop_java": "Java 21",
+    "numpy": "1.26.4 (apt python3-numpy)",
+    "pandas": "3.0.5 (pip -U, apt 2.1.4 는 Spark 4.2 요구 2.2.0 미달)",
+    "pyarrow": "25.0.1 (pip)"
+  },
+  "install_commands": [
+    "sudo apt-get install -y python3-pip python3-numpy python3-pandas",
+    "sudo pip3 install --break-system-packages -U pandas pyarrow"
+  ],
+  "note": "두 노드(master-node, app-node) 모두에 설치해야 한다. 실행기가 양쪽에서 뜬다.",
+  "stage": "S2",
+  "date": "2026-09-10",
+  "submitted": "/opt/spark/bin/spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g --name ody-S2-full jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --bundle /home/ubuntu/stage/bundle",
+  "yarn_application_id": "application_1788767549509_0005",
+  "yarn_application_name": "ody-preprocess",
+  "final_status": "SUCCEEDED",
+  "yarn_state": "FINISHED",
+  "queue": "root.default",
+  "am_host": "172.26.14.216",
+  "input_path": "hdfs:///ody/data/raw_features_extracted",
+  "input_rows": 6617603,
+  "output_path": "hdfs:///ody/data/features_pre",
+  "output_rows": 6617603,
+  "executors": 2,
+  "executor_memory": "4g",
+  "executor_cores": 2,
+  "driver_memory": "2g",
+  "duration_s": 349.0,
+  "wall_clock_s": 366,
+  "yarn_start_ms": 1789033414912,
+  "yarn_finish_ms": 1789033763954,
+  "aggregate_resource": "3,519,635 MB-seconds / 1,035 vcore-seconds",
+  "hdfs_du": "6.8 G (복제 포함 13.5 G), 파일 30개, 7,256,592,007 바이트",
+  "sample_run_first": {
+    "rows": 100000,
+    "output_path": "hdfs:///ody/data/features_pre_sample",
+    "result": "output_rows 100000, 스키마 270 float32"
+  },
+  "failures_before_success": [
+    {
+      "application": "application_1788767549509_0001",
+      "error": "UNRESOLVED_COLUMN.WITH_SUGGESTION — 특징 이름의 점을 Spark 가 중첩 필드로 해석",
+      "fix": "select 에 백틱 인용 + f_000..f_269 로 alias (커밋 ca492db, MR !40)"
+    },
+    {
+      "application": "application_1788767549509_0002",
+      "error": "PySparkImportError [UNSUPPORTED_PACKAGE_VERSION] Pandas >= 2.2.0 must be installed; however, your version is 2.1.4.",
+      "fix": "sudo pip3 install --break-system-packages -U pandas → 3.0.5"
+    }
+  ],
+  "warning": "client 모드에서는 드라이버 예외가 나도 SparkContext 가 정상 종료되면 YARN 이 SUCCEEDED 로 기록한다. 실패한 0001·0002 도 SUCCEEDED 로 남아 있다. AC0 판정은 application id 만 보지 말고 출력 경로의 행 수까지 확인해야 한다."
+}

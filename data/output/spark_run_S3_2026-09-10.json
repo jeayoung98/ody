@@ -1,0 +1,57 @@
+{
+  "cluster": {
+    "master_node": "j15a405a.p.ssafy.io",
+    "app_node": "j15a405.p.ssafy.io",
+    "yarn_nodemanagers": 2,
+    "yarn_total": "12GB / 6 vcores"
+  },
+  "runtime_deps_installed_2026-09-10": {
+    "python": "3.12.3",
+    "spark": "4.2.0",
+    "hadoop_java": "Java 21",
+    "numpy": "1.26.4 (apt python3-numpy)",
+    "pandas": "3.0.5 (pip -U, apt 2.1.4 는 Spark 4.2 요구 2.2.0 미달)",
+    "pyarrow": "25.0.1 (pip)"
+  },
+  "install_commands": [
+    "sudo apt-get install -y python3-pip python3-numpy python3-pandas",
+    "sudo pip3 install --break-system-packages -U pandas pyarrow"
+  ],
+  "note": "두 노드(master-node, app-node) 모두에 설치해야 한다. 실행기가 양쪽에서 뜬다.",
+  "stage": "S3",
+  "date": "2026-09-10",
+  "submitted": "/opt/spark/bin/spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g --name ody-S3-full --py-files jobs/preprocess.py jobs/pca.py --in hdfs:///ody/data/features_pre --out hdfs:///ody/data/coords --bundle /home/ubuntu/stage/bundle",
+  "yarn_application_id": "application_1788767549509_0006",
+  "yarn_application_name": "ody-pca",
+  "final_status": "SUCCEEDED",
+  "yarn_state": "FINISHED",
+  "queue": "root.default",
+  "am_host": "172.26.15.14",
+  "input_path": "hdfs:///ody/data/features_pre",
+  "input_rows": 6617603,
+  "output_path": "hdfs:///ody/data/coords",
+  "output_rows": 6617603,
+  "dims": 16,
+  "executors": 2,
+  "executor_memory": "4g",
+  "executor_cores": 2,
+  "driver_memory": "2g",
+  "duration_s": 125.7,
+  "wall_clock_s": 145,
+  "yarn_start_ms": 1789033795054,
+  "yarn_finish_ms": 1789033920766,
+  "aggregate_resource": "1,223,896 MB-seconds / 362 vcore-seconds",
+  "hdfs_du": "632.3 M (복제 포함 1.2 G), 파일 59개, 663,056,520 바이트",
+  "py_files": "jobs/preprocess.py — S3 이 번들 로더를 import 한다",
+  "parity_vs_local_coords": {
+    "method": "클러스터 출력 part-00000 에서 표본 5,000곡, serving/v2.1-pca16/coords_v2.parquet 과 대조",
+    "checked": 4577,
+    "sampled": 5000,
+    "note": "표본 중 423곡은 제외된 곡이라 기존 좌표에 없다",
+    "max_abs_error": 1.9073486328125e-06,
+    "p99_abs_error": 9.5367431640625e-07,
+    "criterion": "< 1e-4 (스펙 20 S3)",
+    "pass": true
+  },
+  "coverage_note": "입력이 v2_feats 28/30 파트라 6,617,603행이다. 전곡 6,624,399 대비 coords∩feats 5,891,253 곡이 겹친다. 전곡 패리티는 열린 질문 Q7(파트 재추출) 뒤."
+}

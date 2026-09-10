@@ -279,23 +279,20 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     }
   });
 
-  // 라벨: 순번 · 제목
+  // 라벨: 제목만 (순번 없음). 진행도로 옅어지되 바닥을 둬서 아직 안 들은 곡도 읽힌다
   g.textAlign = "center";
   g.textBaseline = "middle";
   pts.forEach((p, i) => {
     const s = e.songs[e.songs.findIndex((x) => x.musicId === p.id)];
-    g.globalAlpha = k * alphaOf(i);
-    g.font = `500 10.5px ${FONTS.body}`;
+    g.globalAlpha = k * Math.max(CONSTELLATION.labelMinAlpha, alphaOf(i));
+    g.font = `600 11px ${FONTS.body}`;
     const title = fitText(g, s.title, 120);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
     roundRect(g, p.x - tw / 2 - 6, p.y + 12, tw + 12, 17, 5);
     g.fill();
-    g.fillStyle = "rgba(233,241,255,.9)";
+    g.fillStyle = "#dbe4f2";
     g.fillText(title, p.x, p.y + 21);
-    g.font = `600 9px ${FONTS.mono}`;
-    g.fillStyle = "rgba(147,164,196,.8)";
-    g.fillText(String(i + 1), p.x, p.y - 15);
   });
 
   // 지금 듣는 곡 위에 내 위치 다이아몬드
@@ -617,13 +614,15 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawStars(g, e);
   drawCovers(g, e);
 
-  // 사람들은 오버레이보다 **뒤**에 — 별자리·주변 탐색이 켜지면 함께 어두워진다
+  // 지도 위 요소(사람·선택·고스트·내 위치·호버)는 전부 오버레이보다 **뒤**에 —
+  // 별자리·주변 탐색이 켜지면 다 같이 어두워진다
   drawFriends(g, e);
-  drawConstellation(g, e, currentMusicId);
-  drawProbe(g, e);
   drawSelected(g, e);
   drawGhost(g, e);
   drawMe(g, e);
-  drawPressure(g, e);
   drawHover(g, e);
+
+  drawConstellation(g, e, currentMusicId);
+  drawProbe(g, e);
+  drawPressure(g, e);
 }

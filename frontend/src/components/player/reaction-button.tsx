@@ -4,6 +4,7 @@ import { useState } from "react";
 import { SmileIcon } from "@/components/common/icons";
 import { REACTION_COOLDOWN_MS, type ReactionKey } from "@/constants";
 import { useSendReactionMutation } from "@/hooks/mutations/use-send-reaction-mutation";
+import { useMapStore } from "@/stores/use-map-store";
 import { useReactionStore } from "@/stores/use-reaction-store";
 import ReactionPicker from "./reaction-picker";
 
@@ -18,6 +19,8 @@ export default function ReactionButton() {
   const lastSentAt = useReactionStore((s) => s.lastSentAt);
   const markSent = useReactionStore((s) => s.markSent);
   const send = useSendReactionMutation();
+  // 오버레이 뷰(별자리·주변 탐색)에서는 반응을 받지 않는다 — 띄울 지도가 가려져 있다
+  const overlay = useMapStore((s) => s.viewMode) !== "default";
 
   const handlePick = (key: ReactionKey, toEmail?: string) => {
     push({ reactionKey: key, mine: true, fromEmail: null });
@@ -29,6 +32,8 @@ export default function ReactionButton() {
     }
     setOpen(false);
   };
+
+  if (overlay) return null;
 
   return (
     <div className="absolute right-[18px] bottom-[18px] z-[22] flex flex-col items-center gap-2">

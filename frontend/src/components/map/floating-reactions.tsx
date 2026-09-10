@@ -1,5 +1,6 @@
 "use client";
 
+import { useMapStore } from "@/stores/use-map-store";
 import { useReactionStore } from "@/stores/use-reaction-store";
 import FloatingReactionItem from "./floating-reaction-item";
 
@@ -9,7 +10,9 @@ import FloatingReactionItem from "./floating-reaction-item";
  */
 export default function FloatingReactions() {
   const floating = useReactionStore((s) => s.floating);
-  if (floating.length === 0) return null;
+  // 별자리·주변 탐색 오버레이 중에는 숨긴다 — 지도 위 요소는 오버레이 아래에 있어야 한다
+  const overlay = useMapStore((s) => s.viewMode) !== "default";
+  if (overlay || floating.length === 0) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 overflow-hidden">

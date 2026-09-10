@@ -19,9 +19,9 @@ data 트랙이 만드는 산출물(곡·아티스트·좌표·지도 계층)을 
 | Q1 | `track_vector` 차원 | Jira S15P21A405-35 설명은 **dim 64**, 실제 아티팩트는 **PCA-16**(`manifest.k=16`). 어느 쪽이 맞는지 팀 확인 없이 한쪽을 고르지 않는다 |
 | Q2 | 마이그레이션 도구 | Flyway / Liquibase / 수동 SQL. DATABASE.md 는 미결정으로 둠 |
 | Q3 | 소유권 경계 | 사용자·플레이리스트 테이블은 BE1(Jira S15P21A405-89). data 는 곡·좌표·지도 계층만 소유 |
-| Q4 | Vector DB 도입 여부 | Jira 35 는 "Vector DB 동기화" 를 언급하나 확정 기술 목록(팀 AGENTS.md §3)에는 없다 |
+| ~~Q4~~ | ~~Vector DB 도입 여부~~ | **종결 2026-09-10 → D9: pgvector.** `track_vector` 테이블은 스펙 `17_pgvector_serving` 이 정의한다. 이 스펙은 `track`·`artist`·`track_artist` 만 소유한다 |
 
-Q1~Q4 가 정해지기 전에는 DDL 을 확정하지 않는다. 결정되면 `specs/DECISIONS.md` 에 새 번호로 기록하고 이 스펙을 갱신한다.
+Q1 은 D7(PCA-16), Q4 는 D9(pgvector) 로 종결됐다. 남은 Q2·Q3 가 정해지기 전에는 DDL 을 확정하지 않는다. 결정되면 `specs/DECISIONS.md` 에 새 번호로 기록하고 이 스펙을 갱신한다.
 
 ## 산출물 (Q2 확정 후)
 

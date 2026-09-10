@@ -26,8 +26,10 @@
 | 기능 | 백엔드 | 프론트 |
 | --- | --- | --- |
 | AUTH-01/02 로그인 (Google OAuth2 + JWT) | ✅ `AuthController` — `POST /api/auth/exchange`, `/reissue`, `/logout`, `/withdraw`. refresh 는 httpOnly 쿠키 | ✅ `/oauth/redirect` → exchange → 토큰 저장 |
-| AUTH-01/02 이메일·비밀번호 가입·로그인 | ⬜ 미착수 — 엔드포인트 없음, ERD `user` 에 비밀번호 컬럼 없음 (BACKEND-NOTES 참고) | 🟡 목 API 로만 동작 |
-| AUTH-01 닉네임 설정 (중복 불가) | ⬜ 미착수 — 중복 확인·저장 API 없음, `user.nickname` UNIQUE 아님 | 🟡 목 API 로만 동작 |
+| AUTH-01/02 이메일·비밀번호 가입·로그인 | ✅ `POST /api/auth/signup`(email·password·nickname) · `/api/auth/login` (backend/dev, S15P21A405-121) | ✅ `/login` `/signup` 화면 · 목 라우트도 같은 계약 |
+| AUTH-01 닉네임 중복 확인 | ✅ `GET /api/users/nickname-available` | ✅ 가입·닉네임 화면에서 입력 중 확인 |
+| AUTH-01 구글 신규 사용자 닉네임 저장 | ⬜ 엔드포인트 없음 (신규 사용자 nickname 을 비워둔 채 insert) — BACKEND-NOTES A-13 | 🟡 `/nickname` 화면 + 목 라우트 |
+| 본인 조회 | ⬜ `/api/auth/me` 없음. `GET /user/detail?email=` 은 이메일을 요구 — A-15 | 🟡 목 라우트로 동작 |
 | 공통 응답 봉투 `{success, data, error}` | ✅ `common/ApiResponse.java` | ✅ `src/lib/api.ts` 가 벗겨서 반환 |
 | 실시간(소켓) | 🟡 `WebSocketConfig` 만 있음 (테스트 컨트롤러) | ⬜ 미착수 |
 | 그 외 전 기능 (지도·검색·플리·여정·소셜·차트) | ⬜ 미착수 | 🟡 `src/app/api/` 목 라우트로 동작 중 |

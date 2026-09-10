@@ -3,14 +3,16 @@ export const API_ENDPOINTS = {
   health: "/api/health",
 
   auth: {
+    /** 본인 조회. 백엔드에 아직 없다 — 지금은 목 라우트만 응답한다 (BACKEND-NOTES A-15) */
     me: "/api/auth/me",
     logout: "/api/auth/logout",
-    googleLogin: "/api/auth/google",
-    /** 이메일·비밀번호 가입 (BACKEND-NOTES A-10) */
+    /** 구글 로그인 진입. Spring Security 기본 경로라 /api 아래가 아니다 (backend/dev SecurityConfig) */
+    googleLogin: "/oauth2/authorization/google",
+    /** 이메일·비밀번호 가입 — 요청 본문에 email, password, nickname (backend/dev, S15P21A405-121) */
     signup: "/api/auth/signup",
-    /** 이메일·비밀번호 로그인 (A-11) */
+    /** 이메일·비밀번호 로그인 — 요청 본문에 email, password */
     login: "/api/auth/login",
-    /** 가입 직후 닉네임 확정 (A-13) */
+    /** 구글 신규 사용자의 닉네임 확정. 백엔드에 아직 없다 (BACKEND-NOTES A-13) */
     nickname: "/api/auth/nickname",
     /** OAuth 콜백 code → accessToken 교환. refresh token 은 httpOnly 쿠키로 이미 심겨 있다 */
     exchange: "/api/auth/exchange",

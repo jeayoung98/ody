@@ -6,6 +6,8 @@ import { writeStorage } from "@/lib/storage";
 interface Credentials {
   email: string;
   password: string;
+  /** 가입에만 있다 — 백엔드가 가입 요청에서 닉네임까지 함께 받는다 (S15P21A405-121) */
+  nickname?: string;
   /** 로그인 상태 유지 (끄면 이 탭에서만 유지) */
   remember?: boolean;
 }
@@ -21,8 +23,11 @@ interface TokenResponse {
 function useTokenMutation(path: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ email, password }: Credentials) =>
-      api<TokenResponse>(path, { method: "POST", body: JSON.stringify({ email: email.trim(), password }) }),
+    mutationFn: ({ email, password, nickname }: Credentials) =>
+      api<TokenResponse>(path, {
+        method: "POST",
+        body: JSON.stringify({ email: email.trim(), password, ...(nickname ? { nickname: nickname.trim() } : {}) }),
+      }),
     onSuccess: ({ accessToken }, { remember = true }) => {
       writeStorage(STORAGE_KEYS.accessToken, accessToken, remember ? "local" : "session");
       // 토큰이 생겼으니 토큰 없이 받아둔 응답은 버린다

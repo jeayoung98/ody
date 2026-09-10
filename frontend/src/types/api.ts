@@ -15,7 +15,14 @@ export type ImplementedErrorCode =
   | "REFRESH_TOKEN_MISMATCH"
   | "INVALID_EXCHANGE_CODE"
   | "INVALID_INPUT"
-  | "INTERNAL_SERVER_ERROR";
+  | "INTERNAL_SERVER_ERROR"
+  // 이메일·비밀번호 인증 (S15P21A405-121, backend/dev AuthErrorCode)
+  | "EMAIL_ALREADY_EXISTS"
+  | "NICKNAME_ALREADY_EXISTS"
+  | "INVALID_CREDENTIALS"
+  | "PASSWORD_MISMATCH"
+  | "INVALID_PASSWORD_FORMAT"
+  | "INVALID_NICKNAME_LENGTH";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =
@@ -38,13 +45,7 @@ export type SpecErrorCode =
   | "FILE_TOO_LARGE"
   | "INTERNAL_ERROR";
 
-/**
- * 이메일 가입·로그인·닉네임에 필요한데 양쪽 목록에 **아직 없는** 코드 (BACKEND-NOTES B-13).
- * 목 라우트가 이 이름으로 답하고 있고, 백엔드와 이름을 맞출 때 여기부터 정리한다.
- */
-export type ProposedAuthErrorCode = "EMAIL_DUPLICATED" | "INVALID_CREDENTIALS" | "NICKNAME_DUPLICATED";
-
-export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | ProposedAuthErrorCode;
+export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode;
 
 export interface ApiErrorBody {
   code: ApiErrorCode;

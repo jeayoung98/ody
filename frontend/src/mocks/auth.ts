@@ -7,7 +7,7 @@ import { mockMe, MOCK_ME_EMAIL } from "./user";
 export interface MockAccount {
   email: string;
   password: string;
-  /** 가입 직후에는 null — 프론트가 닉네임 설정 화면으로 보낸다 */
+  /** 이메일 가입은 가입 요청에서 함께 받는다. 구글 신규 사용자는 null — 닉네임 화면으로 보낸다 */
   nickname: string | null;
   /** 구글로 만든 계정인가 (비밀번호 없음) */
   social: boolean;
@@ -39,8 +39,8 @@ const EMAIL_RE_LOOSE = /^[^\s@]+@[^\s@]+$/;
 
 export const findAccount = (email: string): MockAccount | null => accounts.get(norm(email)) ?? null;
 
-export function createAccount(email: string, password: string, social = false): MockAccount {
-  const acc: MockAccount = { email: norm(email), password, nickname: null, social };
+export function createAccount(email: string, password: string, social = false, nickname: string | null = null): MockAccount {
+  const acc: MockAccount = { email: norm(email), password, nickname, social };
   accounts.set(acc.email, acc);
   return acc;
 }

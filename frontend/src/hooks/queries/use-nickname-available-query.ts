@@ -8,7 +8,8 @@ export function useNicknameAvailableQuery(nickname: string) {
   const value = nickname.trim();
   return useQuery({
     queryKey: QUERY_KEYS.auth.nicknameAvailable(value),
-    queryFn: () => api<{ nickname: string; available: boolean }>(API_ENDPOINTS.user.nicknameAvailable(value)),
+    // 백엔드 응답은 NicknameAvailabilityResponse — available 하나뿐이다 (닉네임을 되돌려주지 않는다)
+    queryFn: () => api<{ available: boolean }>(API_ENDPOINTS.user.nicknameAvailable(value)),
     enabled: !nicknameError(value),
     staleTime: 30 * 1000,
   });

@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useState } from "react";
 import { ROUTES } from "@/constants";
 import { useLoginMutation } from "@/hooks/mutations/use-email-auth-mutation";
-import { emailError, passwordError } from "@/lib/auth-rules";
+import { emailError, loginPasswordError } from "@/lib/auth-rules";
 import type { ApiError } from "@/lib/api";
 import AuthField from "./auth-field";
 
@@ -20,12 +20,12 @@ export default function EmailLoginForm() {
   const [forgotNote, setForgotNote] = useState(false);
 
   const eErr = touched ? emailError(email) : null;
-  const pErr = touched ? passwordError(password) : null;
+  const pErr = touched ? loginPasswordError(password) : null;
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     setTouched(true);
-    if (emailError(email) || passwordError(password)) return;
+    if (emailError(email) || loginPasswordError(password)) return;
     login.mutate({ email, password, remember }, { onSuccess: () => router.replace(ROUTES.home) });
   };
 

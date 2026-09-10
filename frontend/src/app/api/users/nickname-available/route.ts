@@ -2,9 +2,8 @@ import { ok } from "@/lib/api-response";
 import { nicknameError } from "@/lib/auth-rules";
 import { nicknameTaken } from "@/mocks/auth";
 
-/** 닉네임 중복 확인 (AUTH-01, 목). 형식이 틀린 값은 available=false 로 답한다 */
+/** 닉네임 사용 가능 여부 (목). 백엔드 응답과 같은 모양 — available 하나만 준다 */
 export function GET(req: Request) {
   const nickname = (new URL(req.url).searchParams.get("nickname") ?? "").trim();
-  const available = !nicknameError(nickname) && !nicknameTaken(nickname);
-  return ok({ nickname, available });
+  return ok({ available: !nicknameError(nickname) && !nicknameTaken(nickname) });
 }

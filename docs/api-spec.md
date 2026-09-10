@@ -136,13 +136,14 @@ body: `idToken`(String, required).
 ```json
 { "success": true, "data": {
   "email": "user@gmail.com", "name": "홍길동", "nickname": "길동무", "isPublic": true,
-  "lastMusic": { "id": 10234, "title": "Love wins all", "artist": "IU", "youtubeUrl": "https://..." },
+  "tutorialCompleted": true,
   "lastActiveAt": "2026-09-07T13:41:02+09:00", "createdAt": "2026-08-21T09:12:44+09:00",
   "imageUrl": "https://cdn.example.com/profile/abc.png",
   "followerCnt": 12, "followingCnt": 8, "isFollowing": false, "isMe": false
 }, "error": null }
 ```
-- 본인 프로필도 이 API로 조회(본인 email → `isMe: true`). `lastMusic`은 재생 이력 없으면 null. `isFollowing`은 토큰 주체가 조회 대상을 팔로우 중인지. 에러: `USER_NOT_FOUND`, `USER_PRIVATE`.
+- 본인 프로필도 이 API로 조회(본인 email → `isMe: true`). `isFollowing`은 토큰 주체가 조회 대상을 팔로우 중인지. 에러: `USER_NOT_FOUND`, `USER_PRIVATE`.
+- 구현 메모(S15P21A405-70): `followerCnt`/`followingCnt`/`isFollowing`은 팔로우 MVP 범위 확정(E1) 전까지 서버가 0/0/false 고정값을 반환한다.
 
 ### 2.2 사용자 수정 (온보딩)
 `PATCH /user/update` · 인증 필요 · `multipart/form-data`. body: `nickname`(String, opt), `image`(file, opt). res: 2.1과 동일 상세 객체.

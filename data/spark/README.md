@@ -36,40 +36,75 @@ apt 의 pandas 2.1.4 로는 안 된다 — Spark 4.2.0 이 `pandas >= 2.2.0` 을
 제출 시 `PYSPARK_PYTHON=python3 PYSPARK_DRIVER_PYTHON=python3` 를 준다.
 
 ## 제출 (master-node)
+아래 명령은 **2026-09-10 에 실제로 `SUCCEEDED` 로 끝난 것**이다(S2·S3). 증거는 `output/spark_run_S2_2026-09-10.json`, `spark_run_S3_2026-09-10.json`.
+
 ```bash
 sudo -u ubuntu bash ops/verify/cluster.sh
-# S2 전처리 — 번들 두 파일을 --files 로 올리고 --bundle . 로 가리킨다
-spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
-  --files serving/v2.1-pca16/model_bundle.npz,serving/v2.1-pca16/feature_list.json \
-  spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre \
-  --bundle . --sample 100000
-# S3 PCA — 로더를 preprocess.py 에서 import 하므로 --py-files 가 필요하다
-spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
-  --py-files spark/jobs/preprocess.py \
-  --files serving/v2.1-pca16/model_bundle.npz,serving/v2.1-pca16/feature_list.json \
-  spark/jobs/pca.py --in hdfs:///ody/data/features_pre --out hdfs:///ody/data/coords --bundle .
-yarn application -list -all
+export PYSPARK_PYTHON=python3 PYSPARK_DRIVER_PYTHON=python3
+cd /home/ubuntu/stage            # jobs/ 와 bundle/ 을 여기 올려 둔다
+
+# S2 전처리 — 표본 먼저
+/opt/spark/bin/spark-submit --master yarn --deploy-mode client \
+  --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
+  --name ody-S2-sample jobs/preprocess.py \
+  --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre_sample \
+  --bundle /home/ubuntu/stage/bundle --sample 100000
+
+# S2 전처리 — 전수 (349초, 6,617,603행)
+/opt/spark/bin/spark-submit --master yarn --deploy-mode client \
+  --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
+  --name ody-S2-full jobs/preprocess.py \
+  --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre \
+  --bundle /home/ubuntu/stage/bundle
+
+# S3 PCA — 로더를 preprocess.py 에서 import 하므로 --py-files 가 필요하다 (126초)
+/opt/spark/bin/spark-submit --master yarn --deploy-mode client \
+  --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
+  --name ody-S3-full --py-files jobs/preprocess.py jobs/pca.py \
+  --in hdfs:///ody/data/features_pre --out hdfs:///ody/data/coords \
+  --bundle /home/ubuntu/stage/bundle
+
+yarn application -list -appStates ALL
 ```
+
+`--bundle` 은 **드라이버가 읽는 로컬 경로**다. 번들 파라미터는 클로저에 실려 실행기로 가므로 `--files` 로 올릴 필요가 없다.
+
+### 아직 클러스터에서 돌리지 않은 잡
 ```bash
-# S6 내보내기 — Spark 로 세 표를 정렬해 쓴 뒤, 로컬로 내려 번들을 조립한다
-spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
-  spark/jobs/artifact_export.py --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords \
+# S1 대표행 선택
+spark-submit ... jobs/manifest_rows.py --in hdfs:///ody/data/census_all --out hdfs:///ody/data/manifest_rows
+# S1.5 특징 선택 (원본 JSON 에서 시작할 때만. 추출 특징으로 시작하면 이미 270이다)
+spark-submit ... jobs/feature_select.py --from-raw ...
+# S4 트리 배정 — 트리 두 파일 경로를 직접 준다
+spark-submit ... --files serving/v2.1-pca16/map_tree/tree.json,serving/v2.1-pca16/map_tree/split_axes.npz \
+  jobs/tree_assign.py --in hdfs:///ody/data/coords --out hdfs:///ody/data/node_paths \
+  --tree-json tree.json --split-axes split_axes.npz
+# S5 카탈로그 제외 규칙
+spark-submit ... jobs/catalog_rules.py --in hdfs:///ody/data/catalog_input --out hdfs:///ody/data/catalog --expect-excluded 780107
+# S6 번들 내보내기 — 세 표를 정렬해 쓴 뒤 로컬로 내려 조립한다
+spark-submit ... jobs/artifact_export.py --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords \
   --node-paths hdfs:///ody/data/node_paths --out hdfs:///ody/data/bundle_stage
 hdfs dfs -get /ody/data/bundle_stage /home/ubuntu/stage/bundle_stage
-python -c "import sys; sys.path.insert(0,'spark/jobs'); import artifact_export as S6; \
-  print(S6.assemble_bundle('serving/v2.2-pca16-candidate',
-    S6.single_parquet('/home/ubuntu/stage/bundle_stage/coords'),
-    S6.single_parquet('/home/ubuntu/stage/bundle_stage/node_paths'),
-    'serving/v2.1-pca16', 'work/catalog_v2.parquet', 780107, '<규칙 해시>',
+python3 -c "import sys; sys.path.insert(0,'spark/jobs'); import artifact_export as S6; \
+  print(S6.assemble_bundle('serving/v2.2-pca16-candidate', \
+    S6.single_parquet('/home/ubuntu/stage/bundle_stage/coords'), \
+    S6.single_parquet('/home/ubuntu/stage/bundle_stage/node_paths'), \
+    'serving/v2.1-pca16', 'work/catalog_v2.parquet', 780107, '<규칙 해시>', \
     'v2.2-pca16-YYYY-MM-DD')['songs'])"
 python tests/check_contract.py serving/v2.2-pca16-candidate --strict
 ```
 
-S6 은 세 표를 모두 `mbid` 오름차순으로 정렬한다. 서빙의 정렬 불변식(좌표 i번째 = 카탈로그 excluded=false i번째)을 분산 환경에서 성립시키려면 정렬 키를 명시해야 한다. 동결 파일 7개는 복사만 한다(규칙 3).
+단계 순서: `manifest_rows.py`(S1) → `feature_select.py`(S1.5) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 
-`--prev` 해시 대조는 Spark 산출물에 적용할 수 없다(바이트가 같을 수 없다). 대신 `compare_bundle` 내용 대조를 쓴다. 근거는 스펙 20 의 S6 절. 전수 조립 실측은 `output/artifact_export_2026-09-10.json`(계약 strict FAIL 0, 말단 노드 일치 100%).
+곡 수를 줄이는 잡은 **S1 과 S5 둘**이다(제출본 2,946만 → 곡 740만 → 662만). 차원을 줄이는 잡은 S1.5a·S1.5b·S3 이다.
 
-단계 순서: `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
+S2·S3 은 `mapInPandas` 로 실행기에서 numpy 연산을 한다. 270컬럼·4,320항 표현식 트리를 피하고 기준 구현과 같은 함수를 쓰기 위해서다. 재학습은 없다(규칙 3).
+
+⚠️ 특징 이름은 `lowlevel.gfcc.mean.0` 처럼 점을 포함한다. `select` 에 그대로 넘기면 Spark 가 중첩 필드로 해석해 `UNRESOLVED_COLUMN` 으로 실패한다. 백틱으로 감싸야 한다(`preprocess.quoted`).
+
+S4 는 깊이 한 단계마다 같은 노드의 행을 모아 계산한다. S5 는 행을 지우지 않고 `excluded`·`excluded_reason[]`·`flag_*` 로 표시하며 임계값은 `pipeline/exclusion_rules.json` 에서만 읽는다. S6 은 세 표를 모두 `mbid` 오름차순으로 정렬해 서빙의 정렬 불변식을 성립시키고, 동결 파일 7개는 복사만 한다.
+
+`--prev` 해시 대조는 Spark 산출물에 적용할 수 없다(바이트가 같을 수 없다). 대신 `compare_bundle` 내용 대조를 쓴다. 근거는 스펙 20 의 S6 절.
 
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료
 ```bash

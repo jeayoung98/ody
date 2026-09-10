@@ -8,7 +8,7 @@ import DrillHint from "./drill-hint";
 export default function LayerName() {
   const layer = useMapStore((s) => s.layer);
   const residentCount = useMapStore((s) => s.residentCount);
-  const revealedCount = useMapStore((s) => s.revealedCount);
+  const viewportCount = useMapStore((s) => s.viewportCount);
   const zoomK = useMapStore((s) => s.zoomK);
   const gateOpen = useMapStore((s) => s.gateOpen);
   return (
@@ -25,7 +25,7 @@ export default function LayerName() {
       <div className="num mt-[3px] flex flex-wrap gap-x-3 text-[9.5px] tracking-[0.04em] text-ink-3">
         <span>이 겹 {residentCount.toLocaleString()}곡</span>
         <span className={zoomK >= DRILL.gateZoomMul ? "text-teal" : ""}>배율 ×{zoomK.toFixed(1)}</span>
-        <span className={gateOpen ? "text-teal" : ""}>떠 있는 별 {revealedCount.toLocaleString()}</span>
+        <span className={gateOpen ? "text-teal" : ""}>화면 안 {viewportCount.toLocaleString()}곡</span>
       </div>
       <DrillHint />
     </div>

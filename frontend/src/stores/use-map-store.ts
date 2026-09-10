@@ -15,8 +15,8 @@ export interface EngineSnapshot {
   camera: MapCamera;
   /** 이 레이어에 상주하는 곡 수 */
   residentCount: number;
-  /** 그중 지금 배율에서 실제로 떠 있는 별 수 (확대하면 늘어난다) */
-  revealedCount: number;
+  /** 그중 화면 안에 들어와 있는 곡 수 — 다음 단계로 데려갈 후보 */
+  viewportCount: number;
   /** 이 레이어에 들어온 배율 대비 현재 배율 (1 = 진입, DRILL.gateZoomMul 이상이면 파고들 준비) */
   zoomK: number;
   /** 확대 임계치를 넘겼다 → 계속 확대하면 파고든다 */
@@ -88,7 +88,7 @@ export const useMapStore = create<MapState>()(
       layer: 0,
       camera: { cx: 0, cy: 0, s: 100 },
       residentCount: 0,
-      revealedCount: 0,
+      viewportCount: 0,
       zoomK: 1,
       gateOpen: false,
       atBottom: false,

@@ -57,6 +57,11 @@ input {
     box-shadow: var(--shadow-box);
   }
 }
+/* .gchip:hover — 프로토타입 값 (색·테두리만 바뀐다) */
+.gchip:hover {
+  color: var(--color-ink);
+  border-color: rgba(255, 255, 255, 0.17);
+}
 @utility lbl {
   font-family: var(--font-mono);
   font-size: 9.5px;

@@ -1,32 +1,25 @@
 "use client";
 
-import { useRouter } from "next/navigation";
-import { ROUTES } from "@/constants";
-import { useExchangeCodeMutation } from "@/hooks/mutations/use-exchange-code-mutation";
+import { API_ENDPOINTS } from "@/constants";
 
 /**
  * 구글 로그인 (AUTH-01/02).
- * 실제 연동 시 API_ENDPOINTS.auth.googleLogin 으로 리다이렉트한다.
- * 목 환경에서는 백엔드를 거치지 않고 목 교환 라우트에서 토큰을 받아 홈으로 간다 —
- * 첫 로그인이면 닉네임이 비어 있어서 가드가 닉네임 화면으로 보낸다 (AUTH-01).
+ * 백엔드의 Spring Security OAuth2 진입점으로 보낸다 — 구글 동의 화면을 거친 뒤 백엔드가
+ * `/oauth/redirect?code=` 로 되돌려보내고 거기서 accessToken 으로 교환한다 (oauth-callback.tsx).
+ * NEXT_PUBLIC_API_URL 이 비어 있으면 같은 오리진으로 나간다 — 배포 환경은 nginx 가 /oauth2 를
+ * 백엔드로 넘기므로 그대로 동작하고, 로컬 dev 서버 단독으로는 404 다. 목 로그인 분기는 없앴다.
  */
 export default function GoogleLoginButton() {
-  const router = useRouter();
-  const exchange = useExchangeCodeMutation();
-  const isMock = !process.env.NEXT_PUBLIC_API_URL;
-
   const handleLogin = () => {
-    if (isMock) exchange.mutate("google-demo", { onSuccess: () => router.replace(ROUTES.home) });
     // 외부(백엔드) OAuth 엔드포인트로 이동하므로 Next 라우터가 아닌 전체 페이지 이동을 사용한다
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
-    else window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`;
+    window.location.href = `${process.env.NEXT_PUBLIC_API_URL ?? ""}${API_ENDPOINTS.auth.googleLogin}`;
   };
 
   return (
     <button
       type="button"
       onClick={handleLogin}
-      disabled={exchange.isPending}
       className="flex w-full items-center justify-center gap-[9px] rounded-pill bg-white px-3 py-3 text-[13px] font-semibold text-[#1f1f1f] transition-[filter] hover:brightness-95"
     >
       <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden>

@@ -23,9 +23,9 @@
 | B-9 | `POST /api/auth/withdraw` | **존재함.** 회원 탈퇴 (USER-01) | 프론트 화면 미구현 | 협의 전 |
 | B-13 | 인증 관련 에러 코드 | **구현됨** (backend/dev `AuthErrorCode`): `EMAIL_ALREADY_EXISTS` `NICKNAME_ALREADY_EXISTS` `INVALID_CREDENTIALS` `PASSWORD_MISMATCH` `INVALID_PASSWORD_FORMAT`(영문+숫자 8~72자) `INVALID_NICKNAME_LENGTH`(2~20자) | 프론트 `ImplementedErrorCode` 에 반영 완료. 목 라우트도 같은 코드로 답한다 | 반영됨 |
 | B-14 | **구글 로그인 진입 경로** | `/oauth2/authorization/google` (Spring Security 기본, SecurityConfig permitAll). `/api/auth/google` 은 존재하지 않는다 | 프론트가 `/api/auth/google` 로 보내고 있었다 → 경로 수정 완료 | 반영됨 |
-| B-15 | 배포 서버 응답 | `https://j15a405a.p.ssafy.io` 의 `/actuator/health` 도 404 | 실제 구글 로그인은 아직 한 번도 성공 경로를 밟지 못했다. 배포 주소·프로필 확인 필요 | 협의 전 |
+| B-15 | 배포 서버 응답 | 실제 도메인은 `https://j15a405.p.ssafy.io` — `.env.example` 에 있던 `j15a405a` 는 오타였다. 2026-09-10 확인: `/oauth2/authorization/google` → 구글 동의 화면으로 302 (client_id·PKCE 정상), 콜백 `/login/oauth2/code/google` 도 백엔드로 라우팅됨. `/api/auth/google` 은 401, `/api/health` 는 백엔드에 없어 401 | 백엔드 OAuth 진입은 살아 있다. 프론트 버튼을 실제 경로로 연결하고(S15P21A405-129) 로컬 dev + 배포 백엔드로 구글 로그인 화면까지 도달 확인 | 반영됨 |
 | B-10 | **에러 코드가 API 명세서 §0.5와 다름** | 구현: `UNAUTHENTICATED` `INVALID_TOKEN` `REFRESH_TOKEN_NOT_FOUND` `REFRESH_TOKEN_MISMATCH` `INVALID_EXCHANGE_CODE` `INVALID_INPUT` `INTERNAL_SERVER_ERROR` / 명세서: `VALIDATION_ERROR` `TOKEN_EXPIRED` `REFRESH_TOKEN_INVALID` `OAUTH_FAILED` `INTERNAL_ERROR` … | **어느 쪽이 맞는지 백엔드 확인 필요.** 확정 전까지 `src/types/api.ts` 는 양쪽을 모두 허용 | 협의 전 |
-| B-11 | OAuth 리다이렉트 URI | `app.oauth.frontend-redirect-uri` 설정값으로 이동. 교환 코드는 1회용, TTL 30초 | 프론트 착지점은 `/oauth/redirect`. **이 값이 그렇게 설정돼 있는지 백엔드 확인 필요** | 협의 전 |
+| B-11 | OAuth 리다이렉트 URI | `app.oauth.frontend-redirect-uri` 설정값으로 이동. 교환 코드는 1회용, TTL 30초 | 프론트 착지점은 `/oauth/redirect`. **운영값이 `https://j15a405.p.ssafy.io/oauth/redirect` 인지 백엔드 확인 필요.** 값이 하나뿐이라 로컬 dev 서버에서는 구글 로그인 성공 후 배포 프론트로 착지한다 — 로컬에서 흐름을 끝까지 보려면 로컬 오리진을 받는 방법(프로필 분리 등)이 필요하다 | 협의 전 |
 | B-12 | 인증 외 API 전무 | 컨트롤러가 `Auth` / `Hello` / `Test` / `WebSocketTest` 뿐 | 지도·검색·플리·여정·소셜·차트는 계속 목 라우트로 개발 | — |
 
 ---

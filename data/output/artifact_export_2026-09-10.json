@@ -1,0 +1,238 @@
+{
+  "stage": "S6",
+  "date": "2026-09-10",
+  "bundle": "임시 검증 번들 (승격 아님)",
+  "songs": 6624399,
+  "sort_key": "mbid",
+  "contract_strict_fail": 0,
+  "contract_strict_warn": 0,
+  "contract_items": [
+    [
+      "OK",
+      "file:manifest.json",
+      ""
+    ],
+    [
+      "OK",
+      "file:coords_v2.parquet",
+      ""
+    ],
+    [
+      "OK",
+      "file:map_tree/node_paths_v2.parquet",
+      ""
+    ],
+    [
+      "OK",
+      "file:map_tree/tree.json",
+      ""
+    ],
+    [
+      "OK",
+      "file:map_tree/split_axes.npz",
+      ""
+    ],
+    [
+      "OK",
+      "file:map_tree/quality_by_depth.csv",
+      ""
+    ],
+    [
+      "OK",
+      "file:model_bundle.npz",
+      ""
+    ],
+    [
+      "OK",
+      "file:feature_list.json",
+      ""
+    ],
+    [
+      "OK",
+      "file:fit_manifest.json",
+      ""
+    ],
+    [
+      "OK",
+      "file:postprocess_rules.json",
+      ""
+    ],
+    [
+      "OK",
+      "manifest.keys",
+      ""
+    ],
+    [
+      "OK",
+      "manifest.k/n_features",
+      "16 / 270"
+    ],
+    [
+      "OK",
+      "manifest.bundle_version",
+      "v2.1-pca16-2026-09-10"
+    ],
+    [
+      "OK",
+      "manifest.explained_variance_per_axis[16]",
+      ""
+    ],
+    [
+      "OK",
+      "coords.columns",
+      "mbid,pc1,pc2..."
+    ],
+    [
+      "OK",
+      "coords.pc_dtype_float32",
+      "float"
+    ],
+    [
+      "OK",
+      "coords.rows==manifest.songs",
+      "6624399"
+    ],
+    [
+      "OK",
+      "coords.mbid_unique",
+      ""
+    ],
+    [
+      "OK",
+      "coords.mbid_lowercase",
+      ""
+    ],
+    [
+      "OK",
+      "coords.all_finite",
+      ""
+    ],
+    [
+      "OK",
+      "node_paths.rows==songs",
+      "6624399"
+    ],
+    [
+      "OK",
+      "node_paths.columns",
+      "mbid,leaf_id"
+    ],
+    [
+      "OK",
+      "node_paths.distinct_leaf==4096",
+      "4096"
+    ],
+    [
+      "OK",
+      "node_paths.leaf_id_format",
+      "[]"
+    ],
+    [
+      "OK",
+      "node_paths.mbid_set==coords.mbid_set",
+      ""
+    ],
+    [
+      "OK",
+      "tree.n_nodes==len(nodes)",
+      "5461 vs 5461"
+    ],
+    [
+      "OK",
+      "tree.leaf_count==4096",
+      "4096"
+    ],
+    [
+      "OK",
+      "tree.max_depth==manifest",
+      ""
+    ],
+    [
+      "OK",
+      "tree.children_4_and_prefixed",
+      "[]"
+    ],
+    [
+      "OK",
+      "split_axes.keys==3*internal(1365)",
+      "4095"
+    ],
+    [
+      "OK",
+      "split_axes.root_shapes",
+      ""
+    ],
+    [
+      "OK",
+      "model_bundle.shapes",
+      "[]"
+    ],
+    [
+      "OK",
+      "model_bundle.float32",
+      ""
+    ],
+    [
+      "OK",
+      "feature_list.270_unique",
+      "270"
+    ],
+    [
+      "OK",
+      "feature_list.skew_keys==features",
+      ""
+    ],
+    [
+      "OK",
+      "feature_list.skew_values",
+      "set()"
+    ],
+    [
+      "OK",
+      "fit_manifest.keys",
+      ""
+    ],
+    [
+      "OK",
+      "postprocess_rules.keys",
+      "[]"
+    ],
+    [
+      "OK",
+      "quality_by_depth.header",
+      "depth,n_nodes,n_leaves_at_depth,songs_median,songs_p10,songs_p90,songs_min,songs_max"
+    ],
+    [
+      "OK",
+      "manifest.files_sha256",
+      ""
+    ],
+    [
+      "OK",
+      "manifest.catalog_sha256",
+      ""
+    ],
+    [
+      "OK",
+      "manifest.contract_version==v1",
+      "v1"
+    ],
+    [
+      "OK",
+      "elapsed_s",
+      "11.1"
+    ]
+  ],
+  "compare_to_v2.1-pca16": {
+    "rows_new": 6624399,
+    "rows_ref": 6624399,
+    "mbid_set_equal": true,
+    "tolerance": 0.0001,
+    "coords_max_abs_error": 0.0,
+    "coords_within_tolerance": true,
+    "leaf_match": 6624399,
+    "leaf_match_rate": 1.0,
+    "pass": true
+  },
+  "elapsed_s": 107.1
+}

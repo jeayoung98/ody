@@ -28,7 +28,7 @@ spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-mem
   spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --sample 100000
 yarn application -list -all
 ```
-단계 순서: `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
+단계 순서: `manifest_rows.py`(S1) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료
 ```bash

@@ -34,12 +34,55 @@
 | 단계 | 입력 | 출력 (HDFS Parquet) | 패리티 기준 |
 |---|---|---|---|
 | S0 원본 적재 | `lowlevel/*.tar.zst` 30파트 | `raw_features/part=NN/` : `mbid, offset, part, fingerprint, codec, bit_rate, length, lossless, sample_rate, f_000..f_269(float32), title, artist` | 행 수 = 전수조사 `census_all.parquet` 의 코호트 행 수; 표본 1만 행 값 == 기존 추출 Parquet |
-| S1 대표행 선택 | raw_features + `work/v2_manifest.parquet` 규칙(지문→lossless→44100→규모→part,offset) | `manifest_rows/` 7,404,506 행 | mbid 집합 == v2 manifest |
+| S1 대표행 선택 | `census_all.parquet` 제출본 29,460,584 | `manifest_rows/` **7,404,506 행** | mbid 집합 == v2 manifest. 규칙은 아래 별도 절. 잡은 `spark/jobs/manifest_rows.py` |
 | S2 전처리 | manifest_rows + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` 270 f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인 |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
 | S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
 | S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
+
+## S1 대표행 선택 — 제출본 2,946만 → 곡 740만
+
+**곡 수를 줄이는 단계는 파이프라인에 둘이다.** 이것이 첫 번째이고 S5 카탈로그 규칙이 두 번째다. 차원을 줄이는 단계(S1.5a, S1.5b, S3)와는 별개다.
+
+```text
+census 제출본 29,460,584
+  → 1. 코호트 필터            지문 9개 밖은 후보 아님
+  → 2~5. MBID 당 1행 선택
+  → 곡 7,404,506
+  → (S5 가 R1~R9 로 780,107 더 자름)  →  6,624,399
+```
+
+### 선택 규칙 (완전 결정적)
+```text
+1. 코호트 9개 지문의 제출본만 후보
+2. lossless 우선
+3. sample_rate == 44100 우선 (결측은 뒤로)
+4. 지문 규모 순위  74 > 72 > 73 > 76 > 99 > 71 > 101 > 103 > 87
+5. part 오름차순 → offset 오름차순      최종 동률 제거자
+```
+
+원본은 `dmadkr/scripts/build_v2_manifest.py` 이고 `np.lexsort` 로 같은 순서를 만든다. Spark 는 `Window.partitionBy(mbid).orderBy(...)` + `row_number() == 1` 로 재현한다.
+
+### 코호트 판정은 네 문자열 일치다
+census 에 `fingerprint` 컬럼이 **없다.** `essentia`, `essentia_git_sha`, `essentia_build_sha`, `extractor` **네 값이 모두** 정의와 같을 때 그 지문으로 본다. 단일 컬럼 비교로 착각하면 결과가 달라진다.
+
+| 무엇 | 어디 |
+|---|---|
+지문 정의 (네 문자열) | `output/version_census_fingerprints.csv` |
+코호트 목록 | `pipeline/v2_cohort_decision.json` 의 `cohort_fingerprints` |
+코호트 근거 | `CONFIRMED_BY_GATE_V2` |
+
+코호트 지문은 `71, 72, 73, 74, 76, 87, 99, 101, 103` 이다. 규모 순위(`FP_RANK`)와 집합이 같아야 하고 잡이 시작할 때 검사한다.
+
+### `is_fit_sample` 은 재현하지 않는다
+원본은 `numpy.default_rng(42)` 로 층(part × lossless)마다 `rng.choice` 를 불러 fit 표본 100만 곡을 뽑는다. **호출 순서에 의존하므로 Spark 로 같은 결과를 낼 수 없다.**
+
+다만 이것은 fit 산물이고 규칙 3 상 재계산 대상이 아니다. S2·S3 은 동결 파라미터를 적용만 하므로 fit 표본이 필요 없다. Spark S1 출력은 `mbid, part, offset, fingerprint, lossless, sample_rate` 여섯 컬럼이다. 필요하면 기존 `work/v2_manifest.parquet` 에서 조인한다.
+
+### 패리티 기준
+- 행 수 7,404,506, `mbid` 중복 0.
+- 실제 census 표본 300 mbid 에서 고른 `(part, offset, fingerprint)` 가 `v2_manifest.parquet` 과 같다. `tests/test_manifest_rows.py` 가 검사하며 2026-09-10 에 통과했다.
 
 ## 수용 기준
 - AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**

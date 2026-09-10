@@ -23,7 +23,7 @@ IVFFlat 은 쓰지 않는다. 인덱스가 작지만(약 480 MB 추정) 재현�
 질의 시 `hnsw.ef_search` 기본값은 40 이다. 필터를 거는 질의에서만 올린다(스펙 경고 2).
 
 ## 후처리와의 관계
-pgvector 는 **후보만 뽑는다.** 중복 접기·아티스트 상한·길이 규칙은 그대로 `retrieval/postprocess.py` 가 한다.
+pgvector 는 **후보만 뽑는다.** 중복 접기·아티스트 상한·길이 규칙은 Backend 가 적용한다(D12). 임계값의 유일한 출처는 서빙 번들의 `postprocess_rules.json` 이다: τ_dup 1.6624 · artist_cap 3 · τ_far 4.912 · 길이 30~1200s. 전부 L2 거리 기준이다.
 규칙 임계값이 `postprocess_rules.json` 에 있고 SQL 로 옮기면 두 벌이 되기 때문이다(규칙 9).
 
 즉 흐름은 이렇다.
@@ -34,7 +34,7 @@ Backend 가 직접 조회하는 경우에도 후처리는 AI 서비스가 하거
 어느 쪽으로 할지는 Backend 담당과 정한다. **규칙을 두 곳에 손으로 베끼지 않는다.**
 
 ## 검증 방법
-정답은 numpy 정확 kNN 이다. 이미 `retrieval.neighbors.exact_knn` 이 있다.
+정답은 numpy 정확 kNN 이다. 구현은 삭제됐으므로(D12) 필요하면 `coords_v2.parquet` 를 읽어 임시 스크립트로 계산한다. 2026-09-10 실측 recall@10 0.9995 는 `output/pgvector_bench_2026-09-10.json` 에 있다.
 
 ```
 무작위 200곡 → exact_knn(k=10) → 정답셋

@@ -27,12 +27,12 @@ E4 실데이터(트리 배치·카탈로그 확정)가 끝나기 전에 탐색 B
 ## 수용 기준
 - AC1 `python tests/check_contract.py serving/v0.0-mock` 이 FAIL 0 (WARN 허용).
 - AC2 `serving/v0.0-mock/` 전체 ≤ 20MB 이고 git 에 커밋된다(`.gitignore` 의 parquet·npz 패턴에 이 디렉터리만 예외 등록).
-- AC3 `serving/CURRENT.json` 을 `v0.0-mock` 과 `v2.1-pca16` 사이에서 바꿔도 `retrieval/` 코드 변경 0. `tests/test_mock_swap.py` 가 두 번들 각각에서 같은 엔드포인트 계약(응답 키 집합·타입)을 검사해 통과.
+- AC3 `serving/CURRENT.json` 을 `v0.0-mock` 과 `v2.1-pca16` 사이에서 바꿔도 번들을 읽는 코드(적재 잡·계약 검사) 변경 0. `tests/check_contract.py` 가 두 번들 모두에서 FAIL 0 으로 통과. (원래 문장은 `retrieval/` 서빙 코드 기준이었다. D12 로 그 코드가 없어졌다)
 - AC4 목업 mbid 5,000개가 전부 실번들 `coords_v2.parquet` 의 mbid 집합에 포함된다.
 - AC5 목업 트리가 **리프 200개 이상**을 채우고, `tree.json` 의 모든 내부 노드가 자식 4개를 유지한다(빈 자식은 `size: 0`).
-- AC6 `GET /health` 응답의 `bundle` 이 `v0.0-mock-<날짜>` 로 나온다 — BE 가 목업인지 실데이터인지 응답만 보고 구분할 수 있다.
+- AC6 목업 `manifest.bundle_version` 이 `v0.0-mock-<날짜>` 다 — 적재된 행이 목업에서 온 것인지 실번들에서 온 것인지 구분할 수 있다. (원래 문장은 `GET /health` 기준이었다. D12 로 API 가 없어졌다)
 
 ## 비범위
-- 목업 전용 API 서버. 같은 `retrieval` 서비스가 번들 포인터만 바꿔 뜬다.
+- API 서버 일체. data 는 서빙 API 를 제공하지 않는다(D12).
 - 가짜 오디오·앨범 이미지·미리듣기(규칙 6).
-- 목업으로 성능 수치를 내는 것. 벤치는 실번들에서만(스펙 10~12).
+- 목업으로 성능 수치를 내는 것. 실측은 실번들 적재에서만(스펙 16·17·18).

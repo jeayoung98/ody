@@ -9,5 +9,5 @@
 | T5 | 축 라벨 조인 (스펙 14, 없으면 null) | `test_axis_label_join_optional` | ⬜ |
 | T6 | 멱등 확인 | `test_idempotent` 2회 실행 결과 동일 (AC5) | ⬜ |
 | T7 | depth 3·4·5·6 벤치마크 | `output/map_layer_bench.json` (AC6) | ⬜ |
-| T8 | 스펙 12 API 와 값 대조 | `test_size_matches_tree_api` 5,461 노드 전부 (AC7) | ⬜ |
+| T8 | `tree.json` 원본과 값 대조 | `test_size_matches_tree_json` 5,461 노드 전부 (AC7) | ⬜ |
 | T9 | DB 적재 스크립트 (스펙 50 확정 후) | `ops/` 또는 `pipeline/load_map_layer.sql`, 적재 시간 기록 | ⬜ |

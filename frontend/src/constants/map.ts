@@ -6,12 +6,6 @@ export const LAYER_COUNT = 8;
 /** 한 겹에 상주하는 곡 수. 겹을 옮겨도 이 규모는 그대로다 (백엔드가 겹마다 이만큼 내려준다는 전제) */
 export const LAYER_SONG_COUNT = 1000;
 
-/**
- * 필터에서 꺼진 장르의 밝기 배수 (프로토타입 값).
- * 지우지 않고 형태만 남긴다 — 한 장르가 이 겹에 어떻게 퍼져 있는지 나머지와 비교해 보이게.
- */
-export const GENRE_DIM = 0.16;
-
 /** 장르 이름. 인덱스 = genreId, 색은 GENRE_COLORS 의 같은 인덱스 */
 export const GENRE_NAMES = ["앰비언트", "일렉트로닉", "클래식", "재즈", "힙합", "R&B·소울", "팝", "록", "메탈", "포크·컨트리"] as const;
 
@@ -82,6 +76,11 @@ export const DRILL = {
   /** 다음 겹으로 가는 임계치 — 진입 배율의 이 배수까지는 휠이 순수 확대다 */
   gateZoomMul: 6,
   /**
+   * 한 겹 안에서 확대·축소할 수 있는 한계 (진입 배율 대비).
+   * 화면 안 곡이 적어 게이트가 닫혀 있어도 무한히 확대되면 빈 우주만 남는다.
+   */
+  zoomRange: { min: 0.4, max: 24 },
+  /**
    * 다음 겹의 기준은 **화면 안에 담긴 곡**이다 (프로토타입 viewMembers).
    * 화면 안이 이보다 적으면 들어가지 않는다 — 너무 좁혀 들어가면 받아올 영역이 없다.
    */
@@ -122,6 +121,15 @@ export const STAR_VIEW = {
   appearMs: 380,
 } as const;
 
+/**
+ * 지도·오버레이를 밀 수 있는 한계. 한 방향으로 무한히 밀려 별이 전부 화면 밖으로 나가면
+ * 자기가 어디 있는지 알 수 없다 — 별 무리 끝에서 화면 반쪽의 이 비율까지만 더 나간다.
+ */
+export const PAN_LIMIT = { slack: 0.45 } as const;
+
+/** 별자리 뷰 안에서의 확대 범위 (지도 배율과 별개) */
+export const OVERLAY_ZOOM = { min: 0.6, max: 4 } as const;
+
 /** 휠 확대 계수 (배율 = exp(-deltaY × 이 값)) */
 export const WHEEL_ZOOM = 0.0015;
 
@@ -136,6 +144,19 @@ export const COVER_COUNT = { far: 7, near: 13 } as const;
 
 /** 지도 위에 동시에 보이는 주변 사용자 최대 수 */
 export const MAP_FRIENDS_MAX = 20;
+
+/**
+ * 재생하면 '나'가 그 곡으로 **날아간다** (MAP-08). 친구 우주선처럼 곡선을 타고 온다 —
+ * 별을 누르는 것(뷰만 이동)과 재생하는 것(내가 이동)이 눈으로 구분되게.
+ */
+export const ME_FLIGHT = {
+  /** 비행 시간(ms) */
+  ms: 1500,
+  /** 곡선이 직선에서 벗어나는 정도 (거리 대비) */
+  bow: 0.28,
+  /** 꼬리 길이 (비행 거리 대비) */
+  trail: 0.22,
+} as const;
 
 /** 따라가기: 인솔자가 다음 곡으로 넘어가는 간격(ms), 이동 시간(ms) */
 export const FOLLOW = {
@@ -197,6 +218,10 @@ export const CONSTELLATION = {
  * 이 겹의 영역 안에는 절대 들어가지 않는다 — 들어가면 이 겹에 있는 곡처럼 보이기 때문이다.
  */
 export const GHOST = {
+  /** 화면 테두리에서 안쪽으로 남기는 여백(px). 표식이 화면 밖으로 나가지 않게 */
+  edgeInset: 34,
+  /** 상단 HUD(검색바·배너)에 가리지 않게 이만큼은 내려온다(px) */
+  topInset: 168,
   /** 별들이 뻗은 끝에서 이만큼 더 밖에 놓는다(px). 구름 안에는 어떤 경우에도 들어가지 않는다 */
   cloudMargin: 46,
   /** 고스트별이 뜰 때 뷰가 물러난다: 구름 끝이 화면 반지름의 이 비율까지만 오게 */

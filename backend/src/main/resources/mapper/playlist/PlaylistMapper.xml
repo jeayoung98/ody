@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.playlist.mapper.PlaylistMapper">
+
+	<insert id="insertPlaylist" useGeneratedKeys="true" keyProperty="id">
+		INSERT INTO playlist (owner_email, name)
+		VALUES (#{ownerEmail}, #{name})
+	</insert>
+
+	<select id="findById" resultType="com.ssafy.backend.playlist.dto.PlaylistRow">
+		SELECT id, owner_email, name, created_at
+		FROM playlist
+		WHERE id = #{playlistId}
+	</select>
+
+	<select id="existsByOwnerEmailAndName" resultType="boolean">
+		SELECT EXISTS(SELECT 1 FROM playlist WHERE owner_email = #{ownerEmail} AND name = #{name})
+	</select>
+
+	<select id="findSummariesByOwnerEmail" resultType="com.ssafy.backend.playlist.dto.PlaylistSummaryRow">
+		SELECT p.id AS id, p.name AS name, p.created_at AS created_at,
+		       COUNT(pm.music_id) AS music_cnt
+		FROM playlist p
+		LEFT JOIN playlist_music pm ON pm.playlist_id = p.id
+		WHERE p.owner_email = #{ownerEmail}
+		GROUP BY p.id, p.name, p.created_at
+		ORDER BY p.created_at DESC
+	</select>
+
+	<update id="updateName">
+		UPDATE playlist
+		SET name = #{name},
+		    updated_at = now()
+		WHERE id = #{playlistId}
+	</update>
+
+	<delete id="deleteById">
+		DELETE FROM playlist WHERE id = #{playlistId}
+	</delete>
+
+	<select id="countMusic" resultType="int">
+		SELECT COUNT(*) FROM playlist_music WHERE playlist_id = #{playlistId}
+	</select>
+
+	<select id="findMusicIdsInOrder" resultType="long">
+		SELECT music_id FROM playlist_music WHERE playlist_id = #{playlistId} ORDER BY position ASC
+	</select>
+
+	<select id="findExistingMusicIds" resultType="long">
+		SELECT music_id FROM playlist_music
+		WHERE playlist_id = #{playlistId}
+		AND music_id IN
+		<foreach item="id" collection="musicIdList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</select>
+
+	<insert id="insertPlaylistMusicBatch">
+		INSERT INTO playlist_music (playlist_id, music_id, position)
+		VALUES
+		<foreach item="item" collection="items" separator=",">
+			(#{playlistId}, #{item.musicId}, #{item.position})
+		</foreach>
+	</insert>
+
+	<delete id="deletePlaylistMusic">
+		DELETE FROM playlist_music
+		WHERE playlist_id = #{playlistId}
+		AND music_id IN
+		<foreach item="id" collection="musicIdList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</delete>
+
+	<delete id="deleteAllPlaylistMusic">
+		DELETE FROM playlist_music WHERE playlist_id = #{playlistId}
+	</delete>
+
+</mapper>

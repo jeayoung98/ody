@@ -316,6 +316,35 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 
 ## 4. 플레이리스트
 
+> **S15P21A405-65/66/67에서 구현 완료**. `playlist`, `playlist_music` 테이블은 이 저장소에 마이그레이션 도구가
+> 없어 아직 실행 안 됨 — 아래 쿼리를 실제 DB에 먼저 적용해야 한다.
+> ```sql
+> CREATE TABLE playlist (
+>   id BIGSERIAL PRIMARY KEY,
+>   owner_email varchar(255) NOT NULL REFERENCES "user"(email),
+>   name varchar(100) NOT NULL,
+>   created_at timestamptz NOT NULL DEFAULT now(),
+>   updated_at timestamptz NOT NULL DEFAULT now(),
+>   UNIQUE (owner_email, name)
+> );
+>
+> CREATE TABLE playlist_music (
+>   playlist_id bigint NOT NULL REFERENCES playlist(id) ON DELETE CASCADE,
+>   music_id bigint NOT NULL, -- music 테이블이 아직 없어 FK 제약 없음. music 테이블 확정 후 추가할 것.
+>   position integer NOT NULL,
+>   added_at timestamptz NOT NULL DEFAULT now(),
+>   PRIMARY KEY (playlist_id, music_id)
+> );
+> CREATE INDEX idx_playlist_music_order ON playlist_music (playlist_id, position);
+> ```
+> **또 다른 선행 조건**: 곡 존재 확인·상세 조회는 `MusicDetailReader` 포트를 그대로 재사용하는데, 이 포트는 아직
+> 어댑터(BE4)가 없다(`MusicService`와 동일한 "대기 중" 상태). 그 결과 지금 시점에는:
+> - `musicIdList`가 **빈 배열**인 `/playlist/create`, `/playlist/detail`(빈 플레이리스트)은 정상 동작한다.
+> - `musicIdList`에 실제 곡 ID가 하나라도 들어가는 모든 API(4.2 트랙 있는 상세, 4.3 비어있지 않은 생성, 4.4 곡 추가,
+>   §4의 나머지 곡 관련 호출)는 어댑터가 붙기 전까지 500(`UnsupportedOperationException`)이 난다.
+>
+> `FORBIDDEN`은 신규 공통 에러코드(`GlobalErrorCode`, 403)로 이번에 추가했다.
+
 ### 4.1 플레이리스트 목록 조회
 `GET /playlist/search` · 인증 필요. param: `email`(String, required, 소유자).
 ```json
@@ -346,6 +375,15 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 { "success": true, "data": { "playlistId": 42, "insertedCnt": 3, "skippedCnt": 1, "skippedMusicIds": [10877], "musicCnt": 21 }, "error": null }
 ```
 - 이미 담긴 곡은 에러 대신 skipped로 부분 성공 처리. 에러: `PLAYLIST_NOT_FOUND`, `MUSIC_NOT_FOUND`, `FORBIDDEN`.
+
+### 4.4.1 플레이리스트 곡 순서 변경 (S15P21A405-66, 정본에는 없는 신규 엔드포인트)
+`POST /playlist/music/reorder` · 인증 필요. body: `playlistId`(int, required), `musicIdList`(Array\<int\>, required).
+```json
+{ "success": true, "data": { "playlistId": 42, "musicCnt": 19 }, "error": null }
+```
+- `musicIdList`는 곡 추가·삭제 없이 **현재 담긴 곡과 정확히 같은 집합**을 새 순서로 나열한 것이어야 한다. 집합이
+  다르면(곡이 빠지거나 추가되면) `INVALID_INPUT`(400). 추가/삭제는 4.4/4.5로 따로 한다.
+- 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`, `INVALID_INPUT`.
 
 ### 4.5 플레이리스트에서 곡 삭제
 `POST /playlist/music/delete` · 인증 필요. body: `playlistId`(int, required), `musicIdList`(Array\<int\>, required).

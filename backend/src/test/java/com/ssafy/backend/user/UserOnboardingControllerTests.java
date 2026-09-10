@@ -25,6 +25,7 @@ import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.controller.UserOnboardingController;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserService;
 
@@ -52,6 +53,9 @@ class UserOnboardingControllerTests {
 
 	@MockitoBean
 	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	@Test
 	void completeTutorial_authenticated_returnsTrueAndDelegatesTokenSubject() throws Exception {

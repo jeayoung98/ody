@@ -24,8 +24,16 @@ S0 원본 630GB 적재는 1차 범위 밖. 입력은 추출 특징 `hdfs:///ody/
 ## 제출 (master-node)
 ```bash
 sudo -u ubuntu bash ops/verify/cluster.sh
+# S2 전처리 — 번들 두 파일을 --files 로 올리고 --bundle . 로 가리킨다
 spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
-  spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --sample 100000
+  --files serving/v2.1-pca16/model_bundle.npz,serving/v2.1-pca16/feature_list.json \
+  spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre \
+  --bundle . --sample 100000
+# S3 PCA — 로더를 preprocess.py 에서 import 하므로 --py-files 가 필요하다
+spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
+  --py-files spark/jobs/preprocess.py \
+  --files serving/v2.1-pca16/model_bundle.npz,serving/v2.1-pca16/feature_list.json \
+  spark/jobs/pca.py --in hdfs:///ody/data/features_pre --out hdfs:///ody/data/coords --bundle .
 yarn application -list -all
 ```
 ```bash

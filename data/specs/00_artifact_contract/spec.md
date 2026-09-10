@@ -19,7 +19,7 @@
 | `map_tree/split_axes.npz` | npz | 내부 노드마다 `axes_<id>: (2,16) f32`, `median_<id>: (2,) f32`, `mean_<id>: (16,) f32`. 키 수 = 3 × (n_nodes − n_leaves) |
 | `map_tree/quality_by_depth.csv` | CSV | `depth,n_nodes,n_leaves_at_depth,songs_median,songs_p10,songs_p90,songs_min,songs_max` 행 depth 0..max_depth |
 | `model_bundle.npz` | npz | `impute_median(270) delta_f(270) scaler_center(270) scaler_scale(270) winsorize_clip() pca_components(16,270) pca_mean(270) explained_variance_ratio(16)` 전부 f32 |
-| `feature_list.json` | JSON | `features: [270 str]`, `skew_transform: {feature → "" | "log1p" | "signed_log1p"}` 키 집합 == features |
+| `feature_list.json` | JSON | `features: [270 str]`, `skew_transform: {feature → "" | "log1p" | "signed_log1p"}` 키 집합 == features. **단순 목록이 아니라 동결된 fit 산물이다** — 아래 참조 |
 | `fit_manifest.json` | JSON | `fit_sample_n, fit_sample_mbid_sha256, seed, selection, libraries, generated` |
 | `postprocess_rules.json` | JSON | `version, tau_dup.value, artist_cap.value, tau_far.value, length_range_s.{min,max}, hub_penalty.enabled, display_filter.enabled` (각 항목 `rule`, `basis` 문자열) |
 
@@ -50,3 +50,18 @@ files{ <상대경로> → sha256 }  catalog_sha256  contract_version  created_at
 
 ## 비범위
 - 아티팩트 생성 자체(→ `20_spark_pipeline`), API 응답 스키마(→ `10/11/12`).
+
+## `feature_list.json` 은 동결된 fit 산물이다
+
+270개 목록은 사람이 고른 것이 아니라 **데이터로 뽑은 것**이다. 구조 규칙으로 약 2,900 → 389 를 만들고,
+인코딩 안정성 점수 `S_cross ≥ 2.0` 으로 389 → 270 을 남겼다(119개 탈락). 도출 규칙과 근거는
+`specs/20_spark_pipeline/spec.md` 의 S1.5 절에 있다.
+
+따라서 이 파일은 `model_bundle.npz` 의 PCA 성분과 같은 급으로 다룬다.
+
+- **적용만 한다.** 재계산은 fit 재학습이고 별도 결정이다(`data/AGENTS.md` 규칙 3).
+- 목록이 바뀌면 좌표가 바뀐다. **major 버전**이고 검증 게이트 재등록 대상이다.
+- v1 과 v2.1 의 `features`·`skew_transform` 은 완전히 같다(2026-09-10 확인). v2 는 v1 목록을 물려받았다.
+
+`tests/test_feature_selection.py` 가 270개 목록과 `model_bundle` 행렬 차원, `manifest.n_features` 가
+서로 어긋나지 않는지 검사한다.

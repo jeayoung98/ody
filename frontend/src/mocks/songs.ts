@@ -77,9 +77,10 @@ export function allSongs(): MapPoint[] {
     const n = Math.round(((SONG_COUNT * 0.45) / cells.length) * (0.7 + rnd() * 0.7));
     for (let i = 0; i < n; i++) push(c.x + gauss() * 0.14, c.y + gauss() * 0.12, pickGenre(c));
   }
-  // 봉우리 표본 수가 난수라 총합이 어긋난다 — 정확히 SONG_COUNT 곡으로 맞춘다
-  while (raw.length < SONG_COUNT) scatter();
-  raw.length = SONG_COUNT;
+  // 봉우리 표본 수가 난수라 총합이 어긋난다 — 정확히 맞춘다.
+  // 한 자리는 확인용 고스트곡이 차지하므로 하나 적게 만든다
+  while (raw.length < SONG_COUNT - 1) scatter();
+  raw.length = SONG_COUNT - 1;
 
   // 축별 표준화 (z-score) → 모든 레이어가 같은 스케일
   const dims: number[][] = Array.from({ length: PC_DIMS }, () => []);
@@ -113,12 +114,13 @@ export function allSongs(): MapPoint[] {
 }
 
 /**
- * 목 확인용 곡 — 어느 겹에도 상주하지 않는다. 검색해서 고르면 늘 고스트별로 뜬다 (MAP-12).
+ * 목 확인용 곡 — **최상단 겹(레이어 0)에만** 있고 그 아래 겹에는 없다.
+ * 그래서 깊은 겹에서 검색하면 고스트별로 뜨고, "이 별로 이동" 을 누르면 레이어 0 에서 실제 별로 보인다 (MAP-12).
  * 좌표는 구름 바깥이라 "저쪽 바깥에 있다"는 방향이 잘 읽힌다.
  */
 function ghostOnlySong(): MapPoint {
   return {
-    musicId: SONG_COUNT + 1,
+    musicId: SONG_COUNT,
     pc: [2.6, 1.7, ...Array.from({ length: PC_DIMS - 2 }, (_, i) => (i % 2 ? -1.4 : 1.9))],
     genreId: 2,
     weight: 48_000,

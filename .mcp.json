@@ -1,0 +1,12 @@
+{
+  "mcpServers": {
+    "jam": {
+      "command": "npx",
+      "args": [
+        "--yes",
+        "@jam-mcp/launcher@1.7.0",
+        "serve"
+      ]
+    }
+  }
+}

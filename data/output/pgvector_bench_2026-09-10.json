@@ -1,0 +1,110 @@
+{
+  "issue": "S15P21A405-117",
+  "decision": "D9",
+  "spec": "17_pgvector_serving",
+  "date": "2026-09-10",
+  "question": "좌표 이웃 검색을 Neo4j 에 둘 것인가 pgvector 에 둘 것인가. DECISIONS Q6 및 스펙 50 Q4.",
+  "environment": {
+    "host": "app-node (j15a405.p.ssafy.io)",
+    "host_memory_total_gb": 15.4,
+    "host_memory_available_gb": 13.3,
+    "host_disk_free_gb": 288,
+    "note": "호스트 이름과 역할이 뒤바뀌어 있다. j15a405 가 app-node, j15a405a 가 master-node."
+  },
+  "baseline_numpy": {
+    "source": "기존 retrieval 경로, 2026-09-10 측정 (브릿지 곡 200 질의)",
+    "p50_ms": 1.4,
+    "p95_ms": 1.8,
+    "max_ms": 7.4,
+    "resident_gb": 1.11,
+    "graph_recall_at_30": 0.912,
+    "graph_recall_target": 0.95,
+    "graph_recall_target_met": false,
+    "note": "recall 미달은 work/knn_graph/meta.json 에 사전 기록된 사실이다. 규칙 1에 따라 지우지 않는다."
+  },
+  "neo4j": {
+    "version": "neo4j:5.26.30-community",
+    "container_limit_bytes": 2147483648,
+    "container_cpus": 1,
+    "heap_max": "512m",
+    "pagecache": "512m",
+    "test_scale": {"nodes": 1716382, "relationships": 2000000, "shape": "k=10"},
+    "measured": {
+      "store_mb": 449,
+      "relationshipstore_mb": 96,
+      "propertystore_mb": 224,
+      "bytes_per_relationship": 48,
+      "transaction_logs_mb": 1033,
+      "import_nodes_per_sec": 12087,
+      "import_rels_per_sec": 10695,
+      "query_top10_warm_ms": 2.9,
+      "query_top10_cold_ms": 40,
+      "container_mem_peak": "1.343 GiB / 2 GiB"
+    },
+    "extrapolated_6624399_songs": {
+      "k10": {"relationships": 66243990, "store_gb": 5.7, "load_csv_import": "약 1시간 52분"},
+      "k30": {"relationships": 198731970, "store_gb": 15.2, "load_csv_import": "약 5시간 19분"}
+    },
+    "correction": "이전에 '2억 간선은 15GiB 노드에 못 올린다'고 한 것은 틀렸다. 디스크 288 GB 여유라 k=30 도 저장 자체는 여유가 크다. 실제 제약은 적재 시간과 page cache 였다.",
+    "cleanup": "테스트 데이터 전량 삭제 확인 (MATCH (n) RETURN count(n) = 0)"
+  },
+  "pgvector": {
+    "postgres_version": "PostgreSQL 17.11",
+    "pgvector_version": "0.7.0",
+    "already_installed": true,
+    "container_limit_bytes": 1073741824,
+    "container_cpus": 1,
+    "settings_at_test": {"shared_buffers": "128MB", "maintenance_work_mem": "64MB", "work_mem": "4MB", "effective_cache_size": "4GB"},
+    "test_scale": {"rows": 500000, "type": "vector(16)", "index": "hnsw (vector_l2_ops), 기본 m=16 ef_construction=64"},
+    "measured": {
+      "copy_seconds": 6,
+      "heap_mb": 67,
+      "table_total_mb": 104,
+      "hnsw_index_mb": 176,
+      "total_mb": 280,
+      "hnsw_build_seconds": 1032,
+      "query_warm_ms_per_query": 2.24,
+      "recall_at_10_mean": 0.9995,
+      "recall_at_10_median": 1.0,
+      "recall_at_10_min": 0.9,
+      "queries": 200,
+      "exact_match_queries": 199,
+      "recall_ground_truth": "retrieval.neighbors 의 numpy 정확 kNN, 같은 50만 행 부분집합 대상"
+    },
+    "extrapolated_6624399_songs": {
+      "copy_seconds": 80,
+      "table_gb": 1.4,
+      "index_gb": 2.3,
+      "total_gb": 3.7,
+      "hnsw_build": "4~6시간 (현재 설정). 선형 외삽 3.8시간이나 HNSW 는 초선형"
+    },
+    "pitfalls": [
+      {
+        "id": "subquery",
+        "severity": "correctness",
+        "summary": "질의 벡터를 서브쿼리로 넘기면 HNSW 가 틀린 결과를 낸다",
+        "evidence": "ORDER BY vec <-> (SELECT vec FROM t WHERE mbid=X) 는 실행계획에서 InitPlan 으로 들어가는데, 자기 자신(거리 0)이 1위에 나오지 않고 거리 23.3 짜리가 1위로 나왔다. 같은 벡터를 리터럴로 넘기면 정답 1·2·3위(3.4744 / 3.5968 / 3.7205)가 정확히 나온다.",
+        "fix": "좌표를 먼저 읽어 리터럴 또는 바인드 파라미터로 넘긴다"
+      },
+      {
+        "id": "filtered_underfetch",
+        "severity": "correctness",
+        "summary": "0.7.0 은 iterative index scan 이 없어 선택도 높은 WHERE 를 걸면 LIMIT 보다 적게 반환한다",
+        "fix": "부분 인덱스, hnsw.ef_search 상향, 또는 0.8.0 이상으로 버전 상향"
+      }
+    ],
+    "cleanup": "DROP TABLE pgv_test 확인. DB 크기 7,998 kB 로 원복."
+  },
+  "decision": {
+    "chosen": "pgvector",
+    "reasons": [
+      "이미 설치돼 있어 운영 대상이 늘지 않는다 (pgvector 0.7.0)",
+      "사용자·플레이리스트와 같은 DB 라 조인·트랜잭션이 하나이고 별도 동기화 잡이 없다",
+      "재현율이 기존 k-means 그래프보다 높다 (0.9995 대 0.912)"
+    ],
+    "not_reasons": ["속도. numpy 1.8 ms 가 여전히 가장 빠르다"],
+    "neo4j_rejected_because": "이웃 조회가 cold 40 ms 로 오히려 느리고, 강점인 다중 홉 탐색을 우리 여정(좌표 보간)이 쓰지 않는다",
+    "blocking": "Postgres 컨테이너 자원 상향. 현재 1 GB / maintenance_work_mem 64 MB / CPU 1 로는 662만 행 인덱스 빌드가 반나절이다."
+  },
+  "source": "Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17"
+}

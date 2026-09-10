@@ -25,7 +25,7 @@
 
 | 기능 | 백엔드 | 프론트 |
 | --- | --- | --- |
-| AUTH-01/02 로그인 (Google OAuth2 + JWT) | ✅ `AuthController` — `POST /api/auth/exchange`, `/reissue`, `/logout`, `/withdraw`. refresh 는 httpOnly 쿠키 | ✅ `/oauth/redirect` → exchange → 토큰 저장 |
+| AUTH-01/02 로그인 (구글 idToken + JWT) | ✅ `POST /api/auth/login/google` — GIS idToken 검증, `{accessToken, user}` 반환 (본안, 배포됨). `/exchange` `/reissue` `/logout` `/withdraw` 도 있음. refresh 는 httpOnly 쿠키 | ✅ 구글이 렌더한 버튼 → idToken → `/api/auth/login/google` → 토큰 저장 (S15P21A405-129). 리다이렉트 방식 착지 페이지는 제거 |
 | AUTH-01/02 이메일·비밀번호 가입·로그인 | ✅ `POST /api/auth/signup`(email·password·nickname) · `/api/auth/login` (backend/dev, S15P21A405-121) | ✅ `/login` `/signup` 화면 · 목 라우트도 같은 계약 |
 | AUTH-01 닉네임 중복 확인 | ✅ `GET /api/users/nickname-available` | ✅ 가입·닉네임 화면에서 입력 중 확인 |
 | AUTH-01 구글 신규 사용자 닉네임 저장 | ⬜ 엔드포인트 없음 (신규 사용자 nickname 을 비워둔 채 insert) — BACKEND-NOTES A-13 | 🟡 `/nickname` 화면 + 목 라우트 |

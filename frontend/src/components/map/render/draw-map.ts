@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, STAR_SIZE, STAR_VIEW } from "@/constants";
 import { FONTS, GENRE_COLORS, MAP_COLORS, NEBULA_WASH, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -516,6 +516,26 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   }
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
   const elsewhere = e.playingElsewhere();
+  // 날아오는 중이면 지나온 자리에 꼬리를 남긴다 (친구 우주선처럼)
+  const fl = e.meFlight;
+  if (fl) {
+    const from = e.worldToScreen(fl.ax, fl.ay);
+    const tx = px - from.px;
+    const ty = py - from.py;
+    const td = Math.hypot(tx, ty) || 1;
+    const len = td * ME_FLIGHT.trail;
+    const grad = g.createLinearGradient(px - (tx / td) * len, py - (ty / td) * len, px, py);
+    grad.addColorStop(0, "rgba(79,227,206,0)");
+    grad.addColorStop(1, "rgba(79,227,206,.75)");
+    g.globalCompositeOperation = "lighter";
+    g.strokeStyle = grad;
+    g.lineWidth = 2.2;
+    g.beginPath();
+    g.moveTo(px - (tx / td) * len, py - (ty / td) * len);
+    g.lineTo(px, py);
+    g.stroke();
+    g.globalCompositeOperation = "source-over";
+  }
   drawMeMarker(g, px, py, e.time);
   g.globalCompositeOperation = "source-over";
   g.textAlign = "center";

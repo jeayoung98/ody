@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, ME_FLIGHT, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -117,6 +117,11 @@ export class MapEngine {
   /** 내 위치 (월드, 현재 레이어). 재생 시 곡 쪽으로 이동한다 */
   me = { x: 0, y: 0 };
   private travelToId: number | null = null;
+  /**
+   * '나'의 비행 (MAP-08). 재생을 누르면 있던 자리에서 그 곡으로 곡선을 타고 날아간다.
+   * a = 출발, b = 도착, c = 곡선 제어점, t0 = 시작 시각
+   */
+  meFlight: { ax: number; ay: number; bx: number; by: number; cx: number; cy: number; t0: number } | null = null;
   /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
   playingId: number | null = null;
 
@@ -946,6 +951,22 @@ export class MapEngine {
       return;
     }
     this.travelToId = id;
+    // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
+    const to = this.worldOf(id)!;
+    const dx = to.x - this.me.x;
+    const dy = to.y - this.me.y;
+    const d = Math.hypot(dx, dy);
+    this.meFlight = {
+      ax: this.me.x,
+      ay: this.me.y,
+      bx: to.x,
+      by: to.y,
+      // 진행 방향의 수직으로 부풀린 제어점 (id 로 방향을 갈라 매번 같은 쪽으로 휘지 않게)
+      cx: (this.me.x + to.x) / 2 - dy * ME_FLIGHT.bow * (id % 2 ? 1 : -1),
+      cy: (this.me.y + to.y) / 2 + dx * ME_FLIGHT.bow * (id % 2 ? 1 : -1),
+      t0: performance.now(),
+    };
+    if (d < 1e-6) this.meFlight = null;
     // 별자리 뷰가 떠 있는 동안에는 카메라를 건드리지 않는다 (닫으면 원래 자리로 돌아가야 하므로)
     if (!this.follow && !this.constellationActive()) this.focus(id);
   }
@@ -1170,18 +1191,29 @@ export class MapEngine {
         }
         this.project();
       }
-      // 내 위치가 재생 곡 쪽으로 이동
+      // '나'의 비행 — 재생한 곡까지 곡선을 타고 간다
       if (this.travelToId != null && !this.follow) {
         const w = this.worldOf(this.travelToId);
-        if (!w || !this.isAlive(this.travelToId)) this.travelToId = null;
-        else {
-          this.me.x = lerp(this.me.x, w.x, 0.08);
-          this.me.y = lerp(this.me.y, w.y, 0.08);
-          if (Math.hypot(this.me.x - w.x, this.me.y - w.y) * this.cam.s < 0.5) {
-            this.me = { ...w };
+        if (!w || !this.isAlive(this.travelToId)) {
+          this.travelToId = null;
+          this.meFlight = null;
+        } else if (this.meFlight) {
+          const fl = this.meFlight;
+          const t = Math.min(1, (now - fl.t0) / ME_FLIGHT.ms);
+          const e2 = easeInOut(t);
+          const q = 1 - e2;
+          this.me.x = q * q * fl.ax + 2 * q * e2 * fl.cx + e2 * e2 * fl.bx;
+          this.me.y = q * q * fl.ay + 2 * q * e2 * fl.cy + e2 * e2 * fl.by;
+          if (t >= 1) {
+            this.me = { x: fl.bx, y: fl.by };
             this.myId = this.travelToId;
             this.travelToId = null;
+            this.meFlight = null;
           }
+        } else {
+          this.me = { ...w };
+          this.myId = this.travelToId;
+          this.travelToId = null;
         }
       }
       this.stepFollow(now);

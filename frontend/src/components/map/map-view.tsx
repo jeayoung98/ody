@@ -207,6 +207,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
       }
       selectMusic(id);
       openSong(id);
+      // 누른 별로 뷰만 옮긴다 — '나'는 재생할 때만 움직인다 (MAP-08)
+      if (useMapStore.getState().viewMode === "default") engine.focus(id);
       useTutorialStore.getState().complete("select");
     },
     [engine, openFeed, openSong, selectMusic],

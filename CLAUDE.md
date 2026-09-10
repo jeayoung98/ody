@@ -1,3 +1,5 @@
+@AGENTS.md
+
 # ODY — 저장소 공통 가이드라인
 
 이 파일은 **저장소 전체에 적용되는 규칙**이다. Claude Code, Codex 등 어떤 에이전트로 작업하든
@@ -5,14 +7,17 @@
 
 | 범위 | 문서 |
 | --- | --- |
-| 저장소 전체 (이 파일) | 브랜치·소유권·기능 명세 동기화 |
+| 저장소 전체 (이 파일) | 파트 소유권 · 기능 명세 동기화 · 계약 |
+| **Jira-first 워크플로우 (이슈·브랜치·커밋 강제)** | [.claude/rules/jira-workflow.md](.claude/rules/jira-workflow.md) |
+| 강제 훅 | [.claude/hooks/](.claude/hooks/) · 설정값 [.claude/jira-config.json](.claude/jira-config.json) |
 | **팀 공통 규칙·명세 모음** | [docs/rules/](docs/rules/) |
-| Git 컨벤션 (커밋·브랜치·MR) | [docs/rules/CONVENTIONS.md](docs/rules/CONVENTIONS.md) |
+| Git 컨벤션 (커밋 메시지 형식) | [docs/rules/CONVENTIONS.md](docs/rules/CONVENTIONS.md) |
 | 기능 명세 (기준 문서) | [docs/rules/FEATURES.md](docs/rules/FEATURES.md) |
 | ERD·API 협의 항목 | [docs/rules/BACKEND-NOTES.md](docs/rules/BACKEND-NOTES.md) |
 | Frontend 코드 규칙 | [frontend/CLAUDE.md](frontend/CLAUDE.md) |
 | Backend | [backend/README.md](backend/README.md) |
 | Infra | [AGENTS.md](AGENTS.md), [docs/infra/](docs/infra/) |
+| `data/` 안 작업 | `data/AGENTS.md` |
 
 ---
 
@@ -46,27 +51,31 @@
 
 ---
 
-## 2. 브랜치
+## 2. 브랜치 — Jira 이슈 없이 코드를 고치지 않는다
 
-전략과 네이밍은 [docs/rules/CONVENTIONS.md §3, §4](docs/rules/CONVENTIONS.md) 가 기준이다.
-요약하면:
+**절차의 기준은 [.claude/rules/jira-workflow.md](.claude/rules/jira-workflow.md) 다.** 이슈 검색·생성, 브랜치 생성,
+"진행 중" 전환, 커밋·MR에 Key 넣기까지 그 문서를 따른다. `.claude/hooks/` 가 이를 강제하며 **훅을 우회하지 않는다.**
+커밋 메시지 형식(`type: subject`, 소문자 type, 50자)은 [docs/rules/CONVENTIONS.md §1](docs/rules/CONVENTIONS.md) 이 기준이다.
 
 ```
 master
 ├─ frontend  └─ frontend/<type>/<issue-key>-<description>
 ├─ backend   └─ backend/<type>/<issue-key>-<description>
-├─ ai        └─ ai/<type>/<issue-key>-<description>
+├─ data      └─ data/<type>/<issue-key>-<description>
 ├─ infra     └─ infra/<type>/<issue-key>-<description>
 └─ docs      └─ common/docs/<issue-key>-<description>
 ```
 
 **커밋·브랜치 생성·push·MR 작성 전에 매번 확인한다.**
 
-- 현재 브랜치가 `master` 또는 파트 통합 브랜치(`frontend` `backend` `ai` `infra` `docs`)면
-  **직접 커밋·push 금지.** 작업 브랜치를 먼저 만든다.
-- 작업 브랜치에는 Jira Issue Key(`S15P21A405-<번호>`)가 필수다. 번호를 모르면 사용자에게 묻는다.
-- 커밋 type 은 소문자, `type: subject` 형식.
+- 현재 브랜치가 `master` 또는 파트 통합 브랜치면 **직접 커밋·push 금지.** 작업 브랜치를 먼저 만든다.
+- 작업 브랜치에는 Jira Issue Key(`S15P21A405-<번호>`)가 필수다. 브랜치는
+  `bash .claude/hooks/new-branch.sh <part> <type> <KEY> <desc>` 로 만든다.
+- 커밋 메시지에도 Key 를 넣는다: `feat: 주변 사용자 조회 API 구현 [S15P21A405-57]`
 - 하나의 브랜치·MR = 하나의 이슈. 관련 없는 작업을 섞지 않는다.
+- Jira 접근은 JAM MCP(`jira_search` / `jira_context` / `jira_full` / `jira_write_*`)만 쓴다. Issue Key 를 지어내지 않는다.
+- 이슈가 필요 없는 요청: 코드 설명·읽기·구조 분석·질문 답변·`git status/log/diff/fetch`,
+  그리고 `.claude/` · `.mcp.json` · `CLAUDE.md` 수정.
 
 ---
 

@@ -17,7 +17,7 @@
 ### 코호트 판정은 네 문자열 일치다
 census 에 `fingerprint` 컬럼이 있는 것이 아니다. `essentia`, `essentia_git_sha`,
 `essentia_build_sha`, `extractor` **네 값이 모두** 정의와 같을 때 그 지문으로 본다.
-정의는 `output/version_census_fingerprints.csv` 이고 코호트 목록은
+정의는 `pipeline/version_census_fingerprints.csv` 이고 코호트 목록은
 `pipeline/v2_cohort_decision.json` 의 `cohort_fingerprints` 다(`CONFIRMED_BY_GATE_V2`).
 
 ### `is_fit_sample` 은 내지 않는다
@@ -43,7 +43,7 @@ FP_KEY_COLUMNS = ("essentia", "essentia_git_sha", "essentia_build_sha", "extract
 OUTPUT_COLUMNS = ["mbid", "part", "offset", "fingerprint", "lossless", "sample_rate"]
 
 ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-FINGERPRINT_CSV = os.path.join(ROOT, "output", "version_census_fingerprints.csv")
+FINGERPRINT_CSV = os.path.join(ROOT, "pipeline", "version_census_fingerprints.csv")
 COHORT_DECISION = os.path.join(ROOT, "pipeline", "v2_cohort_decision.json")
 
 

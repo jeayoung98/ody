@@ -69,7 +69,7 @@ census 에 `fingerprint` 컬럼이 **없다.** `essentia`, `essentia_git_sha`, `
 
 | 무엇 | 어디 |
 |---|---|
-지문 정의 (네 문자열) | `output/version_census_fingerprints.csv` |
+지문 정의 (네 문자열) | `pipeline/version_census_fingerprints.csv` |
 코호트 목록 | `pipeline/v2_cohort_decision.json` 의 `cohort_fingerprints` |
 코호트 근거 | `CONFIRMED_BY_GATE_V2` |
 

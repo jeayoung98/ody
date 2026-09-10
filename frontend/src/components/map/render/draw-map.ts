@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, STAR_SIZE } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, STAR_SIZE } from "@/constants";
 import { FONTS, GENRE_COLORS, MAP_COLORS, NEBULA_WASH, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -205,47 +205,14 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   }
   g.globalAlpha = 1;
 }
-
 /**
- * 별자리 뷰 (PATH-01) — 여정·플레이리스트 곡을 최적 레이어로 재투영해 화면에 크게 맞춘 연출 뷰.
- * 위치는 엔진 constellationPos (실제 위치 → 배치 위치로 보간). 배경은 어둡게 덮고 곡·선만 밝게.
+ * 별자리 오버레이 뷰 (PATH-01) — 임시 뷰다. 화면을 어둡게 덮고 곡들을 고정 배치로 모아 선으로 잇는다.
+ * 위치는 엔진 constellationPos (실제 위치 → 배치 위치로 보간)라 켜고 끌 때 날아가 모이고 흩어진다.
+ * 배치는 백엔드가 16차원을 2D로 압축해 준 값이라 **레이어가 달라도 모양이 같다.**
+ *
+ * 재생 진행을 투명도로 보인다: 지금 듣는 곡만 또렷하고, 이미 지나온 곡은 옅게,
+ * 아직 안 들은 곡은 더 옅게. 지금 듣는 곡 위에는 내 위치 다이아몬드가 놓인다.
  */
-/**
- * 흐린 별자리 — 재생 중이던 별자리를 지우지 않고 옅은 선과 점으로만 남긴다 (PATH-01).
- * 배경을 덮지도, 라벨을 붙이지도 않는다. 위에 또렷한 별자리가 얹힌다.
- */
-function drawGhostConstellation(g: CanvasRenderingContext2D, e: MapEngine) {
-  if (!e.ghost) return;
-  const k = e.ghostK() * CONSTELLATION.ghostAlpha;
-  if (k < 0.01) return;
-  const pts: { x: number; y: number }[] = [];
-  for (const id of e.ghost.ids) {
-    const p = e.ghostPos(id);
-    if (p) pts.push(p);
-  }
-  if (pts.length < 2) return;
-
-  g.globalCompositeOperation = "lighter";
-  g.globalAlpha = k;
-  g.strokeStyle = MAP_COLORS.routeStops[1];
-  g.lineWidth = 1.5;
-  g.lineJoin = "round";
-  g.lineCap = "round";
-  g.setLineDash([5, 6]);
-  g.beginPath();
-  pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
-  g.stroke();
-  g.setLineDash([]);
-  g.fillStyle = MAP_COLORS.routeStops[1];
-  for (const p of pts) {
-    g.beginPath();
-    g.arc(p.x, p.y, 2.2, 0, 6.284);
-    g.fill();
-  }
-  g.globalAlpha = 1;
-  g.globalCompositeOperation = "source-over";
-}
-
 function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
   const c = e.constellation;
   if (!c) return;
@@ -259,36 +226,42 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
   }
   if (pts.length < 2) return;
 
+  // 현재 곡까지가 "들은 곡". 재생 중이 아니면(-1) 전부 아직 안 들은 곡이다
+  const cursor = currentMusicId == null ? -1 : c.ids.indexOf(currentMusicId);
+  const progressOf = (i: number) => (cursor < 0 || i > cursor ? "unplayed" : i === cursor ? "current" : "played");
+  const alphaOf = (i: number) => CONSTELLATION.alpha[progressOf(i)];
+
   // 배경 어둡게
   g.globalCompositeOperation = "source-over";
-  g.fillStyle = `rgba(4,6,13,${CONSTELLATION.dim * k})`;
+  g.fillStyle = `rgba(4,6,13,${(CONSTELLATION.dim * k).toFixed(3)})`;
   g.fillRect(0, 0, e.W, e.H);
 
-  // 경로선 (청록→파랑→보라)
+  // 경로선 — 지나온 구간은 또렷하고, 앞으로 갈 구간은 옅다
   g.globalCompositeOperation = "lighter";
-  g.globalAlpha = k;
-  const gr = g.createLinearGradient(pts[0].x, pts[0].y, pts[pts.length - 1].x, pts[pts.length - 1].y);
-  gr.addColorStop(0, MAP_COLORS.routeStops[0]);
-  gr.addColorStop(0.5, MAP_COLORS.routeStops[1]);
-  gr.addColorStop(1, MAP_COLORS.routeStops[2]);
-  g.strokeStyle = gr;
   g.lineWidth = 2.4;
   g.lineJoin = "round";
   g.lineCap = "round";
-  g.beginPath();
-  pts.forEach((p, i) => (i ? g.lineTo(p.x, p.y) : g.moveTo(p.x, p.y)));
-  g.stroke();
+  for (let i = 1; i < pts.length; i++) {
+    const passed = cursor >= 0 && i <= cursor;
+    g.globalAlpha = k * (passed ? 0.85 : 0.28);
+    g.strokeStyle = MAP_COLORS.routeStops[passed ? 0 : 1];
+    g.beginPath();
+    g.moveTo(pts[i - 1].x, pts[i - 1].y);
+    g.lineTo(pts[i].x, pts[i].y);
+    g.stroke();
+  }
 
   // 곡 별 (글로우) + 정거장 원
-  for (const p of pts) {
-    const s = e.songs.find((x) => x.musicId === p.id)!;
-    const cur = p.id === currentMusicId;
+  pts.forEach((p, i) => {
+    const s = e.songs[e.songs.findIndex((x) => x.musicId === p.id)];
+    const a = alphaOf(i);
+    const cur = progressOf(i) === "current";
     const d = cur ? 34 : 24;
     g.globalCompositeOperation = "lighter";
-    g.globalAlpha = k * (s.playable ? 1 : 0.55);
+    g.globalAlpha = k * a * (s.playable ? 1 : 0.55);
     g.drawImage(spr[s.genreId % GENRE_COLORS.length], p.x - d / 2, p.y - d / 2, d, d);
     g.globalCompositeOperation = "source-over";
-    g.globalAlpha = k;
+    g.globalAlpha = k * a;
     g.beginPath();
     g.arc(p.x, p.y, cur ? 6.5 : 4.6, 0, 6.284);
     g.fillStyle = MAP_COLORS.stationFill;
@@ -297,32 +270,39 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     g.strokeStyle = cur ? MAP_COLORS.stationCurrent : MAP_COLORS.stationStroke;
     g.stroke();
     if (e.hoverId === p.id || e.selectedId === p.id) {
+      g.globalAlpha = k;
       g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
       g.lineWidth = 1.4;
       g.beginPath();
       g.arc(p.x, p.y, 13, 0, 6.284);
       g.stroke();
     }
-  }
+  });
 
   // 라벨: 순번 · 제목
   g.textAlign = "center";
   g.textBaseline = "middle";
   pts.forEach((p, i) => {
-    const s = e.songs.find((x) => x.musicId === p.id)!;
-    g.globalAlpha = k;
+    const s = e.songs[e.songs.findIndex((x) => x.musicId === p.id)];
+    g.globalAlpha = k * alphaOf(i);
     g.font = `500 10.5px ${FONTS.body}`;
     const title = fitText(g, s.title, 120);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
     roundRect(g, p.x - tw / 2 - 6, p.y + 12, tw + 12, 17, 5);
     g.fill();
-    g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, p.x, p.y + 20.5);
-    g.font = `500 8.5px ${FONTS.mono}`;
-    g.fillStyle = p.id === currentMusicId ? "rgba(79,227,206,.95)" : "rgba(147,164,196,.7)";
-    g.fillText(`${String(i + 1).padStart(2, "0")}${s.artist ? ` · ${s.artist}` : ""}`, p.x, p.y + 33);
+    g.fillStyle = "rgba(233,241,255,.9)";
+    g.fillText(title, p.x, p.y + 21);
+    g.font = `600 9px ${FONTS.mono}`;
+    g.fillStyle = "rgba(147,164,196,.8)";
+    g.fillText(String(i + 1), p.x, p.y - 15);
   });
+
+  // 지금 듣는 곡 위에 내 위치 다이아몬드
+  if (cursor >= 0) {
+    g.globalAlpha = k;
+    drawMeMarker(g, pts[cursor].x, pts[cursor].y, e.time);
+  }
   g.globalAlpha = 1;
 }
 
@@ -446,11 +426,12 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalAlpha = 1;
 }
 
-/** 내 좌표 (탑승 중에는 선미의 '나' 헬멧이 대신한다) */
-function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
-  if (e.follow || e.myId == null) return;
-  const { px, py } = e.worldToScreen(e.me.x, e.me.y);
-  const rr = 13 + Math.sin(e.time * 1.6) * 2.6;
+/**
+ * 내 위치 표식 — 맥동하는 두 겹 링 + 다이아몬드.
+ * 지도의 "나"와 별자리 뷰의 "지금 듣는 곡" 둘 다 이걸 쓴다 (PATH-01).
+ */
+function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: number) {
+  const rr = 13 + Math.sin(t * 1.6) * 2.6;
   g.save();
   g.translate(px, py);
   g.globalCompositeOperation = "lighter";
@@ -467,12 +448,78 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fillStyle = MAP_COLORS.me;
   g.fillRect(-4, -4, 8, 8);
   g.restore();
+}
+
+/**
+ * 내 좌표 (MAP-08). 탑승 중에는 선미의 '나' 헬멧이, 별자리 뷰에서는 대형 안 현재 곡의 표식이 대신한다.
+ * 재생 곡이 이 겹 밖이면 자리는 그대로 두고 라벨로 그 사실을 알린다.
+ */
+function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
+  if (e.follow || e.myId == null || e.constellationActive()) return;
+  const { px, py } = e.worldToScreen(e.me.x, e.me.y);
+  const elsewhere = e.playingElsewhere();
+  drawMeMarker(g, px, py, e.time);
   g.globalCompositeOperation = "source-over";
-  g.fillStyle = "rgba(79,227,206,.95)";
-  g.font = `600 10px ${FONTS.mono}`;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.fillText("나", px, py + 24);
+  if (elsewhere) {
+    // 지금 듣는 곡이 이 겹에 없다 — 여기가 내 자리이고, 그 곡은 다른 갈래에 있다
+    g.font = `600 9.5px ${FONTS.mono}`;
+    const label = "다른 갈래에서 재생 중";
+    const tw = g.measureText(label).width;
+    g.fillStyle = MAP_COLORS.labelBg;
+    roundRect(g, px - tw / 2 - 6, py + 16, tw + 12, 16, 5);
+    g.fill();
+    g.fillStyle = "rgba(166,124,255,.95)";
+    g.fillText(label, px, py + 24);
+  } else {
+    g.fillStyle = "rgba(79,227,206,.95)";
+    g.font = `600 10px ${FONTS.mono}`;
+    g.fillText("나", px, py + 24);
+  }
+}
+
+/**
+ * 고스트별 (MAP-12) — 이 겹에 없는 곡을 "범위 밖에 있다"고 치고 그린다.
+ * 실제 별과 헷갈리지 않게 점선 링에 옅은 색, 곁에 "다른 갈래에 있는 곡" 라벨을 단다.
+ */
+function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
+  const p = e.ghostPos();
+  if (!p || !e.ghost) return;
+  const i = e.songs.findIndex((x) => x.musicId === e.ghost!.musicId);
+  if (i < 0) return;
+  const s = e.songs[i];
+  const k = e.ghostK() * GHOST.alpha;
+  const rr = 15 + Math.sin(e.time * 1.4) * 2;
+
+  g.globalCompositeOperation = "lighter";
+  g.globalAlpha = k;
+  g.drawImage(glowSprites()[s.genreId % GENRE_COLORS.length], p.x - 26, p.y - 26, 52, 52);
+
+  g.globalCompositeOperation = "source-over";
+  g.globalAlpha = k * 1.6;
+  g.setLineDash([4, 5]);
+  g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+  g.lineWidth = 1.3;
+  g.beginPath();
+  g.arc(p.x, p.y, rr, 0, 6.284);
+  g.stroke();
+  g.setLineDash([]);
+
+  g.globalAlpha = 1;
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = `500 10.5px ${FONTS.body}`;
+  const title = fitText(g, s.title, 130);
+  const tw = g.measureText(title).width;
+  g.fillStyle = MAP_COLORS.labelBg;
+  roundRect(g, p.x - tw / 2 - 7, p.y + rr + 5, tw + 14, 18, 6);
+  g.fill();
+  g.fillStyle = "rgba(233,241,255,.9)";
+  g.fillText(title, p.x, p.y + rr + 14);
+  g.font = `600 9px ${FONTS.mono}`;
+  g.fillStyle = "rgba(147,164,196,.75)";
+  g.fillText("다른 갈래에 있는 곡", p.x, p.y + rr + 30);
 }
 
 /** 선택 곡 강조 링 */
@@ -569,11 +616,13 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawNebula(g, e);
   drawStars(g, e);
   drawCovers(g, e);
-  drawGhostConstellation(g, e);
+
+  // 사람들은 오버레이보다 **뒤**에 — 별자리·주변 탐색이 켜지면 함께 어두워진다
+  drawFriends(g, e);
   drawConstellation(g, e, currentMusicId);
   drawProbe(g, e);
   drawSelected(g, e);
-  drawFriends(g, e);
+  drawGhost(g, e);
   drawMe(g, e);
   drawPressure(g, e);
   drawHover(g, e);

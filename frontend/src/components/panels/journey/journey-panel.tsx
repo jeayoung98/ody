@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import Box from "@/components/common/box";
 import Loading from "@/components/common/loading";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
@@ -15,19 +15,19 @@ import JourneySummary from "./journey-summary";
 /**
  * 여정 패널 (JOURNEY-01, PATH-01/02) — **결과를 보여주는 화면**이다.
  * 지점을 고치거나 경로를 만드는 일은 상단 확장 검색창에서만 한다.
- * 경로가 생기면 재생하지 않아도 지도에 별자리로 미리 뜬다 (다른 별자리를 재생 중이면 그쪽은 흐려진다).
+ * 경로가 도착하면 **곧바로 별자리 뷰가 켜진다.** 이후에는 좌상단 `별자리 뷰` 택으로 껐다 켠다 (PATH-01).
  */
 export default function JourneyPanel() {
   const startMusicId = useJourneyStore((s) => s.startMusicId);
   const endMusicId = useJourneyStore((s) => s.endMusicId);
   const isRouteRequested = useJourneyStore((s) => s.isRouteRequested);
   const route = useJourneyRouteQuery(startMusicId, endMusicId, isRouteRequested);
-  const previewConstellation = useMapStore((s) => s.previewConstellation);
+  const showConstellation = useMapStore((s) => s.showConstellation);
 
-  const stopIds = useMemo(() => route.data?.stops.map((s) => s.id) ?? [], [route.data]);
+  const stops = route.data?.stops;
   useEffect(() => {
-    if (isRouteRequested && stopIds.length >= 2) previewConstellation(stopIds);
-  }, [isRouteRequested, stopIds, previewConstellation]);
+    if (stops && stops.length >= 2) showConstellation(stops.map((s) => s.id));
+  }, [stops, showConstellation]);
 
   const hasRoute = isRouteRequested && !!route.data;
 

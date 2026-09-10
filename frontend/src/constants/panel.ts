@@ -3,8 +3,8 @@ export const PANEL_TYPES = ["song", "playlist", "feed", "journey", "friends", "c
 export type PanelType = (typeof PANEL_TYPES)[number];
 
 /** 맵 뷰 모드 */
-/** 맵 뷰 모드. 별자리는 뷰 모드가 아니라 독립 오버레이(스토어 constellation*) */
-export const MAP_VIEW_MODES = ["default", "nearby"] as const;
+/** 맵 뷰 모드. 셋은 배타다 — 기본 / 주변 탐색 / 별자리 (PATH-01-1) */
+export const MAP_VIEW_MODES = ["default", "nearby", "constellation"] as const;
 export type MapViewMode = (typeof MAP_VIEW_MODES)[number];
 
 /** 네비바 항목 (순서대로 표시) */

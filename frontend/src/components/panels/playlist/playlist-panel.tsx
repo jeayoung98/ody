@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect } from "react";
 import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
@@ -15,22 +15,20 @@ import PlaylistTrackList from "./playlist-track-list";
 
 /**
  * 플레이리스트 상세 (PATH-06).
- * 재생하지 않아도 열기만 하면 곡들이 별자리로 뜬다 — 다른 별자리를 재생 중이면 그쪽은 흐려진다 (PATH-01).
+ * 패널을 열면 좌상단에 `별자리 뷰` 택이 생기고, 그 택으로 모양을 펼쳐 본다 (PATH-01).
  */
 export default function PlaylistPanel() {
   const playlistId = usePanelStore((s) => s.playlistId);
   const { data, isPending, isError } = usePlaylistDetailQuery(playlistId);
   const { data: me } = useMeQuery();
   const isMine = !!data && !!me && data.email === me.email;
-  const previewConstellation = useMapStore((s) => s.previewConstellation);
-  const clearPreview = useMapStore((s) => s.clearPreview);
+  const setConstellationList = useMapStore((s) => s.setConstellationList);
 
-  const musicIds = useMemo(() => data?.items.map((it) => it.musicId) ?? [], [data]);
+  // 뷰를 켜지는 않고 목록만 걸어둔다 — 켜는 건 사용자가 택을 눌렀을 때
+  const items = data?.items;
   useEffect(() => {
-    if (musicIds.length >= 2) previewConstellation(musicIds);
-  }, [musicIds, previewConstellation]);
-  // 패널을 닫으면 미리보기도 걷힌다 (재생 중이던 별자리는 그대로 남는다)
-  useEffect(() => clearPreview, [clearPreview]);
+    if (items && items.length >= 2) setConstellationList(items.map((it) => it.musicId));
+  }, [items, setConstellationList]);
 
   return (
     <Box title="플레이리스트" code="PATH-06" actions={<PanelCloseButton />}>

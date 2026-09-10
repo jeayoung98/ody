@@ -6,7 +6,6 @@ import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
 const EMPTY_IDS: number[] = [];
-const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 
 /** 엔진이 프레임마다 밀어 넣는 읽기 전용 스냅샷 (HUD 표시용) */
 export interface EngineSnapshot {
@@ -31,6 +30,10 @@ export interface EngineSnapshot {
   morph: { big: string; sub: string } | null;
   /** 내 곡 = 내 위치. 파고들 때 구멍 밖이면 엔진이 바꿀 수 있다 */
   myMusicId: number | null;
+  /** 고스트별로 띄운 곡 (MAP-12). 없으면 null */
+  ghostMusicId: number | null;
+  /** 재생 중인 곡이 이 겹 밖인가 (MAP-08) */
+  playingElsewhere: boolean;
 }
 
 interface MapState extends EngineSnapshot {
@@ -38,36 +41,32 @@ interface MapState extends EngineSnapshot {
   selectedMusicId: number | null;
   /** 주변 탐색 모드의 기준 곡 */
   nearbyCenterMusicId: number | null;
-  /** **재생 중인** 활동(여정/플리)의 별자리. 비어 있으면 재생 중인 별자리 없음 */
-  constellationMusicIds: number[];
   /**
-   * **미리보기** 별자리 — 재생하지 않고 패널로 열어만 본 목록 (PATH-01).
-   * 이게 있으면 이쪽이 또렷하게 그려지고, 재생 중인 별자리는 흐린 선으로 남는다.
+   * 지금 별자리로 볼 수 있는 곡 목록 (여정/플리 순서). **뷰가 꺼져 있어도 남아 있다** —
+   * 좌상단 `별자리 뷰` 택이 이 목록이 있을 때 뜨고, 그 택으로 뷰를 껐다 켠다 (PATH-01).
    */
-  previewMusicIds: number[];
-  /** 별자리 보기/숨기기 */
-  constellationVisible: boolean;
+  constellationMusicIds: number[];
 
   setViewMode: (mode: MapViewMode) => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
   enterNearby: (musicId: number) => void;
   exitNearby: () => void;
+  /** 목록을 넣고 별자리 뷰를 바로 켠다. 주변 탐색이 켜져 있으면 닫힌다 (PATH-01-1) */
   showConstellation: (musicIds: number[]) => void;
+  /** 목록만 갈아끼운다 (뷰는 건드리지 않음) — 패널을 열었을 때 택만 뜨게 */
+  setConstellationList: (musicIds: number[]) => void;
+  /** 좌상단 택 — 별자리 뷰를 껐다 켰다 */
+  toggleConstellationView: () => void;
+  /** 목록까지 비운다 (경로 지우기) */
   clearConstellation: () => void;
-  /** 재생하지 않고 목록만 열어봤을 때 (패널을 열면 호출) */
-  previewConstellation: (musicIds: number[]) => void;
-  clearPreview: () => void;
-  toggleConstellationVisible: () => void;
-  /** 카메라를 별자리에 맞추기 */
-  fitConstellation: () => void;
-  /** 별자리가 보이는 동안 보기 전용 레이어 전환 */
-  jumpLayer: (layer: number) => void;
   /**
-   * 곡 하나에 포커스 — 그 곡으로 확대하며 들어간다 (선택도 함께).
-   * targetLayer 를 주면 그 레이어로 전환한 뒤 확대한다 (그 곡이 대표곡인 첫 레이어, SEARCH-01)
+   * 검색 결과를 골랐을 때 (SEARCH-01).
+   * 이 겹에 있으면 그 곡으로 확대하고, 없으면 고스트별로 띄운다 (MAP-12) — 레이어를 자동으로 옮기지 않는다.
    */
-  focusMusic: (musicId: number, targetLayer?: number | null) => void;
+  focusMusic: (musicId: number) => void;
+  /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
+  surfaceToMusic: (musicId: number) => void;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
@@ -91,13 +90,13 @@ export const useMapStore = create<MapState>()(
       pressureDir: 0,
       morph: null,
       myMusicId: null,
+      ghostMusicId: null,
+      playingElsewhere: false,
 
       viewMode: "default",
       selectedMusicId: null,
       nearbyCenterMusicId: null,
-      constellationMusicIds: [],
-      previewMusicIds: EMPTY_IDS,
-      constellationVisible: true,
+      constellationMusicIds: EMPTY_IDS,
 
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
@@ -106,30 +105,41 @@ export const useMapStore = create<MapState>()(
         getMapEngine()?.setMy(myMusicId);
       },
 
+      // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
       enterNearby: (musicId) => {
-        set({ viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId }, false, "enterNearby");
+        set(
+          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS },
+          false,
+          "enterNearby",
+        );
       },
       exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null }, false, "exitNearby"),
 
-      // 재생을 시작하면 그 목록이 "재생 중인 별자리"가 되고, 미리보기는 역할을 다한다
       showConstellation: (constellationMusicIds) =>
-        set({ constellationMusicIds, previewMusicIds: EMPTY_IDS, constellationVisible: true }, false, "showConstellation"),
-      clearConstellation: () => set({ constellationMusicIds: [] }, false, "clearConstellation"),
-
-      previewConstellation: (musicIds) =>
+        set({ viewMode: "constellation", constellationMusicIds, nearbyCenterMusicId: null }, false, "showConstellation"),
+      setConstellationList: (constellationMusicIds) => set({ constellationMusicIds }, false, "setConstellationList"),
+      toggleConstellationView: () =>
         set(
-          (s) => (s.constellationMusicIds.length >= 2 && sameIds(s.constellationMusicIds, musicIds) ? { previewMusicIds: EMPTY_IDS } : { previewMusicIds: musicIds, constellationVisible: true }),
+          (s) =>
+            s.viewMode === "constellation"
+              ? { viewMode: "default" }
+              : { viewMode: "constellation", nearbyCenterMusicId: null },
           false,
-          "previewConstellation",
+          "toggleConstellationView",
         ),
-      clearPreview: () => set({ previewMusicIds: EMPTY_IDS }, false, "clearPreview"),
-      toggleConstellationVisible: () => set((s) => ({ constellationVisible: !s.constellationVisible }), false, "toggleConstellationVisible"),
-      fitConstellation: () => getMapEngine()?.fitConstellation(),
-      jumpLayer: (layer) => getMapEngine()?.jumpLayer(layer),
+      clearConstellation: () =>
+        set((s) => ({ viewMode: s.viewMode === "constellation" ? "default" : s.viewMode, constellationMusicIds: EMPTY_IDS }), false, "clearConstellation"),
 
-      focusMusic: (musicId, targetLayer) => {
+      focusMusic: (musicId) => {
+        const engine = getMapEngine();
         set({ selectedMusicId: musicId }, false, "focusMusic");
-        getMapEngine()?.focusSong(musicId, targetLayer);
+        // 이 겹에 있으면 확대, 없으면 "범위 밖에 있다"고 치고 고스트별로 (MAP-12)
+        if (engine?.isAlive(musicId)) engine.focusSong(musicId);
+        else engine?.setGhost(musicId);
+      },
+      surfaceToMusic: (musicId) => {
+        set({ selectedMusicId: musicId }, false, "surfaceToMusic");
+        getMapEngine()?.surfaceToSong(musicId);
       },
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
@@ -140,9 +150,5 @@ export const useMapStore = create<MapState>()(
   ),
 );
 
-/** 또렷하게 그리는 별자리 = 미리보기가 있으면 미리보기, 없으면 재생 중인 것 (PATH-01) */
-export const brightConstellationIds = (s: MapState) => (s.previewMusicIds.length >= 2 ? s.previewMusicIds : s.constellationMusicIds);
-
-/** 흐리게 남기는 별자리 = 미리보기가 위에 떠 있을 때의 재생 중인 별자리 */
-export const ghostConstellationIds = (s: MapState) =>
-  s.previewMusicIds.length >= 2 && s.constellationMusicIds.length >= 2 ? s.constellationMusicIds : EMPTY_IDS;
+/** 별자리 뷰가 열려 있는가 (PATH-01) */
+export const isConstellationOpen = (s: MapState) => s.viewMode === "constellation" && s.constellationMusicIds.length >= 2;

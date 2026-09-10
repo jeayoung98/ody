@@ -41,6 +41,10 @@ export const API_ENDPOINTS = {
     like: (id: number) => `/api/playlists/${id}/like`,
   },
 
+  constellation: {
+    layout: "/api/constellations/layout",
+  },
+
   journey: {
     route: "/api/journeys/route",
   },

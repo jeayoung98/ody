@@ -1,6 +1,6 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
-import type { MapCamera, MapPoint, NearbyUser } from "@/types";
+import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -104,6 +104,8 @@ export class MapEngine {
   /** 내 위치 (월드, 현재 레이어). 재생 시 곡 쪽으로 이동한다 */
   me = { x: 0, y: 0 };
   private travelToId: number | null = null;
+  /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
+  playingId: number | null = null;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -112,10 +114,10 @@ export class MapEngine {
   probe: { centerId: number; ids: number[]; t0: number; exitingAt: number | null; back: MapCamera } | null = null;
   /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
   route: number[] = [];
-  /** 별자리 오버레이 상태. visible=false 면 페이드아웃 후 숨김 */
-  constellation: { ids: number[]; visible: boolean; t0: number; hiddenAt: number | null } | null = null;
-  /** 재생 중인 별자리를 흐리게 남겨두는 자리 — 다른 별자리를 미리 볼 때만 채워진다 (PATH-01) */
-  ghost: { ids: number[]; t0: number } | null = null;
+  /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
+  constellation: { ids: number[]; layout: ConstellationPoint[]; t0: number; exitingAt: number | null } | null = null;
+  /** 이 겹에 없는 곡을 "범위 밖에 있다"고 치고 띄우는 유령 별 (MAP-12). 검색에서만 만든다 */
+  ghost: { musicId: number; t0: number } | null = null;
 
   friends: NearbyUser[] = [];
   private friendsLayer = -1;
@@ -201,6 +203,8 @@ export class MapEngine {
   }
 
   setSelected(id: number | null) {
+    // 고스트별로 띄운 곡이 아닌 다른 곡을 고르면 고스트는 사라진다 (MAP-12)
+    if (this.ghost && id !== this.ghost.musicId) this.ghost = null;
     this.selectedId = id;
   }
 
@@ -318,150 +322,123 @@ export class MapEngine {
     return new Set([this.probe.centerId, ...this.probe.ids]);
   }
 
-  // ------------------------------------------------------------------ 별자리 오버레이 (PATH-01)
+  // ------------------------------------------------------------------ 별자리 오버레이 뷰 (PATH-01)
   /**
-   * 여정·플레이리스트 곡들을 지도 위 실제 좌표(현재 레이어 축)에 선으로 잇는 오버레이.
-   * 탐색을 잠그지 않는다. 켜질 때만 살짝 줌인하고, 이후엔 줌·이동·파고들기 자유.
-   * 보이는 동안 jumpLayer 로 레이어를 자유롭게 넘겨 모양이 바뀌는 걸 볼 수 있다.
+   * 여정·플레이리스트를 **임시 오버레이 뷰**로 연다. 주변 탐색과 같은 급이고 둘은 배타다 (PATH-01-1).
+   * 곡들이 지금 자리에서 별자리 대형으로 날아가 모이고, 닫으면 흩어져 제자리로 돌아간다.
+   * 배치는 백엔드가 16차원을 2D로 압축해 준 **고정 좌표**라 레이어와 무관하게 늘 같은 모양이다.
    */
-  setConstellation(ids: number[], visible: boolean) {
+  enterConstellation(ids: number[], layout: ConstellationPoint[]) {
     const valid = ids.filter((id) => this.index.has(id));
-    if (valid.length < 2) {
-      this.constellation = null;
-      this.route = [];
+    if (valid.length < 2) return;
+    if (this.constellation && !this.constellation.exitingAt && sameIds(this.constellation.ids, valid)) {
+      this.constellation.layout = layout;
       return;
     }
-    const isNew = !this.constellation || !sameIds(this.constellation.ids, valid);
-    if (isNew) {
-      this.constellation = { ids: valid, visible, t0: performance.now(), hiddenAt: null };
-      this.route = valid;
-      // 살짝 줌인: 별자리에 맞추되 현재 배율의 mildZoomMul 배까지만
-      if (visible && !this.follow) {
-        const fit = this.fitToSongs(valid);
-        const s = Math.min(fit.s, this.cam.s * CONSTELLATION.mildZoomMul);
-        this.camTarget = this.recenter(fit, s);
-        this.touched = true;
-      }
-      return;
-    }
-    const c = this.constellation!;
-    if (c.visible !== visible) {
-      c.visible = visible;
-      if (visible) c.t0 = performance.now();
-      else c.hiddenAt = performance.now();
-    }
+    this.constellation = { ids: valid, layout, t0: performance.now(), exitingAt: null };
+    this.route = valid;
   }
 
-  /** 별자리 페이드 (켜질 때 0→1, 숨길 때 1→0) */
+  /** 별자리 닫기 — 곡들이 실제 자리로 돌아간다. 카메라는 애초에 건드리지 않았다 */
+  exitConstellation() {
+    if (!this.constellation || this.constellation.exitingAt) return;
+    this.constellation.exitingAt = performance.now();
+    this.route = [];
+  }
+
+  /** 별자리 진행도 0~1 (진입 중 오르고, 해제 중 내려간다) */
   constellationK(now = performance.now()) {
     const c = this.constellation;
     if (!c) return 0;
-    if (!c.visible) return c.hiddenAt ? 1 - easeInOut(Math.min(1, (now - c.hiddenAt) / CONSTELLATION.exitMs)) : 0;
+    if (c.exitingAt) return 1 - easeInOut(Math.min(1, (now - c.exitingAt) / CONSTELLATION.exitMs));
     return easeInOut(Math.min(1, (now - c.t0) / CONSTELLATION.enterMs));
   }
 
   /**
-   * 별자리 곡의 화면 위치 = 현재 레이어 축의 실제 좌표 (상주 집합에 없어도 그린다).
-   * 모프 중에는 이전 레이어·카메라 위치에서 새 레이어·카메라 위치로 별들과 같은 이징으로 보간한다.
+   * 별자리 곡의 화면 위치 — 실제 위치와 배치 위치를 진행도로 보간한다.
+   * 배치 좌표는 -1~1 정규화 값이라 남은 화면 중앙에 반지름을 곱해 놓는다.
    */
   constellationPos(id: number): { x: number; y: number } | null {
-    return this.constellation ? this.starScreenPos(id) : null;
-  }
-
-  /** 흐린 별자리(재생 중인 것) 곡의 화면 좌표 */
-  ghostPos(id: number): { x: number; y: number } | null {
-    return this.ghost ? this.starScreenPos(id) : null;
-  }
-
-  /** 별자리 곡의 화면 좌표 — 상주 집합에 없어도, 모프 중이어도 계산한다 */
-  private starScreenPos(id: number): { x: number; y: number } | null {
+    const c = this.constellation;
+    if (!c) return null;
     const i = this.index.get(id);
     if (i == null) return null;
-    const s = this.songs[i];
-    const a = this.anim;
-    if (a) {
-      const e = easeInOut(Math.min(1, (performance.now() - a.t0) / DRILL.morphMs));
-      const from = this.worldToScreen(s.pc[this.layer * 2], s.pc[this.layer * 2 + 1], this.cam);
-      const to = this.worldToScreen(s.pc[a.layer * 2], s.pc[a.layer * 2 + 1], a.cam);
-      return { x: lerp(from.px, to.px, e), y: lerp(from.py, to.py, e) };
-    }
-    const { px, py } = this.worldToScreen(s.pc[this.dx()], s.pc[this.dy()]);
-    return { x: px, y: py };
+    const real = { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
+    const p = c.layout.find((q) => q.musicId === id);
+    if (!p) return real;
+    const f = this.constellationRect();
+    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * CONSTELLATION.radiusRatio;
+    const k = this.constellationK();
+    return { x: lerp(real.x, f.cx + p.x * R, k), y: lerp(real.y, f.cy - p.y * R, k) };
   }
 
   constellationIdSet(): Set<number> | null {
     return this.constellation ? new Set(this.constellation.ids) : null;
   }
 
+  // ------------------------------------------------------------------ 고스트별 (MAP-12)
   /**
-   * 흐린 별자리 지정 — 재생 중인 별자리 위로 다른 별자리를 미리 볼 때,
-   * 재생 중이던 쪽을 지우지 않고 옅은 선으로만 남긴다 (PATH-01).
+   * 이 겹에 없는 곡을 "지금 보는 범위 밖에 있다"고 치고 띄운다.
+   * 레이어는 사용자에게 확대로 보이지만 실제로는 필터라, 확대만 했는데 찾던 곡이 없으면 납득이 안 된다.
+   * 이미 이 겹에 있는 곡이면 고스트를 만들지 않는다 (그냥 확대해 보여주면 되므로).
    */
-  setGhostConstellation(ids: number[]) {
-    const valid = ids.filter((id) => this.index.has(id));
-    if (valid.length < 2) {
+  setGhost(id: number) {
+    if (!this.index.has(id) || this.isAlive(id)) {
       this.ghost = null;
       return;
     }
-    if (this.ghost && sameIds(this.ghost.ids, valid)) return;
-    this.ghost = { ids: valid, t0: performance.now() };
+    this.ghost = { musicId: id, t0: performance.now() };
   }
 
-  /** 흐린 별자리 페이드 */
-  ghostK(now = performance.now()) {
-    if (!this.ghost) return 0;
-    return easeInOut(Math.min(1, (now - this.ghost.t0) / CONSTELLATION.enterMs));
-  }
-
-  /** 카메라를 별자리에 맞춘다 (칩의 "맞추기") */
-  fitConstellation() {
-    if (!this.constellation || this.follow || this.anim) return;
-    this.camTarget = this.fitToSongs(this.constellation.ids);
-    this.touched = true;
+  clearGhost() {
+    this.ghost = null;
   }
 
   /**
-   * 보기 전용 레이어 전환 — 별자리가 보이는 동안 스테퍼로 아무 레이어든 넘긴다.
-   * 상주 집합·게이트·되돌아갈 프레임은 건드리지 않고, 좌표만 그 레이어 축으로 재투영(모프)한다.
+   * 고스트별의 화면 위치 — **레이어 0(전 우주) 좌표에서 내 곡으로부터의 방향**을 재어
+   * 화면 가장자리 안쪽에 놓는다. 실제 별들과 섞이지 않으면서 "저쪽 바깥"이 전달된다.
    */
-  jumpLayer(target: number) {
-    if (this.anim || this.follow) return;
-    if (target < 0 || target >= LAYER_COUNT || target === this.layer) return;
-    if (!this.constellation?.visible) return;
-    const ax = LAYER_AXES[target];
-    const cam = this.fitToSongsAt(this.constellation.ids, target);
-    this.morph(target, cam, this.subset, `${LAYER_NAMES[target]} 축으로 보기`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+  ghostPos(): { x: number; y: number } | null {
+    if (!this.ghost) return null;
+    const i = this.index.get(this.ghost.musicId);
+    const myI = this.myId != null ? this.index.get(this.myId) : undefined;
+    if (i == null || myI == null) return null;
+    const a = this.songs[i].pc;
+    const b = this.songs[myI].pc;
+    let dx = a[0] - b[0];
+    let dy = a[1] - b[1];
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-6) {
+      dx = 0;
+      dy = 1;
+    } else {
+      dx /= d;
+      dy /= d;
+    }
+    const f = this.freeRect();
+    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * GHOST.radiusRatio;
+    // 월드 y 는 위가 양수, 화면 y 는 아래가 양수
+    return { x: f.cx + dx * R, y: f.cy - dy * R };
   }
 
-  /** 곡들의 바운딩 박스가 남은 화면(좌하단 계기판 영역 제외)에 여백을 두고 들어오는 카메라 */
-  private fitToSongs(ids: number[]): MapCamera {
-    return this.fitToSongsAt(ids, this.layer);
+  /** 고스트별 페이드 진행도 */
+  ghostK(now = performance.now()) {
+    return this.ghost ? easeInOut(Math.min(1, (now - this.ghost.t0) / GHOST.enterMs)) : 0;
   }
 
-  private fitToSongsAt(ids: number[], layer: number): MapCamera {
-    const f = this.constellationRect();
-    const pts = ids.map((id) => {
-      const s = this.songs[this.index.get(id)!];
-      return { x: s.pc[layer * 2], y: s.pc[layer * 2 + 1] };
-    });
-    const minX = Math.min(...pts.map((p) => p.x));
-    const maxX = Math.max(...pts.map((p) => p.x));
-    const minY = Math.min(...pts.map((p) => p.y));
-    const maxY = Math.max(...pts.map((p) => p.y));
-    const spanX = Math.max(1e-4, maxX - minX);
-    const spanY = Math.max(1e-4, maxY - minY);
-    const availW = (f.x1 - f.x0) * (1 - CONSTELLATION.padding * 2);
-    const availH = (f.y1 - f.y0) * (1 - CONSTELLATION.padding * 2);
-    const s = Math.min(availW / spanX, availH / spanY, this.entryS * CONSTELLATION.maxZoomMul);
-    return this.recenter({ cx: (minX + maxX) / 2, cy: (minY + maxY) / 2 }, s);
+  /** 고스트별 클릭 판정 — 맞으면 그 곡 ID */
+  hitGhost(mx: number, my: number): number | null {
+    const p = this.ghostPos();
+    if (!p || !this.ghost) return null;
+    return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
   }
 
-  /** 월드 중심(cx,cy)이 별자리 영역 중앙에 오도록 카메라 중심을 보정 */
-  private recenter(center: { cx: number; cy: number }, s: number): MapCamera {
-    const f = this.constellationRect();
-    return { s, cx: center.cx - (f.cx - this.W / 2) / s, cy: center.cy + (f.cy - this.H / 2) / s };
+  /** 별자리가 화면을 차지하고 있는가 (해제 애니메이션 중이면 false) */
+  constellationActive() {
+    return !!this.constellation && !this.constellation.exitingAt;
   }
 
+  /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
   private constellationRect() {
     const base = this.freeRect();
     const x0 = base.x0 + CONSTELLATION.instrumentInsetPx;
@@ -577,6 +554,8 @@ export class MapEngine {
 
   // ------------------------------------------------------------------ layer transitions
   private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string) {
+    // 레이어를 옮기면 고스트별은 사라진다 (MAP-12)
+    this.ghost = null;
     for (let i = 0; i < this.N; i++) {
       this.from[i * 2] = this.pos[i * 2];
       this.from[i * 2 + 1] = this.pos[i * 2 + 1];
@@ -774,11 +753,50 @@ export class MapEngine {
     this.me = { ...w };
   }
 
-  /** 곡 재생 → 내 위치가 그 곡으로 걸어가고 카메라가 나를 중앙에 둔다 */
+  /**
+   * 곡 재생 → 내 위치가 그 곡으로 걸어간다 (MAP-08).
+   * 그 곡이 이 겹에 없으면 **움직이지 않고 있던 자리에 남는다** — 없는 곳으로 데려가지 않고,
+   * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 표식에 "다른 갈래에서 재생 중"이 붙는다.
+   */
   travelTo(id: number) {
     if (!this.index.has(id)) return;
+    this.playingId = id;
+    if (!this.isAlive(id)) {
+      this.travelToId = null;
+      return;
+    }
     this.travelToId = id;
-    if (!this.follow && !this.constellation?.visible) this.focus(id);
+    // 별자리 뷰가 떠 있는 동안에는 카메라를 건드리지 않는다 (닫으면 원래 자리로 돌아가야 하므로)
+    if (!this.follow && !this.constellationActive()) this.focus(id);
+  }
+
+  /** 재생 중인 곡이 이 겹 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08) */
+  playingElsewhere() {
+    return this.playingId != null && !this.isAlive(this.playingId);
+  }
+
+  /**
+   * 레이어 0(전 우주)까지 떠오른 뒤 그 곡을 확대한다 (MAP-12 "이 곡이 있는 곳으로 가기").
+   * 파고든 경로를 버리는 큰 이동이라 사용자가 명시적으로 눌렀을 때만 부른다.
+   */
+  surfaceToSong(id: number) {
+    if (this.follow || this.anim || !this.index.has(id)) return;
+    this.ghost = null;
+    this.stack = [];
+    this.selectedId = id;
+    const ns = new Uint8Array(this.N).fill(1);
+    const ax = LAYER_AXES[0];
+    const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
+    const f = this.freeRect();
+    const s = this.songs[this.index.get(id)!];
+    // 내 위치는 건드리지 않는다 — 내 자리는 재생 중인 곡이지 지금 보러 간 곡이 아니다 (MAP-08)
+    this.morph(
+      0,
+      { s: scale, cx: s.pc[0] - (f.cx - this.W / 2) / scale, cy: s.pc[1] + (f.cy - this.H / 2) / scale },
+      ns,
+      `${s.title} — ${LAYER_NAMES[0]}${ro(LAYER_NAMES[0])} 떠오르는 중`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+    );
   }
 
   startFollow(leader: NearbyUser) {
@@ -787,7 +805,6 @@ export class MapEngine {
     this.camTarget = null;
     // 별자리는 다른 활동이므로 함께 사라진다 (ACT-01)
     this.constellation = null;
-    this.ghost = null;
     this.route = [];
     const viewingMusicId = this.index.has(leader.viewingMusicId) ? leader.viewingMusicId : leader.musicId;
     this.follow = {
@@ -1119,6 +1136,8 @@ export class MapEngine {
       pressureDir: this.pressure > 0.01 ? this.pressureDir : 0,
       morph: this.anim ? { big: this.anim.big, sub: this.anim.sub } : null,
       myMusicId: this.myId,
+      ghostMusicId: this.ghost?.musicId ?? null,
+      playingElsewhere: this.playingElsewhere(),
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

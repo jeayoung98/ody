@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { SearchIcon } from "@/components/common/icons";
 import { useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
-import { useFetchRepresentativeLayers } from "@/hooks/queries/use-representative-layers-query";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicSearchResult } from "@/types";
@@ -15,18 +14,14 @@ export default function SearchBar() {
   const [open, setOpen] = useState(false);
   const { data, isPending } = useMusicSearchQuery(keyword);
   const focusMusic = useMapStore((s) => s.focusMusic);
-  const layer = useMapStore((s) => s.layer);
-  const fetchRepresentativeLayers = useFetchRepresentativeLayers();
   const openSong = usePanelStore((s) => s.openSong);
 
-  const handleSelect = async (r: MusicSearchResult) => {
+  const handleSelect = (r: MusicSearchResult) => {
     setOpen(false);
     setKeyword("");
     openSong(r.id);
-    // 지금 레이어의 대표곡이 아니면, 그 곡이 대표곡으로 노출되는 첫 레이어로 가서 확대한다 (SEARCH-01)
-    const layers = await fetchRepresentativeLayers(r.id).catch(() => null);
-    const target = layers?.layers.includes(layer) ? layer : layers?.layers[0] ?? null;
-    focusMusic(r.id, target);
+    // 이 겹에 있으면 확대해 가고, 없으면 고스트별로 띄운다 — 레이어를 자동으로 옮기지 않는다 (SEARCH-01, MAP-12)
+    focusMusic(r.id);
   };
 
   return (

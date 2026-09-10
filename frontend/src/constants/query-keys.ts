@@ -10,8 +10,12 @@ export const QUERY_KEYS = {
     me: ["auth", "me"] as const,
   },
 
+  /** 별자리 배치 (곡 집합이 같으면 같은 모양) */
+  constellation: {
+    layout: (musicIds: number[]) => ["constellation", "layout", musicIds.join(",")] as const,
+  },
+
   map: {
-    /** 레이어별 대표곡 좌표 */
     /** 지도 곡 전체 (PC 벡터 포함) */
     songs: ["map", "songs"] as const,
     /** 레이어별 대표곡 ID */

@@ -6,7 +6,6 @@ import Tag from "@/components/common/tag";
 import { useLikePlaylistMutation } from "@/hooks/mutations/use-like-playlist-mutation";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { formatDuration } from "@/lib/format";
-import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import type { PlaylistDetail } from "@/types";
@@ -14,7 +13,6 @@ import type { PlaylistDetail } from "@/types";
 /** 플리 제목 · 무드 태그 3개 · 곡 수 · 만든 사람 · 총 재생 시간 · 순차재생 · 좋아요 */
 export default function PlaylistHeader({ playlist }: { playlist: PlaylistDetail }) {
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const showConstellation = useMapStore((s) => s.showConstellation);
   const like = useLikePlaylistMutation();
   const startActivity = useStartActivity();
   const recordPlay = useRecordPlayMutation();
@@ -24,7 +22,6 @@ export default function PlaylistHeader({ playlist }: { playlist: PlaylistDetail 
     const ids = playlist.items.map((it) => it.musicId);
     startActivity("playlist", String(playlist.id), () => {
       playQueue({ kind: "playlist", playlistId: playlist.id }, ids);
-      showConstellation(ids);
       if (ids[0] != null) recordPlay.mutate({ musicId: ids[0], source: "PLAYLIST", playedMs: 0 });
     });
   };

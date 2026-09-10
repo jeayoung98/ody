@@ -17,9 +17,7 @@ import type { JourneyRoute } from "@/types";
 export default function JourneySummary({ route }: { route: JourneyRoute | null }) {
   const reset = useJourneyStore((s) => s.reset);
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const showConstellation = useMapStore((s) => s.showConstellation);
   const clearConstellation = useMapStore((s) => s.clearConstellation);
-  const clearPreview = useMapStore((s) => s.clearPreview);
   const recordPlay = useRecordPlayMutation();
   const startActivity = useStartActivity();
 
@@ -30,14 +28,12 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
     const ids = route.stops.map((s) => s.id);
     startActivity("journey", `${route.startMusicId}-${route.endMusicId}`, () => {
       playQueue({ kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId }, ids);
-      showConstellation(ids);
       recordPlay.mutate({ musicId: ids[0], source: "JOURNEY", playedMs: 0 });
     });
   };
 
   const handleClear = () => {
     reset();
-    clearPreview();
     clearConstellation();
   };
 

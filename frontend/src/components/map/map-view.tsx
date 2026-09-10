@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { STORAGE_KEYS } from "@/constants";
+import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
@@ -10,7 +11,7 @@ import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
-import { brightConstellationIds, ghostConstellationIds, useMapStore } from "@/stores/use-map-store";
+import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -42,9 +43,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const { data: representatives } = useRepresentativesQuery(layer);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
-  const brightIds = useMapStore(brightConstellationIds);
-  const ghostIds = useMapStore(ghostConstellationIds);
-  const constellationVisible = useMapStore((s) => s.constellationVisible);
+  const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
+  const { data: layout } = useConstellationLayoutQuery(constellationMusicIds);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
   const myMusicId = useMapStore((s) => s.myMusicId);
   const selectMusic = useMapStore((s) => s.selectMusic);
@@ -98,10 +98,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (viewMode === "nearby" && nearby) engine.enterProbe(nearby.center.musicId, nearby.neighbors.map((n) => n.musicId));
     else if (viewMode !== "nearby") engine.exitProbe();
   }, [engine, viewMode, nearby]);
-  // 별자리 오버레이: 곡 목록·보기 여부를 엔진에 전달 (탐색은 잠그지 않는다)
-  useEffect(() => engine.setConstellation(brightIds, constellationVisible), [engine, brightIds, constellationVisible]);
-  // 미리보기가 떠 있으면 재생 중이던 별자리는 흐린 선으로만 남는다 (PATH-01)
-  useEffect(() => engine.setGhostConstellation(constellationVisible ? ghostIds : []), [engine, ghostIds, constellationVisible]);
+  // 별자리 오버레이 뷰: 배치가 도착하면 대형으로 모이고, 뷰를 닫으면 제자리로 흩어진다 (PATH-01)
+  useEffect(() => {
+    if (viewMode === "constellation" && layout) engine.enterConstellation(constellationMusicIds, layout.points);
+    else if (viewMode !== "constellation") engine.exitConstellation();
+  }, [engine, viewMode, constellationMusicIds, layout]);
   useEffect(() => engine.setSelected(selectedMusicId), [engine, selectedMusicId]);
 
   // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)
@@ -176,6 +177,13 @@ export default function MapView({ occludedRight }: MapViewProps) {
         return;
       }
       if (engine.follow) return;
+      // 고스트별을 누르면 상세만 열고 화면은 그대로 둔다 — 이동은 상세 안 버튼으로 (MAP-12)
+      const gid = engine.hitGhost(mx, my);
+      if (gid != null) {
+        selectMusic(gid);
+        openSong(gid);
+        return;
+      }
       const hit = engine.hitTest(mx, my);
       if (!hit) return;
       const id = engine.songs[hit.i].musicId;

@@ -8,4 +8,5 @@ export * from "./playlist";
 export * from "./play-history";
 export * from "./map";
 export * from "./journey";
+export * from "./constellation";
 export * from "./api";

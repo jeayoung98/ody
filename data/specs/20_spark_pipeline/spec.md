@@ -35,11 +35,49 @@
 |---|---|---|---|
 | S0 원본 적재 | `lowlevel/*.tar.zst` 30파트 | `raw_features/part=NN/` : `mbid, offset, part, fingerprint, codec, bit_rate, length, lossless, sample_rate, f_000..f_269(float32), title, artist` | 행 수 = 전수조사 `census_all.parquet` 의 코호트 행 수; 표본 1만 행 값 == 기존 추출 Parquet |
 | S1 대표행 선택 | raw_features + `work/v2_manifest.parquet` 규칙(지문→lossless→44100→규모→part,offset) | `manifest_rows/` 7,404,506 행 | mbid 집합 == v2 manifest |
-| S2 전처리 | manifest_rows + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` 270 f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인 |
-| S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
+| S2 전처리 | 추출 특징 + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` `mbid` + `f_000..f_269` f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인. 잡은 `spark/jobs/preprocess.py` |
+| S3 PCA | features_pre + pca_mean, pca_components | `coords/` `mbid` + pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet`. 잡은 `spark/jobs/pca.py` |
 | S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
 | S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
+
+## S2 전처리·S3 PCA — 270차원에서 16차원
+
+재학습하지 않는다(규칙 3). `model_bundle.npz` 와 `feature_list.json` 의 동결 파라미터를 적용만 한다. 기준 구현은 `scripts/korean_common.py` 의 `serving_transform` 이다.
+
+```text
+추출 특징 270(원값)
+  → 1. skew 변환      feature_list.skew_transform 이 지정한 컬럼만 log1p / signed_log1p
+  → 2. delta_f 보정   lossless=false 행에만 더한다
+  → 3. impute        남은 NaN 을 impute_median 으로
+  → 4. scaler        (x - scaler_center) / scaler_scale
+  → 5. clip          NaN·무한대를 0 으로 만든 뒤 ±winsorize_clip
+  → S2 출력 270 float32
+  → 6. PCA           (Z - pca_mean) @ pca_components.T
+  → S3 출력 pc1..pc16
+```
+
+순서가 곧 정의다. 계산은 float64 로 하고 저장만 float32 다(기준 구현이 float64).
+
+### 컬럼식 대신 mapInPandas 를 쓴다
+270개 컬럼에 5단계를 컬럼식으로 쓰면 표현식 트리가 1,000 노드를 넘고, PCA 는 16 × 270 = 4,320 항이 된다. Catalyst 최적화가 급격히 느려지고 패리티도 보장하기 어렵다. `mapInPandas` 는 Arrow 배치를 numpy 로 받아 **기준 구현과 같은 함수**를 executor 에서 돌린다. 분산은 그대로다.
+
+부작용: S3 이 S2 의 로더를 import 하므로 제출 때 `--py-files spark/jobs/preprocess.py` 가 필요하다.
+
+### 번들을 클러스터로 보내야 한다
+두 잡은 `model_bundle.npz`(24 KB)와 `feature_list.json`(17 KB)이 필요하다. git 에 없는 파일이므로 `spark-submit --files` 로 함께 올리고 `--bundle .` 을 준다. 명령은 `spark/README.md`.
+
+### 패리티 실측 (2026-09-10)
+`work/v2_feats/part0.parquet` 표본 3,000곡을 S2 → S3 에 통과시켜 `coords_v2.parquet` 과 대조했다.
+
+| 항목 | 값 |
+|---|---|
+| 대조된 곡 | 2,774 (표본 중 coords 에 있는 것) |
+| 최대 절대 오차 | **1.86e-06** |
+| p99 절대 오차 | 7.41e-07 |
+| 기준 | < 1e-4 |
+
+`tests/test_preprocess_pca.py` 10건이 이 수치를 만들고, 재학습이 없다는 것(소스에 `fit` 호출 없음)과 특징 순서가 `feature_list.json` 과 같다는 것도 함께 검사한다. 표본이 3,000곡인 이유는 pyspark 없이 numpy 경로로 도는 커밋 훅 테스트이기 때문이다. 표본 10만·전곡 검증은 클러스터 실행(AC0·AC1)에서 한다.
 
 ## 수용 기준
 - AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**

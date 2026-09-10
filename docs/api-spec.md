@@ -316,29 +316,43 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 
 ## 4. 플레이리스트
 
-> **S15P21A405-65/66/67에서 구현 완료**. `playlist`, `playlist_music` 테이블은 이 저장소에 마이그레이션 도구가
-> 없어 아직 실행 안 됨 — 아래 쿼리를 실제 DB에 먼저 적용해야 한다.
+> **S15P21A405-65/66/67에서 구현 완료**. `playlist`, `playlist_item` 테이블은 데이터 파트에서 이미 만들었다
+> (아래가 실제 운영 스키마). 컬럼명이 `owner_email`/`name`이 아니라 `email`/`playlist_name`이고, `id`는
+> 자동증가가 아니라 애플리케이션이 시퀀스로 채운다.
 > ```sql
-> CREATE TABLE playlist (
->   id BIGSERIAL PRIMARY KEY,
->   owner_email varchar(255) NOT NULL REFERENCES "user"(email),
->   name varchar(100) NOT NULL,
->   created_at timestamptz NOT NULL DEFAULT now(),
->   updated_at timestamptz NOT NULL DEFAULT now(),
->   UNIQUE (owner_email, name)
+> CREATE TABLE public.playlist (
+>     id int8 NOT NULL,
+>     email varchar(255) NOT NULL,
+>     playlist_name varchar(200) NOT NULL,
+>     like_cnt int4 NULL,
+>     created_at timestamptz DEFAULT now() NOT NULL,
+>     updated_at timestamptz DEFAULT now() NOT NULL,
+>     CONSTRAINT "PK_PLAYLIST" PRIMARY KEY (id)
 > );
 >
-> CREATE TABLE playlist_music (
->   playlist_id bigint NOT NULL REFERENCES playlist(id) ON DELETE CASCADE,
->   music_id bigint NOT NULL, -- music 테이블이 아직 없어 FK 제약 없음. music 테이블 확정 후 추가할 것.
->   position integer NOT NULL,
->   added_at timestamptz NOT NULL DEFAULT now(),
->   PRIMARY KEY (playlist_id, music_id)
+> CREATE TABLE public.playlist_item (
+>     playlist_id int8 NOT NULL,
+>     music_id int8 NOT NULL,
+>     added_at timestamptz DEFAULT now() NOT NULL,
+>     CONSTRAINT "PK_PLAYLIST_ITEM" PRIMARY KEY (playlist_id, music_id),
+>     CONSTRAINT "FK_music_TO_playlist_item_1" FOREIGN KEY (music_id) REFERENCES public.music(id),
+>     CONSTRAINT "FK_playlist_TO_playlist_item_1" FOREIGN KEY (playlist_id) REFERENCES public.playlist(id)
 > );
-> CREATE INDEX idx_playlist_music_order ON playlist_music (playlist_id, position);
 > ```
-> **또 다른 선행 조건**: 곡 존재 확인·상세 조회는 `MusicDetailReader` 포트를 그대로 재사용하는데, 이 포트는 아직
-> 어댑터(BE4)가 없다(`MusicService`와 동일한 "대기 중" 상태). 그 결과 지금 시점에는:
+> **아직 실행 안 된, 백엔드가 추가로 필요한 것 두 가지**:
+> ```sql
+> -- 1) playlist.id 채번용 — 테이블에 DEFAULT/시퀀스가 없다.
+> CREATE SEQUENCE IF NOT EXISTS playlist_id_seq OWNED BY public.playlist.id;
+>
+> -- 2) 곡 순서 변경(4.4.1) 저장용 — 원본 테이블엔 순서 컬럼이 없어서 추가하기로 결정(팀 확인 완료).
+> ALTER TABLE public.playlist_item ADD COLUMN position int4 NOT NULL DEFAULT 0;
+> CREATE INDEX idx_playlist_item_order ON public.playlist_item (playlist_id, position);
+> ```
+> `like_cnt`는 현재 API 어디에도 노출·수정하지 않는다(좋아요 기능 자체가 아직 없음).
+>
+> **곡 조회 선행 조건**: 곡 존재 확인·상세 조회는 `MusicDetailReader` 포트를 그대로 재사용하는데, 이 포트는 아직
+> 어댑터(BE4)가 없다(`MusicService`와 동일한 "대기 중" 상태). `music` 테이블 자체는 이제 있지만(위 FK로 확인),
+> 애플리케이션에서 그 테이블을 읽는 코드가 아직 없다는 뜻이다. 그 결과 지금 시점에는:
 > - `musicIdList`가 **빈 배열**인 `/playlist/create`, `/playlist/detail`(빈 플레이리스트)은 정상 동작한다.
 > - `musicIdList`에 실제 곡 ID가 하나라도 들어가는 모든 API(4.2 트랙 있는 상세, 4.3 비어있지 않은 생성, 4.4 곡 추가,
 >   §4의 나머지 곡 관련 호출)는 어댑터가 붙기 전까지 500(`UnsupportedOperationException`)이 난다.

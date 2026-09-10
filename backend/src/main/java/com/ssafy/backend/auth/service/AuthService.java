@@ -3,10 +3,12 @@ package com.ssafy.backend.auth.service;
 import java.time.Duration;
 
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.auth.dto.UserAuthDto;
 import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
@@ -29,6 +31,46 @@ public class AuthService {
 	private final AuthMapper authMapper;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final StringRedisTemplate redisTemplate;
+	private final PasswordEncoder passwordEncoder;
+
+	/**
+	 * 이메일/비밀번호 회원가입 (S15P21A405-121). AUTH-01 소셜 로그인 확정과 별개로 백엔드 판단 하에 추가한 경로.
+	 * name 컬럼은 NOT NULL이라 구글 표시 이름 대신 nickname을 그대로 채운다.
+	 */
+	public TokenPair signup(String email, String rawPassword, String nickname) {
+		if (authMapper.findByEmail(email) != null) {
+			throw new CustomException(AuthErrorCode.EMAIL_ALREADY_EXISTS);
+		}
+		if (authMapper.existsByNickname(nickname)) {
+			throw new CustomException(AuthErrorCode.NICKNAME_ALREADY_EXISTS);
+		}
+
+		UserAuthDto user = new UserAuthDto();
+		user.setEmail(email);
+		user.setName(nickname);
+		user.setNickname(nickname);
+		user.setPasswordHash(passwordEncoder.encode(rawPassword));
+		authMapper.insert(user);
+
+		log.info("[Auth] 이메일 회원가입 완료 email={}", email);
+		return issueTokenPair(email);
+	}
+
+	/**
+	 * 이메일/비밀번호 로그인. 이메일이 없거나, 구글 OAuth로만 가입해 비밀번호가 없거나, 비밀번호가 틀린 경우
+	 * 전부 동일한 INVALID_CREDENTIALS로 응답해 계정 존재 여부가 드러나지 않게 한다.
+	 */
+	public TokenPair login(String email, String rawPassword) {
+		UserAuthDto user = authMapper.findByEmail(email);
+		if (user == null || user.getPasswordHash() == null
+				|| !passwordEncoder.matches(rawPassword, user.getPasswordHash())) {
+			throw new CustomException(AuthErrorCode.INVALID_CREDENTIALS);
+		}
+
+		authMapper.touchLogin(email, user.getImageUrl());
+		log.info("[Auth] 이메일 로그인 완료 email={}", email);
+		return issueTokenPair(email);
+	}
 
 	public String exchangeCode(String code) {
 		String key = EXCHANGE_CODE_KEY_PREFIX + code;
@@ -68,17 +110,22 @@ public class AuthService {
 			throw new CustomException(AuthErrorCode.REFRESH_TOKEN_MISMATCH);
 		}
 
-		String newAccessToken = jwtTokenProvider.createAccessToken(email);
-		String newRefreshToken = jwtTokenProvider.createRefreshToken(email);
+		TokenPair tokenPair = issueTokenPair(email);
+		log.info("[Auth] access token 재발급 완료 email={}", email);
+
+		return tokenPair;
+	}
+
+	private TokenPair issueTokenPair(String email) {
+		String accessToken = jwtTokenProvider.createAccessToken(email);
+		String refreshToken = jwtTokenProvider.createRefreshToken(email);
 
 		redisTemplate.opsForValue().set(
 				REFRESH_TOKEN_KEY_PREFIX + email,
-				newRefreshToken,
+				refreshToken,
 				Duration.ofMillis(jwtTokenProvider.getRefreshTokenExpirationMs()));
 
-		log.info("[Auth] access token 재발급 완료 email={}", email);
-
-		return new TokenPair(newAccessToken, newRefreshToken);
+		return new TokenPair(accessToken, refreshToken);
 	}
 
 	public void logout(String email, String accessTokenJti, long remainingMillis) {

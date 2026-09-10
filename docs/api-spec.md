@@ -127,6 +127,32 @@ body: `idToken`(String, required).
 `POST /auth/logout` · 인증 필요. header: `Authorization`. res: `{ "success": true, "data": null, "error": null }`.
 - 서버는 토큰 주체의 refreshToken 폐기, 별도 body/param 없음. 에러: `INVALID_TOKEN`, `TOKEN_EXPIRED`.
 
+### 1.4 이메일/비밀번호 회원가입·로그인 (S15P21A405-121)
+> Notion 정본(AUTH-01)은 소셜 로그인만 확정돼 있다. 아래 두 API는 Notion에 없는, 백엔드 담당자 판단으로 추가한
+> 범위 변경이다(`S15P21A405-120`에 기록된 "명세 충돌 — 기획 확인 필요" 메모 참고). 실제 구현 경로 기준으로 적는다
+> (§1.1~1.3의 `/auth/*`와 달리 이 저장소의 실제 `AuthController`는 `/api/auth/*` 접두사를 쓴다 — 기존부터 있던
+> 정본과 코드의 경로 불일치이며 이번 작업 범위에서 고치지 않았다).
+
+`POST /api/auth/signup` · 인증 불필요. body: `email`(String, required), `password`(String, required, 8~72자),
+`nickname`(String, required).
+```json
+{ "success": true, "data": { "accessToken": "..." }, "error": null }
+```
+- 응답 모양은 1.1/1.2의 exchange·reissue와 동일(accessToken만 body, refreshToken은 httpOnly 쿠키).
+- 비밀번호는 bcrypt로 해시해 `"user".password_hash`에 저장. `name` 컬럼은 NOT NULL이라 `nickname` 값을 그대로 채운다.
+- 에러: `EMAIL_ALREADY_EXISTS`(409), `NICKNAME_ALREADY_EXISTS`(409), `VALIDATION_ERROR`(400).
+
+`POST /api/auth/login` · 인증 불필요. body: `email`(String, required), `password`(String, required).
+```json
+{ "success": true, "data": { "accessToken": "..." }, "error": null }
+```
+- 이메일이 없거나, 구글 OAuth로만 가입해 비밀번호가 없거나(`password_hash IS NULL`), 비밀번호가 틀린 경우 모두
+  동일하게 `INVALID_CREDENTIALS`(401)로 응답해 계정 존재 여부를 노출하지 않는다.
+- 선행 조건: `"user".password_hash` 컬럼 추가 필요(아래 쿼리 참고, 아직 실행 안 됨).
+  ```sql
+  ALTER TABLE "user" ADD COLUMN IF NOT EXISTS password_hash varchar(60);
+  ```
+
 ---
 
 ## 2. 사용자

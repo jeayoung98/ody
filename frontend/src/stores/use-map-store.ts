@@ -34,8 +34,6 @@ export interface EngineSnapshot {
   ghostMusicId: number | null;
   /** 재생 중인 곡이 이 겹 밖인가 (MAP-08) */
   playingElsewhere: boolean;
-  /** 내 위치가 지금 보는 영역 밖인가 — 구름 밖 표식과 배너로 알린다 */
-  meOffscreen: boolean;
 }
 
 interface MapState extends EngineSnapshot {
@@ -67,8 +65,6 @@ interface MapState extends EngineSnapshot {
    * 이 겹에 있으면 그 곡으로 확대하고, 없으면 고스트별로 띄운다 (MAP-12) — 레이어를 자동으로 옮기지 않는다.
    */
   focusMusic: (musicId: number) => void;
-  /** 화면 밖으로 나간 내 위치로 카메라를 돌린다 */
-  focusMe: () => void;
   /** 고스트별을 끈다 (배너의 닫기) */
   dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
@@ -98,7 +94,6 @@ export const useMapStore = create<MapState>()(
       myMusicId: null,
       ghostMusicId: null,
       playingElsewhere: false,
-      meOffscreen: false,
 
       viewMode: "default",
       selectedMusicId: null,
@@ -144,7 +139,6 @@ export const useMapStore = create<MapState>()(
         if (engine?.isAlive(musicId)) engine.focusSong(musicId);
         else engine?.setGhost(musicId);
       },
-      focusMe: () => getMapEngine()?.focusMy(),
       dismissGhost: () => {
         getMapEngine()?.clearGhost();
         set({ ghostMusicId: null }, false, "dismissGhost");

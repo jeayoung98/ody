@@ -58,7 +58,7 @@ cd backend && ./gradlew build
 | B12 | 엔진 응답에 같은 mbid 2회 | 500 또는 중복 검산 실패. 같은 곡이 두 번 나오지 않는다 (I6) |
 | B13 | 전 시나리오 | 저장소 쓰기 호출 0건 (I8) |
 
-## C. API 계약 — standalone MockMvc
+## C. API 계약 — `@WebMvcTest` 슬라이스
 
 컨트롤러만 세우고(`@MapperScan` 충돌 회피, R9) 서비스는 mock.
 
@@ -111,7 +111,7 @@ GET /music/journey?start=10234&end=10877
 | `Authorization` 헤더 없음 | 401 `UNAUTHENTICATED` |
 | 위조·만료 토큰 | 401 `INVALID_TOKEN` |
 
-standalone MockMvc는 시큐리티 체인을 태우지 않으므로, 이 두 건은 `SecurityConfig` 기본 거부 규칙이
+이 슬라이스는 시큐리티 체인을 태우지 않으므로, 이 두 건은 `SecurityConfig` 기본 거부 규칙이
 `/music/journey`를 덮는지 확인하는 것으로 대체한다(permitAll 목록에 없음 → 인증 대상).
 
 ---

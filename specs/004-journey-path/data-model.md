@@ -68,7 +68,6 @@
 | `progresses` | `List<Double>` | 단조 증가 검사용. 위반 시 카운터·로그만 (FR-020, R10) |
 | `endpointDist` | `double` | 로그만 (FR-023) |
 | `far` | `boolean` | 로그만 (FR-023) |
-| `nStations` | `int` | `musicCnt` 검산. `stationMbids.size()`와 달라야 할 이유 없음 |
 | `mode` | `String` | 로그만. 요청은 항상 `axis` 고정 |
 | `bundle` | `String` | 로그만 (R11 — 대조하지 않음) |
 
@@ -81,7 +80,7 @@
 | --- | --- | --- |
 | `stations[i].mbid` | `path[i+1]` | `JourneyTrackReader`로 상세 조회 후 조립 |
 | (엔진에 없음) | `path[0]`, `path[last]` | `MusicDetailReader.findDetail(start/end)` 결과 |
-| `n_stations` | `musicCnt` | `+ 2` (FR-021 — 두 수를 혼용하지 않는다) |
+| `n_stations` | `musicCnt` | `stationMbids.size() + 2`. 엔진 메타의 `n_stations` 값을 따로 들고 있지 않는다 — 조립은 실제 mbid 목록 기준이라 자기정합적이다 (FR-021 — 두 수를 혼용하지 않는다) |
 | (엔진에 없음) | `totalDuration` | 게이트웨이가 `duration` 합산 |
 | `stations[i].rank` | `step` | **쓰지 않는다.** `step`은 최종 목록 기준 0부터 재부여 (FR-005) |
 | `far`, `endpoint_dist`, `mode`, `bundle` | — | 응답 제외, 로그만 |
@@ -149,7 +148,7 @@ BE 소유 곡 테이블에 다음이 필요하다(clarify 결정 — **현재 �
 | I3 | `musicCnt == path.size()` | FR-006 |
 | I4 | `totalDuration == Σ path[].duration` | FR-006 |
 | I5 | `path.size() <= 30` | FR-008 |
-| I6 | `path`에 같은 `id`가 두 번 나오지 않는다 | FR-009 (엔진 보장, 게이트웨이 검산) |
+| I6 | `path`에 같은 곡이 두 번 나오지 않는다 | FR-009. 엔진이 보장하고, 게이트웨이는 **엔진이 같은 mbid를 두 번 준 경우**를 거부해 이를 감시한다 |
 | I7 | 정거장 순서 = 엔진 `stationMbids` 순서 (조회 결과 순서가 아니다) | R4, FR-005 |
 | I8 | 도메인 저장소 쓰기 0건 | FR-018 |
 | I9 | 응답 JSON에 `far`·`endpoint_dist`·`mode`·`n_stations`·`bundle` 키가 없다 | FR-023 |

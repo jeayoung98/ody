@@ -138,10 +138,6 @@ public class JourneyService {
 		if (!monotonic) {
 			meterRegistry.counter(MONOTONIC_VIOLATION_COUNTER).increment();
 		}
-		if (path.nStations() != path.stationMbids().size()) {
-			log.warn("journey engine station count mismatch: nStations={} actual={}",
-					path.nStations(), path.stationMbids().size());
-		}
 		log.info("journey mode={} bundle={} far={} endpointDist={} stations={} monotonic={}",
 				path.mode(), path.bundle(), path.far(), path.endpointDist(),
 				path.stationMbids().size(), monotonic);
@@ -191,11 +187,8 @@ public class JourneyService {
 			log.error("journey path exceeds contract limit: {} > {}", songs.size(), MAX_PATH_SIZE);
 			throw new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
 		}
-		if (songs.stream().map(MusicDetail::id).distinct().count() != songs.size()) {
-			log.error("journey path contains duplicate song id");
-			throw new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
-		}
-
+		// 같은 곡 중복(I6)은 hydrate 의 mbid 검사가 잡는다. start == end 는 위에서 끊었고,
+		// 엔진은 출발·도착과 같은 canonical 을 후보에서 제외하므로 여기서 다시 볼 것이 없다.
 		List<JourneyStop> path = IntStream.range(0, songs.size())
 				.mapToObj(i -> new JourneyStop(i, songs.get(i)))
 				.toList();

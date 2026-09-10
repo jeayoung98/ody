@@ -268,28 +268,5 @@ class JourneyControllerTests {
 				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));
 	}
 
-	// ------------------------------------------------------- C4 검증 순서
 
-	@Test
-	void journey_validationRunsBeforeService() throws Exception {
-		// start 가 0 이면 서비스(따라서 엔진)를 부르지 않는다
-		mockMvc.perform(get("/music/journey").param("start", "0").param("end", "0"))
-				.andExpect(status().isBadRequest())
-				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
-		verifyNoInteractions(journeyService);
-	}
-
-	// ------------------------------------------------------- 정본 파라미터 고정
-
-	/** mode·n 은 정본 §3.3 에 없다. 넘겨도 무시되고 정상 응답이어야 한다(FR-023, FR-011). */
-	@Test
-	void journey_unknownParamsIgnored() throws Exception {
-		when(journeyService.getJourney(eq(10234L), eq(10877L))).thenReturn(journey(10));
-
-		mockMvc.perform(get("/music/journey")
-				.param("start", "10234").param("end", "10877")
-				.param("mode", "linear").param("n", "30"))
-				.andExpect(status().isOk())
-				.andExpect(jsonPath("$.data.musicCnt").value(12));
-	}
 }

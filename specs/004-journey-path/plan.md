@@ -4,7 +4,8 @@
 
 **Input**: spec.md rev.3 (BE4 데이터 엔진 MR 반영 + 2026-09-10 clarify 4건)
 
-**Status**: 설계 완료. 차단 게이트 없음. **B-Engine**(BE4 엔진 HTTP 엔드포인트 미구현)·**BE 곡 테이블 미생성**으로
+**Status**: 구현 완료 (2026-09-10). `./gradlew test` 74건 통과·0 실패, `./gradlew build` 통과.
+통합 검증(quickstart D, 종단 3초)은 **미실행** — 아래 대기 항목 때문이다. 차단 게이트 없음. **B-Engine**(BE4 엔진 HTTP 엔드포인트 미구현)·**BE 곡 테이블 미생성**으로
 어댑터 2개는 계약만 두고 대기. port mock 기준 US1~US4 전부 검증 가능.
 
 ## Summary
@@ -32,7 +33,7 @@ BE 곡 테이블에 정수 `id` PK + `mbid` UNIQUE가 필요하다(clarify) — 
 **External Service**: BE4 데이터 엔진(Python FastAPI + numpy, D4). 경로 산출 담당.
 `retrieval/api.py`가 docstring뿐이라 엔드포인트 형태 미확정(B-Engine).
 
-**Testing**: JUnit Platform, standalone MockMvc(master `@MapperScan` ↔ `@WebMvcTest` 충돌 회피, 002·003 선례),
+**Testing**: JUnit Platform, `@WebMvcTest` 슬라이스(`SecurityConfig`·`JwtAuthenticationFilter` 제외 + master `@MapperScan` 매퍼를 `@MockitoBean` 으로, 002·003 선례),
 port mock 서비스 유닛(R9).
 
 **Target Platform**: Java 17 컨테이너(`backend/Dockerfile`), HTTP 8080.
@@ -46,7 +47,7 @@ port mock 서비스 유닛(R9).
 `musicCnt = n_stations + 2` · 재생 불가 곡 유지 · 고정 좌표 · 순수 조회(쓰기 0건) ·
 엔진 메타(`far`/`endpoint_dist`/`mode`) 응답 비노출 · 후처리 임계값 하드코딩 금지.
 
-**Scale/Scope**: 서빙 번들 6,624,399곡. 응답 1건당 최대 22곡. 엔드포인트 1개, 신규 파일 7개.
+**Scale/Scope**: 서빙 번들 6,624,399곡. 응답 1건당 최대 22곡. 엔드포인트 1개, 신규 운영 파일 7개 + 테스트 2개. 기존 파일 수정 1곳(`MusicErrorCode` 상수 추가).
 
 ## Constitution Check
 
@@ -56,7 +57,7 @@ port mock 서비스 유닛(R9).
 | --- | --- | --- |
 | I 명세 우선 | 충족 | spec rev.3 + clarify 4건 완료 후 설계. `[NEEDS CLARIFICATION]` 0건 |
 | II 계약 우선 | 충족 | [contracts/music-journey.md](contracts/music-journey.md)에 API·엔진·port 3개 계약 명시. 정본 §3.3 응답을 바꾸지 않음(엔진 메타 비노출은 clarify 결정) |
-| III 완료 전 검증 | 설계 충족 | [quickstart.md](quickstart.md) 시나리오 + standalone MockMvc·서비스 유닛. 어댑터 부재 구간은 mock으로 검증하고 실 통합은 미검증으로 보고 |
+| III 완료 전 검증 | 설계 충족 | [quickstart.md](quickstart.md) 시나리오 + `@WebMvcTest` 슬라이스·서비스 유닛. 어댑터 부재 구간은 mock으로 검증하고 실 통합은 미검증으로 보고 |
 | IV 데이터 재현성 | N/A | 조회 전용. 데이터 산출물 생성 없음 |
 | V 좌표 안정성 | 충족 | 좌표는 번들 고정값 그대로 전달. 게이트웨이가 좌표·모델을 만들거나 바꾸지 않음(FR-016) |
 | VI 탐색 일관성 | 충족 | 결정성은 같은 번들 안에서만 보장으로 명시(FR-013). 사용자 선택(`start`/`end`)을 재해석하지 않음 |
@@ -96,11 +97,11 @@ specs/004-journey-path/
 
 | 위치 | 설계 | 상태 |
 | --- | --- | --- |
-| `music/controller/MusicController.java` | `GET /music/journey` 핸들러 추가 (`@Min(1) long start`, `@Min(1) long end`) | 기존 파일에 메서드 추가 |
+| `music/controller/JourneyController.java` | `GET /music/journey` 핸들러 (`@Min(1) long start`, `@Min(1) long end`) | **신규**. `MusicController` 에 메서드를 더하면 그 컨트롤러의 기존 슬라이스 테스트 19건이 새 빈을 요구하며 깨진다(실제로 깨졌다) → 분리. URL·응답 계약 동일 |
 | `music/dto/JourneyResponse.java` | `musicCnt`, `totalDuration`, `List<JourneyStop> path` | **신규** |
 | `music/dto/JourneyStop.java` | `@JsonUnwrapped MusicDetail` + `int step` | **신규** |
 | `music/journey/JourneyPathFinder.java` | 엔진 호출 port (BE2 계약) | **신규** (계약) |
-| `music/journey/EnginePath.java` | 엔진 응답 표현 (`reachable`, `stationMbids`, 메타) | **신규** |
+| `music/journey/EnginePath.java` | 엔진 응답 표현 (`reachable`, `stationMbids`, `progresses`, 로그용 메타) | **신규** |
 | `music/journey/JourneyTrackReader.java` | mbid 일괄 상세 조회 port | **신규** (계약) |
 | `music/journey/JourneyEngineClient.java` | **port 구현 = RestClient 어댑터** | **신규**, B-Engine 후 완성 |
 | `music/journey/JourneyTrackMapper.java` | **port 구현 = MyBatis 어댑터** | **신규**, 곡 테이블 후 완성 |
@@ -109,12 +110,13 @@ specs/004-journey-path/
 | `music/dto/MusicDetail.java` | `id`·`mbid` 동시 보유 — 그대로 사용 | 존재, 재사용 |
 | `common/MusicErrorCode.java` | `PATH_NOT_FOUND`(422) 상수 추가 | 기존 파일에 상수 추가 |
 | `common/GlobalExceptionHandler.java` | `CustomException`→`ErrorCode` 매핑 재사용 | BE1 소유, 변경 없음 |
-| `src/test/.../music/journey/*` | standalone MockMvc + 서비스 유닛 | **신규** |
+| `src/test/.../music/JourneyControllerTests.java`·`JourneyServiceTests.java` | `@WebMvcTest` 슬라이스 + 서비스 유닛 | **신규**. 테스트 패키지는 기존 관례대로 flat (`music/`) |
 
 **Structure Decision**: master `backend/` 구조와 공통 레이어를 그대로 쓴다. 여정 전용 코드는
 `music/journey/` 한 패키지에 모으고, 상세 조회·에러 코드·응답 봉투는 기존 것을 재사용한다.
-신규 공통 클래스 없음. `MusicService`는 건드리지 않고 `JourneyService`를 따로 둔다 —
-`MusicService`가 이미 검색·상세·대표곡 3개를 갖고 있고 여정은 의존 port가 다르다.
+신규 공통 클래스 없음. `MusicService`·`MusicController` 를 건드리지 않고 `JourneyService`·`JourneyController` 를 따로 둔다 —
+`MusicService` 가 이미 검색·상세·대표곡 3개를 갖고 있고 여정은 의존 port 가 다르며,
+컨트롤러를 공유하면 엔드포인트가 늘 때마다 남의 기능 슬라이스 테스트가 깨진다.
 
 ## 처리 흐름
 
@@ -161,10 +163,11 @@ GET /music/journey?start=10234&end=10877   (Bearer 필수 — SecurityConfig 기
 
 | 대상 | 방법 | 상태 |
 | --- | --- | --- |
-| US1~US4 시나리오 | standalone MockMvc + port mock ([quickstart.md](quickstart.md)) | 구현 시 실행 |
-| 조립 로직(step·musicCnt·totalDuration·순서 재조립) | 서비스 유닛 | 구현 시 실행 |
-| 경계(`start==end`, 좌표 동일, 30곡 가드, 누락 mbid) | 서비스 유닛 | 구현 시 실행 |
-| 오류 매핑 6종 | MockMvc | 구현 시 실행 |
+| US1~US4 시나리오 | `@WebMvcTest` 슬라이스 + port mock ([quickstart.md](quickstart.md)) | **통과** (2026-09-10) |
+| 조립 로직(step·musicCnt·totalDuration·순서 재조립) | 서비스 유닛 | **통과** |
+| 경계(`start==end`, 좌표 동일, 30곡 가드, 누락 mbid) | 서비스 유닛 | **통과** |
+| 오류 매핑 6종 | MockMvc | **통과** |
+| 결정성(FR-013·SC-006) | 서비스 유닛 (같은 입력 2회 → 동일 응답) | **통과** |
 | 단조 증가·인접 역 거리·규칙 위반 | **BE4 `tests/bench_journey.py`가 소유** — 게이트웨이는 카운터·로그만 | BE4 실측 완료(40쌍) |
 | 종단 3초 | 엔진 통합 후 측정 | **미검증** (B-Engine) |
 | 실 DB 조회 | 곡 테이블 생성 후 | **미검증** |

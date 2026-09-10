@@ -17,16 +17,6 @@ management:
         http.server.requests: true
         ody.journey.engine: true
 
-# 경로 탐색 (정본 §3.3). 산출은 BE4 데이터 엔진(Python FastAPI)이 하고 백엔드는 게이트웨이다(D4).
-# timeout 은 종단 3초 예산(요구사항 §6)에서 역산한 값이다 — 엔진 실측 p95 1.541s.
-# 재시도는 두지 않는다: 1회만 재시도해도 최악 4초로 예산을 넘긴다.
-# base-url 실제 값은 환경별 application-*.yml / 환경변수로 주입한다. 여기에 운영 호스트를 적지 않는다.
-ody:
-  journey:
-    engine:
-      base-url: ${JOURNEY_ENGINE_URL:}
-      timeout: 2s
-
 spring:
   datasource:
     url: jdbc:postgresql://${DB_HOST}:${DB_PORT}/${DB_NAME}

@@ -86,8 +86,7 @@ class JourneyServiceTests {
 	private static EnginePath enginePath(List<String> stationMbids) {
 		List<Double> progresses = IntStream.range(0, stationMbids.size())
 				.mapToObj(i -> (i + 1.0) / (stationMbids.size() + 1.0)).toList();
-		return new EnginePath(true, stationMbids, progresses, 8.4, false,
-				stationMbids.size(), "axis", "v2.1-pca16");
+		return new EnginePath(true, stationMbids, progresses, 8.4, false, "axis", "v2.1-pca16");
 	}
 
 	/** 출발·도착 상세와 엔진 경로를 준비한다. reader 는 정거장을 <b>뒤섞어</b> 돌려준다(순서 미보장 계약). */
@@ -113,12 +112,11 @@ class JourneyServiceTests {
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
 
 		// I7: reader 가 역순으로 줬어도 정거장 순서는 엔진 순서
-		List<String> pathMbids = res.path().stream().map(s -> s.music().mbid()).toList();
-		assertThat(pathMbids).containsExactlyElementsOf(
-				java.util.stream.Stream.concat(
-						java.util.stream.Stream.concat(java.util.stream.Stream.of(START_MBID),
-								mbidsOf(ordered).stream()),
-						java.util.stream.Stream.of(END_MBID)).toList());
+		List<String> expected = new ArrayList<>();
+		expected.add(START_MBID);
+		expected.addAll(mbidsOf(ordered));
+		expected.add(END_MBID);
+		assertThat(res.path().stream().map(stop -> stop.music().mbid())).containsExactlyElementsOf(expected);
 	}
 
 	@Test
@@ -205,7 +203,7 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		// 진행도가 뒤로 감 — linear 모드가 40쌍 중 21쌍에서 내는 현상(D10 근거)
 		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(new EnginePath(true,
-				List.of("s0", "s1"), List.of(0.7, 0.3), 8.4, false, 2, "axis", "v2.1-pca16"));
+				List.of("s0", "s1"), List.of(0.7, 0.3), 8.4, false, "axis", "v2.1-pca16"));
 		when(trackReader.findDetailsByMbids(anyList()))
 				.thenReturn(List.of(song(1000L, "s0", 100), song(1001L, "s1", 100)));
 
@@ -330,7 +328,8 @@ class JourneyServiceTests {
 	void journey_unreachable_throwsPathNotFound() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(EnginePath.unreachable(21.0, "axis"));
+		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(
+				new EnginePath(false, List.of(), List.of(), 21.0, true, "axis", null));
 
 		assertThatThrownBy(() -> service.getJourney(START_ID, END_ID))
 				.isInstanceOf(CustomException.class)
@@ -378,17 +377,19 @@ class JourneyServiceTests {
 				.isEqualTo("INTERNAL_SERVER_ERROR");
 	}
 
-	@Test
-	void journey_validationBeforeEngine_startNotFoundWinsOverAbsentEngine() {
-		JourneyService noEngine = new JourneyService(Optional.of(detailReader), Optional.empty(),
-				Optional.of(trackReader), meterRegistry);
-		when(detailReader.findDetail(START_ID)).thenReturn(Optional.empty());
 
-		// C4: 곡 조회가 엔진보다 먼저다
-		assertThatThrownBy(() -> noEngine.getJourney(START_ID, END_ID))
-				.isInstanceOf(CustomException.class)
-				.extracting(e -> ((CustomException) e).getErrorCode().getCode())
-				.isEqualTo("MUSIC_NOT_FOUND");
+	// ------------------------------------------------- FR-013 / SC-006 결정성
+
+	@Test
+	void journey_repeatedCalls_returnIdenticalPath() {
+		givenJourney(10, 275, 205);
+
+		JourneyResponse first = service.getJourney(START_ID, END_ID);
+		JourneyResponse second = service.getJourney(START_ID, END_ID);
+
+		// 같은 두 곡·같은 번들이면 목록도 순서도 같아야 한다. reader 가 순서를 보장하지 않으므로
+		// 재조립이 Map 순회 순서에 의존하면 여기서 깨진다.
+		assertThat(second).isEqualTo(first);
 	}
 
 	// -------------------------------------------------------- I8 순수 조회

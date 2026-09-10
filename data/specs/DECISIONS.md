@@ -26,7 +26,7 @@
 | # | 질문 | 상충 | 임시 진행 방식 | 관련 |
 |---|---|---|---|---|
 | ~~Q1~~ | ~~`track_vector` 차원이 16인가 64인가~~ | **종결 2026-09-10 → D7 (PCA-16).** Jira 35 설명을 갱신한다 | — | `50_db_schema` |
-| Q2 | 마이그레이션 도구 (Flyway / Liquibase / 수동 SQL) | `docs/infra/DATABASE.md` 가 domain 도입 전 결정으로 유보 | 결정 전 DDL 커밋 금지 | `50_db_schema` |
+| ~~Q2~~ | ~~마이그레이션 도구~~ | **종결 2026-09-11.** BE 가 `ody` DB 에 `music`·`genre`·`music_genre` 를 이미 만들었다. data 는 DDL 을 쓰지 않고 데이터만 넣으므로 도구를 고를 일이 없다 | — | `50_db_schema` 종결 |
 | Q3 | 멜론 소분류 코드표 확보 가능 여부 | `genre_gn_all.json` 부재(원 출처 Kakao Arena 재다운로드 필요). 대분류 21개만 보유 | 1차는 대분류만. 소분류는 보류 | `13_genre_hierarchy` |
 | Q4 | 축 라벨의 태그 출처 | Jira S15P21A405-38 은 Last.fm 태그 log-odds. 저장소에는 AcousticBrainz 자유 텍스트 태그(`work/genres_raw.parquet` 23,203,978행)만 있고 Last.fm 데이터는 없다 | 보유한 AB 태그로 진행하고 출처를 문서에 명시 | `14_axis_labels`, `13_genre_hierarchy` |
 | Q5 | 트리 축 할당 방식 표기 | Jira S15P21A405-37 은 "depth별 PC 축 2개". 실제는 **노드별 local PCA-2**(`split_axes.npz`) | 실제 아티팩트를 따르고 Jira 설명 갱신을 제안 | `16_map_layer_serving` |

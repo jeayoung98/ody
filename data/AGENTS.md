@@ -11,7 +11,7 @@
 - Python 3.12, 가상환경 `data/.venv` (`python -m venv data/.venv && data/.venv/Scripts/pip install -r data/requirements.txt`).
 - 항상 `PYTHONUTF8=1`. 파일 I/O 는 `encoding="utf-8"` 명시.
 - 대용량은 git 밖: `data/work/`(junction 또는 `ODY_WORK`), `data/serving/<v>/*.parquet|*.npz`(볼륨 또는 `ODY_SERVING_DIR`), `data/data/`. 없으면 계약 테스트는 skip 된다(로컬 개발 머신에서만 완전 검증).
-- 서비스 환경변수: `ODY_SERVING_DIR`, `ODY_GRAPH_DIR`, `ODY_WORK`. Backend 는 `ODY_AI_BASE_URL` 로 호출.
+- 환경변수: `ODY_SERVING_DIR`, `ODY_WORK`. Backend 는 PostgreSQL(pgvector)·Neo4j 를 직접 조회한다(D12).
 
 ## 절대 규칙
 1. **판정 기준은 측정 전에 등록**(`gates/*.json`, 스펙 수용 기준)하고 사후 수정하지 않는다. 틀렸으면 새 id 로 재등록하고 원 판정을 보존한다. 실패 게이트를 '보고 항목'으로 재분류하지 않는다.
@@ -31,13 +31,13 @@
 - 현재 `v2.1-pca16`. 길이 규칙 60s~6min + `flag_instrumental` 반영 `v2.2-pca16` 예정(D1, D1b).
 
 ## 코드 위치
-`retrieval/` 서빙 라이브러리·FastAPI(스펙 10·11·12) · `spark/jobs/` Spark 이식(스펙 20) · `ingest/` DB 적재 CSV·스크립트(스펙 18) · `pipeline/` 카탈로그 감사·제외 규칙 numpy 기준 구현 · `scripts/` 재사용 실험 코드(이식 원본, 수정 금지) · `tests/` 단위·계약·패리티·벤치 · `gates/` 사전 등록 게이트 · `output/` 벤치·리포트 json · `docs/` 인수인계·계획·정성 기록.
+`spark/jobs/` Spark 이식(스펙 20) · `ingest/` DB 적재 CSV·스크립트(스펙 18) · `pipeline/` 카탈로그 감사·제외 규칙 numpy 기준 구현 · `scripts/` 재사용 실험 코드(이식 원본, 수정 금지) · `tests/` 단위·계약·패리티·벤치 · `gates/` 사전 등록 게이트 · `output/` 벤치·리포트 json · `docs/` 인수인계·계획·정성 기록.
 
 ## 훅
 루트 `.claude/`(git 밖, 팀 배포 키트 `ody-jira-kit` 로 설치)의 훅: Jira-first — 브랜치에 `S15P21A405-\d+` 없으면 파일 수정·commit·push 차단(규칙 `.claude/rules/jira-workflow.md`, data 브랜치는 `data/<type>/<KEY>-<desc>`) · pytest 게이트 — `git commit` 이고 `data/` 변경이 있으면 `pytest -q -x data/tests` 를 먼저 돌린다. 실패 시 커밋 차단(exit 2). 우회하지 말고 테스트를 고친다. 비상용 `SKIP_COMMIT_GATE=1` 은 stderr 에 남는다.
 
 ## Backend 통합
-**이웃 검색·여정·트리 탐색은 Backend(Spring) 담당이다**(D12, 2026-09-10 사용자 결정). data 는 서빙 API 를 제공하지 않는다. data 가 넘기는 것은 **DB 에 적재된 데이터**다: `music`(좌표 `location` 포함)·`genre`·`music_genre`(스펙 18), pgvector 인덱스(스펙 17), map_layer·track_position(스펙 16). 곡 식별자는 MusicBrainz recording MBID(소문자 UUID). 후처리 임계값은 서빙 번들의 `postprocess_rules.json` 이 유일한 출처다(τ_dup 1.6624 · artist_cap 3 · τ_far 4.912 · 길이 30~1200s, 전부 L2 거리 기준).
+**이웃 검색·여정·트리 탐색은 Backend(Spring) 담당이다**(D12, 2026-09-10 사용자 결정). data 는 서빙 API 를 제공하지 않는다. data 가 넘기는 것은 **DB 에 적재된 데이터**다: `music`(좌표 `location vector(16)` 포함)·`genre`·`music_genre` 662만 행(스펙 18), HNSW 인덱스(스펙 17), 레이어 GiST 인덱스와 `map_sample`(스펙 16, D14). 질의 예시와 함정은 `ingest/map_layer_queries.sql`. 곡 식별자는 MusicBrainz recording MBID(소문자 UUID). 후처리 임계값은 서빙 번들의 `postprocess_rules.json` 이 유일한 출처다(τ_dup 1.6624 · artist_cap 3 · τ_far 4.912 · 길이 30~1200s, 전부 L2 거리 기준).
 
 ## 검증·완료 보고
 작업 완료 = tasks.md 의 완료 조건(테스트 이름 또는 산출 파일) 통과 + 상태 갱신(⬜→✅). 보고는 팀 형식: `변경 / 검증 / 남은 위험 / 롤백`.

@@ -1,11 +1,11 @@
-package com.ssafy.backend.dto;
+package com.ssafy.backend.auth.dto;
 
 import lombok.Getter;
 import lombok.Setter;
 
 @Getter
 @Setter
-public class UserDto {
+public class UserAuthDto {
 
 	private String email;
 	private String name;

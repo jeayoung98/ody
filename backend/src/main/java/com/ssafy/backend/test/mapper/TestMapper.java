@@ -1,8 +1,8 @@
-package com.ssafy.backend.mapper;
+package com.ssafy.backend.test.mapper;
 
 import java.util.List;
 
-import com.ssafy.backend.dto.TestDto;
+import com.ssafy.backend.test.dto.TestDto;
 
 public interface TestMapper {
 

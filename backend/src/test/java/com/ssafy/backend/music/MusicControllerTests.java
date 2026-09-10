@@ -15,7 +15,7 @@ import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.mapper.TestMapper;
+import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MajorResponse;

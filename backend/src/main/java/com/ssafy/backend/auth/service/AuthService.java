@@ -1,4 +1,4 @@
-package com.ssafy.backend.service;
+package com.ssafy.backend.auth.service;
 
 import java.time.Duration;
 
@@ -7,7 +7,7 @@ import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.mapper.UserMapper;
+import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
 
@@ -26,7 +26,7 @@ public class AuthService {
 	private static final String BLACKLIST_KEY_PREFIX = "blacklist:";
 	private static final String EXCHANGE_CODE_KEY_PREFIX = "oauth:exchange:";
 
-	private final UserMapper userMapper;
+	private final AuthMapper authMapper;
 	private final JwtTokenProvider jwtTokenProvider;
 	private final StringRedisTemplate redisTemplate;
 
@@ -90,7 +90,7 @@ public class AuthService {
 	public void withdraw(String email, String accessTokenJti, long remainingMillis) {
 		blacklistAccessToken(accessTokenJti, remainingMillis);
 		redisTemplate.delete(REFRESH_TOKEN_KEY_PREFIX + email);
-		userMapper.deleteByEmail(email);
+		authMapper.deleteByEmail(email);
 		log.info("[Auth] 회원 탈퇴로 인한 하드 삭제 완료 email={}", email);
 	}
 

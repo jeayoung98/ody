@@ -11,7 +11,8 @@
 - **[BLOCKED: B#]**: plan의 미결정 게이트에 막힘. **착수 금지**, 표시만. (B1~B6 정의는 [plan.md](plan.md) "보류 항목")
 
 > ⚠️ **현 상태**: 인프라·데이터(B6)와 제품/외부 계약(B1~B5)이 여전히 미결정이다. 선행 게이트였던 T002·T003은 해소됐으므로
-> 지금 착수 가능한 것은 **미정 정책에 독립적인 순수 로직·공통 계층 정합·wire 레벨 테스트**(T006~T012)다.
+> 지금 착수 가능한 것은 **미정 정책에 독립적인 순수 로직·wire 레벨 테스트**(T007~T012)다.
+> T006(전역 에러 코드 정합)은 BE1 이관 대상으로 바뀌었다 — 아래 T006 항목 참조.
 > BLOCKED 태스크는 해당 게이트 해소 후 착수한다. 정책 확정 전 의존 구현은 금지(헌법 I·IX).
 >
 > ✅ **재배치 완료(2026-09-10, S15P21A405-115)**: music 코드는 `backend/src/...` 아래로 이미 옮겨졌고 master 공통 계층
@@ -39,7 +40,7 @@
 - [ ] T005 [BLOCKED: B6] v2.1-pca16 곡 데이터 접근 어댑터. master 스택상 **MyBatis mapper(XML `classpath:mapper/**/*.xml`) + PostgreSQL**이 유력. 좌표 원형 조회 물리 방식(pgvector 없음, 스칼라 컬럼 vs 벡터 확장)·저장소(postgres vs neo4j)는 BE4 확인 (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
 - [ ] T006 [P] ⛔ **BE1 이슈로 이관 대상 — BE2 브랜치에서 하지 않는다**: 전역 `GlobalErrorCode` 개명은 이 기능만의 일이 아니다. 한 번 시도해 커밋했다가(`6349665`) 리베이스 때 제외했다. 근거: (a) 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조가 **12파일**(main 3 + test 9: auth·user·playlist·music)로 늘었다, (b) dev 가 `GlobalErrorCode` 에 `FORBIDDEN` 을 §0.5 이름으로 추가해 이미 §0.5 방향으로 가고 있다, (c) BE1 이 같은 파일에서 인증·유저·플레이리스트를 동시에 올리는 중이라 충돌 비용이 계속 커진다. 계약 코드만 미리 enum 에 넣는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`). **이관 추적**: BE1 이슈 **미생성** (2026-09-10). 이슈 생성 후 여기에 키를 적고 T020·T021 의 선행을 그 키로 바꾼다. ⚠️ 키가 비는 동안 FR-010 은 실효 커버리지가 없다
 
-**Checkpoint**: T004·T005는 B6까지 blocked. **T006은 지금 가능** — T020(A7)·T021(A8)의 계약 코드 검증을 가능하게 한다. US 종단 흐름은 T004·T005 해소에 의존.
+**Checkpoint**: T004·T005는 B6까지 blocked. **T006은 BE1 이관 대상**(이슈 키 미정) — 열리기 전에는 T020(A7)·T021(A8)의 계약 코드 검증을 할 수 없다. US 종단 흐름은 T004·T005 해소에 의존.
 
 ---
 
@@ -192,3 +193,17 @@ master 병합 후 실제로 남은 미정은 B5 전체가 아니다. plan.md 는
 
 **T022 재정의**: blocker 는 "B5" 가 아니라 **T030(만료 코드) 하나**다.
 T029 는 dev 가 해소했으므로 A6 의 **토큰 없음·위조 부분은 지금 착수 가능**하고, 만료 케이스만 T030 이후다.
+
+---
+
+## Phase 8: Convergence
+
+**Input**: 2026-09-10 후반, 리베이스(`origin/backend/dev` 19커밋)와 문서 정합 커밋(`49509e2`) 이후 재대조.
+기준선 `./gradlew test` 113 tests / 0 failures. **코드 쪽 신규 gap 없음** — 실질 미충족은
+T006·T013~T017·T019·T020~T022·T024~T027·T030 이 이미 잡고 있어 중복 기재하지 않는다.
+이번 findings 는 전부 plan.md Source Code 구조표가 구현 상태를 못 따라간 드리프트다.
+
+- [ ] T032 plan.md Source Code 산문이 "아래 표의 `MajorQueryResolver`·`MajorSelection` 은 구현됐고" 라고 하지만 표에 `MajorSelection` 행이 없고 `MajorQueryResolver.java` 는 `(제안)` 표기 그대로다. 산문과 표를 일치시키고 구현 완료를 표기한다 per plan: Source Code structure (contradicts)
+- [ ] T033 구현된 `backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`(T009)를 plan.md 구조표에 행으로 추가한다. 표의 `MajorSelectionPolicy.java (제안)` 는 별개 파일(T013, B2 대기)이므로 대체하지 않는다 per plan: Source Code structure · T009 (partial)
+- [ ] T034 `ObservabilityTests.java` 가 `backend/src/test/java/com/ssafy/backend/`(루트 패키지)에 있는데 plan 구조표의 테스트 경로는 `.../com/ssafy/backend/music/` 다. 기능 경계를 넘는 전역 관측 테스트라 위치는 타당하므로, 표에 전역 테스트 행을 넣거나 위치 근거를 명시한다 per plan: Source Code structure · T023 (partial)
+- [ ] T035 plan.md 구조표의 경로 표기가 재배치 전 형태(`src/test/java/...`, `music/controller/...`)로 남아 있다. 그 위 산문만 `backend/` 로 갱신됐으므로 표 경로에도 접두를 반영한다 per plan: Source Code structure (partial)

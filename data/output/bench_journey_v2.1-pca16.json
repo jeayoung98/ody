@@ -1,0 +1,51 @@
+{
+  "bundle": "v2.1-pca16",
+  "pairs": 40,
+  "seed": 42,
+  "n_stations_requested": 10,
+  "modes": {
+    "axis": {
+      "latency_seconds": {
+        "n": 40,
+        "p50": 1.3756303499994829,
+        "p95": 1.5407542800005103,
+        "max": 1.5521450000014738,
+        "mean": 1.346109355000226
+      },
+      "step_distance_median": {
+        "n": 40,
+        "p50": 2.94940584897995,
+        "p95": 3.7877575933933256,
+        "max": 5.220545530319214,
+        "mean": 3.026892748475075
+      },
+      "unreachable": 0,
+      "rule_violations": 0,
+      "progress_not_monotonic": 0,
+      "far_journeys": 30
+    },
+    "linear": {
+      "latency_seconds": {
+        "n": 40,
+        "p50": 1.4278563499992742,
+        "p95": 1.4877910299994255,
+        "max": 1.5431811999987985,
+        "mean": 1.4333960725003636
+      },
+      "step_distance_median": {
+        "n": 40,
+        "p50": 3.429958999156952,
+        "p95": 4.600373089313507,
+        "max": 5.133306264877319,
+        "mean": 3.501765775680542
+      },
+      "unreachable": 0,
+      "rule_violations": 0,
+      "progress_not_monotonic": 21,
+      "far_journeys": 32
+    }
+  },
+  "ac4_axis_better_than_linear": true,
+  "ac1_axis_p95_under_2s": true,
+  "source": "Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17"
+}

@@ -320,12 +320,12 @@ Discovery 계약의 기존 협의자는 BE2 효정·FE1 주하·BE4 재영이다
 
 ### 현재 코드 참고 — 합의 근거 아님
 
-[MusicController.java](../../src/main/java/com/ssafy/backend/music/controller/MusicController.java)는
+[MusicController.java](../../backend/src/main/java/com/ssafy/backend/music/controller/MusicController.java)는
 pc1~pc16을 선택 입력으로 받고 level 기본값 1·최솟값 1을 적용한다.
-[MusicService.java](../../src/main/java/com/ssafy/backend/music/service/MusicService.java)의
+[MusicService.java](../../backend/src/main/java/com/ssafy/backend/music/service/MusicService.java)의
 `getMajor`는 `UnsupportedOperationException`을 던지는 미구현 상태다.
 KNN·거리 산정 주석은 대표곡 정책의 승인 근거가 아니다.
-[MusicControllerTests.java](../../src/test/java/com/ssafy/backend/music/MusicControllerTests.java)는
+[MusicControllerTests.java](../../backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java)는
 서비스를 대체한 응답 형식·level 검증 테스트이며 실제 대표곡 산정을 검증하지 않는다.
 코드나 테스트의 존재로 level 생략·하한·인증 생략이 합의됐다고 판단하지 않는다.
 

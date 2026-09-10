@@ -24,18 +24,21 @@ S0 원본 630GB 적재는 1차 범위 밖. 입력은 추출 특징 `hdfs:///ody/
 ## 제출 (master-node)
 ```bash
 sudo -u ubuntu bash ops/verify/cluster.sh
+# S2 전처리 — 번들 두 파일을 --files 로 올리고 --bundle . 로 가리킨다
 spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
-  spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --sample 100000
+  --files serving/v2.1-pca16/model_bundle.npz,serving/v2.1-pca16/feature_list.json \
+  spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre \
+  --bundle . --sample 100000
+# S3 PCA — 로더를 preprocess.py 에서 import 하므로 --py-files 가 필요하다
+spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
+  --py-files spark/jobs/preprocess.py \
+  --files serving/v2.1-pca16/model_bundle.npz,serving/v2.1-pca16/feature_list.json \
+  spark/jobs/pca.py --in hdfs:///ody/data/features_pre --out hdfs:///ody/data/coords --bundle .
 yarn application -list -all
 ```
-단계 순서: `manifest_rows.py`(S1) → `feature_select.py`(S1.5) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
+S2·S3 은 `mapInPandas` 로 executor 에서 numpy 연산을 한다. 270컬럼·4,320항 표현식 트리를 피하고 기준 구현과 같은 함수를 쓰기 위해서다. 재학습은 없다(규칙 3). 로컬 numpy 경로 패리티는 표본 2,774곡에서 최대 절대 오차 1.86e-06 이다(기준 1e-4, `tests/test_preprocess_pca.py`).
 
-곡 수를 줄이는 잡은 **S1 과 S5 둘**이다(제출본 2,946만 → 곡 740만 → 662만). 차원을 줄이는 잡은 S1.5a·S1.5b·S3 이다.
-
-```bash
-spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g   spark/jobs/catalog_rules.py --in hdfs:///ody/data/catalog_input --out hdfs:///ody/data/catalog --expect-excluded 780107
-```
-S5 는 행을 지우지 않고 `excluded`·`excluded_reason[]`·`flag_*` 로 표시한다. 임계값은 `pipeline/exclusion_rules.json` 에서만 읽는다. 입력에 필요한 컬럼과 두 값(`dup_group_id`·`rules_hash`)이 기준과 다른 이유는 스펙 20 의 S5 절에 있다.
+단계 순서: `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료
 ```bash

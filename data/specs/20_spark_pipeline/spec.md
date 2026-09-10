@@ -34,68 +34,50 @@
 | 단계 | 입력 | 출력 (HDFS Parquet) | 패리티 기준 |
 |---|---|---|---|
 | S0 원본 적재 | `lowlevel/*.tar.zst` 30파트 | `raw_features/part=NN/` : `mbid, offset, part, fingerprint, codec, bit_rate, length, lossless, sample_rate, f_000..f_269(float32), title, artist` | 행 수 = 전수조사 `census_all.parquet` 의 코호트 행 수; 표본 1만 행 값 == 기존 추출 Parquet |
-| S1 대표행 선택 | `census_all.parquet` 제출본 29,460,584 | `manifest_rows/` **7,404,506 행** | mbid 집합 == v2 manifest. 규칙은 아래 별도 절. 잡은 `spark/jobs/manifest_rows.py` |
-| S2 전처리 | manifest_rows + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` 270 f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인 |
-| S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
+| S1 대표행 선택 | raw_features + `work/v2_manifest.parquet` 규칙(지문→lossless→44100→규모→part,offset) | `manifest_rows/` 7,404,506 행 | mbid 집합 == v2 manifest |
+| S2 전처리 | 추출 특징 + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` `mbid` + `f_000..f_269` f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인. 잡은 `spark/jobs/preprocess.py` |
+| S3 PCA | features_pre + pca_mean, pca_components | `coords/` `mbid` + pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet`. 잡은 `spark/jobs/pca.py` |
 | S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
 | S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R9 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
 
-## S5 카탈로그 제외 규칙 — 곡 740만 → 662만
+## S2 전처리·S3 PCA — 270차원에서 16차원
 
-**곡 수를 줄이는 두 번째이자 마지막 단계다.** 첫 번째는 S1 대표행 선택이다.
+재학습하지 않는다(규칙 3). `model_bundle.npz` 와 `feature_list.json` 의 동결 파라미터를 적용만 한다. 기준 구현은 `scripts/korean_common.py` 의 `serving_transform` 이다.
 
 ```text
-S1 대표행 7,404,506
-  → 규칙 R1~R9 적용        제외 780,107 (10.54%)
-  → 남는 곡 6,624,399
+추출 특징 270(원값)
+  → 1. skew 변환      feature_list.skew_transform 이 지정한 컬럼만 log1p / signed_log1p
+  → 2. delta_f 보정   lossless=false 행에만 더한다
+  → 3. impute        남은 NaN 을 impute_median 으로
+  → 4. scaler        (x - scaler_center) / scaler_scale
+  → 5. clip          NaN·무한대를 0 으로 만든 뒤 ±winsorize_clip
+  → S2 출력 270 float32
+  → 6. PCA           (Z - pca_mean) @ pca_components.T
+  → S3 출력 pc1..pc16
 ```
 
-행을 지우지 않는다. 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`, `flag_*` 로 표시한다(`data/AGENTS.md` 규칙 2). 임계값은 `pipeline/exclusion_rules.json`(v3)에서만 읽고 잡 코드에 숫자를 적지 않는다(규칙 9). 테스트가 하드코딩 여부를 검사한다.
+순서가 곧 정의다. 계산은 float64 로 하고 저장만 float32 다(기준 구현이 float64).
 
-### 규칙별 적중 (원본 기록, `dmadkr/output/exclusion_report.json`)
-| 규칙 | 적중 | 단독 적중 | 무엇을 자르나 |
-|---|---:|---:|---|
-| R1_length | 113,841 | 110,613 | 30초 미만. 20분 초과(태그 있는 비예외). 미태그는 30분 초과 |
-| R2_nonmusic | 10,014 | 8,734 | 비음악 키워드 9개 적중 |
-| R3_no_key | 10,976 | 10,846 | 제목·아티스트 원문이 둘 다 빈 곡 |
-| R4_cohort | 0 | 0 | 코호트 밖 지문. S1 이 이미 걸러 0 이 정상(명시용) |
-| R5_dup_canonical | 241,660 | 240,646 | 같은 canonical 의 가까운 중복 |
-| R6_dup_version | 407,026 | 405,682 | 같은 제목·아티스트의 가까운 버전 중복 |
-| R7_samplerate | 0 | 0 | **꺼짐**. `flag_low_sr` 만 만든다 |
-| R8_silence | 116 | 78 | 하위 분위 음량 + 무음률 높음 |
-| R9_corrupt | 0 | 0 | **꺼짐**. `flag_clipped` 만 만든다 |
+### 컬럼식 대신 mapInPandas 를 쓴다
+270개 컬럼에 5단계를 컬럼식으로 쓰면 표현식 트리가 1,000 노드를 넘고, PCA 는 16 × 270 = 4,320 항이 된다. Catalyst 최적화가 급격히 느려지고 패리티도 보장하기 어렵다. `mapInPandas` 는 Arrow 배치를 numpy 로 받아 **기준 구현과 같은 함수**를 executor 에서 돌린다. 분산은 그대로다.
 
-R5·R6 은 거리 보호가 있다. 대표와 좌표 거리가 `protect_dist`(4.0) 를 넘는 멤버는 제목이 같아도 접지 않는다. 근거는 같은 녹음의 제출본 거리 p90 이 5.18 이고 제목만 같은 묶음의 멤버 거리 median 이 5.34 라는 감사 A6·A7 이다.
+부작용: S3 이 S2 의 로더를 import 하므로 제출 때 `--py-files spark/jobs/preprocess.py` 가 필요하다.
 
-### 분산 처리로 바뀐 것
-| 무엇 | 원본 | Spark |
-|---|---|---|
-| 묶음 대표 선정 | `sort_values` + `drop_duplicates` | `Window.partitionBy(묶음).orderBy(...)` + `row_number() == 1` |
-| 대표와의 거리 | 대표 행을 색인해 `np.linalg.norm` | 같은 창의 `first(pc_i)` 로 대표 좌표를 실어 조인 없이 계산 |
-| 제목 정규화 | `catalog_audit.r6_key` | 같은 정규식을 잡에 복제(실행기에서 pandas import 회피). 테스트가 두 구현의 일치를 검사 |
+### 번들을 클러스터로 보내야 한다
+두 잡은 `model_bundle.npz`(24 KB)와 `feature_list.json`(17 KB)이 필요하다. git 에 없는 파일이므로 `spark-submit --files` 로 함께 올리고 `--bundle .` 을 준다. 명령은 `spark/README.md`.
 
-### 기준 출력과 값이 다른 두 컬럼
-1. `dup_group_id` — 원본은 `pandas.factorize` 의 등장 순서 정수다. 분산 환경에서 재현할 수 없어 묶음 키의 `xxhash64` 를 쓴다. **묶음 분할은 같고 정수 값만 다르다.** 테스트는 분할을 비교한다.
-2. `rules_hash` — 원본 `7854e999ee3f14d1` 은 CRLF 사본의 바이트 해시다. 저장소는 LF 라 내용이 같아도 해시가 다르다. 그래서 정렬된 JSON 을 해시해 개행에 무관하게 만든다.
+### 패리티 실측 (2026-09-10)
+`work/v2_feats/part0.parquet` 표본 3,000곡을 S2 → S3 에 통과시켜 `coords_v2.parquet` 과 대조했다.
 
-### 패리티 기준
-`work/catalog_v2.parquet` 이 기준이다. `tests/test_catalog_rules.py` 13건이 2026-09-10 에 통과했다.
+| 항목 | 값 |
+|---|---|
+| 대조된 곡 | 2,774 (표본 중 coords 에 있는 것) |
+| 최대 절대 오차 | **1.86e-06** |
+| p99 절대 오차 | 7.41e-07 |
+| 기준 | < 1e-4 |
 
-| 무엇 | 어떻게 | 결과 |
-|---|---|---|
-| 행 단위 규칙 R2·R3·R4·R7·R9, R1 짧은 곡 | 표본 8,000행 전수 비교 | 불일치 0 |
-| R1 긴 곡 | 20분 초과 29,966행 중 150행 + 실제 `genres_raw` 태그 | 불일치 0 |
-| R8 | 실제 특징 3컬럼으로 재계산 | 특징이 있는 113곡 전부 일치, 남는 3곡은 특징 없음 |
-| R5 | canonical 묶음 200개 | 대표가 접힌 사례 0. 보호된 멤버 204쌍 모두 거리 > 4.0 |
-| R6 | 묶음 200개(2곡 이상 묶음 589,543개에서 추출) | 묶음 분할·대표 선정 완전 일치 |
-| 제목 정규화 | 실제 제목 5,000개 | `catalog_audit.r6_key` 와 완전 일치 |
-
-### R8 분위값은 입력이 복구된 뒤에 검증한다
-R8 은 전곡 `average_loudness` 의 하위 0.1 퍼센타일이 필요하다. 현재 `v2_feats` 가 28/30 파트라 28파트로 계산하면 8.011e-05 이고 원본 기록은 8.517e-05 다. 데이터가 빠져서 생긴 차이다. 그래서 패리티 테스트는 기록값을 넣어 판정만 검증하고, 분위값 자체의 패리티는 열린 질문 Q7(파트 재추출)이 정해진 뒤로 남긴다.
-
-### 이식하지 않는 것
-dry-run 리포트(md/json), 브릿지 풀 Hit@10 재검증, 서빙 번들 내보내기. 앞의 둘은 fit·QA 산물이고(규칙 3) 마지막은 S6 `artifact_export.py` 담당이다.
+`tests/test_preprocess_pca.py` 10건이 이 수치를 만들고, 재학습이 없다는 것(소스에 `fit` 호출 없음)과 특징 순서가 `feature_list.json` 과 같다는 것도 함께 검사한다. 표본이 3,000곡인 이유는 pyspark 없이 numpy 경로로 도는 커밋 훅 테스트이기 때문이다. 표본 10만·전곡 검증은 클러스터 실행(AC0·AC1)에서 한다.
 
 ## 수용 기준
 - AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**

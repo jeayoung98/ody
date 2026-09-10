@@ -15,6 +15,7 @@
 | D11 | 2026-09-10 | **적재 5단계와 `music` 테이블 필드 확정.** `location` 은 **PCA-16 지도 좌표**(아티스트 지역 아님)이고 `music.location vector(16)` 에 넣는다. `release_year`·`album`·`youtube_url` 은 **컬럼만 만들고 1차 NULL**. 테이블 이름은 **`music`** 으로 통일하고 스펙 17 의 `track_vector` 를 `music.location` 으로 합친다 | 사용자 지정(2026-09-10). 필드 감사 실측: `bpm` 은 270 특징의 3번째 `rhythm.bpm` 으로 보유. `release_year`·`album` 은 `catalog_audit.py` A8 기록대로 원본 재패스가 필요해 2차. `youtube_url` 은 규칙 6(검색 URL 만)과 YouTube API 하루 100곡 할당량으로 662만 곡이면 66,000일 — 채울 방법이 없다. 조회 시 검색 URL 생성으로 대체. 장르 커버리지는 `bridge_v2.parquet` 67,472곡으로 전체의 **1.0%** 이고 나머지 99%는 `music_genre` 행이 없는 것이 정상 | 새 스펙 `18_db_ingest`, 스펙 17(`track_vector` → `music.location`), 스펙 50(`track` → `music`) |
 | D7 | 2026-09-10 | 좌표 차원은 **PCA-16**. Jira S15P21A405-35 설명의 "dim 64" 는 기획 초기 값이며 **설명 쪽을 갱신**한다 | 서빙 아티팩트가 `manifest.k=16`, `coords_v2.parquet` 이 `pc1..pc16`. 64 로 가려면 재학습이 필요하고 major 버전 + 게이트 재등록이라 1차 기간에 불가(규칙 3). 사용자(재영) 확인 | `50_db_schema` `track_vector` 스키마, Jira 35 설명 갱신. 열린 질문 Q1 종료 |
 
+| D13 | 2026-09-10 | **`music.id` 는 적재가 부여한다. `mbid` 오름차순 1..6,624,399.** BE 가 만든 실제 스키마를 따르고 스펙 18 초안(`mbid` PK)을 실제에 맞춘다 | 실측: `music.id BIGINT` 가 PK 인데 DEFAULT·IDENTITY·시퀀스가 없다(`playlist_id_seq` 만 존재). `music_genre` 도 `music_id` 를 참조한다. mbid 정렬 부여는 같은 입력에 같은 id 를 주므로 재적재가 멱등이다. 사용자 확인(2026-09-10) | `ingest/build_csv.py`, 스펙 18 실제 스키마 절·AC1, BE 전달 사항(새 곡은 6,624,400 부터) |
 ---
 
 ## 열린 질문 (결정 대기 — 답이 나오면 위 표에 D7.. 로 옮긴다)

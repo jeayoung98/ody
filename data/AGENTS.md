@@ -31,7 +31,7 @@
 - 현재 `v2.1-pca16`. 길이 규칙 60s~6min + `flag_instrumental` 반영 `v2.2-pca16` 예정(D1, D1b).
 
 ## 코드 위치
-`retrieval/` 서빙 라이브러리·FastAPI(스펙 10·11·12) · `spark/jobs/` Spark 이식(스펙 20) · `pipeline/` 카탈로그 감사·제외 규칙 numpy 기준 구현 · `scripts/` 재사용 실험 코드(이식 원본, 수정 금지) · `tests/` 단위·계약·패리티·벤치 · `gates/` 사전 등록 게이트 · `output/` 벤치·리포트 json · `docs/` 인수인계·계획·정성 기록.
+`retrieval/` 서빙 라이브러리·FastAPI(스펙 10·11·12) · `spark/jobs/` Spark 이식(스펙 20) · `ingest/` DB 적재 CSV·스크립트(스펙 18) · `pipeline/` 카탈로그 감사·제외 규칙 numpy 기준 구현 · `scripts/` 재사용 실험 코드(이식 원본, 수정 금지) · `tests/` 단위·계약·패리티·벤치 · `gates/` 사전 등록 게이트 · `output/` 벤치·리포트 json · `docs/` 인수인계·계획·정성 기록.
 
 ## 훅
 루트 `.claude/`(git 밖, 팀 배포 키트 `ody-jira-kit` 로 설치)의 훅: Jira-first — 브랜치에 `S15P21A405-\d+` 없으면 파일 수정·commit·push 차단(규칙 `.claude/rules/jira-workflow.md`, data 브랜치는 `data/<type>/<KEY>-<desc>`) · pytest 게이트 — `git commit` 이고 `data/` 변경이 있으면 `pytest -q -x data/tests` 를 먼저 돌린다. 실패 시 커밋 차단(exit 2). 우회하지 말고 테스트를 고친다. 비상용 `SKIP_COMMIT_GATE=1` 은 stderr 에 남는다.

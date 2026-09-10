@@ -6,8 +6,8 @@ import org.springframework.security.oauth2.core.OAuth2AuthenticationException;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 import org.springframework.stereotype.Service;
 
-import com.ssafy.backend.dto.UserDto;
-import com.ssafy.backend.mapper.UserMapper;
+import com.ssafy.backend.auth.dto.UserAuthDto;
+import com.ssafy.backend.auth.mapper.AuthMapper;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -17,7 +17,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 
-	private final UserMapper userMapper;
+	private final AuthMapper authMapper;
 
 	@Override
 	public OAuth2User loadUser(OAuth2UserRequest userRequest) throws OAuth2AuthenticationException {
@@ -27,19 +27,19 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 		String name = oAuth2User.getAttribute("name");
 		String imageUrl = oAuth2User.getAttribute("picture");
 
-		UserDto user = userMapper.findByEmail(email);
+		UserAuthDto user = authMapper.findByEmail(email);
 
 		if (user == null) {
 			// nickname은 UNIQUE라 구글 표시 이름을 그대로 넣으면 중복 충돌이 나므로,
 			// 온보딩(tutorial_completed) 단계에서 사용자가 직접 정하도록 비워둔다.
-			user = new UserDto();
+			user = new UserAuthDto();
 			user.setEmail(email);
 			user.setName(name);
 			user.setImageUrl(imageUrl);
-			userMapper.insert(user);
+			authMapper.insert(user);
 			log.info("[OAuth2] 신규 회원가입 완료 email={}", email);
 		} else {
-			userMapper.touchLogin(email, imageUrl);
+			authMapper.touchLogin(email, imageUrl);
 			user.setImageUrl(imageUrl);
 			log.info("[OAuth2] 기존 회원 로그인 email={}", email);
 		}

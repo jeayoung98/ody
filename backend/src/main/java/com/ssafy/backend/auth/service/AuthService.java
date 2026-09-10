@@ -14,6 +14,7 @@ import com.ssafy.backend.auth.dto.UserAuthDto;
 import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
+import com.ssafy.backend.user.NicknamePolicy;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.JwtException;
@@ -33,8 +34,6 @@ public class AuthService {
 	/** 영문+숫자 포함 8자 이상. bcrypt는 UTF-8 72바이트를 넘으면 초과분을 조용히 버리므로 바이트 길이는 별도 검사한다. */
 	private static final Pattern PASSWORD_PATTERN = Pattern.compile("^(?=.*[A-Za-z])(?=.*\\d).{8,}$");
 	private static final int PASSWORD_MAX_BYTES = 72;
-	private static final int NICKNAME_MIN_LENGTH = 2;
-	private static final int NICKNAME_MAX_LENGTH = 20;
 
 	private final AuthMapper authMapper;
 	private final JwtTokenProvider jwtTokenProvider;
@@ -49,7 +48,7 @@ public class AuthService {
 		if (!isValidPassword(rawPassword)) {
 			throw new CustomException(AuthErrorCode.INVALID_PASSWORD_FORMAT);
 		}
-		if (nickname.length() < NICKNAME_MIN_LENGTH || nickname.length() > NICKNAME_MAX_LENGTH) {
+		if (!NicknamePolicy.isValidLength(nickname)) {
 			throw new CustomException(AuthErrorCode.INVALID_NICKNAME_LENGTH);
 		}
 		if (authMapper.findByEmail(email) != null) {

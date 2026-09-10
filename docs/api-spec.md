@@ -163,6 +163,17 @@ body: `idToken`(String, required).
   ALTER TABLE "user" ADD COLUMN IF NOT EXISTS password_hash varchar(60);
   ```
 
+`GET /api/users/nickname-available` · 인증 불필요(가입 전 호출). param: `nickname`(String, required).
+```json
+{ "success": true, "data": { "available": true }, "error": null }
+```
+- `signup`과 같은 길이 규칙(2~20자, `NicknamePolicy`)과 같은 중복 검사(`existsByNickname`)를 그대로 재사용한다.
+  이 API가 `available:true`를 반환해도 그 사이 다른 요청이 먼저 가입하면 `signup`에서 `NICKNAME_ALREADY_EXISTS`가
+  날 수 있다(TOCTOU, 최종 검증은 signup 쪽).
+- 에러: `INVALID_NICKNAME_LENGTH`(400), `VALIDATION_ERROR`(400, 필수값 누락).
+- 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/music/detail`)나
+  `/api/auth/*`와도 다른 세 번째 네이밍이다. 사용자가 지정한 경로를 그대로 따랐다.
+
 ---
 
 ## 2. 사용자

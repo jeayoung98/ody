@@ -21,6 +21,20 @@ S0 원본 630GB 적재는 1차 범위 밖. 입력은 추출 특징 `hdfs:///ody/
 ## 자원 설정
 입력 파티션 ≈ 100(90MB), executor 2 × 4GB × 2 cores, driver 2GB. `collect()`/`toPandas()` 금지. 결과는 HDFS parquet. 팀 규칙(`docs/infra/SPARK_PIPELINE.md`): sample → schema/row 검증 → full → publish.
 
+## 런타임 의존성 (2026-09-10 설치) — 두 노드 모두
+클러스터에는 numpy·pandas·pyarrow·pip 이 없었다. S2·S3 이 `mapInPandas` 를 쓰므로 없으면 실행되지 않는다.
+
+```bash
+sudo apt-get install -y python3-pip python3-numpy python3-pandas
+sudo pip3 install --break-system-packages -U pandas pyarrow
+python3 -c "import numpy,pandas,pyarrow;print(numpy.__version__,pandas.__version__,pyarrow.__version__)"
+```
+
+master-node 와 app-node **둘 다** 해야 한다(실행기가 양쪽에서 뜬다). 설치 결과: numpy 1.26.4, pandas 3.0.5, pyarrow 25.0.1.
+apt 의 pandas 2.1.4 로는 안 된다 — Spark 4.2.0 이 `pandas >= 2.2.0` 을 요구한다.
+
+제출 시 `PYSPARK_PYTHON=python3 PYSPARK_DRIVER_PYTHON=python3` 를 준다.
+
 ## 제출 (master-node)
 ```bash
 sudo -u ubuntu bash ops/verify/cluster.sh

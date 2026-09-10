@@ -116,8 +116,44 @@ root 에서 시작해 깊이 6 까지 한 칸씩
 
 내부 노드는 1,365개이고 `split_axes.npz` 의 축 집합이 `tree.json` 의 내부 노드 집합과 정확히 같다(테스트가 검사).
 
+## 클러스터 실행 실측 (2026-09-10) — AC0 충족
+
+| 항목 | S2 전처리 | S3 PCA |
+|---|---|---|
+| YARN application | `application_1788767549509_0005` | `application_1788767549509_0006` |
+| 최종 상태 | **SUCCEEDED** | **SUCCEEDED** |
+| 입력 | `hdfs:///ody/data/raw_features_extracted` 6,617,603행 | `hdfs:///ody/data/features_pre` 6,617,603행 |
+| 출력 | `hdfs:///ody/data/features_pre` 6,617,603행 | `hdfs:///ody/data/coords` 6,617,603행 |
+| HDFS 크기 | 6.8 G (복제 13.5 G), 파일 30개 | 632.3 M (복제 1.2 G), 파일 59개 |
+| 소요 | 349초 | 126초 |
+| 자원 | executor 2 × 4g × 2 core, driver 2g | 같음 |
+| 누적 자원 | 3,519,635 MB-s / 1,035 vcore-s | 1,223,896 MB-s / 362 vcore-s |
+
+팀 절차대로 표본(10만 행)을 먼저 통과시킨 뒤 전수를 돌렸다.
+
+### 클러스터 좌표 패리티
+클러스터가 쓴 `coords` 의 `part-00000` 에서 표본 5,000곡을 뽑아 `serving/v2.1-pca16/coords_v2.parquet` 과 대조했다. 4,577곡이 대조 대상이었고(423곡은 제외된 곡이라 기존 좌표에 없다) **최대 절대 오차 1.91e-06**, p99 9.54e-07 이다. 기준 1e-4 를 통과한다. 로컬 numpy 경로 실측(1.86e-06)과 같은 자리수다.
+
+### 런타임 의존성 — 두 노드에 설치해야 한다
+클러스터에는 numpy·pandas·pyarrow·pip 이 **하나도 없었다**. S2·S3 이 `mapInPandas` 를 쓰므로 없으면 실행되지 않는다.
+
+```bash
+sudo apt-get install -y python3-pip python3-numpy python3-pandas
+sudo pip3 install --break-system-packages -U pandas pyarrow
+```
+
+master-node 와 app-node **둘 다** 해야 한다(실행기가 양쪽에서 뜬다). 설치 결과: Python 3.12.3, numpy 1.26.4, pandas 3.0.5, pyarrow 25.0.1, Spark 4.2.0.
+
+⚠️ apt 의 pandas 2.1.4 로는 안 된다. Spark 4.2.0 이 `pandas >= 2.2.0` 을 요구해 `PySparkImportError [UNSUPPORTED_PACKAGE_VERSION]` 로 막힌다. pip 로 올려야 한다.
+
+### 첫 제출에서 잡힌 버그 하나
+특징 이름이 `lowlevel.gfcc.mean.0` 처럼 점을 포함하는데, 그대로 `select` 에 넘기면 Spark 가 **중첩 필드 접근으로 해석**해 `UNRESOLVED_COLUMN.WITH_SUGGESTION` 으로 실패한다. 백틱으로 감싸고 `f_000..f_269` 로 alias 해서 고쳤다(커밋 `ca492db`). 로컬 numpy 경로만 검증했을 때는 드러나지 않는 종류의 버그다. **클러스터 실행이 컷 대상이 아닌 이유가 이것이다.**
+
+### AC0 을 판정할 때 주의
+client 모드에서는 드라이버가 예외로 죽어도 SparkContext 가 정상 종료되면 YARN 이 `SUCCEEDED` 로 기록한다. 실패한 `_0001`(컬럼 오류)·`_0002`(pandas 버전)도 목록에 `SUCCEEDED` 로 남아 있다. **application id 만 보지 말고 출력 경로의 행 수를 함께 확인해야 한다.**
+
 ## 수용 기준
-- AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**
+- AC0 **클러스터 실행** ✅ **2026-09-10 충족.** S2 `application_1788767549509_0005`, S3 `application_1788767549509_0006` 둘 다 `spark-submit --master yarn` 으로 `SUCCEEDED`. 입출력 전부 `hdfs:///`. 증거 `output/spark_run_S2_2026-09-10.json`, `spark_run_S3_2026-09-10.json`. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**
 - AC1 S2~S6 이 **기존 추출 Parquet 를 입력으로** 끝까지 돌고 패리티 기준 전부 통과 (`tests/test_spark_parity.py`, 표본 + 전곡 요약).
 - AC2 S0 잡이 클러스터에서 최소 1파트 완주하고 표본 값 일치. 30파트 완주는 배포 후 허용(D6). **S0 자체는 컷 1번**이며, 잘려도 AC0 은 S2·S3 으로 충족된다.
 - AC3 각 잡은 멱등(같은 입력 → 같은 출력 해시), 파티션 단위 재시작 가능.

@@ -1,0 +1,79 @@
+{
+  "stage": "map-layer",
+  "date": "2026-09-11",
+  "jira": "S15P21A405-210",
+  "spec": "16_map_layer_serving",
+  "database": {
+    "host": "app-node ody-postgres",
+    "version": "PostgreSQL 17.11",
+    "pgvector": "0.7.0",
+    "rows": 6624399,
+    "container": "memory 8g / cpus 2 (docker update, 재시작 없음)"
+  },
+  "design": {
+    "layer_pairs": "1레이어 (pc1,pc2) · 2레이어 (pc3,pc4) · ... · 8레이어 (pc15,pc16)",
+    "why_expression_index": "music.location 은 vector(16) 하나라 성분 일부로 인덱스를 타지 못한다. pc1..pc16 을 real 로 복제하면 424 MB 가 더 든다. vector→real[] 캐스트와 point() 가 IMMUTABLE 이라 표현식 GiST 로 해결했다(테이블·컬럼 추가 0).",
+    "one_index_is_enough": "드릴다운 필터 사슬에는 항상 (pc1,pc2) 가 들어가고 그게 662만 → 241,605 로 줄인다. 이후 조건은 작아진 후보에 heap 필터로 붙인다."
+  },
+  "indexes": {
+    "music_l1_gist": {
+      "expr": "point((location::real[])[1], (location::real[])[2])",
+      "build_s": 21,
+      "size": "421 MB"
+    },
+    "music_l2_gist": {
+      "expr": "point((location::real[])[3], (location::real[])[4])",
+      "build_s": 21,
+      "size": "421 MB",
+      "note": "평면 최근접 전용. 사각 범위에 같이 쓰면 BitmapAnd 로 느려진다"
+    },
+    "music_location_hnsw_idx": {
+      "expr": "hnsw (location vector_l2_ops)",
+      "build_s": 3943,
+      "note": "16차원 전체 L2. maintenance_work_mem 6GB 로 재빌드"
+    }
+  },
+  "map_sample": {
+    "rows": 1094,
+    "size": "120 kB",
+    "cell": 2.0,
+    "build_s": 48,
+    "rule": "칸마다 중심에 가장 가까운 1개. 동률은 id 작은 쪽",
+    "columns": "layer, gx, gy, music_id, x, y, title, artist",
+    "denormalized": "제목·아티스트를 넣어 music 조인 제거 (322 ms → 0.4 ms)",
+    "parity_with_local_grid": true,
+    "parity_detail": "DB 1,094행을 내려 numpy 격자 계산과 대조. 셀 집합·대표 선정 전부 일치",
+    "why_precomputed": "첫 화면은 사용자 입력과 무관하게 늘 같다. 실시간 격자는 662만 행을 전부 읽어 20,941 ms. 깊은 레이어는 경로마다 영역이 달라 미리 계산할 수 없고, 이미 좁아서 실시간으로 충분하다"
+  },
+  "latency_ms": {
+    "layer1_first_screen": 0.44,
+    "layer1_first_screen_before_precompute": 20940.7,
+    "layer1_first_screen_with_join": 322.5,
+    "layer2_1000": 82.4,
+    "layer3_1000_heap_filter": 144.9,
+    "layer3_1000_bitmap_and": 355.1,
+    "plane_knn_20": 0.24,
+    "hnsw_knn_10": 13.9,
+    "bbox_without_index": 95.1
+  },
+  "plans": {
+    "layer1_before": "Sort 6,623,146행 → Unique. Bitmap Heap Scan 13,077 ms",
+    "layer1_after": "Seq Scan on map_sample rows=1094 (120 kB)",
+    "layer2": "Bitmap Index Scan on music_l1_gist rows=241,605 → LIMIT 1000",
+    "layer3_heap": "Bitmap Index Scan on music_l1_gist + heap 필터 BETWEEN",
+    "layer3_bitmap_and": "BitmapAnd(music_l2_gist 906,837 + music_l1_gist 241,605), Rows Removed by Index Recheck 99,180 → 2.4배 느림",
+    "plane_knn": "Index Scan using music_l1_gist (KNN GiST)",
+    "hnsw": "Index Scan using music_location_hnsw_idx"
+  },
+  "warnings": [
+    "사각 범위 조건에 GiST 두 개를 함께 쓰지 말 것. BitmapAnd 로 145 ms → 355 ms",
+    "HNSW 질의 벡터를 서브쿼리로 넘기지 말 것. InitPlan 으로 들어가 recall 0.0000",
+    "map_sample 재적재는 DELETE WHERE layer = 1 후 INSERT. 스크립트가 멱등하다"
+  ],
+  "not_done": [
+    "3레이어 이후 평면 인덱스 (필요해지면 21초에 추가)",
+    "깊은 레이어 대표 미리 계산 (경로 의존이라 불가)",
+    "조회수 기준 대표 선정 (play_cnt 가 전 행 0)"
+  ],
+  "reproduce": "ingest/build_map_layer.sql (멱등). 질의는 ingest/map_layer_queries.sql"
+}

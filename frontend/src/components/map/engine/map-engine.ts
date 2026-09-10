@@ -20,6 +20,8 @@ interface Morph {
   subset: Uint8Array<ArrayBufferLike>;
   big: string;
   sub: string;
+  /** 1 = 파고들기(확대해 들어간다), -1 = 떠오르기(물러난다) */
+  dir: 1 | -1;
 }
 
 /** 화면에 잡힌 친구 (그리기·히트테스트용) */
@@ -105,6 +107,9 @@ export class MapEngine {
   private from = new Float32Array(0);
   private to = new Float32Array(0);
   alpha = new Float32Array(0);
+  /** 전환 중 **나가는 겹**의 화면 좌표·투명도 (들어오는 겹은 pos/alpha) */
+  posOut = new Float32Array(0);
+  alphaOut = new Float32Array(0);
   private aFrom = new Float32Array(0);
   private aTo = new Float32Array(0);
   anim: Morph | null = null;
@@ -198,6 +203,8 @@ export class MapEngine {
     this.pos = new Float32Array(this.N * 2);
     this.from = new Float32Array(this.N * 2);
     this.to = new Float32Array(this.N * 2);
+    this.posOut = new Float32Array(this.N * 2);
+    this.alphaOut = new Float32Array(this.N);
     this.alpha = Float32Array.from(this.subset);
     this.aFrom = new Float32Array(this.N);
     this.aTo = new Float32Array(this.N);
@@ -589,23 +596,13 @@ export class MapEngine {
     return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
   }
 
-  private outward(x: number, y: number, out: Float32Array, k: number) {
-    const f = this.freeRect();
-    let dx = x - f.cx;
-    let dy = y - f.cy;
-    let d = Math.hypot(dx, dy);
-    if (d < 1) {
-      dx = 1;
-      dy = 0;
-      d = 1;
-    }
-    const fct = (0.8 * Math.hypot(this.W, this.H)) / d;
-    out[k] = f.cx + dx * fct;
-    out[k + 1] = f.cy + dy * fct;
-  }
-
   // ------------------------------------------------------------------ layer transitions
-  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string) {
+  /**
+   * 겹 전환. 두 겹을 **교차 확대**로 겹쳐 보여준다 (DRILL.dive) —
+   * from 은 지금 화면에 보이던 자리, to 는 새 겹에서의 자리이고, 각자 자기 자리에서
+   * 화면 중앙을 기준으로 커지거나 작아지기만 한다. 별이 새 자리로 미끄러지지 않는다.
+   */
+  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string, dir: 1 | -1 = 1) {
     // 레이어를 옮기면 고스트별은 사라진다 (MAP-12)
     this.ghost = null;
     for (let i = 0; i < this.N; i++) {
@@ -613,13 +610,11 @@ export class MapEngine {
       this.from[i * 2 + 1] = this.pos[i * 2 + 1];
       this.aFrom[i] = this.alpha[i];
       this.aTo[i] = newSubset[i] ? 1 : 0;
-      if (newSubset[i]) this.proj(i, newLayer, newCam, this.to, i * 2);
-      else this.outward(this.pos[i * 2], this.pos[i * 2 + 1], this.to, i * 2);
-      if (!this.subset[i] && newSubset[i]) this.outward(this.to[i * 2], this.to[i * 2 + 1], this.from, i * 2);
+      this.proj(i, newLayer, newCam, this.to, i * 2);
     }
     this.pressure = 0;
     this.camTarget = null;
-    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub };
+    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir };
   }
 
   /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
@@ -669,7 +664,7 @@ export class MapEngine {
     const f = this.freeRect();
     const c: MapCamera = { ...p.cam, cx: m.pc[dx] - (f.cx - this.W / 2) / p.cam.s, cy: m.pc[dy] + (f.cy - this.H / 2) / p.cam.s };
     const ax = LAYER_AXES[p.layer];
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1);
   }
 
   // ------------------------------------------------------------------ input
@@ -746,7 +741,14 @@ export class MapEngine {
     };
     const ax = LAYER_AXES[targetLayer];
     this.touched = true;
-    this.morph(targetLayer, cam, this.subset, `${s.title} — ${LAYER_NAMES[targetLayer]}${ro(LAYER_NAMES[targetLayer])}`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    this.morph(
+      targetLayer,
+      cam,
+      this.subset,
+      `${s.title} — ${LAYER_NAMES[targetLayer]}${ro(LAYER_NAMES[targetLayer])}`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      targetLayer > this.layer ? 1 : -1,
+    );
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {
@@ -831,6 +833,7 @@ export class MapEngine {
       ns,
       `${s.title} — ${LAYER_NAMES[0]}${ro(LAYER_NAMES[0])} 떠오르는 중`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      -1,
     );
   }
 
@@ -973,14 +976,25 @@ export class MapEngine {
       if (Math.abs(this.occludedRight - this.occludedTarget) < 0.5) this.occludedRight = this.occludedTarget;
     }
 
-    // 모프 진행
+    // 모프 진행 — 두 겹을 화면 중앙 기준으로 확대·축소하며 교차한다 (별을 새 자리로 옮기지 않는다)
     if (this.anim) {
       const t = Math.min(1, (now - this.anim.t0) / DRILL.morphMs);
       const e = easeInOut(t);
+      const f = this.freeRect();
+      const dir = this.anim.dir;
+      // 나가는 겹: 파고들면 계속 확대, 떠오르면 줄어든다. 들어오는 겹은 그 반대쪽에서 제 크기로 온다
+      const sOut = dir > 0 ? lerp(1, DRILL.dive.out, e) : lerp(1, DRILL.dive.in, e);
+      const sIn = dir > 0 ? lerp(DRILL.dive.in, 1, e) : lerp(DRILL.dive.out, 1, e);
+      // 두 겹이 겹쳐 있는 구간을 넉넉히 둔다 — 안 그러면 전환 중간이 텅 비어 깜빡인다
+      const aOut = Math.pow(1 - e, 1.15);
+      const aIn = Math.min(1, Math.max(0, (e - 0.04) / 0.52));
       for (let i = 0; i < this.N; i++) {
-        this.pos[i * 2] = this.from[i * 2] + (this.to[i * 2] - this.from[i * 2]) * e;
-        this.pos[i * 2 + 1] = this.from[i * 2 + 1] + (this.to[i * 2 + 1] - this.from[i * 2 + 1]) * e;
-        this.alpha[i] = this.aFrom[i] + (this.aTo[i] - this.aFrom[i]) * e;
+        this.posOut[i * 2] = f.cx + (this.from[i * 2] - f.cx) * sOut;
+        this.posOut[i * 2 + 1] = f.cy + (this.from[i * 2 + 1] - f.cy) * sOut;
+        this.alphaOut[i] = this.aFrom[i] * aOut;
+        this.pos[i * 2] = f.cx + (this.to[i * 2] - f.cx) * sIn;
+        this.pos[i * 2 + 1] = f.cy + (this.to[i * 2 + 1] - f.cy) * sIn;
+        this.alpha[i] = this.aTo[i] * aIn;
       }
       if (t >= 1) {
         const a = this.anim;
@@ -991,6 +1005,7 @@ export class MapEngine {
         this.subset = a.subset;
         this.rebuildAliveIdx();
         this.alpha = this.aTo.slice();
+        this.alphaOut.fill(0);
         const w = this.worldOf(this.myId!);
         if (w) this.me = { ...w };
         if (this.selectedId != null && !this.isAlive(this.selectedId)) this.selectedId = null;

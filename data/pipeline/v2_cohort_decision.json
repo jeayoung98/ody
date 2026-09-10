@@ -1,0 +1,127 @@
+{
+  "record_type": "human_decision_on_gate",
+  "gate_id": "variant_gate_v1",
+  "gate_verdict_was": "FULL_REVIEW",
+  "gate_status_was": "HALTED_PENDING_HUMAN_DECISION",
+  "decided_at": "2026-09-03",
+  "decided_by": "user (프롬프트 'v2 fit 준비 — 매니페스트 · 파일럿 추출 · 실행 계획')",
+  "decision": "CONFIRMED — v2 fit 진행. 코호트는 변종 실험에서 실제로 검정된 9개 beta2 지문으로 한정한다.",
+  "basis": "variant_heterogeneity_report.md 2절 md5 통제 결과 — 같은 오디오 파일 고정 시 beta2 변종 간 median <= 0.0017, d>1.0 비율 <= 0.14%, 계통편향 <= 지도 축 std 의 0.008%. 대조로 beta1->beta2 는 같은 파일에서도 4.07% 가 d>1.0. 게이트 v1 의 R3 는 천장 셀 눈금 가정(3.951 vs 실측 0.0793)이 어긋나 기계적으로 발동한 것.",
+  "gate_v1_not_modified": true,
+  "cohort_file_not_modified": true,
+  "cohort_fingerprints": [
+    71,
+    72,
+    73,
+    74,
+    76,
+    87,
+    99,
+    101,
+    103
+  ],
+  "cohort_fingerprint_detail": [
+    {
+      "fp": 71,
+      "git_sha": "v2.1_beta2-2-gbb40004",
+      "build_sha": "c0e182ba78c2de26e491b7b7a4a2c98c1ed34208",
+      "submissions": 377456,
+      "unique_mbids": 299894
+    },
+    {
+      "fp": 72,
+      "git_sha": "v2.1_beta2-1-ge3940c0",
+      "build_sha": "2d9f1f26377add8aeb1075a9c2973f962c4f09fd",
+      "submissions": 8555408,
+      "unique_mbids": 3365104
+    },
+    {
+      "fp": 73,
+      "git_sha": "v2.1_beta2-1-ge3940c0",
+      "build_sha": "cead25079874084f62182a551b7393616cd33d87",
+      "submissions": 8345261,
+      "unique_mbids": 1920133
+    },
+    {
+      "fp": 74,
+      "git_sha": "v2.1_beta2",
+      "build_sha": "70f2e5ece6736b2c40cc944ad0e695b16b925413",
+      "submissions": 9929549,
+      "unique_mbids": 3457792
+    },
+    {
+      "fp": 76,
+      "git_sha": "v2.1_beta2",
+      "build_sha": "26c37b627ab5a2028d412893e0969599b764ad4d",
+      "submissions": 845932,
+      "unique_mbids": 783388
+    },
+    {
+      "fp": 87,
+      "git_sha": "v2.1_beta2",
+      "build_sha": "9d802f11a06d563db11312c01732e940832f6a11",
+      "submissions": 26736,
+      "unique_mbids": 20610
+    },
+    {
+      "fp": 99,
+      "git_sha": "v2.1_beta2",
+      "build_sha": "05ddcf096b9560a4bec586e3e2c3f09258f97377",
+      "submissions": 421345,
+      "unique_mbids": 208573
+    },
+    {
+      "fp": 101,
+      "git_sha": "v2.1_beta2",
+      "build_sha": "8f36b0d610e462e13050217bbccca683803f5921",
+      "submissions": 118611,
+      "unique_mbids": 61225
+    },
+    {
+      "fp": 103,
+      "git_sha": "v2.1_beta2",
+      "build_sha": "0a4b6ae707e47e71e2df3c44273bac93d7151f5d",
+      "submissions": 30037,
+      "unique_mbids": 27781
+    }
+  ],
+  "expected_unique_songs": 7404506,
+  "excluded_vs_full_beta2": {
+    "untested_fingerprints": [
+      75,
+      77,
+      78,
+      80,
+      81,
+      82,
+      83,
+      84,
+      85,
+      86,
+      88,
+      90,
+      91,
+      93,
+      96,
+      104,
+      106,
+      118,
+      123,
+      128,
+      130,
+      131,
+      132,
+      133,
+      134,
+      136,
+      137,
+      138,
+      141
+    ],
+    "n": 29,
+    "songs_lost": 22797,
+    "reason": "이 실험에서 이질성이 측정되지 않은 소규모 지문. 보수적으로 제외 (전체의 0.31%)."
+  },
+  "also_excluded": "extractor music 2.0 계열 (beta4/beta5-dev/beta6-dev), essentia 2.1-beta1 전체",
+  "open_item": "진행을 정식화하려면 gates/variant_gate_v2.json 을 별도 등록하는 것이 남아 있다 (주 통계량 = md5 통제 부분집합, 임계 = 지도 축 스케일 대비 절대량). 이 기록은 그 대체물이 아니다."
+}

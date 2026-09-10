@@ -28,11 +28,7 @@ spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-mem
   spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --sample 100000
 yarn application -list -all
 ```
-단계 순서: `feature_select.py`(S1.5) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
-
-차원 축소 사슬은 **약 2,929 → 389 → 270 → 16** 이다. 앞 두 컷이 `feature_select.py`, 마지막이 `pca.py` 다.
-`work/v2_feats` 는 270 지점 체크포인트이므로 그 입력으로는 `feature_select.py` 가 순서만 맞춘다.
-원본 JSON 부터 돌리려면 `--from-raw` 를 준다(S0 필요, 1차 범위 밖).
+단계 순서: `manifest_rows.py`(S1) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료
 ```bash

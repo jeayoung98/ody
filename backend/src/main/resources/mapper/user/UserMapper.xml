@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.user.mapper.UserMapper">
+
+	<!-- "user"는 Postgres 예약어라 반드시 큰따옴표로 감싼다 -->
+
+	<resultMap id="userProfileRowMap" type="com.ssafy.backend.user.dto.UserProfileRow">
+		<result property="email" column="email"/>
+		<result property="name" column="name"/>
+		<result property="nickname" column="nickname"/>
+		<result property="imageUrl" column="image_url"/>
+		<result property="isPublic" column="is_public"/>
+		<result property="tutorialCompleted" column="tutorial_completed"/>
+		<result property="lastActiveAt" column="last_active_at"/>
+		<result property="createdAt" column="created_at"/>
+	</resultMap>
+
+	<select id="findProfileByEmail" resultMap="userProfileRowMap">
+		SELECT email, name, nickname, image_url, is_public, tutorial_completed, last_active_at, created_at
+		FROM "user"
+		WHERE email = #{email}
+	</select>
+
+</mapper>

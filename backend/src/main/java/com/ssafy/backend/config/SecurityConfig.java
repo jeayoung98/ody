@@ -43,8 +43,8 @@ public class SecurityConfig {
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						// 로그아웃/탈퇴만 access token 인증을 요구하고, 나머지 기존 엔드포인트는 그대로 공개한다.
-						.requestMatchers("/api/auth/logout", "/api/auth/withdraw").authenticated()
+						// 로그아웃/탈퇴/사용자 상세 조회만 access token 인증을 요구하고, 나머지 기존 엔드포인트는 그대로 공개한다.
+						.requestMatchers("/api/auth/logout", "/api/auth/withdraw", "/user/detail").authenticated()
 						.anyRequest().permitAll())
 				.oauth2Login(oauth2 -> oauth2
 						.userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))

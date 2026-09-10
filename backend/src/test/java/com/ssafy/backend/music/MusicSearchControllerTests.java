@@ -25,6 +25,7 @@ import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
@@ -60,6 +61,9 @@ class MusicSearchControllerTests {
 
 	@MockitoBean
 	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	private static MusicSummary song(long id, String title, String artist, String youtubeUrl) {
 		return new MusicSummary(id, title, artist, "The Winning", List.of("K-Pop"), youtubeUrl,

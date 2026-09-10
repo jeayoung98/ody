@@ -24,6 +24,7 @@ import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.controller.UserAvailabilityController;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserAvailabilityService;
 
@@ -50,6 +51,9 @@ class UserAvailabilityControllerTests {
 
 	@MockitoBean
 	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	@Test
 	void nicknameAvailable_available_returnsTrue() throws Exception {

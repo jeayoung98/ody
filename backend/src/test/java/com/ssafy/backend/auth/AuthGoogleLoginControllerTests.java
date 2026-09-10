@@ -29,6 +29,7 @@ import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
 import com.ssafy.backend.test.mapper.TestMapper;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
 
 /**
@@ -58,6 +59,9 @@ class AuthGoogleLoginControllerTests {
 
 	@MockitoBean
 	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	@Test
 	void loginWithGoogle_success_returnsAccessTokenAndUser() throws Exception {

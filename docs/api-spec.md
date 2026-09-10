@@ -316,6 +316,49 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 
 ## 4. 플레이리스트
 
+> **S15P21A405-65/66/67에서 구현 완료**. `playlist`, `playlist_item` 테이블은 데이터 파트에서 이미 만들었다
+> (아래가 실제 운영 스키마). 컬럼명이 `owner_email`/`name`이 아니라 `email`/`playlist_name`이고, `id`는
+> 자동증가가 아니라 애플리케이션이 시퀀스로 채운다.
+> ```sql
+> CREATE TABLE public.playlist (
+>     id int8 NOT NULL,
+>     email varchar(255) NOT NULL,
+>     playlist_name varchar(200) NOT NULL,
+>     like_cnt int4 NULL,
+>     created_at timestamptz DEFAULT now() NOT NULL,
+>     updated_at timestamptz DEFAULT now() NOT NULL,
+>     CONSTRAINT "PK_PLAYLIST" PRIMARY KEY (id)
+> );
+>
+> CREATE TABLE public.playlist_item (
+>     playlist_id int8 NOT NULL,
+>     music_id int8 NOT NULL,
+>     added_at timestamptz DEFAULT now() NOT NULL,
+>     CONSTRAINT "PK_PLAYLIST_ITEM" PRIMARY KEY (playlist_id, music_id),
+>     CONSTRAINT "FK_music_TO_playlist_item_1" FOREIGN KEY (music_id) REFERENCES public.music(id),
+>     CONSTRAINT "FK_playlist_TO_playlist_item_1" FOREIGN KEY (playlist_id) REFERENCES public.playlist(id)
+> );
+> ```
+> **아직 실행 안 된, 백엔드가 추가로 필요한 것 두 가지**:
+> ```sql
+> -- 1) playlist.id 채번용 — 테이블에 DEFAULT/시퀀스가 없다.
+> CREATE SEQUENCE IF NOT EXISTS playlist_id_seq OWNED BY public.playlist.id;
+>
+> -- 2) 곡 순서 변경(4.4.1) 저장용 — 원본 테이블엔 순서 컬럼이 없어서 추가하기로 결정(팀 확인 완료).
+> ALTER TABLE public.playlist_item ADD COLUMN position int4 NOT NULL DEFAULT 0;
+> CREATE INDEX idx_playlist_item_order ON public.playlist_item (playlist_id, position);
+> ```
+> `like_cnt`는 현재 API 어디에도 노출·수정하지 않는다(좋아요 기능 자체가 아직 없음).
+>
+> **곡 조회 선행 조건**: 곡 존재 확인·상세 조회는 `MusicDetailReader` 포트를 그대로 재사용하는데, 이 포트는 아직
+> 어댑터(BE4)가 없다(`MusicService`와 동일한 "대기 중" 상태). `music` 테이블 자체는 이제 있지만(위 FK로 확인),
+> 애플리케이션에서 그 테이블을 읽는 코드가 아직 없다는 뜻이다. 그 결과 지금 시점에는:
+> - `musicIdList`가 **빈 배열**인 `/playlist/create`, `/playlist/detail`(빈 플레이리스트)은 정상 동작한다.
+> - `musicIdList`에 실제 곡 ID가 하나라도 들어가는 모든 API(4.2 트랙 있는 상세, 4.3 비어있지 않은 생성, 4.4 곡 추가,
+>   §4의 나머지 곡 관련 호출)는 어댑터가 붙기 전까지 500(`UnsupportedOperationException`)이 난다.
+>
+> `FORBIDDEN`은 신규 공통 에러코드(`GlobalErrorCode`, 403)로 이번에 추가했다.
+
 ### 4.1 플레이리스트 목록 조회
 `GET /playlist/search` · 인증 필요. param: `email`(String, required, 소유자).
 ```json
@@ -346,6 +389,15 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 { "success": true, "data": { "playlistId": 42, "insertedCnt": 3, "skippedCnt": 1, "skippedMusicIds": [10877], "musicCnt": 21 }, "error": null }
 ```
 - 이미 담긴 곡은 에러 대신 skipped로 부분 성공 처리. 에러: `PLAYLIST_NOT_FOUND`, `MUSIC_NOT_FOUND`, `FORBIDDEN`.
+
+### 4.4.1 플레이리스트 곡 순서 변경 (S15P21A405-66, 정본에는 없는 신규 엔드포인트)
+`POST /playlist/music/reorder` · 인증 필요. body: `playlistId`(int, required), `musicIdList`(Array\<int\>, required).
+```json
+{ "success": true, "data": { "playlistId": 42, "musicCnt": 19 }, "error": null }
+```
+- `musicIdList`는 곡 추가·삭제 없이 **현재 담긴 곡과 정확히 같은 집합**을 새 순서로 나열한 것이어야 한다. 집합이
+  다르면(곡이 빠지거나 추가되면) `INVALID_INPUT`(400). 추가/삭제는 4.4/4.5로 따로 한다.
+- 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`, `INVALID_INPUT`.
 
 ### 4.5 플레이리스트에서 곡 삭제
 `POST /playlist/music/delete` · 인증 필요. body: `playlistId`(int, required), `musicIdList`(Array\<int\>, required).

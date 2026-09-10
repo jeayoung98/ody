@@ -1,0 +1,89 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.playlist.mapper.PlaylistMapper">
+
+	<!--
+		실제 테이블: public.playlist(id bigint PK, email, playlist_name, like_cnt, created_at, updated_at),
+		public.playlist_item(playlist_id, music_id, position, added_at) — music_id는 music(id) FK.
+		playlist.id는 DEFAULT/시퀀스가 없어 애플리케이션에서 시퀀스로 채운다(아래 selectKey).
+		Java 쪽 프로퍼티명(ownerEmail/name)은 유지하고 SELECT에서만 별칭으로 맞춘다.
+	-->
+
+	<insert id="insertPlaylist">
+		<selectKey keyProperty="id" order="BEFORE" resultType="long">
+			SELECT nextval('playlist_id_seq')
+		</selectKey>
+		INSERT INTO playlist (id, email, playlist_name)
+		VALUES (#{id}, #{ownerEmail}, #{name})
+	</insert>
+
+	<select id="findById" resultType="com.ssafy.backend.playlist.dto.PlaylistRow">
+		SELECT id, email AS owner_email, playlist_name AS name, created_at
+		FROM playlist
+		WHERE id = #{playlistId}
+	</select>
+
+	<select id="existsByOwnerEmailAndName" resultType="boolean">
+		SELECT EXISTS(SELECT 1 FROM playlist WHERE email = #{ownerEmail} AND playlist_name = #{name})
+	</select>
+
+	<select id="findSummariesByOwnerEmail" resultType="com.ssafy.backend.playlist.dto.PlaylistSummaryRow">
+		SELECT p.id AS id, p.playlist_name AS name, p.created_at AS created_at,
+		       COUNT(pi.music_id) AS music_cnt
+		FROM playlist p
+		LEFT JOIN playlist_item pi ON pi.playlist_id = p.id
+		WHERE p.email = #{ownerEmail}
+		GROUP BY p.id, p.playlist_name, p.created_at
+		ORDER BY p.created_at DESC
+	</select>
+
+	<update id="updateName">
+		UPDATE playlist
+		SET playlist_name = #{name},
+		    updated_at = now()
+		WHERE id = #{playlistId}
+	</update>
+
+	<delete id="deleteById">
+		DELETE FROM playlist WHERE id = #{playlistId}
+	</delete>
+
+	<select id="countMusic" resultType="int">
+		SELECT COUNT(*) FROM playlist_item WHERE playlist_id = #{playlistId}
+	</select>
+
+	<select id="findMusicIdsInOrder" resultType="long">
+		SELECT music_id FROM playlist_item WHERE playlist_id = #{playlistId} ORDER BY position ASC
+	</select>
+
+	<select id="findExistingMusicIds" resultType="long">
+		SELECT music_id FROM playlist_item
+		WHERE playlist_id = #{playlistId}
+		AND music_id IN
+		<foreach item="id" collection="musicIdList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</select>
+
+	<insert id="insertPlaylistMusicBatch">
+		INSERT INTO playlist_item (playlist_id, music_id, position)
+		VALUES
+		<foreach item="item" collection="items" separator=",">
+			(#{playlistId}, #{item.musicId}, #{item.position})
+		</foreach>
+	</insert>
+
+	<delete id="deletePlaylistMusic">
+		DELETE FROM playlist_item
+		WHERE playlist_id = #{playlistId}
+		AND music_id IN
+		<foreach item="id" collection="musicIdList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</delete>
+
+	<delete id="deleteAllPlaylistMusic">
+		DELETE FROM playlist_item WHERE playlist_id = #{playlistId}
+	</delete>
+
+</mapper>

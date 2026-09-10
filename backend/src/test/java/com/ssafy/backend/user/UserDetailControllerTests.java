@@ -30,6 +30,7 @@ import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.controller.UserController;
 import com.ssafy.backend.user.dto.UserDetailResponse;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserService;
 
@@ -58,6 +59,9 @@ class UserDetailControllerTests {
 
 	@MockitoBean
 	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(

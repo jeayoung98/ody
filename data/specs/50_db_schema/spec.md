@@ -23,17 +23,23 @@ data 트랙이 만드는 산출물(곡·아티스트·좌표·지도 계층)을 
 
 Q1 은 D7(PCA-16), Q4 는 D9(pgvector) 로 종결됐다. 남은 Q2·Q3 가 정해지기 전에는 DDL 을 확정하지 않는다. 결정되면 `specs/DECISIONS.md` 에 새 번호로 기록하고 이 스펙을 갱신한다.
 
-## 산출물 (Q1~Q2 확정 후)
-data 소유 테이블 5개:
+## 산출물 (Q2 확정 후)
+
+⚠️ **D11 로 이름이 바뀌었다(2026-09-10).** `track` → **`music`**. 좌표·장르 테이블 정의는
+스펙 `18_db_ingest` 가 소유한다. 이 스펙은 아티스트 정규화와 지도 계층만 갖는다.
 
 ```
-track            mbid PK, canonical, title_raw, artist_raw, length, is_bridge, is_korean,
-                 excluded, excluded_reason text[], flag_instrumental, flag_comedy, flag_clipped, ...
-artist           artist_id PK, name_raw, name_norm
-track_artist     mbid, artist_id  (다대다)
+music            스펙 18 소유. mbid PK, title, artist, duration, bpm, location vector(16),
+                 release_year·album·youtube_url (1차 NULL), flag_* ...
+genre            스펙 18 소유
+music_genre      스펙 18 소유
+artist           artist_id PK, name_raw, name_norm            ← 이 스펙
+music_artist     mbid, artist_id  (다대다)                     ← 이 스펙. 옛 track_artist
 track_position   스펙 16 참조
 map_layer        스펙 16 참조
 ```
+
+`music.artist` 는 표시용 원문(`artist_raw`)이고, 정규화된 아티스트 실체는 `artist` 테이블이다. 둘은 다르다.
 
 컬럼은 **계약(스펙 00)의 카탈로그 정의와 1:1** 이다. 계약에 없는 컬럼을 DB 에서 새로 만들지 않는다.
 

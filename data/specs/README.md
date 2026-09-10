@@ -50,7 +50,7 @@
 | `14_axis_labels` | PC1~PC4 축 라벨 + 사람 검수 (노드별 축은 보류) | S15P21A405-38 | 컷 후보 | 미정 |
 | `15_playability` | 외부 서비스 매핑률 실측 · playable 컬럼 | S15P21A405-40 | 컷 후보 | 미정 |
 | `16_map_layer_serving` | map_layer·track_position 적재 (쓰기) | S15P21A405-37 | 필수 | 미정 |
-| `17_pgvector_serving` | 좌표를 PostgreSQL 에 두고 Backend 가 직접 유사도 검색 (D9) | S15P21A405-117 | 인프라 상향 대기 | 미정 |
+| `18_db_ingest` | music·genre·music_genre + Neo4j 적재 5단계 (D11) | S15P21A405-125 | 인프라 상향 대기 | 미정 |
 | `20_spark_pipeline` | 전처리·PCA·카탈로그 Spark 이식 + 패리티 | — | 필수(패리티 기준) | 09-12 |
 | `30_eval_jobs` | 아티팩트 버전별 자동 평가 | — | 있으면 좋음 | 컷 후보 |
 | `40_popularity_tier` | 비인기 티어(D5) | — | ⛔ 2차 | 배포 후 |

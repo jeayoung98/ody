@@ -78,7 +78,7 @@ Related to: #48, #45
 ```
 frontend/
 backend/
-ai/
+data/
 infra/
 docs/
 ```
@@ -90,14 +90,14 @@ docs/
 ```
 master
 │
-├─ frontend
+├─ frontend/dev
 │     └─ frontend/<type>/<issue-key>-<description>
 │
-├─ backend
+├─ backend/dev
 │     └─ backend/<type>/<issue-key>-<description>
 │
-├─ ai
-│     └─ ai/<type>/<issue-key>-<description>
+├─ data/dev
+│     └─ data/<type>/<issue-key>-<description>
 │
 ├─ infra
 │  └─ infra/<type>/<issue-key>-<description>
@@ -106,21 +106,27 @@ master
    └─ common/docs/<issue-key>-<description>
 ```
 
-| 브랜치 | 역할 |
-| --- | --- |
-| `master` | 전체 프로젝트 통합 브랜치. 배포는 여기서 나간다 |
-| `frontend` `backend` `ai` `infra` `docs` | 파트별 통합 브랜치 |
-| `<part>/<type>/...` | 개별 이슈/기능 작업 브랜치 |
+| 브랜치 | 역할 | merge target |
+| --- | --- | --- |
+| `master` | 전체 프로젝트 통합 브랜치. 배포는 여기서 나간다 | — |
+| `frontend/dev` `backend/dev` `data/dev` | 파트별 통합 브랜치 | `master` |
+| `<part>/<type>/<key>-<desc>` | 개별 이슈 작업 브랜치 | `<part>/dev` |
+| `infra/<type>/...` · `common/docs/...` | 인프라·문서 작업 브랜치 (파트 dev 없음) | `master` |
 
-파트별 `main` / `dev` 를 따로 두지 않는다. **파트 통합 브랜치 하나**만 둔다.
+파트 통합 브랜치는 반드시 **`<part>/dev`** 다. 이름 없는 `frontend` 같은 브랜치를 쓰면 안 된다 —
+git 은 같은 이름을 ref 이자 디렉터리로 쓸 수 없어서, `frontend` 브랜치가 있으면
+`frontend/feat/...` 를 **만들 수 없다** (`refname conflict`).
+
+브랜치는 `bash .claude/hooks/new-branch.sh <part> <type> <KEY> <desc>` 로 만든다.
+설정값은 [.claude/jira-config.json](../../.claude/jira-config.json) 이 기준이며 이 표와 같아야 한다.
 
 ### 병합 흐름
 
 ```
-작업 브랜치 → 파트 브랜치 → master
+작업 브랜치 → <part>/dev → master
 ```
 
-**`master` 와 파트 브랜치에는 직접 push 금지. 항상 MR로 병합.**
+**`master` 와 `<part>/dev` 에는 직접 push 금지. 항상 MR로 병합.**
 
 ---
 
@@ -136,7 +142,7 @@ master
 | --- | --- |
 | `frontend` | Frontend |
 | `backend` | Backend |
-| `ai` | AI / 데이터 처리 |
+| `data` | 데이터 / AI 파이프라인 |
 | `infra` | Infra / CI/CD / 서버 |
 | `common` | 공통 문서, 파트 구분 없는 작업 |
 
@@ -175,7 +181,7 @@ master
 ```
 frontend/feat/S15P21A405-10-music-map
 backend/feat/S15P21A405-21-music-search
-ai/feat/S15P21A405-30-knn-search
+data/feat/S15P21A405-30-knn-search
 infra/chore/S15P21A405-40-jenkins-pipeline
 common/docs/S15P21A405-50-api-spec
 ```
@@ -192,7 +198,7 @@ backend/S15P21A405-21                          (type, description 없음)
 ## 5. 기본 원칙
 
 - 브랜치 하나 = Jira Issue 하나
-- `master` 와 파트 통합 브랜치(`frontend` `backend` `ai` `infra` `docs`) 직접 push 금지
+- `master` 와 파트 통합 브랜치(`frontend/dev` `backend/dev` `data/dev`) 직접 push 금지
 - 작업은 반드시 작업 브랜치에서 진행
 - MR을 통해 코드 리뷰 후 병합
 - 브랜치 이름에 Jira Issue Key 필수

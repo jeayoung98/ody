@@ -45,7 +45,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 커밋, 브랜치 생성, push, MR/PR 작성을 하기 전에 아래를 **매번** 확인하고, 위반 사항이 있으면 실행하지 말고 사용자에게 먼저 알린다.
 
 ### 브랜치
-- 현재 브랜치가 `master` 또는 파트 통합 브랜치 `frontend` 이면 **직접 커밋/push 금지**. 작업 브랜치를 먼저 만들 것.
+- 현재 브랜치가 `master` 또는 `frontend/dev` 이면 **직접 커밋/push 금지**. 작업 브랜치를 먼저 만들 것.
 - 작업 브랜치 형식: `frontend/<type>/<issue-key>-<description>`
   - type: `feat` `fix` `refactor` `test` `docs` `chore` `perf` (소문자)
   - issue-key: `S15P21A405-<번호>` 필수. 번호를 모르면 사용자에게 묻는다.
@@ -70,7 +70,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 
 ### MR / PR
 - 제목: `[S15P21A405-<번호>] 한글 설명` (Jira 이슈 제목과 동일하게)
-- 대상 브랜치: 작업 브랜치 → `frontend`. `master` 로 직접 올리지 않는다.
+- 대상 브랜치: 작업 브랜치 → `frontend/dev`. `master` 로 직접 올리지 않는다.
 - 하나의 MR은 하나의 Jira Issue만 다룬다.
 
 ## 프로젝트 구조

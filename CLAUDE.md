@@ -29,7 +29,7 @@
 | --- | --- | --- |
 | `frontend/` | Frontend | 읽기만 |
 | `backend/` | Backend | 읽기만 |
-| `ai/` | AI | 읽기만 |
+| `data/` | 데이터 / AI 파이프라인 | 읽기만 |
 | `infra/` `ops/` `observability/` `scripts/` `docs/infra/` | Infra | 읽기만 |
 | `*/Jenkinsfile` `*/deploy.sh` | Infra | 읽기만 |
 | `docs/` (infra 제외) | 공통 | 관련 파트가 수정 가능 |
@@ -59,16 +59,16 @@
 
 ```
 master
-├─ frontend  └─ frontend/<type>/<issue-key>-<description>
-├─ backend   └─ backend/<type>/<issue-key>-<description>
-├─ data      └─ data/<type>/<issue-key>-<description>
+├─ frontend/dev  └─ frontend/<type>/<issue-key>-<description>
+├─ backend/dev   └─ backend/<type>/<issue-key>-<description>
+├─ data/dev      └─ data/<type>/<issue-key>-<description>
 ├─ infra     └─ infra/<type>/<issue-key>-<description>
 └─ docs      └─ common/docs/<issue-key>-<description>
 ```
 
 **커밋·브랜치 생성·push·MR 작성 전에 매번 확인한다.**
 
-- 현재 브랜치가 `master` 또는 파트 통합 브랜치면 **직접 커밋·push 금지.** 작업 브랜치를 먼저 만든다.
+- 현재 브랜치가 `master` 또는 파트 통합 브랜치(`frontend/dev` `backend/dev` `data/dev`)면 **직접 커밋·push 금지.** 작업 브랜치를 먼저 만든다.
 - 작업 브랜치에는 Jira Issue Key(`S15P21A405-<번호>`)가 필수다. 브랜치는
   `bash .claude/hooks/new-branch.sh <part> <type> <KEY> <desc>` 로 만든다.
 - 커밋 메시지에도 Key 를 넣는다: `feat: 주변 사용자 조회 API 구현 [S15P21A405-57]`

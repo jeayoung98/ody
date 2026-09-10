@@ -645,15 +645,19 @@ export class MapEngine {
    * 어긋나면 압력만 차오르고 내려가지는 않아서 휠이 먹통이 된다 (확대도 멈춰 있으므로).
    */
   gateOpen() {
-    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough();
+    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough() && this.countInView() >= DRILL.minInView;
   }
 
   /**
-   * 한 겹 파고들기 — 상주 집합을 **그대로** 데려가 다음 두 축으로 재투영한다.
-   * 겹이 바뀌면 진입 배율이 다시 잡혀 격자도 다시 넓어진다.
+   * 한 겹 파고들기.
+   * **화면 안에 담긴 곡이 다음 겹의 기준**이다 — 그 영역으로 다음 겹 상주 집합을 받아
+   * 새 두 축으로 뿌린다. 목에서는 받아올 데이터가 같은 1,000곡이라 집합을 그대로 쓴다
+   * (실서비스에서는 이 자리에서 그 영역의 다음 겹 곡을 받아온다 — BACKEND-NOTES A-1).
    */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
+    const inView = this.countInView();
+    if (inView < DRILL.minInView) return;
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
     const ns = this.subset.slice();
     const nl = this.layer + 1;
@@ -662,7 +666,7 @@ export class MapEngine {
       nl,
       this.fitCam(nl, ns, this.myId!),
       ns,
-      `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — ${this.residentCount().toLocaleString()}곡`,
+      `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${inView.toLocaleString()}곡 기준`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
     );
   }
@@ -996,7 +1000,9 @@ export class MapEngine {
       const f = this.freeRect();
       const dir = this.anim.dir;
       // 나가는 겹: 파고들면 계속 확대, 떠오르면 줄어든다. 들어오는 겹은 그 반대쪽에서 제 크기로 온다
-      const sOut = dir > 0 ? lerp(1, DRILL.dive.out, e) : lerp(1, DRILL.dive.in, e);
+      // 나가는 겹은 뒤로 갈수록 가속해 화면 밖으로 빠진다 (후욱)
+      const eOut = Math.pow(e, DRILL.dive.outEase);
+      const sOut = dir > 0 ? lerp(1, DRILL.dive.out, eOut) : lerp(1, DRILL.dive.in, eOut);
       const sIn = dir > 0 ? lerp(DRILL.dive.in, 1, e) : lerp(DRILL.dive.out, 1, e);
       // 두 겹이 겹쳐 있는 구간을 넉넉히 둔다 — 안 그러면 전환 중간이 텅 비어 깜빡인다
       const aOut = Math.pow(1 - e, 1.15);
@@ -1161,8 +1167,11 @@ export class MapEngine {
     return n;
   }
 
-  /** 화면 안 상주 곡 수(다음 단계 후보)와 고스트별을 놓을 구름 반지름을 잰다 */
-  private updateReveal() {
+  /**
+   * 화면 안에 담긴 상주 곡 수 — 다음 겹의 기준이다.
+   * 게이트 판정이 프레임 갱신을 기다리지 않게 필요할 때 바로 센다 (1,000곡 순회는 가볍다).
+   */
+  countInView() {
     const f = this.freeRect();
     let n = 0;
     for (let i = 0; i < this.N; i++) {
@@ -1171,7 +1180,12 @@ export class MapEngine {
       const py = this.pos[i * 2 + 1];
       if (px >= f.x0 && px <= f.x1 && py >= f.y0 && py <= f.y1) n++;
     }
-    this.viewportCount = n;
+    return n;
+  }
+
+  /** 프레임마다 HUD 용 값 갱신 */
+  private updateReveal() {
+    this.viewportCount = this.countInView();
     // 고스트별은 구름을 감싸는 원 밖에 놓아야 하므로 그 반지름을 프레임마다 잰다
     this.ghostExtent = this.ghost ? this.starRadius() : 0;
   }

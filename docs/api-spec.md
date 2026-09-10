@@ -109,18 +109,18 @@
 ## 1. 인증 / 회원
 
 ### 1.1 구글 OAuth 로그인
-`POST /auth/login/google` · 인증 불필요. 프론트에서 Google Identity Services로 `idToken`을 받아 서버에 전달하는 **토큰 검증 방식**.
+`POST /auth/login/google` · 인증 불필요. 프론트에서 Google Identity Services로 `idToken`을 받아 서버에 전달하는 **토큰 검증 방식**(본안). **S15P21A405-122에서 구현 완료**, 실제 경로는 이 저장소 컨벤션에 맞춰 `POST /api/auth/login/google`이다.
 
 body: `idToken`(String, required).
 ```json
 { "success": true, "data": {
-  "accessToken": "...", "refreshToken": "...", "accessTokenExpiresIn": 1800,
-  "isNewUser": true,
+  "accessToken": "...",
   "user": { "email": "user@gmail.com", "name": "홍길동", "nickname": null, "imageUrl": "https://lh3..." }
 }, "error": null }
 ```
-- `isNewUser: true`면 온보딩 화면(2.2 `user/update`)으로 이동. 에러: `OAUTH_FAILED`.
-- 대안(서버 리다이렉트, Spring Security OAuth2 Client): `GET /oauth2/authorization/google` → 동의 화면, `GET /login/oauth2/code/google` → 콜백, 성공 시 `{FRONT_URL}/oauth/success?accessToken=...&refreshToken=...&isNewUser=...`로 302.
+- 정본과 실제 구현의 차이: `refreshToken`은 body가 아니라 httpOnly 쿠키로 내려간다(exchange/reissue와 동일 컨벤션, 탈취 위험 감소). `accessTokenExpiresIn`, `isNewUser`는 응답에 없다(온보딩 분기 신호는 팀 결정으로 쓰지 않기로 함).
+- idToken 검증은 Google 공식 라이브러리(`GoogleIdTokenVerifier`)로 서명·발급자·audience(`GOOGLE_CLIENT_ID`)·만료를 확인한다. `email_verified=false`인 idToken도 거부한다. 에러: `OAUTH_FAILED`.
+- 대안(서버 리다이렉트, Spring Security OAuth2 Client, 기존 그대로 유지): `GET /oauth2/authorization/google` → 동의 화면, `GET /login/oauth2/code/google` → 콜백, 성공 시 `{FRONTEND_OAUTH_REDIRECT_URI}?code=...`로 302, 프론트가 `POST /api/auth/exchange`로 code를 accessToken과 교환(§1.4 참고 경로들과 동일 컨벤션).
 
 ### 1.2 토큰 재발급
 `POST /auth/refresh` · 인증 불필요(refreshToken으로 검증). body: `refreshToken`(String, required).
@@ -173,6 +173,17 @@ body: `idToken`(String, required).
 - 에러: `INVALID_NICKNAME_LENGTH`(400), `VALIDATION_ERROR`(400, 필수값 누락).
 - 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/music/detail`)나
   `/api/auth/*`와도 다른 세 번째 네이밍이다. 사용자가 지정한 경로를 그대로 따랐다.
+
+### 1.5 온보딩 완료 처리 (S15P21A405-122)
+`PATCH /api/user/tutorial-completed` · 인증 필요. 토큰 주체 본인만 대상이라 email을 받지 않는다(§0.7 본인 대상 API 규칙).
+```json
+{ "success": true, "data": { "tutorialCompleted": true }, "error": null }
+```
+- `"user".tutorial_completed`를 true로 전환한다. 이미 true여도 멱등하게 200.
+- 로그인 응답(§1.1, §1.4)에는 `isNewUser` 같은 신호가 없다 — 온보딩 완료 여부를 프론트가 알아야 하면
+  `GET /user/detail`의 `tutorialCompleted` 필드를 조회해서 판단한다.
+- 경로가 `/api/user`(단수, api 접두사)로, `/user/detail`·`/api/users/*`·`/api/auth/*`와도 다른 네 번째
+  네이밍이다 — 이 저장소에 경로 접두사 컨벤션이 아직 통일되지 않았다는 뜻이므로 정리가 필요하다.
 
 ---
 

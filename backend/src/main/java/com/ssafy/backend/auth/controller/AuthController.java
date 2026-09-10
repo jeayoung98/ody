@@ -11,6 +11,9 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.auth.dto.ExchangeRequestDto;
+import com.ssafy.backend.auth.dto.GoogleLoginRequestDto;
+import com.ssafy.backend.auth.dto.GoogleLoginResponseDto;
+import com.ssafy.backend.auth.dto.GoogleLoginResult;
 import com.ssafy.backend.auth.dto.LoginRequestDto;
 import com.ssafy.backend.auth.dto.SignupRequestDto;
 import com.ssafy.backend.auth.dto.TokenResponseDto;
@@ -61,6 +64,19 @@ public class AuthController {
 				RefreshTokenCookie.issue(tokenPair.refreshToken(), jwtTokenProvider.getRefreshTokenExpirationMs()));
 
 		return ApiResponse.success(new TokenResponseDto(tokenPair.accessToken()));
+	}
+
+	// 구글 idToken 로그인 (S15P21A405-122, AUTH-01 본안). Google Identity Services가 발급한 idToken을 검증.
+	@PostMapping("/login/google")
+	public ApiResponse<GoogleLoginResponseDto> loginWithGoogle(
+			@RequestBody @Valid GoogleLoginRequestDto request, HttpServletResponse response) {
+
+		GoogleLoginResult result = authService.loginWithGoogleIdToken(request.idToken());
+		response.addHeader(HttpHeaders.SET_COOKIE,
+				RefreshTokenCookie.issue(result.tokenPair().refreshToken(), jwtTokenProvider.getRefreshTokenExpirationMs()));
+
+		return ApiResponse.success(new GoogleLoginResponseDto(
+				result.tokenPair().accessToken(), result.user()));
 	}
 
 	// 프론트가 OAuth 리다이렉트에서 받은 1회용 code를 실제 access token으로 교환한다.

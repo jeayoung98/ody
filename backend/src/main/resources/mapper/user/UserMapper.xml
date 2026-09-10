@@ -21,4 +21,11 @@
 		WHERE email = #{email}
 	</select>
 
+	<update id="updateTutorialCompleted">
+		UPDATE "user"
+		SET tutorial_completed = true,
+		    updated_at = now()
+		WHERE email = #{email}
+	</update>
+
 </mapper>

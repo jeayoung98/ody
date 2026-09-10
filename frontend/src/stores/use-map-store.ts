@@ -65,6 +65,8 @@ interface MapState extends EngineSnapshot {
    * 이 겹에 있으면 그 곡으로 확대하고, 없으면 고스트별로 띄운다 (MAP-12) — 레이어를 자동으로 옮기지 않는다.
    */
   focusMusic: (musicId: number) => void;
+  /** 고스트별을 끈다 (배너의 닫기) */
+  dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
   surfaceToMusic: (musicId: number) => void;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
@@ -136,6 +138,10 @@ export const useMapStore = create<MapState>()(
         // 이 겹에 있으면 확대, 없으면 "범위 밖에 있다"고 치고 고스트별로 (MAP-12)
         if (engine?.isAlive(musicId)) engine.focusSong(musicId);
         else engine?.setGhost(musicId);
+      },
+      dismissGhost: () => {
+        getMapEngine()?.clearGhost();
+        set({ ghostMusicId: null }, false, "dismissGhost");
       },
       surfaceToMusic: (musicId) => {
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");

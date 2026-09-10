@@ -128,8 +128,13 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
-      // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
       const mode = useMapStore.getState().viewMode;
+      // 오버레이가 떠 있으면 뒷화면 지도는 건드리지 않는다 — 휠은 오버레이 안에서만 작동
+      if (mode === "constellation") {
+        engine.overlayWheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
+        return;
+      }
+      // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
       if (mode === "nearby") {
         if (e.deltaY > 0) useMapStore.getState().exitNearby();
         return;
@@ -151,7 +156,10 @@ export default function MapView({ occludedRight }: MapViewProps) {
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
         drag.current.x = e.clientX;
         drag.current.y = e.clientY;
-        engine.dragBy(dx, dy);
+        const mode = useMapStore.getState().viewMode;
+        // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
+        if (mode === "constellation") engine.overlayPan(dx, dy);
+        else if (mode !== "nearby") engine.dragBy(dx, dy);
         return;
       }
       const mx = e.clientX - r.left;
@@ -187,6 +195,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const hit = engine.hitTest(mx, my);
       if (!hit) return;
       const id = engine.songs[hit.i].musicId;
+      // 오버레이가 떠 있으면 그 안의 곡만 고를 수 있다 (뒷화면 별은 클릭되지 않는다)
+      const overlayIds = engine.constellationIdSet() ?? engine.probeIdSet();
+      if (overlayIds && !overlayIds.has(id)) return;
       // 여정 지정 모드면 클릭이 출발·도착 칸을 번갈아 채운다 (JOURNEY-01)
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {

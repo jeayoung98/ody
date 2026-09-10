@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -127,6 +127,10 @@ export class MapEngine {
   probe: { centerId: number; ids: number[]; t0: number; exitingAt: number | null; back: MapCamera } | null = null;
   /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
   route: number[] = [];
+  /** 별자리 뷰 안에서의 이동·확대. 지도 카메라와 별개다 (오버레이는 화면 좌표 배치) */
+  overlay = { zoom: 1, dx: 0, dy: 0 };
+  /** 상주 별들이 차지하는 월드 범위. 카메라를 이 근처에 붙잡아 둔다 */
+  private bbox = { x0: -1, x1: 1, y0: -1, y1: 1 };
   /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
   constellation: { ids: number[]; layout: ConstellationPoint[]; t0: number; exitingAt: number | null } | null = null;
   /** 이 겹에 없는 곡을 "범위 밖에 있다"고 치고 띄우는 유령 별 (MAP-12). 검색에서만 만든다 */
@@ -286,6 +290,73 @@ export class MapEngine {
     this.aliveIdx = [];
     for (let i = 0; i < this.N; i++) if (this.subset[i]) this.aliveIdx.push(i);
     this.anchorCache.clear();
+    this.computeBbox();
+  }
+
+  /** 지금 겹 축에서 상주 별들이 차지하는 범위 */
+  private computeBbox() {
+    const dx = this.dx();
+    const dy = this.dy();
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i]) continue;
+      const x = this.songs[i].pc[dx];
+      const y = this.songs[i].pc[dy];
+      if (x < x0) x0 = x;
+      if (x > x1) x1 = x;
+      if (y < y0) y0 = y;
+      if (y > y1) y1 = y;
+    }
+    this.bbox = Number.isFinite(x0) ? { x0, x1, y0, y1 } : { x0: -1, x1: 1, y0: -1, y1: 1 };
+  }
+
+  /**
+   * 카메라를 별 무리 근처에 붙잡아 둔다 — 한 방향으로 무한히 밀어서 별이 전부
+   * 화면에서 사라지는 걸 막는다. 화면 반쪽의 PAN_LIMIT.slack 만큼까지만 더 나간다.
+   */
+  private clampCam() {
+    const f = this.freeRect();
+    const mx = (((f.x1 - f.x0) / 2) * PAN_LIMIT.slack) / this.cam.s;
+    const my = (((f.y1 - f.y0) / 2) * PAN_LIMIT.slack) / this.cam.s;
+    this.cam.cx = Math.min(Math.max(this.cam.cx, this.bbox.x0 - mx), this.bbox.x1 + mx);
+    this.cam.cy = Math.min(Math.max(this.cam.cy, this.bbox.y0 - my), this.bbox.y1 + my);
+  }
+
+  // ------------------------------------------------------------------ 오버레이(별자리) 조작
+  /** 별자리 뷰에 들어갈 때 초기화 */
+  overlayReset() {
+    this.overlay = { zoom: 1, dx: 0, dy: 0 };
+  }
+
+  overlayPan(dx: number, dy: number) {
+    this.overlay.dx += dx;
+    this.overlay.dy += dy;
+    this.clampOverlay();
+  }
+
+  /** 커서 아래 지점을 붙잡은 채 확대 */
+  overlayWheel(deltaY: number, mx: number, my: number) {
+    const o = this.overlay;
+    const f = this.constellationRect();
+    const next = Math.min(OVERLAY_ZOOM.max, Math.max(OVERLAY_ZOOM.min, o.zoom * Math.exp(-deltaY * WHEEL_ZOOM)));
+    const ux = (mx - f.cx - o.dx) / o.zoom;
+    const uy = (my - f.cy - o.dy) / o.zoom;
+    o.zoom = next;
+    o.dx = mx - f.cx - ux * next;
+    o.dy = my - f.cy - uy * next;
+    this.clampOverlay();
+  }
+
+  /** 별자리가 화면 밖으로 완전히 나가지 않게 — 배치 중심이 영역 반쪽 안에 남는다 */
+  private clampOverlay() {
+    const f = this.constellationRect();
+    const lx = ((f.x1 - f.x0) / 2) * PAN_LIMIT.slack;
+    const ly = ((f.y1 - f.y0) / 2) * PAN_LIMIT.slack;
+    this.overlay.dx = Math.min(Math.max(this.overlay.dx, -lx), lx);
+    this.overlay.dy = Math.min(Math.max(this.overlay.dy, -ly), ly);
   }
 
   /**
@@ -369,6 +440,7 @@ export class MapEngine {
     }
     this.constellation = { ids: valid, layout, t0: performance.now(), exitingAt: null };
     this.route = valid;
+    this.overlayReset();
   }
 
   /** 별자리 닫기 — 곡들이 실제 자리로 돌아간다. 카메라는 애초에 건드리지 않았다 */
@@ -401,7 +473,11 @@ export class MapEngine {
     const f = this.constellationRect();
     const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * CONSTELLATION.radiusRatio;
     const k = this.constellationK();
-    return { x: lerp(real.x, f.cx + p.x * R, k), y: lerp(real.y, f.cy - p.y * R, k) };
+    const o = this.overlay;
+    // 오버레이 안에서의 이동·확대를 배치 위에 얹는다
+    const tx = f.cx + p.x * R * o.zoom + o.dx;
+    const ty = f.cy - p.y * R * o.zoom + o.dy;
+    return { x: lerp(real.x, tx, k), y: lerp(real.y, ty, k) };
   }
 
   constellationIdSet(): Set<number> | null {
@@ -488,7 +564,17 @@ export class MapEngine {
     if (!dir) return null;
     const f = this.freeRect();
     const t = this.ghostExtent + GHOST.cloudMargin;
-    return { x: f.cx + dir.x * t, y: f.cy + dir.y * t };
+    let x = f.cx + dir.x * t;
+    let y = f.cy + dir.y * t;
+    // 상단 HUD 에 붙지 않게 내려오고, 그만큼 옆으로 밀어 구름 밖 거리를 지킨다
+    const minY = f.y0 + GHOST.topInset;
+    if (y < minY) {
+      const side = dir.x >= 0 ? 1 : -1;
+      const gap = Math.sqrt(Math.max(0, t * t - (minY - f.cy) ** 2));
+      y = minY;
+      x = f.cx + side * Math.max(gap, t * 0.35);
+    }
+    return { x, y };
   }
 
   /** 고스트별 페이드 진행도 */
@@ -647,8 +733,9 @@ export class MapEngine {
     const inView = this.countInView();
     if (inView < DRILL.minInView) return;
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
-    const ns = this.subset.slice();
     const nl = this.layer + 1;
+    // 다음 겹의 상주 집합 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
+    const ns = this.residentMask(nl);
     const ax = LAYER_AXES[nl];
     this.morph(
       nl,
@@ -694,6 +781,7 @@ export class MapEngine {
     this.cam.s *= Math.exp(-deltaY * WHEEL_ZOOM);
     this.cam.cx = w.x - (mx - this.W / 2) / this.cam.s;
     this.cam.cy = w.y + (my - this.H / 2) / this.cam.s;
+    this.clampCam();
     this.project();
     return "zoom";
   }
@@ -704,6 +792,7 @@ export class MapEngine {
     this.touched = true;
     this.cam.cx -= dx / this.cam.s;
     this.cam.cy += dy / this.cam.s;
+    this.clampCam();
     this.project();
   }
 
@@ -1141,10 +1230,13 @@ export class MapEngine {
     }
   }
 
-  /** 상주 집합 마스크. ghostOnly 곡(목 확인용)은 어느 겹에도 상주하지 않는다 */
-  private residentMask() {
+  /**
+   * 상주 집합 마스크. ghostOnly 곡(목 확인용)은 **레이어 0 에만** 있다 —
+   * 레이어 0 은 전 우주라 모든 곡이 있고, 파고들면 빠지는 게 실제 규칙이다.
+   */
+  private residentMask(layer = this.layer) {
     const m = new Uint8Array(this.N);
-    for (let i = 0; i < this.N; i++) m[i] = this.songs[i].ghostOnly ? 0 : 1;
+    for (let i = 0; i < this.N; i++) m[i] = this.songs[i].ghostOnly && layer > 0 ? 0 : 1;
     return m;
   }
 

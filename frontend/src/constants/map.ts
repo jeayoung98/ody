@@ -116,6 +116,15 @@ export const STAR_VIEW = {
   appearMs: 380,
 } as const;
 
+/**
+ * 지도·오버레이를 밀 수 있는 한계. 한 방향으로 무한히 밀려 별이 전부 화면 밖으로 나가면
+ * 자기가 어디 있는지 알 수 없다 — 별 무리 끝에서 화면 반쪽의 이 비율까지만 더 나간다.
+ */
+export const PAN_LIMIT = { slack: 0.45 } as const;
+
+/** 별자리 뷰 안에서의 확대 범위 (지도 배율과 별개) */
+export const OVERLAY_ZOOM = { min: 0.6, max: 4 } as const;
+
 /** 휠 확대 계수 (배율 = exp(-deltaY × 이 값)) */
 export const WHEEL_ZOOM = 0.0015;
 
@@ -191,6 +200,8 @@ export const CONSTELLATION = {
  * 이 겹의 영역 안에는 절대 들어가지 않는다 — 들어가면 이 겹에 있는 곡처럼 보이기 때문이다.
  */
 export const GHOST = {
+  /** 상단 HUD(검색바·배너)에 가리지 않게 이만큼은 내려온다(px) */
+  topInset: 168,
   /** 별들이 뻗은 끝에서 이만큼 더 밖에 놓는다(px). 구름 안에는 어떤 경우에도 들어가지 않는다 */
   cloudMargin: 46,
   /** 고스트별이 뜰 때 뷰가 물러난다: 구름 끝이 화면 반지름의 이 비율까지만 오게 */

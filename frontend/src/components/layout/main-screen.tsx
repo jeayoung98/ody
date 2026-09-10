@@ -13,6 +13,8 @@ import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
 import SearchOpenButton from "./search-open-button";
 import FollowBanner from "@/components/map/follow-banner";
+import GhostBanner from "@/components/map/ghost-banner";
+import OverlayClose from "@/components/map/overlay-close";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
@@ -43,6 +45,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {composerOpen ? <JourneyComposer /> : activePanel ? <SearchOpenButton /> : <SearchBar />}
       <HelpButton />
       <FollowBanner />
+      <OverlayClose />
+      <GhostBanner />
       <Rail />
       {activePanel && <RightPanel />}
       <MinimapPanel />

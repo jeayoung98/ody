@@ -1,4 +1,4 @@
-package com.ssafy.backend.controller;
+package com.ssafy.backend.test.controller;
 
 import java.util.List;
 
@@ -7,8 +7,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.common.ApiResponse;
-import com.ssafy.backend.dto.TestDto;
-import com.ssafy.backend.service.TestService;
+import com.ssafy.backend.test.dto.TestDto;
+import com.ssafy.backend.test.service.TestService;
 
 @RestController
 @RequestMapping("/api")
@@ -30,7 +30,7 @@ public class TestController {
 		return ApiResponse.success(testService.pingRedis());
 	}
 
-	@GetMapping("/test/neo4j")
+	@GetMapping("/test/neo4j") 
 	public ApiResponse<String> getTestNeo4j() {
 		return ApiResponse.success(testService.pingNeo4j());
 	}

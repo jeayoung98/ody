@@ -1,4 +1,4 @@
-package com.ssafy.backend.service;
+package com.ssafy.backend.test.service;
 
 import java.util.List;
 
@@ -7,8 +7,8 @@ import org.neo4j.driver.Session;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
 
-import com.ssafy.backend.dto.TestDto;
-import com.ssafy.backend.mapper.TestMapper;
+import com.ssafy.backend.test.dto.TestDto;
+import com.ssafy.backend.test.mapper.TestMapper;
 
 @Service
 public class TestService {

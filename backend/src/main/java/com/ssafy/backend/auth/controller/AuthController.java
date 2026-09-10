@@ -1,4 +1,4 @@
-package com.ssafy.backend.controller;
+package com.ssafy.backend.auth.controller;
 
 import org.springframework.http.HttpHeaders;
 import org.springframework.web.bind.annotation.CookieValue;
@@ -10,12 +10,12 @@ import org.springframework.web.bind.annotation.RestController;
 import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.dto.ExchangeRequestDto;
-import com.ssafy.backend.dto.TokenResponseDto;
+import com.ssafy.backend.auth.dto.ExchangeRequestDto;
+import com.ssafy.backend.auth.dto.TokenResponseDto;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.RefreshTokenCookie;
 import com.ssafy.backend.security.TokenPair;
-import com.ssafy.backend.service.AuthService;
+import com.ssafy.backend.auth.service.AuthService;
 
 import io.jsonwebtoken.Claims;
 

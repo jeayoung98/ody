@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.util.Map;
 
 import com.ssafy.backend.common.ApiResponse;
-import com.ssafy.backend.controller.HelloController;
+import com.ssafy.backend.test.controller.HelloController;
 import org.junit.jupiter.api.Test;
 
 class HelloControllerTests {

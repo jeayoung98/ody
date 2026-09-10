@@ -1,4 +1,4 @@
-package com.ssafy.backend.dto;
+package com.ssafy.backend.test.dto;
 
 import lombok.Getter;
 

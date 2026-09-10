@@ -1,4 +1,4 @@
-package com.ssafy.backend.controller;
+package com.ssafy.backend.test.controller;
 
 import java.util.Map;
 

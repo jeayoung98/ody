@@ -28,6 +28,16 @@ spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-mem
   spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --sample 100000
 yarn application -list -all
 ```
+```bash
+# S4 트리 배정 — 트리 두 파일을 올리고 경로를 직접 지정한다
+spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g \
+  --files serving/v2.1-pca16/map_tree/tree.json,serving/v2.1-pca16/map_tree/split_axes.npz \
+  spark/jobs/tree_assign.py --in hdfs:///ody/data/coords --out hdfs:///ody/data/node_paths \
+  --tree-json tree.json --split-axes split_axes.npz
+```
+
+S4 는 깊이 한 단계마다 같은 노드의 행을 모아 계산한다. 재학습은 없다(규칙 3). 표본 5,000곡 말단 노드 일치율 100%(`tests/test_tree_assign.py`).
+
 단계 순서: `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료

@@ -16,7 +16,8 @@
 >
 > ✅ **재배치 완료(2026-09-10, S15P21A405-115)**: music 코드는 `backend/src/...` 아래로 이미 옮겨졌고 master 공통 계층
 > (`ApiResponse.success`·`ErrorCode` 인터페이스·`CustomException`)을 쓴다. Setup 단계(T001~T003)는 해소됐다. 상세·충돌은
-> plan "master 통합 재검증" 절(M1~M8) 참조.
+> 아래 Notes 의 "master 통합 재검증(M 항목)" 참조.
+> (plan.md 에는 해당 절이 없다 — M 번호는 S15P21A405-115 작업 메모에서 왔다)
 
 ---
 
@@ -36,7 +37,7 @@
 
 - [ ] T004 [BLOCKED: B6] `MajorTrackReader` 조회 port 인터페이스 정의 (`backend/src/main/java/com/ssafy/backend/music/retrieval/MajorTrackReader.java`). 시그니처·스키마·ID 매핑은 BE4와 합의 후. 잠정 시그니처를 확정 계약으로 만들지 않는다
 - [ ] T005 [BLOCKED: B6] v2.1-pca16 곡 데이터 접근 어댑터. master 스택상 **MyBatis mapper(XML `classpath:mapper/**/*.xml`) + PostgreSQL**이 유력. 좌표 원형 조회 물리 방식(pgvector 없음, 스칼라 컬럼 vs 벡터 확장)·저장소(postgres vs neo4j)는 BE4 확인 (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
-- [ ] T006 [P] ⛔ **BE1 이슈로 이관 대상 — BE2 브랜치에서 하지 않는다**: 전역 `GlobalErrorCode` 개명은 이 기능만의 일이 아니다. 한 번 시도해 커밋했다가(`6349665`) 리베이스 때 제외했다. 근거: (a) 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조가 **12파일**(main 3 + test 9: auth·user·playlist·music)로 늘었다, (b) dev 가 `GlobalErrorCode` 에 `FORBIDDEN` 을 §0.5 이름으로 추가해 이미 §0.5 방향으로 가고 있다, (c) BE1 이 같은 파일에서 인증·유저·플레이리스트를 동시에 올리는 중이라 충돌 비용이 계속 커진다. 계약 코드만 미리 enum 에 넣는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`)
+- [ ] T006 [P] ⛔ **BE1 이슈로 이관 대상 — BE2 브랜치에서 하지 않는다**: 전역 `GlobalErrorCode` 개명은 이 기능만의 일이 아니다. 한 번 시도해 커밋했다가(`6349665`) 리베이스 때 제외했다. 근거: (a) 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조가 **12파일**(main 3 + test 9: auth·user·playlist·music)로 늘었다, (b) dev 가 `GlobalErrorCode` 에 `FORBIDDEN` 을 §0.5 이름으로 추가해 이미 §0.5 방향으로 가고 있다, (c) BE1 이 같은 파일에서 인증·유저·플레이리스트를 동시에 올리는 중이라 충돌 비용이 계속 커진다. 계약 코드만 미리 enum 에 넣는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`). **이관 추적**: BE1 이슈 **미생성** (2026-09-10). 이슈 생성 후 여기에 키를 적고 T020·T021 의 선행을 그 키로 바꾼다. ⚠️ 키가 비는 동안 FR-010 은 실효 커버리지가 없다
 
 **Checkpoint**: T004·T005는 B6까지 blocked. **T006은 지금 가능** — T020(A7)·T021(A8)의 계약 코드 검증을 가능하게 한다. US 종단 흐름은 T004·T005 해소에 의존.
 
@@ -88,8 +89,8 @@
 
 **Independent Test**: 타입 위반·내부 실패·인증 상태를 각각 구성해 기존 오류 계약 확인.
 
-- [ ] T020 [US3] **부분 완료** — `major_invalidLevel_/nonNumericLevel_returnsInvalidInput`이 400은 확인하나 코드가 master `INVALID_INPUT`이라 계약 코드(M4) 불일치. MVC 슬라이스 테스트 A7: `level=abc` 및 PC 필드에 `abc` → 400 `VALIDATION_ERROR` + 공통 실패 구조. **T006의 검증 예외 매핑 선행**(master 기본 핸들러엔 없음, M5) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [ ] T021 [US3] MVC 슬라이스 테스트 A8: 서비스 내부 실패 → 500 `INTERNAL_ERROR` + 공통 실패 구조. `MusicService` mock이 예외 throw. ⚠️ **T006의 500→`INTERNAL_ERROR` 매핑 선행 필수**: master generic 핸들러는 `INTERNAL_SERVER_ERROR`를 반환하므로(M4/F1) 매핑 없이는 계약 코드 불일치로 실패 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [ ] T020 [US3] **부분 완료** — `major_invalidLevel_/nonNumericLevel_returnsInvalidInput`이 400은 확인하나 코드가 master `INVALID_INPUT`이라 계약 코드(M4) 불일치. MVC 슬라이스 테스트 A7: `level=abc` 및 PC 필드에 `abc` → 400 `VALIDATION_ERROR` + 공통 실패 구조. **T006(BE1 이관, 이슈 키 미정) 선행**(master 기본 핸들러엔 없음, M5) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [ ] T021 [US3] MVC 슬라이스 테스트 A8: 서비스 내부 실패 → 500 `INTERNAL_ERROR` + 공통 실패 구조. `MusicService` mock이 예외 throw. ⚠️ **T006(BE1 이관, 이슈 키 미정) 선행 필수**: master generic 핸들러는 `INTERNAL_SERVER_ERROR`를 반환하므로(M4/F1) 매핑 없이는 계약 코드 불일치로 실패 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 - [ ] T022 [BLOCKED: T030] **(부분 착수 가능 — T029 dev 해소로 토큰 없음·위조는 지금 검증 가능, 만료만 T030 대기)** [US3] 인증 테스트 A6: 토큰 위조·무효 → 401 `INVALID_TOKEN`, 만료 → 401 `TOKEN_EXPIRED`, 토큰 없음 → 401 상태·공통 실패. 인증 연동(T006) 후 (`backend/src/test/java/com/ssafy/backend/music/`)
 
 **Checkpoint**: A7·A8은 T020·T021로 검증(T006의 검증 핸들러 보완 전제). 401(A6)은 인증 통합 후.
@@ -149,7 +150,12 @@ master `backend/`가 정식 베이스다. T002(재배치 + master 공통 계층 
 
 - BLOCKED 태스크는 게이트가 열리기 전에는 구현하지 않는다. 미정 정책을 운영 기본값으로 가정 금지(헌법 IX).
 - **master 통합**: `backend/` 평면 레이어·MyBatis·postgres·neo4j·redis·Lombok 공통 계층 재사용. 신규 ORM·캐시·검색엔진 신규 채택 금지.
-- **M4 문서 충돌**: master 전역 에러 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`)가 api-spec §0.5(`VALIDATION_ERROR`/`INTERNAL_ERROR`)와 다르다. music은 자체 `ErrorCode` 구현으로 계약 준수, 전역 정합은 팀 결정(plan M4).
+- **master 통합 재검증 (M 항목)** — plan.md 에 절이 없으므로 이 파일에서 인용하는 것만 정의한다.
+  - **M4** 문서 충돌: master 전역 에러 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`)가 api-spec §0.5(`VALIDATION_ERROR`/`INTERNAL_ERROR`)와 다르다. music 은 자체 `ErrorCode` 구현으로 계약 준수, 전역 정합은 BE1 결정(T006).
+  - **M5**: master `GlobalExceptionHandler` 에 검증 예외 → 계약 코드 매핑이 없다.
+  - **M7**: master 가 `http.server.requests` 히스토그램을 이미 켜뒀다(`application.yml`).
+  - **M8**: master 는 Lombok DTO 관례, music 은 record. 팀 확인 대상.
+  - M1~M3·M6 은 이 파일에서 인용하지 않는다. 필요하면 S15P21A405-115 작업 기록에서 확인.
 - 정확한 대표곡 ID·k·동률 순서·빈 결과 기대값은 B2~B4 확정 후 fixture로 보완. 지금은 정렬 규칙·축 매핑·응답 구조만 확정 검증.
 
 ---

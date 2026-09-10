@@ -4,11 +4,11 @@ import { DRILL, LAYER_COUNT, LAYER_NAMES, LAYER_NAMES_EN } from "@/constants";
 import { useMapStore } from "@/stores/use-map-store";
 import DrillHint from "./drill-hint";
 
-/** #layerName / #layerSub / #layerMeta — 지금 레이어, 상주 곡 수, 배율, 구멍 안 곡 수(게이트) */
+/** #layerName / #layerSub / #layerMeta — 지금 레이어, 상주 곡 수, 배율, 떠 있는 별 수 */
 export default function LayerName() {
   const layer = useMapStore((s) => s.layer);
   const residentCount = useMapStore((s) => s.residentCount);
-  const holeCount = useMapStore((s) => s.holeCount);
+  const revealedCount = useMapStore((s) => s.revealedCount);
   const zoomK = useMapStore((s) => s.zoomK);
   const gateOpen = useMapStore((s) => s.gateOpen);
   return (
@@ -25,9 +25,7 @@ export default function LayerName() {
       <div className="num mt-[3px] flex flex-wrap gap-x-3 text-[9.5px] tracking-[0.04em] text-ink-3">
         <span>이 겹 {residentCount.toLocaleString()}곡</span>
         <span className={zoomK >= DRILL.gateZoomMul ? "text-teal" : ""}>배율 ×{zoomK.toFixed(1)}</span>
-        <span className={gateOpen ? "text-teal" : ""}>
-          화면 안 {holeCount.toLocaleString()} / {DRILL.gate.toLocaleString()}
-        </span>
+        <span className={gateOpen ? "text-teal" : ""}>떠 있는 별 {revealedCount.toLocaleString()}</span>
       </div>
       <DrillHint />
     </div>

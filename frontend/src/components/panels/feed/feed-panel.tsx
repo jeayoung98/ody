@@ -12,6 +12,7 @@ import FeedDashboard from "./feed-dashboard";
 import FeedHeader from "./feed-header";
 import FeedLikedPlaylists from "./feed-liked-playlists";
 import FeedMyPlaylists from "./feed-my-playlists";
+import LogoutButton from "@/components/auth/logout-button";
 
 /** 피드 = 마이페이지(내 것) / 상대 프로필(남의 것). 레이아웃 동일 (USER-02, USER-04) */
 export default function FeedPanel() {
@@ -35,6 +36,8 @@ export default function FeedPanel() {
               <Divider />
               <FeedMyPlaylists />
               <FeedLikedPlaylists />
+              <Divider />
+              <LogoutButton />
             </>
           )}
         </>

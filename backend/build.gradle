@@ -32,6 +32,8 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.neo4j.driver:neo4j-java-driver'
 	implementation 'io.jsonwebtoken:jjwt-api:0.12.6'
+	// Google idToken 검증 (본안 로그인, S15P21A405-122). GoogleIdTokenVerifier.
+	implementation 'com.google.api-client:google-api-client:2.8.0'
 	runtimeOnly 'io.jsonwebtoken:jjwt-impl:0.12.6'
 	runtimeOnly 'io.jsonwebtoken:jjwt-jackson:0.12.6'
 	runtimeOnly 'io.micrometer:micrometer-registry-prometheus'

@@ -12,6 +12,7 @@ public enum AuthErrorCode implements ErrorCode {
 	REFRESH_TOKEN_NOT_FOUND(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_NOT_FOUND", "리프레시 토큰이 없습니다."),
 	REFRESH_TOKEN_MISMATCH(HttpStatus.UNAUTHORIZED, "REFRESH_TOKEN_MISMATCH", "리프레시 토큰이 일치하지 않습니다. 다시 로그인해주세요."),
 	INVALID_EXCHANGE_CODE(HttpStatus.UNAUTHORIZED, "INVALID_EXCHANGE_CODE", "유효하지 않거나 만료된 코드입니다."),
+	OAUTH_FAILED(HttpStatus.UNAUTHORIZED, "OAUTH_FAILED", "구글 인증에 실패했습니다."),
 	EMAIL_ALREADY_EXISTS(HttpStatus.CONFLICT, "EMAIL_ALREADY_EXISTS", "이미 가입된 이메일입니다."),
 	NICKNAME_ALREADY_EXISTS(HttpStatus.CONFLICT, "NICKNAME_ALREADY_EXISTS", "이미 사용 중인 닉네임입니다."),
 	INVALID_CREDENTIALS(HttpStatus.UNAUTHORIZED, "INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다."),

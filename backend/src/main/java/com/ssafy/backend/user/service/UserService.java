@@ -48,4 +48,12 @@ public class UserService {
 				false,
 				isMe);
 	}
+
+	/**
+	 * 온보딩(지도 튜토리얼) 완료 처리 (S15P21A405-122). 토큰 주체 본인만 대상, email 파라미터 없음.
+	 * 이후 로그인 응답의 isNewUser는 항상 false가 된다.
+	 */
+	public void completeTutorial(String email) {
+		userMapper.updateTutorialCompleted(email);
+	}
 }

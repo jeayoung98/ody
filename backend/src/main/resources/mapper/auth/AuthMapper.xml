@@ -5,7 +5,7 @@
 	<!-- "user"는 Postgres 예약어라 반드시 큰따옴표로 감싼다 -->
 
 	<select id="findByEmail" resultType="com.ssafy.backend.auth.dto.UserAuthDto">
-		SELECT email, name, nickname, image_url, password_hash
+		SELECT email, name, nickname, image_url, password_hash, tutorial_completed
 		FROM "user"
 		WHERE email = #{email}
 	</select>

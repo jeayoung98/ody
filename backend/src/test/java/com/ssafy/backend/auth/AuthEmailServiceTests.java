@@ -21,6 +21,7 @@ import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.auth.service.AuthService;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.security.GoogleIdTokenVerifierPort;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
 
@@ -40,8 +41,10 @@ class AuthEmailServiceTests {
 	private final JwtTokenProvider jwtTokenProvider =
 			new JwtTokenProvider(TEST_JWT_SECRET, 1_800_000L, 1_209_600_000L);
 
+	private final GoogleIdTokenVerifierPort googleIdTokenVerifierPort = mock(GoogleIdTokenVerifierPort.class);
+
 	private final AuthService authService =
-			new AuthService(authMapper, jwtTokenProvider, redisTemplate, passwordEncoder);
+			new AuthService(authMapper, jwtTokenProvider, redisTemplate, passwordEncoder, googleIdTokenVerifierPort);
 
 	private void stubRedis() {
 		when(redisTemplate.opsForValue()).thenReturn(valueOperations);

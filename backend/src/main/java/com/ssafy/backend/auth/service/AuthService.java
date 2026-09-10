@@ -10,8 +10,10 @@ import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.auth.dto.GoogleLoginResult;
 import com.ssafy.backend.auth.dto.UserAuthDto;
 import com.ssafy.backend.auth.mapper.AuthMapper;
+import com.ssafy.backend.security.GoogleIdTokenVerifierPort;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
 import com.ssafy.backend.user.NicknamePolicy;
@@ -39,6 +41,7 @@ public class AuthService {
 	private final JwtTokenProvider jwtTokenProvider;
 	private final StringRedisTemplate redisTemplate;
 	private final PasswordEncoder passwordEncoder;
+	private final GoogleIdTokenVerifierPort googleIdTokenVerifierPort;
 
 	/**
 	 * 이메일/비밀번호 회원가입 (S15P21A405-121). AUTH-01 소셜 로그인 확정과 별개로 백엔드 판단 하에 추가한 경로.
@@ -85,6 +88,40 @@ public class AuthService {
 		authMapper.touchLogin(email, user.getImageUrl());
 		log.info("[Auth] 이메일 로그인 완료 email={}", email);
 		return issueTokenPair(email);
+	}
+
+	/**
+	 * 구글 idToken 로그인/가입 (S15P21A405-122, AUTH-01 본안). 서명 위조·audience 불일치·만료·
+	 * email_verified=false는 전부 OAUTH_FAILED로 뭉뚱그린다. isNewUser는 신규 가입이거나
+	 * 기존 계정이 아직 온보딩(tutorial_completed)을 안 끝냈으면 true.
+	 */
+	public GoogleLoginResult loginWithGoogleIdToken(String idToken) {
+		GoogleIdTokenVerifierPort.GoogleIdentity identity = googleIdTokenVerifierPort.verify(idToken)
+				.filter(GoogleIdTokenVerifierPort.GoogleIdentity::emailVerified)
+				.orElseThrow(() -> new CustomException(AuthErrorCode.OAUTH_FAILED));
+
+		UserAuthDto user = authMapper.findByEmail(identity.email());
+		boolean isNewUser;
+
+		if (user == null) {
+			user = new UserAuthDto();
+			user.setEmail(identity.email());
+			user.setName(identity.name());
+			user.setImageUrl(identity.imageUrl());
+			authMapper.insert(user);
+			isNewUser = true;
+			log.info("[Auth] 구글 idToken 신규 회원가입 완료 email={}", identity.email());
+		} else {
+			authMapper.touchLogin(identity.email(), identity.imageUrl());
+			isNewUser = !user.isTutorialCompleted();
+			log.info("[Auth] 구글 idToken 로그인 완료 email={}", identity.email());
+		}
+
+		TokenPair tokenPair = issueTokenPair(identity.email());
+		GoogleLoginResult.UserInfo userInfo =
+				new GoogleLoginResult.UserInfo(user.getEmail(), user.getName(), user.getNickname(), identity.imageUrl());
+
+		return new GoogleLoginResult(tokenPair, isNewUser, userInfo);
 	}
 
 	private boolean isValidPassword(String rawPassword) {

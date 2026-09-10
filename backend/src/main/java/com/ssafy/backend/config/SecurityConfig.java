@@ -47,7 +47,7 @@ public class SecurityConfig {
 				.authorizeHttpRequests(auth -> auth
 						// 정본 §0.7: 로그인/토큰 재발급/OAuth 리다이렉트·콜백/헬스체크만 공개, 나머지는 전부 인증 필요(기본 거부, S15P21A405-33).
 						.requestMatchers(
-								"/api/auth/signup", "/api/auth/login",
+								"/api/auth/signup", "/api/auth/login", "/api/auth/login/google",
 								"/api/auth/exchange", "/api/auth/reissue",
 								"/api/users/nickname-available",
 								"/oauth2/authorization/**", "/login/oauth2/code/**",

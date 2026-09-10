@@ -13,11 +13,11 @@ export interface EngineSnapshot {
   camera: MapCamera;
   /** 이 레이어에 상주하는 곡 수 */
   residentCount: number;
-  /** 화면 중앙 보이지 않는 구멍 안 곡 수 */
-  holeCount: number;
+  /** 그중 지금 배율에서 실제로 떠 있는 별 수 (확대하면 늘어난다) */
+  revealedCount: number;
   /** 이 레이어에 들어온 배율 대비 현재 배율 (1 = 진입, DRILL.gateZoomMul 이상이면 파고들 준비) */
   zoomK: number;
-  /** 구멍 안 곡 수가 게이트 이하 → 계속 확대하면 파고든다 */
+  /** 확대 임계치를 넘겼다 → 계속 확대하면 파고든다 */
   gateOpen: boolean;
   /** 마지막 레이어 */
   atBottom: boolean;
@@ -38,6 +38,8 @@ export interface EngineSnapshot {
 
 interface MapState extends EngineSnapshot {
   viewMode: MapViewMode;
+  /** 별로 남길 장르. null = 전체 (MAP 보기 필터) */
+  genreFilter: number | null;
   selectedMusicId: number | null;
   /** 주변 탐색 모드의 기준 곡 */
   nearbyCenterMusicId: number | null;
@@ -48,6 +50,7 @@ interface MapState extends EngineSnapshot {
   constellationMusicIds: number[];
 
   setViewMode: (mode: MapViewMode) => void;
+  setGenreFilter: (genreId: number | null) => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
   enterNearby: (musicId: number) => void;
@@ -67,6 +70,8 @@ interface MapState extends EngineSnapshot {
   focusMusic: (musicId: number) => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
   surfaceToMusic: (musicId: number) => void;
+  /** 확인용: 이 겹에 있든 없든 그 곡을 고스트별로 띄운다 (검색어 "고스트별") */
+  showGhost: (musicId: number) => void;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
@@ -81,7 +86,7 @@ export const useMapStore = create<MapState>()(
       layer: 0,
       camera: { cx: 0, cy: 0, s: 100 },
       residentCount: 0,
-      holeCount: 0,
+      revealedCount: 0,
       zoomK: 1,
       gateOpen: false,
       atBottom: false,
@@ -94,11 +99,13 @@ export const useMapStore = create<MapState>()(
       playingElsewhere: false,
 
       viewMode: "default",
+      genreFilter: null,
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
 
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
+      setGenreFilter: (genreFilter) => set({ genreFilter }, false, "setGenreFilter"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
       setMyMusicId: (myMusicId) => {
         set({ myMusicId }, false, "setMyMusicId");
@@ -140,6 +147,10 @@ export const useMapStore = create<MapState>()(
       surfaceToMusic: (musicId) => {
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");
         getMapEngine()?.surfaceToSong(musicId);
+      },
+      showGhost: (musicId) => {
+        set({ selectedMusicId: musicId }, false, "showGhost");
+        getMapEngine()?.setGhost(musicId, true);
       },
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),

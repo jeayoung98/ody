@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, REVEAL, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -75,6 +75,14 @@ export class MapEngine {
   songs: MapPoint[] = [];
   private index = new Map<number, number>();
   private byWeight: number[] = [];
+  /** 재생수 순위 (0 = 1위). 확대할수록 이 순위 아래까지 별이 드러난다 (REVEAL) */
+  private rank = new Int32Array(0);
+  /** 드러나는 재생수 순위 경계. 프레임마다 갱신 */
+  revealCount = 0;
+  /** 실제로 화면에 떠 있는 별 수 (장르 필터까지 반영). 프레임마다 갱신 */
+  shownCount = 0;
+  /** 고른 장르만 별로 남긴다. null = 전체 */
+  genreFilter: number | null = null;
   N = 0;
 
   W = 1;
@@ -182,6 +190,8 @@ export class MapEngine {
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
+    this.rank = new Int32Array(this.N);
+    this.byWeight.forEach((idx, r) => (this.rank[idx] = r));
     this.subset = new Uint8Array(this.N).fill(1);
     this.pos = new Float32Array(this.N * 2);
     this.from = new Float32Array(this.N * 2);
@@ -214,6 +224,11 @@ export class MapEngine {
     // 고스트별로 띄운 곡이 아닌 다른 곡을 고르면 고스트는 사라진다 (MAP-12)
     if (this.ghost && id !== this.ghost.musicId) this.ghost = null;
     this.selectedId = id;
+  }
+
+  /** 장르 필터 (SEARCH 아님 — 보기 필터). null 이면 전체 */
+  setGenreFilter(genreId: number | null) {
+    this.genreFilter = genreId;
   }
 
   setCallbacks(cb: {
@@ -390,8 +405,9 @@ export class MapEngine {
    * 레이어는 사용자에게 확대로 보이지만 실제로는 필터라, 확대만 했는데 찾던 곡이 없으면 납득이 안 된다.
    * 이미 이 겹에 있는 곡이면 고스트를 만들지 않는다 (그냥 확대해 보여주면 되므로).
    */
-  setGhost(id: number) {
-    if (!this.index.has(id) || this.isAlive(id)) {
+  setGhost(id: number, force = false) {
+    // force = 확인용 경로 (검색어 "고스트별"). 실제 규칙은 이 겹에 없는 곡일 때만 고스트다
+    if (!this.index.has(id) || (!force && this.isAlive(id))) {
       this.ghost = null;
       return;
     }
@@ -529,22 +545,6 @@ export class MapEngine {
     return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
   }
 
-  private holeRadius() {
-    return DRILL.holeRatio * Math.min(this.W, this.H);
-  }
-
-  /** 구멍(보이지 않는 원) 안에 있는 상주 곡 인덱스 */
-  private inHole(): number[] {
-    const f = this.freeRect();
-    const R = this.holeRadius();
-    const out: number[] = [];
-    for (let i = 0; i < this.N; i++) {
-      if (!this.subset[i]) continue;
-      if (Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy) <= R) out.push(i);
-    }
-    return out;
-  }
-
   private outward(x: number, y: number, out: Float32Array, k: number) {
     const f = this.freeRect();
     let dx = x - f.cx;
@@ -593,41 +593,24 @@ export class MapEngine {
    * 어긋나면 압력만 차오르고 내려가지는 않아서 휠이 먹통이 된다 (확대도 멈춰 있으므로).
    */
   gateOpen() {
-    if (this.layer >= LAYER_COUNT - 1 || !this.zoomedEnough()) return false;
-    const n = this.inHole().length;
-    return n <= DRILL.gate && n >= DRILL.minKeep;
+    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough();
   }
 
-  /** 한 겹 파고들기 — 구멍 안 곡만 데려가 다음 두 축으로 재투영 */
+  /**
+   * 한 겹 파고들기 — 상주 집합을 **그대로** 데려가 다음 두 축으로 재투영한다.
+   * 겹이 바뀌면 진입 배율이 다시 잡히므로, 드러난 별 수도 REVEAL.base 로 돌아간다.
+   */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
-    const keep = this.inHole();
-    if (keep.length > DRILL.gate || keep.length < DRILL.minKeep) return;
-    // 내 곡이 구멍 밖이면 구멍 중앙 곡으로 재지정
-    const f = this.freeRect();
-    const myI = this.myId != null ? this.index.get(this.myId) : undefined;
-    if (myI == null || !keep.includes(myI)) {
-      let b = keep[0];
-      let bd = 1e9;
-      for (const i of keep) {
-        const d = Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy);
-        if (d < bd) {
-          bd = d;
-          b = i;
-        }
-      }
-      this.myId = this.songs[b].musicId;
-    }
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
-    const ns = new Uint8Array(this.N);
-    for (const i of keep) ns[i] = 1;
+    const ns = this.subset.slice();
     const nl = this.layer + 1;
     const ax = LAYER_AXES[nl];
     this.morph(
       nl,
       this.fitCam(nl, ns, this.myId!),
       ns,
-      `${LAYER_NAMES[nl]}으로 파고드는 중 — ${keep.length.toLocaleString()}곡`,
+      `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — ${this.residentCount().toLocaleString()}곡`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
     );
   }
@@ -1012,6 +995,7 @@ export class MapEngine {
     if (Math.abs(this.coverAlpha - coverTarget) < 0.005) this.coverAlpha = coverTarget;
     if (Math.abs(this.friendAlpha - friendTarget) < 0.005) this.friendAlpha = friendTarget;
 
+    this.updateReveal();
     this.updateFriends();
     if (!this.anim) this.pickRepresentatives();
     this.publish();
@@ -1091,6 +1075,34 @@ export class MapEngine {
     }
   }
 
+  /** 이 겹에 상주하는 곡 수 */
+  residentCount() {
+    let n = 0;
+    for (let i = 0; i < this.N; i++) n += this.subset[i];
+    return n;
+  }
+
+  /** 드러나는 순위 경계와 실제로 떠 있는 별 수 — 진입 배율에서 REVEAL.base, 확대할수록 상주 수까지 늘어난다 */
+  private updateReveal() {
+    const k = Math.max(1, this.zoomK());
+    this.revealCount = Math.min(this.residentCount(), Math.round(REVEAL.base * Math.pow(k, REVEAL.exp)));
+    let n = 0;
+    for (let i = 0; i < this.N; i++) if (this.subset[i] && this.revealAlpha(i) >= 0.5) n++;
+    this.shownCount = n;
+  }
+
+  /**
+   * 이 별이 지금 얼마나 드러나 있는가 (0 = 안 보임).
+   * 재생수 순위가 revealCount 안쪽이면 1, 그 아래 REVEAL.fade 순위까지는 옅게, 더 아래는 0.
+   * 장르 필터가 걸려 있으면 다른 장르는 0.
+   */
+  revealAlpha(i: number) {
+    if (this.genreFilter != null && this.songs[i].genreId !== this.genreFilter) return 0;
+    const over = this.rank[i] - this.revealCount;
+    if (over < 0) return 1;
+    return Math.max(0, 1 - over / REVEAL.fade);
+  }
+
   /** 대표곡 선별 — 격자를 월드에 못박아 팬해도 승자가 바뀌지 않게 */
   private pickRepresentatives() {
     this.visible = [];
@@ -1100,7 +1112,7 @@ export class MapEngine {
     const dx = this.dx();
     const dy = this.dy();
     for (const i of this.byWeight) {
-      if (!this.subset[i] || this.alpha[i] < 0.5) continue;
+      if (!this.subset[i] || this.alpha[i] < 0.5 || this.revealAlpha(i) < 0.5) continue;
       const px = this.pos[i * 2];
       const py = this.pos[i * 2 + 1];
       if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;
@@ -1136,14 +1148,12 @@ export class MapEngine {
   }
 
   private publish() {
-    const resident = this.subset.reduce((a, b) => a + b, 0);
-    const holeCount = this.anim ? this.lastSnap.holeCount ?? 0 : this.inHoleCountFast();
     const snap: Partial<EngineSnapshot> = {
       layer: this.layer,
-      residentCount: resident,
-      holeCount,
+      residentCount: this.residentCount(),
+      revealedCount: this.shownCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
-      gateOpen: !this.anim && this.layer < LAYER_COUNT - 1 && this.zoomedEnough() && holeCount <= DRILL.gate && holeCount >= DRILL.minKeep,
+      gateOpen: !this.anim && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,
       canRise: this.stack.length > 0,
       pressure: Math.round(this.pressure * 100) / 100,
@@ -1165,11 +1175,4 @@ export class MapEngine {
     }
   }
 
-  private holeTick = 0;
-  private holeCache = 0;
-  private inHoleCountFast() {
-    // 4,000곡 순회는 가볍지만 매 프레임 할 필요는 없다
-    if (++this.holeTick % 6 === 1) this.holeCache = this.inHole().length;
-    return this.holeCache;
-  }
 }

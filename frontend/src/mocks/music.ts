@@ -56,9 +56,18 @@ export function mockNearby(musicId: number): NearbyResponse {
   return { center, neighbors: nearestSongs(center, NEARBY_COUNT) };
 }
 
+/** 고스트별 디자인을 눈으로 확인하는 키워드 (SearchBar 가 이 접두를 보고 강제 고스트로 띄운다) */
+export const GHOST_PROBE_KEYWORD = "고스트별";
+
 export function mockSearch(keyword: string): MusicSearchResult[] {
   const q = keyword.trim().toLowerCase();
   if (!q) return [];
+  // 확인용: 아무 곡이나 몇 개 돌려주고, 고른 곡을 고스트별로 띄운다
+  if (q.startsWith(GHOST_PROBE_KEYWORD)) {
+    return allSongs()
+      .slice(0, 6)
+      .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));
+  }
   return allSongs()
     .filter((p) => p.title.toLowerCase().includes(q) || (p.artist ?? "").toLowerCase().includes(q))
     .slice(0, 9)

@@ -8,6 +8,7 @@ import ConfirmDialog from "@/components/common/confirm-dialog";
 import ReactionButton from "@/components/player/reaction-button";
 import Brand from "./brand";
 import HelpButton from "./help-button";
+import LayerScopeHud from "./layer-scope-hud";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
@@ -42,6 +43,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
           검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}
       {composerOpen ? <JourneyComposer /> : activePanel ? <SearchOpenButton /> : <SearchBar />}
       <HelpButton />
+      {/* 우측 패널과 자리가 겹치므로 검색바와 같은 규칙으로 접는다 (필터 값은 스토어에 남는다) */}
+      {!activePanel && <LayerScopeHud />}
       <FollowBanner />
       <Rail />
       {activePanel && <RightPanel />}

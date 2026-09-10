@@ -81,16 +81,18 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
   const H = e.H;
   const R = clamp(0.55 * e.cam.s, 60, Math.max(W, H) * 0.8);
   g.globalCompositeOperation = "lighter";
-  // 앵커: 190곡마다 하나 (결정적)
-  for (let i = 0; i < e.N; i += 190) {
-    if (e.alpha[i] < 0.05) continue;
+  // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
+  const step = Math.max(1, Math.floor(e.N / 22));
+  for (let i = 0; i < e.N; i += step) {
+    const a0 = e.alpha[i] * (e.genreFilter == null ? 1 : e.revealAlpha(i));
+    if (a0 < 0.05) continue;
     const s = e.songs[i];
     const px = e.pos[i * 2];
     const py = e.pos[i * 2 + 1];
     if (px < -R * 1.7 || px > W + R * 1.7 || py < -R * 1.7 || py > H + R * 1.7) continue;
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
-      g.globalAlpha = q.a * e.alpha[i];
+      g.globalAlpha = q.a * a0;
       g.drawImage(puffFor(q.k, s.genreId), px + q.dx * R - rr, py + q.dy * R - rr, rr * 2, rr * 2);
     }
   }
@@ -109,7 +111,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
   const swy = Math.cos(t * 0.027) * 17 + Math.sin(t * 0.008 + 0.6) * 9;
   g.globalCompositeOperation = "lighter";
   for (let i = 0; i < e.N; i++) {
-    const a0 = e.alpha[i];
+    // 진입 배율에서는 상위 몇 개만 떠 있고, 확대하면 아래 순위가 드러난다 (REVEAL) — 장르 필터도 여기서 걸린다
+    const a0 = e.alpha[i] * e.revealAlpha(i);
     if (a0 < 0.01) continue;
     let px = e.pos[i * 2];
     let py = e.pos[i * 2 + 1];
@@ -170,7 +173,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.coverAlpha < 0.01) return;
   // 커버는 이 레이어의 대표곡(백엔드 선별) 중 화면 안에 있는 곡. 부족하면 격자 대표곡으로 채운다
   const candidates = new Set<number>();
-  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
+  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId) && e.revealAlpha(i) > 0.5) candidates.add(i);
   if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
   const list = [...candidates]
     .map((i) => ({ i, px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] }))

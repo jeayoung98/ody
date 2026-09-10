@@ -5,7 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 @SpringBootApplication
-@MapperScan({ "com.ssafy.backend.auth.mapper", "com.ssafy.backend.test.mapper" })
+@MapperScan("com.ssafy.backend.*.mapper")
 public class BackendApplication {
 
 	public static void main(String[] args) {

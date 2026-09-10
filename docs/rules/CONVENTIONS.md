@@ -91,7 +91,8 @@ docs/
 master
 │
 ├─ frontend/dev
-│     └─ frontend/<type>/<issue-key>-<description>
+│     ├─ frontend/<type>/<issue-key>-<description>
+│     └─ frontend/jenkins            (배포용. dev 에서 push)
 │
 ├─ backend/dev
 │     └─ backend/<type>/<issue-key>-<description>
@@ -108,10 +109,15 @@ master
 
 | 브랜치 | 역할 | merge target |
 | --- | --- | --- |
-| `master` | 전체 프로젝트 통합 브랜치. 배포는 여기서 나간다 | — |
+| `master` | 전체 프로젝트 통합 브랜치. **보관·동기화용** — 여기서 배포하지 않는다 | — |
 | `frontend/dev` `backend/dev` `data/dev` | 파트별 통합 브랜치 | `master` |
 | `<part>/<type>/<key>-<desc>` | 개별 이슈 작업 브랜치 | `<part>/dev` |
 | `infra/<type>/...` · `common/docs/...` | 인프라·문서 작업 브랜치 (파트 dev 없음) | `master` |
+| `frontend/jenkins` | **프론트 배포용.** Jenkins 가 이 브랜치를 보고 프론트만 배포한다 | — (`frontend/dev` 에서 push) |
+
+배포 브랜치를 파트마다 따로 두는 이유: `master` 에서 배포하면 프론트·백엔드가 매번 **같이** 나간다.
+파트별로 끊어 배포하려고 중간에 둔 브랜치라 Jira Key 가 없고, 작업 브랜치처럼 쓰지 않는다.
+백엔드는 이미 `jenkins/backend` 를 쓰고 있다 — 이름 순서가 다르니 헷갈리지 않게 표를 확인한다.
 
 파트 통합 브랜치는 반드시 **`<part>/dev`** 다. 이름 없는 `frontend` 같은 브랜치를 쓰면 안 된다 —
 git 은 같은 이름을 ref 이자 디렉터리로 쓸 수 없어서, `frontend` 브랜치가 있으면
@@ -123,10 +129,14 @@ git 은 같은 이름을 ref 이자 디렉터리로 쓸 수 없어서, `frontend
 ### 병합 흐름
 
 ```
-작업 브랜치 → <part>/dev → master
+작업 브랜치 → <part>/dev ─┬→ frontend/jenkins   (배포)
+                          └→ master             (보관·동기화)
 ```
 
-**`master` 와 `<part>/dev` 에는 직접 push 금지. 항상 MR로 병합.**
+`<part>/dev` 에서 오류가 없는 것을 확인한 다음에 배포 브랜치와 `master` 로 각각 push 한다.
+
+**작업 브랜치 → `<part>/dev` 는 항상 MR로 병합하고, `<part>/dev` 에 직접 커밋하지 않는다.**
+`frontend/jenkins` 와 `master` 는 `<part>/dev` 검증 후 push 하는 대상이라 MR을 거치지 않는다.
 
 ---
 

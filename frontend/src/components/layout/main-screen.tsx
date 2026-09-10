@@ -14,6 +14,7 @@ import SearchBar from "./search-bar";
 import SearchOpenButton from "./search-open-button";
 import FollowBanner from "@/components/map/follow-banner";
 import GhostBanner from "@/components/map/ghost-banner";
+import MeBanner from "@/components/map/me-banner";
 import OverlayClose from "@/components/map/overlay-close";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
@@ -47,6 +48,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       <FollowBanner />
       <OverlayClose />
       <GhostBanner />
+      <MeBanner />
       <Rail />
       {activePanel && <RightPanel />}
       <MinimapPanel />

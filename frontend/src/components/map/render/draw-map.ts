@@ -103,7 +103,8 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
   const step = Math.max(1, Math.floor(e.N / 22));
   for (let i = 0; i < e.N; i += step) {
-    const a0 = A[i];
+    // 전환 중에는 성운을 늦게 올린다 — 들어오는 겹이 작게 뭉쳐 있는 동안 켜면 가운데가 하얗게 뜬다
+    const a0 = e.anim ? A[i] * A[i] * A[i] : A[i];
     if (a0 < 0.05) continue;
     const s = e.songs[i];
     const px = P[i * 2];
@@ -165,6 +166,21 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     if (e.hoverId === s.musicId) alpha = Math.min(1, alpha + 0.3);
     g.globalAlpha = alpha;
     g.drawImage(spr[s.genreId % GENRE_COLORS.length], px - d / 2, py - d / 2, d, d);
+    // 전환 중 나가는 별은 지나간 자리에 잔상을 남긴다 — 가장자리로 훅 빠지는 게 보이게
+    if (out && e.anim) {
+      const f2 = e.freeRect();
+      const tx = px - f2.cx;
+      const ty = py - f2.cy;
+      const td = Math.hypot(tx, ty) || 1;
+      const len = Math.min(90, td * 0.22) * (e.anim.dir > 0 ? 1 : -1);
+      g.globalAlpha = alpha * 0.5;
+      g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+      g.lineWidth = Math.max(0.8, d * 0.18);
+      g.beginPath();
+      g.moveTo(px - (tx / td) * len, py - (ty / td) * len);
+      g.lineTo(px, py);
+      g.stroke();
+    }
     if (on) {
       g.globalAlpha = 0.95 * alpha;
       g.fillStyle = MAP_COLORS.core;
@@ -481,6 +497,23 @@ function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: nu
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
+  const edge = e.meEdgePos();
+  if (edge) {
+    // 내 자리가 지금 보는 영역 밖이다 — 구름 밖에 방향만 찍어두고 배너로 찾아가게 한다
+    drawMeMarker(g, edge.x, edge.y, e.time);
+    g.globalCompositeOperation = "source-over";
+    g.textAlign = "center";
+    g.textBaseline = "middle";
+    g.font = `600 9.5px ${FONTS.mono}`;
+    const label = "내 위치 · 화면 밖";
+    const tw = g.measureText(label).width;
+    g.fillStyle = MAP_COLORS.labelBg;
+    roundRect(g, edge.x - tw / 2 - 6, edge.y + 16, tw + 12, 16, 5);
+    g.fill();
+    g.fillStyle = "rgba(79,227,206,.9)";
+    g.fillText(label, edge.x, edge.y + 24);
+    return;
+  }
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
   const elsewhere = e.playingElsewhere();
   drawMeMarker(g, px, py, e.time);
@@ -689,8 +722,7 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
   drawBackground(g, e.W, e.H, e.time, e.layer / (LAYER_COUNT - 1));
   if (e.anim) {
-    // 나가는 겹을 먼저 깔고 그 위에 들어오는 겹을 얹는다 (교차 확대)
-    drawNebula(g, e, true);
+    // 나가는 겹은 **별만** 훅 지나가게 그린다. 성운까지 겹쳐 그리면 가산 합성이라 화면이 하얗게 뜬다
     drawStars(g, e, true);
   }
   drawNebula(g, e);

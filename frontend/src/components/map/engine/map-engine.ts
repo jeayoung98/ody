@@ -561,20 +561,67 @@ export class MapEngine {
    */
   ghostPos(): { x: number; y: number } | null {
     const dir = this.ghostDir();
-    if (!dir) return null;
+    return dir ? this.outsideCloudPos(dir, this.ghostExtent) : null;
+  }
+
+  /**
+   * 화면 안에 없는 것(고스트별·화면 밖 내 위치)을 **별 구름 밖**에 놓는다.
+   * 상단 HUD 에 붙지 않게 내려오고, 그만큼 옆으로 밀어 구름과의 거리를 지킨다.
+   */
+  private outsideCloudPos(dir: { x: number; y: number }, extent: number) {
     const f = this.freeRect();
-    const t = this.ghostExtent + GHOST.cloudMargin;
+    // 놓을 수 있는 박스 — 위쪽은 상단 HUD 를 피해 더 내려온다
+    const x0 = f.x0 + GHOST.edgeInset;
+    const x1 = Math.max(x0 + 1, f.x1 - GHOST.edgeInset);
+    const y0 = f.y0 + GHOST.topInset;
+    const y1 = Math.max(y0 + 1, f.y1 - GHOST.edgeInset);
+    // 구름 밖으로 밀되, 박스를 넘지 않는다 — 구름이 화면보다 크면 테두리에 붙는다
+    const tx = Math.abs(dir.x) < 1e-6 ? Infinity : ((dir.x > 0 ? x1 : x0) - f.cx) / dir.x;
+    const ty = Math.abs(dir.y) < 1e-6 ? Infinity : ((dir.y > 0 ? y1 : y0) - f.cy) / dir.y;
+    const t = Math.max(0, Math.min(extent + GHOST.cloudMargin, Math.min(tx, ty)));
     let x = f.cx + dir.x * t;
     let y = f.cy + dir.y * t;
-    // 상단 HUD 에 붙지 않게 내려오고, 그만큼 옆으로 밀어 구름 밖 거리를 지킨다
-    const minY = f.y0 + GHOST.topInset;
-    if (y < minY) {
+    // 위로 치우쳐 상단에 닿으면 옆으로 밀어 거리를 지킨다
+    if (y < y0) {
       const side = dir.x >= 0 ? 1 : -1;
-      const gap = Math.sqrt(Math.max(0, t * t - (minY - f.cy) ** 2));
-      y = minY;
-      x = f.cx + side * Math.max(gap, t * 0.35);
+      const gap = Math.sqrt(Math.max(0, t * t - (y0 - f.cy) ** 2));
+      y = y0;
+      x = Math.min(x1, Math.max(x0, f.cx + side * Math.max(gap, t * 0.35)));
     }
     return { x, y };
+  }
+
+  /**
+   * 내 위치가 화면 밖인가 (MAP-08). 플레이리스트·여정으로 듣다 보면 내 자리가 지금 보는
+   * 영역 밖으로 나갈 수 있다 — 그때는 고스트별처럼 구름 밖에 띄우고 눌러서 찾아가게 한다.
+   */
+  meOffscreen() {
+    if (this.myId == null || this.follow || this.anim) return false;
+    const f = this.freeRect();
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    return px < f.x0 + 24 || px > f.x1 - 24 || py < f.y0 + 24 || py > f.y1 - 24;
+  }
+
+  /** 화면 밖 내 위치를 가리키는 표식 자리 (구름 밖) */
+  meEdgePos(): { x: number; y: number } | null {
+    if (!this.meOffscreen()) return null;
+    const f = this.freeRect();
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    let dx = px - f.cx;
+    let dy = py - f.cy;
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-6) return null;
+    dx /= d;
+    dy /= d;
+    return this.outsideCloudPos({ x: dx, y: dy }, this.starRadius());
+  }
+
+  /** 내 위치로 카메라를 돌린다 (배율은 그대로) */
+  focusMy() {
+    if (this.myId == null || this.follow || this.anim) return;
+    this.touched = true;
+    const f = this.freeRect();
+    this.camTarget = { s: this.cam.s, cx: this.me.x - (f.cx - this.W / 2) / this.cam.s, cy: this.me.y + (f.cy - this.H / 2) / this.cam.s };
   }
 
   /** 고스트별 페이드 진행도 */
@@ -778,7 +825,9 @@ export class MapEngine {
     this.camTarget = null;
     this.touched = true;
     const w = this.screenToWorld(mx, my);
-    this.cam.s *= Math.exp(-deltaY * WHEEL_ZOOM);
+    const want = this.cam.s * Math.exp(-deltaY * WHEEL_ZOOM);
+    // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게)
+    this.cam.s = Math.min(this.entryS * DRILL.zoomRange.max, Math.max(this.entryS * DRILL.zoomRange.min, want));
     this.cam.cx = w.x - (mx - this.W / 2) / this.cam.s;
     this.cam.cy = w.y + (my - this.H / 2) / this.cam.s;
     this.clampCam();
@@ -912,8 +961,8 @@ export class MapEngine {
    */
   surfaceToSong(id: number) {
     if (this.follow || this.anim || !this.index.has(id)) return;
-    // 상주 집합으로 되돌린다 — 확인용 곡이 여기서 상주로 바뀌면 겹의 곡 수가 어긋난다
-    const ns = this.residentMask();
+    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 그 겹에는 이 곡도 있다
+    const ns = this.residentMask(0);
     this.stack = [];
     this.selectedId = id;
     const ax = LAYER_AXES[0];
@@ -1329,6 +1378,7 @@ export class MapEngine {
       myMusicId: this.myId,
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
+      meOffscreen: this.meOffscreen(),
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

@@ -58,20 +58,20 @@
 커밋 메시지 형식(`type: subject`, 소문자 type, 50자)은 [docs/rules/CONVENTIONS.md §1](docs/rules/CONVENTIONS.md) 이 기준이다.
 
 ```
-master                                       (보관·동기화용)
-├─ frontend/dev  └─ frontend/<type>/<issue-key>-<description>
-│                └─ frontend/jenkins         (프론트 배포용. dev 검증 후 push)
-├─ backend/dev   └─ backend/<type>/<issue-key>-<description>
-├─ data/dev      └─ data/<type>/<issue-key>-<description>
-├─ infra     └─ infra/<type>/<issue-key>-<description>
-└─ docs      └─ common/docs/<issue-key>-<description>
+frontend/<type>/<key>-<desc> → frontend/dev → frontend/jenkins (프론트 배포) + master
+backend/<type>/<key>-<desc>  → backend/dev  → backend/jenkins  (백엔드 배포) + master
+data/<type>/<key>-<desc>     → data/dev     → master
+infra/<type>/<key>-<desc>    → master
+common/docs/<key>-<desc>     → master
+
+<part>/jenkins 는 master 와 동급 (파트별 master). master 는 그것들을 합치는 자리.
 ```
 
 **커밋·브랜치 생성·push·MR 작성 전에 매번 확인한다.**
 
 - 현재 브랜치가 `master` 또는 파트 통합 브랜치(`frontend/dev` `backend/dev` `data/dev`)면 **직접 커밋·push 금지.** 작업 브랜치를 먼저 만든다.
-- 배포 브랜치(`frontend/jenkins`, `jenkins/backend`)는 Jira Key 없이 `<part>/dev` 에서 push 만 하는 대상이다.
-  여기에 커밋하거나 여기서 작업 브랜치를 따지 않는다. `master` 는 배포가 아니라 보관·동기화용이다.
+- 파트별 배포 브랜치(`frontend/jenkins` `backend/jenkins`)는 `master` 와 **동급**이다. `<part>/dev` 검증 후
+  `<part>/jenkins` 와 `master` 에 각각 **MR** 을 넣는다 — 셋 다 직접 push 금지이고, 여기서 작업 브랜치를 따지 않는다.
 - 작업 브랜치에는 Jira Issue Key(`S15P21A405-<번호>`)가 필수다. 브랜치는
   `bash .claude/hooks/new-branch.sh <part> <type> <KEY> <desc>` 로 만든다.
 - 커밋 메시지에도 Key 를 넣는다: `feat: 주변 사용자 조회 API 구현 [S15P21A405-57]`

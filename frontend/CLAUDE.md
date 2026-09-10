@@ -52,8 +52,9 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
   - description: 영문 소문자 kebab-case
   - 예: `frontend/feat/S15P21A405-10-music-map`
 - 브랜치 하나에 관련 없는 작업을 섞지 않는다.
-- `frontend/jenkins` 는 **배포용**이다. `frontend/dev` 에서 오류가 없는 것을 확인한 뒤 push 하는 대상이고,
-  여기에 커밋하거나 여기서 작업 브랜치를 따지 않는다. `master` 는 보관·동기화용이라 배포가 나가지 않는다.
+- `frontend/jenkins` 는 **프론트 배포용이자 프론트의 master** 다(`master` 와 동급). `frontend/dev` 에서
+  오류가 없는 것을 확인한 뒤 `frontend/jenkins` 와 `master` 에 각각 MR 을 넣는다.
+  직접 push 하거나 여기서 작업 브랜치를 따지 않는다.
 
 ### 커밋 메시지
 - 형식: `type: subject` (type은 소문자, 콜론 앞 공백 없음, 뒤에만 공백 하나)

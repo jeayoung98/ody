@@ -35,11 +35,52 @@
 |---|---|---|---|
 | S0 원본 적재 | `lowlevel/*.tar.zst` 30파트 | `raw_features/part=NN/` : `mbid, offset, part, fingerprint, codec, bit_rate, length, lossless, sample_rate, f_000..f_269(float32), title, artist` | 행 수 = 전수조사 `census_all.parquet` 의 코호트 행 수; 표본 1만 행 값 == 기존 추출 Parquet |
 | S1 대표행 선택 | raw_features + `work/v2_manifest.parquet` 규칙(지문→lossless→44100→규모→part,offset) | `manifest_rows/` 7,404,506 행 | mbid 집합 == v2 manifest |
+| **S1.5 특징 선택** | 원본 JSON 수치 잎 **약 2,900** | `f_000..f_269` **270** | 아래 별도 절. 두 단계로 나뉘고 성격이 다르다 |
 | S2 전처리 | manifest_rows + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` 270 f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인 |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
 | S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
 | S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
+
+## S1.5 특징 선택 — 약 2,900 → 389 → 270
+
+목적 줄에 `Feature Selection` 이 있는데 단계 표에는 없었다(2026-09-10 지적). 선택이 추출기 안에 숨어 있어 파이프라인에 드러나지 않았다. 실제 사슬은 **두 단계**이고 성격이 다르다.
+
+| 하위 단계 | 개수 | 성격 | Spark 에서 | 규칙 위치 |
+|---|---|---|---|---|
+| **S1.5a 구조 선택** | 약 2,900 → **389** | 규칙 기반, 데이터 불필요, 결정적 | **재현한다** | `scripts/feature_spec.py` docstring + `COLUMNS` |
+| **S1.5b 안정성 선택** | 389 → **270** | **데이터 기반 fit** | **적용만 한다** (규칙 3) | `feature_list.json` (동결). 도출은 `dmadkr/scripts/exp_a.py` |
+
+### S1.5a 구조 선택 규칙
+원본 lowlevel JSON 을 평탄화할 때 무엇을 남기는지의 규칙이다. 데이터를 보지 않으므로 Spark 가 그대로 재현해야 한다.
+
+- 통계팩 스칼라는 `mean`, `var`, `dmean2` 만
+- 리스트 특징은 `mean` 배열만 (mfcc·gfcc 는 `mean` 뿐, `cov`·`icov` 제외)
+- 고정 길이 리스트(`chords_histogram`, `thpcp`)는 그대로
+- `metadata.*` 제외
+- 가변 길이 시계열(`beats_position`) 제외
+- `bpm_histogram_{first,second}_peak_*` 는 `mean` 만
+- 문자열 특징(`key_key` 등)은 수치 벡터에서 분리해 따로 저장
+
+### S1.5b 안정성 선택 규칙 (동결)
+특징마다 인코딩 안정성 점수를 재고 임계 이상만 남겼다.
+
+```text
+S_cross = median(무작위 쌍 거리) / median(교차 인코딩 중복 쌍 거리)
+S_cross ≥ 2.0 이면 유지          (S_CUT = 2.0)
+```
+
+같은 녹음을 다르게 인코딩했을 때 값이 다른 곡만큼 흔들리는 특징은 음악이 아니라 인코더를 재는 것이라 버린다. 동일 파일(같은 md5)은 쌍에서 제외하고, 코덱·비트레이트·무손실 여부가 다른 **교차 인코딩** 쌍만 분모로 쓴다(보수적 기준).
+
+탈락 **119개**: `lowlevel` 85, `tonal` 30, `rhythm` 4.
+
+산출물은 `work/A_kept_features.json` 의 `cut_cross` 이고, 그것이 서빙 번들의 `feature_list.json` 으로 굳었다. **v2 는 v1 목록을 그대로 물려받았다** — v1 과 v2.1 의 `features`·`skew_transform`·`winsorize_clip` 이 완전히 같음을 확인했다(2026-09-10). 다른 것은 `pca_components` 뿐이다.
+
+**Spark 에서 이 단계를 다시 계산하지 않는다.** 중복 쌍 표본이 달라지면 다른 목록이 나오고 좌표가 바뀐다. 그건 major 버전이고 게이트 재등록 대상이다(규칙 3).
+
+### 패리티 기준
+- S1.5a: 평탄화 결과 컬럼 이름 집합이 `feature_spec.COLUMNS` 389개와 정확히 같다.
+- S1.5b: 최종 컬럼이 `feature_list.json` 의 270개와 순서까지 같다.
 
 ## 수용 기준
 - AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**

@@ -38,7 +38,7 @@
 | S2 전처리 | 추출 특징 + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` `mbid` + `f_000..f_269` f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인. 잡은 `spark/jobs/preprocess.py` |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` `mbid` + pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet`. 잡은 `spark/jobs/pca.py` |
 | S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
-| S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
+| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R9 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
 
 ## S2 전처리·S3 PCA — 270차원에서 16차원

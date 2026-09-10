@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GENRE_DIM, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, REVEAL, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GENRE_DIM, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -77,12 +77,10 @@ export class MapEngine {
   songs: MapPoint[] = [];
   private index = new Map<number, number>();
   private byWeight: number[] = [];
-  /** 재생수 순위 (0 = 1위). 확대할수록 이 순위 아래까지 별이 드러난다 (REVEAL) */
-  private rank = new Int32Array(0);
-  /** 드러나는 재생수 순위 경계. 프레임마다 갱신 */
-  revealCount = 0;
-  /** 실제로 화면에 떠 있는 별 수 (끈 장르까지 반영). 프레임마다 갱신 */
-  shownCount = 0;
+  /** 별마다 다른 깊이 (가우시안). 시차에 쓴다 — 팬·줌에 따라 앞뒤가 갈린다 (프로토타입 z) */
+  z = new Float32Array(0);
+  /** 화면 안에 들어와 있는 상주 곡 수 — 다음 단계로 데려갈 후보다. 프레임마다 갱신 */
+  viewportCount = 0;
   /** 이 겹 별들을 다 감싸는 반지름 (중심 기준 px). 고스트별을 그 밖에 놓는다. 프레임마다 갱신 */
   private ghostExtent = 0;
   /** 필터에서 켜 둔 장르. 꺼진 장르는 지워지지 않고 GENRE_DIM 만큼 흐려진다 */
@@ -197,8 +195,17 @@ export class MapEngine {
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
-    this.rank = new Int32Array(this.N);
-    this.byWeight.forEach((idx, r) => (this.rank[idx] = r));
+    // 깊이는 musicId 로 결정한다 (새로고침해도 같은 하늘)
+    this.z = new Float32Array(this.N);
+    for (let i = 0; i < this.N; i++) {
+      let h = (songs[i].musicId * 2654435761) >>> 0;
+      let g = 0;
+      for (let k = 0; k < 4; k++) {
+        h = (h * 1664525 + 1013904223) >>> 0;
+        g += h / 0xffffffff;
+      }
+      this.z[i] = ((g - 2) / 1.6) * 0.75;
+    }
     this.subset = this.residentMask();
     this.pos = new Float32Array(this.N * 2);
     this.from = new Float32Array(this.N * 2);
@@ -476,7 +483,7 @@ export class MapEngine {
     const f = this.freeRect();
     let max = 0;
     for (let i = 0; i < this.N; i++) {
-      if (!this.subset[i] || this.alpha[i] < 0.5 || this.revealAlpha(i) < 0.5) continue;
+      if (!this.subset[i] || this.alpha[i] < 0.5 || this.genreDim(i) < 1) continue;
       const d = Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy);
       if (d > max) max = d;
     }
@@ -546,10 +553,16 @@ export class MapEngine {
     return { x: cam.cx + (px - this.W / 2) / cam.s, y: cam.cy - (py - this.H / 2) / cam.s };
   }
 
+  /** 깊이 시차 — 앞쪽(z>0) 별이 조금 더 크게 움직인다 (프로토타입 par) */
+  private par(i: number) {
+    return 1 + this.z[i] * STAR_VIEW.parallax;
+  }
+
   private proj(i: number, layer: number, cam: MapCamera, out: Float32Array, k: number) {
     const s = this.songs[i];
-    out[k] = this.W / 2 + (s.pc[layer * 2] - cam.cx) * cam.s;
-    out[k + 1] = this.H / 2 - (s.pc[layer * 2 + 1] - cam.cy) * cam.s;
+    const p = this.par(i);
+    out[k] = this.W / 2 + (s.pc[layer * 2] - cam.cx) * cam.s * p;
+    out[k + 1] = this.H / 2 - (s.pc[layer * 2 + 1] - cam.cy) * cam.s * p;
   }
 
   private project() {
@@ -637,7 +650,7 @@ export class MapEngine {
 
   /**
    * 한 겹 파고들기 — 상주 집합을 **그대로** 데려가 다음 두 축으로 재투영한다.
-   * 겹이 바뀌면 진입 배율이 다시 잡히므로, 드러난 별 수도 REVEAL.base 로 돌아간다.
+   * 겹이 바뀌면 진입 배율이 다시 잡혀 격자도 다시 넓어진다.
    */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
@@ -1148,26 +1161,19 @@ export class MapEngine {
     return n;
   }
 
-  /** 드러나는 순위 경계와 실제로 떠 있는 별 수 — 진입 배율에서 REVEAL.base, 확대할수록 상주 수까지 늘어난다 */
+  /** 화면 안 상주 곡 수(다음 단계 후보)와 고스트별을 놓을 구름 반지름을 잰다 */
   private updateReveal() {
-    const k = Math.max(1, this.zoomK());
-    this.revealCount = Math.min(this.residentCount(), Math.round(REVEAL.base * Math.pow(k, REVEAL.exp)));
+    const f = this.freeRect();
     let n = 0;
-    for (let i = 0; i < this.N; i++) if (this.subset[i] && this.revealAlpha(i) >= 0.5) n++;
-    this.shownCount = n;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i] || this.genreDim(i) < 1) continue;
+      const px = this.pos[i * 2];
+      const py = this.pos[i * 2 + 1];
+      if (px >= f.x0 && px <= f.x1 && py >= f.y0 && py <= f.y1) n++;
+    }
+    this.viewportCount = n;
     // 고스트별은 구름을 감싸는 원 밖에 놓아야 하므로 그 반지름을 프레임마다 잰다
     this.ghostExtent = this.ghost ? this.starRadius() : 0;
-  }
-
-  /**
-   * 이 별이 지금 얼마나 드러나 있는가 (0 = 안 보임).
-   * 재생수 순위가 revealCount 안쪽이면 1, 그 아래 REVEAL.fade 순위까지는 옅게, 더 아래는 0.
-   * 필터에서 꺼진 장르는 여기에 GENRE_DIM 이 곱해져 형태만 남는다 (0.5 미만이라 대표곡·클릭 대상에서는 빠진다).
-   */
-  revealAlpha(i: number) {
-    const over = this.rank[i] - this.revealCount;
-    const a = over < 0 ? 1 : Math.max(0, 1 - over / REVEAL.fade);
-    return a * this.genreDim(i);
   }
 
   /** 대표곡 선별 — 격자를 월드에 못박아 팬해도 승자가 바뀌지 않게 */
@@ -1179,7 +1185,7 @@ export class MapEngine {
     const dx = this.dx();
     const dy = this.dy();
     for (const i of this.byWeight) {
-      if (!this.subset[i] || this.alpha[i] < 0.5 || this.revealAlpha(i) < 0.5) continue;
+      if (!this.subset[i] || this.alpha[i] < 0.5 || this.genreDim(i) < 1) continue;
       const px = this.pos[i * 2];
       const py = this.pos[i * 2 + 1];
       if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;
@@ -1218,7 +1224,7 @@ export class MapEngine {
     const snap: Partial<EngineSnapshot> = {
       layer: this.layer,
       residentCount: this.residentCount(),
-      revealedCount: this.shownCount,
+      viewportCount: this.viewportCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
       gateOpen: !this.anim && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,

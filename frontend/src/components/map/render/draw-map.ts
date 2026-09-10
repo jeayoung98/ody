@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, STAR_SIZE } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, STAR_SIZE, STAR_VIEW } from "@/constants";
 import { FONTS, GENRE_COLORS, MAP_COLORS, NEBULA_WASH, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -24,6 +24,22 @@ function twinkle(id: number, t: number) {
  * 배경. 깊은 겹일수록 **어두워지고 배경 별이 성겨진다** — 색조는 그대로라 장르색과 싸우지 않는다.
  * depth = 0(가장 얕은 겹) ~ 1(가장 깊은 겹)
  */
+/**
+ * 새로 도드라진 별이 밝아지는 진행도 (프로토타입 appear).
+ * 한동안 안 보인 별은 잊어서, 다시 나타날 때 또 부드럽게 밝아진다.
+ */
+const seenAt = new Map<number, { first: number; last: number }>();
+function appear(id: number, t: number) {
+  const e = seenAt.get(id);
+  if (!e) {
+    seenAt.set(id, { first: t, last: t });
+    return 0;
+  }
+  e.last = t;
+  if (seenAt.size > 4000 && t - e.first > 3) seenAt.delete(id);
+  return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
+}
+
 function drawBackground(g: CanvasRenderingContext2D, W: number, H: number, t: number, depth: number) {
   g.globalCompositeOperation = "source-over";
   g.fillStyle = MAP_COLORS.background;
@@ -117,8 +133,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const swy = Math.cos(t * 0.027) * 17 + Math.sin(t * 0.008 + 0.6) * 9;
   g.globalCompositeOperation = "lighter";
   for (let i = 0; i < e.N; i++) {
-    // 진입 배율에서는 상위 몇 개만 떠 있고, 확대하면 아래 순위가 드러난다 (REVEAL) — 장르 필터도 여기서 걸린다
-    const a0 = A[i] * e.revealAlpha(i);
+    // 상주 곡은 전부 그린다 — 격자에서 이긴 별만 크고 밝다. 꺼진 장르는 형태만 남는다
+    const a0 = A[i] * e.genreDim(i);
     if (a0 < 0.01) continue;
     let px = P[i * 2];
     let py = P[i * 2 + 1];
@@ -134,13 +150,15 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = 1;
     } else if (on) {
       d = (STAR_SIZE.min + Math.pow(mag, 1.75) * (STAR_SIZE.max - STAR_SIZE.min)) * grow;
-      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t);
+      // 새로 도드라진 별은 툭 튀지 않게 380ms 동안 밝아진다 (프로토타입 appear)
+      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * appear(s.musicId, t);
     } else {
-      // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다
+      // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
       d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow;
       alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t);
-      px += swx * 0.34;
-      py += swy * 0.34;
+      const drift = 0.34 + e.z[i] * 0.05;
+      px += swx * drift;
+      py += swy * drift;
     }
     if (!s.playable) alpha *= 0.5;
     alpha *= a0;
@@ -179,7 +197,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.coverAlpha < 0.01) return;
   // 커버는 이 레이어의 대표곡(백엔드 선별) 중 화면 안에 있는 곡. 부족하면 격자 대표곡으로 채운다
   const candidates = new Set<number>();
-  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId) && e.revealAlpha(i) > 0.5) candidates.add(i);
+  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId) && e.genreDim(i) >= 1) candidates.add(i);
   if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
   const list = [...candidates]
     .map((i) => ({ i, px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] }))

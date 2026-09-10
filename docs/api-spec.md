@@ -174,6 +174,17 @@ body: `idToken`(String, required).
 - 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/music/detail`)나
   `/api/auth/*`와도 다른 세 번째 네이밍이다. 사용자가 지정한 경로를 그대로 따랐다.
 
+### 1.5 온보딩 완료 처리 (S15P21A405-122)
+`PATCH /api/user/tutorial-completed` · 인증 필요. 토큰 주체 본인만 대상이라 email을 받지 않는다(§0.7 본인 대상 API 규칙).
+```json
+{ "success": true, "data": { "tutorialCompleted": true }, "error": null }
+```
+- `"user".tutorial_completed`를 true로 전환한다. 이미 true여도 멱등하게 200.
+- 로그인 응답(§1.1, §1.4)에는 `isNewUser` 같은 신호가 없다 — 온보딩 완료 여부를 프론트가 알아야 하면
+  `GET /user/detail`의 `tutorialCompleted` 필드를 조회해서 판단한다.
+- 경로가 `/api/user`(단수, api 접두사)로, `/user/detail`·`/api/users/*`·`/api/auth/*`와도 다른 네 번째
+  네이밍이다 — 이 저장소에 경로 접두사 컨벤션이 아직 통일되지 않았다는 뜻이므로 정리가 필요하다.
+
 ---
 
 ## 2. 사용자

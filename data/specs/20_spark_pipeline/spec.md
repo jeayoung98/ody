@@ -38,8 +38,64 @@
 | S2 전처리 | manifest_rows + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` 270 f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인 |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
 | S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
-| S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
+| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R9 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | `check_contract.py --strict --prev` 통과 |
+
+## S5 카탈로그 제외 규칙 — 곡 740만 → 662만
+
+**곡 수를 줄이는 두 번째이자 마지막 단계다.** 첫 번째는 S1 대표행 선택이다.
+
+```text
+S1 대표행 7,404,506
+  → 규칙 R1~R9 적용        제외 780,107 (10.54%)
+  → 남는 곡 6,624,399
+```
+
+행을 지우지 않는다. 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`, `flag_*` 로 표시한다(`data/AGENTS.md` 규칙 2). 임계값은 `pipeline/exclusion_rules.json`(v3)에서만 읽고 잡 코드에 숫자를 적지 않는다(규칙 9). 테스트가 하드코딩 여부를 검사한다.
+
+### 규칙별 적중 (원본 기록, `dmadkr/output/exclusion_report.json`)
+| 규칙 | 적중 | 단독 적중 | 무엇을 자르나 |
+|---|---:|---:|---|
+| R1_length | 113,841 | 110,613 | 30초 미만. 20분 초과(태그 있는 비예외). 미태그는 30분 초과 |
+| R2_nonmusic | 10,014 | 8,734 | 비음악 키워드 9개 적중 |
+| R3_no_key | 10,976 | 10,846 | 제목·아티스트 원문이 둘 다 빈 곡 |
+| R4_cohort | 0 | 0 | 코호트 밖 지문. S1 이 이미 걸러 0 이 정상(명시용) |
+| R5_dup_canonical | 241,660 | 240,646 | 같은 canonical 의 가까운 중복 |
+| R6_dup_version | 407,026 | 405,682 | 같은 제목·아티스트의 가까운 버전 중복 |
+| R7_samplerate | 0 | 0 | **꺼짐**. `flag_low_sr` 만 만든다 |
+| R8_silence | 116 | 78 | 하위 분위 음량 + 무음률 높음 |
+| R9_corrupt | 0 | 0 | **꺼짐**. `flag_clipped` 만 만든다 |
+
+R5·R6 은 거리 보호가 있다. 대표와 좌표 거리가 `protect_dist`(4.0) 를 넘는 멤버는 제목이 같아도 접지 않는다. 근거는 같은 녹음의 제출본 거리 p90 이 5.18 이고 제목만 같은 묶음의 멤버 거리 median 이 5.34 라는 감사 A6·A7 이다.
+
+### 분산 처리로 바뀐 것
+| 무엇 | 원본 | Spark |
+|---|---|---|
+| 묶음 대표 선정 | `sort_values` + `drop_duplicates` | `Window.partitionBy(묶음).orderBy(...)` + `row_number() == 1` |
+| 대표와의 거리 | 대표 행을 색인해 `np.linalg.norm` | 같은 창의 `first(pc_i)` 로 대표 좌표를 실어 조인 없이 계산 |
+| 제목 정규화 | `catalog_audit.r6_key` | 같은 정규식을 잡에 복제(실행기에서 pandas import 회피). 테스트가 두 구현의 일치를 검사 |
+
+### 기준 출력과 값이 다른 두 컬럼
+1. `dup_group_id` — 원본은 `pandas.factorize` 의 등장 순서 정수다. 분산 환경에서 재현할 수 없어 묶음 키의 `xxhash64` 를 쓴다. **묶음 분할은 같고 정수 값만 다르다.** 테스트는 분할을 비교한다.
+2. `rules_hash` — 원본 `7854e999ee3f14d1` 은 CRLF 사본의 바이트 해시다. 저장소는 LF 라 내용이 같아도 해시가 다르다. 그래서 정렬된 JSON 을 해시해 개행에 무관하게 만든다.
+
+### 패리티 기준
+`work/catalog_v2.parquet` 이 기준이다. `tests/test_catalog_rules.py` 13건이 2026-09-10 에 통과했다.
+
+| 무엇 | 어떻게 | 결과 |
+|---|---|---|
+| 행 단위 규칙 R2·R3·R4·R7·R9, R1 짧은 곡 | 표본 8,000행 전수 비교 | 불일치 0 |
+| R1 긴 곡 | 20분 초과 29,966행 중 150행 + 실제 `genres_raw` 태그 | 불일치 0 |
+| R8 | 실제 특징 3컬럼으로 재계산 | 특징이 있는 113곡 전부 일치, 남는 3곡은 특징 없음 |
+| R5 | canonical 묶음 200개 | 대표가 접힌 사례 0. 보호된 멤버 204쌍 모두 거리 > 4.0 |
+| R6 | 묶음 200개(2곡 이상 묶음 589,543개에서 추출) | 묶음 분할·대표 선정 완전 일치 |
+| 제목 정규화 | 실제 제목 5,000개 | `catalog_audit.r6_key` 와 완전 일치 |
+
+### R8 분위값은 입력이 복구된 뒤에 검증한다
+R8 은 전곡 `average_loudness` 의 하위 0.1 퍼센타일이 필요하다. 현재 `v2_feats` 가 28/30 파트라 28파트로 계산하면 8.011e-05 이고 원본 기록은 8.517e-05 다. 데이터가 빠져서 생긴 차이다. 그래서 패리티 테스트는 기록값을 넣어 판정만 검증하고, 분위값 자체의 패리티는 열린 질문 Q7(파트 재추출)이 정해진 뒤로 남긴다.
+
+### 이식하지 않는 것
+dry-run 리포트(md/json), 브릿지 풀 Hit@10 재검증, 서빙 번들 내보내기. 앞의 둘은 fit·QA 산물이고(규칙 3) 마지막은 S6 `artifact_export.py` 담당이다.
 
 ## 수용 기준
 - AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**

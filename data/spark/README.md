@@ -28,7 +28,14 @@ spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-mem
   spark/jobs/preprocess.py --in hdfs:///ody/data/raw_features_extracted --out hdfs:///ody/data/features_pre --sample 100000
 yarn application -list -all
 ```
-단계 순서: `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
+단계 순서: `manifest_rows.py`(S1) → `feature_select.py`(S1.5) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
+
+곡 수를 줄이는 잡은 **S1 과 S5 둘**이다(제출본 2,946만 → 곡 740만 → 662만). 차원을 줄이는 잡은 S1.5a·S1.5b·S3 이다.
+
+```bash
+spark-submit --master yarn --deploy-mode client --num-executors 2 --executor-memory 4g --executor-cores 2 --driver-memory 2g   spark/jobs/catalog_rules.py --in hdfs:///ody/data/catalog_input --out hdfs:///ody/data/catalog --expect-excluded 780107
+```
+S5 는 행을 지우지 않고 `excluded`·`excluded_reason[]`·`flag_*` 로 표시한다. 임계값은 `pipeline/exclusion_rules.json` 에서만 읽는다. 입력에 필요한 컬럼과 두 값(`dup_group_id`·`rules_hash`)이 기준과 다른 이유는 스펙 20 의 S5 절에 있다.
 
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료
 ```bash

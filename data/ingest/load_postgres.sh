@@ -1,14 +1,19 @@
 #!/usr/bin/env bash
 # 스펙 18 적재 2단계 — CSV 를 ody DB 에 COPY (Jira S15P21A405-209)
 #
-# 이 스크립트는 **아직 돌리지 않았다.** 두 가지가 사용자 결정 대기다:
-#   1. HNSW 인덱스 드롭 여부 (BE 가 만든 music_location_hnsw_idx)
-#   2. ody-postgres 컨테이너 자원 상향 (현재 메모리 1GB, maintenance_work_mem 64MB)
+# 2026-09-10 에 실제로 돌려서 성공한 절차다. 실측:
+#   - CSV 전송 2.72 GB → app-node 9분 18초
+#   - COPY music 6,624,399행 66초, music_genre 71,285행 0.12초, genre 29행 2ms
+#   - music 테이블 1,518 MB, DB 전체 1,532 MB
+#   - 컨테이너 자원은 재시작 없이 올렸다: docker update --memory 4g --cpus 2 ody-postgres
 #
-# 2026-09-10 실측 근거:
-#   - music.csv 2.72 GB / 6,624,399행, neo4j_music.csv 1.43 GB
-#   - 스펙 17 측정으로 HNSW 는 50만행 1,032초. 662만행이면 4~6시간 (자원 상향 전)
-#   - 스펙 50 규칙: 662만 행 적재는 인덱스를 만들기 전에 한다
+# 처음 두 번은 실패했다. 원인과 해결을 그대로 남긴다:
+#   1. inline psql -c 의 따옴표 중첩 → 경로가 큰따옴표로 나가 syntax error.
+#      해결: SQL 을 파일로 쓰고 psql -f 로 실행한다.
+#   2. title 이 빈 문자열인 곡 3,977개 → COPY 가 NULL 로 넣어 NOT NULL 위반.
+#      해결: FORCE_NOT_NULL (title). 빈 문자열을 그대로 넣는다.
+#   3. HNSW 병렬 빌드가 /dev/shm 64MB 를 넘겨 "could not resize shared memory segment".
+#      해결: SET max_parallel_maintenance_workers = 0. shm-size 를 늘리려면 컨테이너 재생성이 필요하다.
 #
 # 사용법 (master 아니라 app-node 에서):
 #   scp -i ~/.ssh/J15A405T.pem music.csv genre.csv music_genre.csv ubuntu@j15a405.p.ssafy.io:/tmp/ingest/
@@ -34,10 +39,16 @@ done
 echo "== 2. HNSW 인덱스 드롭 (적재 후 다시 만든다)"
 run_sql "DROP INDEX IF EXISTS music_location_hnsw_idx;"
 
-echo "== 3. COPY — 순서가 중요하다. genre 가 먼저여야 music_genre 의 genre_id 가 맞는다"
-run_sql "COPY genre (id, name) FROM '/tmp/genre.csv' WITH (FORMAT csv, HEADER true);"
-run_sql "COPY music (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt) FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true);"
-run_sql "COPY music_genre (id, music_id, genre_id) FROM '/tmp/music_genre.csv' WITH (FORMAT csv, HEADER true);"
+echo "== 3. COPY — SQL 을 파일로 만들어 psql -f 로 넣는다(따옴표 중첩 회피)"
+docker exec -i "$CONTAINER" bash -lc "cat > /tmp/copy.sql" <<'SQL'
+\timing on
+COPY genre (id, name) FROM '/tmp/genre.csv' WITH (FORMAT csv, HEADER true);
+-- title 이 빈 문자열인 곡이 3,977개 있다. FORCE_NOT_NULL 이 없으면 NULL 로 들어가 NOT NULL 위반이다.
+COPY music (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt)
+  FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true, FORCE_NOT_NULL (title));
+COPY music_genre (id, music_id, genre_id) FROM '/tmp/music_genre.csv' WITH (FORMAT csv, HEADER true);
+SQL
+docker exec -i "$CONTAINER" bash -lc 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/copy.sql'
 
 echo "== 4. 행 수 검증 (스펙 18 AC1·AC5)"
 run_sql "DO \\\$\\\$ DECLARE m bigint; g bigint; l bigint; BEGIN
@@ -53,9 +64,15 @@ run_sql "SELECT count(*) AS must_be_zero FROM music WHERE release_year IS NOT NU
 echo "== 6. 좌표 차원과 표본"
 run_sql "SELECT vector_dims(location) AS dims, count(*) FROM music WHERE location IS NOT NULL GROUP BY 1;"
 
-echo "== 7. HNSW 다시 만들기 — 자원 상향 후에 한다. 지금은 주석으로 둔다"
-echo "   run_sql \"SET maintenance_work_mem='2GB'; CREATE INDEX music_location_hnsw_idx ON music USING hnsw (location vector_l2_ops);\""
+echo "== 7. HNSW 다시 만들기 — 병렬을 끄지 않으면 /dev/shm 64MB 에 걸려 실패한다"
+docker exec -i "$CONTAINER" bash -lc "cat > /tmp/hnsw.sql" <<'SQL'
+\timing on
+SET maintenance_work_mem = '2GB';
+SET max_parallel_maintenance_workers = 0;
+CREATE INDEX music_location_hnsw_idx ON music USING hnsw (location vector_l2_ops);
+SQL
+docker exec -i "$CONTAINER" bash -lc 'psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/hnsw.sql'
 
 echo "== 8. BE 에게 전달할 값"
 run_sql "SELECT max(id) AS max_music_id, max(id) + 1 AS next_id_for_backend FROM music;"
-echo "완료. 인덱스는 아직 없다. BE 는 그동안 정확 거리 질의(전체 스캔)로 붙을 수 있다."
+echo "완료. HNSW 빌드는 시간이 걸린다. 그동안에도 BE 는 정확 거리 질의(전체 스캔)로 붙을 수 있다."

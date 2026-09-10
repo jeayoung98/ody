@@ -1,6 +1,6 @@
 # 18 적재 파이프라인 (music·genre·music_genre + Neo4j) — spec
 
-상태 🔶 · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · 결정 **D11**, **D13** · 선행: 스펙 17 T1(Postgres 자원 상향)
+상태 🔶(적재 완료, HNSW 빌드 중) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · 결정 **D11**, **D13** · 선행: 스펙 17 T1(Postgres 자원 상향)
 
 ## 목적
 Spark 가 만든 좌표와 카탈로그를 서비스가 쓰는 형태로 PostgreSQL 과 Neo4j 에 적재한다.
@@ -70,15 +70,56 @@ music_genre  id BIGINT PK · music_id BIGINT NOT NULL · genre_id BIGINT NOT NUL
 1. **장르 곡 수 67,472 → 66,036.** 67,472 는 **manifest 기준**이고 그중 **1,436곡이 S5 제외 규칙에 걸려** `coords` 에 없다. 링크는 71,285개다(곡당 코드 여러 개). AC5·AC6 을 이 수치로 고쳤다.
 2. **`bpm` 이 733,146곡에서 NULL.** `v2_feats` 가 28/30 파트라 그렇다(열린 질문 Q7). `coords` 에만 있는 곡 수와 정확히 같다.
 
-### 아직 안 한 것 — DB 쓰기
-`ingest/load_postgres.sh` 에 COPY 절차를 적어 뒀지만 **실행하지 않았다.** 두 가지가 결정 대기다.
+## 적재 2단계 — 실제 DB 적재 (완료 2026-09-10)
 
-| 무엇 | 현재 | 왜 걸리나 |
+실측은 `output/db_ingest_bench.json`.
+
+| 무엇 | 결과 |
+|---|---|
+| `music` | **6,624,399행** (id 1..6,624,399 연속, mbid 소문자 UUID 중복 0) |
+| `genre` | **29행** |
+| `music_genre` | **71,285행** (곡 66,036개) |
+| Neo4j `(:Music)` | **6,624,399** 노드 |
+| Neo4j `(:Genre)` | 29 노드 · `HAS_GENRE` **71,285** 관계 |
+| COPY 시간 | music 66초 · music_genre 0.12초 · genre 2ms |
+| CSV 전송 | 2.72 GB, 9분 18초 |
+| 크기 | `music` 힙 1,376 MB(총 1,518 MB) · DB 2,540 MB · Neo4j 스토어 4.2 GB |
+| Neo4j 적재 | Music 노드 653초 · 장르 그래프 157초 |
+
+`location` 은 전 행 `vector(16)` 이고 세 컬럼(`release_year`·`album`·`youtube_url`)은 전 행 NULL 이다(AC4 통과).
+
+### 자원은 재시작 없이 올렸다
+```bash
+docker update --memory 4g --memory-swap 4g --cpus 2 ody-postgres   # cgroup v2, 다운타임 0
+SET maintenance_work_mem = '2GB';                                   # 세션 단위, 재시작 불필요
+```
+⚠️ **컨테이너가 재생성되면 원복된다.** compose 파일(`/home/ubuntu/ody-infra-rollout/infra/database/postgres/docker-compose.yml`)에 반영하는 것은 인프라 담당 몫이다. 되돌리기는 `docker update --memory 1g --cpus 1 ody-postgres`.
+
+### 세 번 실패하고 알아낸 것
+| 증상 | 원인 | 해결 |
 |---|---|---|
-| `music_location_hnsw_idx` | 빈 테이블에 이미 걸려 있음 | 662만 행 COPY 전에 드롭해야 한다(스펙 50 규칙). BE 소유 인덱스다 |
-| `ody-postgres` 자원 | 메모리 1 GB · CPU 1 · `maintenance_work_mem` 64 MB · `shared_buffers` 128 MB | 스펙 17 T1 이 요구한 4~6 GB·2 GB 미달. HNSW 빌드가 수 시간 걸린다 |
+| `syntax error at or near "/tmp/music.csv"` | inline `psql -c` 의 따옴표 중첩 | SQL 을 파일로 쓰고 `psql -f` |
+| `null value in column "title" violates not-null` | 제목이 빈 문자열인 곡 **3,977개**. CSV 빈 칸을 COPY 가 NULL 로 넣는다 | `FORCE_NOT_NULL (title)` |
+| `could not resize shared memory segment ... No space left on device` | HNSW 병렬 빌드가 컨테이너 `/dev/shm` 64 MB 를 넘김 | `SET max_parallel_maintenance_workers = 0` |
+| `Could not find command :auto` | cypher-shell 5.26 에 `:auto` 가 없다 | 빼면 된다. 기본이 auto-commit |
 
-인덱스 없이도 데이터는 넣을 수 있고, BE 는 그동안 정확 거리 질의(전체 스캔)로 기능 통합을 진행할 수 있다.
+### HNSW 인덱스는 아직 빌드 중
+662만 행에서 `maintenance_work_mem` 2 GB 로는 **2,757,295 튜플에서 그래프가 메모리를 넘긴다**. 그 뒤는 디스크 기반이라 크게 느려진다(경고 원문: `hnsw graph no longer fits into maintenance_work_mem`).
+
+선택지 둘이다.
+1. 그대로 두고 끝나기를 기다린다(수 시간 예상)
+2. 취소하고 컨테이너를 8 GB 로 올려 `maintenance_work_mem = 6GB` 로 다시 빌드한다(호스트 15.8 GB 중 가용 12.8 GB)
+
+**인덱스가 없어도 정확 거리 질의(전체 스캔)는 동작한다.** BE 통합은 막히지 않는다.
+
+### 남은 것
+| 무엇 | 상태 |
+|---|---|
+| HNSW 인덱스 | 빌드 중. 위 절의 선택지 둘 |
+| DB 왕복 좌표 표본 검증(AC2) | 인덱스 빌드가 끝난 뒤에 한다 |
+| compose 파일에 자원 반영 | 인프라 담당 |
+| `music.mbid` UNIQUE 등 제약 | BE 결정. 지금은 데이터 자체에 중복이 없다(distinct 6,624,399) |
+| BE 에 전달 | 새 곡 id 는 **6,624,400** 부터 |
 
 ## music 테이블
 

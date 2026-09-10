@@ -36,7 +36,7 @@
 
 - [ ] T004 [BLOCKED: B6] `MajorTrackReader` 조회 port 인터페이스 정의 (`backend/src/main/java/com/ssafy/backend/music/retrieval/MajorTrackReader.java`). 시그니처·스키마·ID 매핑은 BE4와 합의 후. 잠정 시그니처를 확정 계약으로 만들지 않는다
 - [ ] T005 [BLOCKED: B6] v2.1-pca16 곡 데이터 접근 어댑터. master 스택상 **MyBatis mapper(XML `classpath:mapper/**/*.xml`) + PostgreSQL**이 유력. 좌표 원형 조회 물리 방식(pgvector 없음, 스칼라 컬럼 vs 벡터 확장)·저장소(postgres vs neo4j)는 BE4 확인 (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
-- [ ] T006 [P] ⛔ **2026-09-10 착수 보류 — "지금 가능" 판정이 틀렸다**: `GlobalExceptionHandler` 는 전역이라 검증→`VALIDATION_ERROR`, generic→`INTERNAL_ERROR` 로 바꾸면 이 기능뿐 아니라 **002-music-search·003-music-detail 의 확정 테스트 11개 단언**(`MusicSearchControllerTests` 5, `MusicDetailControllerTests` 4, `MusicControllerTests` 2)이 함께 깨진다. 세 기능의 공개 오류 계약을 한 번에 바꾸는 일이라 M4(BE1·팀 결정) 없이 진행 불가. 계약 코드만 미리 enum 에 추가하는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`)
+- [ ] T006 [P] ⛔ **BE1 이슈로 이관 대상 — BE2 브랜치에서 하지 않는다**: 전역 `GlobalErrorCode` 개명은 이 기능만의 일이 아니다. 한 번 시도해 커밋했다가(`6349665`) 리베이스 때 제외했다. 근거: (a) 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조가 **12파일**(main 3 + test 9: auth·user·playlist·music)로 늘었다, (b) dev 가 `GlobalErrorCode` 에 `FORBIDDEN` 을 §0.5 이름으로 추가해 이미 §0.5 방향으로 가고 있다, (c) BE1 이 같은 파일에서 인증·유저·플레이리스트를 동시에 올리는 중이라 충돌 비용이 계속 커진다. 계약 코드만 미리 enum 에 넣는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`)
 
 **Checkpoint**: T004·T005는 B6까지 blocked. **T006은 지금 가능** — T020(A7)·T021(A8)의 계약 코드 검증을 가능하게 한다. US 종단 흐름은 T004·T005 해소에 의존.
 
@@ -90,7 +90,7 @@
 
 - [ ] T020 [US3] **부분 완료** — `major_invalidLevel_/nonNumericLevel_returnsInvalidInput`이 400은 확인하나 코드가 master `INVALID_INPUT`이라 계약 코드(M4) 불일치. MVC 슬라이스 테스트 A7: `level=abc` 및 PC 필드에 `abc` → 400 `VALIDATION_ERROR` + 공통 실패 구조. **T006의 검증 예외 매핑 선행**(master 기본 핸들러엔 없음, M5) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 - [ ] T021 [US3] MVC 슬라이스 테스트 A8: 서비스 내부 실패 → 500 `INTERNAL_ERROR` + 공통 실패 구조. `MusicService` mock이 예외 throw. ⚠️ **T006의 500→`INTERNAL_ERROR` 매핑 선행 필수**: master generic 핸들러는 `INTERNAL_SERVER_ERROR`를 반환하므로(M4/F1) 매핑 없이는 계약 코드 불일치로 실패 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [ ] T022 [BLOCKED: B5] [US3] 인증 테스트 A6: 토큰 위조·무효 → 401 `INVALID_TOKEN`, 만료 → 401 `TOKEN_EXPIRED`, 토큰 없음 → 401 상태·공통 실패. 인증 연동(T006) 후 (`backend/src/test/java/com/ssafy/backend/music/`)
+- [ ] T022 [BLOCKED: T030] **(부분 착수 가능 — T029 dev 해소로 토큰 없음·위조는 지금 검증 가능, 만료만 T030 대기)** [US3] 인증 테스트 A6: 토큰 위조·무효 → 401 `INVALID_TOKEN`, 만료 → 401 `TOKEN_EXPIRED`, 토큰 없음 → 401 상태·공통 실패. 인증 연동(T006) 후 (`backend/src/test/java/com/ssafy/backend/music/`)
 
 **Checkpoint**: A7·A8은 T020·T021로 검증(T006의 검증 핸들러 보완 전제). 401(A6)은 인증 통합 후.
 
@@ -156,14 +156,20 @@ master `backend/`가 정식 베이스다. T002(재배치 + master 공통 계층 
 
 ## Phase 7: Convergence
 
-**Input**: 2026-09-10 코드 대조. 기준선: `cd backend && ./gradlew test` 27 tests / 0 failures (실행 확인).
-master 병합으로 인증 인프라(`SecurityConfig`·`JwtAuthenticationFilter`·`JwtTokenProvider`·`AuthErrorCode`)가
-저장소에 들어왔고, 그에 따라 새로 드러난 계약 공백만 여기 기록한다.
+**Input**: 2026-09-10 코드 대조. master 병합으로 들어온 인증 인프라
+(`SecurityConfig`·`JwtAuthenticationFilter`·`JwtTokenProvider`·`AuthErrorCode`)에 대해 새로 드러난 계약 공백만 기록한다.
 기존 미완 태스크(T004~T017·T019~T027)는 그대로 유효하며 중복 기재하지 않는다.
 
+> 🔄 **2026-09-10 후반 갱신 — `origin/backend/dev` 19커밋 위로 리베이스**. 기준선 `./gradlew test` **113 tests / 0 failures**
+> (내 것 14건 + dev 의 auth·user·playlist 99건). dev 가 가져온 변화:
+> - `c820b53` 인증 정책을 **기본 거부**로 전환(S15P21A405-33, 정본 §0.7) → `/music/**` 인증 필요. **T029 해소**
+> - `AuthErrorCode` 확장(`OAUTH_FAILED`·`EMAIL_ALREADY_EXISTS` 등) — 단 `TOKEN_EXPIRED` 는 여전히 없음 → T030 유효
+> - `GlobalErrorCode` 에 `FORBIDDEN` 추가(§0.5 이름). 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조는 **12파일**로 증가
+> - M4 정합 커밋은 이 브랜치에서 **제외**했다(BE1 이 같은 파일 활발히 편집 중) → T006·T020·T021 미완 복귀
+
 - [X] T028 (2026-09-10 완료: `major_level0_currentMinConstraintRejects_provisionalUntilB1` 로 개명 + 잠정 검증 javadoc. 커버리지 유지) **CRITICAL** `major_invalidLevel_returnsInvalidInput`(`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)이 `level=0 → 400`을 확정 기대값으로 단언한다. spec Edge Cases는 레벨 하한을 P1 미정으로 두고 `@Min(1)`을 정책 근거로 쓰지 말라고 명시했다. 해당 단언을 B1 의존 잠정 검증으로 표시하거나 기대값을 B1 확정까지 보류로 분리한다. 커버리지 자체를 삭제하지 않는다 per Constitution IX (contradicts)
-- [ ] T029 `/music/major`가 `SecurityConfig`의 `anyRequest().permitAll()`에 걸려 인증 없이 호출된다. FR-002는 `Authorization: Bearer` 요구를 MUST로 규정한다. `/music/**` 인증 요구 여부를 BE1·infra와 합의하고 매처에 반영한다. `SecurityConfig`는 BE2 소유가 아니므로 합의 전 임의 수정하지 않는다 per FR-002 (contradicts)
-- [ ] T030 `AuthErrorCode`에 `TOKEN_EXPIRED`가 없고 `JwtAuthenticationFilter:54`가 `JwtException`을 한 덩어리로 잡아 만료와 위조를 구분하지 않는다. A6은 만료 → 401 `TOKEN_EXPIRED`, 위조·무효 → 401 `INVALID_TOKEN`을 요구한다. 만료 예외 분기와 코드를 추가한다(공통 계층이므로 BE1 합의 대상) per US3/A6 · FR-010 (partial)
+- [X] T029 (2026-09-10 **dev 가 해소** — `c820b53 fix: 인증 정책을 화이트리스트에서 기본 거부로 전환 [S15P21A405-33]`. `SecurityConfig` 가 로그인·재발급·OAuth·`/actuator/health,prometheus` 만 `permitAll()` 이고 `anyRequest().authenticated()` 라 `/music/**` 은 인증 필요. BE2 가 할 일 없음) `/music/major`가 `SecurityConfig`의 `anyRequest().permitAll()`에 걸려 인증 없이 호출된다. FR-002는 `Authorization: Bearer` 요구를 MUST로 규정한다. `/music/**` 인증 요구 여부를 BE1·infra와 합의하고 매처에 반영한다. `SecurityConfig`는 BE2 소유가 아니므로 합의 전 임의 수정하지 않는다 per FR-002 (contradicts)
+- [ ] T030 (2026-09-10 후반 재확인: dev 가 `AuthErrorCode` 를 `OAUTH_FAILED`·`EMAIL_ALREADY_EXISTS`·`INVALID_CREDENTIALS` 등으로 확장했으나 **`TOKEN_EXPIRED` 는 여전히 없다**. 유효) `AuthErrorCode`에 `TOKEN_EXPIRED`가 없고 `JwtAuthenticationFilter:54`가 `JwtException`을 한 덩어리로 잡아 만료와 위조를 구분하지 않는다. A6은 만료 → 401 `TOKEN_EXPIRED`, 위조·무효 → 401 `INVALID_TOKEN`을 요구한다. 만료 예외 분기와 코드를 추가한다(공통 계층이므로 BE1 합의 대상) per US3/A6 · FR-010 (partial)
 - [X] T031 (2026-09-10 판정 완료 — 아래) plan "보류 항목" B5는 Core 인증 미연동을 전제로 기술돼 있으나 인증 인프라는 이미 저장소에 있다. B5 잔여 미정이 무엇인지(토큰 없음 세부 코드·`genres`/null 표현) 재확정하고 T022(A6 인증 테스트) 착수 가능 여부를 판정한다. plan.md 수정은 별도 합의 후 per plan: B5 게이트 (partial)
 
 ### T031 판정 결과 (2026-09-10) — B5 재분해
@@ -172,11 +178,11 @@ master 병합 후 실제로 남은 미정은 B5 전체가 아니다. plan.md 는
 
 | B5 하위 | 상태 | 근거 |
 |---|---|---|
-| Core 인증 연동 | 인프라 있음, **/music 미적용** | `JwtAuthenticationFilter`·`JwtTokenProvider`·`CustomAuthenticationEntryPoint` 존재. `SecurityConfig` 는 `/api/auth/logout`·`withdraw` 만 `authenticated()`, 나머지 `permitAll()` → T029 |
+| Core 인증 연동 | **해소** (2026-09-10 후반) | `c820b53` 이 기본 거부로 전환. `SecurityConfig` 가 `anyRequest().authenticated()` 라 `/music/**` 에 인증이 걸린다 → T029 종료 |
 | 토큰 없음 세부 코드 | **해소** | 코드가 `AuthErrorCode.UNAUTHENTICATED` 로 401 + 공통 실패 구조를 반환. spec A6 은 "토큰 없음은 상태·공통 실패 구조까지만 검증" 이라 이 수준으로 충분 |
 | 위조·무효 → `INVALID_TOKEN` | **해소** | `AuthErrorCode.INVALID_TOKEN` 존재 |
 | 만료 → `TOKEN_EXPIRED` | 미해소 | 코드 부재 + `JwtAuthenticationFilter:54` 가 `JwtException` 일괄 catch → T030 |
 | DTO `genres`/null/정수 표현 범위 | 미해소 (P3-c) | 원문에 필수/null 제약 미명시. B5 잔여는 이것뿐 |
 
-**T022 재정의**: blocker 는 "B5" 가 아니라 **T029(경로 인증 적용) + T030(만료 코드)** 이다.
-T029 만 열리면 A6 의 토큰 없음·위조 부분을 먼저 검증할 수 있고, 만료 케이스는 T030 이후다.
+**T022 재정의**: blocker 는 "B5" 가 아니라 **T030(만료 코드) 하나**다.
+T029 는 dev 가 해소했으므로 A6 의 **토큰 없음·위조 부분은 지금 착수 가능**하고, 만료 케이스만 T030 이후다.

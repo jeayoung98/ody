@@ -11,10 +11,18 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration;
+import org.springframework.boot.security.oauth2.client.autoconfigure.servlet.OAuth2ClientWebSecurityAutoConfiguration;
+import org.springframework.context.annotation.ComponentScan;
+import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
+import com.ssafy.backend.auth.mapper.AuthMapper;
+import com.ssafy.backend.config.SecurityConfig;
+import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
@@ -26,7 +34,12 @@ import com.ssafy.backend.music.service.MusicService;
  * 대표곡 컨트롤러 슬라이스 테스트 (@WebMvcTest). 에러코드는 master GlobalErrorCode 기준.
  * testMapper mock 이유는 MusicSearchControllerTests 참조(T301 전까지).
  */
-@WebMvcTest(MusicController.class)
+// ponytail: master SecurityConfig가 슬라이스에 딸려와 security 빈 부재로 컨텍스트가 죽는다 →
+// JwtAuthenticationFilter는 Filter라 슬라이스에 스캔된다. 둘 다 제외하고 기본 시큐리티 필터도 끈다(BE-infra 소스 무수정).
+@WebMvcTest(controllers = MusicController.class, excludeFilters = @ComponentScan.Filter(
+		type = FilterType.ASSIGNABLE_TYPE, classes = { SecurityConfig.class, JwtAuthenticationFilter.class }),
+		excludeAutoConfiguration = { OAuth2ClientAutoConfiguration.class, OAuth2ClientWebSecurityAutoConfiguration.class })
+@AutoConfigureMockMvc(addFilters = false)
 class MusicControllerTests {
 
 	@Autowired
@@ -37,6 +50,9 @@ class MusicControllerTests {
 
 	@MockitoBean
 	private TestMapper testMapper;
+
+	@MockitoBean
+	private AuthMapper authMapper;
 
 	@Test
 	void major_level1_returnsSuccessEnvelope() throws Exception {

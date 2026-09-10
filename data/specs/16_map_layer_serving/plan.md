@@ -5,7 +5,7 @@
 
 1. **트리 읽기** — `map_tree/tree.json` 에서 노드 5,461개의 `id, depth, size, children, leaf, local_explained_variance_2d`.
 2. **곡 집계** — `map_tree/node_paths_v2.parquet`(mbid, leaf_id) + 카탈로그(`excluded`, 길이 규칙)로 리프별 유효 곡 수를 센 뒤, **리프에서 위로 합산**해 내부 노드 `track_count` 를 만든다. 위에서 아래로 각각 세지 않는다 — 합산으로 만들면 AC3 불변식이 구조적으로 성립한다.
-3. **중심 좌표** — 리프별 `pc1`,`pc2` 평균(유효 곡만). 내부 노드는 자식 중심의 **곡 수 가중 평균**. 스펙 12 plan 과 같은 방식이라 AC7 이 성립한다.
+3. **중심 좌표** — 리프별 `pc1`,`pc2` 평균(유효 곡만). 내부 노드는 자식 중심의 **곡 수 가중 평균**. 계산 경로는 이 잡 하나뿐이다(D12).
 4. **축 라벨 조인** — `serving/<version>/aux/axis_labels.json` 이 있고 `bundle` 이 일치하면 조인, 아니면 전부 null.
 5. **parquet 산출** — `work/map_layer/map_layer.parquet`, `work/map_layer/track_position.parquet`. DB 적재는 스펙 50 의 스키마 확정 후 `COPY`.
 

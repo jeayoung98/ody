@@ -16,7 +16,6 @@ cd data
 PYTHONUTF8=1 .venv/Scripts/python.exe -m pytest -q tests                      # 단위·계약 (번들 없으면 계약 테스트 skip)
 PYTHONUTF8=1 .venv/Scripts/python.exe tests/check_contract.py serving/v2.1-pca16   # 계약 검사
 PYTHONUTF8=1 .venv/Scripts/python.exe pipeline/run.py --stage s1_dryrun       # 카탈로그 규칙 dry-run
-uvicorn retrieval.api:app --host 0.0.0.0 --port 8000                           # 검색 서비스 (스펙 10~12, 예정)
 ```
 
 ## 구조
@@ -24,7 +23,6 @@ uvicorn retrieval.api:app --host 0.0.0.0 --port 8000                           #
 data/
 ├── AGENTS.md CLAUDE.md      # 에이전트 규칙 (CLAUDE.md 는 @AGENTS.md import)
 ├── specs/                   # SDD: 00 계약 · 10 이웃 · 11 여정 · 12 트리 · 20 Spark · 30 평가 · DECISIONS · README(하네스 지도)
-├── retrieval/               # 서빙 라이브러리·FastAPI (specs 10~12): artifact postprocess neighbors search journey tree common api
 ├── spark/                   # Spark 이식 (spec 20): README(제출·자원) · jobs/{preprocess,pca,tree_assign,catalog_rules,artifact_export}
 ├── pipeline/                # 카탈로그 감사·제외 규칙 (numpy 기준 구현, Spark 패리티 기준값)
 ├── scripts/                 # 이식 원본 실험 코드(수정 금지) · hooks/pre_commit_gate.sh

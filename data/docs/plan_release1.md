@@ -7,6 +7,8 @@
 **서빙은 이미 있는 아티팩트(`serving/v2.1-pca16`, 필요 시 길이 규칙 반영 v2.2)로 나간다. Spark 이식은 같은 아티팩트를 재현하는 별도 트랙이며 서빙의 선행조건이 아니다.**
 이걸 섞으면 둘 다 14일에 못 끝난다. 배포 대상은 "주변 탐색 + 여정" 두 기능이고, Spark 파이프라인은 패리티 테스트 통과가 완료 기준이다.
 
+> **2026-09-10 갱신 (D12).** 주변 탐색·여정·트리 탐색은 Backend(Spring)가 구현한다. 아래 09-08·09-09 일정의 `retrieval/` 라이브러리·FastAPI 항목은 **무효**다. data 의 남는 범위는 Spark 파이프라인(스펙 20)과 DB 적재(스펙 16·17·18·50)다. 이 문서의 지난 일정과 D2·D3 은 기록으로 남긴다(규칙 1).
+
 ## 1. 오늘(09-07) 결정할 것 — 결정 없으면 내일 작업이 막힌다
 
 | # | 결정 | 제안 | 근거 |
@@ -79,7 +81,6 @@ D8 보충 — 프로젝트 요건상 Spark 와 Hadoop 을 모두 실제로 써�
 ```
 specs/
   00_artifact_contract/   spec.md  plan.md  tasks.md   # 아티팩트 스키마·버전·해시 — 모든 트랙의 계약
-  10_retrieval_neighbors/ spec.md  plan.md  tasks.md   # 이웃 API 수용 기준(§3)
   11_journey/             spec.md  plan.md  tasks.md
   12_tree_explore/        spec.md  plan.md  tasks.md
   20_spark_pipeline/      spec.md  plan.md  tasks.md   # 단계별 패리티 기준

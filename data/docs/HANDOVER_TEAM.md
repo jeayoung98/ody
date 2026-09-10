@@ -6,6 +6,22 @@
 
 ---
 
+> ## ⚠️ 2026-09-10 갱신 (D12) — 이 문서의 서빙 API 부분은 무효다
+>
+> 이웃 검색·여정·트리 탐색은 **Backend(Spring)** 가 구현한다. data 는 서빙 API 를 제공하지 않고 **DB 적재까지** 책임진다.
+> `retrieval/` 코드와 스펙 10·11·12 는 저장소에서 삭제했다(git 이력에 남는다).
+>
+> | 이 문서에서 무효 | 대신 볼 것 |
+> |---|---|
+> | §1 의 `retrieval/` 디렉터리 | `spark/jobs/`(스펙 20), `specs/18_db_ingest` |
+> | §3 의 `retrieval/*` 이식 목적지 | 후처리 임계값은 `serving/<v>/postprocess_rules.json` 이 유일한 출처 |
+> | §4 의 스펙 10·11·12 | `specs/16_map_layer_serving`, `17_pgvector_serving`, `18_db_ingest` |
+> | §5·§6 의 `ody-ai:8000` 컨테이너와 `ODY_AI_BASE_URL` | Backend 가 PostgreSQL(pgvector)·Neo4j 를 직접 조회 |
+> | §7 의 09-10~09-13 API 일정 | 남은 것은 DB 적재와 파이프라인 클러스터 실행 |
+>
+> 이웃 검색은 pgvector `<->`(L2)로 한다. 질의 벡터를 **서브쿼리로 넘기면 조용히 틀린 결과**가 나온다 — 근거와 올바른 SQL 은 `specs/17_pgvector_serving/spec.md`.
+> 지금 파이프라인 상태: Spark 잡 6개 이식 완료, S2·S3 은 YARN 에서 `SUCCEEDED`(`output/spark_run_S2_2026-09-10.json`).
+
 ## 0. 지금 상태 한 문단
 
 AcousticBrainz 660만 곡(v2.1 번들, essentia 2.1-beta2 코호트, PCA-16, 깊이 6 사분할 트리 4,096 리프)의 좌표·트리·후처리 규칙·카탈로그가 **완성·검증·승격**돼 있다(멜론 공통 풀 AUC v1 대비 +0.047, CI [+0.037, +0.056]). 09-07 에 개발 결정 6건(D1~D6)과 1차 배포 계획, SDD 스펙 6개, 아티팩트 계약 v1 + 검사기를 만들었다. **코드 개발(`retrieval/`, `spark/`)은 아직 0 줄**이다. 09-14 까지 남은 것은 (1) 길이 규칙 반영 v2.2 아티팩트, (2) 이웃·여정·트리 API(Python), (3) Spark 이식 패리티, (4) 배포다.

@@ -16,7 +16,7 @@
 - 집계는 `scripts/axis_labels.py --summarize` → `aux/axis_labels.json` 의 `review` 블록.
 
 ## 계약
-- 파일 위치는 `serving/<version>/aux/axis_labels.json`. `aux/` 는 계약 v1 의 선택 디렉터리이며 검사기는 존재 여부를 FAIL 조건으로 보지 않는다. 스펙 11 이 `aux/` 에 리프 중심·k-means 중심을 두려는 계획과 같은 자리다.
+- 파일 위치는 `serving/<version>/aux/axis_labels.json`. `aux/` 는 계약 v1 의 선택 디렉터리이며 검사기는 존재 여부를 FAIL 조건으로 보지 않는다. 리프 중심·k-means 중심도 같은 자리(`aux/`)에 둔다.
 - 번들과 함께 버전된다. 좌표가 바뀌면(major) 라벨은 **무효**이며 재검수 대상이다. `axis_labels.json` 의 `bundle` 값이 `manifest.bundle_version` 과 다르면 서비스는 라벨을 읽지 않는다.
 
 ## 리스크

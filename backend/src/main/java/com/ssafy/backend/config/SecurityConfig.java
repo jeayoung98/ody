@@ -43,9 +43,13 @@ public class SecurityConfig {
 				.cors(cors -> cors.configurationSource(corsConfigurationSource()))
 				.sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
 				.authorizeHttpRequests(auth -> auth
-						// 로그아웃/탈퇴/사용자 상세 조회만 access token 인증을 요구하고, 나머지 기존 엔드포인트는 그대로 공개한다.
-						.requestMatchers("/api/auth/logout", "/api/auth/withdraw", "/user/detail").authenticated()
-						.anyRequest().permitAll())
+						// 정본 §0.7: 로그인/토큰 재발급/OAuth 리다이렉트·콜백/헬스체크만 공개, 나머지는 전부 인증 필요(기본 거부, S15P21A405-33).
+						.requestMatchers(
+								"/api/auth/exchange", "/api/auth/reissue",
+								"/oauth2/authorization/**", "/login/oauth2/code/**",
+								"/actuator/health", "/actuator/prometheus")
+						.permitAll()
+						.anyRequest().authenticated())
 				.oauth2Login(oauth2 -> oauth2
 						.userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
 						.successHandler(oAuth2SuccessHandler))

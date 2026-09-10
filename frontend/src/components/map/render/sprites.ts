@@ -1,0 +1,257 @@
+import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
+import type { MapPoint, NearbyUser } from "@/types";
+
+/** mulberry32 — 프로토타입과 같은 결정적 난수 */
+export function mulberry32(a: number) {
+  return () => {
+    a |= 0;
+    a = (a + 0x6d2b79f5) | 0;
+    let t = Math.imul(a ^ (a >>> 15), 1 | a);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+const SPR_SIZE = 48;
+let glow: HTMLCanvasElement[] | null = null;
+
+/** 장르별 글로우 스프라이트 (48px 방사 그라데이션) */
+export function glowSprites(): HTMLCanvasElement[] {
+  if (glow) return glow;
+  glow = GENRE_COLORS.map((rgb) => {
+    const c = document.createElement("canvas");
+    c.width = c.height = SPR_SIZE;
+    const g = c.getContext("2d")!;
+    const grd = g.createRadialGradient(SPR_SIZE / 2, SPR_SIZE / 2, 0, SPR_SIZE / 2, SPR_SIZE / 2, SPR_SIZE / 2);
+    const light: [number, number, number] = [Math.min(255, rgb[0] + 70), Math.min(255, rgb[1] + 70), Math.min(255, rgb[2] + 70)];
+    grd.addColorStop(0, "rgba(255,255,255,1)");
+    grd.addColorStop(0.14, rgba(light, 0.95));
+    grd.addColorStop(0.33, rgba(rgb, 0.5));
+    grd.addColorStop(0.62, rgba(rgb, 0.12));
+    grd.addColorStop(1, rgba(rgb, 0));
+    g.fillStyle = grd;
+    g.fillRect(0, 0, SPR_SIZE, SPR_SIZE);
+    return c;
+  });
+  return glow;
+}
+
+/** 먼 배경 별 — 화면 비율 좌표에 고정 */
+export interface SkyStar {
+  i: number;
+  u: number;
+  v: number;
+  m: number;
+  spr: number;
+  lum: number;
+}
+let sky: SkyStar[] | null = null;
+export function skyStars(): SkyStar[] {
+  if (sky) return sky;
+  const rnd = mulberry32(20260902);
+  sky = Array.from({ length: 1100 }, (_, i) => ({
+    i,
+    u: rnd(),
+    v: rnd(),
+    m: Math.pow(rnd(), 1.9),
+    spr: Math.floor(rnd() * GENRE_COLORS.length),
+    lum: Math.pow(rnd(), 0.7),
+  }));
+  return sky;
+}
+
+/* ---------- 성운 퍼프: 부드러운 방울 여러 겹, 색만 갈아 끼움 ---------- */
+const PUFF_N = 208;
+let puffBase: HTMLCanvasElement[] | null = null;
+const puffTint = new Map<string, HTMLCanvasElement>();
+
+function puffBases(): HTMLCanvasElement[] {
+  if (puffBase) return puffBase;
+  puffBase = [];
+  for (let k = 0; k < 4; k++) {
+    const c = document.createElement("canvas");
+    c.width = c.height = PUFF_N;
+    const g = c.getContext("2d")!;
+    const r = mulberry32(9001 + k * 577);
+    g.globalCompositeOperation = "lighter";
+    for (let i = 0; i < 38; i++) {
+      const a = r() * 6.284;
+      const rad = Math.pow(r(), 0.65) * PUFF_N * 0.4;
+      const x = PUFF_N / 2 + Math.cos(a) * rad;
+      const y = PUFF_N / 2 + Math.sin(a) * rad;
+      const rr = PUFF_N * (0.07 + r() * 0.27);
+      const al = 0.04 + r() * 0.1;
+      const gr = g.createRadialGradient(x, y, 0, x, y, rr);
+      gr.addColorStop(0, `rgba(255,255,255,${al})`);
+      gr.addColorStop(0.55, `rgba(255,255,255,${al * 0.34})`);
+      gr.addColorStop(1, "rgba(255,255,255,0)");
+      g.fillStyle = gr;
+      g.beginPath();
+      g.arc(x, y, rr, 0, 6.284);
+      g.fill();
+    }
+    g.globalCompositeOperation = "destination-in";
+    const m = g.createRadialGradient(PUFF_N / 2, PUFF_N / 2, 0, PUFF_N / 2, PUFF_N / 2, PUFF_N / 2);
+    m.addColorStop(0, "rgba(0,0,0,1)");
+    m.addColorStop(0.6, "rgba(0,0,0,.9)");
+    m.addColorStop(1, "rgba(0,0,0,0)");
+    g.fillStyle = m;
+    g.fillRect(0, 0, PUFF_N, PUFF_N);
+    puffBase.push(c);
+  }
+  return puffBase;
+}
+
+export function puffFor(k: number, genreId: number): HTMLCanvasElement {
+  const key = `${k}:${genreId % GENRE_COLORS.length}`;
+  let c = puffTint.get(key);
+  if (c) return c;
+  c = document.createElement("canvas");
+  c.width = c.height = PUFF_N;
+  const g = c.getContext("2d")!;
+  g.drawImage(puffBases()[k], 0, 0);
+  g.globalCompositeOperation = "source-in";
+  g.fillStyle = rgba(genreRgb(genreId), 1);
+  g.fillRect(0, 0, PUFF_N, PUFF_N);
+  puffTint.set(key, c);
+  return c;
+}
+
+/* ---------- 절차적 프로필 사진 (곡=빛나는 점, 사람=사진 원판) ---------- */
+const avCache = new Map<string, HTMLCanvasElement>();
+export function avatarFor(u: NearbyUser): HTMLCanvasElement {
+  let c = avCache.get(u.email);
+  if (c) return c;
+  if (avCache.size > 400) avCache.clear();
+  const N = 76;
+  c = document.createElement("canvas");
+  c.width = c.height = N;
+  const g = c.getContext("2d")!;
+  const [a1 = 0.5, a2 = 0.5, a3 = 0.5, a4 = 0.5, a5 = 0.5, a6 = 0.5] = u.avatarSeed;
+  const A = genreRgb(u.genreId);
+  const B = genreRgb(u.genreId + (a1 < 0.5 ? 3 : 7));
+  const gr = g.createLinearGradient(0, 0, N, N);
+  gr.addColorStop(0, rgba(A, 1));
+  gr.addColorStop(1, rgba(B, 1));
+  g.fillStyle = gr;
+  g.fillRect(0, 0, N, N);
+  g.globalAlpha = 0.26;
+  g.fillStyle = "#ffffff";
+  g.beginPath();
+  g.arc(N * (0.16 + a5 * 0.24), N * (0.14 + a6 * 0.16), N * 0.26, 0, 6.284);
+  g.fill();
+  g.globalAlpha = 1;
+  g.fillStyle = "rgba(5,9,18,.38)";
+  g.beginPath();
+  g.arc(N * 0.5, N * (0.4 + a2 * 0.05), N * 0.165, 0, 6.284);
+  g.fill();
+  g.beginPath();
+  g.ellipse(N * 0.5, N * (1.06 + a3 * 0.05), N * (0.33 + a4 * 0.07), N * 0.31, 0, Math.PI, 0, true);
+  g.fill();
+  avCache.set(u.email, c);
+  return c;
+}
+
+/** 내 헬멧용 가짜 사용자 */
+export const ME_AVATAR: NearbyUser = {
+  email: "me",
+  nickname: "나",
+  imageUrl: null,
+  isOnline: true,
+  isPublic: true,
+  musicId: 0,
+  viewingMusicId: 0,
+  genreId: 0,
+  meetingCount: 0,
+  riderCount: 0,
+  followingNickname: null,
+  avatarSeed: [0.32, 0.58, 0.21, 0.77, 0.44, 0.68],
+};
+
+/* ---------- 절차적 앨범 커버 ---------- */
+const coverCache = new Map<number, HTMLCanvasElement>();
+export function coverFor(s: MapPoint): HTMLCanvasElement {
+  let c = coverCache.get(s.musicId);
+  if (c) return c;
+  if (coverCache.size > 500) coverCache.clear();
+  const N = 104;
+  c = document.createElement("canvas");
+  c.width = c.height = N;
+  const g = c.getContext("2d")!;
+  const r = mulberry32(((s.musicId + 1) * 2246822519) >>> 0);
+  const A = genreRgb(s.genreId);
+  const B = genreRgb(s.genreId + (r() < 0.5 ? 2 : 6));
+  const gr = g.createLinearGradient(0, 0, N * (0.3 + r()), N);
+  gr.addColorStop(0, rgba(A, 1));
+  gr.addColorStop(1, rgba(B, 1));
+  g.fillStyle = "#070b14";
+  g.fillRect(0, 0, N, N);
+  g.globalAlpha = 0.82;
+  g.fillStyle = gr;
+  g.fillRect(0, 0, N, N);
+  const n = 2 + Math.floor(r() * 2);
+  for (let i = 0; i < n; i++) {
+    g.globalAlpha = 0.2 + r() * 0.45;
+    g.fillStyle = i % 2 ? "rgba(5,8,16,.95)" : "rgba(255,255,255,.92)";
+    const t = Math.floor(r() * 3);
+    if (t === 0) {
+      g.beginPath();
+      g.arc(r() * N, r() * N, N * (0.13 + r() * 0.3), 0, 6.284);
+      g.fill();
+    } else if (t === 1) {
+      g.fillRect(0, r() * N, N, N * (0.05 + r() * 0.14));
+    } else {
+      const x = r() * N;
+      const y = r() * N;
+      const w = N * (0.28 + r() * 0.5);
+      g.beginPath();
+      g.moveTo(x, y);
+      g.lineTo(x + w, y + w * 0.35);
+      g.lineTo(x + w * 0.25, y + w);
+      g.closePath();
+      g.fill();
+    }
+  }
+  g.globalAlpha = 1;
+  coverCache.set(s.musicId, c);
+  return c;
+}
+
+/** 사용자 동선 잔상 (이메일 해시로 고정된 상대 좌표) */
+const trailCache = new Map<string, [number, number][]>();
+export function trailOf(email: string): [number, number][] {
+  let t = trailCache.get(email);
+  if (t) return t;
+  let h = 2166136261;
+  for (const ch of email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
+  const r = mulberry32(h);
+  let a = r() * 6.284;
+  let x = 0;
+  let y = 0;
+  t = [[0, 0]];
+  for (let k = 0; k < 8; k++) {
+    a += (r() - 0.5) * 1.0;
+    x -= Math.cos(a) * (0.55 + r() * 0.6);
+    y -= Math.sin(a) * (0.55 + r() * 0.6);
+    t.push([x, y]);
+  }
+  trailCache.set(email, t);
+  return t;
+}
+
+export function roundRect(g: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  g.beginPath();
+  g.moveTo(x + r, y);
+  g.arcTo(x + w, y, x + w, y + h, r);
+  g.arcTo(x + w, y + h, x, y + h, r);
+  g.arcTo(x, y + h, x, y, r);
+  g.arcTo(x, y, x + w, y, r);
+  g.closePath();
+}
+
+export function fitText(g: CanvasRenderingContext2D, str: string, maxW: number) {
+  if (g.measureText(str).width <= maxW) return str;
+  let out = str;
+  while (out.length > 2 && g.measureText(out + "…").width > maxW) out = out.slice(0, -1);
+  return out + "…";
+}

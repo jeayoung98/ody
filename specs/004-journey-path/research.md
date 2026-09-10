@@ -126,10 +126,16 @@ HTTP 왕복을 쓸 이유도 없다.
 
 ## R9 — 테스트 인프라
 
-**Decision**: 002·003과 같은 **standalone MockMvc** + port mock 서비스 유닛 테스트.
+**Decision**: 002·003과 같은 **`@WebMvcTest` 슬라이스** + port mock 서비스 유닛 테스트.
 
-**Rationale**: master가 `@MapperScan`을 쓰고 있어 `@WebMvcTest` 슬라이스가 매퍼 빈을 요구한다
-(002·003이 이미 밟은 문제). standalone MockMvc는 컨트롤러만 세워 그 충돌을 피한다.
+**[2026-09-10 정정]** 처음 이 항목을 "standalone MockMvc" 로 적었으나 실제 저장소 관례를 확인한 결과
+`@WebMvcTest(controllers = ...)` 에 `excludeFilters` 로 `SecurityConfig`·`JwtAuthenticationFilter` 를 빼고
+`@MapperScan` 이 끌어오는 매퍼를 `@MockitoBean` 으로 채우는 방식이다(003 `MusicDetailControllerTests` 선례).
+이 방식이 실제 MVC 바인딩·`GlobalExceptionHandler` 매핑·Jackson 직렬화를 함께 검증하므로 더 낫다.
+구현은 이 관례를 따랐고 39건이 통과한다.
+
+**Rationale**: master가 `@MapperScan`을 쓰고 있어 슬라이스가 매퍼 빈을 요구한다(002·003이 이미 밟은 문제).
+매퍼를 `@MockitoBean` 으로 채워 회피한다. BE-infra 소스는 수정하지 않는다.
 엔진·DB 둘 다 port mock이라 B-Engine 대기 중에도 US1~US4 전부 검증된다.
 
 **검증 대상 로직**(테스트가 실제로 잡아야 하는 것): step 연속 부여, `musicCnt = n_stations + 2`,

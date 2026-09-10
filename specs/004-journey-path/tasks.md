@@ -26,8 +26,8 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 단일 Gradle backend. 모든 경로는 저장소 루트 기준.
 
 - 운영 코드: `backend/src/main/java/com/ssafy/backend/`
-- 테스트: `backend/src/test/java/com/ssafy/backend/`
-- 여정 전용 패키지: `.../music/journey/`
+- 테스트: `backend/src/test/java/com/ssafy/backend/music/` (기존 관례가 flat 이라 `journey/` 하위를 만들지 않았다)
+- 여정 전용 운영 패키지: `.../music/journey/`
 
 ---
 
@@ -35,8 +35,8 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 **Purpose**: 신규 프로젝트 초기화가 아니다. master 구조·의존성이 이미 있으므로 설정 항목만 둔다.
 
-- [ ] T001 엔진 base URL·타임아웃 속성을 `backend/src/main/resources/application.yml`에 추가 (`ody.journey.engine.base-url`, `ody.journey.engine.timeout=2s`). 값은 환경별 `application-*.yml`에서 덮고, 시크릿·운영 호스트를 커밋하지 않는다 (research R8)
-- [ ] T002 기준선 확인 — `cd backend && ./gradlew test` 가 현재 통과하는지 먼저 확인해 신규 실패와 기존 실패를 구분한다
+- [X] T001 엔진 base URL·타임아웃 속성을 `backend/src/main/resources/application.yml`에 추가 (`ody.journey.engine.base-url`, `ody.journey.engine.timeout=2s`). 값은 환경별 `application-*.yml`에서 덮고, 시크릿·운영 호스트를 커밋하지 않는다 (research R8)
+- [X] T002 기준선 확인 — `cd backend && ./gradlew test` 가 현재 통과하는지 먼저 확인해 신규 실패와 기존 실패를 구분한다
 
 **Checkpoint**: 설정 자리와 기준선 확보.
 
@@ -48,13 +48,13 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 **⚠️ CRITICAL**: 여기까지 끝나야 사용자 스토리 작업이 시작된다.
 
-- [ ] T003 [P] `PATH_NOT_FOUND`(422, "두 곡을 연결하는 경로를 찾을 수 없습니다.") 상수를 `backend/src/main/java/com/ssafy/backend/common/MusicErrorCode.java`에 추가. 신규 enum 파일을 만들지 않는다 (research R7)
-- [ ] T004 [P] `JourneyStop` record 생성 — `@JsonUnwrapped MusicDetail` + `int step` — `backend/src/main/java/com/ssafy/backend/music/dto/JourneyStop.java` (research R6, 003 `NeighborTrack` 선례)
-- [ ] T005 [P] `JourneyResponse` record 생성 — `musicCnt`, `totalDuration`, `List<JourneyStop> path` — `backend/src/main/java/com/ssafy/backend/music/dto/JourneyResponse.java` (data-model §2)
-- [ ] T006 [P] `EnginePath` record 생성 — `reachable`, `stationMbids`, `progresses`, `endpointDist`, `far`, `nStations`, `mode`, `bundle` — `backend/src/main/java/com/ssafy/backend/music/journey/EnginePath.java` (data-model §3)
-- [ ] T007 [P] `JourneyPathFinder` port 인터페이스 생성 (`EnginePath find(String startMbid, String endMbid)`) — `backend/src/main/java/com/ssafy/backend/music/journey/JourneyPathFinder.java`. 계약을 javadoc에 적는다: 모드는 구현이 `axis` 고정, 경로 없음은 예외가 아니라 `reachable:false`, 엔진 부재·타임아웃은 예외 (contracts §②)
-- [ ] T008 [P] `JourneyTrackReader` port 인터페이스 생성 (`List<MusicDetail> findDetailsByMbids(List<String> mbids)`) — `backend/src/main/java/com/ssafy/backend/music/journey/JourneyTrackReader.java`. javadoc에 **순서 미보장·누락 시 결과에서 빠짐·최대 20건**을 명시 (contracts §③, research R4)
-- [ ] T009 `JourneyService` 골격 생성 — `Optional<JourneyPathFinder>`·`Optional<JourneyTrackReader>`·`MusicDetailReader` 주입, 어댑터 부재 시 기존 `MusicService` 패턴대로 미구현을 드러냄 — `backend/src/main/java/com/ssafy/backend/music/service/JourneyService.java` (research R2, FR-019)
+- [X] T003 [P] `PATH_NOT_FOUND`(422, "두 곡을 연결하는 경로를 찾을 수 없습니다.") 상수를 `backend/src/main/java/com/ssafy/backend/common/MusicErrorCode.java`에 추가. 신규 enum 파일을 만들지 않는다 (research R7)
+- [X] T004 [P] `JourneyStop` record 생성 — `@JsonUnwrapped MusicDetail` + `int step` — `backend/src/main/java/com/ssafy/backend/music/dto/JourneyStop.java` (research R6, 003 `NeighborTrack` 선례)
+- [X] T005 [P] `JourneyResponse` record 생성 — `musicCnt`, `totalDuration`, `List<JourneyStop> path` — `backend/src/main/java/com/ssafy/backend/music/dto/JourneyResponse.java` (data-model §2)
+- [X] T006 [P] `EnginePath` record 생성 — `reachable`, `stationMbids`, `progresses`, `endpointDist`, `far`, `nStations`, `mode`, `bundle` — `backend/src/main/java/com/ssafy/backend/music/journey/EnginePath.java` (data-model §3)
+- [X] T007 [P] `JourneyPathFinder` port 인터페이스 생성 (`EnginePath find(String startMbid, String endMbid)`) — `backend/src/main/java/com/ssafy/backend/music/journey/JourneyPathFinder.java`. 계약을 javadoc에 적는다: 모드는 구현이 `axis` 고정, 경로 없음은 예외가 아니라 `reachable:false`, 엔진 부재·타임아웃은 예외 (contracts §②)
+- [X] T008 [P] `JourneyTrackReader` port 인터페이스 생성 (`List<MusicDetail> findDetailsByMbids(List<String> mbids)`) — `backend/src/main/java/com/ssafy/backend/music/journey/JourneyTrackReader.java`. javadoc에 **순서 미보장·누락 시 결과에서 빠짐·최대 20건**을 명시 (contracts §③, research R4)
+- [X] T009 `JourneyService` 골격 생성 — `Optional<JourneyPathFinder>`·`Optional<JourneyTrackReader>`·`MusicDetailReader` 주입, 어댑터 부재 시 기존 `MusicService` 패턴대로 미구현을 드러냄 — `backend/src/main/java/com/ssafy/backend/music/service/JourneyService.java` (research R2, FR-019)
 
 **Checkpoint**: 계약·DTO 준비 완료. 컴파일 통과. 어댑터 없이도 빌드가 깨지지 않는다.
 
@@ -71,19 +71,20 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 > 구현 전에 작성하고 실패를 확인한다.
 
-- [ ] T010 [P] [US1] 조립 유닛 테스트 B1~B5 작성 — reader가 뒤섞인 순서로 반환해도 정거장 순서가 엔진 순서와 같고(I7), `step` 0부터 연속(I1), 양끝이 start·end(I2), `musicCnt == path.size()`(I3), `totalDuration` 합(I4) — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyServiceTests.java` (quickstart B)
-- [ ] T011 [P] [US1] null 허용·재생불가 유닛 테스트 B6~B7 작성 — `duration`이 null인 곡은 0으로 더하고, `youtubeUrl`이 null인 곡은 `path`에 남는다 — 같은 파일 `JourneyServiceTests.java`
-- [ ] T012 [P] [US1] 응답 계약 MockMvc 테스트 C1 작성 — 200·`success:true`·`error:null`, `path` 원소가 MusicDetail 필드 + `step`으로 평평하게 직렬화(`@JsonUnwrapped`) — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyControllerTests.java` (standalone MockMvc, research R9)
+- [X] T010 [P] [US1] 조립 유닛 테스트 B1~B5 작성 — reader가 뒤섞인 순서로 반환해도 정거장 순서가 엔진 순서와 같고(I7), `step` 0부터 연속(I1), 양끝이 start·end(I2), `musicCnt == path.size()`(I3), `totalDuration` 합(I4) — `backend/src/test/java/com/ssafy/backend/music/JourneyServiceTests.java` (quickstart B)
+- [X] T011 [P] [US1] null 허용·재생불가 유닛 테스트 B6~B7 작성 — `duration`이 null인 곡은 0으로 더하고, `youtubeUrl`이 null인 곡은 `path`에 남는다 — 같은 파일 `JourneyServiceTests.java`
+- [X] T012 [P] [US1] 응답 계약 MockMvc 테스트 C1 작성 — 200·`success:true`·`error:null`, `path` 원소가 MusicDetail 필드 + `step`으로 평평하게 직렬화(`@JsonUnwrapped`) — `backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java` (@WebMvcTest 슬라이스 — research R9 정정, 아래 참조)
 
 ### Implementation for User Story 1
 
-- [ ] T013 [US1] `GET /music/journey` 핸들러를 `backend/src/main/java/com/ssafy/backend/music/controller/MusicController.java`에 추가 — `@RequestParam @Min(1) long start`, `@RequestParam @Min(1) long end`, `ApiResponse.success(journeyService.getJourney(start, end))` 반환. `mode`·`n`·detour 파라미터를 받지 않는다 (FR-023, contracts §①)
-- [ ] T014 [US1] 식별자 해석 구현 — `JourneyService`에서 `MusicDetailReader.findDetail(start)`·`findDetail(end)` 호출로 `MusicDetail` 2건을 얻고 그 `mbid`를 엔진 호출에 쓴다. **별도 `id→mbid` 조회를 만들지 않는다** (research R3, FR-022)
-- [ ] T015 [US1] 엔진 호출 연결 — `JourneyPathFinder.find(startMbid, endMbid)` 호출부를 `JourneyService`에 구현. 정거장 수·모드를 넘기지 않는다 (FR-011, FR-023)
-- [ ] T016 [US1] 정거장 상세 일괄 조회 — `JourneyTrackReader.findDetailsByMbids(stationMbids)` 1회 호출. 곡당 조회로 나누지 않는다(왕복 예산) (research R3)
-- [ ] T017 [US1] 순서 재조립 — 조회 결과를 `Map<String, MusicDetail>`로 만들고 **엔진 `stationMbids` 순서대로** 꺼낸다. SQL 순서에 의존하지 않는다 (research R4, I7)
-- [ ] T018 [US1] 최종 조립 — `[startDetail] + 정거장 + [endDetail]`로 `path`를 만들고 `step`을 0부터 연속 부여, `musicCnt = path.size()`, `totalDuration = Σ duration`(null은 0) (FR-005, FR-006, FR-021)
-- [ ] T019 [US1] T010~T012 통과 확인 — `cd backend && ./gradlew test`
+- [X] T013 [US1] `GET /music/journey` 핸들러 — **신규 `backend/src/main/java/com/ssafy/backend/music/controller/JourneyController.java`**. `@RequestParam @Min(1) long start`, `@RequestParam @Min(1) long end`, `ApiResponse.success(journeyService.getJourney(start, end))`. `mode`·`n`·detour 파라미터를 받지 않는다 (FR-023, contracts §①)
+      - **설계 변경**: 처음에 `MusicController` 에 메서드를 추가했더니 그 컨트롤러의 기존 슬라이스 테스트 19건(major·search·detail)이 새 빈을 요구하며 깨졌다. 남의 기능 테스트 3개 파일을 고치는 대신 컨트롤러를 분리했다. URL·응답 계약은 동일하다
+- [X] T014 [US1] 식별자 해석 구현 — `JourneyService`에서 `MusicDetailReader.findDetail(start)`·`findDetail(end)` 호출로 `MusicDetail` 2건을 얻고 그 `mbid`를 엔진 호출에 쓴다. **별도 `id→mbid` 조회를 만들지 않는다** (research R3, FR-022)
+- [X] T015 [US1] 엔진 호출 연결 — `JourneyPathFinder.find(startMbid, endMbid)` 호출부를 `JourneyService`에 구현. 정거장 수·모드를 넘기지 않는다 (FR-011, FR-023)
+- [X] T016 [US1] 정거장 상세 일괄 조회 — `JourneyTrackReader.findDetailsByMbids(stationMbids)` 1회 호출. 곡당 조회로 나누지 않는다(왕복 예산) (research R3)
+- [X] T017 [US1] 순서 재조립 — 조회 결과를 `Map<String, MusicDetail>`로 만들고 **엔진 `stationMbids` 순서대로** 꺼낸다. SQL 순서에 의존하지 않는다 (research R4, I7)
+- [X] T018 [US1] 최종 조립 — `[startDetail] + 정거장 + [endDetail]`로 `path`를 만들고 `step`을 0부터 연속 부여, `musicCnt = path.size()`, `totalDuration = Σ duration`(null은 0) (FR-005, FR-006, FR-021)
+- [X] T019 [US1] T010~T012 통과 확인 — `cd backend && ./gradlew test`
 
 **Checkpoint**: 정상 경로가 정본 §3.3 형태로 나온다. US1만으로 "두 곡을 잇는 플레이리스트"가 성립한다.
 
@@ -102,14 +103,14 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 ### Tests for User Story 2 ⚠️
 
-- [ ] T020 [P] [US2] 단조 위반 유닛 테스트 B11 작성 — 엔진 `progresses`가 단조가 아닐 때 **200 통과**하고 카운터가 1 증가 — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyServiceTests.java`
-- [ ] T021 [P] [US2] 중복 곡 검산 테스트 B12 작성 — 엔진이 같은 mbid를 2회 주면 500, 같은 곡이 두 번 나오는 응답을 내지 않는다(I6) — 같은 파일
+- [X] T020 [P] [US2] 단조 위반 유닛 테스트 B11 작성 — 엔진 `progresses`가 단조가 아닐 때 **200 통과**하고 카운터가 1 증가 — `backend/src/test/java/com/ssafy/backend/music/JourneyServiceTests.java`
+- [X] T021 [P] [US2] 중복 곡 검산 테스트 B12 작성 — 엔진이 같은 mbid를 2회 주면 500, 같은 곡이 두 번 나오는 응답을 내지 않는다(I6) — 같은 파일
 
 ### Implementation for User Story 2
 
-- [ ] T022 [US2] 단조 증가 검사 추가 — `JourneyService`에서 엔진 `progresses` 수열이 단조인지 확인하고 위반 시 Micrometer 카운터 증가 + 로그. **응답을 막지 않는다** (FR-020)
-- [ ] T023 [US2] 엔진 구간 지연 계측 — Micrometer `Timer` `ody.journey.engine` 1개를 엔진 호출 구간에 두어 게이트웨이/엔진 예산을 분리 측정 (research R10, SC-002)
-- [ ] T024 [US2] 엔진 메타 구조화 로그 1줄 추가 — `far`, `endpoint_dist`, `n_stations`, `mode`, `bundle`, 단조 위반 여부. **곡 제목·사용자 식별자는 남기지 않는다.** `endpoint_dist`를 지표 태그로 쓰지 않는다(카디널리티) (research R10, FR-023, 헌법 VIII)
+- [X] T022 [US2] 단조 증가 검사 추가 — `JourneyService`에서 엔진 `progresses` 수열이 단조인지 확인하고 위반 시 Micrometer 카운터 증가 + 로그. **응답을 막지 않는다** (FR-020)
+- [X] T023 [US2] 엔진 구간 지연 계측 — Micrometer `Timer` `ody.journey.engine` 1개를 엔진 호출 구간에 두어 게이트웨이/엔진 예산을 분리 측정 (research R10, SC-002)
+- [X] T024 [US2] 엔진 메타 구조화 로그 1줄 추가 — `far`, `endpoint_dist`, `n_stations`, `mode`, `bundle`, 단조 위반 여부. **곡 제목·사용자 식별자는 남기지 않는다.** `endpoint_dist`를 지표 태그로 쓰지 않는다(카디널리티) (research R10, FR-023, 헌법 VIII)
 
 **Checkpoint**: 경로 품질이 지표·로그로 확인된다. 응답 본문은 변하지 않는다.
 
@@ -123,16 +124,16 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 ### Tests for User Story 3 ⚠️
 
-- [ ] T025 [P] [US3] `start == end` 테스트 C2 작성 — 200, `path` 1개(`step:0`), `musicCnt:1`, `totalDuration` = 그 곡 길이, **엔진 mock 호출 0회 검증** — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyControllerTests.java` (quickstart C2, research R5)
-- [ ] T026 [P] [US3] 좌표 동일 2곡 경로 테스트 작성 — `start != end`이나 엔진이 정거장 0개를 주면 2곡 경로 200 — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyServiceTests.java` (FR-012)
-- [ ] T027 [P] [US3] 상한 테스트 B8~B9 작성 — 정거장 20개면 `musicCnt` 22·축소 없음·예외 없음, 정거장 29개(계약 위반 강제)면 500이고 부분 경로를 내지 않는다(I5) — 같은 파일
+- [X] T025 [P] [US3] `start == end` 테스트 C2 작성 — 200, `path` 1개(`step:0`), `musicCnt:1`, `totalDuration` = 그 곡 길이, **엔진 mock 호출 0회 검증** — `backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java` (quickstart C2, research R5)
+- [X] T026 [P] [US3] 좌표 동일 2곡 경로 테스트 작성 — `start != end`이나 엔진이 정거장 0개를 주면 2곡 경로 200 — `backend/src/test/java/com/ssafy/backend/music/JourneyServiceTests.java` (FR-012)
+- [X] T027 [P] [US3] 상한 테스트 B8~B9 작성 — 정거장 20개면 `musicCnt` 22·축소 없음·예외 없음, 정거장 29개(계약 위반 강제)면 500이고 부분 경로를 내지 않는다(I5) — 같은 파일
 
 ### Implementation for User Story 3
 
-- [ ] T028 [US3] `start == end` 단축 구현 — `JourneyService`에서 엔진 호출 **전에** 분기. `findDetail(start)` 1회로 응답을 만든다 (research R5, FR-012)
-- [ ] T029 [US3] 정거장 0개 처리 — 엔진이 중간 정거장을 주지 않으면 `[start, end]` 2곡 경로를 200으로 반환 (FR-012, FR-009 "중복 제거로 중간이 사라져도 200")
-- [ ] T030 [US3] 30곡 계약 가드 구현 — `path.size() > 30`이면 500. **축소 알고리즘을 만들지 않는다** — 엔진 상한이 20이라 이 경로는 발동하지 않는다 (FR-008, plan "처리 흐름" 6)
-- [ ] T031 [US3] T025~T027 통과 확인 — `cd backend && ./gradlew test`
+- [X] T028 [US3] `start == end` 단축 구현 — `JourneyService`에서 엔진 호출 **전에** 분기. `findDetail(start)` 1회로 응답을 만든다 (research R5, FR-012)
+- [X] T029 [US3] 정거장 0개 처리 — 엔진이 중간 정거장을 주지 않으면 `[start, end]` 2곡 경로를 200으로 반환 (FR-012, FR-009 "중복 제거로 중간이 사라져도 200")
+- [X] T030 [US3] 30곡 계약 가드 구현 — `path.size() > 30`이면 500. **축소 알고리즘을 만들지 않는다** — 엔진 상한이 20이라 이 경로는 발동하지 않는다 (FR-008, plan "처리 흐름" 6)
+- [X] T031 [US3] T025~T027 통과 확인 — `cd backend && ./gradlew test`
 
 **Checkpoint**: 경계 입력이 오류 없이 처리된다.
 
@@ -146,17 +147,17 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 ### Tests for User Story 4 ⚠️
 
-- [ ] T032 [P] [US4] 검증·404 테스트 C3 일부 작성 — `start` 누락 / `start=0` / `start=abc` / `end` 누락 → 400 `INVALID_INPUT`, 없는 곡 → 404 `MUSIC_NOT_FOUND` — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyControllerTests.java`
-- [ ] T033 [P] [US4] 422 vs 500 구분 테스트 C3 나머지 작성 — 엔진 `reachable:false` → 422 `PATH_NOT_FOUND`, **엔진 port 빈 부재 → 500**, **엔진 타임아웃·연결 실패 → 500**. 세 경우가 서로 다른 코드로 나오는지 확인 (clarify: 엔진 부재를 422로 내리지 않는다) — 같은 파일
-- [ ] T034 [P] [US4] 조회 누락 테스트 B10 작성 — reader가 요청한 mbid 중 1건을 반환하지 않으면 500이고 19곡 경로를 성공으로 내지 않는다 — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyServiceTests.java` (research R4)
-- [ ] T035 [P] [US4] 검증 순서 테스트 C4 작성 — `start=0`이고 엔진도 부재면 **400**이 먼저이고 엔진을 호출하지 않는다, 없는 곡이고 엔진도 부재면 **404**가 먼저 — `JourneyControllerTests.java`
-- [ ] T036 [P] [US4] 실패 본문 형태 테스트 작성 — 모든 실패가 `success:false`·`data:null`·`error:{code,message}` — 같은 파일
+- [X] T032 [P] [US4] 검증·404 테스트 C3 일부 작성 — `start` 누락 / `start=0` / `start=abc` / `end` 누락 → 400 `INVALID_INPUT`, 없는 곡 → 404 `MUSIC_NOT_FOUND` — `backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java`
+- [X] T033 [P] [US4] 422 vs 500 구분 테스트 C3 나머지 작성 — 엔진 `reachable:false` → 422 `PATH_NOT_FOUND`, **엔진 port 빈 부재 → 500**, **엔진 타임아웃·연결 실패 → 500**. 세 경우가 서로 다른 코드로 나오는지 확인 (clarify: 엔진 부재를 422로 내리지 않는다) — 같은 파일
+- [X] T034 [P] [US4] 조회 누락 테스트 B10 작성 — reader가 요청한 mbid 중 1건을 반환하지 않으면 500이고 19곡 경로를 성공으로 내지 않는다 — `backend/src/test/java/com/ssafy/backend/music/JourneyServiceTests.java` (research R4)
+- [X] T035 [P] [US4] 검증 순서 테스트 C4 작성 — `start=0`이고 엔진도 부재면 **400**이 먼저이고 엔진을 호출하지 않는다, 없는 곡이고 엔진도 부재면 **404**가 먼저 — `JourneyControllerTests.java`
+- [X] T036 [P] [US4] 실패 본문 형태 테스트 작성 — 모든 실패가 `success:false`·`data:null`·`error:{code,message}` — 같은 파일
 
 ### Implementation for User Story 4
 
-- [ ] T037 [US4] 오류 매핑 구현 — `JourneyService`에서 곡 없음 → `CustomException(MusicErrorCode.MUSIC_NOT_FOUND)`, 엔진 `reachable:false` → `CustomException(MusicErrorCode.PATH_NOT_FOUND)`, 엔진 예외·타임아웃·조립 실패 → `CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR)`. **부분 경로를 성공으로 반환하지 않는다** (FR-014, plan "오류 매핑")
-- [ ] T038 [US4] `/music/journey`가 `SecurityConfig` permitAll 목록에 없어 인증 대상임을 확인하고, 그 사실을 테스트나 주석으로 고정 — `backend/src/main/java/com/ssafy/backend/config/SecurityConfig.java` 는 **수정하지 않는다** (FR-015, quickstart C5)
-- [ ] T039 [US4] T032~T036 통과 확인 — `cd backend && ./gradlew test`
+- [X] T037 [US4] 오류 매핑 구현 — `JourneyService`에서 곡 없음 → `CustomException(MusicErrorCode.MUSIC_NOT_FOUND)`, 엔진 `reachable:false` → `CustomException(MusicErrorCode.PATH_NOT_FOUND)`, 엔진 예외·타임아웃·조립 실패 → `CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR)`. **부분 경로를 성공으로 반환하지 않는다** (FR-014, plan "오류 매핑")
+- [X] T038 [US4] `/music/journey`가 `SecurityConfig` permitAll 목록에 없어 인증 대상임을 확인하고, 그 사실을 테스트나 주석으로 고정 — `backend/src/main/java/com/ssafy/backend/config/SecurityConfig.java` 는 **수정하지 않는다** (FR-015, quickstart C5)
+- [X] T039 [US4] T032~T036 통과 확인 — `cd backend && ./gradlew test`
 
 **Checkpoint**: US1~US4 전부 port mock 기준으로 동작·검증된다.
 
@@ -164,12 +165,26 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T040 순수 조회 검증 (I8) — 전 시나리오에서 저장소 쓰기 호출이 0건인지 mock 상호작용으로 확인 — `backend/src/test/java/com/ssafy/backend/music/journey/JourneyServiceTests.java` (FR-018)
-- [ ] T041 엔진 메타 비노출 검증 (I9) — 응답 JSON에 `far`·`endpoint_dist`·`mode`·`n_stations`·`bundle`·`reachable` 키가 하나도 없는지 MockMvc로 확인 — `JourneyControllerTests.java` (FR-023, quickstart C1)
-- [ ] T042 최소 검증선 실행 — `cd backend && ./gradlew test` 와 `cd backend && ./gradlew build` 둘 다 통과 (CLAUDE.md §5, quickstart A)
-- [ ] T043 [P] quickstart A~C 결과를 통과·실패·**미실행**으로 구분해 기록. **D절(통합)은 선행조건 미충족으로 미실행**이라고 명시하고 "3초 이내 확인"이라고 쓰지 않는다 (헌법 III, quickstart "보고 형식")
+- [X] T040 순수 조회 검증 (I8) — 전 시나리오에서 저장소 쓰기 호출이 0건인지 mock 상호작용으로 확인 — `backend/src/test/java/com/ssafy/backend/music/JourneyServiceTests.java` (FR-018)
+- [X] T041 엔진 메타 비노출 검증 (I9) — 응답 JSON에 `far`·`endpoint_dist`·`mode`·`n_stations`·`bundle`·`reachable` 키가 하나도 없는지 MockMvc로 확인 — `JourneyControllerTests.java` (FR-023, quickstart C1)
+- [X] T042 최소 검증선 실행 — `cd backend && ./gradlew test` 와 `cd backend && ./gradlew build` 둘 다 통과 (CLAUDE.md §5, quickstart A)
+- [X] T043 [P] quickstart A~C 결과를 통과·실패·**미실행**으로 구분해 기록. **D절(통합)은 선행조건 미충족으로 미실행**이라고 명시하고 "3초 이내 확인"이라고 쓰지 않는다 (헌법 III, quickstart "보고 형식")
 
 **Checkpoint**: 게이트웨이 완결. 어댑터 2개만 대기.
+
+### 실행 결과 (2026-09-10)
+
+| 항목 | 결과 |
+| --- | --- |
+| `./gradlew test` | **통과** — 76 tests, 0 failed, 0 skipped |
+| `./gradlew build` | **통과** |
+| 신규 테스트 | JourneyServiceTests 23건 + JourneyControllerTests 16건 = **39건 전부 통과** |
+| 기존 테스트 | 37건 전부 통과 (T013 설계 변경 전 19건이 깨졌다가 복구) |
+| quickstart A·B·C | 통과 |
+| quickstart D (통합) | **미실행** — B-Engine·곡 테이블 미충족. 종단 3초는 측정하지 않았다 |
+
+**research R9 정정**: "standalone MockMvc" 로 적었으나 실제 관례는 `@WebMvcTest` + SecurityConfig·
+JwtAuthenticationFilter 제외 + 매퍼 `@MockitoBean` 이다(003 선례). 그 패턴을 따랐고 동작한다.
 
 ---
 
@@ -237,11 +252,11 @@ Task: "JourneyTrackReader port in backend/.../music/journey/JourneyTrackReader.j
 ## Parallel Example: US4 테스트
 
 ```bash
-Task: "검증·404 테스트 C3 in .../JourneyControllerTests.java"
-Task: "422 vs 500 구분 테스트 in .../JourneyControllerTests.java"
-Task: "조회 누락 테스트 B10 in .../JourneyServiceTests.java"
-Task: "검증 순서 테스트 C4 in .../JourneyControllerTests.java"
-Task: "실패 본문 형태 테스트 in .../JourneyControllerTests.java"
+Task: "검증·404 테스트 C3 in backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java"
+Task: "422 vs 500 구분 테스트 in backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java"
+Task: "조회 누락 테스트 B10 in backend/src/test/java/com/ssafy/backend/music/JourneyServiceTests.java"
+Task: "검증 순서 테스트 C4 in backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java"
+Task: "실패 본문 형태 테스트 in backend/src/test/java/com/ssafy/backend/music/JourneyControllerTests.java"
 ```
 
 ---

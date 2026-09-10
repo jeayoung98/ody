@@ -3,7 +3,6 @@
 import { useState } from "react";
 import { SearchIcon } from "@/components/common/icons";
 import { useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
-import { GHOST_PROBE_KEYWORD } from "@/mocks/music";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicSearchResult } from "@/types";
@@ -15,21 +14,12 @@ export default function SearchBar() {
   const [open, setOpen] = useState(false);
   const { data, isPending } = useMusicSearchQuery(keyword);
   const focusMusic = useMapStore((s) => s.focusMusic);
-  const showGhost = useMapStore((s) => s.showGhost);
   const openSong = usePanelStore((s) => s.openSong);
-
-  // 확인용 경로: "고스트별" 로 검색하면 이 겹에 있는 곡이어도 고스트별 디자인으로 띄운다.
-  // 실제 규칙은 그 겹에 없는 곡일 때만 고스트 처리다 (MAP-12).
-  const ghostProbe = keyword.trim().startsWith(GHOST_PROBE_KEYWORD);
 
   const handleSelect = (r: MusicSearchResult) => {
     setOpen(false);
     setKeyword("");
     openSong(r.id);
-    if (ghostProbe) {
-      showGhost(r.id);
-      return;
-    }
     // 이 겹에 있으면 확대해 가고, 없으면 고스트별로 띄운다 — 레이어를 자동으로 옮기지 않는다 (SEARCH-01, MAP-12)
     focusMusic(r.id);
   };

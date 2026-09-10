@@ -108,7 +108,25 @@ export function allSongs(): MapPoint[] {
       playable: rnd() > 0.115,
     };
   });
+  cache.push(ghostOnlySong());
   return cache;
+}
+
+/**
+ * 목 확인용 곡 — 어느 겹에도 상주하지 않는다. 검색해서 고르면 늘 고스트별로 뜬다 (MAP-12).
+ * 좌표는 구름 바깥이라 "저쪽 바깥에 있다"는 방향이 잘 읽힌다.
+ */
+function ghostOnlySong(): MapPoint {
+  return {
+    musicId: SONG_COUNT + 1,
+    pc: [2.6, 1.7, ...Array.from({ length: PC_DIMS - 2 }, (_, i) => (i % 2 ? -1.4 : 1.9))],
+    genreId: 2,
+    weight: 48_000,
+    title: "고스트별",
+    artist: "다른 갈래",
+    playable: true,
+    ghostOnly: true,
+  };
 }
 
 export function songById(id: number): MapPoint | undefined {

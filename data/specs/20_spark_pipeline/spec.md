@@ -37,7 +37,7 @@
 | S1 대표행 선택 | raw_features + `work/v2_manifest.parquet` 규칙(지문→lossless→44100→규모→part,offset) | `manifest_rows/` 7,404,506 행 | mbid 집합 == v2 manifest |
 | S2 전처리 | manifest_rows + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` 270 f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인 |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet` |
-| S4 트리 배정 | coords + split_axes.npz | `node_paths/` leaf_id | 리프 일치 100% (경계값 동률은 v2 규칙과 같은 부호 처리) |
+| S4 트리 배정 | coords + `map_tree/tree.json` + `split_axes.npz` | `node_paths/` `mbid` + `leaf_id` + `node_d1` + `node_d2` | 말단 노드 일치 100%. 표본 5,000곡 실측 완료. 잡은 `spark/jobs/tree_assign.py` |
 | S5 카탈로그·규칙 | manifest_rows + titles + canonical + 규칙 R1~R9(+길이 v4, flag_instrumental) | `catalog/` (계약 스키마) | `excluded` 집합 == v2.2 카탈로그, 규칙별 적중 수 동일 |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | 원래 문장: `check_contract.py --strict --prev` 통과. **`--prev` 는 적용 불가 — 아래 S6 절 참조.** 대체 기준은 `--strict` 통과 + 내용 대조. 잡은 `spark/jobs/artifact_export.py` |
 
@@ -85,6 +85,36 @@ S5 카탈로그 + S3 좌표 + S4 말단 노드
 | 소요 | 107초 (정렬·쓰기 45초, 계약 검사 11초, 대조 51초) |
 
 ⚠️ **이 실측이 무엇을 증명하고 무엇을 증명하지 않는가.** 좌표를 기존 번들에서 가져와 정렬·조립했으므로 오차 0 은 당연하다. 이 실측이 증명하는 것은 **조립 경로**(정렬, 동결 파일 복사, manifest 해시, 계약 준수)다. 좌표 계산의 정확성은 S2·S3 패리티(최대 오차 1.86e-06), 말단 노드는 S4 패리티(100%)가 증명한다. 클러스터에서 S2~S6 을 이어 돌린 뒤 같은 대조를 다시 해야 AC1 이 채워진다.
+
+## S4 트리 배정 — 16차원 좌표에서 말단 노드 4,096개
+
+트리는 학습된 산물이다(`map_tree/tree.json`, `split_axes.npz`, 2026-09-03 사용자 승인). 이 잡은 다시 학습하지 않고 노드별 값을 적용한다(규칙 3). 테스트가 소스에 고유분해(`eigh`)가 없는지도 검사한다.
+
+```text
+root 에서 시작해 깊이 6 까지 한 칸씩
+  1. proj = (x - mean_<id>) @ axes_<id>.T          2차원으로 내린다
+  2. q = (proj0 >= med0) * 2 + (proj1 >= med1)     사분면 0~3
+  3. 다음 노드는 "<id>.<q>"
+```
+
+같은 값일 때는 `>=` 로 가른다. **원본이 `>=` 라서 그렇다.** 이 부등호가 뒤집히면 경계에 놓인 곡의 말단 노드가 달라진다.
+
+`node_d1`·`node_d2` 는 `leaf_id` 의 앞 두 단계·세 단계다(`root.2.3.0.3.1.2` → `root.2`, `root.2.3`). 카탈로그와 같은 형식이다.
+
+### 한 행씩 내려가지 않는다
+깊이 한 단계마다 **같은 노드에 속한 행을 모아 한 번에** 행렬곱을 한다. 배치당 최대 6번의 그룹 연산으로 끝난다. 행마다 트리를 타면 6.6M × 6 번의 파이썬 루프가 된다.
+
+### 패리티 실측 (2026-09-10)
+`coords_v2.parquet` 표본 5,000곡을 배정해 `map_tree/node_paths_v2.parquet` 과 대조했다.
+
+| 항목 | 값 |
+|---|---|
+| 대조된 곡 | 5,000 |
+| 말단 노드 일치 | **5,000 / 5,000 = 100%** |
+| 트리 밖 배정 | 0 |
+| 쓰인 말단 노드 | 2,798 (전체 4,096 중, 표본이라 일부만 등장) |
+
+내부 노드는 1,365개이고 `split_axes.npz` 의 축 집합이 `tree.json` 의 내부 노드 집합과 정확히 같다(테스트가 검사).
 
 ## 수용 기준
 - AC0 **클러스터 실행** — S2 와 S3 이 최소 1회씩 `spark-submit --master yarn` 으로 제출돼 `SUCCEEDED` 로 끝나고, 입력·출력이 `hdfs:///` 경로다. `output/spark_run_S2_*.json`, `spark_run_S3_*.json` 에 YARN application id·최종 상태·입출력 경로·행 수가 남는다. 로컬 `local[*]` 실행 기록은 이 기준을 충족하지 않는다. **컷 대상 아님.**

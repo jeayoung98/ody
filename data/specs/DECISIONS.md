@@ -12,6 +12,7 @@
 | D5 | 2026-09-07 | '오래됐고 인기 없는 곡' 은 **1차 제외 안 함**. 2차: 발매연도 = MusicBrainz `recording_first_release_date`, 인기 = MLHD 청취 합산(+ListenBrainz/Last.fm 보조). 제외가 아닌 **서빙 티어** | YouTube Data API 는 하루 100곡(할당량), 스크래핑은 약관 위반, 매칭 오염 | 2차 스펙 `40_popularity_tier`(미작성) |
 | D6 | 2026-09-07 | 서빙은 기존 아티팩트(v2.2)로 배포. **Spark 이식은 패리티 트랙**(서빙 선행조건 아님) | 6.5 작업일. 두 트랙을 묶으면 둘 다 미완 | `plan_release1.md` |
 | D8 | 2026-09-10 | **Spark 와 Hadoop 을 모두 실제로 사용한다 (프로젝트 요건).** 잡의 입출력은 `hdfs:///` 경로, 제출은 `spark-submit --master yarn`. 로컬 `pyspark local[*]` 은 개발용이며 완료 증거 아님. 컷 대상은 처리 범위(원본 630GB·전곡)이지 실행 환경이 아니다 | 사용자 확인(2026-09-10). 기존 컷 순서 1번이 S0 적재를 자르고 plan 이 로컬 `local[8]` 패리티를 허용해, 컷이 발동하면 Hadoop 사용 증거가 남지 않는 구멍이 있었다. 클러스터는 이미 준비됨(S15P21A405-46 완료: HDFS DataNode 2, YARN NodeManager 2, Spark 4.2.0 on YARN VERIFIED) | 스펙 20 **AC0** 신설(+AC5), `AGENTS.md` 규칙 10, `plan_release1.md` §4 컷 순서·절대 자르지 않는 것, `spark/README.md` 증거 수집 절차 |
+| D9 | 2026-09-10 | Vector 저장소는 **pgvector**(PostgreSQL 확장). Neo4j 는 좌표 이웃 검색에 쓰지 않는다. 기존 numpy 경로는 당분간 병행 | app-node 실물 측정. pgvector HNSW recall@10 **0.9995**(기존 k-means 그래프 0.912), 질의 2.24 ms(numpy 1.8 ms), 662만 행 약 3.7 GB. Neo4j 는 warm 2.9 ms / **cold 40 ms** 라 이웃 조회가 오히려 느리고 서비스가 하나 는다. pgvector 0.7.0 은 이미 설치돼 있고 사용자·플레이리스트와 같은 DB 라 동기화 잡이 불필요. Neo4j 강점인 다중 홉은 여정이 좌표 보간이라 미사용 | 새 스펙 `17_pgvector_serving`, `50_db_schema` Q4 종결, `output/pgvector_bench_2026-09-10.json`. 인프라 상향(컨테이너 4~6 GB, `maintenance_work_mem` 2 GB, CPU 2+)이 선행 조건 |
 | D7 | 2026-09-10 | 좌표 차원은 **PCA-16**. Jira S15P21A405-35 설명의 "dim 64" 는 기획 초기 값이며 **설명 쪽을 갱신**한다 | 서빙 아티팩트가 `manifest.k=16`, `coords_v2.parquet` 이 `pc1..pc16`. 64 로 가려면 재학습이 필요하고 major 버전 + 게이트 재등록이라 1차 기간에 불가(규칙 3). 사용자(재영) 확인 | `50_db_schema` `track_vector` 스키마, Jira 35 설명 갱신. 열린 질문 Q1 종료 |
 
 ---
@@ -27,5 +28,5 @@
 | Q3 | 멜론 소분류 코드표 확보 가능 여부 | `genre_gn_all.json` 부재(원 출처 Kakao Arena 재다운로드 필요). 대분류 21개만 보유 | 1차는 대분류만. 소분류는 보류 | `13_genre_hierarchy` |
 | Q4 | 축 라벨의 태그 출처 | Jira S15P21A405-38 은 Last.fm 태그 log-odds. 저장소에는 AcousticBrainz 자유 텍스트 태그(`work/genres_raw.parquet` 23,203,978행)만 있고 Last.fm 데이터는 없다 | 보유한 AB 태그로 진행하고 출처를 문서에 명시 | `14_axis_labels`, `13_genre_hierarchy` |
 | Q5 | 트리 축 할당 방식 표기 | Jira S15P21A405-37 은 "depth별 PC 축 2개". 실제는 **노드별 local PCA-2**(`split_axes.npz`) | 실제 아티팩트를 따르고 Jira 설명 갱신을 제안 | `16_map_layer_serving` |
-| Q6 | Vector DB 도입 여부 | Jira 35 는 "Vector DB 동기화" 언급. 팀 확정 기술 목록(루트 `AGENTS.md` §3)에는 없음 | 1차 미사용 | `50_db_schema` |
+| ~~Q6~~ | ~~Vector DB 도입 여부~~ | **종결 2026-09-10 → D9 (pgvector).** app-node 실측으로 Neo4j 와 비교해 결정 | — | `17_pgvector_serving`, `50_db_schema` |
 | Q7 | 빠진 특징 2파트를 재추출할까 | `work/v2_feats` 는 30파트 중 **28파트**(`part10`, `part24` 없음). 6,617,603행. coords 6,624,399곡 중 **733,146곡(11.1%)에 특징이 없어** 전곡 패리티 검증 불가. 교집합 5,891,253곡(88.9%)은 가능. 원본 tar.zst 2개와 추출기(`dmadkr/scripts/extract_v2_features.py`)는 있고 파트당 약 5분 | 재추출을 제안한다. 15분이면 전곡 검증이 열리고, 안 하면 스펙 20 S3 의 "전곡" 기준을 교집합으로 낮춰야 한다 | `20_spark_pipeline` AC5·S3, `output/hdfs_ingest_2026-09-10.json` |

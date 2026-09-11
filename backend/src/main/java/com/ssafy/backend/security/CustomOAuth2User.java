@@ -8,19 +8,19 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
-import com.ssafy.backend.dto.UserDto;
+import com.ssafy.backend.auth.dto.UserAuthDto;
 
 public class CustomOAuth2User implements OAuth2User {
 
-	private final UserDto user;
+	private final UserAuthDto user;
 	private final Map<String, Object> attributes;
 
-	public CustomOAuth2User(UserDto user, Map<String, Object> attributes) {
+	public CustomOAuth2User(UserAuthDto user, Map<String, Object> attributes) {
 		this.user = user;
 		this.attributes = attributes;
 	}
 
-	public UserDto getUser() {
+	public UserAuthDto getUser() {
 		return user;
 	}
 

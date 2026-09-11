@@ -165,10 +165,16 @@ def test_genre_csv_links_by_music_id(sample_bundle, tmp_path, root):
     assert [int(r["id"]) for r in link_rows] == list(range(1, len(link_rows) + 1))
 
 
+def test_feature_dirs_include_pilot():
+    """특징은 두 디렉터리에 나뉘어 있다. 하나만 읽으면 786,903행이 빠진다(D16)."""
+    dirs = S18.feature_dirs("work")
+    assert [os.path.basename(d) for d in dirs] == ["v2_feats", "v2_feats_pilot"]
+
+
 def test_full_run_evidence(root):
     """전수 CSV 를 만든 기록이 있으면 수치를 검사한다. 커밋 훅에서는 만들지 않는다."""
     import json
-    path = os.path.join(root, "output", "db_ingest_csv_2026-09-10.json")
+    path = os.path.join(root, "output", "db_ingest_csv_2026-09-11.json")
     if not os.path.exists(path):
         pytest.skip("전수 CSV 기록 없음")
     report = json.load(io.open(path, encoding="utf-8"))
@@ -180,6 +186,7 @@ def test_full_run_evidence(root):
     assert report["songs_with_genre"] == 66_036
     assert report["music_genre_rows"] == 71_285
     assert report["songs_without_genre"] == TARGET_ROWS - 66_036
-    # v2_feats 가 28/30 파트라 bpm 이 없는 곡이 있다. coords 에만 있는 733,146 곡과 같다(Q7).
-    assert report["missing_bpm"] == 733_146
+    # 2026-09-11 정정(D16): 733,146곡 bpm 결측은 파트 누락이 아니라 v2_feats_pilot 를
+    # 안 읽어서였다. 두 디렉터리를 읽으면 결측이 없다.
+    assert report["missing_bpm"] == 0
     assert report["missing_catalog"] == 0

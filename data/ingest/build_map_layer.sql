@@ -53,10 +53,13 @@ CREATE TABLE IF NOT EXISTS map_sample (
   y        real         NOT NULL,
   title    varchar(200),
   artist   varchar(500),
+  cnt      integer      NOT NULL DEFAULT 0,   -- 그 칸에 든 곡 수
   PRIMARY KEY (layer, gx, gy)
 );
+ALTER TABLE map_sample ADD COLUMN IF NOT EXISTS cnt integer NOT NULL DEFAULT 0;
 COMMENT ON TABLE map_sample IS '레이어 첫 화면용 격자 대표 트랙. 칸마다 중심에 가장 가까운 1개';
-COMMENT ON COLUMN map_sample.gx IS 'floor(x / 2.0). 셀 크기 2.0';
+COMMENT ON COLUMN map_sample.gx IS 'floor(x / 2.0). 셀 크기 2.0. 칸 범위는 [gx*2.0, gx*2.0+2.0)';
+COMMENT ON COLUMN map_sample.cnt IS '그 칸에 든 곡 수. 칸마다 편차가 크다(1 ~ 수십만). FE 가 점 크기와 LIMIT 판단에 쓴다';
 
 DELETE FROM map_sample WHERE layer = 1;
 INSERT INTO map_sample (layer, gx, gy, music_id, x, y, title, artist)
@@ -71,11 +74,23 @@ FROM (
 ) s
 ORDER BY gx, gy, ((pc1 - (gx * 2.0 + 1.0)) ^ 2 + (pc2 - (gy * 2.0 + 1.0)) ^ 2), id;
 
+-- 칸마다 곡 수. 대표만 주면 FE 가 "이 칸에 몇 곡인지" 를 알 수 없다.
+UPDATE map_sample s SET cnt = c.n
+FROM (
+  SELECT floor((location::real[])[1] / 2.0)::smallint AS gx,
+         floor((location::real[])[2] / 2.0)::smallint AS gy,
+         count(*) AS n
+  FROM music GROUP BY 1, 2
+) c
+WHERE s.layer = 1 AND s.gx = c.gx AND s.gy = c.gy;
+
 GRANT SELECT ON map_sample TO ody_read;
 
 -- 3) 검증
 SELECT count(*) AS sample_rows, min(gx) AS gx_min, max(gx) AS gx_max,
-       min(gy) AS gy_min, max(gy) AS gy_max FROM map_sample WHERE layer = 1;
+       min(gy) AS gy_min, max(gy) AS gy_max,
+       sum(cnt) AS songs_covered, min(cnt) AS cnt_min, max(cnt) AS cnt_max
+FROM map_sample WHERE layer = 1;
 SELECT pg_size_pretty(pg_total_relation_size('map_sample')) AS sample_size,
        pg_size_pretty(pg_relation_size('music_l1_gist'))   AS l1_size,
        pg_size_pretty(pg_relation_size('music_l2_gist'))   AS l2_size;

@@ -74,6 +74,23 @@ def test_one_representative_per_cell():
 
 # --- SQL 과 규칙이 어긋나지 않게 --------------------------------------------
 
+def test_cell_bounds_derive_from_index():
+    """칸 경계는 저장하지 않고 gx·gy 로 계산한다. 대표를 누르면 이 범위가 다음 레이어 필터다."""
+    cell = map_grid.CELL
+    for gx in (-13, 0, 44):
+        x1, x2 = gx * cell, gx * cell + cell
+        assert map_grid.cell_center(gx) == (x1 + x2) / 2
+        assert list(map_grid.cell_of([x1, x2 - 1e-6])) == [gx, gx]
+        assert list(map_grid.cell_of([x2])) == [gx + 1], "위 경계는 다음 칸에 속한다"
+
+
+def test_sql_fills_cell_counts():
+    """칸별 곡 수를 채워야 FE 가 점 크기와 LIMIT 을 판단한다."""
+    sql = io.open(SQL_FILE, encoding="utf-8").read()
+    assert "cnt      integer" in sql
+    assert "UPDATE map_sample s SET cnt = c.n" in sql
+
+
 def test_sql_uses_same_cell_size():
     """SQL 의 셀 크기와 파이썬 상수가 같아야 대조가 성립한다."""
     sql = io.open(SQL_FILE, encoding="utf-8").read()

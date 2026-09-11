@@ -15,6 +15,13 @@
 #   3. HNSW 병렬 빌드가 /dev/shm 64MB 를 넘겨 "could not resize shared memory segment".
 #      해결: SET max_parallel_maintenance_workers = 0. shm-size 를 늘리려면 컨테이너 재생성이 필요하다.
 #
+# 2026-09-11 에 배운 것 둘:
+#   4. 특징은 work/v2_feats 와 work/v2_feats_pilot 두 곳에 나뉘어 있다(D16).
+#      한쪽만 읽으면 786,903행이 빠진다. build_csv.py 가 이제 둘 다 읽는다.
+#   5. 적재가 끝난 뒤 컬럼 하나를 고치려고 733k 행을 UPDATE 하면 HNSW·GiST 유지 비용이 지배해
+#      30분이 지나도 안 끝난다. 인덱스를 내리고 UPDATE 한 뒤 다시 만드는 편이 빠르다
+#      (UPDATE 2분 + GiST 21초 x2 + HNSW 65분). **처음부터 CSV 를 맞게 만드는 것이 가장 싸다.**
+#
 # 사용법 (master 아니라 app-node 에서):
 #   scp -i ~/.ssh/J15A405T.pem music.csv genre.csv music_genre.csv ubuntu@j15a405.p.ssafy.io:/tmp/ingest/
 #   bash load_postgres.sh /tmp/ingest

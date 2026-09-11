@@ -174,20 +174,34 @@ def load_catalog(path, wanted):
     return out
 
 
-def load_bpm(feats_dir, wanted, column="rhythm.bpm"):
-    """v2_feats 에서 bpm 만 뽑는다. 파트가 빠져 있으면 그 곡은 NULL 이 된다."""
+def feature_dirs(work):
+    """특징 parquet 이 있는 디렉터리 **둘 다**.
+
+    파일럿 추출(`v2_feats_pilot`)이 본 추출의 첫 조각이라 part10·part24 가 거기 있다.
+    한쪽만 읽으면 786,903행이 통째로 빠진다(2026-09-11 에 이것 때문에 bpm 이
+    733,146곡 NULL 이었고 "파트 2개 누락" 으로 잘못 판단했다). 원본
+    `pipeline/exclusion_apply.py` 도 두 디렉터리를 순회한다.
+    """
+    return [os.path.join(work, name) for name in ("v2_feats", "v2_feats_pilot")]
+
+
+def load_bpm(feats_dirs, wanted, column="rhythm.bpm"):
+    """특징에서 bpm 만 뽑는다. 디렉터리 목록을 받는다(문자열 하나도 받아준다)."""
     import pyarrow.parquet as pq
     out = {}
-    if not os.path.isdir(feats_dir):
-        return out
-    for name in sorted(os.listdir(feats_dir)):
-        if not name.endswith(".parquet"):
+    if isinstance(feats_dirs, str):
+        feats_dirs = [feats_dirs]
+    for feats_dir in feats_dirs:
+        if not os.path.isdir(feats_dir):
             continue
-        table = pq.read_table(os.path.join(feats_dir, name), columns=["mbid", column])
-        for mbid, bpm in zip(table.column("mbid").to_pylist(), table.column(column).to_pylist()):
-            mbid = mbid.lower()
-            if mbid in wanted:
-                out[mbid] = bpm
+        for name in sorted(os.listdir(feats_dir)):
+            if not name.endswith(".parquet"):
+                continue
+            table = pq.read_table(os.path.join(feats_dir, name), columns=["mbid", column])
+            for mbid, bpm in zip(table.column("mbid").to_pylist(), table.column(column).to_pylist()):
+                mbid = mbid.lower()
+                if mbid in wanted:
+                    out[mbid] = bpm
     return out
 
 
@@ -214,7 +228,7 @@ def build(out_dir, coords_path=None, catalog_path=None, meta_path=None, feats_di
     coords_path = coords_path or os.path.join(bundle, "coords_v2.parquet")
     catalog_path = catalog_path or os.path.join(work, "catalog_v2.parquet")
     meta_path = meta_path or os.path.join(work, "v2_song_meta.parquet")
-    feats_dir = feats_dir or os.path.join(work, "v2_feats")
+    feats_dirs = [feats_dir] if feats_dir else feature_dirs(work)
     os.makedirs(out_dir, exist_ok=True)
 
     mbids, coords = load_targets(coords_path)
@@ -226,7 +240,7 @@ def build(out_dir, coords_path=None, catalog_path=None, meta_path=None, feats_di
         raise ValueError("소문자 UUID 가 아닌 mbid: {}".format(bad[:3]))
 
     catalog = load_catalog(catalog_path, wanted)
-    bpm = load_bpm(feats_dir, wanted)
+    bpm = load_bpm(feats_dirs, wanted)
     genres = load_column_map(meta_path, "mbid", "gnr", wanted)
 
     # --- genre.csv: 코드 하나가 행 하나. 이름 오름차순으로 id 를 준다 ---
@@ -277,7 +291,7 @@ def build(out_dir, coords_path=None, catalog_path=None, meta_path=None, feats_di
     report = {
         "stage": "S18-csv", "out_dir": out_dir,
         "inputs": {"coords": coords_path, "catalog": catalog_path, "meta": meta_path,
-                   "feats": feats_dir},
+                   "feats": feats_dirs},
         "music_rows": len(mbids), "id_range": [1, len(mbids)],
         "genre_rows": len(codes), "music_genre_rows": links,
         "songs_with_genre": songs_with_genre,
@@ -299,7 +313,8 @@ def main():
     ap.add_argument("--coords", default=None)
     ap.add_argument("--catalog", default=None)
     ap.add_argument("--meta", default=None)
-    ap.add_argument("--feats", default=None)
+    ap.add_argument("--feats", default=None,
+                    help="특징 디렉터리 하나. 생략하면 v2_feats 와 v2_feats_pilot 를 모두 읽는다")
     ap.add_argument("--expect-rows", type=int, default=6_624_399,
                     help="기대 행 수. 0 이면 검사하지 않는다")
     ap.add_argument("--report", default=None, help="리포트 json 경로")

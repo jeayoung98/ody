@@ -92,7 +92,7 @@ class JourneyControllerTests {
 	void journey_success_returnsFlatPath() throws Exception {
 		when(journeyService.getJourney(eq(10234L), eq(10877L))).thenReturn(journey(10));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.error").doesNotExist())
@@ -120,7 +120,7 @@ class JourneyControllerTests {
 	void journey_engineMetaNotExposed() throws Exception {
 		when(journeyService.getJourney(anyLong(), anyLong())).thenReturn(journey(10));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.far").doesNotExist())
 				.andExpect(jsonPath("$.data.endpointDist").doesNotExist())
@@ -145,7 +145,7 @@ class JourneyControllerTests {
 		when(journeyService.getJourney(anyLong(), anyLong()))
 				.thenReturn(new JourneyResponse(3, 580, path));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.path[1].id").value(1000))
 				.andExpect(jsonPath("$.data.path[1].youtubeUrl").value(nullValue()));
@@ -159,7 +159,7 @@ class JourneyControllerTests {
 				List.of(new JourneyStop(0, song(10234L, "b1a9c0e9", "https://youtu.be/a", 275))));
 		when(journeyService.getJourney(eq(10234L), eq(10234L))).thenReturn(single);
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10234"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10234"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.musicCnt").value(1))
 				.andExpect(jsonPath("$.data.totalDuration").value(275))
@@ -171,7 +171,7 @@ class JourneyControllerTests {
 	void journey_twentyStations_returns22Songs() throws Exception {
 		when(journeyService.getJourney(anyLong(), anyLong())).thenReturn(journey(20));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.musicCnt").value(22))
 				.andExpect(jsonPath("$.data.path.length()").value(22))
@@ -182,7 +182,7 @@ class JourneyControllerTests {
 
 	@Test
 	void journey_missingStart_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/journey").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("end", "10877"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.data").doesNotExist())
@@ -192,7 +192,7 @@ class JourneyControllerTests {
 
 	@Test
 	void journey_missingEnd_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/journey").param("start", "10234"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 		verifyNoInteractions(journeyService);
@@ -200,7 +200,7 @@ class JourneyControllerTests {
 
 	@Test
 	void journey_startZero_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/journey").param("start", "0").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "0").param("end", "10877"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 		verifyNoInteractions(journeyService);
@@ -208,7 +208,7 @@ class JourneyControllerTests {
 
 	@Test
 	void journey_endZero_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "0"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "0"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 		verifyNoInteractions(journeyService);
@@ -216,7 +216,7 @@ class JourneyControllerTests {
 
 	@Test
 	void journey_nonNumericStart_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/journey").param("start", "abc").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "abc").param("end", "10877"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 		verifyNoInteractions(journeyService);
@@ -227,7 +227,7 @@ class JourneyControllerTests {
 		when(journeyService.getJourney(eq(999L), anyLong()))
 				.thenThrow(new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
 
-		mockMvc.perform(get("/music/journey").param("start", "999").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "999").param("end", "10877"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.data").doesNotExist())
@@ -239,7 +239,7 @@ class JourneyControllerTests {
 		when(journeyService.getJourney(anyLong(), anyLong()))
 				.thenThrow(new CustomException(MusicErrorCode.PATH_NOT_FOUND));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isUnprocessableEntity())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.data").doesNotExist())
@@ -253,7 +253,7 @@ class JourneyControllerTests {
 		when(journeyService.getJourney(anyLong(), anyLong()))
 				.thenThrow(new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isInternalServerError())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));
@@ -263,7 +263,7 @@ class JourneyControllerTests {
 	void journey_unexpectedException_returns500() throws Exception {
 		when(journeyService.getJourney(anyLong(), anyLong())).thenThrow(new RuntimeException("boom"));
 
-		mockMvc.perform(get("/music/journey").param("start", "10234").param("end", "10877"))
+		mockMvc.perform(get("/api/music/journey").param("start", "10234").param("end", "10877"))
 				.andExpect(status().isInternalServerError())
 				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));
 	}

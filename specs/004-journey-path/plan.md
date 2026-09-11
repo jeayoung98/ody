@@ -10,7 +10,7 @@
 
 ## Summary
 
-`GET /music/journey?start=&end=`에서 두 곡을 잇는 순서 있는 곡 목록을 반환한다(정본 §3.3).
+`GET /api/music/journey?start=&end=`에서 두 곡을 잇는 순서 있는 곡 목록을 반환한다(정본 §3.3).
 
 **경로 산출은 BE2가 하지 않는다.** BE4 데이터 엔진(Python, D4)이 축 통로 + Viterbi(`axis`, D10)로
 경로를 만들고, BE2는 **게이트웨이**로서 입력 검증 · `id↔mbid` 해석 · 엔진 호출 · 상세 필드 조립 ·
@@ -97,7 +97,7 @@ specs/004-journey-path/
 
 | 위치 | 설계 | 상태 |
 | --- | --- | --- |
-| `music/controller/JourneyController.java` | `GET /music/journey` 핸들러 (`@Min(1) long start`, `@Min(1) long end`) | **신규**. `MusicController` 에 메서드를 더하면 그 컨트롤러의 기존 슬라이스 테스트 19건이 새 빈을 요구하며 깨진다(실제로 깨졌다) → 분리. URL·응답 계약 동일 |
+| `music/controller/JourneyController.java` | `GET /api/music/journey` 핸들러 (`@Min(1) long start`, `@Min(1) long end`) | **신규**. `MusicController` 에 메서드를 더하면 그 컨트롤러의 기존 슬라이스 테스트 19건이 새 빈을 요구하며 깨진다(실제로 깨졌다) → 분리. URL·응답 계약 동일 |
 | `music/dto/JourneyResponse.java` | `musicCnt`, `totalDuration`, `List<JourneyStop> path` | **신규** |
 | `music/dto/JourneyStop.java` | `@JsonUnwrapped MusicDetail` + `int step` | **신규** |
 | `music/journey/JourneyPathFinder.java` | 엔진 호출 port (BE2 계약) | **신규** (계약) |
@@ -121,7 +121,7 @@ specs/004-journey-path/
 ## 처리 흐름
 
 ```text
-GET /music/journey?start=10234&end=10877   (Bearer 필수 — SecurityConfig 기본 거부)
+GET /api/music/journey?start=10234&end=10877   (Bearer 필수 — SecurityConfig 기본 거부)
  │
  1. MVC 바인딩·검증 (@Min(1) long)          위반 → 400 INVALID_INPUT
  │

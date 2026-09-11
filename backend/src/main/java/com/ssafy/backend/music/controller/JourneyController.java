@@ -20,7 +20,7 @@ import jakarta.validation.constraints.Min;
  * 고쳐야 하므로 여정은 별도 컨트롤러로 둔다. 경로·응답 계약은 정본 그대로다.
  */
 @RestController
-@RequestMapping("/music")
+@RequestMapping("/api/music")
 @Validated
 public class JourneyController {
 

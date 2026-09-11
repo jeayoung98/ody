@@ -64,7 +64,7 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 **Goal**: 두 곡 ID로 출발→도착 순서 목록을 받고, 각 곡이 MusicDetail 필드와 좌표를 갖는다.
 
-**Independent Test**: port 2개를 mock으로 두고 `GET /music/journey?start=10234&end=10877` 호출 →
+**Independent Test**: port 2개를 mock으로 두고 `GET /api/music/journey?start=10234&end=10877` 호출 →
 `path[0]`이 출발곡(`step:0`), 마지막이 도착곡, `step` 연속, `musicCnt`·`totalDuration`이 `path`와 일치.
 
 ### Tests for User Story 1 ⚠️
@@ -77,7 +77,7 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 
 ### Implementation for User Story 1
 
-- [X] T013 [US1] `GET /music/journey` 핸들러 — **신규 `backend/src/main/java/com/ssafy/backend/music/controller/JourneyController.java`**. `@RequestParam @Min(1) long start`, `@RequestParam @Min(1) long end`, `ApiResponse.success(journeyService.getJourney(start, end))`. `mode`·`n`·detour 파라미터를 받지 않는다 (FR-023, contracts §①)
+- [X] T013 [US1] `GET /api/music/journey` 핸들러 — **신규 `backend/src/main/java/com/ssafy/backend/music/controller/JourneyController.java`**. `@RequestParam @Min(1) long start`, `@RequestParam @Min(1) long end`, `ApiResponse.success(journeyService.getJourney(start, end))`. `mode`·`n`·detour 파라미터를 받지 않는다 (FR-023, contracts §①)
       - **설계 변경**: 처음에 `MusicController` 에 메서드를 추가했더니 그 컨트롤러의 기존 슬라이스 테스트 19건(major·search·detail)이 새 빈을 요구하며 깨졌다. 남의 기능 테스트 3개 파일을 고치는 대신 컨트롤러를 분리했다. URL·응답 계약은 동일하다
 - [X] T014 [US1] 식별자 해석 구현 — `JourneyService`에서 `MusicDetailReader.findDetail(start)`·`findDetail(end)` 호출로 `MusicDetail` 2건을 얻고 그 `mbid`를 엔진 호출에 쓴다. **별도 `id→mbid` 조회를 만들지 않는다** (research R3, FR-022)
 - [X] T015 [US1] 엔진 호출 연결 — `JourneyPathFinder.find(startMbid, endMbid)` 호출부를 `JourneyService`에 구현. 정거장 수·모드를 넘기지 않는다 (FR-011, FR-023)
@@ -156,7 +156,7 @@ description: "Task list for 004-journey-path (경로 탐색 게이트웨이)"
 ### Implementation for User Story 4
 
 - [X] T037 [US4] 오류 매핑 구현 — `JourneyService`에서 곡 없음 → `CustomException(MusicErrorCode.MUSIC_NOT_FOUND)`, 엔진 `reachable:false` → `CustomException(MusicErrorCode.PATH_NOT_FOUND)`, 엔진 예외·타임아웃·조립 실패 → `CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR)`. **부분 경로를 성공으로 반환하지 않는다** (FR-014, plan "오류 매핑")
-- [X] T038 [US4] `/music/journey`가 `SecurityConfig` permitAll 목록에 없어 인증 대상임을 확인하고, 그 사실을 테스트나 주석으로 고정 — `backend/src/main/java/com/ssafy/backend/config/SecurityConfig.java` 는 **수정하지 않는다** (FR-015, quickstart C5)
+- [X] T038 [US4] `/api/music/journey`가 `SecurityConfig` permitAll 목록에 없어 인증 대상임을 확인하고, 그 사실을 테스트나 주석으로 고정 — `backend/src/main/java/com/ssafy/backend/config/SecurityConfig.java` 는 **수정하지 않는다** (FR-015, quickstart C5)
 - [X] T039 [US4] T032~T036 통과 확인 — `cd backend && ./gradlew test`
 
 **Checkpoint**: US1~US4 전부 port mock 기준으로 동작·검증된다.

@@ -9,7 +9,7 @@
 
 ## ① 공개 API (정본 §3.3 — 변경 없음)
 
-`GET /music/journey` · 인증 필요 (`Authorization: Bearer {accessToken}`)
+`GET /api/music/journey` · 인증 필요 (`Authorization: Bearer {accessToken}`)
 
 ### 요청
 
@@ -170,7 +170,7 @@ GET /journeys?from={mbid}&to={mbid}&n=10&mode=axis
 | 401 | `common.AuthErrorCode` (`UNAUTHENTICATED`, `INVALID_TOKEN`) |
 | 404·**422(신규)** | `common.MusicErrorCode` (`MUSIC_NOT_FOUND`, **`PATH_NOT_FOUND` 추가**) |
 | 예외→응답 변환 | `common.GlobalExceptionHandler` (BE1 소유, 변경 없음) |
-| 인증 | `config.SecurityConfig` 기본 거부 — `/music/journey`는 별도 등록 없이 인증 대상 |
+| 인증 | `config.SecurityConfig` 기본 거부 — `/api/music/journey`는 별도 등록 없이 인증 대상 |
 
 **정정**: 정본 §0.5는 400을 `VALIDATION_ERROR`, 500을 `INTERNAL_ERROR`로 적지만 master 구현은
 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`다. 002·003이 이미 보고한 불일치이며 본 계약은 구현 코드값을 따른다.

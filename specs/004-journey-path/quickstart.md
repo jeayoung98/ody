@@ -65,7 +65,7 @@ cd backend && ./gradlew build
 ### C1. 성공 응답 형태
 
 ```
-GET /music/journey?start=10234&end=10877
+GET /api/music/journey?start=10234&end=10877
 ```
 
 **기대**: 200, `success:true`, `error:null`, `data`에 `musicCnt`/`totalDuration`/`path`.
@@ -112,7 +112,7 @@ GET /music/journey?start=10234&end=10877
 | 위조·만료 토큰 | 401 `INVALID_TOKEN` |
 
 이 슬라이스는 시큐리티 체인을 태우지 않으므로, 이 두 건은 `SecurityConfig` 기본 거부 규칙이
-`/music/journey`를 덮는지 확인하는 것으로 대체한다(permitAll 목록에 없음 → 인증 대상).
+`/api/music/journey`를 덮는지 확인하는 것으로 대체한다(permitAll 목록에 없음 → 인증 대상).
 
 ---
 

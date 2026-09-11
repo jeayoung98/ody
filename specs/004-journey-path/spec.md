@@ -6,7 +6,7 @@
 
 **Status**: Clarified — 차단 항목 없음. 방식 명확화는 BE4 구현으로, 계약 공백 4건(식별자 / 성능 게이트 / 엔진 부재 오류 / 엔진 메타 노출)은 2026-09-10 clarify로 해소. 남은 것은 타 파트 알림·요청과 BE4 엔진 엔드포인트 대기. Jira S15P21A405-61 / 기능 ID JOURNEY-01
 
-**Input**: 인증된 사용자가 출발곡·도착곡 두 곡을 지정하면, 시스템이 그 사이를 잇는 곡의 순서 목록(경로)을 만들어 반환한다(정본 §3.3 `GET /music/journey`, 요구사항 JOURNEY-01). 성공 기준은 "두 곡이 연결됐는가"가 아니라 **"인접 정거장 사이의 낙차가 고른가"** 다. 경로 산출 알고리즘은 **BE4 데이터 엔진(Python)** 이 소유하고, BE2는 정본 계약을 지키는 **게이트웨이**를 소유한다(D4).
+**Input**: 인증된 사용자가 출발곡·도착곡 두 곡을 지정하면, 시스템이 그 사이를 잇는 곡의 순서 목록(경로)을 만들어 반환한다(정본 §3.3 `GET /api/music/journey`, 요구사항 JOURNEY-01). 성공 기준은 "두 곡이 연결됐는가"가 아니라 **"인접 정거장 사이의 낙차가 고른가"** 다. 경로 산출 알고리즘은 **BE4 데이터 엔진(Python)** 이 소유하고, BE2는 정본 계약을 지키는 **게이트웨이**를 소유한다(D4).
 
 ---
 
@@ -86,7 +86,7 @@ Viterbi로 비용 최소 열을 고른다. 비용 = `Σ 걸음² + λ·Σ 축이
 
 **Why this priority**: 경로가 하나도 나오지 않으면 여정 기능 전체(시각화 -62, 순차 재생 -63, 이력 -64)가 성립하지 않는다. 이 스토리만 구현해도 "두 곡을 잇는 플레이리스트"라는 사용자 가치가 완결된다.
 
-**Independent Test**: 데이터 엔진 호출을 mock으로 두고 `GET /music/journey?start=10234&end=10877`를 호출해, `path[0]`이 출발곡(`step:0`), 마지막 원소가 도착곡이며 `step`이 0부터 1씩 증가하는지, `musicCnt`·`totalDuration`이 `path`와 일치하는지 검증한다.
+**Independent Test**: 데이터 엔진 호출을 mock으로 두고 `GET /api/music/journey?start=10234&end=10877`를 호출해, `path[0]`이 출발곡(`step:0`), 마지막 원소가 도착곡이며 `step`이 0부터 1씩 증가하는지, `musicCnt`·`totalDuration`이 `path`와 일치하는지 검증한다.
 
 **Acceptance Scenarios**:
 
@@ -179,7 +179,7 @@ Viterbi로 비용 최소 열을 고른다. 비용 = `Σ 걸음² + λ·Σ 축이
 
 ### Functional Requirements
 
-- **FR-001 — 경로 탐색 조회**: 시스템은 `GET /music/journey`에서 `start`·`end` 곡 ID로 두 곡을 잇는 경로를 반환해야 한다(MUST). **근거**: [api-spec §3.3](../../docs/api-spec.md).
+- **FR-001 — 경로 탐색 조회**: 시스템은 `GET /api/music/journey`에서 `start`·`end` 곡 ID로 두 곡을 잇는 경로를 반환해야 한다(MUST). **근거**: [api-spec §3.3](../../docs/api-spec.md).
 - **FR-002 — 경로 연결 불가**: 데이터 엔진이 `reachable:false`를 반환하면 422 `PATH_NOT_FOUND`로 응답해야 한다(MUST). **근거**: api-spec §0.4·§0.5·§3.3; `journey.py` 반환 계약. **[정정]** `PATH_NOT_FOUND`는 master `MusicErrorCode`에 미등록 → 본 기능에서 BE2 도메인 에러로 정의한다. **[주의]** D3("먼 곡도 항상 잇는다")과 통로 완화 단계 때문에 실측 실패는 40쌍 중 0건이다. 422는 계약상 유지하되 사실상 예외 경로다.
 - **FR-003 — 없는 곡**: `start` 또는 `end`가 존재하지 않으면 404 `MUSIC_NOT_FOUND`로 응답해야 한다(MUST). **근거**: api-spec §0.5·§3.3.
 - **FR-004 — 경로 원소 필드**: `path`의 각 원소는 `step`과 MusicDetail 필드(id, mbid, title, artist, bpm, duration, album, genres, youtubeUrl, location pc1~pc16, playCnt, youtubeCnt)를 포함해야 한다(MUST). 데이터 엔진은 정거장을 행 인덱스·`mbid`와 `rank`/`dist_from_prev`/`progress`로만 돌려주므로, **나머지 필드는 게이트웨이가 채워야 한다**(MUST). **근거**: api-spec §0.6·§3.3; `journey.py::journey` 반환 형태.
@@ -193,7 +193,7 @@ Viterbi로 비용 최소 열을 고른다. 비용 = `Σ 걸음² + λ·Σ 축이
 - **FR-012 — 경계 입력**: `start == end`이면 엔진을 호출하지 않고 200과 `path` 1개(해당 곡, `step:0`), `musicCnt:1`을 반환해야 한다(MUST). `start != end`이면서 좌표가 동일하면 축 길이가 0이라 통로가 성립하지 않으므로 두 곡만 포함한 2곡 경로를 200으로 반환해야 한다(MUST). **근거**: api-spec §3.3; `journey.py::axis_frame`(`length == 0.0` 분기).
 - **FR-013 — 결정성**: 같은 `start`·`end`·같은 번들·같은 모드에서 반복 요청하면 동일한 곡 목록과 동일한 순서를 반환해야 한다(MUST). 산출 로직에 기록되지 않은 무작위성을 도입해서는 안 된다(MUST NOT). **번들 버전이 바뀌면 결과가 달라질 수 있으며 결정성 보장은 번들 안에서만 성립한다.** **근거**: 헌법 IV·V·VI.
 - **FR-014 — 오류 구조**: 검증 실패는 400 `INVALID_INPUT`, 없는 곡·식별자 해석 실패는 404 `MUSIC_NOT_FOUND`, 경로 불가는 422 `PATH_NOT_FOUND`, 인증 실패는 401 `UNAUTHENTICATED`/`INVALID_TOKEN`, **엔진 부재·타임아웃·응답 조립 불가·그 밖의 내부 실패는 500 `INTERNAL_SERVER_ERROR`** 로 응답하고, 실패 본문은 `success:false`, `data:null`, `error:{code,message}`(master `ErrorResponse`)여야 한다(MUST). 부분 경로를 성공으로 응답해서는 안 된다(MUST NOT). **엔진 부재를 422와 섞어서는 안 된다**(MUST NOT) — 사용자가 곡을 바꿔 해결할 수 있는 실패가 아니다. 새 에러 코드나 503을 정본 §0.5에 추가하지 않는다(2026-09-10 clarify); 엔진 부재와 다른 500의 구분은 로그·지표로만 한다(MUST). **근거**: 2026-09-10 clarify; master `common.GlobalErrorCode`/`AuthErrorCode`/`MusicErrorCode`/`GlobalExceptionHandler`; api-spec §0.2·§0.4·§0.5.
-- **FR-015 — 인증**: `Authorization: Bearer {accessToken}` 인증을 요구해야 한다(MUST). master `SecurityConfig`는 기본 거부(`anyRequest().authenticated()`)이므로 `/music/journey`는 별도 조치 없이 인증 대상이다. **근거**: api-spec §0.1·§0.7·§3.3; master `SecurityConfig`(S15P21A405-33).
+- **FR-015 — 인증**: `Authorization: Bearer {accessToken}` 인증을 요구해야 한다(MUST). master `SecurityConfig`는 기본 거부(`anyRequest().authenticated()`)이므로 `/api/music/journey`는 별도 조치 없이 인증 대상이다. **근거**: api-spec §0.1·§0.7·§3.3; master `SecurityConfig`(S15P21A405-33).
 - **FR-016 — 고정 좌표**: 경로 곡의 좌표는 서빙 번들(`v2.1-pca16`, PCA-16, D7) 기준으로 진입 경로와 무관하게 동일해야 하며(MUST), 경로 생성이 좌표·모델을 변경해서는 안 된다(MUST NOT). 서빙·요청 경로에서 차원 축소 모델을 재학습해서는 안 된다(MUST NOT). **근거**: 헌법 V·VII; D7.
 - **FR-017 — 아키텍처 경계**: 경로 산출 알고리즘(축 통로·Viterbi·후처리·완화 단계)은 **BE4 데이터 엔진(Python)이 소유**해야 한다(MUST). BE2는 정본 계약 준수, 입력 검증, 식별자 해석, 응답 조립, 오류 매핑을 소유하는 **게이트웨이**여야 한다(MUST). BE2가 경로 산출 로직을 Java로 재구현해서는 안 된다(MUST NOT). **근거**: **D4**(검색 서비스 = Python FastAPI + numpy, BE 게이트웨이가 호출); 헌법 X. **[정정]** rev.1의 "BE4 MyBatis 조회 port(`*Reader`) 패턴"은 D4와 맞지 않는다. 그 패턴은 곡 조회에는 유효하나 여정 산출에는 적용되지 않는다.
 - **FR-018 — 순수 조회**: 경로 생성은 어떤 도메인 상태도 변경해서는 안 된다(MUST NOT). 여정 이력 저장은 S15P21A405-64 범위다. **근거**: 헌법 X.

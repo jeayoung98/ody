@@ -28,4 +28,14 @@
 		WHERE email = #{email}
 	</update>
 
+	<update id="updateProfile">
+		UPDATE "user"
+		<set>
+			<if test="nickname != null">nickname = #{nickname},</if>
+			<if test="imageUrl != null">image_url = #{imageUrl},</if>
+			updated_at = now()
+		</set>
+		WHERE email = #{email}
+	</update>
+
 </mapper>

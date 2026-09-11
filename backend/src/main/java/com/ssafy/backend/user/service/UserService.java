@@ -2,10 +2,16 @@ package com.ssafy.backend.user.service;
 
 import org.springframework.stereotype.Service;
 
+import com.ssafy.backend.auth.mapper.AuthMapper;
+import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
+import com.ssafy.backend.user.NicknamePolicy;
 import com.ssafy.backend.user.dto.UserDetailResponse;
 import com.ssafy.backend.user.dto.UserProfileRow;
+import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
+import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
 import com.ssafy.backend.user.mapper.UserMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -15,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 public class UserService {
 
 	private final UserMapper userMapper;
+	private final AuthMapper authMapper;
 
 	/**
 	 * 사용자 상세 조회 (정본 §2.1). 본인 조회도 이 API(email == 토큰 주체 → isMe:true).
@@ -54,5 +61,38 @@ public class UserService {
 	 */
 	public void completeTutorial(String email) {
 		userMapper.updateTutorialCompleted(email);
+	}
+
+	/**
+	 * 프로필(닉네임, 프로필 이미지) 부분 수정 (S15P21A405-216). 토큰 주체 본인만 대상, email 파라미터 없음.
+	 * 요청에 포함된 필드만 갱신하고 나머지는 기존 값을 유지한다. 닉네임 변경 시 signup과 같은 길이 규칙·중복 검사를
+	 * 적용하되, 기존과 동일한 닉네임으로의 "변경"은 중복으로 취급하지 않는다.
+	 */
+	public UserProfileUpdateResponse updateProfile(String email, UserProfileUpdateRequest request) {
+		String nickname = request.nickname();
+		String imageUrl = request.imageUrl();
+
+		if (nickname == null && imageUrl == null) {
+			throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+		}
+
+		if (nickname != null) {
+			if (!NicknamePolicy.isValidLength(nickname)) {
+				throw new CustomException(AuthErrorCode.INVALID_NICKNAME_LENGTH);
+			}
+
+			UserProfileRow current = userMapper.findProfileByEmail(email);
+			if (current == null) {
+				throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+			}
+			if (!nickname.equals(current.getNickname()) && authMapper.existsByNickname(nickname)) {
+				throw new CustomException(AuthErrorCode.NICKNAME_ALREADY_EXISTS);
+			}
+		}
+
+		userMapper.updateProfile(email, nickname, imageUrl);
+
+		UserProfileRow updated = userMapper.findProfileByEmail(email);
+		return new UserProfileUpdateResponse(updated.getNickname(), updated.getImageUrl());
 	}
 }

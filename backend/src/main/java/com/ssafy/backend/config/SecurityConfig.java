@@ -52,7 +52,7 @@ public class SecurityConfig {
 								"/api/users/nickname-available",
 								"/oauth2/authorization/**", "/login/oauth2/code/**",
 								"/actuator/health", "/actuator/prometheus",
-								"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
+								"/api/swagger-ui.html", "/api/swagger-ui/**", "/api/v3/api-docs/**")
 						.permitAll()
 						.anyRequest().authenticated())
 				.oauth2Login(oauth2 -> oauth2

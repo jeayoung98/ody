@@ -51,7 +51,8 @@ public class SecurityConfig {
 								"/api/auth/exchange", "/api/auth/reissue",
 								"/api/users/nickname-available",
 								"/oauth2/authorization/**", "/login/oauth2/code/**",
-								"/actuator/health", "/actuator/prometheus")
+								"/actuator/health", "/actuator/prometheus",
+								"/swagger-ui.html", "/swagger-ui/**", "/v3/api-docs/**")
 						.permitAll()
 						.anyRequest().authenticated())
 				.oauth2Login(oauth2 -> oauth2

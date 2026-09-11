@@ -11,6 +11,8 @@ import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
 import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
+@Tag(name = "User", description = "프로필(닉네임/이미지) 부분 수정")
 public class UserProfileController {
 
 	private final UserService userService;

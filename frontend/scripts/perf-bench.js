@@ -375,18 +375,48 @@
 
   // ── 13. 출력 ───────────────────────────────────────────────────────────
   const today = new Date().toISOString().slice(0, 10);
-  const row = `| ${today} | ??? | ${engine.N} | ${fps} | ${drawPerFrame}ms | ${enginePerFrame}ms | ???KB | ${hidden0 ? "탭 숨김 — 프레임 지표 무효" : ""} |`;
+  /** 못 잰 값은 빈칸이 아니라 "미측정" 으로 남긴다 — 나중에 0 과 헷갈리지 않게 */
+  const cell = (v, unit = "") => (v == null ? "미측정" : `${v}${unit}`);
+  const note = frames === 0 ? "rAF 미동작 — 프레임·그리기 무효" : "";
+  const row = `| ${today} | ??? | ${engine.N} | ${frames === 0 ? "미측정" : fps} | ${cell(drawPerFrame, "ms")} | ${cell(enginePerFrame, "ms")} | ???KB | ${note} |`;
 
   hud.textContent = `FPS ${fps}\ndraw ${drawPerFrame}ms/f\nN ${engine.N}`;
   window.__odyPerf = report;
 
+  // ── 14. PERF-LOG.md 에 자동 기록 (개발 전용 라우트) ────────────────────
+  // 실패해도 측정 결과는 콘솔과 window.__odyPerf 에 그대로 남는다.
+  let logged = null;
+  try {
+    const res = await fetch("/dev-perf-log", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        row,
+        detail: report,
+        summary: `${today} · ${report.환경.커밋} · N=${engine.N} · ${fps}fps`,
+      }),
+    });
+    logged = await res.json();
+  } catch (err) {
+    logged = { ok: false, error: String(err) };
+  }
+
   console.log("%c=== ODY 성능 측정 ===", "font-weight:bold;font-size:14px");
   console.log(report);
   for (const v of report.검증) console.log(v);
-  console.log("\n%cPERF-LOG.md 에 붙여넣을 한 줄 (??? 는 커밋·번들로 채운다):", "font-weight:bold");
-  console.log(row);
-  console.log("\n%c상세 JSON (details 블록에 넣는다):", "font-weight:bold");
-  console.log(JSON.stringify(report, null, 2));
+  if (logged?.ok) {
+    console.log(
+      "%c✅ PERF-LOG.md 에 자동 기록됨%c — 커밋 해시와 번들 크기(???) 두 칸만 채우면 된다.",
+      "font-weight:bold;color:#3c3",
+      "",
+    );
+    console.log(`   ${logged.file}`);
+  } else {
+    console.warn("⚠️ 자동 기록 실패 — 아래 한 줄을 PERF-LOG.md 표에 직접 붙여넣는다.", logged?.error ?? logged);
+    console.log(row);
+    console.log("\n%c상세 JSON (details 블록에 넣는다):", "font-weight:bold");
+    console.log(JSON.stringify(report, null, 2));
+  }
   console.log("\nwindow.__odyPerf 에도 남아 있다. HUD 는 새로고침하면 사라진다.");
 
   return report;

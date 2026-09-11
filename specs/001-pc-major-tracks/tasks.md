@@ -73,7 +73,7 @@
 
 **Goal**: `level=1`을 PC 값 없이 호출 가능(최상위 진입).
 
-**Independent Test**: `GET /music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
+**Independent Test**: `GET /api/api/music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
 
 - [X] T018 (2026-09-10 완료: `major_level1_returnsSuccessEnvelope`) [US2] MVC 슬라이스 테스트 A5: `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 - [ ] T019 [BLOCKED: B2] [US2] level=1 PC 생략 시 조회 대상 정의(중심을 (0,0)/전체 영역으로 대체 금지). 초기 조회 분기 (`backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`)

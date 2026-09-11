@@ -1,4 +1,4 @@
-# Contract: GET /music/major (대표곡 조회)
+# Contract: GET /api/music/major (대표곡 조회)
 
 **Spec**: [../spec.md](../spec.md) | **정본**: [docs/api-spec.md §3.4](../../../docs/api-spec.md) | **Date**: 2026-09-08
 
@@ -6,7 +6,7 @@
 
 ## 1. Request (확정)
 
-`GET /music/major` · 인증 필요.
+`GET /api/music/major` · 인증 필요.
 
 | 항목 | 값 |
 | --- | --- |

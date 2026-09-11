@@ -10,6 +10,8 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.user.dto.NicknameAvailabilityResponse;
 import com.ssafy.backend.user.service.UserAvailabilityService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.constraints.NotBlank;
 
 import lombok.RequiredArgsConstructor;
@@ -21,6 +23,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/api/users")
 @Validated
 @RequiredArgsConstructor
+@Tag(name = "User", description = "닉네임 사용 가능 여부 조회")
 public class UserAvailabilityController {
 
 	private final UserAvailabilityService userAvailabilityService;

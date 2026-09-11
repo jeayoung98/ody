@@ -9,6 +9,8 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.user.dto.TutorialCompletedResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -17,6 +19,7 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
+@Tag(name = "User", description = "온보딩 튜토리얼 완료 처리")
 public class UserOnboardingController {
 
 	private final UserService userService;

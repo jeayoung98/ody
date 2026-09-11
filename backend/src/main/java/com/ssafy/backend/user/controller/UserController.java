@@ -11,6 +11,8 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.user.dto.UserDetailResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.constraints.NotBlank;
 
 import lombok.RequiredArgsConstructor;
@@ -19,6 +21,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/user")
 @Validated
 @RequiredArgsConstructor
+@Tag(name = "User", description = "사용자 상세 조회")
 public class UserController {
 
 	private final UserService userService;

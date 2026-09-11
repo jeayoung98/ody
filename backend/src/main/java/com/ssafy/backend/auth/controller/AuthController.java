@@ -24,6 +24,8 @@ import com.ssafy.backend.auth.service.AuthService;
 
 import io.jsonwebtoken.Claims;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
@@ -35,6 +37,7 @@ import lombok.extern.slf4j.Slf4j;
 @RestController
 @RequestMapping("/api/auth")
 @RequiredArgsConstructor
+@Tag(name = "Auth", description = "회원가입·로그인·토큰 재발급")
 public class AuthController {
 
 	private static final String REFRESH_TOKEN_COOKIE_NAME = "refreshToken";

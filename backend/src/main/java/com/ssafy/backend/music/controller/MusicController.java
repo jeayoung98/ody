@@ -16,9 +16,12 @@ import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @RestController
 @RequestMapping("/music")
 @Validated
+@Tag(name = "Music", description = "곡 검색·상세·대표곡 조회")
 public class MusicController {
 
 	private final MusicService musicService;

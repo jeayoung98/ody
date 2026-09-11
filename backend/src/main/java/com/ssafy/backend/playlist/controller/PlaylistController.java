@@ -29,6 +29,8 @@ import com.ssafy.backend.playlist.dto.PlaylistUpdateRequest;
 import com.ssafy.backend.playlist.dto.PlaylistUpdateResponse;
 import com.ssafy.backend.playlist.service.PlaylistService;
 
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
@@ -39,6 +41,7 @@ import lombok.RequiredArgsConstructor;
 @RequestMapping("/playlist")
 @Validated
 @RequiredArgsConstructor
+@Tag(name = "Playlist", description = "플레이리스트 조회·생성·수정")
 public class PlaylistController {
 
 	private final PlaylistService playlistService;

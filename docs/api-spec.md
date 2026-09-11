@@ -63,6 +63,12 @@
 | `TOKEN_EXPIRED` | 401 | 액세스 토큰이 만료되었습니다. |
 | `REFRESH_TOKEN_INVALID` | 401 | 리프레시 토큰이 유효하지 않거나 만료되었습니다. |
 | `OAUTH_FAILED` | 401 | 구글 인증에 실패했습니다. |
+| `INVALID_CREDENTIALS` | 401 | 이메일 또는 비밀번호가 올바르지 않습니다. (§1.4, 이메일 없음/OAuth 전용 계정) |
+| `PASSWORD_MISMATCH` | 401 | 비밀번호가 올바르지 않습니다. (§1.4, 이메일은 존재하나 비밀번호 틀림) |
+| `INVALID_PASSWORD_FORMAT` | 400 | 비밀번호는 영문과 숫자를 포함해 8~72자여야 합니다. (§1.4) |
+| `INVALID_NICKNAME_LENGTH` | 400 | 닉네임은 2~20자여야 합니다. (§1.4) |
+| `EMAIL_ALREADY_EXISTS` | 409 | 이미 가입된 이메일입니다. (§1.4) |
+| `NICKNAME_ALREADY_EXISTS` | 409 | 이미 사용 중인 닉네임입니다. (§1.4) |
 | `FORBIDDEN` | 403 | 접근 권한이 없습니다. |
 | `USER_NOT_FOUND` | 404 | 존재하지 않는 사용자입니다. |
 | `USER_PRIVATE` | 403 | 비공개 사용자입니다. |
@@ -103,18 +109,18 @@
 ## 1. 인증 / 회원
 
 ### 1.1 구글 OAuth 로그인
-`POST /auth/login/google` · 인증 불필요. 프론트에서 Google Identity Services로 `idToken`을 받아 서버에 전달하는 **토큰 검증 방식**.
+`POST /auth/login/google` · 인증 불필요. 프론트에서 Google Identity Services로 `idToken`을 받아 서버에 전달하는 **토큰 검증 방식**(본안). **S15P21A405-122에서 구현 완료**, 실제 경로는 이 저장소 컨벤션에 맞춰 `POST /api/auth/login/google`이다.
 
 body: `idToken`(String, required).
 ```json
 { "success": true, "data": {
-  "accessToken": "...", "refreshToken": "...", "accessTokenExpiresIn": 1800,
-  "isNewUser": true,
+  "accessToken": "...",
   "user": { "email": "user@gmail.com", "name": "홍길동", "nickname": null, "imageUrl": "https://lh3..." }
 }, "error": null }
 ```
-- `isNewUser: true`면 온보딩 화면(2.2 `user/update`)으로 이동. 에러: `OAUTH_FAILED`.
-- 대안(서버 리다이렉트, Spring Security OAuth2 Client): `GET /oauth2/authorization/google` → 동의 화면, `GET /login/oauth2/code/google` → 콜백, 성공 시 `{FRONT_URL}/oauth/success?accessToken=...&refreshToken=...&isNewUser=...`로 302.
+- 정본과 실제 구현의 차이: `refreshToken`은 body가 아니라 httpOnly 쿠키로 내려간다(exchange/reissue와 동일 컨벤션, 탈취 위험 감소). `accessTokenExpiresIn`, `isNewUser`는 응답에 없다(온보딩 분기 신호는 팀 결정으로 쓰지 않기로 함).
+- idToken 검증은 Google 공식 라이브러리(`GoogleIdTokenVerifier`)로 서명·발급자·audience(`GOOGLE_CLIENT_ID`)·만료를 확인한다. `email_verified=false`인 idToken도 거부한다. 에러: `OAUTH_FAILED`.
+- 대안(서버 리다이렉트, Spring Security OAuth2 Client, 기존 그대로 유지): `GET /oauth2/authorization/google` → 동의 화면, `GET /login/oauth2/code/google` → 콜백, 성공 시 `{FRONTEND_OAUTH_REDIRECT_URI}?code=...`로 302, 프론트가 `POST /api/auth/exchange`로 code를 accessToken과 교환(§1.4 참고 경로들과 동일 컨벤션).
 
 ### 1.2 토큰 재발급
 `POST /auth/refresh` · 인증 불필요(refreshToken으로 검증). body: `refreshToken`(String, required).
@@ -127,6 +133,58 @@ body: `idToken`(String, required).
 `POST /auth/logout` · 인증 필요. header: `Authorization`. res: `{ "success": true, "data": null, "error": null }`.
 - 서버는 토큰 주체의 refreshToken 폐기, 별도 body/param 없음. 에러: `INVALID_TOKEN`, `TOKEN_EXPIRED`.
 
+### 1.4 이메일/비밀번호 회원가입·로그인 (S15P21A405-121)
+> Notion 정본(AUTH-01)은 소셜 로그인만 확정돼 있다. 아래 두 API는 Notion에 없는, 백엔드 담당자 판단으로 추가한
+> 범위 변경이다(`S15P21A405-120`에 기록된 "명세 충돌 — 기획 확인 필요" 메모 참고). 실제 구현 경로 기준으로 적는다
+> (§1.1~1.3의 `/auth/*`와 달리 이 저장소의 실제 `AuthController`는 `/api/auth/*` 접두사를 쓴다 — 기존부터 있던
+> 정본과 코드의 경로 불일치이며 이번 작업 범위에서 고치지 않았다).
+
+`POST /api/auth/signup` · 인증 불필요. body: `email`(String, required), `password`(String, required, 영문+숫자
+포함 8자 이상, UTF-8 72바이트 이하), `nickname`(String, required, 2~20자).
+```json
+{ "success": true, "data": { "accessToken": "..." }, "error": null }
+```
+- 응답 모양은 1.1/1.2의 exchange·reissue와 동일(accessToken만 body, refreshToken은 httpOnly 쿠키).
+- 비밀번호는 bcrypt로 해시해 `"user".password_hash`에 저장. `name` 컬럼은 NOT NULL이라 `nickname` 값을 그대로 채운다.
+- password/nickname의 형식·길이 검증은 Bean Validation이 아니라 서비스 레이어에서 하며, 필수값 누락만 공통
+  `VALIDATION_ERROR`(400)이고 형식·길이·중복은 아래 전용 코드를 쓴다.
+- 에러: `INVALID_PASSWORD_FORMAT`(400), `INVALID_NICKNAME_LENGTH`(400), `EMAIL_ALREADY_EXISTS`(409),
+  `NICKNAME_ALREADY_EXISTS`(409), `VALIDATION_ERROR`(400, 필수값 누락).
+
+`POST /api/auth/login` · 인증 불필요. body: `email`(String, required), `password`(String, required).
+```json
+{ "success": true, "data": { "accessToken": "..." }, "error": null }
+```
+- 이메일이 없거나 구글 OAuth 전용 계정(`password_hash IS NULL`)이면 `INVALID_CREDENTIALS`(401) — 계정 존재
+  여부를 노출하지 않는다. 이메일은 존재하는데 비밀번호만 틀리면 `PASSWORD_MISMATCH`(401)로 구분한다.
+- 에러: `INVALID_CREDENTIALS`(401), `PASSWORD_MISMATCH`(401), `VALIDATION_ERROR`(400).
+- 선행 조건: `"user".password_hash` 컬럼 추가 필요(아래 쿼리 참고, 아직 실행 안 됨).
+  ```sql
+  ALTER TABLE "user" ADD COLUMN IF NOT EXISTS password_hash varchar(60);
+  ```
+
+`GET /api/users/nickname-available` · 인증 불필요(가입 전 호출). param: `nickname`(String, required).
+```json
+{ "success": true, "data": { "available": true }, "error": null }
+```
+- `signup`과 같은 길이 규칙(2~20자, `NicknamePolicy`)과 같은 중복 검사(`existsByNickname`)를 그대로 재사용한다.
+  이 API가 `available:true`를 반환해도 그 사이 다른 요청이 먼저 가입하면 `signup`에서 `NICKNAME_ALREADY_EXISTS`가
+  날 수 있다(TOCTOU, 최종 검증은 signup 쪽).
+- 에러: `INVALID_NICKNAME_LENGTH`(400), `VALIDATION_ERROR`(400, 필수값 누락).
+- 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/music/detail`)나
+  `/api/auth/*`와도 다른 세 번째 네이밍이다. 사용자가 지정한 경로를 그대로 따랐다.
+
+### 1.5 온보딩 완료 처리 (S15P21A405-122)
+`PATCH /api/user/tutorial-completed` · 인증 필요. 토큰 주체 본인만 대상이라 email을 받지 않는다(§0.7 본인 대상 API 규칙).
+```json
+{ "success": true, "data": { "tutorialCompleted": true }, "error": null }
+```
+- `"user".tutorial_completed`를 true로 전환한다. 이미 true여도 멱등하게 200.
+- 로그인 응답(§1.1, §1.4)에는 `isNewUser` 같은 신호가 없다 — 온보딩 완료 여부를 프론트가 알아야 하면
+  `GET /user/detail`의 `tutorialCompleted` 필드를 조회해서 판단한다.
+- 경로가 `/api/user`(단수, api 접두사)로, `/user/detail`·`/api/users/*`·`/api/auth/*`와도 다른 네 번째
+  네이밍이다 — 이 저장소에 경로 접두사 컨벤션이 아직 통일되지 않았다는 뜻이므로 정리가 필요하다.
+
 ---
 
 ## 2. 사용자
@@ -136,13 +194,14 @@ body: `idToken`(String, required).
 ```json
 { "success": true, "data": {
   "email": "user@gmail.com", "name": "홍길동", "nickname": "길동무", "isPublic": true,
-  "lastMusic": { "id": 10234, "title": "Love wins all", "artist": "IU", "youtubeUrl": "https://..." },
+  "tutorialCompleted": true,
   "lastActiveAt": "2026-09-07T13:41:02+09:00", "createdAt": "2026-08-21T09:12:44+09:00",
   "imageUrl": "https://cdn.example.com/profile/abc.png",
   "followerCnt": 12, "followingCnt": 8, "isFollowing": false, "isMe": false
 }, "error": null }
 ```
-- 본인 프로필도 이 API로 조회(본인 email → `isMe: true`). `lastMusic`은 재생 이력 없으면 null. `isFollowing`은 토큰 주체가 조회 대상을 팔로우 중인지. 에러: `USER_NOT_FOUND`, `USER_PRIVATE`.
+- 본인 프로필도 이 API로 조회(본인 email → `isMe: true`). `isFollowing`은 토큰 주체가 조회 대상을 팔로우 중인지. 에러: `USER_NOT_FOUND`, `USER_PRIVATE`.
+- 구현 메모(S15P21A405-70): `followerCnt`/`followingCnt`/`isFollowing`은 팔로우 MVP 범위 확정(E1) 전까지 서버가 0/0/false 고정값을 반환한다.
 
 ### 2.2 사용자 수정 (온보딩)
 `PATCH /user/update` · 인증 필요 · `multipart/form-data`. body: `nickname`(String, opt), `image`(file, opt). res: 2.1과 동일 상세 객체.
@@ -257,6 +316,49 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 
 ## 4. 플레이리스트
 
+> **S15P21A405-65/66/67에서 구현 완료**. `playlist`, `playlist_item` 테이블은 데이터 파트에서 이미 만들었다
+> (아래가 실제 운영 스키마). 컬럼명이 `owner_email`/`name`이 아니라 `email`/`playlist_name`이고, `id`는
+> 자동증가가 아니라 애플리케이션이 시퀀스로 채운다.
+> ```sql
+> CREATE TABLE public.playlist (
+>     id int8 NOT NULL,
+>     email varchar(255) NOT NULL,
+>     playlist_name varchar(200) NOT NULL,
+>     like_cnt int4 NULL,
+>     created_at timestamptz DEFAULT now() NOT NULL,
+>     updated_at timestamptz DEFAULT now() NOT NULL,
+>     CONSTRAINT "PK_PLAYLIST" PRIMARY KEY (id)
+> );
+>
+> CREATE TABLE public.playlist_item (
+>     playlist_id int8 NOT NULL,
+>     music_id int8 NOT NULL,
+>     added_at timestamptz DEFAULT now() NOT NULL,
+>     CONSTRAINT "PK_PLAYLIST_ITEM" PRIMARY KEY (playlist_id, music_id),
+>     CONSTRAINT "FK_music_TO_playlist_item_1" FOREIGN KEY (music_id) REFERENCES public.music(id),
+>     CONSTRAINT "FK_playlist_TO_playlist_item_1" FOREIGN KEY (playlist_id) REFERENCES public.playlist(id)
+> );
+> ```
+> **아직 실행 안 된, 백엔드가 추가로 필요한 것 두 가지**:
+> ```sql
+> -- 1) playlist.id 채번용 — 테이블에 DEFAULT/시퀀스가 없다.
+> CREATE SEQUENCE IF NOT EXISTS playlist_id_seq OWNED BY public.playlist.id;
+>
+> -- 2) 곡 순서 변경(4.4.1) 저장용 — 원본 테이블엔 순서 컬럼이 없어서 추가하기로 결정(팀 확인 완료).
+> ALTER TABLE public.playlist_item ADD COLUMN position int4 NOT NULL DEFAULT 0;
+> CREATE INDEX idx_playlist_item_order ON public.playlist_item (playlist_id, position);
+> ```
+> `like_cnt`는 현재 API 어디에도 노출·수정하지 않는다(좋아요 기능 자체가 아직 없음).
+>
+> **곡 조회 선행 조건**: 곡 존재 확인·상세 조회는 `MusicDetailReader` 포트를 그대로 재사용하는데, 이 포트는 아직
+> 어댑터(BE4)가 없다(`MusicService`와 동일한 "대기 중" 상태). `music` 테이블 자체는 이제 있지만(위 FK로 확인),
+> 애플리케이션에서 그 테이블을 읽는 코드가 아직 없다는 뜻이다. 그 결과 지금 시점에는:
+> - `musicIdList`가 **빈 배열**인 `/playlist/create`, `/playlist/detail`(빈 플레이리스트)은 정상 동작한다.
+> - `musicIdList`에 실제 곡 ID가 하나라도 들어가는 모든 API(4.2 트랙 있는 상세, 4.3 비어있지 않은 생성, 4.4 곡 추가,
+>   §4의 나머지 곡 관련 호출)는 어댑터가 붙기 전까지 500(`UnsupportedOperationException`)이 난다.
+>
+> `FORBIDDEN`은 신규 공통 에러코드(`GlobalErrorCode`, 403)로 이번에 추가했다.
+
 ### 4.1 플레이리스트 목록 조회
 `GET /playlist/search` · 인증 필요. param: `email`(String, required, 소유자).
 ```json
@@ -287,6 +389,15 @@ param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 { "success": true, "data": { "playlistId": 42, "insertedCnt": 3, "skippedCnt": 1, "skippedMusicIds": [10877], "musicCnt": 21 }, "error": null }
 ```
 - 이미 담긴 곡은 에러 대신 skipped로 부분 성공 처리. 에러: `PLAYLIST_NOT_FOUND`, `MUSIC_NOT_FOUND`, `FORBIDDEN`.
+
+### 4.4.1 플레이리스트 곡 순서 변경 (S15P21A405-66, 정본에는 없는 신규 엔드포인트)
+`POST /playlist/music/reorder` · 인증 필요. body: `playlistId`(int, required), `musicIdList`(Array\<int\>, required).
+```json
+{ "success": true, "data": { "playlistId": 42, "musicCnt": 19 }, "error": null }
+```
+- `musicIdList`는 곡 추가·삭제 없이 **현재 담긴 곡과 정확히 같은 집합**을 새 순서로 나열한 것이어야 한다. 집합이
+  다르면(곡이 빠지거나 추가되면) `INVALID_INPUT`(400). 추가/삭제는 4.4/4.5로 따로 한다.
+- 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`, `INVALID_INPUT`.
 
 ### 4.5 플레이리스트에서 곡 삭제
 `POST /playlist/music/delete` · 인증 필요. body: `playlistId`(int, required), `musicIdList`(Array\<int\>, required).

@@ -13,4 +13,6 @@ public interface AuthMapper {
 	void touchLogin(@Param("email") String email, @Param("imageUrl") String imageUrl);
 
 	void deleteByEmail(@Param("email") String email);
+
+	boolean existsByNickname(@Param("nickname") String nickname);
 }

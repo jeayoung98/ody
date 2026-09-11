@@ -24,6 +24,8 @@ import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
+import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MajorResponse;
@@ -53,6 +55,12 @@ class MusicControllerTests {
 
 	@MockitoBean
 	private AuthMapper authMapper;
+
+	@MockitoBean
+	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	@Test
 	void major_level1_returnsSuccessEnvelope() throws Exception {

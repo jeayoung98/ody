@@ -5,14 +5,18 @@
 	<!-- "user"는 Postgres 예약어라 반드시 큰따옴표로 감싼다 -->
 
 	<select id="findByEmail" resultType="com.ssafy.backend.auth.dto.UserAuthDto">
-		SELECT email, name, nickname, image_url
+		SELECT email, name, nickname, image_url, password_hash
 		FROM "user"
 		WHERE email = #{email}
 	</select>
 
+	<select id="existsByNickname" resultType="boolean">
+		SELECT EXISTS(SELECT 1 FROM "user" WHERE nickname = #{nickname})
+	</select>
+
 	<insert id="insert">
-		INSERT INTO "user" (email, name, image_url)
-		VALUES (#{email}, #{name}, #{imageUrl})
+		INSERT INTO "user" (email, name, nickname, image_url, password_hash)
+		VALUES (#{email}, #{name}, #{nickname}, #{imageUrl}, #{passwordHash})
 	</insert>
 
 	<update id="touchLogin">

@@ -38,10 +38,11 @@ export async function POST(req: Request) {
     return NextResponse.json({ ok: false, error: "JSON 파싱 실패" }, { status: 400 });
   }
 
-  const { row, detail, summary } = (body ?? {}) as {
+  const { row, detail, summary, markdown } = (body ?? {}) as {
     row?: unknown;
     detail?: unknown;
     summary?: unknown;
+    markdown?: unknown;
   };
 
   if (typeof row !== "string" || !row.trim().startsWith("|")) {
@@ -69,11 +70,16 @@ export async function POST(req: Request) {
     );
   }
 
+  // 사람이 읽는 건 마크다운 표, 재분석용 원본 JSON 은 그 아래 한 겹 더 접어둔다
+  const human = typeof markdown === "string" && markdown.trim() ? `${markdown.trim()}\n\n` : "";
   const detailBlock =
     `<details><summary>${title}</summary>\n\n` +
+    human +
+    "<details><summary>원본 JSON</summary>\n\n" +
     "```json\n" +
     `${JSON.stringify(detail, null, 2)}\n` +
     "```\n\n" +
+    "</details>\n\n" +
     "</details>\n\n";
 
   const next = md.replace(ROW_MARK, `${safeRow}\n${ROW_MARK}`).replace(DETAIL_MARK, `${detailBlock}${DETAIL_MARK}`);

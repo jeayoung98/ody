@@ -1,13 +1,18 @@
 /**
  * ODY 프론트엔드 성능 계측 (S15P21A405-215)
  *
- * 쓰는 법: `npm run dev` 로 지도를 띄운 뒤 브라우저 콘솔에 이 파일 내용을 통째로 붙여넣는다.
- * 앱 소스는 건드리지 않는다 — 캔버스 컨텍스트와 엔진을 런타임에 가로채서 잰다.
+ * 쓰는 법·지표 설명·주의사항은 **scripts/README.md** 를 본다.
+ * 요약: `npm run dev` 로 지도를 띄우고, 창이 실제로 화면에 보이는 상태에서
+ * 이 파일 내용을 콘솔에 통째로 붙여넣는다. 5초간 잰다.
  *
- * ⚠️ 브라우저 탭이 숨겨져 있으면 requestAnimationFrame 이 멈춘다. 프레임 지표가 전부 0 이면
- *    탭을 앞으로 꺼낸 뒤 다시 돌린다.
+ * 앱 소스는 건드리지 않는다 — 캔버스 컨텍스트와 window.__odyEngine 을 런타임에 가로챈다.
  *
- * 결과: PERF-LOG.md 에 붙여넣을 마크다운 한 줄 + 상세 JSON (window.__odyPerf 에도 남는다)
+ * ⚠️ 창이 가려져 있으면 requestAnimationFrame 이 멈춰 프레임 지표가 전부 0 이 된다.
+ *    그때는 스크립트가 경고를 띄운다. 나머지 지표는 그 상태에서도 유효하다.
+ *
+ * 결과는 ../PERF-LOG.md 에 자동으로 기록된다(개발 전용 라우트 /dev-perf-log).
+ * 실패하면 붙여넣을 마크다운 한 줄과 상세 JSON 을 콘솔에 출력한다.
+ * window.__odyPerf 에도 남는다.
  */
 (async () => {
   const DURATION_MS = 5000;
@@ -377,8 +382,133 @@
   const today = new Date().toISOString().slice(0, 10);
   /** 못 잰 값은 빈칸이 아니라 "미측정" 으로 남긴다 — 나중에 0 과 헷갈리지 않게 */
   const cell = (v, unit = "") => (v == null ? "미측정" : `${v}${unit}`);
+  const budget = report.그리기["예산_16.7ms_대비_%"];
   const note = frames === 0 ? "rAF 미동작 — 프레임·그리기 무효" : "";
-  const row = `| ${today} | ??? | ${engine.N} | ${frames === 0 ? "미측정" : fps} | ${cell(drawPerFrame, "ms")} | ${cell(enginePerFrame, "ms")} | ???KB | ${note} |`;
+  const row =
+    `| ${today} | ??? | ${engine.N} | ${frames === 0 ? "미측정" : fps} | ${cell(drawPerFrame, "ms")} | ` +
+    `${cell(frames === 0 ? null : budget, "%")} | ${cell(enginePerFrame, "ms")} | ???KB | ${note} |`;
+
+  // ── 사람이 읽는 상세 (마크다운 표). 원본 JSON 은 그 아래 접어둔다 ────────
+  const t = (rows) => rows.map((r) => `| ${r.join(" | ")} |`).join("\n");
+  const kindRows = Object.entries(byKind).map(([k, v]) => [
+    k,
+    v["프레임당_호출"],
+    cell(v["프레임당_ms"], "ms"),
+    cell(v["그리기중_비중_%"], "%"),
+  ]);
+  const f = report.프레임;
+  const st = report.상태;
+  const ld = report.로딩;
+  const env = report.환경;
+
+  const detailMd = [
+    frames === 0
+      ? "> ⚠️ **rAF 가 돌지 않아 프레임·그리기 지표는 무효다.** 엔진·로딩·메모리·상태만 유효하다."
+      : `**FPS ${fps}** · 그리기 ${cell(drawPerFrame, "ms")}/프레임 (예산의 ${cell(budget, "%")}) · ` +
+        `느린 프레임 33ms↑ ${f["느린프레임_33ms초과"]}개 · longtask ${f.longtask_개수}개`,
+    "",
+    "### 프레임",
+    "| FPS | 최저 1% | 최저 5% | 간격 중앙값 | p95 | 최대 | 16.7ms↑ | 33ms↑ | 미계측 시간 |",
+    "|---|---|---|---|---|---|---|---|---|",
+    t([
+      [
+        fps,
+        cell(f["최저1%_FPS"]),
+        cell(f["최저5%_FPS"]),
+        cell(f["간격_중앙값_ms"], "ms"),
+        cell(f["간격_p95_ms"], "ms"),
+        cell(f["간격_최대_ms"], "ms"),
+        f["느린프레임_16.7ms초과"],
+        f["느린프레임_33ms초과"],
+        cell(f.미계측_시간_ms, "ms"),
+      ],
+    ]),
+    "",
+    "### 그리기 — 종류별",
+    "| 종류 | 프레임당 호출 | 프레임당 ms | 그리기 중 비중 |",
+    "|---|---|---|---|",
+    t(kindRows),
+    "",
+    `합계 **${draw.calls ? report.그리기["프레임당_drawImage"] : 0}회/프레임**, ${cell(drawPerFrame, "ms")} ` +
+      `(관찰자 효과 보정 후 ${cell(report.관찰자효과["보정후_그리기_프레임당_ms"], "ms")})`,
+    "",
+    "### 캔버스 상태 변경 (프레임당)",
+    "| globalAlpha | compositeOp | fillStyle | strokeStyle | font |",
+    "|---|---|---|---|---|",
+    t([
+      [
+        report.그리기.상태변경["프레임당_globalAlpha"] ?? "미측정",
+        frames ? num(stateSets.globalCompositeOperation / frames, 1) : "미측정",
+        frames ? num(stateSets.fillStyle / frames, 1) : "미측정",
+        frames ? num(stateSets.strokeStyle / frames, 1) : "미측정",
+        frames ? num(stateSets.font / frames, 1) : "미측정",
+      ],
+    ]),
+    "",
+    "### 엔진 (1회 호출당 ms)",
+    "| frame() | project() | pickRepresentatives() | residentCount() | countInView() |",
+    "|---|---|---|---|---|",
+    t([
+      [
+        engineBench["frame()"],
+        engineBench["project()"],
+        engineBench["pickRepresentatives()"],
+        engineBench["residentCount()"],
+        engineBench["countInView()"],
+      ],
+    ]),
+    "",
+    "### 상태 · React · rAF",
+    "| N | 상주 | 화면 안 | visible | chosen | layer | cam.s | 친구 | React 통지/프레임 | rAF 루프/프레임 |",
+    "|---|---|---|---|---|---|---|---|---|---|",
+    t([
+      [
+        st.N,
+        st.residentCount,
+        st.viewportCount,
+        st.visible,
+        st.chosen,
+        st.layer,
+        st["cam.s"],
+        st.친구수,
+        cell(report.React["프레임당_통지"]),
+        cell(report.rAF["프레임당_등록"]),
+      ],
+    ]),
+    "",
+    "### 로딩 · 네트워크",
+    "| TTFB | FCP | LCP | CLS | JS 요청 | JS 전송 | 이미지 | map/songs |",
+    "|---|---|---|---|---|---|---|---|",
+    t([
+      [
+        cell(ld.TTFB_ms, "ms"),
+        cell(ld["first-contentful-paint"], "ms"),
+        cell(ld.LCP, "ms"),
+        cell(ld.CLS),
+        ld.JS_요청수,
+        cell(ld["JS_전송_KB"], "KB"),
+        `${ld.이미지_요청수}건 / ${cell(ld["이미지_전송_KB"], "KB")}`,
+        `${cell(ld["map_songs_KB"], "KB")} / ${cell(ld["map_songs_ms"], "ms")}`,
+      ],
+    ]),
+    "",
+    "### 환경",
+    "| 화면 | 캔버스 픽셀 | DPR | 빌드 | 힙 | 데이터 |",
+    "|---|---|---|---|---|---|",
+    t([
+      [
+        `${env.화면} (engine ${st["W/H"]})`,
+        env.캔버스픽셀,
+        env.DPR,
+        env.빌드모드,
+        cell(report.메모리["usedJSHeap_MB"], "MB"),
+        env.데이터,
+      ],
+    ]),
+    "",
+    "### 검증",
+    ...report.검증.map((v) => `- ${v}`),
+  ].join("\n");
 
   hud.textContent = `FPS ${fps}\ndraw ${drawPerFrame}ms/f\nN ${engine.N}`;
   window.__odyPerf = report;
@@ -393,7 +523,8 @@
       body: JSON.stringify({
         row,
         detail: report,
-        summary: `${today} · ${report.환경.커밋} · N=${engine.N} · ${fps}fps`,
+        markdown: detailMd,
+        summary: `${today} · N=${engine.N} · ${frames === 0 ? "프레임 미측정" : `${fps}fps`} · 그리기 ${cell(drawPerFrame, "ms")}`,
       }),
     });
     logged = await res.json();

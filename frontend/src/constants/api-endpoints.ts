@@ -3,23 +3,48 @@ import type { LayerBox } from "@/types";
 /** PC 좌표를 URL 에 실을 때의 자릿수. 화면 한 픽셀보다 훨씬 촘촘하다 */
 const round = (v: number) => v.toFixed(4);
 
-/** 백엔드 API 경로 모음. fetch 호출 시 문자열을 직접 쓰지 않고 여기서 가져온다. */
+/**
+ * 백엔드 API 경로 모음. fetch 호출 시 문자열을 직접 쓰지 않고 여기서 가져온다.
+ *
+ * **[실]** 표시는 배포된 백엔드가 실제로 응답하는 경로다 (`live-api-paths.ts` 목록과 같아야 한다).
+ * 표시가 없으면 아직 `src/app/api/` 목 라우트가 답하는 것이고, 대응 항목이 BACKEND-NOTES 에 있다.
+ */
 export const API_ENDPOINTS = {
   health: "/api/health",
 
   auth: {
     /** 본인 조회. 백엔드에 아직 없다 — 지금은 목 라우트만 응답한다 (BACKEND-NOTES A-15) */
     me: "/api/auth/me",
+    /** [실] 인증 필요. 토큰 블랙리스트 등록 + refresh 쿠키 삭제 */
     logout: "/api/auth/logout",
-    /** 구글 로그인. GIS 가 발급한 idToken 을 검증하고 accessToken + refresh 쿠키를 준다 (backend/jenkins 본안) */
-    googleLogin: "/api/auth/login/google",
-    /** 이메일·비밀번호 가입 — 요청 본문에 email, password, nickname (backend/dev, S15P21A405-121) */
+    /** [실] 구글 로그인 진입. Spring Security 기본 경로라 /api 아래가 아니다 */
+    googleLogin: "/oauth2/authorization/google",
+    /** [실] 이메일·비밀번호 가입 — 본문 `{email, password, nickname}` → `{accessToken}` */
     signup: "/api/auth/signup",
-    /** 이메일·비밀번호 로그인 — 요청 본문에 email, password */
+    /** [실] 이메일·비밀번호 로그인 — 본문 `{email, password}` → `{accessToken}` */
     login: "/api/auth/login",
-    /** 구글 신규 사용자의 닉네임 확정. 백엔드에 아직 없다 (BACKEND-NOTES A-13) */
-    nickname: "/api/auth/nickname",
-    completeTutorial: "/api/auth/tutorial/complete",
+    /** [실] 구글 idToken 로그인 — 본문 `{idToken}` → `{accessToken, user}` */
+    loginGoogle: "/api/auth/login/google",
+    /** [실] OAuth 콜백 code → accessToken 교환. refresh 는 httpOnly 쿠키로 이미 심겨 있다 */
+    exchange: "/api/auth/exchange",
+    /** [실] refresh 쿠키로 accessToken 재발급 (BACKEND-NOTES B-8) */
+    reissue: "/api/auth/reissue",
+    /** [실] 회원 탈퇴 (BACKEND-NOTES B-9) */
+    withdraw: "/api/auth/withdraw",
+  },
+
+  user: {
+    /** [실] PATCH, 본문 `{nickname?, imageUrl?}` → `{nickname, imageUrl}`. 토큰 주체 본인 대상 */
+    profile: "/api/user/profile",
+    /** [실] PATCH, 본문 없음 → `{tutorialCompleted}` */
+    completeTutorial: "/api/user/tutorial-completed",
+    /** [실] 닉네임 중복 확인 → `{available}` */
+    nicknameAvailable: (nickname: string) => `/api/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
+    /** 남의 프로필 조회. 백엔드 `GET /user/detail?email=` 은 nginx 가 프록시하지 않아 못 부른다 (B-16) */
+    detail: (email: string) => `/api/users/${encodeURIComponent(email)}`,
+    nearby: (layer: number) => `/api/users/nearby?layer=${layer}`,
+    follow: (email: string) => `/api/users/${encodeURIComponent(email)}/follow`,
+    reaction: (email: string) => `/api/users/${encodeURIComponent(email)}/reactions`,
   },
 
   map: {
@@ -48,15 +73,6 @@ export const API_ENDPOINTS = {
     play: (id: number) => `/api/music/${id}/play`,
   },
 
-  user: {
-    profile: (email: string) => `/api/users/${encodeURIComponent(email)}`,
-    /** 닉네임 중복 확인 (A-12) */
-    nicknameAvailable: (nickname: string) => `/api/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
-    nearby: (layer: number) => `/api/users/nearby?layer=${layer}`,
-    follow: (email: string) => `/api/users/${encodeURIComponent(email)}/follow`,
-    reaction: (email: string) => `/api/users/${encodeURIComponent(email)}/reactions`,
-  },
-
   playlist: {
     list: "/api/playlists",
     mine: "/api/playlists/mine",
@@ -72,7 +88,8 @@ export const API_ENDPOINTS = {
   },
 
   journey: {
-    route: "/api/journeys/route",
+    /** [실] `?start=&end=` → `{musicCnt, totalDuration, path[]}`. 인증 필요 */
+    route: "/api/music/journey",
   },
 
   chart: {

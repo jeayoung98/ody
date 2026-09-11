@@ -4,7 +4,7 @@
 프론트가 임의로 정할 수 없는 것들이며, 목(mock) API로 임시 구현해둔 것도 전부 여기에 적는다.
 
 - 상태: `협의 전` / `협의 중` / `반영됨`
-- 최종 수정: 2026-09-11
+- 최종 수정: 2026-09-12
 
 **항목을 추가했으면 문서만 고치고 끝내지 말고 백엔드에 직접 알린다** ([루트 CLAUDE.md §3](../../CLAUDE.md)).
 반대로 백엔드가 API·응답·에러 코드를 바꿨으면 여기와 [FEATURES.md](FEATURES.md)를 갱신하고 프론트에 알린다.
@@ -22,13 +22,30 @@
 | B-8 | `POST /api/auth/reissue` | **존재함.** refresh 쿠키로 새 accessToken 재발급 | 401 시 1회 재발급 후 재시도 로직 필요 | 협의 전 |
 | B-9 | `POST /api/auth/withdraw` | **존재함.** 회원 탈퇴 (USER-01) | 프론트 화면 미구현 | 협의 전 |
 | B-13 | 인증 관련 에러 코드 | **구현됨** (backend/dev `AuthErrorCode`): `EMAIL_ALREADY_EXISTS` `NICKNAME_ALREADY_EXISTS` `INVALID_CREDENTIALS` `PASSWORD_MISMATCH` `INVALID_PASSWORD_FORMAT`(영문+숫자 8~72자) `INVALID_NICKNAME_LENGTH`(2~20자) | 프론트 `ImplementedErrorCode` 에 반영 완료. 목 라우트도 같은 코드로 답한다 | 반영됨 |
-| B-14 | **구글 로그인 본안은 idToken 방식** | 배포 브랜치(`backend/jenkins`)에 `POST /api/auth/login/google` 이 있다 — `{idToken}` 을 받아 `GoogleIdTokenVerifierAdapter` 가 검증하고 `{accessToken, user{email,name,nickname,imageUrl}}` + refresh 쿠키를 준다. 주석에 "AUTH-01 본안"으로 명시. 리다이렉트 방식(`/oauth2/authorization/google` → `?code=` → `/exchange`)도 함께 살아 있다 | 프론트를 idToken 방식으로 붙였다 (S15P21A405-129). 응답에 `user` 가 오므로 A-15 없이도 신규 여부를 판단한다. 리다이렉트 방식 착지 페이지·목 exchange 라우트는 삭제 | 반영됨 |
-| B-16 | **`backend/dev` 와 배포본(`backend/jenkins`)이 다르다** | 배포본은 패키지가 `auth/` `music/` `user/` 로 재구성돼 있고 `/api/auth/login/google`, `/api/user/tutorial-completed`, `/api/users/nickname-available` 가 있다. `backend/dev` 에는 `/api/auth/login/google` 이 없다. SecurityConfig 도 다르다 — 배포본은 `anyRequest().authenticated()` 기본 거부 | 프론트는 **배포본 기준**으로 붙였다. `backend/dev` 로 로컬 백엔드를 띄우면 구글 로그인이 404 난다 — 어느 쪽이 기준인지 백엔드 확인 필요 | 협의 전 (**필요**) |
-| B-17 | CORS 가 로컬 오리진을 막는다 | 배포 백엔드에 `Origin: http://localhost:3000`(3001·5173 도 동일) 로 preflight 하면 **403, `Access-Control-Allow-Origin` 없음**. `app.cors.allowed-origins` 에 로컬이 없다 | 로컬 dev 서버에서 배포 백엔드로 구글 로그인 요청이 브라우저에 막힌다. 로컬 오리진 추가 필요 | 협의 전 (**필요**) |
-| B-15 | 배포 서버 응답 | 실제 도메인은 `https://j15a405.p.ssafy.io` — `.env.example` 에 있던 `j15a405a` 는 오타였다. 2026-09-10 확인: `/oauth2/authorization/google` → 구글 동의 화면으로 302 (client_id·PKCE 정상), 콜백 `/login/oauth2/code/google` 도 백엔드로 라우팅됨. `/api/auth/google` 은 401, `/api/health` 는 백엔드에 없어 401 | 백엔드 OAuth 진입은 살아 있다. 프론트 버튼을 실제 경로로 연결하고(S15P21A405-129) 로컬 dev + 배포 백엔드로 구글 로그인 화면까지 도달 확인 | 반영됨 |
+| B-14 | **구글 로그인 진입 경로** | `/oauth2/authorization/google` (Spring Security 기본, SecurityConfig permitAll). `/api/auth/google` 은 존재하지 않는다 | 프론트가 `/api/auth/google` 로 보내고 있었다 → 경로 수정 완료 | 반영됨 |
+| B-15 | ~~배포 서버 응답 404~~ **주소가 틀렸던 것** | 앱 노드는 `https://j15a405.p.ssafy.io` 다. `j15a405a` (a 붙음) 는 Jenkins·Grafana 가 있는 master-node 라 API 가 없다 | `.env.example` 과 `next.config.ts` 의 `BACKEND_ORIGIN` 을 올바른 주소로 고침 | 반영됨 (2026-09-12) |
 | B-10 | **에러 코드가 API 명세서 §0.5와 다름** | 구현: `UNAUTHENTICATED` `INVALID_TOKEN` `REFRESH_TOKEN_NOT_FOUND` `REFRESH_TOKEN_MISMATCH` `INVALID_EXCHANGE_CODE` `INVALID_INPUT` `INTERNAL_SERVER_ERROR` / 명세서: `VALIDATION_ERROR` `TOKEN_EXPIRED` `REFRESH_TOKEN_INVALID` `OAUTH_FAILED` `INTERNAL_ERROR` … | **어느 쪽이 맞는지 백엔드 확인 필요.** 확정 전까지 `src/types/api.ts` 는 양쪽을 모두 허용 | 협의 전 |
-| B-11 | OAuth 리다이렉트 URI | `app.oauth.frontend-redirect-uri` 설정값으로 이동. 교환 코드는 1회용, TTL 30초 | 프론트 착지점은 `/oauth/redirect`. **운영값이 `https://j15a405.p.ssafy.io/oauth/redirect` 인지 백엔드 확인 필요.** 값이 하나뿐이라 로컬 dev 서버에서는 구글 로그인 성공 후 배포 프론트로 착지한다 — 로컬에서 흐름을 끝까지 보려면 로컬 오리진을 받는 방법(프로필 분리 등)이 필요하다 | 협의 전 |
-| B-12 | 인증 외 API 전무 | 컨트롤러가 `Auth` / `Hello` / `Test` / `WebSocketTest` 뿐 | 지도·검색·플리·여정·소셜·차트는 계속 목 라우트로 개발 | — |
+| B-11 | OAuth 리다이렉트 URI | `app.oauth.frontend-redirect-uri` 설정값으로 이동. 교환 코드는 1회용, TTL 30초 | 프론트 착지점은 `/oauth/redirect`. **이 값이 그렇게 설정돼 있는지 백엔드 확인 필요** | 협의 전 |
+| B-12 | ~~인증 외 API 전무~~ | 배포본(`origin/backend/jenkins`)에 Music·Journey·Playlist·UserDetail·UserProfile 컨트롤러가 생겼다. 다만 **대부분 nginx 를 통과하지 못한다** — B-16 참고 | 도달 가능한 것만 실연동(S15P21A405-221), 나머지는 목 유지 | 갱신됨 (2026-09-12) |
+
+---
+
+## 0-1. 배포 서버 실호출 대조 (2026-09-12) — **백엔드·인프라 확인 요청**
+
+`https://j15a405.p.ssafy.io` 를 직접 호출하고, 배포 브랜치(`origin/backend/jenkins`) 컨트롤러와 대조한 결과다.
+배포본은 `master` 도 `backend/dev` 도 아닌 **`backend/jenkins`** 다 (근거: master 엔 springdoc 이 없는데 실서버는
+swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼는데 실서버는 루트 `/swagger-ui/` 에서 답한다).
+
+| # | 항목 | 확인된 사실 | 없으면 안 되는 것 | 상태 |
+| --- | --- | --- | --- | --- |
+| B-16 | **`/api` 접두가 없는 컨트롤러는 프론트가 부를 수 없다** | 배포 nginx 가 백엔드로 넘기는 건 `/api/`, `/oauth2/`, `/login/oauth2/` 뿐이다. `/music/**` `/playlist/**` `/user/detail` 은 전부 SPA `index.html` 로 떨어진다 (200 text/html) | 곡 검색·상세·대표곡, 플레이리스트 8종, 남의 프로필 — **구현돼 있는데 전부 못 쓴다.** `/api` 접두 정렬(S15P21A405-213·222)을 배포까지 올려야 한다 | 협의 전 (**막힘**) |
+| B-17 | **CORS 가 모든 오리진을 거부한다** | `Origin` 헤더가 붙으면 origin 과 무관하게 `403 Invalid CORS request`. `https://j15a405.p.ssafy.io` 자기 자신을 넣어도 403 이다 — 서버의 `CORS_ALLOWED_ORIGINS` 값이 맞지 않다 | 브라우저에서 백엔드를 직접 호출하는 모든 경로. 프론트는 Next rewrite 프록시로 우회했다(S15P21A405-221) — **정상화되면 프록시를 걷어낼 수 있다** | 협의 전 (**우회 중**) |
+| B-18 | **Swagger 스펙이 500 이라 문서를 못 본다** | `/swagger-ui/index.html` 은 200 인데 nginx 가 `/v3/api-docs` → `/v3/api-docs/` 로 301 을 걸고, springdoc 이 그 trailing slash 를 group 이름으로 받아 500 을 낸다. UI 에 `Failed to load API definition` 만 뜬다 | 프론트가 계약을 확인할 방법. `backend/dev` 의 S15P21A405-222(문서를 `/api/` 아래로 이동)가 이걸 고치므로 **배포만 올리면 된다** | 협의 전 |
+| B-19 | `PATCH /api/user/tutorial-completed` · `PATCH /api/user/profile` | 둘 다 도달 가능. 본문 없음/`{nickname?, imageUrl?}`, 토큰 주체 본인 대상이라 email 을 받지 않는다 | — | ✅ 프론트 반영 완료 |
+| B-20 | 구글 OAuth 리다이렉트 착지점 | 진입(`/oauth2/authorization/google`)은 정상 302 이고 `redirect_uri` 도 맞다. 다만 콜백 뒤 프론트로 되돌리는 `app.oauth.frontend-redirect-uri` **서버 설정값은 확인할 수 없었다** | 로컬(`localhost:3000`)에서 구글 로그인 테스트. 배포 SPA 주소로 고정돼 있으면 로컬 개발자는 구글 로그인을 못 한다 | 협의 전 (B-11 연장) |
+
+**요약 — 백엔드·인프라에 필요한 것 두 가지:** ① `/api` 접두 정렬 배포(B-16) ② `CORS_ALLOWED_ORIGINS` 정상화(B-17).
+이 둘이 되면 프론트는 목 라우트를 대부분 걷어낼 수 있다.
 
 ---
 
@@ -55,17 +72,17 @@
 | A-2 | `GET /api/map/layers/{layer}/representatives` | layer | `{ layer, musicIds[] }` | 레이어마다 **다른 대표곡**을 앨범 커버로 띄운다. 선별 기준은 백엔드가 정함 | 협의 전 |
 | A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | 협의 전 |
 | A-4 | `NearbyUser` 응답 | — | `viewingMusicId` **추가 필요** | 따라가기 시 좌표 두 개가 필요하다: `musicId`=재생 중(우주선 위치), `viewingMusicId`=인솔자가 보고 있는 상세 곡(뷰포트·우측 패널 기준) (SOCIAL-07) | 협의 전 |
-| A-5 | `GET /api/journeys/route?start=&end=` | 두 곡 ID | `JourneyRoute` (정거장 약 20곡) | **16차원 임베딩 거리 기준**으로 경로를 뽑아야 한다. 2D 평면 직선으로 뽑으면 레이어 0에서 일직선이 되어 별자리 모양이 안 나온다 (PATH-01) | 협의 전 |
+| A-5 | `GET /api/music/journey?start=&end=` | 두 곡 ID | `{musicCnt, totalDuration, path:[{step, …MusicDetail}]}` | **16차원 임베딩 거리 기준** 경로 (PATH-01). 프론트가 기대하던 `/api/journeys/route` + `JourneyRoute` 와 경로·형태가 다르다 | ✅ 구현·도달 가능 · 프론트가 훅에서 변환해 반영 완료 (2026-09-12) |
 | A-6 | `GET /api/map/nearby/{musicId}` | musicId | `{ center, neighbors[10] }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10) | 협의 전 |
 | A-8 | `GET /api/music/{id}/representative-layers` | musicId | `{ musicId, layers: number[] }` (오름차순) | 검색 결과를 누르면 그 곡이 **대표곡으로 노출되는 첫 레이어**로 이동해야 한다. 한 곡이 여러 레이어에서 대표곡일 수 있다. 클라이언트가 8개 레이어 대표곡을 전부 들고 있을 수 없으므로 서버가 계산해야 한다 (SEARCH-01) | 협의 전 |
 | A-7 | `POST /api/music/{id}/play` | `{ source, playedMs }` | ok | 재생 로그 (`play_history`). `source` 값은 `MAP` / `JOURNEY` / `PLAYLIST` / `FOLLOW` | 협의 전 |
 | A-10 | `POST /api/auth/signup` | `{ email, password, nickname }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 가입 (AUTH-01) | ✅ 구현됨 (backend/dev, S15P21A405-121) · 프론트 반영 완료 |
 | A-11 | `POST /api/auth/login` | `{ email, password }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 로그인 (AUTH-02) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
 | A-12 | `GET /api/users/nickname-available?nickname=` | nickname | `{ available }` | 닉네임 중복 확인 (AUTH-01) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
-| A-13 | `PATCH /api/auth/nickname` (경로 협의 필요) | `{ nickname }` | `{ nickname }` | **구글 신규 사용자의 닉네임 저장.** `CustomOAuth2UserService` 가 신규 구글 사용자의 nickname 을 의도적으로 비워두는데, 그 값을 채울 엔드포인트가 없다. `UserController` 에는 `GET /user/detail` 뿐이다. 프론트는 이 API 를 목으로 대체해 두었다 | 협의 전 (**필요**) |
+| A-13 | `PATCH /api/user/profile` | `{ nickname?, imageUrl? }` | `{ nickname, imageUrl }` | **구글 신규 사용자의 닉네임 저장.** 전용 `/api/auth/nickname` 대신 프로필 부분 수정 API 로 해결됐다 (S15P21A405-216). 넘기지 않은 필드는 기존 값 유지 | ✅ 구현·도달 가능 · 프론트 반영 완료, 목 라우트 삭제 (2026-09-12) |
 | A-14 | 신규 가입 여부 판단 | — | 본인 조회 응답의 `nickname` 이 null 이면 신규로 본다 | 프론트는 닉네임이 비어 있으면 닉네임 설정 화면으로 보낸다. exchange 응답만으로는 신규를 알 수 없어서 본인 조회(A-15)로 판단한다 | A-15 로 대체 |
 | A-15 | **본인 조회 API** | 없음 (Bearer 토큰) | `User` (email, nickname, isPublic, tutorialCompleted, imageUrl …) | 프론트는 `GET /api/auth/me` 를 쓰는데 **백엔드에 없다.** `GET /user/detail?email=` 은 이메일을 파라미터로 요구하지만, 로그인 직후 프론트는 JWT 안의 이메일을 모른다(디코딩하지 않는다). 토큰 주체 기준으로 본인을 돌려주는 엔드포인트가 필요하다 | 협의 전 (**필요**) |
-| A-16 | `/user/detail` 경로 접두 | — | — | 다른 API 는 모두 `/api/...` 인데 `UserController` 만 `/user/...` 다. 프론트 `API_ENDPOINTS` 는 `/api` 접두를 전제로 한다 — 어느 쪽으로 통일할지 확인 필요 | 협의 전 |
+| A-16 | `/user/detail` 경로 접두 | — | — | `/api` 로 통일하는 방향으로 확인됨. 다만 **배포본은 아직 `/user/...` 라 nginx 를 못 넘는다** — B-16 이 본질적인 문제다 | 협의 중 (B-16 으로 승계) |
 | A-9 | `POST /api/constellations/layout` | `{ musicIds: number[] }` (최대 30) | `{ points: [{ musicId, x, y }] }` — `x`, `y` 는 `-1 ~ 1` 정규화 좌표 | **별자리 오버레이의 모양** (PATH-01). 16차원 좌표를 2D로 압축한 고정 배치다. 레이어와 무관하게 **같은 곡 집합이면 항상 같은 모양**이어야 한다 — 플리 모양(예: 강아지)이 상품이 되려면 모양이 고정·재현 가능해야 하고, 나중에 "누가 만든 모양"으로 저장·거래하려면 서버에 있어야 한다. 클라이언트 MDS 로도 계산은 되지만 그러면 모양이 클라이언트 구현에 종속된다 | 협의 전 |
 
 ---

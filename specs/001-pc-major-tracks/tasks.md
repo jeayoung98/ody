@@ -40,13 +40,13 @@
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: 모든 스토리의 종단 구현이 의존하는 기반. **전부 외부 게이트에 막혀 있음** — 지금 착수 불가.
+**Purpose**: 모든 스토리의 종단 구현이 의존하는 기반. **T004 완료, T005 착수 가능**(B6 해소). T006 만 BE1 대기.
 
-- [ ] T004 ✅**착수 가능**(B6 해소 + D19) `MajorTrackReader` 조회 port 인터페이스 정의 (`backend/src/main/java/com/ssafy/backend/music/retrieval/MajorTrackReader.java`). 시그니처가 확정 가능해졌다 — `(level, 누적 축 범위[], 크기)` → 상주 집합(`MapPoint` 형태, D18). 스키마·ID 매핑은 `music.id`(BIGINT, 1..6,624,399) 기준
+- [X] T004 (2026-09-11 완료: `MajorTrackReader` + `MajorQuery` + `LayerBox` + `MapPoint`, 계약 테스트 7건) `MajorTrackReader` 조회 port 인터페이스 정의 (`backend/src/main/java/com/ssafy/backend/music/retrieval/MajorTrackReader.java`). 시그니처가 확정 가능해졌다 — `(level, 누적 축 범위[], 크기)` → 상주 집합(`MapPoint` 형태, D18). 스키마·ID 매핑은 `music.id`(BIGINT, 1..6,624,399) 기준
 - [ ] T005 ✅**착수 가능**(B6 해소) 곡 데이터 접근 어댑터. **MyBatis mapper + PostgreSQL 확정.** ~~pgvector 없음, postgres vs neo4j 미확인~~ → 실제로는 pgvector 0.7.0 + HNSW 빌드 완료, `music.location vector(16)` 662만행 적재 완료(data 스펙 18). 좌표 평면 조회는 **표현식 GiST**(`music_l1_gist`·`music_l2_gist`), 16차원 이웃은 HNSW. Neo4j 는 곡–장르 관계용이라 좌표에 쓰지 않는다(D9) (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
 - [ ] T006 [P] ⛔ **BE1 이슈로 이관 대상 — BE2 브랜치에서 하지 않는다**: 전역 `GlobalErrorCode` 개명은 이 기능만의 일이 아니다. 한 번 시도해 커밋했다가(`6349665`) 리베이스 때 제외했다. 근거: (a) 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조가 **12파일**(main 3 + test 9: auth·user·playlist·music)로 늘었다, (b) dev 가 `GlobalErrorCode` 에 `FORBIDDEN` 을 §0.5 이름으로 추가해 이미 §0.5 방향으로 가고 있다, (c) BE1 이 같은 파일에서 인증·유저·플레이리스트를 동시에 올리는 중이라 충돌 비용이 계속 커진다. 계약 코드만 미리 enum 에 넣는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`). **이관 추적**: BE1 이슈 **미생성** (2026-09-10). 이슈 생성 후 여기에 키를 적고 T020·T021 의 선행을 그 키로 바꾼다. ⚠️ 키가 비는 동안 FR-010 은 실효 커버리지가 없다
 
-**Checkpoint**: T004·T005는 B6까지 blocked. **T006은 BE1 이관 대상**(이슈 키 미정) — 열리기 전에는 T020(A7)·T021(A8)의 계약 코드 검증을 할 수 없다. US 종단 흐름은 T004·T005 해소에 의존.
+**Checkpoint**: T004 완료로 port 계약이 고정됐다 — T005 어댑터가 다음이다. **T006은 BE1 이관 대상**(이슈 키 미정) — 열리기 전에는 T020(A7)·T021(A8)의 계약 코드 검증을 할 수 없다. US 종단 흐름은 T005 에 의존.
 
 ---
 
@@ -305,3 +305,27 @@ B1(입력 검증)·M4(에러 코드)·T030(`TOKEN_EXPIRED`)은 이 목록과 별
 
 **남은 통보 대기 2건** — FE 구현 후 받는다: 무장르 인덱스 번호, 범위 파라미터 이름.
 그동안 어댑터·port 작업은 진행 가능하다(둘 다 값·표기 문제라 구조에 영향 없음).
+
+## T004 완료 메모 (2026-09-11)
+
+만든 것 — 인터페이스와 그 계약 타입만. 구현체는 없다.
+
+| 파일 | 역할 |
+|---|---|
+| `music/retrieval/MajorTrackReader.java` | port. `findResidentSet(MajorQuery) → List<MapPoint>` |
+| `music/retrieval/MajorQuery.java` | `(level, accumulated: List<LayerBox>, limit)` |
+| `music/retrieval/LayerBox.java` | 레이어별 사각 범위 `(layer, xMin, yMin, xMax, yMax)` + `axisX/axisY()` |
+| `music/dto/MapPoint.java` | 응답 항목 (D18). `PC_DIMS = 16` |
+| `test/.../MajorQueryContractTests.java` | 불변식 7건 |
+
+**강제한 불변식** — 값이 아니라 구조다. 미정 정책(B1 레벨 상한 등)은 건드리지 않았다.
+- `accumulated.size() == level - 1` (D19). 모자라면 후보가 조용히 넓어져 FR-008 이 깨진다
+- `LayerBox` 범위 역전 금지, `layer >= 1`
+- `MapPoint.pc` 는 정확히 16개 (D7 PCA-16)
+- `MapPoint.genreId >= 0` — FE `draw-map.ts` 가 raw modulo 라 음수면 `drawImage` 예외
+
+**안 한 것**: 구현체(T005·T016), 컨트롤러·`MajorResponse` 교체(T015), `weight`·`genreId` 채우기.
+`MusicService` 는 `Optional<MajorTrackReader>` 로 받아 미구현을 드러낸다 — 임시 스키마·목 어댑터를 만들지 않는다.
+
+⚠️ **`contracts/music-major.md` 가 원안 상태다.** 원형·`youtubeCnt` DESC·`MusicDetail` 응답으로 적혀 있어
+D15~D19 와 어긋난다. T004 범위 밖이라 두었다 — T015 전에 갱신해야 한다.

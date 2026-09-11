@@ -74,7 +74,7 @@ class MusicControllerTests {
 				1428, 3);
 		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(sample)));
 
-		mockMvc.perform(get("/music/major").param("level", "1"))
+		mockMvc.perform(get("/api/music/major").param("level", "1"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.error").doesNotExist())
@@ -97,7 +97,7 @@ class MusicControllerTests {
 				1428, 90210);
 		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(sample)));
 
-		ResultActions result = mockMvc.perform(get("/music/major").param("level", "1"))
+		ResultActions result = mockMvc.perform(get("/api/music/major").param("level", "1"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content[0].id").value(10234))
 				.andExpect(jsonPath("$.data.content[0].mbid").value("b1a9c0e9-1111"))
@@ -127,7 +127,7 @@ class MusicControllerTests {
 				7, 12);
 		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(unplayable)));
 
-		mockMvc.perform(get("/music/major").param("level", "1"))
+		mockMvc.perform(get("/api/music/major").param("level", "1"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content.length()").value(1))
 				.andExpect(jsonPath("$.data.content[0].id").value(55))
@@ -145,7 +145,7 @@ class MusicControllerTests {
 	 */
 	@Test
 	void major_level0_currentMinConstraintRejects_provisionalUntilB1() throws Exception {
-		mockMvc.perform(get("/music/major").param("level", "0"))
+		mockMvc.perform(get("/api/music/major").param("level", "0"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
@@ -153,7 +153,7 @@ class MusicControllerTests {
 
 	@Test
 	void major_nonNumericLevel_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/major").param("level", "abc"))
+		mockMvc.perform(get("/api/music/major").param("level", "abc"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}

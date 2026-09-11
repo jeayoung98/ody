@@ -2,17 +2,21 @@
 
 import { useRouter } from "next/navigation";
 import { ROUTES } from "@/constants";
+import { useExchangeCodeMutation } from "@/hooks/mutations/use-exchange-code-mutation";
 
 /**
  * 구글 로그인 (AUTH-01/02).
- * 실제 연동 시 API_ENDPOINTS.auth.googleLogin 으로 리다이렉트한다. 목 환경에서는 바로 홈으로.
+ * 실제 연동 시 API_ENDPOINTS.auth.googleLogin 으로 리다이렉트한다.
+ * 목 환경에서는 백엔드를 거치지 않고 목 교환 라우트에서 토큰을 받아 홈으로 간다 —
+ * 첫 로그인이면 닉네임이 비어 있어서 가드가 닉네임 화면으로 보낸다 (AUTH-01).
  */
 export default function GoogleLoginButton() {
   const router = useRouter();
+  const exchange = useExchangeCodeMutation();
   const isMock = !process.env.NEXT_PUBLIC_API_URL;
 
   const handleLogin = () => {
-    if (isMock) router.push(ROUTES.home);
+    if (isMock) exchange.mutate("google-demo", { onSuccess: () => router.replace(ROUTES.home) });
     // 외부(백엔드) OAuth 엔드포인트로 이동하므로 Next 라우터가 아닌 전체 페이지 이동을 사용한다
     // eslint-disable-next-line @next/next/no-location-assign-relative-destination
     else window.location.href = `${process.env.NEXT_PUBLIC_API_URL}/api/auth/google`;
@@ -22,6 +26,7 @@ export default function GoogleLoginButton() {
     <button
       type="button"
       onClick={handleLogin}
+      disabled={exchange.isPending}
       className="flex w-full items-center justify-center gap-[9px] rounded-pill bg-white px-3 py-3 text-[13px] font-semibold text-[#1f1f1f] transition-[filter] hover:brightness-95"
     >
       <svg width="17" height="17" viewBox="0 0 48 48" aria-hidden>

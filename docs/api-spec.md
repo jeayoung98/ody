@@ -10,7 +10,7 @@
 >
 > | | |
 > |---|---|
-> | 무엇 | `GET /music/major` 의 요청·응답·선정 책임(§3.4), 공통 DTO `MapPoint` 신설(§0.6) |
+> | 무엇 | `GET /api/music/major` 의 요청·응답·선정 책임(§3.4), 공통 DTO `MapPoint` 신설(§0.6) |
 > | 왜 | 구현이 원안과 호환 불가하게 갈라졌다. 헌법 II — "경계를 넘는 변경은 **구현 전에** 계약을 갱신해야 한다(MUST)" |
 > | 근거 | 결정 D15~D19. `specs/001-pc-major-tracks/spec.md` 의 Clarifications 절 |
 > | 원안 | 같은 파일 "대체된 요구사항 — 롤백 기록" 절에 **전문 보존**. 롤백 조건도 거기 있다 |
@@ -191,7 +191,7 @@ body: `idToken`(String, required).
   이 API가 `available:true`를 반환해도 그 사이 다른 요청이 먼저 가입하면 `signup`에서 `NICKNAME_ALREADY_EXISTS`가
   날 수 있다(TOCTOU, 최종 검증은 signup 쪽).
 - 에러: `INVALID_NICKNAME_LENGTH`(400), `VALIDATION_ERROR`(400, 필수값 누락).
-- 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/music/detail`)나
+- 경로가 `/api/users`(복수, api 접두사)로, 이 저장소의 다른 컨트롤러(`/user/detail`, `/playlist/detail`)나
   `/api/auth/*`와도 다른 세 번째 네이밍이다. 사용자가 지정한 경로를 그대로 따랐다.
 
 ### 1.5 온보딩 완료 처리 (S15P21A405-122)
@@ -281,8 +281,10 @@ body: `idToken`(String, required).
 
 ## 3. 음악  *(BE2 효정 담당)*
 
+> 경로는 `/api/music/*` (S15P21A405-213). 이 저장소의 `/api/auth/*`·`/api/users/*` 컨벤션과 프론트 `api-endpoints.ts` 에 맞춘 것으로, 정본 v1.0 의 `/music/*` 표기를 대체한다.
+
 ### 3.1 노래 검색
-`GET /music/search` · 인증 필요. param: `query`(String, required), `page`(int, required, 0).
+`GET /api/music/search` · 인증 필요. param: `query`(String, required), `page`(int, required, 0).
 ```json
 { "success": true, "data": { "content": [ {
   "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
@@ -293,7 +295,7 @@ body: `idToken`(String, required).
 - 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
 
 ### 3.2 노래 상세 조회
-`GET /music/detail` · 인증 필요. param: `id`(int, required).
+`GET /api/music/detail` · 인증 필요. param: `id`(int, required).
 ```json
 { "success": true, "data": {
   "id": 10234, "mbid": "b1a9c0e9-d987-4042-ae91-78d6a3267d69", "title": "Love wins all", "artist": "IU",
@@ -311,7 +313,7 @@ body: `idToken`(String, required).
 - `neighbors`는 임베딩 공간 최근접 10곡, `distance` 오름차순. 자기 자신 제외. 재생 불가(`youtubeUrl == null`) 곡도 포함. 거리 척도는 서빙 baseline(`v2.1-pca16`) 기준. 에러: `MUSIC_NOT_FOUND`.
 
 ### 3.3 경로 탐색
-`GET /music/journey` · 인증 필요. param: `start`(int, required, 시작곡 ID), `end`(int, required, 끝곡 ID).
+`GET /api/music/journey` · 인증 필요. param: `start`(int, required, 시작곡 ID), `end`(int, required, 끝곡 ID).
 ```json
 { "success": true, "data": {
   "musicCnt": 14, "totalDuration": 3480,
@@ -332,10 +334,10 @@ body: `idToken`(String, required).
 
 ### 3.4 대표곡 조회
 > ⚠️ **2026-09-11 개정 · 스냅샷 선행(Notion 미반영).** 아래 "변경 이력" 참조.
-> 절 이름과 경로(`/music/major`)는 참조 깨짐을 피하려고 **그대로 둔다** — 서버가 대표곡을 고르지 않게 된 뒤에도
+> 절 이름과 경로(`/api/music/major`)는 참조 깨짐을 피하려고 **그대로 둔다** — 서버가 대표곡을 고르지 않게 된 뒤에도
 > 이름이 `major` 인 것은 역사적 잔재다.
 
-`GET /music/major` · 인증 필요. 지도 레이어(`level`)와 이전 겹들에서 좁힌 누적 범위로 그 레이어에 **상주하는 곡 집합**을 반환. 레이어 n 은 평면 `pc(2n-1)`·`pc(2n)` 을 축으로 씀.
+`GET /api/music/major` · 인증 필요. 지도 레이어(`level`)와 이전 겹들에서 좁힌 누적 범위로 그 레이어에 **상주하는 곡 집합**을 반환. 레이어 n 은 평면 `pc(2n-1)`·`pc(2n)` 을 축으로 씀.
 
 param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, 레이어 1..level-1 각각의 min·max 쌍).
 ```json

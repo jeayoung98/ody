@@ -1,0 +1,139 @@
+@import "tailwindcss";
+@import "../styles/tokens.css";
+
+/* ---------- 기본 ---------- */
+html,
+body {
+  height: 100%;
+  background: var(--color-void);
+  color: var(--color-ink);
+  font-family: var(--font-body);
+  font-weight: 400;
+  -webkit-font-smoothing: antialiased;
+  overflow: hidden;
+}
+button {
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+input {
+  font: inherit;
+  color: inherit;
+}
+:focus-visible {
+  outline: 2px solid var(--color-teal);
+  outline-offset: 2px;
+  border-radius: 6px;
+}
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-thumb {
+  background: rgb(255 255 255 / 0.12);
+  border-radius: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* ---------- 재사용 유틸 (디자인 원본의 .glass / .lbl / .num / grad) ---------- */
+/*
+ * .glass 는 @utility 가 아니라 일반 클래스로 둔다.
+ * Tailwind 4 가 @utility 안의 backdrop-filter 를 컴파일 시 제거해 블러가 사라지는 문제가 있었다.
+ * components 레이어에 두어 Tailwind 유틸리티(rounded-pill! 등)가 여전히 덮어쓸 수 있게 한다.
+ */
+@layer components {
+  .glass {
+    /* 반투명 흰색 틴트 위에 어두운 밑칠 한 겹 — 뒤의 별빛이 글자와 섞이지 않게 */
+    background:
+      linear-gradient(var(--color-glass), var(--color-glass)),
+      rgb(9 13 24 / 0.5);
+    -webkit-backdrop-filter: blur(28px) saturate(1.3);
+    backdrop-filter: blur(28px) saturate(1.3);
+    border: 1px solid var(--color-line);
+    border-radius: var(--radius-box);
+    box-shadow: var(--shadow-box);
+  }
+}
+@utility lbl {
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--color-ink-3);
+}
+@utility num {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+@utility grad-bg {
+  background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
+}
+@utility grad-text {
+  background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* ---------- 스테이지 배경 (지도 뒤) ---------- */
+.stage-bg {
+  background:
+    radial-gradient(120% 80% at 18% 8%, #0a1226 0%, transparent 62%),
+    radial-gradient(90% 70% at 88% 92%, #120b26 0%, transparent 60%),
+    var(--color-void);
+}
+.vignette {
+  background: radial-gradient(115% 95% at 50% 50%, transparent 45%, rgb(2 3 8 / 0.62) 100%);
+}
+.grain {
+  opacity: 0.28;
+  mix-blend-mode: overlay;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.5'/%3E%3C/svg%3E");
+}
+
+/* ---------- 애니메이션 ---------- */
+@keyframes fly {
+  0% { opacity: 0; transform: translate(-50%, 0) scale(0.6); }
+  18% { opacity: 1; transform: translate(-50%, -14px) scale(1.15); }
+  100% { opacity: 0; transform: translate(-50%, -72px) scale(0.95); }
+}
+.animate-fly {
+  animation: fly 1.5s ease-out forwards;
+}
+@keyframes rpop {
+  from { opacity: 0; transform: translateY(8px) scale(0.9); }
+}
+.animate-rpop {
+  animation: rpop 0.22s var(--ease-spring);
+}
+@keyframes pulse-dot {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.3; }
+}
+.animate-pulse-dot {
+  animation: pulse-dot 1.5s infinite;
+}
+@keyframes tin {
+  from { opacity: 0; transform: translateY(10px); }
+}
+.animate-tin {
+  animation: tin 0.3s var(--ease-spring);
+}
+@keyframes tring {
+  0% { transform: scale(0.95); opacity: 0.85; }
+  70% { transform: scale(1.07); opacity: 0; }
+  100% { opacity: 0; }
+}
+.animate-tring {
+  animation: tring 1.7s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.06s !important;
+  }
+}

@@ -1,0 +1,1175 @@
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
+import type { EngineSnapshot } from "@/stores/use-map-store";
+import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
+import { ro } from "@/lib/korean";
+
+const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+
+interface Frame {
+  layer: number;
+  cam: MapCamera;
+  subset: Uint8Array<ArrayBufferLike>;
+}
+
+interface Morph {
+  t0: number;
+  layer: number;
+  cam: MapCamera;
+  subset: Uint8Array<ArrayBufferLike>;
+  big: string;
+  sub: string;
+}
+
+/** 화면에 잡힌 친구 (그리기·히트테스트용) */
+export interface VisibleFriend {
+  user: NearbyUser;
+  px: number;
+  py: number;
+  /** 진행 방향(rad). 우주선 기수 */
+  heading: number;
+  isLeader: boolean;
+}
+
+export interface VisibleStar {
+  i: number;
+  px: number;
+  py: number;
+  r: number;
+}
+
+/**
+ * 따라가기 상태 (SOCIAL-07). 인솔자의 동작은 두 단계로 나뉘어 전달된다.
+ *  ① 인솔자가 곡을 클릭해 상세를 본다 → viewingMusicId 변경 → **내 뷰가 먼저 그리로 간다** (우주선은 제자리)
+ *  ② 인솔자가 그 곡을 재생한다 → 우주선이 이전 재생 곡에서 날아온다. **이때 뷰는 움직이지 않는다**
+ * 인솔자가 레이어를 바꾸면 따라가는 사람도 같은 레이어로 전환된다.
+ */
+export interface FollowState {
+  leader: NearbyUser;
+  /** 인솔자가 지금 보고 있는 상세 곡 (뷰포트·우측 패널 기준) */
+  viewingMusicId: number;
+  /** 인솔자가 지금 재생 중인 곡 (우주선 위치 기준) */
+  playingMusicId: number;
+  /** 다음에 일어날 인솔자 동작 */
+  phase: "view" | "play";
+  /** 그 동작이 일어날 시각 */
+  nextAt: number;
+  hops: number;
+  /** 우주선 이동 구간 (월드 좌표). 이 동안 카메라는 고정 */
+  mv: { ax: number; ay: number; bx: number; by: number; cx: number; cy: number; t0: number; dur: number; toId: number } | null;
+  /** 방문한 곡 (하차 시 저장 대기) */
+  visited: number[];
+}
+
+/**
+ * 지도 엔진 — 좌표·카메라·레이어(재투영)·모프·따라가기·친구 배치를 한 곳에서 다룬다.
+ * React 는 프레임마다 스냅샷만 받고, 그리기는 draw-map 이 이 객체를 읽어 수행한다.
+ *
+ * 탐색 규칙 (모프 프로토타입):
+ *  - 휠 확대 = 순수 확대. 화면 중앙 보이지 않는 구멍 안 곡 수가 GATE 이하가 되면 확대가 멈추고(벽) 압력만 찬다.
+ *  - 압력이 차면 구멍 안 곡만 다음 레이어(다음 PC 두 축)로 재투영되어 새 자리로 이동하고, 나머지는 바깥으로 밀려나 사라진다.
+ *  - 들어온 배율보다 더 축소하면 떠오르기 압력이 차고, 두고 온 곡이 바깥에서 돌아오며 좌표가 복원된다.
+ */
+export class MapEngine {
+  songs: MapPoint[] = [];
+  private index = new Map<number, number>();
+  private byWeight: number[] = [];
+  N = 0;
+
+  W = 1;
+  H = 1;
+  occludedRight = 76;
+  /** 패널이 열리고 닫히면 여기가 먼저 바뀌고 occludedRight 가 프레임마다 따라간다 */
+  private occludedTarget = 76;
+
+  layer = 0;
+  cam: MapCamera = { cx: 0, cy: 0, s: 100 };
+  /** 부드럽게 따라갈 카메라 목표 (focus/travel/follow 때만 사용) */
+  private camTarget: MapCamera | null = null;
+  private entryS = 100;
+
+  subset: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
+  private stack: Frame[] = [];
+  pos = new Float32Array(0);
+  private from = new Float32Array(0);
+  private to = new Float32Array(0);
+  alpha = new Float32Array(0);
+  private aFrom = new Float32Array(0);
+  private aTo = new Float32Array(0);
+  anim: Morph | null = null;
+
+  pressure = 0;
+  pressureDir: 1 | -1 | 0 = 0;
+
+  myId: number | null = null;
+  /** 내 위치 (월드, 현재 레이어). 재생 시 곡 쪽으로 이동한다 */
+  me = { x: 0, y: 0 };
+  private travelToId: number | null = null;
+  /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
+  playingId: number | null = null;
+
+  selectedId: number | null = null;
+  hoverId: number | null = null;
+  nearby: { centerId: number; ids: number[] } | null = null;
+  /** 주변 탐색 연출 상태. back = 진입 전 카메라 */
+  probe: { centerId: number; ids: number[]; t0: number; exitingAt: number | null; back: MapCamera } | null = null;
+  /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
+  route: number[] = [];
+  /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
+  constellation: { ids: number[]; layout: ConstellationPoint[]; t0: number; exitingAt: number | null } | null = null;
+  /** 이 겹에 없는 곡을 "범위 밖에 있다"고 치고 띄우는 유령 별 (MAP-12). 검색에서만 만든다 */
+  ghost: { musicId: number; t0: number } | null = null;
+
+  friends: NearbyUser[] = [];
+  private friendsLayer = -1;
+  private friendPos = new Map<string, { x: number; y: number; heading: number }>();
+  private anchorCache = new Map<string, number>();
+  private aliveIdx: number[] = [];
+  visFriends: VisibleFriend[] = [];
+  /** 이 레이어의 대표곡 (커버) */
+  repIds = new Set<number>();
+  private repLayer = -1;
+  /** 레이어 전환 시 커버·프로필 페이드. 모프 중 0으로, 새 레이어 데이터가 오면 1로 */
+  coverAlpha = 0;
+  friendAlpha = 0;
+  follow: FollowState | null = null;
+  onFollowEnd: ((reason: string) => void) | null = null;
+  onArrive: ((musicId: number) => void) | null = null;
+  /** 인솔자가 보고 있는 곡이 바뀌면 알린다 (우측 패널에 상세를 띄우기 위해) */
+  onLeaderViewingChange: ((musicId: number) => void) | null = null;
+
+  visible: VisibleStar[] = [];
+  chosen = new Set<number>();
+  time = 0;
+  private lastSnap: Partial<EngineSnapshot> = {};
+  private snapListener: ((s: Partial<EngineSnapshot>) => void) | null = null;
+  private inited = false;
+  /** 사용자가 확대/이동했는지. 전까지는 크기가 바뀌면 카메라를 다시 맞춘다 (자가치유) */
+  private touched = false;
+
+  // ------------------------------------------------------------------ setup
+  setSnapshotListener(fn: (s: Partial<EngineSnapshot>) => void) {
+    this.snapListener = fn;
+  }
+
+  setSize(W: number, H: number) {
+    if (W === this.W && H === this.H) return;
+    // 캔버스 크기가 잡히기 전(1x1)에 계산된 카메라는 배율이 엉뚱하므로 무조건 다시 맞춘다
+    const wasUnsized = this.W < 50 || this.H < 50;
+    this.W = Math.max(1, W);
+    this.H = Math.max(1, H);
+    if (!this.inited || this.anim) return;
+    if ((wasUnsized || !this.touched) && this.myId != null) {
+      this.cam = this.fitCam(this.layer, this.subset, this.myId);
+      this.entryS = this.cam.s;
+    }
+    this.project();
+  }
+
+  /**
+   * 우측 패널 폭 변화. 값을 바로 갈아끼우면 freeRect 를 쓰는 것들(별자리 배치·주변 탐색 고리)이
+   * 한 프레임에 순간이동한다 — 목표만 잡아두고 frame() 에서 따라가게 한다.
+   */
+  setOcclusion(right: number) {
+    this.occludedTarget = right;
+    // 첫 설정은 애니메이션 없이 바로
+    if (!this.inited) this.occludedRight = right;
+  }
+
+  setSongs(songs: MapPoint[]) {
+    this.songs = songs;
+    this.N = songs.length;
+    this.index = new Map(songs.map((s, i) => [s.musicId, i]));
+    this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
+    this.subset = new Uint8Array(this.N).fill(1);
+    this.pos = new Float32Array(this.N * 2);
+    this.from = new Float32Array(this.N * 2);
+    this.to = new Float32Array(this.N * 2);
+    this.alpha = new Float32Array(this.N).fill(1);
+    this.aFrom = new Float32Array(this.N);
+    this.aTo = new Float32Array(this.N);
+    this.stack = [];
+    this.layer = 0;
+    if (this.myId == null || !this.index.has(this.myId)) this.myId = this.centerMost();
+    const m = this.songs[this.index.get(this.myId!)!];
+    this.me = { x: m.pc[0], y: m.pc[1] };
+    this.cam = this.fitCam(0, this.subset, this.myId!);
+    this.entryS = this.cam.s;
+    this.inited = true;
+    this.rebuildAliveIdx();
+    this.project();
+  }
+
+  /** 초기 내 곡 (setSongs 전에 호출). 데이터가 오면 그 자리에서 시작한다 */
+  setInitialMy(id: number | null) {
+    this.myId = id;
+  }
+
+  setHover(id: number | null) {
+    this.hoverId = id;
+  }
+
+  setSelected(id: number | null) {
+    // 고스트별로 띄운 곡이 아닌 다른 곡을 고르면 고스트는 사라진다 (MAP-12)
+    if (this.ghost && id !== this.ghost.musicId) this.ghost = null;
+    this.selectedId = id;
+  }
+
+  setCallbacks(cb: {
+    onFollowEnd?: (reason: string) => void;
+    onArrive?: (musicId: number) => void;
+    onLeaderViewingChange?: (musicId: number) => void;
+  }) {
+    this.onFollowEnd = cb.onFollowEnd ?? null;
+    this.onArrive = cb.onArrive ?? null;
+    this.onLeaderViewingChange = cb.onLeaderViewingChange ?? null;
+  }
+
+  /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
+  setFriends(layer: number, friends: NearbyUser[]) {
+    this.friends = friends;
+    this.friendsLayer = layer;
+    this.friendPos.clear();
+    this.anchorCache.clear();
+  }
+
+  /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
+  setRepresentatives(layer: number, ids: number[]) {
+    this.repIds = new Set(ids);
+    this.repLayer = layer;
+  }
+
+  /**
+   * 목 폴백: 사용자의 곡이 이 레이어 상주 집합에 없으면 이메일 해시로 상주 곡 하나를 정해 그 자리에 둔다.
+   * 실서비스는 백엔드가 현재 영역의 사용자만 내려주므로 필요 없다.
+   */
+  private anchorFor(u: NearbyUser): { x: number; y: number } | null {
+    if (this.isAlive(u.musicId)) return this.worldOf(u.musicId);
+    let idx = this.anchorCache.get(u.email);
+    if (idx == null) {
+      if (!this.aliveIdx.length) return null;
+      let h = 2166136261;
+      for (const ch of u.email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
+      idx = this.aliveIdx[h % this.aliveIdx.length];
+      this.anchorCache.set(u.email, idx);
+    }
+    const s = this.songs[idx];
+    return { x: s.pc[this.dx()], y: s.pc[this.dy()] };
+  }
+
+  private rebuildAliveIdx() {
+    this.aliveIdx = [];
+    for (let i = 0; i < this.N; i++) if (this.subset[i]) this.aliveIdx.push(i);
+    this.anchorCache.clear();
+  }
+
+  /**
+   * 주변 탐색(프로브) 진입 — 연출용 뷰.
+   * 기준 곡을 남은 화면 중앙에 두고 유사곡 10곡을 두 겹 고리로 보기 좋게 배치한다 (실제 좌표 아님).
+   * 카메라는 기준 곡으로 줌인되고, 곡들은 실제 위치에서 배치 위치로 미끄러져 들어온다.
+   */
+  enterProbe(centerId: number, ids: number[]) {
+    if (!this.isAlive(centerId)) return;
+    const now = performance.now();
+    if (this.probe && this.probe.centerId === centerId && !this.probe.exitingAt) {
+      this.probe.ids = ids;
+      this.nearby = { centerId, ids };
+      return;
+    }
+    const back = this.probe?.back ?? { ...this.cam };
+    this.probe = { centerId, ids, t0: now, exitingAt: null, back };
+    this.nearby = { centerId, ids };
+    this.selectedId = centerId;
+    this.focus(centerId, PROBE.zoomMul);
+  }
+
+  /** 주변 탐색 해제 — 곡들이 실제 자리로 돌아가고 카메라가 진입 전으로 복귀 */
+  exitProbe() {
+    if (!this.probe || this.probe.exitingAt) return;
+    this.probe.exitingAt = performance.now();
+    this.nearby = null;
+    if (!this.follow) this.camTarget = { ...this.probe.back };
+  }
+
+  /** 프로브 진행도 0~1 (진입 중 오르고, 해제 중 내려간다) */
+  probeK(now = performance.now()) {
+    const p = this.probe;
+    if (!p) return 0;
+    if (p.exitingAt) return 1 - easeInOut(Math.min(1, (now - p.exitingAt) / PROBE.exitMs));
+    return easeInOut(Math.min(1, (now - p.t0) / PROBE.enterMs));
+  }
+
+  /** 프로브 곡의 화면 위치 — 실제 위치와 연출 배치 위치를 진행도로 보간 */
+  probePos(id: number): { x: number; y: number } | null {
+    const p = this.probe;
+    if (!p) return null;
+    const i = this.index.get(id);
+    if (i == null) return null;
+    const real = { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
+    const f = this.freeRect();
+    let target: { x: number; y: number };
+    if (id === p.centerId) target = { x: f.cx, y: f.cy };
+    else {
+      const rank = p.ids.indexOf(id);
+      if (rank < 0) return real;
+      const n = Math.max(1, p.ids.length);
+      const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
+      // 바깥·안쪽 고리를 번갈아 — 유사한 곡(앞 순위)이 안쪽
+      const ring = rank % 2 === 0 ? PROBE.innerRing : 1;
+      const jitter = (((id * 2654435761) >>> 0) % 1000) / 1000 - 0.5;
+      const ang = -Math.PI / 2 + (rank / n) * Math.PI * 2 + jitter * 0.25;
+      target = { x: f.cx + Math.cos(ang) * R * ring, y: f.cy + Math.sin(ang) * R * ring };
+    }
+    const k = this.probeK();
+    return { x: lerp(real.x, target.x, k), y: lerp(real.y, target.y, k) };
+  }
+
+  probeIdSet(): Set<number> | null {
+    if (!this.probe) return null;
+    return new Set([this.probe.centerId, ...this.probe.ids]);
+  }
+
+  // ------------------------------------------------------------------ 별자리 오버레이 뷰 (PATH-01)
+  /**
+   * 여정·플레이리스트를 **임시 오버레이 뷰**로 연다. 주변 탐색과 같은 급이고 둘은 배타다 (PATH-01-1).
+   * 곡들이 지금 자리에서 별자리 대형으로 날아가 모이고, 닫으면 흩어져 제자리로 돌아간다.
+   * 배치는 백엔드가 16차원을 2D로 압축해 준 **고정 좌표**라 레이어와 무관하게 늘 같은 모양이다.
+   */
+  enterConstellation(ids: number[], layout: ConstellationPoint[]) {
+    const valid = ids.filter((id) => this.index.has(id));
+    if (valid.length < 2) return;
+    if (this.constellation && !this.constellation.exitingAt && sameIds(this.constellation.ids, valid)) {
+      this.constellation.layout = layout;
+      return;
+    }
+    this.constellation = { ids: valid, layout, t0: performance.now(), exitingAt: null };
+    this.route = valid;
+  }
+
+  /** 별자리 닫기 — 곡들이 실제 자리로 돌아간다. 카메라는 애초에 건드리지 않았다 */
+  exitConstellation() {
+    if (!this.constellation || this.constellation.exitingAt) return;
+    this.constellation.exitingAt = performance.now();
+    this.route = [];
+  }
+
+  /** 별자리 진행도 0~1 (진입 중 오르고, 해제 중 내려간다) */
+  constellationK(now = performance.now()) {
+    const c = this.constellation;
+    if (!c) return 0;
+    if (c.exitingAt) return 1 - easeInOut(Math.min(1, (now - c.exitingAt) / CONSTELLATION.exitMs));
+    return easeInOut(Math.min(1, (now - c.t0) / CONSTELLATION.enterMs));
+  }
+
+  /**
+   * 별자리 곡의 화면 위치 — 실제 위치와 배치 위치를 진행도로 보간한다.
+   * 배치 좌표는 -1~1 정규화 값이라 남은 화면 중앙에 반지름을 곱해 놓는다.
+   */
+  constellationPos(id: number): { x: number; y: number } | null {
+    const c = this.constellation;
+    if (!c) return null;
+    const i = this.index.get(id);
+    if (i == null) return null;
+    const real = { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
+    const p = c.layout.find((q) => q.musicId === id);
+    if (!p) return real;
+    const f = this.constellationRect();
+    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * CONSTELLATION.radiusRatio;
+    const k = this.constellationK();
+    return { x: lerp(real.x, f.cx + p.x * R, k), y: lerp(real.y, f.cy - p.y * R, k) };
+  }
+
+  constellationIdSet(): Set<number> | null {
+    return this.constellation ? new Set(this.constellation.ids) : null;
+  }
+
+  // ------------------------------------------------------------------ 고스트별 (MAP-12)
+  /**
+   * 이 겹에 없는 곡을 "지금 보는 범위 밖에 있다"고 치고 띄운다.
+   * 레이어는 사용자에게 확대로 보이지만 실제로는 필터라, 확대만 했는데 찾던 곡이 없으면 납득이 안 된다.
+   * 이미 이 겹에 있는 곡이면 고스트를 만들지 않는다 (그냥 확대해 보여주면 되므로).
+   */
+  setGhost(id: number) {
+    if (!this.index.has(id) || this.isAlive(id)) {
+      this.ghost = null;
+      return;
+    }
+    this.ghost = { musicId: id, t0: performance.now() };
+  }
+
+  clearGhost() {
+    this.ghost = null;
+  }
+
+  /**
+   * 고스트별의 화면 위치 — **레이어 0(전 우주) 좌표에서 내 곡으로부터의 방향**을 재어
+   * 화면 가장자리 안쪽에 놓는다. 실제 별들과 섞이지 않으면서 "저쪽 바깥"이 전달된다.
+   */
+  ghostPos(): { x: number; y: number } | null {
+    if (!this.ghost) return null;
+    const i = this.index.get(this.ghost.musicId);
+    const myI = this.myId != null ? this.index.get(this.myId) : undefined;
+    if (i == null || myI == null) return null;
+    const a = this.songs[i].pc;
+    const b = this.songs[myI].pc;
+    let dx = a[0] - b[0];
+    let dy = a[1] - b[1];
+    const d = Math.hypot(dx, dy);
+    if (d < 1e-6) {
+      dx = 0;
+      dy = 1;
+    } else {
+      dx /= d;
+      dy /= d;
+    }
+    const f = this.freeRect();
+    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * GHOST.radiusRatio;
+    // 월드 y 는 위가 양수, 화면 y 는 아래가 양수
+    return { x: f.cx + dx * R, y: f.cy - dy * R };
+  }
+
+  /** 고스트별 페이드 진행도 */
+  ghostK(now = performance.now()) {
+    return this.ghost ? easeInOut(Math.min(1, (now - this.ghost.t0) / GHOST.enterMs)) : 0;
+  }
+
+  /** 고스트별 클릭 판정 — 맞으면 그 곡 ID */
+  hitGhost(mx: number, my: number): number | null {
+    const p = this.ghostPos();
+    if (!p || !this.ghost) return null;
+    return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
+  }
+
+  /** 별자리가 화면을 차지하고 있는가 (해제 애니메이션 중이면 false) */
+  constellationActive() {
+    return !!this.constellation && !this.constellation.exitingAt;
+  }
+
+  /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
+  private constellationRect() {
+    const base = this.freeRect();
+    const x0 = base.x0 + CONSTELLATION.instrumentInsetPx;
+    const y1 = base.y1 - 20;
+    return { x0, y0: base.y0, x1: base.x1, y1, cx: (x0 + base.x1) / 2, cy: (base.y0 + y1) / 2 };
+  }
+
+  // ------------------------------------------------------------------ geometry
+  private dx() {
+    return this.layer * 2;
+  }
+  private dy() {
+    return this.layer * 2 + 1;
+  }
+
+  /** 패널·HUD를 뺀 "실제로 지도가 보이는 사각형" */
+  freeRect() {
+    const x0 = 0;
+    const x1 = Math.max(120, this.W - this.occludedRight);
+    const y0 = 58;
+    const y1 = Math.max(y0 + 120, this.H - 92);
+    return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  }
+
+  worldToScreen(x: number, y: number, cam = this.cam) {
+    return { px: this.W / 2 + (x - cam.cx) * cam.s, py: this.H / 2 - (y - cam.cy) * cam.s };
+  }
+
+  screenToWorld(px: number, py: number, cam = this.cam) {
+    return { x: cam.cx + (px - this.W / 2) / cam.s, y: cam.cy - (py - this.H / 2) / cam.s };
+  }
+
+  private proj(i: number, layer: number, cam: MapCamera, out: Float32Array, k: number) {
+    const s = this.songs[i];
+    out[k] = this.W / 2 + (s.pc[layer * 2] - cam.cx) * cam.s;
+    out[k + 1] = this.H / 2 - (s.pc[layer * 2 + 1] - cam.cy) * cam.s;
+  }
+
+  private project() {
+    for (let i = 0; i < this.N; i++) this.proj(i, this.layer, this.cam, this.pos, i * 2);
+  }
+
+  /** 곡의 현재 레이어 월드 좌표 */
+  worldOf(id: number): { x: number; y: number } | null {
+    const i = this.index.get(id);
+    if (i == null) return null;
+    const s = this.songs[i];
+    return { x: s.pc[this.dx()], y: s.pc[this.dy()] };
+  }
+
+  isAlive(id: number) {
+    const i = this.index.get(id);
+    return i != null && this.subset[i] === 1;
+  }
+
+  private centerMost() {
+    let b = 0;
+    let bd = 1e9;
+    for (let i = 0; i < this.N; i++) {
+      const d = Math.abs(this.songs[i].pc[0]) + Math.abs(this.songs[i].pc[1]);
+      if (d < bd) {
+        bd = d;
+        b = i;
+      }
+    }
+    return this.songs[b].musicId;
+  }
+
+  /** 카메라 맞춤: 기준 곡을 남은 화면 중앙에, 상주 집합의 97%가 들어오게 */
+  private fitCam(layer: number, mask: Uint8Array<ArrayBufferLike>, centerId: number): MapCamera {
+    const dx = layer * 2;
+    const dy = layer * 2 + 1;
+    const c = this.songs[this.index.get(centerId)!];
+    const d: number[] = [];
+    for (let i = 0; i < this.N; i++) if (mask[i]) d.push(Math.hypot(this.songs[i].pc[dx] - c.pc[dx], this.songs[i].pc[dy] - c.pc[dy]));
+    d.sort((a, b) => a - b);
+    const r = d[Math.floor(d.length * DRILL.fitQuantile)] || 1;
+    const f = this.freeRect();
+    const s = Math.min(f.x1 - f.x0, f.y1 - f.y0) * DRILL.fitRadiusRatio / r;
+    return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
+  }
+
+  private holeRadius() {
+    return DRILL.holeRatio * Math.min(this.W, this.H);
+  }
+
+  /** 구멍(보이지 않는 원) 안에 있는 상주 곡 인덱스 */
+  private inHole(): number[] {
+    const f = this.freeRect();
+    const R = this.holeRadius();
+    const out: number[] = [];
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i]) continue;
+      if (Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy) <= R) out.push(i);
+    }
+    return out;
+  }
+
+  private outward(x: number, y: number, out: Float32Array, k: number) {
+    const f = this.freeRect();
+    let dx = x - f.cx;
+    let dy = y - f.cy;
+    let d = Math.hypot(dx, dy);
+    if (d < 1) {
+      dx = 1;
+      dy = 0;
+      d = 1;
+    }
+    const fct = (0.8 * Math.hypot(this.W, this.H)) / d;
+    out[k] = f.cx + dx * fct;
+    out[k + 1] = f.cy + dy * fct;
+  }
+
+  // ------------------------------------------------------------------ layer transitions
+  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string) {
+    // 레이어를 옮기면 고스트별은 사라진다 (MAP-12)
+    this.ghost = null;
+    for (let i = 0; i < this.N; i++) {
+      this.from[i * 2] = this.pos[i * 2];
+      this.from[i * 2 + 1] = this.pos[i * 2 + 1];
+      this.aFrom[i] = this.alpha[i];
+      this.aTo[i] = newSubset[i] ? 1 : 0;
+      if (newSubset[i]) this.proj(i, newLayer, newCam, this.to, i * 2);
+      else this.outward(this.pos[i * 2], this.pos[i * 2 + 1], this.to, i * 2);
+      if (!this.subset[i] && newSubset[i]) this.outward(this.to[i * 2], this.to[i * 2 + 1], this.from, i * 2);
+    }
+    this.pressure = 0;
+    this.camTarget = null;
+    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub };
+  }
+
+  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
+  zoomK() {
+    return this.cam.s / this.entryS;
+  }
+
+  /** 레이어 안에서 충분히(gateZoomMul 배) 확대했는가 — 그 전에는 파고들 수 없다 */
+  private zoomedEnough() {
+    return this.zoomK() >= DRILL.gateZoomMul;
+  }
+
+  /**
+   * 게이트 조건은 descend() 와 **정확히 같아야 한다.**
+   * 어긋나면 압력만 차오르고 내려가지는 않아서 휠이 먹통이 된다 (확대도 멈춰 있으므로).
+   */
+  gateOpen() {
+    if (this.layer >= LAYER_COUNT - 1 || !this.zoomedEnough()) return false;
+    const n = this.inHole().length;
+    return n <= DRILL.gate && n >= DRILL.minKeep;
+  }
+
+  /** 한 겹 파고들기 — 구멍 안 곡만 데려가 다음 두 축으로 재투영 */
+  descend() {
+    if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
+    const keep = this.inHole();
+    if (keep.length > DRILL.gate || keep.length < DRILL.minKeep) return;
+    // 내 곡이 구멍 밖이면 구멍 중앙 곡으로 재지정
+    const f = this.freeRect();
+    const myI = this.myId != null ? this.index.get(this.myId) : undefined;
+    if (myI == null || !keep.includes(myI)) {
+      let b = keep[0];
+      let bd = 1e9;
+      for (const i of keep) {
+        const d = Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy);
+        if (d < bd) {
+          bd = d;
+          b = i;
+        }
+      }
+      this.myId = this.songs[b].musicId;
+    }
+    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
+    const ns = new Uint8Array(this.N);
+    for (const i of keep) ns[i] = 1;
+    const nl = this.layer + 1;
+    const ax = LAYER_AXES[nl];
+    this.morph(
+      nl,
+      this.fitCam(nl, ns, this.myId!),
+      ns,
+      `${LAYER_NAMES[nl]}으로 파고드는 중 — ${keep.length.toLocaleString()}곡`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+    );
+  }
+
+  /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원 */
+  ascend() {
+    if (this.anim || !this.stack.length || this.follow) return;
+    const p = this.stack.pop()!;
+    const dx = p.layer * 2;
+    const dy = p.layer * 2 + 1;
+    const m = this.songs[this.index.get(this.myId!)!];
+    const f = this.freeRect();
+    const c: MapCamera = { ...p.cam, cx: m.pc[dx] - (f.cx - this.W / 2) / p.cam.s, cy: m.pc[dy] + (f.cy - this.H / 2) / p.cam.s };
+    const ax = LAYER_AXES[p.layer];
+    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+  }
+
+  // ------------------------------------------------------------------ input
+  /** 휠. 게이트가 열리면 배율은 멈추고 압력만 찬다 */
+  wheel(deltaY: number, mx: number, my: number): "zoom" | "pressure" | "blocked" {
+    if (this.anim || this.follow) return "blocked";
+    const zoomIn = deltaY < 0;
+    const canDig = zoomIn && this.gateOpen();
+    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * DRILL.riseScaleRatio;
+    if (canDig || canRise) {
+      this.pressureDir = canDig ? 1 : -1;
+      this.pressure = Math.min(1, this.pressure + Math.abs(deltaY) * DRILL.pressurePerDelta);
+      if (this.pressure >= 1) {
+        if (canDig) this.descend();
+        else this.ascend();
+      }
+      return "pressure";
+    }
+    this.camTarget = null;
+    this.touched = true;
+    const w = this.screenToWorld(mx, my);
+    this.cam.s *= Math.exp(-deltaY * WHEEL_ZOOM);
+    this.cam.cx = w.x - (mx - this.W / 2) / this.cam.s;
+    this.cam.cy = w.y + (my - this.H / 2) / this.cam.s;
+    this.project();
+    return "zoom";
+  }
+
+  dragBy(dx: number, dy: number) {
+    if (this.anim || this.follow) return;
+    this.camTarget = null;
+    this.touched = true;
+    this.cam.cx -= dx / this.cam.s;
+    this.cam.cy += dy / this.cam.s;
+    this.project();
+  }
+
+  setCameraCenter(x: number, y: number) {
+    if (this.anim || this.follow) return;
+    this.camTarget = { ...this.cam, cx: x, cy: y };
+  }
+
+  /** 곡을 남은 화면 중앙으로. scaleMul 이 있으면 그만큼 확대 */
+  focus(id: number, scaleMul?: number) {
+    const w = this.worldOf(id);
+    if (!w || !this.isAlive(id) || this.follow) return;
+    this.touched = true;
+    const f = this.freeRect();
+    const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
+    this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
+  }
+
+  /**
+   * 곡 하나에 포커스 — 그 곡으로 **확대하며** 들어간다 (검색 결과 클릭 등).
+   * targetLayer 가 지금 레이어와 다르면 그 레이어로 먼저 전환(모프)한 뒤, 그 곡을 확대한 자리에서 시작한다.
+   * targetLayer 는 "그 곡이 대표곡으로 노출되는 첫 레이어"다 (SEARCH-01).
+   */
+  focusSong(id: number, targetLayer?: number | null) {
+    if (this.follow || this.anim || !this.index.has(id)) return;
+    this.selectedId = id;
+    const s = this.songs[this.index.get(id)!];
+    if (targetLayer == null || targetLayer === this.layer) {
+      this.focus(id, FOCUS.zoomMul);
+      return;
+    }
+    if (targetLayer < 0 || targetLayer >= LAYER_COUNT) return;
+    // 다른 레이어의 대표곡이면 그 레이어로 전환하면서 그 곡을 확대해 보여준다
+    const fr = this.freeRect();
+    const scale = this.entryS * FOCUS.zoomMul;
+    const cam: MapCamera = {
+      s: scale,
+      cx: s.pc[targetLayer * 2] - (fr.cx - this.W / 2) / scale,
+      cy: s.pc[targetLayer * 2 + 1] + (fr.cy - this.H / 2) / scale,
+    };
+    const ax = LAYER_AXES[targetLayer];
+    this.touched = true;
+    this.morph(targetLayer, cam, this.subset, `${s.title} — ${LAYER_NAMES[targetLayer]}${ro(LAYER_NAMES[targetLayer])}`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+  }
+
+  hitTest(mx: number, my: number): VisibleStar | null {
+    let best: VisibleStar | null = null;
+    let bd = 1e9;
+    for (const v of this.visible) {
+      const d = (v.px - mx) ** 2 + (v.py - my) ** 2;
+      if (d < v.r * v.r && d < bd) {
+        bd = d;
+        best = v;
+      }
+    }
+    return best;
+  }
+
+  /** 내 위치(우주선·헬멧)의 화면 좌표. 반응 이모지가 여기서 떠오른다 (SOCIAL-02) */
+  mePos(): { x: number; y: number } | null {
+    if (this.myId == null) return null;
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    return { x: px, y: py };
+  }
+
+  /** 지도에 떠 있는 사용자의 화면 좌표. 내 뷰 안에 없으면 null (남의 반응은 그때만 보인다) */
+  friendScreenPos(email: string): { x: number; y: number } | null {
+    const f = this.visFriends.find((v) => v.user.email === email);
+    return f ? { x: f.px, y: f.py } : null;
+  }
+
+  hitFriend(mx: number, my: number): VisibleFriend | null {
+    for (const fr of this.visFriends) if ((fr.px - mx) ** 2 + (fr.py - my) ** 2 < 22 * 22) return fr;
+    return null;
+  }
+
+  // ------------------------------------------------------------------ me / play / follow
+  setMy(id: number | null) {
+    if (id == null || !this.index.has(id)) return;
+    this.myId = id;
+    const w = this.worldOf(id)!;
+    this.me = { ...w };
+  }
+
+  /**
+   * 곡 재생 → 내 위치가 그 곡으로 걸어간다 (MAP-08).
+   * 그 곡이 이 겹에 없으면 **움직이지 않고 있던 자리에 남는다** — 없는 곳으로 데려가지 않고,
+   * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 표식에 "다른 갈래에서 재생 중"이 붙는다.
+   */
+  travelTo(id: number) {
+    if (!this.index.has(id)) return;
+    this.playingId = id;
+    if (!this.isAlive(id)) {
+      this.travelToId = null;
+      return;
+    }
+    this.travelToId = id;
+    // 별자리 뷰가 떠 있는 동안에는 카메라를 건드리지 않는다 (닫으면 원래 자리로 돌아가야 하므로)
+    if (!this.follow && !this.constellationActive()) this.focus(id);
+  }
+
+  /** 재생 중인 곡이 이 겹 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08) */
+  playingElsewhere() {
+    return this.playingId != null && !this.isAlive(this.playingId);
+  }
+
+  /**
+   * 레이어 0(전 우주)까지 떠오른 뒤 그 곡을 확대한다 (MAP-12 "이 곡이 있는 곳으로 가기").
+   * 파고든 경로를 버리는 큰 이동이라 사용자가 명시적으로 눌렀을 때만 부른다.
+   */
+  surfaceToSong(id: number) {
+    if (this.follow || this.anim || !this.index.has(id)) return;
+    this.ghost = null;
+    this.stack = [];
+    this.selectedId = id;
+    const ns = new Uint8Array(this.N).fill(1);
+    const ax = LAYER_AXES[0];
+    const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
+    const f = this.freeRect();
+    const s = this.songs[this.index.get(id)!];
+    // 내 위치는 건드리지 않는다 — 내 자리는 재생 중인 곡이지 지금 보러 간 곡이 아니다 (MAP-08)
+    this.morph(
+      0,
+      { s: scale, cx: s.pc[0] - (f.cx - this.W / 2) / scale, cy: s.pc[1] + (f.cy - this.H / 2) / scale },
+      ns,
+      `${s.title} — ${LAYER_NAMES[0]}${ro(LAYER_NAMES[0])} 떠오르는 중`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+    );
+  }
+
+  startFollow(leader: NearbyUser) {
+    if (!this.index.has(leader.musicId)) return;
+    this.travelToId = null;
+    this.camTarget = null;
+    // 별자리는 다른 활동이므로 함께 사라진다 (ACT-01)
+    this.constellation = null;
+    this.route = [];
+    const viewingMusicId = this.index.has(leader.viewingMusicId) ? leader.viewingMusicId : leader.musicId;
+    this.follow = {
+      leader,
+      viewingMusicId,
+      playingMusicId: leader.musicId,
+      // 탑승 직후엔 인솔자가 이미 보고 있는 곡이 있으므로, 다음 동작은 그 곡의 재생이다
+      phase: "play",
+      nextAt: performance.now() + FOLLOW.viewToPlayMs,
+      hops: 0,
+      mv: null,
+      visited: [],
+    };
+    this.onLeaderViewingChange?.(viewingMusicId);
+  }
+
+  stopFollow() {
+    if (!this.follow) return;
+    const f = this.follow;
+    this.follow = null;
+    const w = this.worldOf(f.mv?.toId ?? f.leader.musicId);
+    if (w) {
+      this.me = { ...w };
+      this.myId = f.mv?.toId ?? f.leader.musicId;
+    }
+  }
+  /**
+   * 인솔자의 다음 동작을 진행한다 (목: 랜덤. 실서비스: 소켓 이벤트로 대체).
+   *  phase "view" → 인솔자가 새 곡을 클릭한다. 뷰만 그리로 간다.
+   *  phase "play" → 인솔자가 그 곡을 재생한다. 우주선이 날아온다. 뷰는 그대로.
+   * 가끔 인솔자가 레이어를 바꾸면 따라가는 사람도 같은 레이어로 전환된다.
+   */
+  private stepLeader(now: number) {
+    const f = this.follow!;
+    if (f.phase === "view") this.leaderPicksSong(now, f);
+    else this.leaderPlaysSong(now, f);
+  }
+
+  /** ① 인솔자가 곡을 클릭해 상세를 본다 — 내 뷰가 먼저 이동한다 */
+  private leaderPicksSong(now: number, f: FollowState) {
+    f.hops++;
+    if (f.hops > FOLLOW.maxHops) {
+      const who = f.leader.nickname ?? "인솔자";
+      // 엔진에서 먼저 끊는다. 안 그러면 콜백이 매 프레임 다시 불린다
+      this.stopFollow();
+      this.onFollowEnd?.(`${who} 님이 접속을 종료해 따라가기가 끝났습니다.`);
+      return;
+    }
+    // 인솔자가 레이어를 옮기는 차례
+    if (f.hops > 1 && f.hops % FOLLOW.layerChangeEvery === 0 && this.leaderChangesLayer(f)) return;
+
+    const from = this.friendPos.get(f.leader.email) ?? this.worldOf(f.playingMusicId);
+    if (!from) return;
+    const next = this.pickNearbySong(from, f.viewingMusicId, f.playingMusicId);
+    if (next == null) return;
+    f.viewingMusicId = next;
+    f.phase = "play";
+    f.nextAt = now + FOLLOW.viewToPlayMs;
+    this.onLeaderViewingChange?.(next);
+  }
+
+  /** ② 인솔자가 보고 있던 곡을 재생한다 — 우주선이 그 방향에서 날아온다. 뷰는 고정 */
+  private leaderPlaysSong(now: number, f: FollowState) {
+    const target = this.worldOf(f.viewingMusicId);
+    const known = this.friendPos.get(f.leader.email);
+    const from = known ?? this.worldOf(f.playingMusicId);
+    if (!target || !from) return;
+    const side = Math.random() < 0.5 ? 1 : -1;
+    const L = Math.hypot(target.x - from.x, target.y - from.y) || 1e-6;
+    f.mv = {
+      ax: from.x,
+      ay: from.y,
+      bx: target.x,
+      by: target.y,
+      cx: (from.x + target.x) / 2 - ((target.y - from.y) / L) * L * 0.35 * side,
+      cy: (from.y + target.y) / 2 + ((target.x - from.x) / L) * L * 0.35 * side,
+      t0: now,
+      dur: FOLLOW.moveMs,
+      toId: f.viewingMusicId,
+    };
+    f.visited.push(f.viewingMusicId);
+    f.phase = "view";
+    f.nextAt = now + FOLLOW.moveMs + FOLLOW.playToViewMs;
+    this.onArrive?.(f.viewingMusicId);
+  }
+
+  /** 인솔자가 레이어를 바꾼다 — 따라가는 사람도 같은 레이어로 전환 (모프) */
+  private leaderChangesLayer(f: FollowState): boolean {
+    const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
+    const target = this.layer + dir;
+    if (target < 0 || target >= LAYER_COUNT) return false;
+    const ax = LAYER_AXES[target];
+    const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
+    const fr = this.freeRect();
+    const s = this.entryS * FOLLOW.zoomMul;
+    const cam: MapCamera = { s, cx: view.x - (fr.cx - this.W / 2) / s, cy: view.y + (fr.cy - this.H / 2) / s };
+    // 우주선·내 위치는 새 레이어 좌표로 옮긴다
+    this.friendPos.delete(f.leader.email);
+    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    f.phase = "view";
+    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+    return true;
+  }
+
+  /** 지금 위치 기준 가까운 상주 곡 하나 (직전 곡들은 제외) */
+  private pickNearbySong(from: { x: number; y: number }, ...exclude: number[]): number | null {
+    const skip = new Set(exclude);
+    const cands: { i: number; d: number }[] = [];
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i] || !this.songs[i].playable) continue;
+      const s = this.songs[i];
+      if (skip.has(s.musicId)) continue;
+      const d = Math.hypot(s.pc[this.dx()] - from.x, s.pc[this.dy()] - from.y);
+      if (d < 0.02) continue;
+      cands.push({ i, d });
+    }
+    if (!cands.length) return null;
+    cands.sort((a, b) => a.d - b.d);
+    const pool = cands.slice(0, 8);
+    return this.songs[pool[Math.floor(Math.random() * pool.length)].i].musicId;
+  }
+
+  // ------------------------------------------------------------------ frame
+  frame(now: number) {
+    this.time = now / 1000;
+    if (!this.inited) return;
+
+    // 패널 폭을 부드럽게 따라간다 (사이드 패널 열고 닫을 때 화면이 끊기며 튀지 않게)
+    if (this.occludedRight !== this.occludedTarget) {
+      this.occludedRight = lerp(this.occludedRight, this.occludedTarget, OCCLUSION_EASE);
+      if (Math.abs(this.occludedRight - this.occludedTarget) < 0.5) this.occludedRight = this.occludedTarget;
+    }
+
+    // 모프 진행
+    if (this.anim) {
+      const t = Math.min(1, (now - this.anim.t0) / DRILL.morphMs);
+      const e = easeInOut(t);
+      for (let i = 0; i < this.N; i++) {
+        this.pos[i * 2] = this.from[i * 2] + (this.to[i * 2] - this.from[i * 2]) * e;
+        this.pos[i * 2 + 1] = this.from[i * 2 + 1] + (this.to[i * 2 + 1] - this.from[i * 2 + 1]) * e;
+        this.alpha[i] = this.aFrom[i] + (this.aTo[i] - this.aFrom[i]) * e;
+      }
+      if (t >= 1) {
+        const a = this.anim;
+        this.anim = null;
+        this.layer = a.layer;
+        this.cam = a.cam;
+        this.entryS = a.cam.s;
+        this.subset = a.subset;
+        this.rebuildAliveIdx();
+        this.alpha = this.aTo.slice();
+        const w = this.worldOf(this.myId!);
+        if (w) this.me = { ...w };
+        if (this.selectedId != null && !this.isAlive(this.selectedId)) this.selectedId = null;
+        this.project();
+      }
+    } else {
+      if (this.pressure > 0) this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
+      // 카메라 목표 추적
+      if (this.camTarget) {
+        const k = 1 - Math.pow(0.001, 16 / 1000) * 0.85;
+        this.cam.cx = lerp(this.cam.cx, this.camTarget.cx, k);
+        this.cam.cy = lerp(this.cam.cy, this.camTarget.cy, k);
+        this.cam.s = this.cam.s * Math.pow(this.camTarget.s / this.cam.s, k);
+        if (Math.abs(this.cam.cx - this.camTarget.cx) * this.cam.s < 0.3 && Math.abs(this.cam.cy - this.camTarget.cy) * this.cam.s < 0.3 && Math.abs(this.cam.s / this.camTarget.s - 1) < 0.002) {
+          this.cam = { ...this.camTarget };
+          this.camTarget = null;
+        }
+        this.project();
+      }
+      // 내 위치가 재생 곡 쪽으로 이동
+      if (this.travelToId != null && !this.follow) {
+        const w = this.worldOf(this.travelToId);
+        if (!w || !this.isAlive(this.travelToId)) this.travelToId = null;
+        else {
+          this.me.x = lerp(this.me.x, w.x, 0.08);
+          this.me.y = lerp(this.me.y, w.y, 0.08);
+          if (Math.hypot(this.me.x - w.x, this.me.y - w.y) * this.cam.s < 0.5) {
+            this.me = { ...w };
+            this.myId = this.travelToId;
+            this.travelToId = null;
+          }
+        }
+      }
+      this.stepFollow(now);
+    }
+
+    // 커버·프로필 페이드: 모프 중이거나 데이터가 아직 이전 레이어 것이면 사라지고, 새 레이어 데이터가 오면 서서히 나타난다
+    // 프로브 해제 애니메이션이 끝나면 정리
+    if (this.probe?.exitingAt && now - this.probe.exitingAt > PROBE.exitMs) this.probe = null;
+    const probing = !!this.probe && !this.probe.exitingAt;
+    const coverTarget = !this.anim && !probing && this.repLayer === this.layer ? 1 : 0;
+    const friendTarget = !this.anim && !probing && this.friendsLayer === this.layer ? 1 : 0;
+    const fadeK = coverTarget ? 0.045 : 0.16; // 사라질 땐 빠르게, 나타날 땐 천천히
+    this.coverAlpha += (coverTarget - this.coverAlpha) * fadeK;
+    this.friendAlpha += (friendTarget - this.friendAlpha) * (friendTarget ? 0.045 : 0.16);
+    if (Math.abs(this.coverAlpha - coverTarget) < 0.005) this.coverAlpha = coverTarget;
+    if (Math.abs(this.friendAlpha - friendTarget) < 0.005) this.friendAlpha = friendTarget;
+
+    this.updateFriends();
+    if (!this.anim) this.pickRepresentatives();
+    this.publish();
+  }
+
+  private stepFollow(now: number) {
+    const f = this.follow;
+    if (!f) return;
+    if (!f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
+    // 뷰는 인솔자가 "보고 있는 곡"만 좇는다. 우주선이 날아오는 동안(mv)에는 고정 (SOCIAL-07)
+    if (!f.mv) this.trackViewing(f);
+    if (!f.mv) return;
+    const m = f.mv;
+    const t = Math.min(1, (now - m.t0) / m.dur);
+    const e = easeInOut(t);
+    const q = 1 - e;
+    const x = q * q * m.ax + 2 * q * e * m.cx + e * e * m.bx;
+    const y = q * q * m.ay + 2 * q * e * m.cy + e * e * m.by;
+    const hx = 2 * q * (m.cx - m.ax) + 2 * e * (m.bx - m.cx);
+    const hy = 2 * q * (m.cy - m.ay) + 2 * e * (m.by - m.cy);
+    this.friendPos.set(f.leader.email, { x, y, heading: Math.atan2(hy, hx) });
+    // 나는 선미 바로 뒤
+    const back = Math.max(0, e - 0.06);
+    const qb = 1 - back;
+    this.me.x = qb * qb * m.ax + 2 * qb * back * m.cx + back * back * m.bx;
+    this.me.y = qb * qb * m.ay + 2 * qb * back * m.cy + back * back * m.by;
+    this.project();
+    if (t >= 1) {
+      f.mv = null;
+      f.playingMusicId = m.toId;
+      f.leader = { ...f.leader, musicId: m.toId };
+      this.myId = m.toId;
+    }
+  }
+
+  /** 뷰포트를 인솔자가 보고 있는 곡으로. 배율도 따라가기 배율로 맞춘다 (SOCIAL-07) */
+  private trackViewing(f: FollowState) {
+    const view = this.worldOf(f.viewingMusicId);
+    if (!view) return;
+    const fr = this.freeRect();
+    const targetS = this.entryS * FOLLOW.zoomMul;
+    this.cam.s = this.cam.s * Math.pow(targetS / this.cam.s, 0.06);
+    this.cam.cx = lerp(this.cam.cx, view.x - (fr.cx - this.W / 2) / this.cam.s, 0.06);
+    this.cam.cy = lerp(this.cam.cy, view.y + (fr.cy - this.H / 2) / this.cam.s, 0.06);
+    this.project();
+  }
+
+  private updateFriends() {
+    this.visFriends = [];
+    const f = this.freeRect();
+    const G = 58;
+    const occ = new Set<string>();
+    const capN = MAP_FRIENDS_MAX;
+    const list = this.follow ? [this.follow.leader, ...this.friends.filter((x) => x.email !== this.follow!.leader.email)] : this.friends;
+    for (const u of list) {
+      if (this.visFriends.length >= capN) break;
+      if (!u.isOnline || !u.isPublic) continue;
+      const isLeader = this.follow?.leader.email === u.email;
+      let w = this.friendPos.get(u.email);
+      if (!w || !isLeader) {
+        const base = this.anchorFor(u);
+        if (!base) continue;
+        w = w && isLeader ? w : { x: base.x, y: base.y, heading: w?.heading ?? ((u.avatarSeed[0] ?? 0.5) * Math.PI * 2) };
+        this.friendPos.set(u.email, w);
+      }
+      const { px, py } = this.worldToScreen(w.x, w.y);
+      if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+      if (!isLeader && (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104)) continue;
+      const key = `${Math.floor(px / G)},${Math.floor(py / G)}`;
+      if (!isLeader) {
+        let clash = false;
+        for (let a = -1; a <= 1 && !clash; a++) for (let b = -1; b <= 1; b++) if (occ.has(`${Math.floor(px / G) + a},${Math.floor(py / G) + b}`)) clash = true;
+        if (clash) continue;
+      }
+      occ.add(key);
+      this.visFriends.push({ user: u, px, py, heading: w.heading, isLeader });
+    }
+  }
+
+  /** 대표곡 선별 — 격자를 월드에 못박아 팬해도 승자가 바뀌지 않게 */
+  private pickRepresentatives() {
+    this.visible = [];
+    this.chosen = new Set();
+    const gw = REPRESENTATIVE_GRID_PX / this.cam.s;
+    const occ = new Set<string>();
+    const dx = this.dx();
+    const dy = this.dy();
+    for (const i of this.byWeight) {
+      if (!this.subset[i] || this.alpha[i] < 0.5) continue;
+      const px = this.pos[i * 2];
+      const py = this.pos[i * 2 + 1];
+      if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;
+      const s = this.songs[i];
+      const key = `${Math.floor(s.pc[dx] / gw)},${Math.floor(s.pc[dy] / gw)}`;
+      if (occ.has(key)) continue;
+      occ.add(key);
+      this.chosen.add(i);
+      this.visible.push({ i, px, py, r: 15 });
+    }
+    // 선택·경로·주변 탐색 결과는 간격과 무관하게 항상 집을 수 있다
+    const extra = new Set<number>();
+    if (this.selectedId != null) extra.add(this.selectedId);
+    if (this.constellation) for (const id of this.constellation.ids) extra.add(id);
+    if (this.probe) {
+      extra.add(this.probe.centerId);
+      for (const id of this.probe.ids) extra.add(id);
+    }
+    for (const id of extra) {
+      const i = this.index.get(id);
+      if (i == null || !this.subset[i]) continue;
+      const pp = this.probePos(id) ?? this.constellationPos(id);
+      if (pp) {
+        // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
+        const k = this.visible.findIndex((v) => v.i === i);
+        if (k >= 0) this.visible.splice(k, 1);
+        this.visible.push({ i, px: pp.x, py: pp.y, r: 16 });
+        continue;
+      }
+      if (this.chosen.has(i)) continue;
+      this.visible.push({ i, px: this.pos[i * 2], py: this.pos[i * 2 + 1], r: 14 });
+    }
+  }
+
+  private publish() {
+    const resident = this.subset.reduce((a, b) => a + b, 0);
+    const holeCount = this.anim ? this.lastSnap.holeCount ?? 0 : this.inHoleCountFast();
+    const snap: Partial<EngineSnapshot> = {
+      layer: this.layer,
+      residentCount: resident,
+      holeCount,
+      zoomK: Math.round(this.zoomK() * 100) / 100,
+      gateOpen: !this.anim && this.layer < LAYER_COUNT - 1 && this.zoomedEnough() && holeCount <= DRILL.gate && holeCount >= DRILL.minKeep,
+      atBottom: this.layer >= LAYER_COUNT - 1,
+      canRise: this.stack.length > 0,
+      pressure: Math.round(this.pressure * 100) / 100,
+      pressureDir: this.pressure > 0.01 ? this.pressureDir : 0,
+      morph: this.anim ? { big: this.anim.big, sub: this.anim.sub } : null,
+      myMusicId: this.myId,
+      ghostMusicId: this.ghost?.musicId ?? null,
+      playingElsewhere: this.playingElsewhere(),
+    };
+    const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
+      const a = snap[k];
+      const b = this.lastSnap[k];
+      if (k === "morph") return (a as { big: string } | null)?.big !== (b as { big: string } | null)?.big;
+      return a !== b;
+    });
+    if (changed) {
+      this.lastSnap = { ...this.lastSnap, ...snap };
+      this.snapListener?.({ ...snap, camera: { ...this.cam } });
+    }
+  }
+
+  private holeTick = 0;
+  private holeCache = 0;
+  private inHoleCountFast() {
+    // 4,000곡 순회는 가볍지만 매 프레임 할 필요는 없다
+    if (++this.holeTick % 6 === 1) this.holeCache = this.inHole().length;
+    return this.holeCache;
+  }
+}

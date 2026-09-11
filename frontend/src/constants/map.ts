@@ -7,7 +7,14 @@ export const LAYER_COUNT = 8;
 export const LAYER_SONG_COUNT = 1000;
 
 /** 장르 이름. 인덱스 = genreId, 색은 GENRE_COLORS 의 같은 인덱스 */
-export const GENRE_NAMES = ["앰비언트", "일렉트로닉", "클래식", "재즈", "힙합", "R&B·소울", "팝", "록", "메탈", "포크·컨트리"] as const;
+export const GENRE_NAMES = ["앰비언트", "일렉트로닉", "클래식", "재즈", "힙합", "R&B·소울", "팝", "록", "메탈", "포크·컨트리", "무장르"] as const;
+
+/**
+ * 장르를 모르는 곡의 genreId. 실데이터는 662만 곡 중 장르가 붙은 게 6.6만(1.0%)뿐이라
+ * 나머지 99%가 여기로 온다 — 0(앰비언트)으로 보내면 지도가 전부 앰비언트 색이 된다.
+ * 목 데이터는 색이 보여야 하므로 0 ~ NO_GENRE_ID-1 만 쓴다.
+ */
+export const NO_GENRE_ID = GENRE_NAMES.length - 1;
 
 /**
  * 레이어별 이름 (깊이 = 천체 축척 메타포). 인덱스 = 레이어 번호.

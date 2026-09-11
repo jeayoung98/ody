@@ -37,7 +37,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const [hover, setHover] = useState(false);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
 
-  const { data: songs } = useMapSongsQuery();
+  // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
+  const boxes = useMapStore((s) => s.boxes);
+  const { data: songs } = useMapSongsQuery(boxes);
   const layer = useMapStore((s) => s.layer);
   const { data: friends } = useNearbyUsersQuery(layer);
   const { data: representatives } = useRepresentativesQuery(layer);
@@ -78,13 +80,12 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   useEffect(() => engine.setOcclusion(occludedRight), [engine, occludedRight]);
 
-  // 데이터 주입. 저장된 내 곡이 있으면 그 자리에서 시작
+  // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {
     if (!songs) return;
-    const saved = readStorage<number>(STORAGE_KEYS.myMusicId);
-    engine.setInitialMy(saved);
-    engine.setSongs(songs);
-  }, [engine, songs]);
+    if (!engine.ready) engine.setInitialMy(readStorage<number>(STORAGE_KEYS.myMusicId));
+    engine.setLayerSongs(boxes.length, songs);
+  }, [engine, boxes, songs]);
   // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
   useEffect(() => {
     if (friends) engine.setFriends(layer, friends);

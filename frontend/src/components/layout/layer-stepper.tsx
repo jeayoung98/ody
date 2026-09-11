@@ -13,7 +13,6 @@ export default function LayerStepper() {
   const layer = useMapStore((s) => s.layer);
   const gateOpen = useMapStore((s) => s.gateOpen);
   const canRise = useMapStore((s) => s.canRise);
-  const holeCount = useMapStore((s) => s.holeCount);
   const morph = useMapStore((s) => s.morph);
   const drillDown = useMapStore((s) => s.drillDown);
   const surface = useMapStore((s) => s.surface);
@@ -41,8 +40,8 @@ export default function LayerStepper() {
                   ? "뷰를 닫으면 다시 이동할 수 있어요"
                   : next
                     ? gateOpen
-                      ? "한 칸 깊이 — 화면 안 별만 데려가 새 축으로 재투영"
-                      : "확대해서 화면 안 곡 수를 게이트 아래로 좁히면 열립니다"
+                      ? "한 칸 깊이 — 이 겹의 별을 그대로 데려가 새 축으로 재투영"
+                      : "임계치까지 확대하면 열립니다"
                     : i === layer - 1
                       ? "한 칸 얕게 — 두고 온 별이 돌아오고 좌표도 복원"
                       : "한 칸씩만 이동합니다"
@@ -60,7 +59,7 @@ export default function LayerStepper() {
               <em className="num text-[8px] tracking-[0.02em] opacity-55 not-italic">L{i}</em>
             </span>
             <span className={`h-[3px] w-full rounded-pill ${on ? "grad-bg" : past ? "bg-teal/50" : "bg-white/[.13]"}`} />
-            {next && <span className="num text-[8.5px] text-teal">{gateOpen ? holeCount : ""}</span>}
+            {next && <span className="num text-[8.5px] text-teal">{gateOpen ? "▼" : ""}</span>}
           </button>
         );
       })}

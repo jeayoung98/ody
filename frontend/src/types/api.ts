@@ -15,7 +15,14 @@ export type ImplementedErrorCode =
   | "REFRESH_TOKEN_MISMATCH"
   | "INVALID_EXCHANGE_CODE"
   | "INVALID_INPUT"
-  | "INTERNAL_SERVER_ERROR";
+  | "INTERNAL_SERVER_ERROR"
+  // 이메일·비밀번호 인증 (S15P21A405-121, backend/dev AuthErrorCode)
+  | "EMAIL_ALREADY_EXISTS"
+  | "NICKNAME_ALREADY_EXISTS"
+  | "INVALID_CREDENTIALS"
+  | "PASSWORD_MISMATCH"
+  | "INVALID_PASSWORD_FORMAT"
+  | "INVALID_NICKNAME_LENGTH";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =

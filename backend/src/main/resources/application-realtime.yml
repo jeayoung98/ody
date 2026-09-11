@@ -1,0 +1,46 @@
+# Realtime 설정 — 하트비트/TTL/Sweep, 격자·임계, 레이어 축 배정, 축별 정규화 min/max.
+# ★ 활성화: spring.profiles.active 에 realtime 추가. 골격 단계에서는 서비스가 @Value(":기본값") 로 읽으므로
+#   이 파일/프로파일 없이도 기동된다. 내부작업 때 RealtimeProperties 주입으로 전환한다.
+# 계약: specs/004-realtime-presence-nearby/plan.md §설정, data-model.md §1.
+realtime:
+  presence:
+    heartbeat-interval-ms: 15000
+    ttl-ms: 45000
+    sweep-interval-ms: 5000
+    recount-interval-ms: 60000
+  nearby:
+    neighbor-k: 10
+  viewport:
+    grid-size: 16                  # ★ cluster-threshold-cells 와 세트로만 변경
+    cluster-threshold-cells: 36
+    marker-cap: 64
+    debounce-ms: 250
+    cell-counts-interval-ms: 5000
+  # 레이어 l → 표시 축 PC(2l-1), PC(2l)
+  layers:
+    - { layer: 1, axis-x: 1,  axis-y: 2 }
+    - { layer: 2, axis-x: 3,  axis-y: 4 }
+    - { layer: 3, axis-x: 5,  axis-y: 6 }
+    - { layer: 4, axis-x: 7,  axis-y: 8 }
+    - { layer: 5, axis-x: 9,  axis-y: 10 }
+    - { layer: 6, axis-x: 11, axis-y: 12 }
+    - { layer: 7, axis-x: 13, axis-y: 14 }
+    - { layer: 8, axis-x: 15, axis-y: 16 }
+  # 축별 전역 min/max — ★★ 실측 전 임의값(B-4). 실데이터 분포로 교체 전 시연 금지.
+  axis-range:
+    - { axis: 1,  min: -10.0, max: 10.0 }
+    - { axis: 2,  min: -10.0, max: 10.0 }
+    - { axis: 3,  min: -10.0, max: 10.0 }
+    - { axis: 4,  min: -10.0, max: 10.0 }
+    - { axis: 5,  min: -10.0, max: 10.0 }
+    - { axis: 6,  min: -10.0, max: 10.0 }
+    - { axis: 7,  min: -10.0, max: 10.0 }
+    - { axis: 8,  min: -10.0, max: 10.0 }
+    - { axis: 9,  min: -10.0, max: 10.0 }
+    - { axis: 10, min: -10.0, max: 10.0 }
+    - { axis: 11, min: -10.0, max: 10.0 }
+    - { axis: 12, min: -10.0, max: 10.0 }
+    - { axis: 13, min: -10.0, max: 10.0 }
+    - { axis: 14, min: -10.0, max: 10.0 }
+    - { axis: 15, min: -10.0, max: 10.0 }
+    - { axis: 16, min: -10.0, max: 10.0 }

@@ -18,6 +18,16 @@
 
 ## Clarifications
 
+### Session 2026-09-11 (4차)
+
+- Q: 응답 항목 필드 구성과 상주 집합 크기를 어떻게 정하나요? → A: **FE `MapPoint` 기준으로 맞춘다(D18).**
+  응답 항목은 `musicId`·`pc[16]`·`genreId`·`weight`·`title`·`artist`·`playable` 로 한다.
+  `ghostOnly` 는 FE 타입 주석이 "목 확인용" 이라 명시하므로 서버가 보내지 않는다.
+  상주 집합 크기는 `LAYER_SONG_COUNT`=1000 을 **규모** 기준으로 삼고 정확한 수는 강제하지 않는다.
+  FE 렌더링 로직은 이 상수를 쓰지 않는다(확인: UI 힌트 문구와 목 생성에만 사용) — 1레이어 실측 1,094칸도 허용된다.
+
+  ⚠️ **이 결정으로 새 미정이 하나 생겼다 — `genreId`.** 아래 FR-012 참조.
+
 ### Session 2026-09-11 (3차)
 
 - Q: 인기 지표가 없어서 FE 가 인기순 선별을 못 하는데, 서버가 상주 집합만 보낸다면 이건 FE 가 나중에 정해도 되나요?
@@ -248,7 +258,26 @@ PC 누락만으로 검증 오류가 발생하는지 확인한다. 구체적인 �
   서버의 격자 사용은 상주 집합을 **공간적으로 고르게 뽑기 위한 샘플링 수단**에 한정한다.
   화면 격자 대표 선별은 클라이언트 책임이다.
   - [NEEDS CLARIFICATION: 2레이어 이후 영역 지정 파라미터의 형태 — 사각 범위 경계(FE 뷰포트·data `<@ box`) vs 중심좌표]
-  - [NEEDS CLARIFICATION: 응답 항목의 필드 구성 — FE `MapPoint`(`musicId`·`pc[16]`·`genreId`·`weight`·`title`·`artist`·`playable`)가 유력 후보다. 정본 §0.6 `MusicDetail` 전체를 담으면 `map_sample` 이 조인을 없애 얻은 0.4 ms 이점이 사라진다]
+
+  **D18 — 응답 계약은 FE `MapPoint` 다.** 응답 항목은 다음 필드로 구성해야 한다(MUST).
+
+  | 필드 | 내용 |
+  |---|---|
+  | `musicId` | 곡 ID (`music.id`, 1..6,624,399) |
+  | `pc` | PC 16개 배열. **클라이언트가 레이어 축으로 재투영하므로 전부 보낸다** |
+  | `genreId` | 색상 코딩용. **비음수 정수여야 한다(MUST)** — 아래 미정 참조 |
+  | `weight` | 별 크기·밝기·선별용 가중치 (D17) |
+  | `title`·`artist` | 표시용 |
+  | `playable` | 재생 링크 유무. `youtube_url` 이 전 행 NULL 이므로 현재는 전부 false |
+
+  `ghostOnly` 는 FE 타입이 "목 확인용" 이라 명시하므로 **서버가 보내지 않는다**(MUST NOT).
+  정본 §0.6 `MusicDetail` 전체(bpm·duration·album·genres·`location`·playCnt·youtubeCnt)는 담지 않는다 —
+  `map_sample` 이 조인을 없애 얻은 0.4 ms 이점이 사라진다. 상세 필드는 `/music/{id}` 가 담당한다.
+
+  **상주 집합 크기**: `LAYER_SONG_COUNT`=1000 을 **규모** 기준으로 한다. 정확한 수를 강제하지 않는다 —
+  FE 렌더링 로직은 이 상수를 쓰지 않는다(UI 힌트 문구·목 생성 전용). 1레이어 실측 1,094칸도 허용된다.
+
+  - [NEEDS CLARIFICATION: **`genreId` 를 무엇으로 채울지.** 셋이 얽혀 있다 — (a) 장르 없는 곡이 **99%** 다(662만 중 6.6만만 `music_genre` 행 보유), (b) data 는 멜론 코드 **29종**인데 FE `GENRE_COLORS` 는 **10색 인덱스**라 29→10 매핑이 없다, (c) **음수를 보내면 FE 가 죽는다** — `draw-map.ts` 의 `spr[s.genreId % GENRE_COLORS.length]` 는 raw modulo라 `-1 % 10 = -1` → `spr[-1]` = undefined → `drawImage` 예외. (`genreRgb` 만 `Math.abs` 로 보호돼 있다)]
   **근거**: 2026-09-11 팀 결정(FE 구현 방식 채택); data 스펙 16 `map_sample`·`build_map_layer.sql`(실측 20,941ms → 0.4ms);
   FE `constants/map.ts` 의 `DRILL`·`REPRESENTATIVE_GRID_PX`.
 
@@ -360,8 +389,8 @@ MAP-04/MAP-05는 원문에서 논의 필요 상태다. 조회 목적을 문서�
 - **P3 — 결과 계약** ⟲ *D16 으로 재정의*:
   인기순 대표곡 선별은 **클라이언트 책임**으로 옮겨졌으므로 서버의 미정은 "상위 k 선정"이 아니라
   "상주 집합을 몇 곡, 어떤 필드로 내려주는가"다.
-  `weight` 는 D17 로 확정됐다(필드 포함, 현재 0/균일, 지표 확보 시 서버가 채움).
-  [NEEDS CLARIFICATION: 상주 집합 크기(FE 전제 `LAYER_SONG_COUNT`=1000, data 1레이어 실측 1,094칸), 빈 결과·응답 세부 계약을 확정해야 한다.]
+  `weight` 는 D17, 응답 필드 구성과 상주 집합 크기는 D18 로 확정됐다.
+  [NEEDS CLARIFICATION: `genreId` 를 무엇으로 채울지(99% 무장르·29→10 매핑·음수 금지), 빈 결과 응답 계약을 확정해야 한다.]
 
 | 항목 | 무엇이 미정인가 | 왜 필요한가 / 영향받는 동작·검증 |
 | --- | --- | --- |

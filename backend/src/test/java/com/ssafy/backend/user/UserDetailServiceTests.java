@@ -9,6 +9,7 @@ import java.time.OffsetDateTime;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
+import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.user.dto.UserDetailResponse;
@@ -39,7 +40,7 @@ class UserDetailServiceTests {
 	void getDetail_otherPublicUser_returnsDetailWithIsMeFalse() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
-		UserService service = new UserService(mapper);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -56,7 +57,7 @@ class UserDetailServiceTests {
 	void getDetail_selfPrivateUser_returnsDetailWithIsMeTrue() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "you@gmail.com");
 
@@ -68,7 +69,7 @@ class UserDetailServiceTests {
 	void getDetail_otherPrivateUser_throwsUserPrivate() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
 
 		assertThatThrownBy(() -> service.getDetail("you@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class)
@@ -80,7 +81,7 @@ class UserDetailServiceTests {
 	void getDetail_notFound_throwsUserNotFound() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("nobody@gmail.com")).thenReturn(null);
-		UserService service = new UserService(mapper);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
 
 		assertThatThrownBy(() -> service.getDetail("nobody@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class)

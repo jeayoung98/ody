@@ -203,9 +203,20 @@ body: `idToken`(String, required).
 - 본인 프로필도 이 API로 조회(본인 email → `isMe: true`). `isFollowing`은 토큰 주체가 조회 대상을 팔로우 중인지. 에러: `USER_NOT_FOUND`, `USER_PRIVATE`.
 - 구현 메모(S15P21A405-70): `followerCnt`/`followingCnt`/`isFollowing`은 팔로우 MVP 범위 확정(E1) 전까지 서버가 0/0/false 고정값을 반환한다.
 
-### 2.2 사용자 수정 (온보딩)
-`PATCH /user/update` · 인증 필요 · `multipart/form-data`. body: `nickname`(String, opt), `image`(file, opt). res: 2.1과 동일 상세 객체.
-- 대상은 토큰 주체(`email` 안 받음). 미전달 필드는 기존 값 유지(PATCH). 에러: `USER_NOT_FOUND`, `VALIDATION_ERROR`, `UNSUPPORTED_FILE_TYPE`, `FILE_TOO_LARGE`.
+### 2.2 사용자 수정 (프로필)
+정본은 `PATCH /user/update`(multipart, 이미지 파일 업로드)를 명세하지만, 이 저장소에는 이미지 업로드
+인프라(스토리지·MultipartFile 처리)가 없어 아래와 같이 JSON body로 구현했다(S15P21A405-216).
+
+`PATCH /api/user/profile` · 인증 필요 · `application/json`. body: `nickname`(String, opt), `imageUrl`(String, opt).
+```json
+{ "success": true, "data": { "nickname": "새닉네임", "imageUrl": "https://cdn.example.com/profile/abc.png" }, "error": null }
+```
+- 대상은 토큰 주체(`email` 안 받음). 요청에 포함된 필드만 갱신하고 미전달 필드는 기존 값 유지(PATCH).
+  둘 다 없으면 `INVALID_INPUT`. 닉네임은 `signup`/닉네임 사용 가능 여부 조회와 같은 길이 규칙(`NicknamePolicy`)을
+  적용하되, 현재 값과 동일한 닉네임을 다시 보내는 것은 중복으로 취급하지 않는다.
+- 에러: `INVALID_INPUT`(400, 둘 다 미전달), `INVALID_NICKNAME_LENGTH`(400), `NICKNAME_ALREADY_EXISTS`(409), `USER_NOT_FOUND`(404).
+- `is_public`(§2.3)과 `tutorial_completed`(§1.5)는 이 API에서 다루지 않는다 — 전자는 실시간 노출 범위와
+  얽혀 있고(S15P21A405-72), 후자는 온보딩 1회성 상태 전이라 의미가 달라 별도 엔드포인트로 유지한다.
 
 ### 2.3 공개 여부 변경
 `PATCH /user/ispublic` · 인증 필요. body: `isPublic`(boolean, required).

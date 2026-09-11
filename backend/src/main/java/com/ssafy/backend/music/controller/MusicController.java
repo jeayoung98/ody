@@ -17,7 +17,7 @@ import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 
 @RestController
-@RequestMapping("/music")
+@RequestMapping("/api/music")
 @Validated
 public class MusicController {
 

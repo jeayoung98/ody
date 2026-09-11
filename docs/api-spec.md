@@ -250,8 +250,10 @@ body: `idToken`(String, required).
 
 ## 3. 음악  *(BE2 효정 담당)*
 
+> 경로는 `/api/music/*` (S15P21A405-213). 이 저장소의 `/api/auth/*`·`/api/users/*` 컨벤션과 프론트 `api-endpoints.ts` 에 맞춘 것으로, 정본 v1.0 의 `/music/*` 표기를 대체한다.
+
 ### 3.1 노래 검색
-`GET /music/search` · 인증 필요. param: `query`(String, required), `page`(int, required, 0).
+`GET /api/music/search` · 인증 필요. param: `query`(String, required), `page`(int, required, 0).
 ```json
 { "success": true, "data": { "content": [ {
   "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
@@ -262,7 +264,7 @@ body: `idToken`(String, required).
 - 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
 
 ### 3.2 노래 상세 조회
-`GET /music/detail` · 인증 필요. param: `id`(int, required).
+`GET /api/music/detail` · 인증 필요. param: `id`(int, required).
 ```json
 { "success": true, "data": {
   "id": 10234, "mbid": "b1a9c0e9-d987-4042-ae91-78d6a3267d69", "title": "Love wins all", "artist": "IU",
@@ -280,7 +282,7 @@ body: `idToken`(String, required).
 - `neighbors`는 임베딩 공간 최근접 10곡, `distance` 오름차순. 자기 자신 제외. 재생 불가(`youtubeUrl == null`) 곡도 포함. 거리 척도는 서빙 baseline(`v2.1-pca16`) 기준. 에러: `MUSIC_NOT_FOUND`.
 
 ### 3.3 경로 탐색
-`GET /music/journey` · 인증 필요. param: `start`(int, required, 시작곡 ID), `end`(int, required, 끝곡 ID).
+`GET /api/music/journey` · 인증 필요. param: `start`(int, required, 시작곡 ID), `end`(int, required, 끝곡 ID).
 ```json
 { "success": true, "data": {
   "musicCnt": 14, "totalDuration": 3480,
@@ -300,7 +302,7 @@ body: `idToken`(String, required).
 - 에러: `MUSIC_NOT_FOUND`(없는 곡), `PATH_NOT_FOUND`(경로 연결 불가).
 
 ### 3.4 대표곡 조회
-`GET /music/major` · 인증 필요. 지도 확대 단계(`level`)와 구역 중심 좌표(`pc1`~`pc16`)로 구역 대표곡 반환. level에 따라 사용하는 PC 축 개수가 달라짐.
+`GET /api/music/major` · 인증 필요. 지도 확대 단계(`level`)와 구역 중심 좌표(`pc1`~`pc16`)로 구역 대표곡 반환. level에 따라 사용하는 PC 축 개수가 달라짐.
 
 param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
 ```json

@@ -34,6 +34,7 @@ import com.ssafy.backend.music.dto.JourneyStop;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.service.JourneyService;
+import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
@@ -65,6 +66,9 @@ class JourneyControllerTests {
 
 	@MockitoBean
 	private UserMapper userMapper;
+
+	@MockitoBean
+	private PlaylistMapper playlistMapper;
 
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);

@@ -10,7 +10,10 @@
 - **[Story]**: US1/US2/US3 (spec User Story 매핑)
 - **[BLOCKED: B#]**: plan의 미결정 게이트에 막힘. **착수 금지**, 표시만. (B1~B6 정의는 [plan.md](plan.md) "보류 항목")
 
-> ⚠️ **현 상태**: 인프라·데이터(B6)와 제품/외부 계약(B1~B5)이 여전히 미결정이다. 선행 게이트였던 T002·T003은 해소됐으므로
+> ⟲ **2026-09-11 D15**: 조회 구역이 원형 → **격자 모델**로 바뀌었다. 롤백 가능하게 원안을 보존했다 —
+> 맨 아래 "D15 영향 요약" 과 [spec.md 롤백 기록](spec.md) 절 참조. **B6(데이터·조회 인터페이스)는 해소됐다.**
+>
+> ⚠️ **현 상태**: 제품/외부 계약(B1~B4)이 여전히 미결정이다. 선행 게이트였던 T002·T003은 해소됐으므로
 > 지금 착수 가능한 것은 **미정 정책에 독립적인 순수 로직·wire 레벨 테스트**(T007~T012)다.
 > T006(전역 에러 코드 정합)은 BE1 이관 대상으로 바뀌었다 — 아래 T006 항목 참조.
 > BLOCKED 태스크는 해당 게이트 해소 후 착수한다. 정책 확정 전 의존 구현은 금지(헌법 I·IX).
@@ -46,7 +49,8 @@
 
 ## Phase 3: User Story 1 — 중심좌표 주변 구역 대표곡 (Priority: P1) 🎯 MVP
 
-**Goal**: 레벨·중심좌표 → 이동 원형 영역에서 `youtubeCnt` DESC 상위 k 대표곡 반환.
+**Goal** ⟲ *D15*: 레벨 → 해당 PC 축 쌍 평면의 **격자 구역별 대표곡** 반환. 1레이어 정적, 2레이어 이후 실시간.
+*(원안: 이동 원형 영역에서 `youtubeCnt` DESC 상위 k)*
 
 **Independent Test**: 순수 조건 변환(A9/A10)과 선정 정렬(A14 부분)을 DB 없이 검증; 성공 응답 필드·고정 좌표(A2)를 MVC 슬라이스로 검증.
 
@@ -61,11 +65,11 @@
 
 ### 게이트 대기
 
-- [ ] T013 [BLOCKED: B2] [US1] `MajorSelectionPolicy`: 레벨별 서버 반경 + 원형 내부 판정(원주 포함 `<=`/`<`, 축 스케일). 값·규칙 미정 (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelectionPolicy.java`)
+- [ ] T013 ⟲**D15 재정의** [BLOCKED: B2] [US1] ~~`MajorSelectionPolicy`: 레벨별 서버 반경 + 원형 내부 판정~~ → **격자 구역 판정**(격자 단위·칸 경계·칸별 선정 규칙). 원안 문구는 롤백용으로 남긴다 (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelectionPolicy.java`)
 - [ ] T014 [BLOCKED: B3] [US1] 장르·이전 PC 선택 누적 제약을 현재 한 쌍 요청과 연결. 제약 미확보 시 전역 후보 축소 금지. 신규 세션/파라미터 임의 추가 금지 (`backend/src/main/java/com/ssafy/backend/music/service/`)
 - [ ] T015 [BLOCKED: B2/B3/B4/B6] [US1] `MusicService.getMajor` orchestration으로 미구현 예외 교체: 정책 조회 → 조건 변환 → Reader 호출 → 순위 보존 조립 (`backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`)
-- [ ] T016 [BLOCKED: B6] [US1] `MajorTrackReader` 어댑터 구현(MyBatis mapper): "동일 버전 + 기존 제약 + 원형 내부" 후보에 `youtubeCnt` DESC top-k. 전역 선절단·ANN 대체 금지 (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
-- [ ] T017 [BLOCKED: B2/B6] [US1] 통합 테스트 A11/A12/A13 + SC-002: 이동 원형·레벨별 동일 반경·원 내부/외부 포함·동일 버전 좌표 불변(차이 0). H2(test) 또는 실 postgres fixture (`backend/src/test/java/com/ssafy/backend/music/`)
+- [ ] T016 ⟲**D15 재정의** [BLOCKED: B2] [US1] `MajorTrackReader` 어댑터 구현(MyBatis mapper): ~~"원형 내부" 후보에 `youtubeCnt` DESC top-k~~ → **1레이어는 `map_sample` 정적 조회, 2레이어 이후는 `point(...) <@ box(...)` + GiST 인덱스**(data 스펙 16 `map_layer_queries.sql` 이 질의 형태·함정 제공). 전역 선절단·ANN 대체 금지는 유지. **B6 는 해소됨**(DB 적재 완료, 조회 계약 문서화) (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
+- [ ] T017 ⟲**D15 보류** [BLOCKED: B2] [US1] ~~통합 테스트 A11/A12/A13~~ — A11~A14 가 D15 로 보류돼 대상이 없다. **SC-002(동일 버전 좌표 불변, 차이 0)는 유효**하므로 그 부분만 먼저 할 수 있다. 격자 모델의 새 수용 기준이 정해지면 그때 확장. 실 postgres fixture 사용 가능(DB 적재 완료) (`backend/src/test/java/com/ssafy/backend/music/`)
 
 **Checkpoint**: T007~T012 완료 시 순수 로직·wire 계약 독립 검증(MVP 부분). 종단 조회는 T013~T017 게이트 해소 후.
 
@@ -207,3 +211,23 @@ T006·T013~T017·T019·T020~T022·T024~T027·T030 이 이미 잡고 있어 중�
 - [ ] T033 구현된 `backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`(T009)를 plan.md 구조표에 행으로 추가한다. 표의 `MajorSelectionPolicy.java (제안)` 는 별개 파일(T013, B2 대기)이므로 대체하지 않는다 per plan: Source Code structure · T009 (partial)
 - [ ] T034 `ObservabilityTests.java` 가 `backend/src/test/java/com/ssafy/backend/`(루트 패키지)에 있는데 plan 구조표의 테스트 경로는 `.../com/ssafy/backend/music/` 다. 기능 경계를 넘는 전역 관측 테스트라 위치는 타당하므로, 표에 전역 테스트 행을 넣거나 위치 근거를 명시한다 per plan: Source Code structure · T023 (partial)
 - [ ] T035 plan.md 구조표의 경로 표기가 재배치 전 형태(`src/test/java/...`, `music/controller/...`)로 남아 있다. 그 위 산문만 `backend/` 로 갱신됐으므로 표 경로에도 접두를 반영한다 per plan: Source Code structure (partial)
+
+---
+
+## D15 영향 요약 (2026-09-11) — 조회 구역 모델 변경
+
+spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 방식 채택). 롤백 조건과 원안 전문은
+[spec.md "대체된 요구사항 — 롤백 기록"](spec.md) 절에 있다. 태스크 영향은 아래가 전부다.
+
+| 태스크 | 영향 |
+|---|---|
+| T013 | ⟲ 재정의 — 서버 반경·원형 판정 → 격자 구역 판정 |
+| T016 | ⟲ 재정의 — 원형 top-k → `map_sample` 정적 + `<@ box` 실시간. **B6 해소로 B2 만 남음** |
+| T017 | ⟲ 보류 — A11~A13 이 보류라 대상 없음. SC-002 부분만 유효 |
+| T019 | level=1 조회 대상이 `map_sample` 로 해소 후보 |
+| T009·T010 | `MajorSelection.topByYoutubeCnt` 는 **원안 전용**이 됐다. 삭제하지 않는다 — 롤백 자산이고, 인기 지표가 채워지면 그대로 쓴다 |
+| T025 | k 계약이 "격자 칸 수"로 바뀔 수 있다(1레이어 실측 1,094칸) |
+| T007·T008 | 영향 없음 — 레벨→PC 축 쌍 매핑(FR-003)은 D15 에서 그대로 유지 |
+
+**새로 열린 것**: DB 적재 완료(662만행)와 data 의 조회 계약 문서화로 **B6 가 해소**됐다.
+남은 게이트는 B1(입력 검증)·B2(격자 파라미터·선정 규칙)·B3(누적 제약)·B4(결과 계약)다.

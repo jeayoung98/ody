@@ -1,3 +1,8 @@
+import type { LayerBox } from "@/types";
+
+/** PC 좌표를 URL 에 실을 때의 자릿수. 화면 한 픽셀보다 훨씬 촘촘하다 */
+const round = (v: number) => v.toFixed(4);
+
 /** 백엔드 API 경로 모음. fetch 호출 시 문자열을 직접 쓰지 않고 여기서 가져온다. */
 export const API_ENDPOINTS = {
   health: "/api/health",
@@ -18,7 +23,20 @@ export const API_ENDPOINTS = {
   },
 
   map: {
-    songs: "/api/map/songs",
+    /**
+     * 이 겹의 상주 집합. `boxes` = 이전 겹들에서 뷰포트로 좁힌 누적 범위 (레이어 0 이면 빈 배열).
+     * 서버 쪽 level·축 번호는 1-based 다 — 레이어 l 은 level l+1, 평면은 pc(2l+1)·pc(2l+2).
+     * 누적 범위를 level-1 쌍 전부 실어야 candidate(N+1) ⊆ candidate(N) 이 성립한다 (백엔드 MajorQuery).
+     * 실서비스 경로는 `/api/music/major` 로 합쳐진다 (BACKEND-NOTES A-1).
+     */
+    songs: (boxes: readonly LayerBox[]) => {
+      const q = [`level=${boxes.length + 1}`];
+      for (const b of boxes) {
+        const k = b.layer * 2 + 1;
+        q.push(`pc${k}min=${round(b.xMin)}`, `pc${k}max=${round(b.xMax)}`, `pc${k + 1}min=${round(b.yMin)}`, `pc${k + 1}max=${round(b.yMax)}`);
+      }
+      return `/api/map/songs?${q.join("&")}`;
+    },
     representatives: (layer: number) => `/api/map/layers/${layer}/representatives`,
     representativeLayers: (musicId: number) => `/api/music/${musicId}/representative-layers`,
     nearby: (musicId: number) => `/api/map/nearby/${musicId}`,

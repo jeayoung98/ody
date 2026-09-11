@@ -4,7 +4,7 @@
 프론트가 임의로 정할 수 없는 것들이며, 목(mock) API로 임시 구현해둔 것도 전부 여기에 적는다.
 
 - 상태: `협의 전` / `협의 중` / `반영됨`
-- 최종 수정: 2026-09-09
+- 최종 수정: 2026-09-11
 
 **항목을 추가했으면 문서만 고치고 끝내지 말고 백엔드에 직접 알린다** ([루트 CLAUDE.md §3](../../CLAUDE.md)).
 반대로 백엔드가 API·응답·에러 코드를 바꿨으면 여기와 [FEATURES.md](FEATURES.md)를 갱신하고 프론트에 알린다.
@@ -50,7 +50,8 @@
 
 | # | API | 요청 | 응답 | 이유 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| A-1 | `GET /api/map/songs` | 없음 (또는 뷰포트·게이트 파라미터) | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | 지도 렌더링·재투영의 원본. 실서비스는 레이어 0 스트리밍 + 게이트 이하 상주 집합 통째 전송 | 협의 전 |
+| A-1 | `GET /music/major` (목: `/api/map/songs`) | `level` (1-based) + 누적 범위 `pc{k}min`·`pc{k}max` 를 **level-1 쌍 전부**. level=1 은 파라미터 없음 | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | **겹마다 그 겹의 상주 집합을 받는다** (2026-09-11 BE 김효정 ↔ FE 윤주하 확정, D15~D19). 프론트가 파고들 때 화면 범위를 누적에 쌓고 떠오르면 버린다 — 서버는 탐색 상태를 갖지 않는다. 레이어 l ↔ level l+1, 평면은 pc(2l+1)·pc(2l+2) | 협의 중 (프론트 반영 완료) |
+| A-1-1 | `MapPoint.genreId` | — | 장르를 모르는 곡은 **무장르 인덱스(10)** 로 내려준다. 음수 금지 | 실데이터는 662만 중 6.6만(1.0%)만 장르가 있다. 0 으로 채우면 지도가 전부 "앰비언트" 색이 된다. 프론트에 `GENRE_NAMES[10] = "무장르"` 와 회청색을 추가했다. 멜론 코드 29종 → 10색 대응표는 아직 없다 — **누가 어떻게 매핑할지 미정** | 협의 중 (프론트 반영 완료) |
 | A-2 | `GET /api/map/layers/{layer}/representatives` | layer | `{ layer, musicIds[] }` | 레이어마다 **다른 대표곡**을 앨범 커버로 띄운다. 선별 기준은 백엔드가 정함 | 협의 전 |
 | A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | 협의 전 |
 | A-4 | `NearbyUser` 응답 | — | `viewingMusicId` **추가 필요** | 따라가기 시 좌표 두 개가 필요하다: `musicId`=재생 중(우주선 위치), `viewingMusicId`=인솔자가 보고 있는 상세 곡(뷰포트·우측 패널 기준) (SOCIAL-07) | 협의 전 |

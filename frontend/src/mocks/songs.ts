@@ -1,14 +1,18 @@
 /**
  * 목 곡 데이터셋 — 16차원 PC 벡터를 가진 곡 N개.
  * 별지도/모프 프로토타입의 생성 규칙을 따른다: 밀도 봉우리 22개 주변에 군집, 장르는 색·성향으로만.
- * 실서비스에서는 겹마다 그 겹의 상주 집합(LAYER_SONG_COUNT 규모, PC 16개 포함)을 받는다.
+ * 여기는 **우주 전체**(카탈로그)다 — 겹의 상주 집합은 /api/map/songs 라우트가 이 중에서 골라 내려준다.
  */
-import { GENRE_NAMES, LAYER_COUNT, LAYER_SONG_COUNT } from "@/constants";
+import { GENRE_NAMES, LAYER_COUNT, LAYER_SONG_COUNT, NO_GENRE_ID } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";
 import { seeded } from "./seed";
 
-/** 겹마다 상주하는 곡 수. 목에서는 같은 집합을 8겹이 돌려 쓰고, 겹마다 다른 두 축으로 투영한다 */
-export const SONG_COUNT = LAYER_SONG_COUNT;
+/**
+ * 목 우주 전체의 곡 수. **한 겹 규모(LAYER_SONG_COUNT)보다 커야** 겹마다 다른 집합이 내려간다 —
+ * 같으면 어느 겹에서나 전곡이 상주해서 "겹마다 받는다"가 확인되지 않는다.
+ * 실서비스는 662만 곡 중 한 겹에 1,000곡이다.
+ */
+export const SONG_COUNT = LAYER_SONG_COUNT * 4;
 export { GENRE_NAMES };
 export const MOODS = ["몽환적", "신나는", "잔잔한", "어두운", "따뜻한", "차가운"];
 
@@ -32,8 +36,9 @@ export function allSongs(): MapPoint[] {
   const cells = Array.from({ length: 22 }, () => {
     const a = rnd() * Math.PI * 2;
     const r = Math.sqrt(rnd());
-    const gi = Math.floor(rnd() * GENRE_NAMES.length);
-    const w = Array.from({ length: GENRE_NAMES.length }, () => 0.75 + rnd() * 0.5);
+    // 색이 보여야 하는 목이라 '무장르'는 뽑지 않는다 (실데이터는 99%가 무장르다 — BACKEND-NOTES A-1)
+    const gi = Math.floor(rnd() * NO_GENRE_ID);
+    const w = Array.from({ length: NO_GENRE_ID }, () => 0.75 + rnd() * 0.5);
     w[gi] += 1.9;
     const tot = w.reduce((p, v) => p + v, 0);
     return { x: Math.cos(a) * r * 1.16, y: Math.sin(a) * r * 0.72, w: w.map((v) => v / tot), gi };

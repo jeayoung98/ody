@@ -1,5 +1,5 @@
 import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, STAR_SIZE, STAR_VIEW } from "@/constants";
-import { FONTS, GENRE_COLORS, MAP_COLORS, NEBULA_WASH, genreRgb, rgba } from "@/constants/design-tokens";
+import { FONTS, MAP_COLORS, NEBULA_WASH, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
 import { coverFor, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32 } from "./sprites";
@@ -165,7 +165,7 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     alpha *= a0;
     if (e.hoverId === s.musicId) alpha = Math.min(1, alpha + 0.3);
     g.globalAlpha = alpha;
-    g.drawImage(spr[s.genreId % GENRE_COLORS.length], px - d / 2, py - d / 2, d, d);
+    g.drawImage(spr[genreIdx(s.genreId)], px - d / 2, py - d / 2, d, d);
     // 전환 중 나가는 별은 지나간 자리에 잔상을 남긴다 — 가장자리로 훅 빠지는 게 보이게
     if (out && e.anim) {
       const f2 = e.freeRect();
@@ -302,7 +302,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     const d = cur ? 34 : 24;
     g.globalCompositeOperation = "lighter";
     g.globalAlpha = k * a * (s.playable ? 1 : 0.55);
-    g.drawImage(spr[s.genreId % GENRE_COLORS.length], p.x - d / 2, p.y - d / 2, d, d);
+    g.drawImage(spr[genreIdx(s.genreId)], p.x - d / 2, p.y - d / 2, d, d);
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = k * a;
     g.beginPath();
@@ -401,7 +401,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     const s = e.songs.find((x) => x.musicId === n.id)!;
     const d = 22 + (1 - n.rank / Math.max(1, nodes.length)) * 10;
     g.globalAlpha = 0.95 * k * (s.playable ? 1 : 0.55);
-    g.drawImage(spr[s.genreId % GENRE_COLORS.length], n.x - d / 2, n.y - d / 2, d, d);
+    g.drawImage(spr[genreIdx(s.genreId)], n.x - d / 2, n.y - d / 2, d, d);
     g.globalAlpha = k;
     g.fillStyle = MAP_COLORS.core;
     g.beginPath();
@@ -441,7 +441,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
-  g.drawImage(spr[song.genreId % GENRE_COLORS.length], tx - 22, ty - 22, 44, 44);
+  g.drawImage(spr[genreIdx(song.genreId)], tx - 22, ty - 22, 44, 44);
   g.beginPath();
   g.arc(tx, ty, rr, 0, 6.284);
   g.strokeStyle = rgba(frgb, 0.85);
@@ -589,7 +589,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
   const gr = 26 * pop;
-  g.drawImage(glowSprites()[s.genreId % GENRE_COLORS.length], cx - gr, cy - gr, gr * 2, gr * 2);
+  g.drawImage(glowSprites()[genreIdx(s.genreId)], cx - gr, cy - gr, gr * 2, gr * 2);
 
   // 등장 파문 — 한 번 퍼지고 사라진다
   if (kk < 1) {

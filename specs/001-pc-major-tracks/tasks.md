@@ -63,7 +63,7 @@
 - [X] T008 (2026-09-10 완료: 4 tests) [P] [US1] Resolver 단위테스트 A9/A10: level=1→pc1·pc2, level=2→pc3·pc4, 이전 단계 중심으로 해석 안 함 (`backend/src/test/java/com/ssafy/backend/music/MajorQueryResolverTests.java`)
 - [X] T009 (2026-09-10 완료) [P] [US1] 대표곡 선정 순수 로직: 후보 리스트에 `youtubeCnt` DESC 정렬 후 상위 k. **k는 주입 파라미터**(하드코딩 금지, B4). `playCnt`·재생 링크로 순위 변경 안 함. 동률·null·부족 미포함(B4) (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`)
 - [X] T010 (2026-09-10 완료: 3 tests) [P] [US1] 선정 단위테스트 A14: 후보 조회수 [300,100,200], k=2 → [300,200]; `playCnt` 역순이어도 순서 불변 (`backend/src/test/java/com/ssafy/backend/music/MajorSelectionTests.java`)
-- [X] T011 (2026-09-10 완료: `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` — §0.6 12필드 + pc1~pc16 전부) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [X] T011 (2026-09-10 완료: `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` / ⚠️ **D18 로 교체 예정** — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 - [X] T012 (2026-09-10 완료: `major_itemWithoutYoutubeUrl_isKeptWithNullPreserved`) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 
 ### 게이트 대기
@@ -71,7 +71,7 @@
 - [ ] T013 ⟲**D15 재정의** [BLOCKED: B2] [US1] ~~`MajorSelectionPolicy`: 레벨별 서버 반경 + 원형 내부 판정~~ → **격자 구역 판정**(격자 단위·칸 경계·칸별 선정 규칙). 원안 문구는 롤백용으로 남긴다 (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelectionPolicy.java`)
 - [ ] T014 [BLOCKED: B3] [US1] 장르·이전 PC 선택 누적 제약을 현재 한 쌍 요청과 연결. 제약 미확보 시 전역 후보 축소 금지. 신규 세션/파라미터 임의 추가 금지 (`backend/src/main/java/com/ssafy/backend/music/service/`)
 - [ ] T015 [BLOCKED: B2/B3/B4/B6] [US1] `MusicService.getMajor` orchestration으로 미구현 예외 교체: 정책 조회 → 조건 변환 → Reader 호출 → 순위 보존 조립 (`backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`)
-- [ ] T016 ⟲**D15 재정의** [BLOCKED: B2] [US1] `MajorTrackReader` 어댑터 구현(MyBatis mapper): ~~"원형 내부" 후보에 `youtubeCnt` DESC top-k~~ → **1레이어는 `map_sample` 정적 조회, 2레이어 이후는 `point(...) <@ box(...)` + GiST 인덱스**(data 스펙 16 `map_layer_queries.sql` 이 질의 형태·함정 제공). 전역 선절단·ANN 대체 금지는 유지. **B6 는 해소됨**(DB 적재 완료, 조회 계약 문서화) (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
+- [ ] T016 ⟲**D15 재정의** [BLOCKED: B2] [US1] `MajorTrackReader` 어댑터 구현(MyBatis mapper): ~~"원형 내부" 후보에 `youtubeCnt` DESC top-k~~ → **1레이어는 `map_sample` 정적 조회, 2레이어 이후는 `point(...) <@ box(...)` + GiST 인덱스**(data 스펙 16 `map_layer_queries.sql` 이 질의 형태·함정 제공). 전역 선절단·ANN 대체 금지는 유지. **응답 필드를 채운다** — `pc[16]`·`genreId`·`weight`·`playable`. `map_sample` 에 없는 필드는 `music` 조인이 필요하니 **0.4 ms 이점을 재측정할 것**. `weight` 는 상수(D17), `genreId` 는 무장르 인덱스 통보 후. **B6 는 해소됨**(DB 적재 완료, 조회 계약 문서화) (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
 - [ ] T017 ⟲**D15 보류** [BLOCKED: B2] [US1] ~~통합 테스트 A11/A12/A13~~ — A11~A14 가 D15 로 보류돼 대상이 없다. **SC-002(동일 버전 좌표 불변, 차이 0)는 유효**하므로 그 부분만 먼저 할 수 있다. 격자 모델의 새 수용 기준이 정해지면 그때 확장. 실 postgres fixture 사용 가능(DB 적재 완료) (`backend/src/test/java/com/ssafy/backend/music/`)
 
 **Checkpoint**: T007~T012 완료 시 순수 로직·wire 계약 독립 검증(MVP 부분). 종단 조회는 T013~T017 게이트 해소 후.
@@ -329,3 +329,9 @@ B1(입력 검증)·M4(에러 코드)·T030(`TOKEN_EXPIRED`)은 이 목록과 별
 
 ⚠️ **`contracts/music-major.md` 가 원안 상태다.** 원형·`youtubeCnt` DESC·`MusicDetail` 응답으로 적혀 있어
 D15~D19 와 어긋난다. T004 범위 밖이라 두었다 — T015 전에 갱신해야 한다.
+
+---
+
+## Phase 9: 외부 계약 동기화
+
+- [ ] T036 **[헌법 II MUST · T005 선행]** 정본 `docs/api-spec.md` §3.4 를 D15~D19 로 갱신한다. 현재 원안(중심좌표 기반 대표곡·원형 구역·`youtubeCnt` DESC·`MusicDetail` 응답)이라 **구현과 호환 불가하게 어긋나 있다.** 헌법 II 는 "경계를 넘는 변경은 **구현 전에** 계약을 정의·갱신해야 한다(MUST)" 이므로 T005 착수 전에 한다. 소비자 합의는 2026-09-11 FE1 확인으로 끝났고 문서 갱신만 남았다. 변경분 — **요청**: `level` + 누적 축 범위(1레이어는 파라미터 없음) / **응답**: `MapPoint` 7필드 / **선정 책임**: 서버=공간 균등, 클라이언트=인기순. ⚠️ 팀 공용 문서(Notion 스냅샷, FE·DATA 공유)라 **MR 리뷰어에 FE1·BE4 포함** per Constitution II (missing)

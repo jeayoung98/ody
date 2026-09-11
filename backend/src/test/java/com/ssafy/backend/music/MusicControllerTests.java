@@ -1,15 +1,18 @@
 package com.ssafy.backend.music;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
+import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
@@ -81,8 +84,67 @@ class MusicControllerTests {
 				.andExpect(jsonPath("$.data.content[0].location.pc1").value(-0.4213));
 	}
 
+	/** A2 (FR-006/FR-007): 성공 항목이 정본 §0.6 필드를 전부 포함하고 pc1~pc16 이 곡 기준선 좌표와 일치한다. */
 	@Test
-	void major_invalidLevel_returnsInvalidInput() throws Exception {
+	void major_successItem_carriesAllContractFieldsAndBaselineCoordinates() throws Exception {
+		double[] pcs = { 0.11, -0.22, 0.33, -0.44, 0.55, -0.66, 0.77, -0.88,
+				0.99, -1.10, 1.21, -1.32, 1.43, -1.54, 1.65, -1.76 };
+		MusicDetail sample = new MusicDetail(
+				10234L, "b1a9c0e9-1111", "Love wins all", "IU", 128.4, 275, "The Winning",
+				List.of("K-Pop", "Ballad"), "https://youtu.be/x",
+				new Location(pcs[0], pcs[1], pcs[2], pcs[3], pcs[4], pcs[5], pcs[6], pcs[7],
+						pcs[8], pcs[9], pcs[10], pcs[11], pcs[12], pcs[13], pcs[14], pcs[15]),
+				1428, 90210);
+		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(sample)));
+
+		ResultActions result = mockMvc.perform(get("/music/major").param("level", "1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].id").value(10234))
+				.andExpect(jsonPath("$.data.content[0].mbid").value("b1a9c0e9-1111"))
+				.andExpect(jsonPath("$.data.content[0].title").value("Love wins all"))
+				.andExpect(jsonPath("$.data.content[0].artist").value("IU"))
+				.andExpect(jsonPath("$.data.content[0].album").value("The Winning"))
+				.andExpect(jsonPath("$.data.content[0].genres[0]").value("K-Pop"))
+				.andExpect(jsonPath("$.data.content[0].genres[1]").value("Ballad"))
+				.andExpect(jsonPath("$.data.content[0].youtubeUrl").value("https://youtu.be/x"))
+				.andExpect(jsonPath("$.data.content[0].bpm").value(128.4))
+				.andExpect(jsonPath("$.data.content[0].duration").value(275))
+				.andExpect(jsonPath("$.data.content[0].playCnt").value(1428))
+				.andExpect(jsonPath("$.data.content[0].youtubeCnt").value(90210));
+
+		for (int i = 0; i < pcs.length; i++) {
+			result.andExpect(jsonPath("$.data.content[0].location.pc" + (i + 1)).value(pcs[i]));
+		}
+	}
+
+	/** A3 (FR-009): youtubeUrl 이 null 이어도 항목을 제거하지 않고 null 을 그대로 보존한다. */
+	@Test
+	void major_itemWithoutYoutubeUrl_isKeptWithNullPreserved() throws Exception {
+		MusicDetail unplayable = new MusicDetail(
+				55L, "mbid-55", "No link song", "Unknown", 100.0, 180, null,
+				List.of("Indie"), null,
+				new Location(0.1, 0.2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0),
+				7, 12);
+		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(unplayable)));
+
+		mockMvc.perform(get("/music/major").param("level", "1"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content.length()").value(1))
+				.andExpect(jsonPath("$.data.content[0].id").value(55))
+				// 필드가 통째로 빠지는 것과 null 로 남는 것을 구분해야 재생 불가를 식별할 수 있다.
+				.andExpect(content().string(containsString("\"youtubeUrl\":null")));
+	}
+
+	/**
+	 * ⚠️ 잠정 검증 (B1 미정) — 확정된 수용 기준이 아니다.
+	 *
+	 * spec Edge Cases 는 level=0·음수·상한 초과의 허용 범위를 P1(B1) 미정으로 두었고
+	 * 컨트롤러의 {@code @Min(1)} 을 정책 근거로 삼지 말라고 명시한다(헌법 IX).
+	 * 이 테스트는 현재 구현 동작의 회귀 방지일 뿐이며, B1 확정 시 기대값을 그때 규범으로 교체한다.
+	 * 커버리지를 유지하기 위해 삭제하지 않는다.
+	 */
+	@Test
+	void major_level0_currentMinConstraintRejects_provisionalUntilB1() throws Exception {
 		mockMvc.perform(get("/music/major").param("level", "0"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))

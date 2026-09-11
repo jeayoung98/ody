@@ -3,6 +3,23 @@
 > 출처: Notion 「ODY api 명세서 최종」(정본). 정본은 Notion이며, 이 문서는 스냅샷이다.
 > 상위 「API 명세서(수정중)」의 개별 API 페이지와 차이가 있으면 **이 정본이 우선**한다.
 
+> ## ⚠️ 스냅샷 선행 갱신 (2026-09-11) — Notion 미반영
+>
+> **§3.4 와 §0.6 의 `MapPoint` 항목은 이 스냅샷에서 먼저 갱신됐고 Notion 정본에는 아직 없다.**
+> 위의 "정본(Notion) 우선" 규칙과 충돌하므로 **해당 두 곳에 한해 이 스냅샷을 따른다.**
+>
+> | | |
+> |---|---|
+> | 무엇 | `GET /music/major` 의 요청·응답·선정 책임(§3.4), 공통 DTO `MapPoint` 신설(§0.6) |
+> | 왜 | 구현이 원안과 호환 불가하게 갈라졌다. 헌법 II — "경계를 넘는 변경은 **구현 전에** 계약을 갱신해야 한다(MUST)" |
+> | 근거 | 결정 D15~D19. `specs/001-pc-major-tracks/spec.md` 의 Clarifications 절 |
+> | 원안 | 같은 파일 "대체된 요구사항 — 롤백 기록" 절에 **전문 보존**. 롤백 조건도 거기 있다 |
+> | 합의 | FE1 확인 완료(2026-09-11). data 인프라(스펙 16·18)가 이 모델로 이미 구축됨 |
+> | 이슈 | S15P21A405-50 · 태스크 T036 |
+>
+> **남은 일: Notion 정본에 이 내용을 옮겨야 한다. 옮긴 뒤 이 블록을 지운다.**
+> 그 전까지 Notion 만 보고 구현하면 어긋난다.
+
 ## 0. 공통 사항
 
 ### 0.1 기본 정보
@@ -90,6 +107,9 @@
 **Location**: `pc1`~`pc16` (각 float).
 
 **MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `playCnt`(int), `youtubeCnt`(int).
+
+**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `playable`(boolean, 재생 링크 유무).
+좌표를 `Location` 객체가 아니라 배열로 싣는 유일한 DTO다 — 클라이언트가 레이어 축 `pc(2n-1)`·`pc(2n)` 으로 재투영하기 때문.
 
 **PlaylistTrack**: `id`(int, 곡 ID), `title`, `artist`, `duration`(int, 초), `youtubeUrl`(string\|null).
 
@@ -311,17 +331,47 @@ body: `idToken`(String, required).
 - 에러: `MUSIC_NOT_FOUND`(없는 곡), `PATH_NOT_FOUND`(경로 연결 불가).
 
 ### 3.4 대표곡 조회
-`GET /music/major` · 인증 필요. 지도 확대 단계(`level`)와 구역 중심 좌표(`pc1`~`pc16`)로 구역 대표곡 반환. level에 따라 사용하는 PC 축 개수가 달라짐.
+> ⚠️ **2026-09-11 개정 · 스냅샷 선행(Notion 미반영).** 아래 "변경 이력" 참조.
+> 절 이름과 경로(`/music/major`)는 참조 깨짐을 피하려고 **그대로 둔다** — 서버가 대표곡을 고르지 않게 된 뒤에도
+> 이름이 `major` 인 것은 역사적 잔재다.
 
-param: `level`(int, required, 기본 1), `pc1`~`pc16`(float, not required).
+`GET /music/major` · 인증 필요. 지도 레이어(`level`)와 이전 겹들에서 좁힌 누적 범위로 그 레이어에 **상주하는 곡 집합**을 반환. 레이어 n 은 평면 `pc(2n-1)`·`pc(2n)` 을 축으로 씀.
+
+param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, 레이어 1..level-1 각각의 min·max 쌍).
 ```json
 { "success": true, "data": { "content": [ {
-  "id": 10234, "mbid": "b1a9c0e9-...", "title": "Love wins all", "artist": "IU", "bpm": 128.4, "duration": 275,
-  "album": "The Winning", "genres": ["K-Pop"], "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
-  "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3
+  "musicId": 10234,
+  "pc": [-0.4213, 1.0872, "...", -0.123],
+  "genreId": 0, "weight": 0,
+  "title": "Love wins all", "artist": "IU", "playable": false
 } ] }, "error": null }
 ```
-- `level = 1`(최상위)에서는 PC 값 없이 호출 가능. 에러: `VALIDATION_ERROR`.
+- `level = 1`(최상위)은 범위 없이 호출. 서버가 미리 계산한 정적 결과를 반환.
+- 누적 범위는 **클라이언트가 캐싱해 전부 전달**. 서버는 탐색 상태를 보관하지 않으며 요청 하나로 완결됨. 레이어를 올라가면 클라이언트가 해당 범위를 폐기.
+- **선정 책임 분리**: 서버는 상주 집합을 공간적으로 고르게 뽑음. 인기순 대표 선별은 클라이언트가 화면 픽셀 격자에서 수행 — 격자가 줌에 따라 변해 서버가 적용할 수 없음.
+- 반환 개수는 1,000 **규모**. 정확한 수는 강제하지 않음.
+- 상세 필드(`bpm`·`duration`·`album`·`genres`·`mbid`·`playCnt`·`youtubeCnt`)는 담지 않음 — §3.2 담당.
+- 에러: `VALIDATION_ERROR`.
+
+**미정**: 범위 파라미터의 이름·표기는 FE 구현 시 확정(후보 `pc{n}min`·`pc{n}max`). `genreId` 의 무장르 인덱스 번호와 멜론 코드 29종 → 색 인덱스 매핑은 FE 통보 대기.
+
+**현재 데이터 상태**(계약이 아니라 사실): `weight` 는 인기 지표 부재로 균일값, `playable` 은 `youtube_url` 미수집이라 전부 false.
+
+#### 변경 이력 — 2026-09-11 (D15~D19, 이슈 S15P21A405-50)
+
+| | 원안 (~2026-09-10) | 개정 |
+|---|---|---|
+| 요청 | `level` + 중심좌표 `pc1`~`pc16` | `level` + **누적 축 범위**(1레이어는 파라미터 없음) |
+| 조회 구역 | 서버가 레벨별 **반경**으로 정하는 **원형** | **격자**. 구역 선택·이동은 **클라이언트 뷰포트** |
+| 선정 | 서버가 `youtubeCnt` **내림차순 상위 k** | 서버는 **공간 균등 상주 집합**, 인기순은 **클라이언트** |
+| 응답 | `MusicDetail` (12필드, `location` 객체) | **`MapPoint`** (7필드, `pc` 배열) |
+| 1레이어 | 다른 레벨과 동일 처리 | **정적 사전 계산** |
+
+**왜**: FE 가 이 모델로 이미 구현했고(`map-engine.ts`), data 가 거기 맞춰 인프라를 만들었으며(스펙 16 `map_sample`·GiST),
+1레이어 전역 실시간 집계가 **20,941 ms** 로 측정돼 정적화 없이는 첫 화면이 성립하지 않는다.
+
+**원안 전문과 롤백 조건**: `specs/001-pc-major-tracks/spec.md` 의 "대체된 요구사항 — 롤백 기록" 절.
+인기 지표가 확보되거나 고정 격자의 시각적 문제가 드러나면 재검토 대상이다.
 
 ---
 

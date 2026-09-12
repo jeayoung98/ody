@@ -21,12 +21,8 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicSummary;
@@ -36,8 +32,6 @@ import com.ssafy.backend.music.service.MusicService;
 /**
  * 검색 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler 동작 검증.
  * 에러코드는 master GlobalErrorCode 기준.
- * ponytail: master @MapperScan이 슬라이스에 testMapper를 끌어와 SqlSessionFactory 부재로 실패 →
- * 해당 매퍼만 @MockitoBean으로 대체(BE-infra 소스 무수정). 근본 해결은 T301(@MapperScan 분리).
  */
 // ponytail: master SecurityConfig가 슬라이스에 딸려와 security 빈 부재로 컨텍스트가 죽는다 →
 // JwtAuthenticationFilter는 Filter라 슬라이스에 스캔된다. 둘 다 제외하고 기본 시큐리티 필터도 끈다(BE-infra 소스 무수정).
@@ -53,17 +47,9 @@ class MusicSearchControllerTests {
 	@MockitoBean
 	private MusicService musicService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	private static MusicSummary song(long id, String title, String artist, String youtubeUrl) {
 		return new MusicSummary(id, title, artist, "The Winning", List.of("K-Pop"), youtubeUrl,

@@ -19,6 +19,7 @@
 | [004](004-infinite-scroll-fired-before-scrolling.md) | 무한 스크롤이 스크롤 전에 다음 페이지를 당겨옴 | `IntersectionObserver.observe()` 의 첫 콜백이 아직 안 그려진 레이아웃으로 판정 | S15P21A405-267 |
 | [005](005-stale-overlay-click-gate.md) | 여정을 한 번 만들면 그 뒤로 지도의 별이 안 눌림 | 해제된 별자리가 정리되지 않아 클릭 게이트가 계속 걸림 | S15P21A405-270 |
 | [006](006-layer-entry-scale-lost-on-ascend.md) | 겹을 다녀오면 줌아웃이 안 되고 별 무리가 안 보임 | 떠오를 때 그 겹의 **진입** 배율 대신 **도착** 배율을 기준으로 삼음 | S15P21A405-271 |
+| [007](007-album-covers-flicker-on-zoom.md) | 줌하면 앨범 커버가 통째로 교체돼 반짝임 | 격자 칸이 배율에 반비례해 매 프레임 새로 뽑히는데 붙잡아 줄 정렬 키가 없음 | S15P21A405-276 |
 
 ---
 

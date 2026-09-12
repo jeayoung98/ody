@@ -65,12 +65,12 @@ class MajorQueryContractTests {
 	@Test
 	void mapPointRejectsNegativeGenreId() {
 		assertThrows(IllegalArgumentException.class,
-				() -> new MapPoint(1L, pc16(), -1, 0, "t", "a", null, false));
+				() -> new MapPoint(1L, pc16(), -1, 0, "t", "a", null, null, false));
 	}
 
 	@Test
 	void mapPointRequiresSixteenCoordinates() {
 		assertThrows(IllegalArgumentException.class,
-				() -> new MapPoint(1L, Collections.nCopies(8, 0.0), 0, 0, "t", "a", null, false));
+				() -> new MapPoint(1L, Collections.nCopies(8, 0.0), 0, 0, "t", "a", null, null, false));
 	}
 }

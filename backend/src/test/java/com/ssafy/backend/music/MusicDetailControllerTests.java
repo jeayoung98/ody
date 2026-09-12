@@ -61,12 +61,12 @@ class MusicDetailControllerTests {
 
 	private static MusicDetail detail(String youtubeUrl) {
 		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning",
-				List.of("K-Pop"), youtubeUrl, loc(), 1428, 3);
+				List.of("K-Pop"), youtubeUrl, null, loc(), 1428, 3);
 	}
 
 	private static NeighborTrack neighbor(long id, String youtubeUrl, double distance) {
 		return new NeighborTrack(
-				new MusicSummary(id, "Through the Night", "IU", "Palette", List.of("K-Pop"), youtubeUrl, loc()),
+				new MusicSummary(id, "Through the Night", "IU", "Palette", List.of("K-Pop"), youtubeUrl, null, loc()),
 				distance);
 	}
 

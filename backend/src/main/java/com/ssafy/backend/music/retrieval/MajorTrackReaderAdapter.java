@@ -1,5 +1,6 @@
 package com.ssafy.backend.music.retrieval;
 
+import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import java.util.List;
 
 import org.springframework.stereotype.Repository;
@@ -72,6 +73,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 				row.getTitle(),
 				row.getArtist(),
 				youtubeUrl,
+				VIDEO_ID_NOT_LOADED,
 				youtubeUrl != null);
 	}
 

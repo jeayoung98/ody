@@ -1,10 +1,12 @@
 package com.ssafy.backend.music;
 
+import static org.hamcrest.Matchers.containsString;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,8 +54,46 @@ class MusicSearchControllerTests {
 
 
 	private static MusicSummary song(long id, String title, String artist, String youtubeUrl) {
-		return new MusicSummary(id, title, artist, "The Winning", List.of("K-Pop"), youtubeUrl,
+		return song(id, title, artist, youtubeUrl, null);
+	}
+
+	private static MusicSummary song(long id, String title, String artist, String youtubeUrl, String videoId) {
+		return new MusicSummary(id, title, artist, "The Winning", List.of("K-Pop"), youtubeUrl, videoId,
 				new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123));
+	}
+
+	/**
+	 * videoId 는 응답에 실려 나가야 한다 (spec 006 FR-001).
+	 * 적재 전이라 실제로는 전 곡 null 이지만, 값이 생겼을 때 직렬화 경로가 이미 열려 있어야
+	 * 프론트가 미리 붙일 수 있다.
+	 */
+	@Test
+	void search_carriesVideoId_whenPresent() throws Exception {
+		when(musicService.search(anyString(), anyInt())).thenReturn(new PageResponse<>(
+				List.of(song(1L, "A", "IU", "https://y/1", "dQw4w9WgXcQ")), 0, 10, false));
+
+		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].videoId").value("dQw4w9WgXcQ"))
+				// 가산 변경이다 — 기존 필드는 그대로 있어야 한다 (FR-002)
+				.andExpect(jsonPath("$.data.content[0].youtubeUrl").value("https://y/1"));
+	}
+
+	/**
+	 * videoId 가 없으면 키가 <b>빠지는 게 아니라 null 로 나간다</b>. 그리고 youtubeUrl 폴백은 살아 있어야 한다 (FR-003).
+	 *
+	 * 원문 문자열로 확인하는 이유: {@code jsonPath(...).doesNotExist()} 는 "키 없음"과 "값이 null"을
+	 * 둘 다 통과시켜 지금 확인하려는 차이를 못 가른다. 프론트는 그 차이로 분기하므로 못 박아 둔다.
+	 */
+	@Test
+	void videoIdIsSerializedAsNull_notOmitted_whenAbsent() throws Exception {
+		when(musicService.search(anyString(), anyInt())).thenReturn(new PageResponse<>(
+				List.of(song(1L, "A", "IU", "https://y/1")), 0, 10, false));
+
+		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
+				.andExpect(status().isOk())
+				.andExpect(content().string(containsString("\"videoId\":null")))
+				.andExpect(jsonPath("$.data.content[0].youtubeUrl").value("https://y/1"));
 	}
 
 	@Test

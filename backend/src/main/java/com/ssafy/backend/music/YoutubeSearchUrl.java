@@ -19,6 +19,18 @@ public final class YoutubeSearchUrl {
 
 	private static final String SEARCH_BASE = "https://www.youtube.com/results?search_query=";
 
+	/**
+	 * {@code videoId} 적재 전이라는 뜻 (S15P21A405-57, spec 006).
+	 *
+	 * <p>값은 {@code null} 이지만 이름을 붙였다. 응답에 {@code videoId} 자리는 있으나 아직 채울
+	 * 저장소가 없는 상태라, 그냥 {@code null} 을 적으면 "값이 없는 곡"인지 "기능이 아직 없는 것"인지
+	 * 읽는 사람이 구분할 수 없다. 적재가 붙으면 이 상수를 쓰는 자리가 곧 교체 지점이다.
+	 *
+	 * <p>확보 조건은 spec 006 FR-006 이다 — 길이 ±3초(공식 채널 ±30초) 일치 + {@code embeddable}.
+	 * 조건을 못 넘긴 곡은 확보 후에도 {@code null} 이며, 그건 정상 상태다(FR-007).
+	 */
+	public static final String VIDEO_ID_NOT_LOADED = null;
+
 	private YoutubeSearchUrl() {
 	}
 

@@ -72,6 +72,12 @@ class JourneyBenchmarkIT {
 	/** AC-J5 기준. 종단 3초 예산의 하위 목표다. */
 	private static final long P95_BUDGET_MS = 2000;
 
+	/** 최악 케이스는 질의가 3배라 표본을 줄인다. 분포가 아니라 상한을 보는 측정이다. */
+	private static final int WORST_PAIRS = 10;
+
+	/** 종단 3초 예산. 게이트웨이 몫이 따로 붙으므로 여유가 남아야 한다. */
+	private static final long WORST_BUDGET_MS = 3000;
+
 	private static final ServingRules RULES =
 			new ServingRules("v2.1-pca16", 1.6624, 3, 4.912, 30, 1200, 10.7);
 
@@ -174,6 +180,57 @@ class JourneyBenchmarkIT {
 			return 0;
 		}
 		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
+	}
+
+	/**
+	 * B-Latency — 최악 케이스 지연. 층 재질의 상한이 <b>매 층</b> 소진되게 강제한다.
+	 *
+	 * <p>무작위 표본으로는 이 조합이 안 나온다(후보가 넉넉해 첫 질의에서 끝난다). 그래서 조회 결과를
+	 * {@code MIN_LAYER} 미만으로 깎아 재질의를 강제한다 — <b>DB 에 나가는 질의는 실제 그대로</b>라
+	 * (limit 200 → 400 → 800, {@code ef_search} 도 같이 오른다) 비용이 줄지 않는다.
+	 *
+	 * <p>타임아웃이 없으므로 이 값이 곧 산출 지연 상한이다(FR-025). 종단 예산 3초와 비교한다 —
+	 * 게이트웨이(상세 조회 2회 + 조립)가 여기에 더 붙는다.
+	 */
+	@Test
+	void worstCaseLatencyStaysWithinBudget() {
+		Random rnd = new Random(SEED);
+		List<Long> latencies = new ArrayList<>(WORST_PAIRS);
+
+		for (int i = 0; i < WORST_PAIRS; i++) {
+			try (SqlSession session = factory.openSession()) {
+				BenchMapper bench = session.getMapper(BenchMapper.class);
+				MusicDetail a = load(bench, rnd);
+				MusicDetail b = load(bench, rnd);
+				if (a == null || b == null || a.id().equals(b.id())) {
+					continue;
+				}
+
+				NearestTrackReader real = adapterOn(session);
+				// 늘 부족하게 돌려줘 재질의 상한을 소진시킨다. 질의 자체는 실제로 나간다.
+				NearestTrackReader starved = (point, limit) -> {
+					List<TrackCandidate> rows = real.findNearest(point, limit);
+					return rows.subList(0, Math.min(rows.size(), LayerCandidates.MIN_LAYER - 1));
+				};
+				AxisJourneyPathFinder finder =
+						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry());
+
+				long t0 = System.nanoTime();
+				finder.find(a, b);
+				latencies.add((System.nanoTime() - t0) / 1_000_000);
+			}
+		}
+
+		latencies.sort(null);
+		System.out.printf("%n=== B-Latency 최악 케이스 (쌍 %d, 층마다 재질의 %d회 소진) ===%n",
+				latencies.size(), LayerCandidates.MAX_RETRY);
+		System.out.printf("p50 / p95 / max : %d / %d / %d ms%n",
+				latencies.get(latencies.size() / 2), percentile(latencies),
+				latencies.get(latencies.size() - 1));
+
+		assertThat(latencies.get(latencies.size() - 1))
+				.as("B-Latency 최악 지연 <= %d ms (종단 3초 예산)", WORST_BUDGET_MS)
+				.isLessThanOrEqualTo(WORST_BUDGET_MS);
 	}
 
 	/**

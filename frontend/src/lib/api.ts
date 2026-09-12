@@ -1,8 +1,22 @@
-import { STORAGE_KEYS } from "@/constants";
+import { API_ENDPOINTS, STORAGE_KEYS } from "@/constants";
 import type { ApiErrorCode, ApiResponse } from "@/types";
-import { readStorage } from "./storage";
+import { readStorage, readStorageScope, writeStorage } from "./storage";
 
+/**
+ * 비워둔다. 브라우저는 백엔드를 직접 부르지 않고 Next 서버의 rewrite 프록시를 거친다
+ * (이유는 `next.config.ts` 주석 참고 — 배포 백엔드가 CORS 를 전부 막고 있고, refresh 쿠키가
+ * `Secure; SameSite=Lax` 라 크로스 사이트로는 실리지 않는다).
+ * 값을 채우면 브라우저가 직접 호출하게 되어 `403 Invalid CORS request` 를 받는다.
+ */
 const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? "";
+
+/** 401 을 받아도 재발급을 시도하면 안 되는 경로 — 재발급 자체와 로그인 계열 */
+const NO_REISSUE_PATHS: readonly string[] = [
+  API_ENDPOINTS.auth.reissue,
+  API_ENDPOINTS.auth.login,
+  API_ENDPOINTS.auth.signup,
+  API_ENDPOINTS.auth.exchange,
+];
 
 /**
  * 백엔드 공통 실패 응답 (§0.2 / §0.5).
@@ -19,17 +33,45 @@ export class ApiError extends Error {
   }
 }
 
+/** 동시에 여러 요청이 401 을 받아도 재발급은 한 번만 태운다 */
+let reissuing: Promise<boolean> | null = null;
+
 /**
- * 모든 API 호출의 단일 통로.
- * - `Authorization: Bearer {accessToken}` 을 붙인다 (§0.1)
- * - `{ success, data, error }` 봉투를 벗겨 data 만 돌려준다 (§0.2)
- * - 실패면 code 를 담은 ApiError 를 던진다 (§0.4, §0.5)
+ * refresh 쿠키로 accessToken 을 재발급받는다 (BACKEND-NOTES B-8).
+ * 토큰이 원래 sessionStorage 에 있었다면 거기에 그대로 다시 넣는다 —
+ * "로그인 상태 유지" 를 끈 사용자를 재발급 때문에 영구 저장으로 올려버리지 않기 위해서다.
  */
-export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+async function reissueAccessToken(): Promise<boolean> {
+  reissuing ??= (async () => {
+    try {
+      const res = await fetch(`${BASE_URL}${API_ENDPOINTS.auth.reissue}`, {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json; charset=UTF-8" },
+      });
+      const body = (await res.json().catch(() => null)) as ApiResponse<{ accessToken: string }> | null;
+      if (!res.ok || !body?.success || !body.data?.accessToken) return false;
+
+      writeStorage(STORAGE_KEYS.accessToken, body.data.accessToken, readStorageScope(STORAGE_KEYS.accessToken) ?? "local");
+      return true;
+    } catch {
+      return false;
+    } finally {
+      // 다음 401 때 다시 시도할 수 있도록 비운다
+      setTimeout(() => {
+        reissuing = null;
+      }, 0);
+    }
+  })();
+
+  return reissuing;
+}
+
+function request(path: string, init?: RequestInit): Promise<Response> {
   const token = readStorage<string>(STORAGE_KEYS.accessToken);
-  const res = await fetch(`${BASE_URL}${path}`, {
+  return fetch(`${BASE_URL}${path}`, {
     ...init,
-    // refresh token 이 httpOnly 쿠키로 심겨 있어서, 다른 오리진이어도 쿠키를 실어 보내야 한다
+    // refresh token 이 httpOnly 쿠키로 심겨 있어서 쿠키를 실어 보내야 한다
     credentials: "include",
     headers: {
       "Content-Type": "application/json; charset=UTF-8",
@@ -37,6 +79,23 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
       ...init?.headers,
     },
   });
+}
+
+/**
+ * 모든 API 호출의 단일 통로.
+ * - `Authorization: Bearer {accessToken}` 을 붙인다 (§0.1)
+ * - 401 이면 refresh 쿠키로 한 번 재발급하고 같은 요청을 다시 태운다 (B-8)
+ * - `{ success, data, error }` 봉투를 벗겨 data 만 돌려준다 (§0.2)
+ * - 실패면 code 를 담은 ApiError 를 던진다 (§0.4, §0.5)
+ */
+export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  let res = await request(path, init);
+
+  // 토큰이 아예 없으면 재발급해봐야 소용없다 (로그인 전 401)
+  const canReissue = res.status === 401 && !NO_REISSUE_PATHS.includes(path) && readStorage<string>(STORAGE_KEYS.accessToken) != null;
+  if (canReissue && (await reissueAccessToken())) {
+    res = await request(path, init);
+  }
 
   const body = (await res.json().catch(() => null)) as ApiResponse<T> | null;
 

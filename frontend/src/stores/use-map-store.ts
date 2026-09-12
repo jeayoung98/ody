@@ -1,22 +1,26 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { GENRE_NAMES, type MapViewMode } from "@/constants";
-import type { MapCamera } from "@/types";
+import type { MapViewMode } from "@/constants";
+import type { LayerBox, MapCamera } from "@/types";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
 const EMPTY_IDS: number[] = [];
-/** 장르 전부 켜진 상태 (같은 참조 유지) */
-const ALL_GENRES: number[] = GENRE_NAMES.map((_, i) => i);
+const EMPTY_BOXES: LayerBox[] = [];
 
 /** 엔진이 프레임마다 밀어 넣는 읽기 전용 스냅샷 (HUD 표시용) */
 export interface EngineSnapshot {
   layer: number;
+  /**
+   * 겹마다 화면으로 좁혀 온 누적 범위 (길이 = 현재 레이어 번호).
+   * 다음 겹 상주 집합을 요청하는 조건이라 이게 바뀌면 곡을 새로 받는다.
+   */
+  boxes: readonly LayerBox[];
   camera: MapCamera;
   /** 이 레이어에 상주하는 곡 수 */
   residentCount: number;
-  /** 그중 지금 배율에서 실제로 떠 있는 별 수 (확대하면 늘어난다) */
-  revealedCount: number;
+  /** 그중 화면 안에 들어와 있는 곡 수 — 다음 단계로 데려갈 후보 */
+  viewportCount: number;
   /** 이 레이어에 들어온 배율 대비 현재 배율 (1 = 진입, DRILL.gateZoomMul 이상이면 파고들 준비) */
   zoomK: number;
   /** 확대 임계치를 넘겼다 → 계속 확대하면 파고든다 */
@@ -40,8 +44,6 @@ export interface EngineSnapshot {
 
 interface MapState extends EngineSnapshot {
   viewMode: MapViewMode;
-  /** 필터에서 켜 둔 장르. 꺼진 장르는 지도에서 형태만 남는다 */
-  litGenres: number[];
   selectedMusicId: number | null;
   /** 주변 탐색 모드의 기준 곡 */
   nearbyCenterMusicId: number | null;
@@ -52,9 +54,6 @@ interface MapState extends EngineSnapshot {
   constellationMusicIds: number[];
 
   setViewMode: (mode: MapViewMode) => void;
-  /** 장르 칩 토글 — 전부 켜진 상태에서 누르면 그 장르만 남기고(솔로), 마지막 하나를 끄면 전부 켜진다 */
-  toggleGenre: (genreId: number) => void;
-  showAllGenres: () => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
   enterNearby: (musicId: number) => void;
@@ -72,6 +71,8 @@ interface MapState extends EngineSnapshot {
    * 이 겹에 있으면 그 곡으로 확대하고, 없으면 고스트별로 띄운다 (MAP-12) — 레이어를 자동으로 옮기지 않는다.
    */
   focusMusic: (musicId: number) => void;
+  /** 고스트별을 끈다 (배너의 닫기) */
+  dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
   surfaceToMusic: (musicId: number) => void;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
@@ -86,9 +87,10 @@ export const useMapStore = create<MapState>()(
   devtools(
     (set) => ({
       layer: 0,
+      boxes: EMPTY_BOXES,
       camera: { cx: 0, cy: 0, s: 100 },
       residentCount: 0,
-      revealedCount: 0,
+      viewportCount: 0,
       zoomK: 1,
       gateOpen: false,
       atBottom: false,
@@ -101,23 +103,11 @@ export const useMapStore = create<MapState>()(
       playingElsewhere: false,
 
       viewMode: "default",
-      litGenres: ALL_GENRES,
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
 
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
-      toggleGenre: (genreId) =>
-        set(
-          (s) => {
-            if (s.litGenres.length === ALL_GENRES.length) return { litGenres: [genreId] };
-            const next = s.litGenres.includes(genreId) ? s.litGenres.filter((g) => g !== genreId) : [...s.litGenres, genreId];
-            return { litGenres: next.length ? next : ALL_GENRES };
-          },
-          false,
-          "toggleGenre",
-        ),
-      showAllGenres: () => set({ litGenres: ALL_GENRES }, false, "showAllGenres"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
       setMyMusicId: (myMusicId) => {
         set({ myMusicId }, false, "setMyMusicId");
@@ -155,6 +145,10 @@ export const useMapStore = create<MapState>()(
         // 이 겹에 있으면 확대, 없으면 "범위 밖에 있다"고 치고 고스트별로 (MAP-12)
         if (engine?.isAlive(musicId)) engine.focusSong(musicId);
         else engine?.setGhost(musicId);
+      },
+      dismissGhost: () => {
+        getMapEngine()?.clearGhost();
+        set({ ghostMusicId: null }, false, "dismissGhost");
       },
       surfaceToMusic: (musicId) => {
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");

@@ -1,8 +1,8 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, STAR_SIZE } from "@/constants";
-import { FONTS, GENRE_COLORS, MAP_COLORS, NEBULA_WASH, genreRgb, rgba } from "@/constants/design-tokens";
+import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { FONTS, MAP_COLORS, NEBULA_WASH, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
-import { coverFor, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32 } from "./sprites";
+import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -24,7 +24,35 @@ function twinkle(id: number, t: number) {
  * 배경. 깊은 겹일수록 **어두워지고 배경 별이 성겨진다** — 색조는 그대로라 장르색과 싸우지 않는다.
  * depth = 0(가장 얕은 겹) ~ 1(가장 깊은 겹)
  */
-function drawBackground(g: CanvasRenderingContext2D, W: number, H: number, t: number, depth: number) {
+/**
+ * 새로 도드라진 별이 밝아지는 진행도 (프로토타입 appear).
+ * 한동안 안 보인 별은 잊어서, 다시 나타날 때 또 부드럽게 밝아진다.
+ */
+const seenAt = new Map<number, { first: number; last: number }>();
+function appear(id: number, t: number) {
+  const e = seenAt.get(id);
+  if (!e) {
+    seenAt.set(id, { first: t, last: t });
+    return 0;
+  }
+  e.last = t;
+  if (seenAt.size > 4000 && t - e.first > 3) seenAt.delete(id);
+  return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
+}
+
+/**
+ * 지금 겹의 깊이 0~1. 전환 중에는 두 겹 사이 소수로 건너간다 —
+ * 끝나는 순간 배경이 툭 바뀌면 그것부터 눈에 띈다.
+ */
+function depthOf(e: MapEngine) {
+  const l = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
+  return l / (LAYER_COUNT - 1);
+}
+
+function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number) {
+  const W = e.W;
+  const H = e.H;
+  const t = e.time;
   g.globalCompositeOperation = "source-over";
   g.fillStyle = MAP_COLORS.background;
   g.fillRect(0, 0, W, H);
@@ -51,17 +79,40 @@ function drawBackground(g: CanvasRenderingContext2D, W: number, H: number, t: nu
     g.fill();
   }
   const spr = glowSprites();
-  const sox = t * 0.0052;
-  const soy = -t * 0.0019;
   const sky = skyStars();
-  const skyN = Math.round(sky.length * (1 - depth * LAYER_DEPTH.maxStarThin));
-  for (let k = 0; k < skyN; k++) {
-    const bg = sky[k];
-    const px = ((((bg.u - sox) % 1) + 1) % 1) * (W + 64) - 32;
-    const py = ((((bg.v - soy) % 1) + 1) % 1) * (H + 64) - 32;
-    const d = 1.3 + Math.pow(bg.m, 1.5) * 4.2;
-    g.globalAlpha = (0.06 + bg.lum * 0.19) * (0.55 + 0.45 * Math.sin(t * (0.35 + (bg.i % 17) / 14) + bg.i));
-    g.drawImage(spr[bg.spr], px - d / 2, py - d / 2, d, d);
+  // 확대해서 들어온 겹이므로 별을 **덜어내지 않는다.** 밝기만 낮춰 클릭 대상인 상주 곡과 층을 가른다
+  const dim = 1 - depth * LAYER_DEPTH.maxStarDim;
+  const field = (ox: number, oy: number, sizeK: number, aK: number, stars: SkyStar[] = sky, n = stars.length) => {
+    for (let k = 0; k < n; k++) {
+      const bg = stars[k];
+      const px = ((((bg.u - ox) % 1) + 1) % 1) * (W + 64) - 32;
+      const py = ((((bg.v - oy) % 1) + 1) % 1) * (H + 64) - 32;
+      const d = (1.3 + Math.pow(bg.m, 1.5) * 4.2) * sizeK;
+      g.globalAlpha = (0.06 + bg.lum * 0.19) * (0.55 + 0.45 * Math.sin(t * (0.35 + (bg.i % 17) / 14) + bg.i)) * aK;
+      g.drawImage(spr[bg.spr], px - d / 2, py - d / 2, d, d);
+    }
+  };
+  // 가장 먼 별밭은 카메라와 무관하다 — 아무리 밀어도 제자리인 것이 오히려 "아주 멀다"로 읽힌다
+  field(t * 0.0052, -t * 0.0019, 1, dim);
+  /**
+   * 0겹(우주)을 뺀 겹에는 별밭을 세 겹 더 깐다.
+   * 파고들수록 상주 곡은 화면 가운데로 모이는데(fitCam 이 97%를 화면 짧은 변 44% 반지름 안에 넣는다),
+   * 그 바깥이 빈 하늘이면 "확대해 들어왔다"가 아니라 "별 뭉치 하나가 떠 있다"로 읽힌다.
+   * 그래서 ① 화면 전체를 별로 채우고 ② **카메라를 따라 시차를 두고 함께 밀리게** 한다 —
+   * 지도를 밀 때 배경이 가만히 있으면 상주 구름만 미끄러져 뭉치의 경계가 그대로 드러난다.
+   * farK 는 0겹 → 1겹 한 칸에서 0 → 1 로 차오른다 — 전환 중 깊이가 소수라 별밭이 툭 켜지지 않는다.
+   */
+  const farK = Math.min(1, depth * (LAYER_COUNT - 1));
+  if (farK > 0.01) {
+    // 월드 원점이 화면에서 밀린 양(타일 단위). 별과 같은 식으로 움직이므로 같은 세계에 있는 것처럼 보인다
+    const camU = (e.cam.cx * e.cam.s) / (W + 64);
+    const camV = -(e.cam.cy * e.cam.s) / (H + 64);
+    const par = LAYER_DEPTH.parallax;
+    const A = LAYER_DEPTH.farFieldAlpha;
+    field(camU * par.mid + t * 0.0026 + 0.37, camV * par.mid - t * 0.0009 + 0.61, 0.92, dim * A * farK);
+    field(camU * par.far + t * 0.0013 + 0.71, camV * par.far - t * 0.0004 + 0.23, 0.8, dim * A * 0.82 * farK, sky, Math.round(sky.length * 0.7));
+    // 가장 가까운 별먼지 — 상주 별과 거의 같은 평면에서, 같은 크기대로 섞인다
+    field(camU * par.near + 0.14, camV * par.near + 0.42, 1.4, dim * LAYER_DEPTH.dustAlpha * farK, dustStars());
   }
   g.globalAlpha = 1;
 }
@@ -76,7 +127,10 @@ function puffsOf(id: number) {
   puffPlan.set(id, p);
   return p;
 }
-function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
+/** @param out true 면 전환 중 **나가는 겹**을 그린다 (posOut/alphaOut) */
+function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
+  const P = out ? e.posOut : e.pos;
+  const A = out ? e.alphaOut : e.alpha;
   const W = e.W;
   const H = e.H;
   const R = clamp(0.55 * e.cam.s, 60, Math.max(W, H) * 0.8);
@@ -84,11 +138,12 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
   // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
   const step = Math.max(1, Math.floor(e.N / 22));
   for (let i = 0; i < e.N; i += step) {
-    const a0 = e.alpha[i] * e.genreDim(i);
+    // 전환 중에는 성운을 늦게 올린다 — 들어오는 겹이 작게 뭉쳐 있는 동안 켜면 가운데가 하얗게 뜬다
+    const a0 = e.anim ? A[i] * A[i] * A[i] : A[i];
     if (a0 < 0.05) continue;
     const s = e.songs[i];
-    const px = e.pos[i * 2];
-    const py = e.pos[i * 2 + 1];
+    const px = P[i * 2];
+    const py = P[i * 2 + 1];
     if (px < -R * 1.7 || px > W + R * 1.7 || py < -R * 1.7 || py > H + R * 1.7) continue;
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
@@ -99,11 +154,22 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalAlpha = 1;
 }
 
-function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
+/** @param out true 면 전환 중 **나가는 겹**을 그린다 (posOut/alphaOut) */
+function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
+  const P = out ? e.posOut : e.pos;
+  const A = out ? e.alphaOut : e.alpha;
   const spr = glowSprites();
   const W = e.W;
   const H = e.H;
   const t = e.time;
+  /**
+   * 파고든 겹에서는 **비대표 상주 별**(클릭 대상이 아닌 별)을 키우고 밝힌다.
+   * 0겹에서는 1 이라 지금 모습 그대로다. 깊이 들어갈수록 별밭이 촘촘해져,
+   * 클릭 가능한 대표 별이 빈 하늘에 홀로 뜬 게 아니라 별밭 속에 섞여 보인다.
+   */
+  const fieldK = Math.min(1, depthOf(e) * (LAYER_COUNT - 1));
+  const fieldSize = 1 + (LAYER_DEPTH.fieldStarSize - 1) * fieldK;
+  const fieldAlpha = 1 + (LAYER_DEPTH.fieldStarAlpha - 1) * fieldK;
   const grow = clamp(0.86 + Math.log(Math.max(1, e.cam.s / 100)) * 0.13, 0.86, 1.5);
   const pset = e.probeIdSet();
   const cset = e.constellationIdSet();
@@ -111,11 +177,11 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
   const swy = Math.cos(t * 0.027) * 17 + Math.sin(t * 0.008 + 0.6) * 9;
   g.globalCompositeOperation = "lighter";
   for (let i = 0; i < e.N; i++) {
-    // 진입 배율에서는 상위 몇 개만 떠 있고, 확대하면 아래 순위가 드러난다 (REVEAL) — 장르 필터도 여기서 걸린다
-    const a0 = e.alpha[i] * e.revealAlpha(i);
+    // 상주 곡은 전부 그린다 — 격자에서 이긴 별만 크고 밝다
+    const a0 = A[i];
     if (a0 < 0.01) continue;
-    let px = e.pos[i * 2];
-    let py = e.pos[i * 2 + 1];
+    let px = P[i * 2];
+    let py = P[i * 2 + 1];
     if (px < -20 || px > W + 20 || py < -20 || py > H + 20) continue;
     const s = e.songs[i];
     if (pset?.has(s.musicId) || cset?.has(s.musicId)) continue; // 프로브·별자리 곡은 따로 그린다
@@ -128,19 +194,36 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
       alpha = 1;
     } else if (on) {
       d = (STAR_SIZE.min + Math.pow(mag, 1.75) * (STAR_SIZE.max - STAR_SIZE.min)) * grow;
-      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t);
+      // 새로 도드라진 별은 툭 튀지 않게 380ms 동안 밝아진다 (프로토타입 appear)
+      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * appear(s.musicId, t);
     } else {
-      // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다
-      d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow;
-      alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t);
-      px += swx * 0.34;
-      py += swy * 0.34;
+      // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
+      d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow * fieldSize;
+      alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t) * fieldAlpha;
+      const drift = 0.34 + e.z[i] * 0.05;
+      px += swx * drift;
+      py += swy * drift;
     }
     if (!s.playable) alpha *= 0.5;
     alpha *= a0;
     if (e.hoverId === s.musicId) alpha = Math.min(1, alpha + 0.3);
     g.globalAlpha = alpha;
-    g.drawImage(spr[s.genreId % GENRE_COLORS.length], px - d / 2, py - d / 2, d, d);
+    g.drawImage(spr[genreIdx(s.genreId)], px - d / 2, py - d / 2, d, d);
+    // 전환 중 나가는 별은 지나간 자리에 잔상을 남긴다 — 가장자리로 훅 빠지는 게 보이게
+    if (out && e.anim) {
+      const f2 = e.freeRect();
+      const tx = px - f2.cx;
+      const ty = py - f2.cy;
+      const td = Math.hypot(tx, ty) || 1;
+      const len = Math.min(90, td * 0.22) * (e.anim.dir > 0 ? 1 : -1);
+      g.globalAlpha = alpha * 0.5;
+      g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+      g.lineWidth = Math.max(0.8, d * 0.18);
+      g.beginPath();
+      g.moveTo(px - (tx / td) * len, py - (ty / td) * len);
+      g.lineTo(px, py);
+      g.stroke();
+    }
     if (on) {
       g.globalAlpha = 0.95 * alpha;
       g.fillStyle = MAP_COLORS.core;
@@ -173,7 +256,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.coverAlpha < 0.01) return;
   // 커버는 이 레이어의 대표곡(백엔드 선별) 중 화면 안에 있는 곡. 부족하면 격자 대표곡으로 채운다
   const candidates = new Set<number>();
-  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId) && e.revealAlpha(i) > 0.5) candidates.add(i);
+  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
   if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
   const list = [...candidates]
     .map((i) => ({ i, px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] }))
@@ -262,7 +345,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     const d = cur ? 34 : 24;
     g.globalCompositeOperation = "lighter";
     g.globalAlpha = k * a * (s.playable ? 1 : 0.55);
-    g.drawImage(spr[s.genreId % GENRE_COLORS.length], p.x - d / 2, p.y - d / 2, d, d);
+    g.drawImage(spr[genreIdx(s.genreId)], p.x - d / 2, p.y - d / 2, d, d);
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = k * a;
     g.beginPath();
@@ -361,7 +444,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     const s = e.songs.find((x) => x.musicId === n.id)!;
     const d = 22 + (1 - n.rank / Math.max(1, nodes.length)) * 10;
     g.globalAlpha = 0.95 * k * (s.playable ? 1 : 0.55);
-    g.drawImage(spr[s.genreId % GENRE_COLORS.length], n.x - d / 2, n.y - d / 2, d, d);
+    g.drawImage(spr[genreIdx(s.genreId)], n.x - d / 2, n.y - d / 2, d, d);
     g.globalAlpha = k;
     g.fillStyle = MAP_COLORS.core;
     g.beginPath();
@@ -401,7 +484,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
-  g.drawImage(spr[song.genreId % GENRE_COLORS.length], tx - 22, ty - 22, 44, 44);
+  g.drawImage(spr[genreIdx(song.genreId)], tx - 22, ty - 22, 44, 44);
   g.beginPath();
   g.arc(tx, ty, rr, 0, 6.284);
   g.strokeStyle = rgba(frgb, 0.85);
@@ -455,9 +538,30 @@ function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: nu
  * 재생 곡이 이 겹 밖이면 자리는 그대로 두고 라벨로 그 사실을 알린다.
  */
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
-  if (e.follow || e.myId == null || e.constellationActive()) return;
+  // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
+  if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
   const elsewhere = e.playingElsewhere();
+  // 날아오는 중이면 지나온 자리에 꼬리를 남긴다 (친구 우주선처럼)
+  const fl = e.meFlight;
+  if (fl) {
+    const from = e.worldToScreen(fl.ax, fl.ay);
+    const tx = px - from.px;
+    const ty = py - from.py;
+    const td = Math.hypot(tx, ty) || 1;
+    const len = td * ME_FLIGHT.trail;
+    const grad = g.createLinearGradient(px - (tx / td) * len, py - (ty / td) * len, px, py);
+    grad.addColorStop(0, "rgba(79,227,206,0)");
+    grad.addColorStop(1, "rgba(79,227,206,.75)");
+    g.globalCompositeOperation = "lighter";
+    g.strokeStyle = grad;
+    g.lineWidth = 2.2;
+    g.beginPath();
+    g.moveTo(px - (tx / td) * len, py - (ty / td) * len);
+    g.lineTo(px, py);
+    g.stroke();
+    g.globalCompositeOperation = "source-over";
+  }
   drawMeMarker(g, px, py, e.time);
   g.globalCompositeOperation = "source-over";
   g.textAlign = "center";
@@ -511,7 +615,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
   const gr = 26 * pop;
-  g.drawImage(glowSprites()[s.genreId % GENRE_COLORS.length], cx - gr, cy - gr, gr * 2, gr * 2);
+  g.drawImage(glowSprites()[genreIdx(s.genreId)], cx - gr, cy - gr, gr * 2, gr * 2);
 
   // 등장 파문 — 한 번 퍼지고 사라진다
   if (kk < 1) {
@@ -662,7 +766,12 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 
 /** 한 프레임 */
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
-  drawBackground(g, e.W, e.H, e.time, e.layer / (LAYER_COUNT - 1));
+  // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
+  drawBackground(g, e, depthOf(e));
+  if (e.anim) {
+    // 나가는 겹은 **별만** 훅 지나가게 그린다. 성운까지 겹쳐 그리면 가산 합성이라 화면이 하얗게 뜬다
+    drawStars(g, e, true);
+  }
   drawNebula(g, e);
   drawStars(g, e);
   drawCovers(g, e);

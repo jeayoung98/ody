@@ -1,4 +1,5 @@
-import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
+import { NO_GENRE_ID } from "@/constants";
+import { GENRE_COLORS, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapPoint, NearbyUser } from "@/types";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
@@ -54,10 +55,31 @@ export function skyStars(): SkyStar[] {
     u: rnd(),
     v: rnd(),
     m: Math.pow(rnd(), 1.9),
-    spr: Math.floor(rnd() * GENRE_COLORS.length),
+    spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
     lum: Math.pow(rnd(), 0.7),
   }));
   return sky;
+}
+
+/**
+ * 파고든 겹에서 상주 별 사이사이에 까는 **가까운 별먼지**. skyStars 보다 성글지만 하나하나가 크다 —
+ * 비대표 상주 별과 같은 급으로 읽혀야 "별밭 속에 클릭 가능한 별이 섞여 있다"가 된다.
+ * 화면 비율 좌표지만 그리는 쪽에서 카메라만큼 밀어 쓴다(월드에 붙은 것처럼 보이게).
+ */
+let dust: SkyStar[] | null = null;
+export function dustStars(): SkyStar[] {
+  if (dust) return dust;
+  const rnd = mulberry32(20260912);
+  dust = Array.from({ length: 2200 }, (_, i) => ({
+    i,
+    u: rnd(),
+    v: rnd(),
+    // skyStars(1.9)보다 완만해 큰 별의 비율이 높다 — 상주 별과 같은 크기대로 올라온다
+    m: Math.pow(rnd(), 1.15),
+    spr: Math.floor(rnd() * NO_GENRE_ID), // 장식이라 색 있는 장르만 (무장르 회색 제외)
+    lum: Math.pow(rnd(), 0.6),
+  }));
+  return dust;
 }
 
 /* ---------- 성운 퍼프: 부드러운 방울 여러 겹, 색만 갈아 끼움 ---------- */
@@ -103,7 +125,7 @@ function puffBases(): HTMLCanvasElement[] {
 }
 
 export function puffFor(k: number, genreId: number): HTMLCanvasElement {
-  const key = `${k}:${genreId % GENRE_COLORS.length}`;
+  const key = `${k}:${genreIdx(genreId)}`;
   let c = puffTint.get(key);
   if (c) return c;
   c = document.createElement("canvas");

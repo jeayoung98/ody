@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { STORAGE_KEYS } from "@/constants";
+import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
@@ -29,7 +30,7 @@ interface MapViewProps {
 
 /**
  * 스테이지 전체를 채우는 별지도. 엔진을 소유하고 스토어/쿼리와 엔진을 연결한다.
- * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 곡 선택 / 친구 프로필
+ * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 그 곡으로 이동·재생·상세 / 친구 프로필
  */
 export default function MapView({ occludedRight }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
@@ -37,7 +38,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const [hover, setHover] = useState(false);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
 
-  const { data: songs } = useMapSongsQuery();
+  // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
+  const boxes = useMapStore((s) => s.boxes);
+  const { data: songs } = useMapSongsQuery(boxes);
   const layer = useMapStore((s) => s.layer);
   const { data: friends } = useNearbyUsersQuery(layer);
   const { data: representatives } = useRepresentativesQuery(layer);
@@ -46,13 +49,14 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
   const { data: layout } = useConstellationLayoutQuery(constellationMusicIds);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
-  const litGenres = useMapStore((s) => s.litGenres);
   const myMusicId = useMapStore((s) => s.myMusicId);
   const selectMusic = useMapStore((s) => s.selectMusic);
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
   const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
+  const playSingle = usePlayerStore((s) => s.playSingle);
+  const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
@@ -79,13 +83,12 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   useEffect(() => engine.setOcclusion(occludedRight), [engine, occludedRight]);
 
-  // 데이터 주입. 저장된 내 곡이 있으면 그 자리에서 시작
+  // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {
     if (!songs) return;
-    const saved = readStorage<number>(STORAGE_KEYS.myMusicId);
-    engine.setInitialMy(saved);
-    engine.setSongs(songs);
-  }, [engine, songs]);
+    if (!engine.ready) engine.setInitialMy(readStorage<number>(STORAGE_KEYS.myMusicId));
+    engine.setLayerSongs(boxes.length, songs);
+  }, [engine, boxes, songs]);
   // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
   useEffect(() => {
     if (friends) engine.setFriends(layer, friends);
@@ -105,7 +108,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
     else if (viewMode !== "constellation") engine.exitConstellation();
   }, [engine, viewMode, constellationMusicIds, layout]);
   useEffect(() => engine.setSelected(selectedMusicId), [engine, selectedMusicId]);
-  useEffect(() => engine.setLitGenres(litGenres), [engine, litGenres]);
 
   // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)
   useEffect(() => {
@@ -130,8 +132,13 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
-      // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
       const mode = useMapStore.getState().viewMode;
+      // 오버레이가 떠 있으면 뒷화면 지도는 건드리지 않는다 — 휠은 오버레이 안에서만 작동
+      if (mode === "constellation") {
+        engine.overlayWheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
+        return;
+      }
+      // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
       if (mode === "nearby") {
         if (e.deltaY > 0) useMapStore.getState().exitNearby();
         return;
@@ -153,7 +160,10 @@ export default function MapView({ occludedRight }: MapViewProps) {
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
         drag.current.x = e.clientX;
         drag.current.y = e.clientY;
-        engine.dragBy(dx, dy);
+        const mode = useMapStore.getState().viewMode;
+        // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
+        if (mode === "constellation") engine.overlayPan(dx, dy);
+        else if (mode !== "nearby") engine.dragBy(dx, dy);
         return;
       }
       const mx = e.clientX - r.left;
@@ -189,6 +199,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const hit = engine.hitTest(mx, my);
       if (!hit) return;
       const id = engine.songs[hit.i].musicId;
+      // 오버레이가 떠 있으면 그 안의 곡만 고를 수 있다 (뒷화면 별은 클릭되지 않는다)
+      const overlayIds = engine.constellationIdSet() ?? engine.probeIdSet();
+      if (overlayIds && !overlayIds.has(id)) return;
       // 여정 지정 모드면 클릭이 출발·도착 칸을 번갈아 채운다 (JOURNEY-01)
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {
@@ -196,11 +209,15 @@ export default function MapView({ occludedRight }: MapViewProps) {
         selectMusic(id);
         return;
       }
+      // 클릭 = 그 곡으로 이동 + 재생 + 상세 (MAP-08) — 보는 곡과 내 위치를 나누지 않는다
       selectMusic(id);
       openSong(id);
+      engine.travelTo(id);
+      playSingle(id);
+      recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
       useTutorialStore.getState().complete("select");
     },
-    [engine, openFeed, openSong, selectMusic],
+    [engine, openFeed, openSong, playSingle, recordPlay, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;

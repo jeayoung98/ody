@@ -45,11 +45,6 @@ export function createAccount(email: string, password: string, social = false, n
   return acc;
 }
 
-/** 구글 로그인(목): 같은 계정을 계속 쓰되 첫 로그인에서는 닉네임이 비어 있다 */
-export function socialAccount(email: string): MockAccount {
-  return findAccount(email) ?? createAccount(email, "", true);
-}
-
 export function nicknameTaken(nickname: string): boolean {
   const v = nickname.trim();
   if (RESERVED.some((r) => r === v)) return true;

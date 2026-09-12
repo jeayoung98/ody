@@ -686,39 +686,6 @@ export class MapEngine {
     return { x, y };
   }
 
-  /**
-   * 내 위치가 화면 밖인가 (MAP-08). 플레이리스트·여정으로 듣다 보면 내 자리가 지금 보는
-   * 영역 밖으로 나갈 수 있다 — 그때는 고스트별처럼 구름 밖에 띄우고 눌러서 찾아가게 한다.
-   */
-  meOffscreen() {
-    if (this.myId == null || this.follow || this.anim) return false;
-    const f = this.freeRect();
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
-    return px < f.x0 + 24 || px > f.x1 - 24 || py < f.y0 + 24 || py > f.y1 - 24;
-  }
-
-  /** 화면 밖 내 위치를 가리키는 표식 자리 (구름 밖) */
-  meEdgePos(): { x: number; y: number } | null {
-    if (!this.meOffscreen()) return null;
-    const f = this.freeRect();
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
-    let dx = px - f.cx;
-    let dy = py - f.cy;
-    const d = Math.hypot(dx, dy);
-    if (d < 1e-6) return null;
-    dx /= d;
-    dy /= d;
-    return this.outsideCloudPos({ x: dx, y: dy }, this.starRadius());
-  }
-
-  /** 내 위치로 카메라를 돌린다 (배율은 그대로) */
-  focusMy() {
-    if (this.myId == null || this.follow || this.anim) return;
-    this.touched = true;
-    const f = this.freeRect();
-    this.camTarget = { s: this.cam.s, cx: this.me.x - (f.cx - this.W / 2) / this.cam.s, cy: this.me.y + (f.cy - this.H / 2) / this.cam.s };
-  }
-
   /** 고스트별 페이드 진행도 */
   ghostK(now = performance.now()) {
     return this.ghost ? easeInOut(Math.min(1, (now - this.ghost.t0) / GHOST.enterMs)) : 0;
@@ -1522,7 +1489,6 @@ export class MapEngine {
       myMusicId: this.myId,
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
-      meOffscreen: this.meOffscreen(),
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

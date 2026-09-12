@@ -510,23 +510,6 @@ function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: nu
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
-  const edge = e.meEdgePos();
-  if (edge) {
-    // 내 자리가 지금 보는 영역 밖이다 — 구름 밖에 방향만 찍어두고 배너로 찾아가게 한다
-    drawMeMarker(g, edge.x, edge.y, e.time);
-    g.globalCompositeOperation = "source-over";
-    g.textAlign = "center";
-    g.textBaseline = "middle";
-    g.font = `600 9.5px ${FONTS.mono}`;
-    const label = "내 위치 · 화면 밖";
-    const tw = g.measureText(label).width;
-    g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, edge.x - tw / 2 - 6, edge.y + 16, tw + 12, 16, 5);
-    g.fill();
-    g.fillStyle = "rgba(79,227,206,.9)";
-    g.fillText(label, edge.x, edge.y + 24);
-    return;
-  }
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
   const elsewhere = e.playingElsewhere();
   // 날아오는 중이면 지나온 자리에 꼬리를 남긴다 (친구 우주선처럼)

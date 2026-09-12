@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 
 import org.springframework.stereotype.Repository;
@@ -33,10 +34,17 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 	@Override
 	public PageResult search(String query, int page, int size) {
 		String pattern = "%" + escapeLike(query) + "%";
+		String lowered = query.toLowerCase(Locale.ROOT);
+		String prefix = escapeLike(lowered) + "%";
+		long offset = (long) page * size;
 
+		// countMatches 가 0 이면 findPage 를 아예 돌리지 않는다. 단순한 최적화가 아니라
+		// 관련성 질의가 5단계라, 매칭 0건일 때 각 단계가 조기 종료에 실패해 5배로 느려지는 것을 막는다.
+		// ponytail: lower(title)·lower(artist) 색인이 붙으면 이 방방이는 필요 없다 (S15P21A405-255).
 		long total = mapper.countMatches(pattern);
-		List<MusicSearchRow> rows =
-				total == 0 ? List.of() : mapper.findPage(pattern, size, (long) page * size);
+		List<MusicSearchRow> rows = total == 0
+				? List.of()
+				: mapper.findPage(lowered, prefix, pattern, offset + size, size, offset);
 		if (rows.isEmpty()) {
 			// 매칭 0건이거나 page 가 마지막 페이지를 넘었다. 오류가 아니라 빈 목록이다(FR-002).
 			return new PageResult(List.of(), total);

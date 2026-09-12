@@ -293,6 +293,7 @@ body: `idToken`(String, required).
 } ], "page": 0, "size": 20, "totalElements": 137, "totalPages": 7, "hasNext": true }, "error": null }
 ```
 - 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
+- **정렬은 관련성 순**: 제목 완전일치 → 제목 앞일치 → 아티스트 완전일치 → 아티스트 앞일치 → 나머지 부분일치. 같은 순위 안에서는 `id` 오름차순. 대소문자 구분 없음 (2026-09-12 변경, S15P21A405-234 — 이전은 `youtubeCnt` 내림차순이었으나 값이 전 행 0 이라 무작위였다).
 
 ### 3.2 노래 상세 조회
 `GET /api/music/detail` · 인증 필요. param: `id`(int, required).

@@ -42,7 +42,10 @@ export const API_ENDPOINTS = {
   },
 
   user: {
-    /** 목. 백엔드 `GET /user/detail?email=` 은 nginx 가 프록시하지 않아 못 부른다 (B-16) */
+    /**
+     * 목. 백엔드는 `GET /api/user/detail?email=` 이고 **도달은 된다** (B-16 해소).
+     * 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe` 가 더 오고 `updatedAt` 은 없다 (0-2 필드 대조).
+     */
     detail: (email: string) => `/api/users/${encodeURIComponent(email)}`,
     /** 목. 백엔드 `GET /api/users/nickname-available` 이 있다 */
     nicknameAvailable: (nickname: string) => `/api/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
@@ -68,7 +71,6 @@ export const API_ENDPOINTS = {
     },
     // nearby 는 라우트 핸들러가 백엔드 `GET /api/music/detail?id=` 의 neighbors 로 만들어 준다
     representatives: (layer: number) => `/api/map/layers/${layer}/representatives`,
-    representativeLayers: (musicId: number) => `/api/music/${musicId}/representative-layers`,
     nearby: (musicId: number) => `/api/map/nearby/${musicId}`,
   },
 
@@ -78,6 +80,15 @@ export const API_ENDPOINTS = {
     play: (id: number) => `/api/music/${id}/play`,
   },
 
+  /**
+   * **전부 목이다.** 백엔드에 8종이 다 있지만 **경로도 응답 모양도 다르다** (BACKEND-NOTES 0-2):
+   * `POST /api/playlist/create` · `PATCH /api/playlist/update` · `DELETE /api/playlist/delete/{id}` ·
+   * `GET /api/playlist/detail?playlistId=` · `GET /api/playlist/search?email=` ·
+   * `POST /api/playlist/music/{insert,delete,reorder}` (곡은 **배열** `musicIdList` 로 주고받는다).
+   *
+   * 그대로 붙이면 화면이 깨진다 — 백엔드 응답에 **좋아요·무드 태그·소유자·`addedAt` 이 없다.**
+   * FEATURES 의 PATH-06·유저플로우 13·14 항목이라 프론트가 임의로 뺄 수 없다. 팀 결정 대기.
+   */
   playlist: {
     list: "/api/playlists",
     mine: "/api/playlists/mine",

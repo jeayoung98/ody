@@ -203,8 +203,12 @@ JwtAuthenticationFilter 제외 + 매퍼 `@MockitoBean` 이다(003 선례). 그 �
 
 - [~] ~~T044 [B-Engine] `JourneyEngineClient` 구현 — `RestClient` 로 BE4 엔진 호출, 타임아웃 2초~~
   → ❌ **폐기 (rev.3)**. 호출할 원격 엔진이 없다. 대체: **T049~T056** (인프로세스 산출)
-- [ ] T045 `JourneyTrackMapper` MyBatis 어댑터 + 매퍼 XML — 정거장 상세 일괄 조회. **선행**: 곡 테이블에 정수 `id` PK + `mbid` UNIQUE + 16차원 좌표 필요 (data-model §5). **rev.3 참고**: 식별자를 `mbid` 로 둘지 `id` 로 바꿀지는 D-ID2 로 미뤘으므로 **rev.2 계약(mbid IN 조회) 그대로 구현한다**
-- [ ] T046 `MusicDetailReader` 어댑터 — **[2026-09-12] `MusicDetailReaderAdapter` 가 `backend/dev` 에 이미 머지됨.** 좌표(16축)를 채우는지 확인만 하면 된다 — 002·003·005 와 공유. 이 기능은 `findDetail(id)` 만 쓴다. **rev.3: 좌표(16차원)가 응답에 필요하므로 이 어댑터가 좌표를 채워야 한다** — 산출의 축 좌표계가 출발·도착 좌표에서 시작한다
+- [x] T045 `JourneyTrackMapper` MyBatis 어댑터 + 매퍼 XML — 정거장 상세 일괄 조회. **선행**: 곡 테이블에 정수 `id` PK + `mbid` UNIQUE + 16차원 좌표 필요 (data-model §5). **rev.3 참고**: 식별자를 `mbid` 로 둘지 `id` 로 바꿀지는 D-ID2 로 미뤘으므로 **rev.2 계약(mbid IN 조회) 그대로 구현한다**
+
+  **[2026-09-12] 완료** — `JourneyTrackReaderAdapter` + `MusicDetailMapper.findByMbids`. 별도 매퍼를 두지 않고 기존 `MusicDetailMapper` 에 `mbid IN` 조회를 더했다 — 같은 테이블·같은 컬럼이라 매퍼를 나누면 `locationColumns` 조각이 두 벌이 된다.
+
+  **이게 없으면 API 가 동작하지 않는다.** `JourneyService.hydrate()` 가 port 를 `orElseThrow` 로 꺼내므로, 산출이 다 붙어도 **중간 정거장이 있는 모든 요청이 500** 이었다. 측정 하네스는 산출기만 직접 불러서 이 구멍을 덮고 있었다 — 벤치가 통과한다고 API 가 도는 것이 아니다.
+- [x] T046 `MusicDetailReader` 어댑터 — **[2026-09-12] `MusicDetailReaderAdapter` 가 `backend/dev` 에 이미 머지됨.** 좌표(16축)를 채우는지 확인만 하면 된다 — 002·003·005 와 공유. 이 기능은 `findDetail(id)` 만 쓴다. **rev.3: 좌표(16차원)가 응답에 필요하므로 이 어댑터가 좌표를 채워야 한다** — 산출의 축 좌표계가 출발·도착 좌표에서 시작한다 — **확인 완료**: `MusicDetailReaderAdapter.findDetail` 이 `locationColumns` 로 pc1~pc16 을 채운다.
 - [x] T047 [T045+T046+T053] quickstart D1~D7 실행 — **[2026-09-12] D-DATA 해소로 착수 가능.** 수용 기준은 핸드오프 §4.9 의 AC-J1~J6 를 함께 쓴다(무작위 40쌍 전부 reachable · 단조 증가 · 인접 역 거리 ≥ 1.6624 · 아티스트 4곡 이상 0건 · **p95 ≤ 2초** · far 쌍의 역 10~20개) — **rev.3: 측정 구간을 "엔진 / 게이트웨이" 가 아니라 "층 조회 / DP / 조립" 으로 나눈다.** 최악 케이스(층 재질의 상한 + 규칙 재산출 상한 소진)를 반드시 포함한다 — **타임아웃이 없어져 이 값이 곧 지연 상한이다** (SC-002, FR-025, B-Latency)
 
   **[2026-09-12] 운영 DB 실측 결과** (`JourneyBenchmarkIT`, pairs=40, seed=42, SSH 터널 경유):

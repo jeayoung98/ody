@@ -591,19 +591,19 @@ function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number;
 
 /**
  * 내 좌표 (MAP-08). 탑승 중에는 선미의 '나' 헬멧이, 별자리 뷰에서는 대형 안 현재 곡의 표식이 대신한다.
- * 재생 곡이 이 겹 밖이면 자리는 그대로 두고 라벨로 그 사실을 알린다.
+ * 화면 밖이거나 재생 곡이 이 겹 밖이면 {@link drawMeAway} 의 **옅은 점 + 화살촉**으로 갈린다 —
+ * 글씨로 사정을 설명하지 않는다. 제자리 표식(링 + 다이아)과 눈으로 바로 갈라져야 한다.
  */
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
-  // 화면 밖(또는 이 겹 밖)이면 자리 대신 방향을 그린다
+  // 화면 밖이면 자리 대신 가장자리 화살표를 그린다
   const off = e.meArrow();
   if (off) {
     drawMeAway(g, e, off);
     return;
   }
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
-  const elsewhere = e.playingElsewhere();
   // 날아오는 중이면 지나온 자리에 꼬리를 남긴다 (친구 우주선처럼)
   const fl = e.meFlight;
   if (fl) {
@@ -628,21 +628,9 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "source-over";
   g.textAlign = "center";
   g.textBaseline = "middle";
-  if (elsewhere) {
-    // 방향조차 잴 수 없을 때만 여기로 온다 (meArrow 가 null) — 묵은 자리에 사실만 적어 둔다
-    g.font = `600 9.5px ${FONTS.mono}`;
-    const label = "다른 갈래에서 재생 중";
-    const tw = g.measureText(label).width;
-    g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, px - tw / 2 - 6, py + 16, tw + 12, 16, 5);
-    g.fill();
-    g.fillStyle = "rgba(166,124,255,.95)";
-    g.fillText(label, px, py + 24);
-  } else {
-    g.fillStyle = "rgba(79,227,206,.95)";
-    g.font = `600 10px ${FONTS.mono}`;
-    g.fillText("나", px, py + 24);
-  }
+  g.fillStyle = "rgba(79,227,206,.95)";
+  g.font = `600 10px ${FONTS.mono}`;
+  g.fillText("나", px, py + 24);
 }
 
 /**

@@ -242,7 +242,7 @@ export class MapEngine {
     this.H = Math.max(1, H);
     if (!this.inited || this.anim) return;
     if ((wasUnsized || !this.touched) && this.myId != null) {
-      this.cam = this.fitCam(this.layer, this.subset, this.myId);
+      this.cam = this.fitCam(this.layer, this.subset, this.fitAnchor(this.subset, this.layer));
       this.entryS = this.cam.s;
     }
     this.project();
@@ -327,19 +327,30 @@ export class MapEngine {
     if (add.length) this.allocate([...this.songs, ...add], this.N);
     const ns = new Uint8Array(this.N);
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
+    this.keepPinned(ns, layer);
     // 이미 그 집합이면 다시 연출하지 않는다 (떠오르기는 쌓아둔 집합으로 이미 돌아가 있다)
     if (sameMask(this.anim?.subset ?? this.subset, ns)) return;
-    // 내 곡이 이 겹에 없으면 가장 가까운 상주 곡으로 옮긴다 (카메라 기준점이 있어야 한다)
-    if (!ns[this.index.get(this.myId!)!]) this.myId = this.nearestIn(ns, this.myId!, layer);
     const ax = LAYER_AXES[layer];
     this.morph(
       layer,
-      this.anim ? this.fitCam(layer, ns, this.myId!) : { ...this.cam },
+      this.anim ? this.fitCam(layer, ns, this.fitAnchor(ns, layer)) : { ...this.cam },
       ns,
       this.anim?.big ?? `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
       this.anim?.sub ?? `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
       this.anim?.dir ?? 1,
     );
+  }
+
+  /**
+   * 겹 맞춤(`fitCam`)의 기준 곡.
+   *
+   * 내 곡이 이 겹에 상주하지 않으면 가장 가까운 상주 곡을 대신 쓴다. **`myId` 는 건드리지 않는다** —
+   * '나' 는 내가 재생한 그 곡이고, 여기서 옮겨 두면 되돌아오지 않아서 "내 위치로 가기" 가
+   * 남의 곡 자리로 간다.
+   */
+  private fitAnchor(mask: Uint8Array, layer: number) {
+    const id = this.myId!;
+    return mask[this.index.get(id)!] ? id : this.nearestIn(mask, id, layer);
   }
 
   /** 마스크 안에서 기준 곡과 가장 가까운 곡 (그 겹 두 축 기준) */
@@ -826,7 +837,8 @@ export class MapEngine {
    * 내 위치는 곧 지금 재생 중인 곡이다 (MAP-08). 그래서 두 갈래로 갈린다.
    * - 그 곡이 **이 겹에 상주하면** 실제 자리 방향. 화면 안으로 돌아오면 화살표는 사라진다.
    * - **이 겹에 없으면** 파고들어온 경로를 거슬러 올라가 방향을 잰다 ({@link awayDir}).
-   *   자리가 이 겹에 없으니 화면 안이고 밖이고를 따질 것도 없이 늘 화살표다.
+   *   자리가 이 겹에 없으니 화면 안이고 밖이고를 따질 것도 없이 늘 화살표다 — 글씨로 알리지 않고
+   *   가생이에 붙은 옅은 점으로만 알린다. 돌아오는 길은 "내 위치로 가기" 가 맡는다.
    */
   meArrow(): { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean } | null {
     if (this.anim || this.follow || this.myId == null || this.constellationActive()) return null;
@@ -1083,7 +1095,7 @@ export class MapEngine {
     const ax = LAYER_AXES[nl];
     this.morph(
       nl,
-      this.fitCam(nl, ns, this.myId!),
+      this.fitCam(nl, ns, this.fitAnchor(ns, nl)),
       ns,
       `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${inView.toLocaleString()}곡 기준`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
@@ -1295,18 +1307,24 @@ export class MapEngine {
   /**
    * 곡 재생 → 내 위치가 그 곡으로 걸어간다 (MAP-08).
    * 그 곡이 이 겹에 없으면 **움직이지 않고 있던 자리에 남는다** — 없는 곳으로 데려가지 않고,
-   * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 표식에 "다른 갈래에서 재생 중"이 붙는다.
+   * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 가생이에 옅은 점으로 방향만 뜬다.
    */
   travelTo(id: number) {
     if (!this.index.has(id)) return;
     this.playingId = id;
+    /**
+     * 이 겹에 없는 곡(주변 탐색에서 고른 이웃 곡 등)이어도 **자리는 기억한다.**
+     * 기억해 두지 않으면 "내 위치로 가기" 가 한참 전에 재생한 딴 곡으로 데려간다 —
+     * 화살표는 지금 곡 쪽을 가리키는데 버튼은 딴 데로 가니 안 먹은 것처럼 보인다.
+     */
+    this.home = { musicId: id, boxes: [...this.boxes] };
+    // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
+    if (this.pinned && this.pinned.id !== id) this.pinned = null;
     if (!this.isAlive(id)) {
       this.travelToId = null;
       return;
     }
     this.travelToId = id;
-    // 이 겹에 상주하는 곡을 재생했을 때만 자리를 기억한다 — 없는 곡은 어디 사는지 모른다 (MAP-08)
-    this.home = { musicId: id, boxes: [...this.boxes] };
     this.centerLock = true;
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
@@ -1348,6 +1366,42 @@ export class MapEngine {
     const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
     this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
     this.centerLock = true;
+  }
+
+  /**
+   * "내 위치로 가기" 로 데려다 놓은 곡을 **그 겹에 붙들어 둔다.**
+   *
+   * 서버 top-k 에 없는 곡일 수 있어서(주변 탐색에서 고른 이웃 곡이 그렇다) 그냥 두면 상주 집합
+   * 응답이 도착하는 순간 도로 빠진다 — 카메라만 제자리고 표식은 다시 가생이 화살표가 된다.
+   * 겹을 옮기면 그 겹의 규칙을 따라야 하므로 **못 박은 겹에서만** 유효하다.
+   */
+  private pinned: { id: number; layer: number } | null = null;
+
+  /** 못 박은 곡을 이 겹 상주 마스크에 되살린다 */
+  private keepPinned(mask: Uint8Array, layer: number) {
+    if (!this.pinned || this.pinned.layer !== layer) return;
+    const i = this.index.get(this.pinned.id);
+    if (i != null) mask[i] = 1;
+  }
+
+  /**
+   * "내 위치로 가기" 로 도착한 자리에 '나'를 앉힌다.
+   *
+   * 명시적으로 누른 버튼이므로, 그 곡이 이 겹 상주 집합에 없더라도 그 한 곡만 끼워 넣고
+   * '나'를 그 자리로 옮긴다 — 카메라만 가고 표식은 딴 데 있으면 "안 갔다" 로 보인다.
+   */
+  private settleHome(i: number) {
+    const id = this.songs[i].musicId;
+    this.pinned = { id, layer: this.layer };
+    if (!this.subset[i]) {
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      this.rebuildAliveIdx();
+      this.project();
+    }
+    this.myId = id;
+    this.me = { ...this.worldOf(id)! };
+    this.meFlight = null;
   }
 
   /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
@@ -1408,12 +1462,15 @@ export class MapEngine {
 
     // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
     if (target === this.layer) {
+      this.settleHome(i);
       this.centerOn(h.musicId, FOCUS.zoomMul);
       return "moved";
     }
 
     const ns = this.maskForBoxes(h.boxes, target);
-    ns[i] = 1; // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다
+    // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다 — 응답이 와도 빠지지 않게 못 박는다
+    this.pinned = { id: h.musicId, layer: target };
+    ns[i] = 1;
     // 떠오르기용 상위 겹 프레임 재구성 (지금 스택은 다른 길로 파고든 것이라 쓸 수 없다)
     this.stack = Array.from({ length: target }, (_, l) => {
       const sub = this.maskForBoxes(h.boxes, l);
@@ -1423,6 +1480,9 @@ export class MapEngine {
 
     const song = this.songs[i];
     this.centerAfterMorph = h.musicId;
+    // 도착하면 '나'도 그 자리에 앉는다 — 모프 끝에서 me 가 myId 로 맞춰진다
+    this.myId = h.musicId;
+    this.meFlight = null;
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
     const ax = LAYER_AXES[target];

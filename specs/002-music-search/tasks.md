@@ -59,7 +59,7 @@ description: "Task list: 음악 검색 (2026-09-09 master 재베이스라인)"
 - [ ] T205 성능 벤치 p95<300ms(제안) — depends T202·T203
 
 ## B-Common: 전역 테스트 인프라 (BE-infra)
-- [ ] T301 메인 `@MapperScan`을 별도 @Configuration으로 분리해 슬라이스 테스트에서 제외(전역 `@WebMvcTest` 복구) — BE1/BE4 합의. 완료 시 T006~T008을 @WebMvcTest로 되돌릴지 재검토.
+- [X] T301 메인 `@MapperScan`을 `config/MyBatisConfig` 로 분리 (S15P21A405-232) — 평범한 `@Configuration` 은 `@WebMvcTest` 슬라이스가 스캔하지 않는다. 슬라이스 10개에서 매퍼 `@MockitoBean` 4개씩 제거하고 171개 통과 확인. 새 매퍼를 `<도메인>.mapper` 에 추가해도 이제 슬라이스가 깨지지 않는다.
 
 ---
 
@@ -90,7 +90,7 @@ description: "Task list: 음악 검색 (2026-09-09 master 재베이스라인)"
 B-D 해소 — BE4가 어댑터 구현을 BE2에 위임. 운영 DB는 PostgreSQL(pgvector 0.7.0), `music` 6,624,399행 적재 완료.
 근거 질의·실측·함정: `origin/data/dev:data/ingest/map_layer_queries.sql`, 스키마: `origin/data/dev:data/ingest/load_postgres.sh`.
 
-- [X] T302 `MusicSearchMapper`를 `@MapperScan` 범위 **밖**(`com.ssafy.backend.music.search`)에 두고 어댑터가 `SqlSession.getMapper()` 로 받는다 per plan: 소스 구조 (contradicts) — plan·T202는 `music/search/MusicSearchMapper.java`로 적었으나 `BackendApplication`의 `@MapperScan("com.ssafy.backend.*.mapper")`는 와일드카드 1단계라 `music.search`를 스캔하지 않는다. 빈이 안 올라온다. **실측 정정**: `music.mapper` 에 두면 빈이 올라오지만, 그러면 매퍼 빈이 하나 늘 때마다 저장소의 모든 `@WebMvcTest` 슬라이스가 SqlSessionFactory 부재로 죽는다(실측 63건 실패). 슬라이스 10곳에 `@MockitoBean` 을 더하는 대신 — 그중 4곳은 BE1·BE4 소유 파일이다 — 매퍼를 스캔 범위 밖에 두고 XML namespace 바인딩으로 받는다. 근본 해결은 T301.
+- [X] T302 `MusicSearchMapper`를 `com.ssafy.backend.music.mapper` 에 둔다 per plan: 소스 구조 (contradicts) — plan·T202는 `music/search/MusicSearchMapper.java`로 적었으나 `@MapperScan("com.ssafy.backend.*.mapper")` 는 와일드카드 1단계라 `music.search` 를 스캔하지 않는다. **경로**: 처음엔 스캔 범위 밖에 두고 `SqlSession.getMapper()` 로 우회했다(매퍼 빈이 늘면 슬라이스 10곳이 죽어서 — 실측 63건). 그 뒤 T301(S15P21A405-232)로 근본 원인을 없애고 표준 위치로 되돌렸다.
 - [X] T303 [US1] `MusicSearchReader` MyBatis 어댑터 구현 per FR-001·FR-009·FR-010 (missing) — `MusicSearchMapper.xml`(classpath:mapper/music/)에 `title ILIKE '%'||#{query}||'%' OR artist ILIKE '%'||#{query}||'%'`, `ORDER BY youtube_cnt DESC, id ASC`, `LIMIT #{size} OFFSET #{page}*#{size}` + count 질의. `music/search/MusicSearchReaderAdapter`가 port를 구현해 매퍼에 위임.
 - [X] T304 [US1] `MusicSummary` 조립 per FR-005 (missing) — `genres`는 `music_genre`+`genre` 조인(곡당 0..n, collection resultMap), `album`·`youtube_url`은 적재 결과상 전 행 NULL이므로 null 그대로 싣는다(FR-007 재생 불가 곡 유지). `map-underscore-to-camel-case` 전제.
 - [X] T305 [US1] `location vector(16)` → `Location(pc1..pc16)` 매핑 per FR-006·SC-002 (missing) — pgvector 값을 저장값 그대로 읽어 담는다. 재계산·재투영·반올림 금지. JDBC가 `vector`를 문자열로 돌려주므로 SELECT에서 `(location::real[])[n]` 로 축을 펴거나 TypeHandler 중 하나를 택한다.

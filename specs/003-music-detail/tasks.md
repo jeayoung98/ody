@@ -59,7 +59,7 @@ description: "Task list: 노래 상세 조회 (Nearby 포함)"
 - [ ] T206 Nearby 응답 예산(§6 유사곡 1초 매핑) 벤치 — depends T203
 
 ## B-Common: 전역 테스트 인프라 (BE-infra, 002와 공유)
-- [ ] T301 메인 `@MapperScan`을 별도 @Configuration으로 분리해 슬라이스 테스트에서 제외 — BE1/BE4 합의. 완료 시 testMapper mock 제거.
+- [X] T301 메인 `@MapperScan`을 `config/MyBatisConfig` 로 분리 (S15P21A405-232) — 평범한 `@Configuration` 은 `@WebMvcTest` 슬라이스가 스캔하지 않는다. 슬라이스 10개에서 매퍼 `@MockitoBean` 4개씩 제거하고 171개 통과 확인. 새 매퍼를 `<도메인>.mapper` 에 추가해도 이제 슬라이스가 깨지지 않는다.
 
 ---
 

@@ -10,3 +10,4 @@ export * from "./reactions";
 export * from "./chart";
 export * from "./tutorial";
 export * from "./activity";
+export * from "./search";

@@ -70,9 +70,9 @@
 
 - [~] T013 **무효**(D16) — 격자 구역 판정은 서버가 하지 않는다. 격자 단위가 화면 픽셀(86px)이라 줌에 따라 변해 서버가 적용할 수 없고, 인기순 선별도 클라이언트 몫이다. `MajorSelectionPolicy` 를 만들지 않았다. 원안 문구는 롤백용으로 남긴다
 - [~] T014 **부분**(S15P21A405-236) — 이전 PC 선택 누적은 `MajorQuery.accumulated` + `LayerBox` 로 전달 계약이 됐고 어댑터가 전부 적용한다(`candidate(N+1) ⊆ candidate(N)`). **장르 필터는 B3 잔여** — FE 매핑 미통보라 착수 불가
-- [X] T015 (2026-09-12 완료, S15P21A405-236) [US1] `MusicService.getMajor` 본체 — 미구현 예외 제거, `MajorQuery` 조립 → Reader 호출 → `MajorResponse` 반환. 응답 원소를 `MusicDetail` 에서 **`MapPoint`** 로 교체(D18). 컨트롤러 요청도 중심좌표에서 누적 축 범위로 개정(D19)
-- [X] T016 (2026-09-12 완료, S15P21A405-236) [US1] `MajorTrackReader` 어댑터 — level=1 은 `map_sample` 정적 조회, level>=2 는 `boxes[0]` 만 `point(...) <@ box(...)`(GiST) + 나머지는 `BETWEEN` heap 필터. 전역 선절단 없음. **잠정 둘**: `genreId` 는 0 고정(FE 29→10 매핑 미통보, 교체 지점은 `genreIdOf` 한 곳), `weight` 는 균일값 0(D17). **미측정**: `map_sample` 에 pc 16축이 없어 `music` 조인이 필요하다 — 0.4 ms 재측정은 실 DB 필요(T017)
-- [ ] T017 ⟲**D15 보류** [BLOCKED: B2] [US1] ~~통합 테스트 A11/A12/A13~~ — A11~A14 가 D15 로 보류돼 대상이 없다. **SC-002(동일 버전 좌표 불변, 차이 0)는 유효**하므로 그 부분만 먼저 할 수 있다. 격자 모델의 새 수용 기준이 정해지면 그때 확장. 실 postgres fixture 사용 가능(DB 적재 완료) (`backend/src/test/java/com/ssafy/backend/music/`)
+- [X] T015 (2026-09-12 완료, S15P21A405-236) [US1] `MusicService.getMajor` 본체 — 미구현 예외 제거, `MajorQuery` 조립 → Reader 호출 → `MajorResponse` 반환. 응답 원소를 `MusicDetail` 에서 **`MapPoint`** 로 교체(D18). 컨트롤러 요청도 중심좌표에서 누적 축 범위로 개정(D19). **잠정 동작 하나**: 후보 0곡이면 200 + 빈 배열을 돌려준다 — B4 미확정 상태의 기본값이고 코드 주석에 남겼다
+- [X] T016 (2026-09-12 완료, S15P21A405-236) [US1] `MajorTrackReader` 어댑터 — level=1 은 `map_sample` 정적 조회, level>=2 는 `boxes[0]` 만 `point(...) <@ box(...)`(GiST) + 나머지는 `BETWEEN` heap 필터. 전역 선절단 없음. **잠정 둘**: `genreId` 는 0 고정(FE 29→10 매핑 미통보, 교체 지점은 `genreIdOf` 한 곳), `weight` 는 균일값 0(D17). **미측정**: `map_sample` 에 pc 16축이 없어 `music` 조인이 필요하다 — 0.4 ms 재측정은 T017 에 항목으로 올렸다
+- [ ] T017 ⟲**D15 보류** [US1] ~~통합 테스트 A11/A12/A13~~ — A11~A14 가 D15 로 보류돼 대상이 없다. **SC-002(동일 버전 좌표 불변, 차이 0)는 유효**하므로 그 부분만 먼저 할 수 있다. 실 postgres fixture 사용 가능(DB 적재 완료). **S15P21A405-236 이 남긴 실측 항목 2개**: (1) `map_sample`+`music` 조인 후 1레이어 응답 시간 재측정 — 조인 없는 0.4 ms 가 얼마나 깎이는지, (2) level>=2 질의가 `music_l1_gist` 를 타는지 `EXPLAIN` 확인 — `BitmapAnd` 로 떨어지지 않는지. 둘 다 실 DB 접근이 필요하다
 
 **Checkpoint**: T007~T012 완료 시 순수 로직·wire 계약 독립 검증(MVP 부분). 종단 조회는 T013~T017 게이트 해소 후.
 
@@ -85,7 +85,7 @@
 **Independent Test**: `GET /api/api/music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
 
 - [X] T018 (2026-09-10 완료: `major_level1_returnsSuccessEnvelope`) [US2] MVC 슬라이스 테스트 A5: `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T019 (2026-09-12 완료, S15P21A405-236) [US2] level=1 은 범위 파라미터 없이 `map_sample` 정적 결과를 돌려준다. 중심을 (0,0)/전체 영역으로 대체하지 않는다 — 애초에 받지 않는다
+- [X] T019 (2026-09-12 완료, S15P21A405-236) [US2] level=1 은 범위 파라미터 없이 `map_sample` 정적 결과를 돌려준다. 중심을 (0,0)/전체 영역으로 대체하지 않는다 — 애초에 받지 않는다. level=1 은 `limit` 을 적용하지 않는다 — `map_sample` 1레이어는 이미 화면 크기로 계산된 정적 집합(실측 1,094칸)이라 1000 으로 자르면 별 94개가 사라진다. port javadoc 에 예외로 명시했다(D18: 정확한 수는 강제하지 않는다)
 
 **Checkpoint**: A5 계약은 T018로 유지. 최상위 실제 반환은 B2 후.
 

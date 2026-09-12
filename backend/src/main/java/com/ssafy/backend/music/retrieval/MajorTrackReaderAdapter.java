@@ -52,7 +52,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	@Override
 	public List<MapPoint> findResidentSet(MajorQuery query) {
 		List<MapPointRow> rows = query.isTopLevel()
-				? mapper.findLayerOneSample(query.limit())
+				? mapper.findLayerOneSample()
 				: mapper.findInAccumulatedBoxes(checkAxes(query.accumulated()), query.limit());
 		return rows.stream().map(MajorTrackReaderAdapter::toMapPoint).toList();
 	}

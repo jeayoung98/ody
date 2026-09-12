@@ -56,11 +56,11 @@ class MajorTrackReaderAdapterTests {
 	@Test
 	void level1_readsPrecomputedSample_notTheLiveScan() {
 		// 전역 실시간 집계는 20,941 ms 라 1레이어는 map_sample 을 읽어야 한다.
-		when(mapper.findLayerOneSample(anyInt())).thenReturn(List.of(row(1L, null)));
+		when(mapper.findLayerOneSample()).thenReturn(List.of(row(1L, null)));
 
 		adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 
-		verify(mapper).findLayerOneSample(1000);
+		verify(mapper).findLayerOneSample(); // 정적 집합은 자르지 않는다(실측 1,094칸)
 		verify(mapper, never()).findInAccumulatedBoxes(anyList(), anyInt());
 	}
 
@@ -72,12 +72,12 @@ class MajorTrackReaderAdapterTests {
 		adapter.findResidentSet(new MajorQuery(2, List.of(layer1), 1000));
 
 		verify(mapper).findInAccumulatedBoxes(List.of(layer1), 1000);
-		verify(mapper, never()).findLayerOneSample(anyInt());
+		verify(mapper, never()).findLayerOneSample();
 	}
 
 	@Test
 	void copiesStoredCoordinatesVerbatim_as16Axes() {
-		when(mapper.findLayerOneSample(anyInt())).thenReturn(List.of(row(7L, null)));
+		when(mapper.findLayerOneSample()).thenReturn(List.of(row(7L, null)));
 
 		MapPoint point = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000)).get(0);
 
@@ -91,7 +91,7 @@ class MajorTrackReaderAdapterTests {
 	@Test
 	void genreIdAndWeight_areProvisionalConstants() {
 		// genreId 는 FE 매핑 통보 전 잠정 0, weight 는 인기 지표 부재로 균일값(D17).
-		when(mapper.findLayerOneSample(anyInt())).thenReturn(List.of(row(1L, null), row(2L, "https://y/2")));
+		when(mapper.findLayerOneSample()).thenReturn(List.of(row(1L, null), row(2L, "https://y/2")));
 
 		List<MapPoint> points = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 
@@ -101,7 +101,7 @@ class MajorTrackReaderAdapterTests {
 
 	@Test
 	void playable_followsYoutubeUrlPresence() {
-		when(mapper.findLayerOneSample(anyInt())).thenReturn(List.of(row(1L, null), row(2L, "https://y/2")));
+		when(mapper.findLayerOneSample()).thenReturn(List.of(row(1L, null), row(2L, "https://y/2")));
 
 		List<MapPoint> points = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 

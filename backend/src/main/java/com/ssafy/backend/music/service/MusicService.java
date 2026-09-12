@@ -48,6 +48,10 @@ public class MusicService {
 	 * 서버는 공간적으로 고른 상주 집합만 돌려준다 — 인기순 대표 선별은 클라이언트가 화면 픽셀
 	 * 격자에서 한다(D16). 격자는 줌에 따라 변해 서버가 적용할 수 없다.
 	 * 전역 상위 k 를 먼저 자른 뒤 범위로 거르지 않는다(FR-013 MUST NOT).
+	 *
+	 * ponytail: 후보 0곡일 때 200 + 빈 배열을 돌려주는 것은 <b>B4 미확정 상태의 잠정 동작</b>이다.
+	 * plan.md 는 'B4 확정 전 구현하지 않는다' 고 적었으나, 조회 자체를 막을 수는 없어 가장 조용한
+	 * 기본값을 택했다. B4 가 정해지면 여기서 상태·본문을 바꾼다(빈 배열 + 200 을 계약으로 확정할 수도 있다).
 	 */
 	public MajorResponse getMajor(int level, List<LayerBox> accumulated) {
 		MajorTrackReader reader = majorReader.orElseThrow(

@@ -547,32 +547,46 @@ function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: nu
 }
 
 /**
- * 화면 밖으로 나간 '나' (MAP-08). 가장자리에 표식을 붙이고 바깥을 가리키는 화살촉을 단다 —
- * 고스트별과 같은 모양이라 "저쪽 바깥"이 같은 언어로 읽힌다.
+ * 화면 밖으로 나간 '나' (MAP-08).
+ *
+ * **화면 안 표식과 모양이 달라야 한다.** 같은 마름모+링을 가장자리에 그리면
+ * "지금 보는 화면 위에 내가 떠 있다"로 읽힌다. 여기서는 링을 빼고 **작은 점 + 바깥을 가리키는
+ * 화살촉**만 그리고 투명도도 낮춘다 — "여기 있다"가 아니라 "저쪽에 있다"로 읽히게.
  */
 function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean }) {
   const { x, y, dir, elsewhere } = off;
-  drawMeMarker(g, x, y, e.time, elsewhere);
   const c = meTheme(elsewhere);
   const a = ME_OFFSCREEN.arrow;
-  const rr = meRadius(e.time);
-  const ax = x + dir.x * (rr + a.gap);
-  const ay = y + dir.y * (rr + a.gap);
+  // 숨을 쉬듯 아주 옅게만 흔든다 (화면 안 표식처럼 크게 뛰지 않는다)
+  const pulse = 0.88 + 0.12 * Math.sin(e.time * 1.6);
+  g.save();
   g.globalCompositeOperation = "source-over";
-  g.globalAlpha = 1;
+  g.globalAlpha = ME_OFFSCREEN.awayAlpha * pulse;
+
+  // 점 — 링 없이 작게
   g.fillStyle = c.core;
+  g.beginPath();
+  g.arc(x, y, ME_OFFSCREEN.awayDot, 0, 6.284);
+  g.fill();
+
+  // 바깥을 가리키는 화살촉
+  const ax = x + dir.x * (ME_OFFSCREEN.awayDot + a.gap);
+  const ay = y + dir.y * (ME_OFFSCREEN.awayDot + a.gap);
   g.beginPath();
   g.moveTo(ax + dir.x * a.len, ay + dir.y * a.len);
   g.lineTo(ax - dir.y * a.half, ay + dir.x * a.half);
   g.lineTo(ax + dir.y * a.half, ay - dir.x * a.half);
   g.closePath();
   g.fill();
+
+  // 라벨 — 화살촉 반대쪽에 붙여 겹치지 않게
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 10px ${FONTS.mono}`;
+  g.font = `600 9.5px ${FONTS.mono}`;
   g.fillStyle = c.core;
-  // 화살촉이 아래를 가리키면 라벨을 위로 올려 서로 겹치지 않게
-  g.fillText("나", x, dir.y > 0.4 ? y - 24 : y + 24);
+  g.fillText("나", x - dir.x * 13, y - dir.y * 13);
+  g.restore();
+  g.globalAlpha = 1;
 }
 
 /**

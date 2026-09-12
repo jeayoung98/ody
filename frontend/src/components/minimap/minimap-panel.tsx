@@ -18,7 +18,7 @@ export default function MinimapPanel() {
 
   if (!open) {
     return (
-      <button
+      <button data-hud
         type="button"
         onClick={() => setOpen(true)}
         aria-expanded={false}
@@ -38,7 +38,7 @@ export default function MinimapPanel() {
   }
 
   return (
-    <aside className="glass absolute bottom-[18px] left-[18px] z-20 flex w-instrument flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5">
+    <aside data-hud className="glass absolute bottom-[18px] left-[18px] z-20 flex w-instrument flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5">
       <button
         type="button"
         onClick={() => setOpen(false)}

@@ -11,7 +11,7 @@ export default function SearchOpenButton() {
   const close = usePanelStore((s) => s.close);
 
   return (
-    <button
+    <button data-hud
       type="button"
       onClick={close}
       title="검색 열기 (패널이 닫힙니다)"

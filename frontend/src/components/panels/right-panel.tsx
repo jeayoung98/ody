@@ -14,7 +14,7 @@ export default function RightPanel() {
   if (!activePanel) return null;
 
   return (
-    <aside className="animate-tin absolute top-[68px] right-[74px] z-20 flex max-h-[calc(100vh-158px)] w-right-panel flex-col">
+    <aside data-hud className="animate-tin absolute top-[68px] right-[74px] z-20 flex max-h-[calc(100vh-158px)] w-right-panel flex-col">
       {activePanel === "song" && <SongDetailPanel />}
       {activePanel === "playlist" && <PlaylistPanel />}
       {activePanel === "feed" && <FeedPanel />}

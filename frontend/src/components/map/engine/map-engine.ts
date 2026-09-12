@@ -964,18 +964,64 @@ export class MapEngine {
     return this.songs[b].musicId;
   }
 
-  /** 카메라 맞춤: 기준 곡을 남은 화면 중앙에, 상주 집합의 97%가 들어오게 */
+  /**
+   * 카메라 맞춤: 기준 곡을 남은 화면 중앙에.
+   *
+   * - **레이어 0**: 지금까지의 규칙 그대로. 중심에서의 거리 97분위를 화면 44% 반지름에 맞춘다.
+   * - **파고든 겹(1 이상)**: 거리 분위수는 꼬리에 끌려가 알맹이를 작게 모은다. 파고들기는
+   *   "그 부분만 확대해 들어간다" 는 컨셉이라 들어간 순간 화면이 꽉 차야 하므로,
+   *   **가로·세로를 따로 잰 분위수 상자**가 화면의 {@link DRILL.deepFit.fill} 을 채우게 맞춘다.
+   */
   private fitCam(layer: number, mask: Uint8Array<ArrayBufferLike>, centerId: number): MapCamera {
     const dx = layer * 2;
     const dy = layer * 2 + 1;
     const c = this.songs[this.index.get(centerId)!];
+    const f = this.freeRect();
+    if (layer === 0) {
+      const s = this.fitRadial(dx, dy, mask, c.pc);
+      return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
+    }
+    /**
+     * 파고든 겹은 **구름 한가운데**를 본다. 기준 곡에 맞추면 그 곡이 무리 가장자리일 때
+     * 절반이 화면 밖으로 나간다 — 실측상 상주 1,000곡 중 40%만 화면에 들어왔다.
+     * "이 부분을 확대해 들어왔다" 는 컨셉이라 들어온 영역 전체가 보여야 한다.
+     */
+    const b = this.fitBox(dx, dy, mask);
+    return { cx: b.cx - (f.cx - this.W / 2) / b.s, cy: b.cy + (f.cy - this.H / 2) / b.s, s: b.s };
+  }
+
+  /** 레이어 0 맞춤 — 기준 곡에서의 거리 분위수를 화면 반지름에 맞춘다 */
+  private fitRadial(dx: number, dy: number, mask: Uint8Array<ArrayBufferLike>, c: number[]) {
     const d: number[] = [];
-    for (let i = 0; i < this.N; i++) if (mask[i]) d.push(Math.hypot(this.songs[i].pc[dx] - c.pc[dx], this.songs[i].pc[dy] - c.pc[dy]));
+    for (let i = 0; i < this.N; i++) if (mask[i]) d.push(Math.hypot(this.songs[i].pc[dx] - c[dx], this.songs[i].pc[dy] - c[dy]));
     d.sort((a, b) => a - b);
     const r = d[Math.floor(d.length * DRILL.fitQuantile)] || 1;
     const f = this.freeRect();
-    const s = Math.min(f.x1 - f.x0, f.y1 - f.y0) * DRILL.fitRadiusRatio / r;
-    return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
+    return (Math.min(f.x1 - f.x0, f.y1 - f.y0) * DRILL.fitRadiusRatio) / r;
+  }
+
+  /**
+   * 파고든 겹 맞춤 — 분위수 상자가 화면을 꽉 채우는 배율(가로·세로 중 더 빡빡한 쪽)과
+   * 그 상자의 한가운데(월드 좌표).
+   */
+  private fitBox(dx: number, dy: number, mask: Uint8Array<ArrayBufferLike>) {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let i = 0; i < this.N; i++) {
+      if (!mask[i]) continue;
+      xs.push(this.songs[i].pc[dx]);
+      ys.push(this.songs[i].pc[dy]);
+    }
+    if (!xs.length) return { s: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
+    xs.sort((a, b) => a - b);
+    ys.sort((a, b) => a - b);
+    const lo = Math.floor((xs.length - 1) * DRILL.deepFit.trim);
+    const hi = Math.ceil((xs.length - 1) * (1 - DRILL.deepFit.trim));
+    const w = Math.max(1e-6, xs[hi] - xs[lo]);
+    const h = Math.max(1e-6, ys[hi] - ys[lo]);
+    const f = this.freeRect();
+    const s = Math.min(((f.x1 - f.x0) * DRILL.deepFit.fill) / w, ((f.y1 - f.y0) * DRILL.deepFit.fill) / h);
+    return { s, cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
   }
 
   // ------------------------------------------------------------------ layer transitions
@@ -1066,7 +1112,9 @@ export class MapEngine {
     this.centerLock = false;
     const zoomIn = deltaY < 0;
     const canDig = zoomIn && this.gateOpen();
-    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * DRILL.riseScaleRatio;
+    // 파고든 겹에서는 진입 배율이 곧 축소 한계다 — 거기서 더 줄이려 하면 바로 떠오르기다
+    const riseAt = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.riseScaleRatio;
+    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * riseAt;
     if (canDig || canRise) {
       this.pressureDir = canDig ? 1 : -1;
       this.pressure = Math.min(1, this.pressure + Math.abs(deltaY) * DRILL.pressurePerDelta);
@@ -1080,8 +1128,10 @@ export class MapEngine {
     this.touched = true;
     const w = this.screenToWorld(mx, my);
     const want = this.cam.s * Math.exp(-deltaY * WHEEL_ZOOM);
-    // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게)
-    this.cam.s = Math.min(this.entryS * DRILL.zoomRange.max, Math.max(this.entryS * DRILL.zoomRange.min, want));
+    // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게).
+    // 파고든 겹의 축소 한계는 진입 배율 자체다 — 그 아래는 빈 우주만 보여 줄 뿐이다
+    const minK = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.zoomRange.min;
+    this.cam.s = Math.min(this.entryS * DRILL.zoomRange.max, Math.max(this.entryS * minK, want));
     this.cam.cx = w.x - (mx - this.W / 2) / this.cam.s;
     this.cam.cy = w.y + (my - this.H / 2) / this.cam.s;
     this.clampCam();

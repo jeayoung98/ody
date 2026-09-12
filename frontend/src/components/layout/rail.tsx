@@ -18,7 +18,7 @@ export default function Rail() {
   const toggle = usePanelStore((s) => s.toggle);
 
   return (
-    <nav className="glass absolute top-1/2 right-[18px] z-[21] flex -translate-y-1/2 flex-col gap-1.5 rounded-pill! p-1.5">
+    <nav data-hud className="glass absolute top-1/2 right-[18px] z-[21] flex -translate-y-1/2 flex-col gap-1.5 rounded-pill! p-1.5">
       {NAV_ITEMS.map((item) => (
         <RailButton key={item.key} label={item.label} active={activePanel === item.key} onClick={() => toggle(item.key as PanelType)}>
           {ICONS[item.key]}

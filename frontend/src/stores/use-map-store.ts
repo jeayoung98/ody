@@ -40,6 +40,8 @@ export interface EngineSnapshot {
   ghostMusicId: number | null;
   /** 재생 중인 곡이 이 겹 밖인가 (MAP-08) */
   playingElsewhere: boolean;
+  /** "내 위치로 가기" 로 돌아갈 자리가 있는가 (재생한 적이 있는가) */
+  canGoHome: boolean;
 }
 
 interface MapState extends EngineSnapshot {
@@ -75,6 +77,7 @@ interface MapState extends EngineSnapshot {
   dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
   surfaceToMusic: (musicId: number) => void;
+  goHome: () => void;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
@@ -101,6 +104,7 @@ export const useMapStore = create<MapState>()(
       myMusicId: null,
       ghostMusicId: null,
       playingElsewhere: false,
+      canGoHome: false,
 
       viewMode: "default",
       selectedMusicId: null,
@@ -154,6 +158,8 @@ export const useMapStore = create<MapState>()(
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");
         getMapEngine()?.surfaceToSong(musicId);
       },
+      /** 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다 */
+      goHome: () => getMapEngine()?.goHome(),
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
 

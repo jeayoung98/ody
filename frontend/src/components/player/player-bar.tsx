@@ -1,9 +1,10 @@
 "use client";
 
-import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
+import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
+import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { openYoutube } from "@/lib/youtube";
@@ -23,6 +24,8 @@ export default function PlayerBar() {
   const toggle = usePlayerStore((s) => s.toggle);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
+  const goHome = useMapStore((s) => s.goHome);
+  const canGoHome = useMapStore((s) => s.canGoHome);
   const openSong = usePanelStore((s) => s.openSong);
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
@@ -55,6 +58,17 @@ export default function PlayerBar() {
 
   return (
     <div className="glass flex min-w-0 flex-1 items-center gap-3 rounded-pill! py-2 pr-3.5 pl-2.5">
+      {/* 내 위치로 가기 — 재생으로 내 자리가 정해졌던 겹·화면으로 돌아간다 (MAP-08) */}
+      <button
+        type="button"
+        onClick={goHome}
+        disabled={!canGoHome}
+        aria-label="내 위치로 가기"
+        title="내 위치로 가기"
+        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent"
+      >
+        <LocateIcon />
+      </button>
       <span
         className="relative h-9 w-9 shrink-0 overflow-hidden rounded-[9px]"
         style={{ background: rgb ? `linear-gradient(140deg,${rgba(rgb, 0.5)},#13102a)` : "linear-gradient(140deg,#12203c,#1b1330)" }}

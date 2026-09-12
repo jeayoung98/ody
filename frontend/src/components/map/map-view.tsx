@@ -83,6 +83,31 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   useEffect(() => engine.setOcclusion(occludedRight), [engine, occludedRight]);
 
+  /**
+   * 지도 위에 떠 있는 HUD 상자를 재서 엔진에 넘긴다 — 화면 밖 표식이 여기에 가리지 않게 한다.
+   * 상수로 박으면 패널이 열리고 닫힐 때마다 틀어지므로 **실제 DOM 을 잰다.**
+   * 패널 전환은 애니메이션이 있어서 조금 뒤에 한 번 더 잰다.
+   */
+  useEffect(() => {
+    const measure = () => {
+      const host = document.querySelector("canvas")?.getBoundingClientRect();
+      if (!host) return;
+      engine.setObstacles(
+        [...document.querySelectorAll("[data-hud]")].map((el) => {
+          const r = el.getBoundingClientRect();
+          return { x0: r.left - host.left, y0: r.top - host.top, x1: r.right - host.left, y1: r.bottom - host.top };
+        }),
+      );
+    };
+    measure();
+    const later = setTimeout(measure, 420);
+    window.addEventListener("resize", measure);
+    return () => {
+      clearTimeout(later);
+      window.removeEventListener("resize", measure);
+    };
+  }, [engine, occludedRight, viewMode]);
+
   // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {
     if (!songs) return;
@@ -99,7 +124,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   // 주변 탐색: 유사곡 10곡이 오면 연출 뷰로 진입, 모드가 꺼지면 복귀
   useEffect(() => {
-    if (viewMode === "nearby" && nearby) engine.enterProbe(nearby.center.musicId, nearby.neighbors.map((n) => n.musicId));
+    if (viewMode === "nearby" && nearby) engine.enterProbe(nearby.center, nearby.neighbors);
     else if (viewMode !== "nearby") engine.exitProbe();
   }, [engine, viewMode, nearby]);
   // 별자리 오버레이 뷰: 배치가 도착하면 대형으로 모이고, 뷰를 닫으면 제자리로 흩어진다 (PATH-01)

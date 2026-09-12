@@ -20,6 +20,14 @@ export const SearchIcon = ({ size = 14, ...p }: P) => (
     <path d="M20 20l-4.2-4.2" />
   </svg>
 );
+/** 내 위치로 가기 — 지도 앱의 "현재 위치" 조준선 */
+export const LocateIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="12" cy="12" r="6.2" />
+    <circle cx="12" cy="12" r="1.6" fill="currentColor" stroke="none" />
+    <path d="M12 1.8v3.2M12 19v3.2M1.8 12h3.2M19 12h3.2" />
+  </svg>
+);
 export const CloseIcon = ({ size = 14, ...p }: P) => (
   <svg {...base(size, p)} strokeWidth={2.2}>
     <path d="M6 6l12 12M18 6L6 18" />

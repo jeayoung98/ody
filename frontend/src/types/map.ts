@@ -17,7 +17,13 @@ export interface MapPoint {
   weight: number;
   title: string;
   artist: string | null;
-  /** 미리듣기 링크 유무 (없으면 흐리게) */
+  /**
+   * 유튜브 **검색** URL (SONG-03). 백엔드가 조회 시 제목·아티스트로 만들어 담는다 —
+   * 규칙 6 이 음원 재생·임베드를 금지해서 watch·임베드 링크는 오지 않는다.
+   * 제목과 아티스트가 **둘 다 빈 곡**(실측 3,977개)은 검색어를 만들 수 없어 null 이다.
+   */
+  youtubeUrl: string | null;
+  /** 미리듣기 링크 유무 (없으면 흐리게). 백엔드 기준으로 `youtubeUrl != null` 과 같다 */
   playable: boolean;
   /**
    * 목 확인용 — 어느 겹에도 상주하지 않는 곡. 검색해서 고르면 늘 고스트별로 뜬다 (MAP-12 UI 확인).

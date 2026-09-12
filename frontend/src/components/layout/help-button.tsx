@@ -9,7 +9,7 @@ export default function HelpButton() {
   const [open, setOpen] = useState(false);
   return (
     <>
-      <button
+      <button data-hud
         type="button"
         aria-label="도움말"
         title="도움말"

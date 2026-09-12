@@ -242,7 +242,7 @@ export class MapEngine {
     this.H = Math.max(1, H);
     if (!this.inited || this.anim) return;
     if ((wasUnsized || !this.touched) && this.myId != null) {
-      this.cam = this.fitCam(this.layer, this.subset, this.myId);
+      this.cam = this.fitCam(this.layer, this.subset, this.fitAnchor(this.subset, this.layer));
       this.entryS = this.cam.s;
     }
     this.project();
@@ -329,17 +329,27 @@ export class MapEngine {
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
     // 이미 그 집합이면 다시 연출하지 않는다 (떠오르기는 쌓아둔 집합으로 이미 돌아가 있다)
     if (sameMask(this.anim?.subset ?? this.subset, ns)) return;
-    // 내 곡이 이 겹에 없으면 가장 가까운 상주 곡으로 옮긴다 (카메라 기준점이 있어야 한다)
-    if (!ns[this.index.get(this.myId!)!]) this.myId = this.nearestIn(ns, this.myId!, layer);
     const ax = LAYER_AXES[layer];
     this.morph(
       layer,
-      this.anim ? this.fitCam(layer, ns, this.myId!) : { ...this.cam },
+      this.anim ? this.fitCam(layer, ns, this.fitAnchor(ns, layer)) : { ...this.cam },
       ns,
       this.anim?.big ?? `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
       this.anim?.sub ?? `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
       this.anim?.dir ?? 1,
     );
+  }
+
+  /**
+   * 겹 맞춤(`fitCam`)의 기준 곡.
+   *
+   * 내 곡이 이 겹에 상주하지 않으면 가장 가까운 상주 곡을 대신 쓴다. **`myId` 는 건드리지 않는다** —
+   * '나' 는 내가 재생한 그 곡이고, 여기서 옮겨 두면 되돌아오지 않아서 "내 위치로 가기" 가
+   * 남의 곡 자리로 간다.
+   */
+  private fitAnchor(mask: Uint8Array, layer: number) {
+    const id = this.myId!;
+    return mask[this.index.get(id)!] ? id : this.nearestIn(mask, id, layer);
   }
 
   /** 마스크 안에서 기준 곡과 가장 가까운 곡 (그 겹 두 축 기준) */
@@ -1083,7 +1093,7 @@ export class MapEngine {
     const ax = LAYER_AXES[nl];
     this.morph(
       nl,
-      this.fitCam(nl, ns, this.myId!),
+      this.fitCam(nl, ns, this.fitAnchor(ns, nl)),
       ns,
       `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${inView.toLocaleString()}곡 기준`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,

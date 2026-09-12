@@ -1061,7 +1061,7 @@ export class MapEngine {
    * 어긋나면 압력만 차오르고 내려가지는 않아서 휠이 먹통이 된다 (확대도 멈춰 있으므로).
    */
   gateOpen() {
-    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough() && this.countInView() >= DRILL.minInView;
+    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough();
   }
 
   /**
@@ -1072,10 +1072,10 @@ export class MapEngine {
    */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
-    const inView = this.countInView();
-    if (inView < DRILL.minInView) return;
+    const box = this.drillBox();
+    const inView = this.countInBox(box);
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
-    this.boxes = [...this.boxes, this.viewBox()];
+    this.boxes = [...this.boxes, box];
     const nl = this.layer + 1;
     // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
     const ns = this.residentMask(nl);
@@ -1088,6 +1088,59 @@ export class MapEngine {
       `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${inView.toLocaleString()}곡 기준`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
     );
+  }
+
+  /** 그 범위 안에 있는 상주 곡 수 */
+  private countInBox(b: LayerBox) {
+    const dx = b.layer * 2;
+    const dy = b.layer * 2 + 1;
+    let n = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i]) continue;
+      const p = this.songs[i].pc;
+      if (p[dx] >= b.xMin && p[dx] <= b.xMax && p[dy] >= b.yMin && p[dy] <= b.yMax) n++;
+    }
+    return n;
+  }
+
+  /**
+   * 다음 겹으로 가져갈 범위.
+   *
+   * 백엔드에는 **점이 아니라 사각형**을 보낸다 (`pc{k}min`/`pc{k}max`). 그래서 "가장 가까운 별을
+   * 보낸다" 는 대신 **그 별을 가운데 두는 사각형**을 만든다.
+   *
+   * 화면 안에 곡이 충분하면 보던 화면 그대로가 기준이다. 모자라면 — 빈 곳을 확대한 경우 —
+   * 화면 중앙에서 **가장 가까운 곡**을 찾아 그 곡을 가운데 두고, 최소 곡 수가 담길 때까지
+   * 화면 비율 그대로 넓힌다. 빈 곳에서 확대했다고 파고들지 못하면 휠이 먹통으로 느껴진다.
+   */
+  private drillBox(): LayerBox {
+    const view = this.viewBox();
+    if (this.countInBox(view) >= DRILL.minInView) return view;
+    const dx = this.dx();
+    const dy = this.dy();
+    const f = this.freeRect();
+    const c = this.screenToWorld(f.cx, f.cy);
+    let best = -1;
+    let bd = Infinity;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i]) continue;
+      const p = this.songs[i].pc;
+      const d = (p[dx] - c.x) ** 2 + (p[dy] - c.y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    if (best < 0) return view;
+    const p = this.songs[best].pc;
+    const hw = (view.xMax - view.xMin) / 2;
+    const hh = (view.yMax - view.yMin) / 2;
+    let box = view;
+    for (let k = 1; k <= DRILL.nearestGrowMax; k *= DRILL.nearestGrowStep) {
+      box = { layer: this.layer, xMin: p[dx] - hw * k, xMax: p[dx] + hw * k, yMin: p[dy] - hh * k, yMax: p[dy] + hh * k };
+      if (this.countInBox(box) >= DRILL.minInView) break;
+    }
+    return box;
   }
 
   /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */

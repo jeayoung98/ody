@@ -228,8 +228,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const hit = engine.hitTest(mx, my);
       if (!hit) return;
       const id = engine.songs[hit.i].musicId;
-      // 오버레이가 떠 있으면 그 안의 곡만 고를 수 있다 (뒷화면 별은 클릭되지 않는다)
-      const overlayIds = engine.constellationIdSet() ?? engine.probeIdSet();
+      // 오버레이가 **떠 있는 동안에만** 그 안의 곡으로 가둔다 (PATH-01-1).
+      // 닫힌 뒤에도 가두면 지도의 별이 영영 안 눌린다 — 실제로 그랬다 (S15P21A405-270)
+      const overlayIds = engine.clickableOverlayIds();
       if (overlayIds && !overlayIds.has(id)) return;
       // 여정 지정 모드면 클릭이 출발·도착 칸을 번갈아 채운다 (JOURNEY-01)
       const journey = useJourneyStore.getState();

@@ -17,6 +17,7 @@
 | [002](002-constellation-collapsed-to-a-point.md) | 별자리 뷰가 한 점으로 뭉침 | 배치 계산이 목이라 실데이터 곡 좌표를 몰라 전부 (0,0) | S15P21A405-264 |
 | [003](003-raf-paused-silent-test-failure.md) | 브라우저 패널이 숨으면 테스트가 **조용히** 실패 | `requestAnimationFrame` 정지 — 실패가 아니라 "값이 안 변함"으로 나타남 | S15P21A405-215 외 |
 | [004](004-infinite-scroll-fired-before-scrolling.md) | 무한 스크롤이 스크롤 전에 다음 페이지를 당겨옴 | `IntersectionObserver.observe()` 의 첫 콜백이 아직 안 그려진 레이아웃으로 판정 | S15P21A405-267 |
+| [005](005-stale-overlay-click-gate.md) | 여정을 한 번 만들면 그 뒤로 지도의 별이 안 눌림 | 해제된 별자리가 정리되지 않아 클릭 게이트가 계속 걸림 | S15P21A405-270 |
 
 ---
 

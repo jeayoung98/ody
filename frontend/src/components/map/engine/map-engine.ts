@@ -691,8 +691,26 @@ export class MapEngine {
     return Number.isFinite(x0) ? { x0, x1, y0, y1 } : { x0: 0, x1: 0, y0: 0, y1: 0 };
   }
 
+  /**
+   * 그리기용 — 해제 애니메이션이 도는 동안에도 필요하다 (곡들이 제자리로 흩어지는 걸 그려야 한다).
+   * **클릭 판정에는 쓰지 않는다.** {@link clickableOverlayIds} 를 쓸 것.
+   */
   constellationIdSet(): Set<number> | null {
     return this.constellation ? new Set(this.constellation.ids) : null;
+  }
+
+  /**
+   * 클릭을 오버레이 안으로 **가둘 집합**. null 이면 지도의 아무 별이나 고를 수 있다.
+   *
+   * 오버레이(주변 탐색·별자리)가 떠 있는 동안에는 뒷화면 별을 고를 수 없어야 한다 (PATH-01-1).
+   * 그 판정을 `constellationIdSet()` 같은 **그리기용 집합**으로 하면 안 된다 — 그건 해제 뒤에도
+   * 잠깐(또는 정리를 빠뜨리면 영영) 남아 있어서, 닫은 뒤에도 지도가 먹통이 된다 (S15P21A405-270).
+   * 그래서 여기서는 **떠 있는지**만 본다.
+   */
+  clickableOverlayIds(): Set<number> | null {
+    if (this.constellationActive()) return this.constellationIdSet();
+    if (this.probe && !this.probe.exitingAt) return this.probeIdSet();
+    return null;
   }
 
   // ------------------------------------------------------------------ 고스트별 (MAP-12)
@@ -1819,8 +1837,10 @@ export class MapEngine {
     }
 
     // 커버·프로필 페이드: 모프 중이거나 데이터가 아직 이전 레이어 것이면 사라지고, 새 레이어 데이터가 오면 서서히 나타난다
-    // 프로브 해제 애니메이션이 끝나면 정리
+    // 오버레이 해제 애니메이션이 끝나면 정리. **둘 다 지운다** — 별자리를 안 지우면 닫힌 뒤에도
+    // 그 곡 집합이 남아서 클릭 게이트가 계속 걸리고, 지도의 별이 영영 안 눌린다 (S15P21A405-270)
     if (this.probe?.exitingAt && now - this.probe.exitingAt > PROBE.exitMs) this.probe = null;
+    if (this.constellation?.exitingAt && now - this.constellation.exitingAt > CONSTELLATION.exitMs) this.constellation = null;
     const probing = !!this.probe && !this.probe.exitingAt;
     const coverTarget = !this.anim && !probing && this.repLayer === this.layer ? 1 : 0;
     const friendTarget = !this.anim && !probing && this.friendsLayer === this.layer ? 1 : 0;

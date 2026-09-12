@@ -29,12 +29,8 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.MajorResponse;
 import com.ssafy.backend.music.dto.MapPoint;
@@ -43,7 +39,6 @@ import com.ssafy.backend.music.service.MusicService;
 
 /**
  * 대표곡 컨트롤러 슬라이스 테스트 (@WebMvcTest). 에러코드는 master GlobalErrorCode 기준.
- * testMapper mock 이유는 MusicSearchControllerTests 참조(T301 전까지).
  */
 // ponytail: master SecurityConfig가 슬라이스에 딸려와 security 빈 부재로 컨텍스트가 죽는다 →
 // JwtAuthenticationFilter는 Filter라 슬라이스에 스캔된다. 둘 다 제외하고 기본 시큐리티 필터도 끈다(BE-infra 소스 무수정).
@@ -59,17 +54,9 @@ class MusicControllerTests {
 	@MockitoBean
 	private MusicService musicService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	/** D18: 응답 원소는 MapPoint 다. 1레이어는 범위 파라미터 없이 호출한다(FR-004). */
 	private static final double[] PCS = { 0.11, -0.22, 0.33, -0.44, 0.55, -0.66, 0.77, -0.88,

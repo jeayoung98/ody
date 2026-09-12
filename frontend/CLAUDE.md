@@ -12,6 +12,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 | [docs/rules/FEATURES.md](../docs/rules/FEATURES.md) | 기능·화면 코드를 짜기 전 **항상** |
 | [docs/rules/BACKEND-NOTES.md](../docs/rules/BACKEND-NOTES.md) | ERD·API·백엔드 전제가 걸리는 작업을 할 때. 새 항목이 생기면 **여기에 추가하고 사용자에게 보고** |
 | [docs/rules/CONVENTIONS.md](../docs/rules/CONVENTIONS.md) | git 작업(브랜치·커밋·MR) 전 **항상** |
+| [docs/performance/](docs/performance/) · [docs/troubleshooting/](docs/troubleshooting/) | 성능을 재거나 고쳤을 때, 원인 찾느라 헤맸을 때 — **작업이 끝날 때마다** |
 
 ## 기능 명세 준수 (Claude용 — 코드 작성 요청마다 확인)
 
@@ -176,6 +177,34 @@ try {
 - API 응답 타입은 `src/types`의 도메인 타입을 재사용한다. 필드명은 camelCase.
 - 서버 상태는 TanStack Query, 클라이언트 전역 상태는 Zustand. 둘을 섞지 않는다.
 - 백엔드 주소는 `NEXT_PUBLIC_API_URL` 환경변수로 주입한다 (`.env.example` 참고).
+
+## 성능·트러블슈팅 기록 (Claude용 — 작업이 끝날 때마다 확인)
+
+작업이 끝나면 맥락이 흩어진다. **무엇을 왜 고쳤는지는 커밋 메시지에 안 들어간다.**
+아래에 해당하면 문서를 **하나 만들고**, 답변에서 "기록 추가: 경로" 한 줄로 알린다.
+
+| 상황 | 어디에 | 파일 |
+| --- | --- | --- |
+| 느리던 것을 빠르게 / 무겁던 것을 가볍게 만들었다 | [`docs/performance/`](docs/performance/) | `NNN-슬러그.md` |
+| 원인을 바로 못 짚고 헤맸다. 증상과 원인이 달랐다 | [`docs/troubleshooting/`](docs/troubleshooting/) | `NNN-슬러그.md` |
+| 커밋별 원시 수치(FPS·그리기·번들)를 쟀다 | [`PERF-LOG.md`](PERF-LOG.md) | 표에 행 추가 |
+
+각 폴더 `README.md` 에 **템플릿과 서식**이 있다. 그대로 따른다. 새 파일을 만들면 README 의 목록 표에도 줄을 추가한다.
+
+### 지켜야 할 것
+
+- **성능 기록은 `개선 전 수치 → 조치 → 개선 후 수치` 가 전부 있어야 한다.** 하나라도 비면 기록이 아니라 감상문이다.
+- **개선 전·후를 같은 방법으로 잰다.** 방법이 다르면 비교가 아니다. 잰 방법(코드·명령)을 문서에 적는다.
+- **추정값을 수치 칸에 적지 않는다.** 못 쟀으면 `미측정`, 근사치면 근사치라고 밝히고 무엇의 하한/상한인지 쓴다.
+- **바꿨는데 안 좋아졌으면 그대로 쓴다.** 그 사실이 더 쓸모 있다.
+- **트러블슈팅은 증거를 붙인다.** 콘솔 출력·실제 값·읽은 수치 그대로. "그래 보였다"로 끝내지 않는다.
+- **처음에 원인을 잘못 짚었으면 그것도 쓴다.** 왜 그렇게 보였는지가 제일 쓸모 있다.
+
+### 안 써도 되는 것
+
+오타 수정, 문구 변경, 단순 스타일 조정, 원인이 뻔했고 한 번에 고친 것. **전부 적으면 아무도 안 읽는다.**
+
+---
 
 ## 명령어
 ```

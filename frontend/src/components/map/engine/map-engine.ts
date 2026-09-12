@@ -24,6 +24,12 @@ const growU = (a: Uint8Array<ArrayBufferLike>, n: number) => {
   return b;
 };
 
+/**
+ * "내 위치로 가기" 결과. 안 움직였으면 **왜** 안 움직였는지 UI 가 알려 줄 수 있어야 한다 —
+ * 눌렀는데 아무 일도 안 나는 게 제일 나쁘다.
+ */
+export type GoHomeResult = "moved" | "queued" | "overlay" | "follow" | "none";
+
 interface Frame {
   layer: number;
   cam: MapCamera;
@@ -177,6 +183,8 @@ export class MapEngine {
    * 상세가 열리면 왼쪽으로 치우친 가운데, 닫으면 화면 가운데로 부드럽게 돌아온다.
    */
   private centerLock = false;
+  /** 겹 전환 중에 "내 위치로 가기" 를 누르면 전환이 끝난 뒤 처리한다 */
+  private pendingHome = false;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -1223,6 +1231,22 @@ export class MapEngine {
   }
 
   // ------------------------------------------------------------------ 내 위치로 가기
+  /**
+   * 그 곡을 **지도 영역 한가운데**에 놓는다.
+   *
+   * `focus` 와 달리 상주 여부를 따지지 않는다 — "내 위치로 가기" 는 어떤 상황에서든 가운데여야 하고,
+   * 서버가 고른 top-k 에서 빠졌더라도 좌표는 있기 때문이다.
+   */
+  private centerOn(id: number, scaleMul?: number) {
+    const w = this.worldOf(id);
+    if (!w) return;
+    this.touched = true;
+    const f = this.freeRect();
+    const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
+    this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
+    this.centerLock = true;
+  }
+
   /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
   canGoHome() {
     return this.home != null && this.index.has(this.home.musicId);
@@ -1257,18 +1281,32 @@ export class MapEngine {
    * 범위가 바뀌면 그 조건으로 상주 집합을 다시 받아오고, 도착하면 `setLayerSongs` 가 갈아끼운다.
    * 떠오르기가 계속 되도록 상위 겹 프레임도 누적 범위로 다시 쌓는다.
    */
-  goHome() {
+  goHome(): GoHomeResult {
     const h = this.home;
-    if (!h || this.anim || this.follow) return;
+    if (!h) return "none";
     const i = this.index.get(h.musicId);
-    if (i == null) return;
+    if (i == null) return "none";
+    // 따라가기 중에는 화면을 직접 조작하지 않는다 (SOCIAL-08)
+    if (this.follow) return "follow";
+    /**
+     * 임시 뷰(주변 탐색·별자리)가 떠 있으면 **지도를 움직이지 않는다.**
+     * 그 뷰가 화면을 차지하고 곡들을 연출 위치로 끌어다 놓기 때문에, 가 봐야 내 자리가 보이지 않는다.
+     * 대신 왜 안 되는지 알려 줄 수 있게 이유를 돌려준다.
+     */
+    if ((this.probe && !this.probe.exitingAt) || this.constellationActive()) return "overlay";
+    // 겹을 건너는 중이면 끝난 뒤에 처리한다 — 누른 게 묻히지 않게
+    if (this.anim) {
+      this.pendingHome = true;
+      return "queued";
+    }
+    this.ghost = null;
+    this.camTarget = null;
     const target = h.boxes.length;
 
     // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
-    if (target === this.layer && this.isAlive(h.musicId)) {
-      this.focus(h.musicId, FOCUS.zoomMul);
-      this.centerLock = true;
-      return;
+    if (target === this.layer) {
+      this.centerOn(h.musicId, FOCUS.zoomMul);
+      return "moved";
     }
 
     const ns = this.maskForBoxes(h.boxes, target);
@@ -1294,6 +1332,7 @@ export class MapEngine {
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
       target > this.layer ? 1 : -1,
     );
+    return "moved";
   }
 
   /**
@@ -1468,9 +1507,10 @@ export class MapEngine {
      * 여기서 매 프레임 다시 맞추면 '나'도 그 속도로 자연스럽게 따라간다.
      * 배율은 건드리지 않는다 — 가운데로 "옮기는" 것이지 확대하는 게 아니다.
      */
-    if (this.centerLock && !this.camTarget && !this.anim && !this.follow && !this.probe && !this.constellationActive()) {
+    const viewBusy = (!!this.probe && !this.probe.exitingAt) || this.constellationActive();
+    if (this.centerLock && !this.camTarget && !this.anim && !this.follow && !viewBusy) {
       const id = this.playingId ?? this.myId;
-      const w = id != null && this.isAlive(id) ? this.worldOf(id) : null;
+      const w = id != null ? this.worldOf(id) : null;
       if (w) {
         const f = this.freeRect();
         const cx = w.x - (f.cx - this.W / 2) / this.cam.s;
@@ -1525,8 +1565,12 @@ export class MapEngine {
         if (this.centerAfterMorph != null) {
           const id = this.centerAfterMorph;
           this.centerAfterMorph = null;
-          this.focus(id, FOCUS.zoomMul);
-          this.centerLock = true;
+          this.centerOn(id, FOCUS.zoomMul);
+        }
+        // 전환 중에 눌린 "내 위치로 가기" 를 이제 처리한다
+        if (this.pendingHome) {
+          this.pendingHome = false;
+          this.goHome();
         }
       }
     } else {

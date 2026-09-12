@@ -59,10 +59,10 @@
 
 ### 지금 착수 가능 (미정 정책·인프라 독립; `backend/` 경로에 배치)
 
-- [X] T007 (2026-09-10 완료) [P] [US1] `MajorQueryResolver` 구현: level n → 축 번호 (2n-1, 2n), 해당 축 중심 추출. 순수 함수(DB·HTTP 비의존). 레벨 상한·생략 검증 미포함(B1) (`backend/src/main/java/com/ssafy/backend/music/service/MajorQueryResolver.java`)
-- [X] T008 (2026-09-10 완료: 4 tests) [P] [US1] Resolver 단위테스트 A9/A10: level=1→pc1·pc2, level=2→pc3·pc4, 이전 단계 중심으로 해석 안 함 (`backend/src/test/java/com/ssafy/backend/music/MajorQueryResolverTests.java`)
-- [X] T009 (2026-09-10 완료) [P] [US1] 대표곡 선정 순수 로직: 후보 리스트에 `youtubeCnt` DESC 정렬 후 상위 k. **k는 주입 파라미터**(하드코딩 금지, B4). `playCnt`·재생 링크로 순위 변경 안 함. 동률·null·부족 미포함(B4) (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`)
-- [X] T010 (2026-09-10 완료: 3 tests) [P] [US1] 선정 단위테스트 A14: 후보 조회수 [300,100,200], k=2 → [300,200]; `playCnt` 역순이어도 순서 불변 (`backend/src/test/java/com/ssafy/backend/music/MajorSelectionTests.java`)
+- [X] T007 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) `MajorQueryResolver` 구현: level n → 축 번호 (2n-1, 2n). D19 로 `MajorQuery.axisX()`·`axisY()` 가 같은 계산을 하게 되어 호출부가 사라졌다. 축 매핑 규칙(FR-003) 자체는 그대로 유지된다
+- [X] T008 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) Resolver 단위테스트 A9/A10. 같은 검증을 `MajorQueryContractTests`(T004, 7건)가 `MajorQuery.axisX/axisY` 기준으로 이어받는다
+- [X] T009 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) 대표곡 선정 순수 로직 `MajorSelection.topByYoutubeCnt`. D16 으로 서버는 인기순 선별을 하지 않고(클라이언트가 화면 픽셀 격자에서 한다), `youtube_cnt` 는 662만 행 전부 0 이다(data 스펙 18)
+- [X] T010 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) 선정 단위테스트 A14
 - [X] T011 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `major_successItem_carriesPc16AndBaselineCoordinates` + `major_itemOmitsDetailFields` / 원래 항목은 `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 - [X] T012 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `MapPoint` 에는 `youtubeUrl` 이 없고 `playable` 로 표현된다. 어댑터 테스트 `playable_followsYoutubeUrlPresence` 가 대신 검증한다. 원래 항목은 `major_itemWithoutYoutubeUrl_isKeptWithNullPreserved`) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 
@@ -210,8 +210,8 @@ T029 는 dev 가 해소했으므로 A6 의 **토큰 없음·위조 부분은 지
 T006·T013~T017·T019·T020~T022·T024~T027·T030 이 이미 잡고 있어 중복 기재하지 않는다.
 이번 findings 는 전부 plan.md Source Code 구조표가 구현 상태를 못 따라간 드리프트다.
 
-- [ ] T032 plan.md Source Code 산문이 "아래 표의 `MajorQueryResolver`·`MajorSelection` 은 구현됐고" 라고 하지만 표에 `MajorSelection` 행이 없고 `MajorQueryResolver.java` 는 `(제안)` 표기 그대로다. 산문과 표를 일치시키고 구현 완료를 표기한다 per plan: Source Code structure (contradicts)
-- [ ] T033 구현된 `backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`(T009)를 plan.md 구조표에 행으로 추가한다. 표의 `MajorSelectionPolicy.java (제안)` 는 별개 파일(T013, B2 대기)이므로 대체하지 않는다 per plan: Source Code structure · T009 (partial)
+- [~] T032 **불필요**(2026-09-12) — plan.md 산문이 가리키던 `MajorQueryResolver`·`MajorSelection` 이 삭제돼 산문·표를 함께 정리했다(S15P21A405-236)
+- [~] T033 **불필요**(2026-09-12) — 대상 파일 `MajorSelection.java` 가 삭제됐다. plan.md 구조표에는 삭제 사실과 복원 지점을 적었다(S15P21A405-236)
 - [ ] T034 `ObservabilityTests.java` 가 `backend/src/test/java/com/ssafy/backend/`(루트 패키지)에 있는데 plan 구조표의 테스트 경로는 `.../com/ssafy/backend/music/` 다. 기능 경계를 넘는 전역 관측 테스트라 위치는 타당하므로, 표에 전역 테스트 행을 넣거나 위치 근거를 명시한다 per plan: Source Code structure · T023 (partial)
 - [ ] T035 plan.md 구조표의 경로 표기가 재배치 전 형태(`src/test/java/...`, `music/controller/...`)로 남아 있다. 그 위 산문만 `backend/` 로 갱신됐으므로 표 경로에도 접두를 반영한다 per plan: Source Code structure (partial)
 
@@ -228,9 +228,9 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 | T016 | ⟲ 재정의 — 원형 top-k → `map_sample` 정적 + `<@ box` 실시간. **B6 해소로 B2 만 남음** |
 | T017 | ⟲ 보류 — A11~A13 이 보류라 대상 없음. SC-002 부분만 유효 |
 | T019 | level=1 조회 대상이 `map_sample` 로 해소 후보 |
-| T009·T010 | `MajorSelection.topByYoutubeCnt` 는 **원안 전용**이 됐다. 삭제하지 않는다 — 롤백 자산이고, 인기 지표가 채워지면 그대로 쓴다 |
+| T009·T010 | `MajorSelection.topByYoutubeCnt` 는 **원안 전용**이 됐고 **2026-09-12 삭제**했다(팀 결정, S15P21A405-236). 호출부가 없는 코드를 롤백 대비로 두는 대신 복원 지점을 문서에 남긴다 — 아래 "삭제한 롤백 자산" 절 |
 | T025 | k 계약이 "격자 칸 수"로 바뀔 수 있다(1레이어 실측 1,094칸) |
-| T007·T008 | 영향 없음 — 레벨→PC 축 쌍 매핑(FR-003)은 D15 에서 그대로 유지 |
+| T007·T008 | D15 기준 영향 없음 — 레벨→PC 축 쌍 매핑(FR-003)은 유지. **다만 D19 로 `MajorQuery.axisX/axisY` 가 같은 계산을 하게 돼 `MajorQueryResolver` 는 2026-09-12 삭제됐다**(아래 "삭제한 롤백 자산") |
 
 **새로 열린 것**: DB 적재 완료(662만행)와 data 의 조회 계약 문서화로 **B6 가 해소**됐다.
 남은 게이트는 B1(입력 검증)·B2(격자 파라미터·선정 규칙)·B3(누적 제약)·B4(결과 계약)다.
@@ -251,6 +251,18 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 - T013 격자 구역 판정 → **상주 집합 샘플링**으로 다시 좁혀진다. 화면 격자 로직은 서버에 두지 않는다
 - T016 1레이어 `map_sample` 정적 조회는 유지. 단 그 테이블의 의미가 "대표곡"이 아니라 **"상주 집합"** 이다
 - T009·T010 `MajorSelection.topByYoutubeCnt` — 인기순 선별이 클라이언트로 가면서 서버 요구에서 빠졌다.
+  **2026-09-12 삭제됨**(S15P21A405-236). 복원 방법은 아래.
+
+### 삭제한 롤백 자산 — 복원 지점
+
+`MajorSelection`·`MajorQueryResolver` 와 그 테스트 7건은 호출부가 없어 2026-09-12 에 삭제했다. 코드를 남기는 대신 여기에 복원 지점을 적는다. 롤백 조건(spec.md "롤백 조건" 절)이 성립하면 아래로 되살린다.
+
+| 항목 | 값 |
+|---|---|
+| 복원 지점 커밋 | `99c452c` (브랜치 `backend/feat/S15P21A405-236-major-resident-set-adapter`) |
+| 복원 명령 | `git checkout 99c452c -- backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java backend/src/main/java/com/ssafy/backend/music/service/MajorQueryResolver.java backend/src/test/java/com/ssafy/backend/music/MajorSelectionTests.java backend/src/test/java/com/ssafy/backend/music/MajorQueryResolverTests.java` |
+| 삭제 파일 | `MajorSelection.java`, `MajorQueryResolver.java`, `MajorSelectionTests.java`, `MajorQueryResolverTests.java` |
+| 삭제 사유 | `MajorSelection` = D16(서버 인기순 선별 없음) + `youtube_cnt` 전 행 0. `MajorQueryResolver` = D19 로 `MajorQuery.axisX/axisY` 가 대체 |
   롤백 자산으로 유지(D15 롤백 시 복귀)
 - T025 k 계약 → "상위 k" 가 아니라 **상주 집합 크기**(FE 전제 1000 vs data 실측 1,094)
 

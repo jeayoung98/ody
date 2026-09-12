@@ -5,8 +5,10 @@ import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import TrackRow from "@/components/common/track-row";
 import { NEARBY_COUNT } from "@/constants";
+import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import type { MusicDetail } from "@/types";
 
@@ -21,6 +23,8 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const enterNearby = useMapStore((s) => s.enterNearby);
   const exitNearby = useMapStore((s) => s.exitNearby);
   const selectMusic = useMapStore((s) => s.selectMusic);
+  const playSingle = usePlayerStore((s) => s.playSingle);
+  const { mutate: recordPlay } = useRecordPlayMutation();
   const openSong = usePanelStore((s) => s.openSong);
   const inNearby = viewMode === "nearby";
 
@@ -29,10 +33,19 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     useTutorialStore.getState().complete("nearby");
   };
 
+  /**
+   * 이웃 곡을 고른다 — **지도에서 별을 누른 것과 같게 동작해야 한다** (MAP-08).
+   *
+   * 예전에는 재생을 안 불러서, 기준곡과 상세만 그 곡으로 옮겨가고 **소리는 직전 곡에 머물렀다.**
+   * 그러면 "이 곡이 이전 곡과 비슷한가"를 묻는 설문(S15P21A405-250)이 **들어본 적 없는 곡**을
+   * 기준으로 물어보게 된다.
+   */
   const handlePick = (id: number) => {
     selectMusic(id);
     openSong(id);
     enterNearby(id);
+    playSingle(id);
+    recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
   };
 
   return (

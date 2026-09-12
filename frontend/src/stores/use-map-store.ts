@@ -4,6 +4,7 @@ import type { MapViewMode } from "@/constants";
 import type { LayerBox, MapCamera, MapPoint } from "@/types";
 import type { GoHomeResult } from "@/components/map/engine/map-engine";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
+import type { PlayContext } from "./use-player-store";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
 const EMPTY_IDS: number[] = [];
@@ -61,6 +62,14 @@ interface MapState extends EngineSnapshot {
    * 배치를 만들려면 목록과 함께 받아 엔진에 편입해야 한다. 플리(목)처럼 좌표를 모르면 빈 배열
    */
   constellationPoints: MapPoint[];
+  /**
+   * 이 목록이 **어디서 온 것인가** (여정인지 플리인지, 그 식별자까지).
+   *
+   * 목록 안의 곡을 재생할 때 단일 재생으로 떨어지지 않고 그 목록으로 이어가려면
+   * 곡 ID 만으로는 부족하다 — 큐에 넣을 순서와 함께 `context` 를 복원해야 하기 때문이다
+   * (`use-player-store` 의 `playSingle` 참고).
+   */
+  constellationSource: PlayContext | null;
 
   setViewMode: (mode: MapViewMode) => void;
   selectMusic: (musicId: number | null) => void;
@@ -68,9 +77,9 @@ interface MapState extends EngineSnapshot {
   enterNearby: (musicId: number) => void;
   exitNearby: () => void;
   /** 목록을 넣고 별자리 뷰를 바로 켠다. 주변 탐색이 켜져 있으면 닫힌다 (PATH-01-1) */
-  showConstellation: (musicIds: number[], points?: MapPoint[]) => void;
+  showConstellation: (musicIds: number[], points: MapPoint[] | undefined, source: PlayContext) => void;
   /** 목록만 갈아끼운다 (뷰는 건드리지 않음) — 패널을 열었을 때 택만 뜨게 */
-  setConstellationList: (musicIds: number[], points?: MapPoint[]) => void;
+  setConstellationList: (musicIds: number[], points: MapPoint[] | undefined, source: PlayContext) => void;
   /** 좌상단 택 — 별자리 뷰를 껐다 켰다 */
   toggleConstellationView: () => void;
   /** 목록까지 비운다 (경로 지우기) */
@@ -118,6 +127,7 @@ export const useMapStore = create<MapState>()(
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
+      constellationSource: null,
       constellationPoints: EMPTY_POINTS,
 
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
@@ -130,17 +140,21 @@ export const useMapStore = create<MapState>()(
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
       enterNearby: (musicId) => {
         set(
-          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS },
+          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS, constellationSource: null },
           false,
           "enterNearby",
         );
       },
       exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null }, false, "exitNearby"),
 
-      showConstellation: (constellationMusicIds, points = EMPTY_POINTS) =>
-        set({ viewMode: "constellation", constellationMusicIds, constellationPoints: points, nearbyCenterMusicId: null }, false, "showConstellation"),
-      setConstellationList: (constellationMusicIds, points = EMPTY_POINTS) =>
-        set({ constellationMusicIds, constellationPoints: points }, false, "setConstellationList"),
+      showConstellation: (constellationMusicIds, points = EMPTY_POINTS, constellationSource) =>
+        set(
+          { viewMode: "constellation", constellationMusicIds, constellationPoints: points, constellationSource, nearbyCenterMusicId: null },
+          false,
+          "showConstellation",
+        ),
+      setConstellationList: (constellationMusicIds, points = EMPTY_POINTS, constellationSource) =>
+        set({ constellationMusicIds, constellationPoints: points, constellationSource }, false, "setConstellationList"),
       toggleConstellationView: () =>
         set(
           (s) =>
@@ -152,7 +166,12 @@ export const useMapStore = create<MapState>()(
         ),
       clearConstellation: () =>
         set(
-          (s) => ({ viewMode: s.viewMode === "constellation" ? "default" : s.viewMode, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS }),
+          (s) => ({
+            viewMode: s.viewMode === "constellation" ? "default" : s.viewMode,
+            constellationMusicIds: EMPTY_IDS,
+            constellationPoints: EMPTY_POINTS,
+            constellationSource: null,
+          }),
           false,
           "clearConstellation",
         ),

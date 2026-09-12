@@ -34,9 +34,49 @@ export const usePlayerStore = create<PlayerState>()(
       queue: [],
       queueIndex: 0,
 
+      /**
+       * 곡 하나를 재생한다.
+       *
+       * **목록 안의 곡이면 목록을 버리지 않는다.** 여정·플리를 듣던 중에 그 안의 곡을 지도나
+       * 목록에서 눌렀을 때, 예전에는 큐를 비우고 단일 재생으로 떨어뜨렸다. 그러면 이전·다음
+       * 버튼이 죽고 "여정 재생 중" 표시도 사라져서, 사용자가 보기엔 멀쩡한 곡 하나 눌렀을 뿐인데
+       * 여정이 통째로 끊긴 것처럼 보였다.
+       */
       playSingle: (musicId) => {
-        // ACT-01: 별자리(여정·플리) 밖의 곡을 재생하면 그 목록을 벗어난 것이므로 별자리가 사라진다
+        // 1. 지금 듣는 큐 안의 곡 — 자리만 옮긴다
+        const { queue } = get();
+        const atQueue = queue.indexOf(musicId);
+        if (atQueue >= 0) {
+          set({ currentMusicId: musicId, queueIndex: atQueue, isPlaying: true }, false, "playSingle/inQueue");
+          return;
+        }
+
         const map = useMapStore.getState();
+
+        /**
+         * 2. 만들어만 두고 아직 안 듣던 여정·플리 안의 곡 — 그 자리부터 그 목록을 듣는다.
+         *
+         * **다른 활동이 돌고 있으면 여기로 오지 않는다** (`context.kind === "single"` 조건).
+         * 플리를 듣는 중에 여정 별을 누르면 활동이 바뀌는 것이라 "멈추고 시작할까요?" 를
+         * 먼저 물어야 하는데(ACT-01), 스토어에서는 물어볼 수가 없다. 그 경우는 3번으로 내려보낸다.
+         */
+        const atList = map.constellationMusicIds.indexOf(musicId);
+        if (atList >= 0 && map.constellationSource && get().context.kind === "single") {
+          set(
+            {
+              currentMusicId: musicId,
+              isPlaying: true,
+              context: map.constellationSource,
+              queue: map.constellationMusicIds,
+              queueIndex: atList,
+            },
+            false,
+            "playSingle/inList",
+          );
+          return;
+        }
+
+        // 3. ACT-01: 별자리(여정·플리) 밖의 곡을 재생하면 그 목록을 벗어난 것이므로 별자리가 사라진다
         if (map.constellationMusicIds.length && !map.constellationMusicIds.includes(musicId)) map.clearConstellation();
         set({ currentMusicId: musicId, isPlaying: true, context: { kind: "single" }, queue: [], queueIndex: 0 }, false, "playSingle");
       },

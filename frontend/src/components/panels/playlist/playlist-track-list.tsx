@@ -27,6 +27,15 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
 
   const ids = playlist.items.map((it) => it.musicId);
 
+  /**
+   * 곡을 고르면 **그 곡부터 플리를 듣는다.** 행 옆 `이 곡부터 재생` 버튼과 같은 동작이다 —
+   * 목록을 눌렀는데 상세만 뜨고 소리는 그대로면 눌린 건지 알 수 없다.
+   *
+   * 단일 재생이 아니라 플리 재생이다. 다른 활동이 돌고 있으면 먼저 확인을 받는다 (ACT-01).
+   */
+  const playFrom = (index: number) =>
+    startActivity("playlist", String(playlist.id), () => playQueue({ kind: "playlist", playlistId: playlist.id }, ids, index));
+
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle aside={`${playlist.itemCount}곡`}>곡 목록</SectionTitle>
@@ -42,7 +51,10 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
               artist={it.music.artist}
               duration={it.music.duration}
               active={it.musicId === currentMusicId}
-              onClick={() => openSong(it.musicId)}
+              onClick={() => {
+                openSong(it.musicId);
+                playFrom(i);
+              }}
               actions={
                 <>
                   <IconButton
@@ -50,7 +62,7 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
                     size={26}
                     onClick={(e) => {
                       e.stopPropagation();
-                      startActivity("playlist", String(playlist.id), () => playQueue({ kind: "playlist", playlistId: playlist.id }, ids, i));
+                      playFrom(i);
                     }}
                   >
                     <PlayIcon size={13} />

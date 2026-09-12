@@ -13,14 +13,13 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
-import org.apache.ibatis.session.SqlSession;
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.backend.music.dto.MapPoint;
 import com.ssafy.backend.music.dto.MapPointRow;
 import com.ssafy.backend.music.retrieval.LayerBox;
 import com.ssafy.backend.music.retrieval.MajorQuery;
-import com.ssafy.backend.music.retrieval.MajorTrackMapper;
+import com.ssafy.backend.music.mapper.MajorTrackMapper;
 import com.ssafy.backend.music.retrieval.MajorTrackReaderAdapter;
 
 /**
@@ -33,13 +32,7 @@ class MajorTrackReaderAdapterTests {
 			0.99, -1.10, 1.21, -1.32, 1.43, -1.54, 1.65, -1.76 };
 
 	private final MajorTrackMapper mapper = mock(MajorTrackMapper.class);
-	private final MajorTrackReaderAdapter adapter = new MajorTrackReaderAdapter(sqlSessionReturning(mapper));
-
-	private static SqlSession sqlSessionReturning(MajorTrackMapper mapper) {
-		SqlSession sqlSession = mock(SqlSession.class);
-		when(sqlSession.getMapper(MajorTrackMapper.class)).thenReturn(mapper);
-		return sqlSession;
-	}
+	private final MajorTrackReaderAdapter adapter = new MajorTrackReaderAdapter(mapper);
 
 	private static MapPointRow row(long musicId, String youtubeUrl) {
 		MapPointRow r = new MapPointRow();

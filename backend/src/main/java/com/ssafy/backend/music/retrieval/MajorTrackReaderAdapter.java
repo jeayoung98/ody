@@ -2,11 +2,11 @@ package com.ssafy.backend.music.retrieval;
 
 import java.util.List;
 
-import org.apache.ibatis.session.SqlSession;
 import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.music.dto.MapPoint;
 import com.ssafy.backend.music.dto.MapPointRow;
+import com.ssafy.backend.music.mapper.MajorTrackMapper;
 
 /**
  * {@link MajorTrackReader} 의 MyBatis 어댑터 (T016, 헌법 X: BE2 계약 / 실행 분리).
@@ -44,9 +44,8 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 
 	private final MajorTrackMapper mapper;
 
-	public MajorTrackReaderAdapter(SqlSession sqlSession) {
-		// 매퍼를 스프링 빈으로 두지 않는 이유는 MajorTrackMapper javadoc 참조.
-		this.mapper = sqlSession.getMapper(MajorTrackMapper.class);
+	public MajorTrackReaderAdapter(MajorTrackMapper mapper) {
+		this.mapper = mapper;
 	}
 
 	@Override

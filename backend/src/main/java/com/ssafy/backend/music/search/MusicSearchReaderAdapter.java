@@ -1,7 +1,9 @@
 package com.ssafy.backend.music.search;
 
-import java.util.ArrayList;
-import java.util.HashMap;
+import static java.util.stream.Collectors.groupingBy;
+import static java.util.stream.Collectors.mapping;
+import static java.util.stream.Collectors.toList;
+
 import java.util.List;
 import java.util.Map;
 
@@ -34,44 +36,34 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 		String pattern = "%" + escapeLike(query) + "%";
 
 		long total = mapper.countMatches(pattern);
-		if (total == 0) {
-			return new PageResult(List.of(), 0);
-		}
-
-		List<MusicSearchRow> rows = mapper.findPage(pattern, size, (long) page * size);
+		List<MusicSearchRow> rows =
+				total == 0 ? List.of() : mapper.findPage(pattern, size, (long) page * size);
 		if (rows.isEmpty()) {
-			// page 가 총 페이지 수를 넘은 경우. 오류가 아니라 빈 목록이다(FR-002).
+			// 매칭 0건이거나 page 가 마지막 페이지를 넘었다. 오류가 아니라 빈 목록이다(FR-002).
 			return new PageResult(List.of(), total);
 		}
 
-		Map<Long, List<String>> genres = findGenres(rows);
-		List<MusicSummary> content = new ArrayList<>(rows.size());
-		for (MusicSearchRow row : rows) {
-			content.add(new MusicSummary(
-					row.getId(),
-					row.getTitle(),
-					row.getArtist(),
-					row.getAlbum(),
-					genres.getOrDefault(row.getId(), List.of()),
-					row.getYoutubeUrl(),
-					row.toLocation()));
-		}
-		return new PageResult(content, total);
-	}
+		// 페이지에 실린 곡들의 장르를 한 번에 읽어 곡별로 묶는다(N+1 회피).
+		Map<Long, List<String>> genres =
+				mapper.findGenresByMusicIds(rows.stream().map(MusicSearchRow::getId).toList()).stream()
+						.collect(groupingBy(MusicGenreRow::getMusicId,
+								mapping(MusicGenreRow::getName, toList())));
 
-	/** 페이지에 실린 곡들의 장르를 한 번에 읽어 곡별로 묶는다(N+1 회피). */
-	private Map<Long, List<String>> findGenres(List<MusicSearchRow> rows) {
-		List<Long> ids = rows.stream().map(MusicSearchRow::getId).toList();
-		Map<Long, List<String>> byMusicId = new HashMap<>();
-		for (MusicGenreRow genreRow : mapper.findGenresByMusicIds(ids)) {
-			byMusicId.computeIfAbsent(genreRow.getMusicId(), key -> new ArrayList<>()).add(genreRow.getName());
-		}
-		return byMusicId;
+		return new PageResult(rows.stream()
+				.map(row -> new MusicSummary(
+						row.getId(),
+						row.getTitle(),
+						row.getArtist(),
+						row.getAlbum(),
+						genres.getOrDefault(row.getId(), List.of()),
+						row.getYoutubeUrl(),
+						row.toLocation()))
+				.toList(), total);
 	}
 
 	/**
 	 * 검색어 안의 LIKE 와일드카드를 무력화한다. 이스케이프하지 않으면 "%" 한 글자가 전곡과 매칭된다.
-	 * XML 쪽 ESCAPE '\' 와 짝이다.
+	 * XML 쪽 ESCAPE 와 짝이다.
 	 */
 	private static String escapeLike(String query) {
 		return query.replace("\\", "\\\\")

@@ -44,8 +44,14 @@ swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼
 | B-19 | `PATCH /api/user/tutorial-completed` · `PATCH /api/user/profile` | 둘 다 도달 가능. 본문 없음/`{nickname?, imageUrl?}`, 토큰 주체 본인 대상이라 email 을 받지 않는다 | — | ✅ 프론트 반영 완료 |
 | B-20 | 구글 OAuth 리다이렉트 착지점 | 진입(`/oauth2/authorization/google`)은 정상 302 이고 `redirect_uri` 도 맞다. 다만 콜백 뒤 프론트로 되돌리는 `app.oauth.frontend-redirect-uri` **서버 설정값은 확인할 수 없었다** | 로컬(`localhost:3000`)에서 구글 로그인 테스트. 배포 SPA 주소로 고정돼 있으면 로컬 개발자는 구글 로그인을 못 한다 | 협의 전 (B-11 연장) |
 
-**요약 — 백엔드·인프라에 필요한 것 두 가지:** ① `/api` 접두 정렬 배포(B-16) ② `CORS_ALLOWED_ORIGINS` 정상화(B-17).
-이 둘이 되면 프론트는 목 라우트를 대부분 걷어낼 수 있다.
+| B-21 | **곡 응답에 `genreId` 와 `weight` 가 없다** | `MusicSummary`·`MusicDetail` 은 `genres` 를 **이름 문자열 배열**로만 준다. 별 크기·밝기용 가중치도 없다 | 지도의 별 **색(장르)**과 **크기**. 지금은 `genreId: 0`, `weight: 1` 고정이라 실데이터로 그리면 단색·균일 크기가 된다 (`draw-map.ts` 가 `GENRE_COLORS[genreId % n]` 을 쓴다) | 협의 전 (**필요**) |
+| B-22 | **지도 상주 집합이 `/api` 아래에 없어서 곡 ID 가 서로 안 맞는다** | 지도 원본은 `/music/major` 인데 B-16 때문에 못 부른다. 그래서 지도는 목(`mocks/songs.ts`)이고 주변 탐색·경로 탐색만 실데이터가 된다. **목 곡 ID 는 1..N 이라 실제 곡 ID 1..N 과 숫자가 겹친다** — 틀린 곡이 맞는 것처럼 매칭돼 보인다 | 주변 탐색·경로 탐색 결과를 지도 위에 그리는 것 전부. 지도와 탐색 결과는 **같은 출처**여야 한다 | 협의 전 (**막힘**) |
+
+**요약 — 백엔드·인프라에 필요한 것:**
+
+1. **`/api` 접두 정렬 배포 (B-16) — 가장 급하다.** 이것 하나로 곡 검색·상세·대표곡·플레이리스트가 전부 살아나고, B-22(지도 ID 불일치)와 B-18(Swagger 500)도 같이 풀린다. 코드는 이미 `backend/dev`·`master` 에 있고 **배포만 안 올라갔다.**
+2. `genreId`·`weight` 를 곡 응답에 추가 (B-21). 지도 색·크기가 여기 묶여 있다.
+3. `CORS_ALLOWED_ORIGINS` 정상화 (B-17). 지금은 프론트가 서버 프록시로 우회 중이라 급하지는 않다.
 
 ---
 

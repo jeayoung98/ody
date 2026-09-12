@@ -1,9 +1,30 @@
 # 50 DB 스키마·마이그레이션 (data 소유 테이블) — spec
 
-상태 ⬜ · Jira **S15P21A405-90** · 목표일 미정 · 팀 결정 대기 항목 있음 ⛔
+상태 ✅ 종결(2026-09-11) · Jira **S15P21A405-90** · 스키마는 Backend 가 소유한다
 
 ## 목적
 data 트랙이 만드는 산출물(곡·아티스트·좌표·지도 계층)을 PostgreSQL 에 서빙 가능한 형태로 두고, 스키마 변경을 재현 가능하게 관리한다.
+
+## 종결 (2026-09-11)
+
+**이 스펙은 더 진행하지 않는다. Backend 가 스키마를 만들었고 data 는 데이터만 넣는다.**
+
+2026-09-10 실사에서 `ody` DB 에 `music`·`genre`·`music_genre` 가 이미 있었다(pgvector 0.7.0, `location vector(16)`). 그래서 data 가 DDL 을 쓸 일이 없어졌다.
+
+| 이 스펙이 결정 대기였던 것 | 어떻게 끝났나 |
+|---|---|
+| Q1 `track_vector` 차원 | **D7** PCA-16 |
+| Q2 마이그레이션 도구 | **종결.** Backend 가 스키마를 소유하므로 data 는 도구를 고르지 않는다 |
+| Q3 소유권 경계 | data 는 `music`·`genre`·`music_genre` 에 **데이터만** 넣는다. 테이블 정의는 BE |
+| Q4 Vector DB 도입 | **D9** pgvector |
+
+실제 스키마와 적재 결과는 스펙 18, 좌표 인덱스는 스펙 17, 지도 레이어 인덱스는 스펙 16 에 있다.
+
+⚠️ 이름 표기 하나: 이 스펙은 `track` 으로 적었지만 실제 테이블은 **`music`** 이다(D11). 아래 원문은 기록으로 남긴다.
+
+---
+
+## 원문 (2026-09-11 종결 전)
 
 ## 현재 상태 (docs/infra/DATABASE.md, 2026-09-08 기준)
 - PostgreSQL 17.11 이 transactional Source of Truth, Neo4j 5.26.30 은 graph/read projection.

@@ -1,6 +1,6 @@
 # 17 pgvector 좌표 서빙 — spec
 
-상태 ⬜ · Jira **S15P21A405-117** · 결정 **D9**(Vector DB = pgvector) · 목표일 미정
+상태 ✅(2026-09-11 662만 행 적재·인덱스 완료) · Jira **S15P21A405-117** · 결정 **D9**(Vector DB = pgvector) · 목표일 미정
 
 ## 목적
 곡 좌표(PCA-16)를 PostgreSQL 에 두고 Backend 가 직접 유사도 검색을 할 수 있게 한다.
@@ -102,12 +102,29 @@ pgvector 0.7.0 에는 iterative index scan 이 없다. HNSW 가 `ef_search` 개 
 app-node 호스트 여유는 13.3 GB 다(2026-09-10 측정). PostgreSQL·Redis·Neo4j·backend 가 나눠 쓴다.
 이 변경은 인프라 담당 합의 사항이다. **합의 전에는 662만 행 적재를 시작하지 않는다.**
 
+## 실제로 만든 것 (2026-09-11) — `track_vector` 가 아니라 `music.location`
+
+D11 로 좌표는 별도 테이블이 아니라 `music.location vector(16)` 에 들어갔다. 이 스펙의 `track_vector` 표기는 전부 `music.location` 으로 읽는다.
+
+| 항목 | 계획(50만 외삽) | **실측(662만)** |
+|---|---|---|
+| 행 수 | 6,624,399 | **6,624,399** |
+| HNSW 빌드 | 4~6시간(추정) | **3,943초** (65분, `maintenance_work_mem` 6 GB) |
+| 인덱스 크기 | 약 2.3 GB | **2,330 MB** |
+| 이웃 조회 | p95 2.24 ms | **13.9 ms** (662만 행, `LIMIT 10`) |
+
+빌드가 추정보다 빨랐던 이유는 컨테이너 자원을 올린 것이다(메모리 1 GB → 8 GB, CPU 1 → 2, `docker update` 로 재시작 없이).
+
+⚠️ 병렬 빌드는 `/dev/shm` 64 MB 를 넘겨 실패한다. `SET max_parallel_maintenance_workers = 0`.
+
+재현 절차는 `ingest/load_postgres.sh` 7번 절.
+
 ## 수용 기준
-- AC1 `track_vector` 에 `manifest.songs` 와 같은 행 수가 들어가고, 전 행의 `bundle` 이 `CURRENT.json` 의 번들과 같다.
-- AC2 무작위 곡 200개의 top-10 을 numpy 정확 kNN 과 대조해 **recall@10 평균 ≥ 0.99**. 측정 코드는 `tests/bench_pgvector.py`, 결과는 `output/pgvector_recall_<번들>.json`.
-- AC3 같은 200개 질의의 **p95 ≤ 50ms**(Backend 커넥션 풀 기준, psql 기동 시간 제외).
+- AC1 좌표가 `manifest.songs` 와 같은 행 수로 들어간다. **완료: `music` 6,624,399행, `location` 전 행 `vector(16)`.** (`bundle` 컬럼은 실제 스키마에 없다 — 번들 추적은 `output/db_ingest_bench.json` 이 한다)
+- AC2 무작위 곡 200개의 top-10 을 numpy 정확 kNN 과 대조해 **recall@10 평균 ≥ 0.99**. 50만 행에서 0.9995 로 통과했다(`output/pgvector_bench_2026-09-10.json`). **662만 행 재측정은 남아 있다.**
+- AC3 같은 200개 질의의 **p95 ≤ 50ms**. 단건 실측 13.9 ms 로 여유가 있다. 200개 배치 재측정은 남아 있다.
 - AC4 이웃 결과에 `excluded` 곡이 0건, 길이 규칙 위반 0건. `music` 에 `excluded=false` 인 곡만 적재하므로 적재 단계에서 보장된다. 후처리 임계값 적용은 BE 담당이다(D12).
-- AC5 인덱스 빌드가 끝나고 `pg_relation_size('track_vector_hnsw')` 가 기록된다. 소요 시간도 함께.
+- AC5 인덱스 빌드가 끝나고 크기가 기록된다. **완료: `music_location_hnsw_idx` 2,330 MB, 3,943초** (`output/db_ingest_bench.json`).
 - AC6 서브쿼리 금지와 필터 제약이 Backend 연동 문서에 들어가 있다.
 - AC7 좌표 불변성: 적재 전후로 같은 mbid 의 좌표가 비트 단위로 같다(Jira S15P21A405-35 게이트).
 

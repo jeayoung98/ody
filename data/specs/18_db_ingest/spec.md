@@ -1,6 +1,6 @@
 # 18 적재 파이프라인 (music·genre·music_genre + Neo4j) — spec
 
-상태 🔶(적재 완료, HNSW 빌드 중) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · 결정 **D11**, **D13** · 선행: 스펙 17 T1(Postgres 자원 상향)
+상태 ✅(2026-09-11 적재·인덱스 완료) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · 결정 **D11**, **D13** · 선행: 스펙 17 T1(Postgres 자원 상향)
 
 ## 목적
 Spark 가 만든 좌표와 카탈로그를 서비스가 쓰는 형태로 PostgreSQL 과 Neo4j 에 적재한다.
@@ -103,20 +103,25 @@ SET maintenance_work_mem = '2GB';                                   # 세션 단
 | `could not resize shared memory segment ... No space left on device` | HNSW 병렬 빌드가 컨테이너 `/dev/shm` 64 MB 를 넘김 | `SET max_parallel_maintenance_workers = 0` |
 | `Could not find command :auto` | cypher-shell 5.26 에 `:auto` 가 없다 | 빼면 된다. 기본이 auto-commit |
 
-### HNSW 인덱스는 아직 빌드 중
-662만 행에서 `maintenance_work_mem` 2 GB 로는 **2,757,295 튜플에서 그래프가 메모리를 넘긴다**. 그 뒤는 디스크 기반이라 크게 느려진다(경고 원문: `hnsw graph no longer fits into maintenance_work_mem`).
+### HNSW 인덱스 — 완료 (2026-09-11)
+`maintenance_work_mem` 2 GB 로는 **2,757,295 튜플에서 그래프가 메모리를 넘겼다**(경고: `hnsw graph no longer fits into maintenance_work_mem`). 그 뒤는 디스크 기반이라 크게 느려진다. 취소하고 컨테이너를 8 GB 로 올려 `maintenance_work_mem = 6GB` 로 다시 빌드했다.
 
-선택지 둘이다.
-1. 그대로 두고 끝나기를 기다린다(수 시간 예상)
-2. 취소하고 컨테이너를 8 GB 로 올려 `maintenance_work_mem = 6GB` 로 다시 빌드한다(호스트 15.8 GB 중 가용 12.8 GB)
+| 항목 | 값 |
+|---|---|
+| 빌드 시간 | **3,943초** (65분) |
+| 인덱스 크기 | **2,330 MB** |
+| 설정 | `maintenance_work_mem = 6GB`, `max_parallel_maintenance_workers = 0` |
+| 이웃 검색 실측 | **13.9 ms** (662만 행, 리터럴 전달) |
 
-**인덱스가 없어도 정확 거리 질의(전체 스캔)는 동작한다.** BE 통합은 막히지 않는다.
+⚠️ 병렬 빌드는 컨테이너 `/dev/shm` 64 MB 를 넘겨 `could not resize shared memory segment` 로 실패한다. 병렬을 꺼야 한다.
+
+### 지도 레이어 인덱스는 스펙 16 이 맡는다
+`music_l1_gist`·`music_l2_gist` 표현식 GiST 와 `map_sample` 은 스펙 16(D14)에서 다룬다. 재현은 `ingest/build_map_layer.sql`.
 
 ### 남은 것
 | 무엇 | 상태 |
 |---|---|
-| HNSW 인덱스 | 빌드 중. 위 절의 선택지 둘 |
-| DB 왕복 좌표 표본 검증(AC2) | 인덱스 빌드가 끝난 뒤에 한다 |
+| DB 왕복 좌표 표본 검증(AC2) | CSV 왕복은 테스트로 통과. DB 에서 다시 읽어 비교하는 것은 남아 있다 |
 | compose 파일에 자원 반영 | 인프라 담당 |
 | `music.mbid` UNIQUE 등 제약 | BE 결정. 지금은 데이터 자체에 중복이 없다(distinct 6,624,399) |
 | BE 에 전달 | 새 곡 id 는 **6,624,400** 부터 |
@@ -238,8 +243,8 @@ D1 이 길이 규칙을 60초~6분으로 좁히기로 정했고 그것이 v2.2 �
 - AC4 `release_year`·`album`·`youtube_url` 은 전 행 NULL. 값이 들어 있으면 실패다(출처 없는 값이 섞였다는 뜻).
 - AC5 `genre` 행 수 == **29**(멜론 코드 종류), `music_genre` 행 수 == **71,285**(곡 66,036개). 2026-09-10 CSV 실측값이다.
 - AC6 `music_genre` 가 없는 곡이 **6,558,363**곡이고 그것이 정상임을 문서와 테스트가 함께 말한다.
-- AC7 Neo4j `(:Music)` 노드 수 == `music` 행 수, `genres` 배열이 `music_genre` 와 일치.
-- AC8 적재 시간·인덱스 크기·디스크 사용량을 `output/db_ingest_bench.json` 에 기록한다.
+- AC7 Neo4j `(:Music)` 노드 수 == `music` 행 수, `genres` 배열이 `music_genre` 와 일치. **통과** (6,624,399 노드, `HAS_GENRE` 71,285).
+- AC8 적재 시간·인덱스 크기·디스크 사용량을 `output/db_ingest_bench.json` 에 기록한다. **완료.** COPY 66초, `music` 총 4,691 MB(HNSW 2,330 MB + GiST 421 MB × 2 포함), DB 4,704 MB.
 - AC9 `pytest tests/test_db_ingest.py` 통과 (스키마·매핑·좌표 왕복 검사. 실 DB 없이 돈다). **2026-09-10 10건 통과.**
 
 ## 비범위

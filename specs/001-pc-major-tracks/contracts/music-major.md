@@ -1,4 +1,4 @@
-# Contract: GET /music/major (대표곡 조회)
+# Contract: GET /api/music/major (대표곡 조회)
 
 **Spec**: [../spec.md](../spec.md) | **정본**: [docs/api-spec.md §3.4](../../../docs/api-spec.md) | **Date**: 2026-09-08
 
@@ -10,7 +10,7 @@
 
 ## 1. Request (D19 확정)
 
-`GET /music/major` · 인증 필요.
+`GET /api/music/major` · 인증 필요.
 
 | 항목 | 값 |
 | --- | --- |
@@ -49,7 +49,7 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 | --- | --- |
 | `musicId` | `music.id` (BIGINT, 1..6,624,399) |
 | `pc` | **정확히 16개** 배열. 클라이언트가 레이어 축으로 재투영하므로 전부 싣는다(D7 PCA-16) |
-| `genreId` | **비음수 정수(MUST)**. FE `draw-map.ts` 의 `spr[genreId % len]` 이 raw modulo 라 음수면 `drawImage` 예외 |
+| `genreId` | **비음수 정수(MUST)**. FE 는 `design-tokens.ts` 의 `genreIdx() = Math.abs(genreId) % len` 로 색·스프라이트를 고르므로 음수도 터지지는 않는다(2026-09-12 FE 확인, `origin/frontend/dev`). 서버가 음수를 보낼 이유가 없어 검증은 유지 |
 | `weight` | 별 크기·밝기·클라이언트 선별용. 인기 지표 부재로 **현재 균일값**(D17) |
 | `title` / `artist` | 표시용. `artist` 는 null 가능 |
 | `playable` | 재생 링크 유무. `youtube_url` 전 행 NULL 이라 **현재 전부 false** |

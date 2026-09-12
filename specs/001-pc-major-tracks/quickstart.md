@@ -25,7 +25,7 @@
 | A5 | `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) | MVC 슬라이스(기존 통과) |
 | A7 | `level=abc` / PC에 `abc` → 400 `VALIDATION_ERROR` + 공통 실패 구조 | MVC 슬라이스(level=abc는 400까지 통과, 코드는 아직 master `INVALID_INPUT` — M4 미해소) |
 | A8 | 내부 실패 → 500 `INTERNAL_ERROR` + 공통 실패 구조 | MVC 슬라이스(서비스 예외 mock) |
-| A9/A10 | level=1→pc1·pc2, level=2→pc3·pc4로 축 해석 | `MajorQueryResolver` 순수 단위테스트 |
+| A9/A10 | level=1→pc1·pc2, level=2→pc3·pc4로 축 해석 | `MajorQueryContractTests` (`MajorQuery.axisX/axisY`). ~~`MajorQueryResolver`~~ 는 2026-09-12 삭제 |
 | A14(부분) | 순수 후보 리스트에 `youtubeCnt DESC` top-k, `playCnt` 역순 무영향 | 선정 로직 순수 단위테스트(예: 300·100·200, k=2 → 300·200) |
 
 순수 단위테스트 최소 자기검사 예: 후보 조회수 `[300,100,200]`, k=2 → 선정 `[300,200]` (spec A14 예시). 프레임워크

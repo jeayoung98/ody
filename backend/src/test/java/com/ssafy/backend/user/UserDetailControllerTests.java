@@ -22,16 +22,12 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.controller.UserController;
 import com.ssafy.backend.user.dto.UserDetailResponse;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserService;
 
 /**
@@ -51,17 +47,9 @@ class UserDetailControllerTests {
 	@MockitoBean
 	private UserService userService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(
@@ -81,7 +69,7 @@ class UserDetailControllerTests {
 	void detail_success_returnsUserDetailEnvelope() throws Exception {
 		when(userService.getDetail(eq("you@gmail.com"), eq("me@gmail.com"))).thenReturn(response(false));
 
-		mockMvc.perform(get("/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.error").doesNotExist())
@@ -96,14 +84,14 @@ class UserDetailControllerTests {
 	void detail_self_returnsIsMeTrue() throws Exception {
 		when(userService.getDetail(eq("me@gmail.com"), eq("me@gmail.com"))).thenReturn(response(true));
 
-		mockMvc.perform(get("/user/detail").param("email", "me@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "me@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.isMe").value(true));
 	}
 
 	@Test
 	void detail_missingEmail_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/user/detail").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").principal(principal("me@gmail.com")))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
@@ -111,7 +99,7 @@ class UserDetailControllerTests {
 
 	@Test
 	void detail_blankEmail_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/user/detail").param("email", "  ").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "  ").principal(principal("me@gmail.com")))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
@@ -121,7 +109,7 @@ class UserDetailControllerTests {
 		when(userService.getDetail(eq("nobody@gmail.com"), eq("me@gmail.com")))
 				.thenThrow(new CustomException(UserErrorCode.USER_NOT_FOUND));
 
-		mockMvc.perform(get("/user/detail").param("email", "nobody@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "nobody@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("USER_NOT_FOUND"));
@@ -132,7 +120,7 @@ class UserDetailControllerTests {
 		when(userService.getDetail(eq("you@gmail.com"), eq("me@gmail.com")))
 				.thenThrow(new CustomException(UserErrorCode.USER_PRIVATE));
 
-		mockMvc.perform(get("/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code").value("USER_PRIVATE"));
 	}

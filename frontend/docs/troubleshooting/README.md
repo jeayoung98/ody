@@ -18,6 +18,7 @@
 | [003](003-raf-paused-silent-test-failure.md) | 브라우저 패널이 숨으면 테스트가 **조용히** 실패 | `requestAnimationFrame` 정지 — 실패가 아니라 "값이 안 변함"으로 나타남 | S15P21A405-215 외 |
 | [004](004-infinite-scroll-fired-before-scrolling.md) | 무한 스크롤이 스크롤 전에 다음 페이지를 당겨옴 | `IntersectionObserver.observe()` 의 첫 콜백이 아직 안 그려진 레이아웃으로 판정 | S15P21A405-267 |
 | [005](005-stale-overlay-click-gate.md) | 여정을 한 번 만들면 그 뒤로 지도의 별이 안 눌림 | 해제된 별자리가 정리되지 않아 클릭 게이트가 계속 걸림 | S15P21A405-270 |
+| [006](006-layer-entry-scale-lost-on-ascend.md) | 겹을 다녀오면 줌아웃이 안 되고 별 무리가 안 보임 | 떠오를 때 그 겹의 **진입** 배율 대신 **도착** 배율을 기준으로 삼음 | S15P21A405-271 |
 
 ---
 

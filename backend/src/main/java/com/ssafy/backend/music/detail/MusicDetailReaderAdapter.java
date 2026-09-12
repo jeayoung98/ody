@@ -5,6 +5,7 @@ import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 
 import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,6 +13,7 @@ import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.music.YoutubeSearchUrl;
+import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
@@ -41,7 +43,37 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 			return Optional.empty(); // 서비스가 MUSIC_NOT_FOUND(404) 로 바꾼다
 		}
 		List<String> genres = findGenres(List.of(id)).getOrDefault(id, List.of());
-		return Optional.of(new MusicDetail(
+		return Optional.of(toDetail(row, genres));
+	}
+
+	@Override
+	public Map<Long, Location> findLocationsByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, Location> locations = new LinkedHashMap<>();
+		for (MusicDetailRow row : mapper.findLocationsByIds(ids)) {
+			locations.put(row.getId(), row.toLocation());
+		}
+		// 없는 곡·좌표 없는 곡은 키가 없다. 0 으로 채우지 않는다 — 호출자가 404 를 낸다.
+		return locations;
+	}
+
+	@Override
+	public List<MusicDetail> findDetailsByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
+			return List.of();
+		}
+		List<MusicDetailRow> rows = mapper.findByIds(ids);
+		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
+		// 순서는 보장하지 않는다 — 호출자가 id 키로 재조립한다.
+		return rows.stream()
+				.map(row -> toDetail(row, genres.getOrDefault(row.getId(), List.of())))
+				.toList();
+	}
+
+	private static MusicDetail toDetail(MusicDetailRow row, List<String> genres) {
+		return new MusicDetail(
 				row.getId(),
 				row.getMbid(),
 				row.getTitle(),
@@ -53,7 +85,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 				row.toLocation(),
 				row.getPlayCnt(),
-				row.getYoutubeCnt()));
+				row.getYoutubeCnt());
 	}
 
 	@Override

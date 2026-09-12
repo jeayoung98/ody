@@ -255,7 +255,150 @@ MATCH (m:Music)-[:HAS_GENRE]->(g:Genre) RETURN m, g LIMIT 50;
 
 ---
 
-## 7. 하지 말 것
+## 7. ODY 값 기준 점검표
+
+우리 DB에 실제로 들어 있어야 하는 값이다. 기대값 출처는 `data/output/db_ingest_bench.json`(적재 2026-09-10),
+`data/output/map_layer_bench_2026-09-11.json`(인덱스·map_sample), `data/serving/v2.1-pca16/`(좌표 아티팩트).
+DBeaver SQL 편집기에 순서대로 붙여 넣고 기대값과 대조한다.
+
+접속 값: Database `ody` · Port `5432` · Host는 컨테이너 IP(1절) · 계정은 `/etc/ody/postgres.env`.
+
+### C1. 행 수
+
+```sql
+SELECT (SELECT count(*) FROM music)                         AS music,
+       (SELECT count(*) FROM genre)                         AS genre,
+       (SELECT count(*) FROM music_genre)                   AS links,
+       (SELECT count(DISTINCT music_id) FROM music_genre)   AS songs_with_genre;
+```
+
+기대: `6624399` · `29` · `71285` · `66036`.
+
+### C2. id와 mbid
+
+```sql
+SELECT min(id) AS id_min, max(id) AS id_max, count(DISTINCT id) AS distinct_id,
+       count(DISTINCT mbid) AS distinct_mbid,
+       count(*) FILTER (WHERE mbid !~ '^[0-9a-f-]{36}$') AS bad_mbid
+FROM music;
+```
+
+기대: `1` · `6624399` · `6624399` · `6624399` · `0`. id는 mbid 오름차순으로 우리가 부여했다(D13).
+**새 곡은 `6624400`부터** 넣어야 한다.
+
+### C3. 좌표
+
+```sql
+SELECT count(*)                                          AS rows,
+       count(*) FILTER (WHERE location IS NULL)          AS null_location,
+       min(array_length(location::real[], 1))            AS min_dim,
+       max(array_length(location::real[], 1))            AS max_dim
+FROM music;
+```
+
+기대: `6624399` · `0` · `16` · `16`. 차원 16은 D7 확정값이고 `manifest.k`와 같아야 한다.
+
+### C4. 1차에서 비워 둔 컬럼
+
+```sql
+SELECT count(*) FILTER (WHERE release_year IS NOT NULL) AS release_year_filled,
+       count(*) FILTER (WHERE album        IS NOT NULL) AS album_filled,
+       count(*) FILTER (WHERE youtube_url  IS NOT NULL) AS youtube_filled,
+       count(*) FILTER (WHERE bpm          IS NULL)     AS bpm_null,
+       count(*) FILTER (WHERE title = '')               AS title_empty,
+       count(*) FILTER (WHERE play_cnt <> 0 OR youtube_cnt <> 0) AS counters_nonzero
+FROM music;
+```
+
+기대: 앞 셋 `0`(컬럼만 만들고 1차 NULL, D11) · `title_empty` `3977` · `counters_nonzero` `0`.
+
+`bpm_null`은 **적재 시점을 구분한다**. `733146`이면 2026-09-10 적재본 그대로고, `0`이면 09-11에 고친
+CSV로 다시 적재한 것이다(D15 — 특징 디렉터리 `v2_feats_pilot` 누락 정정). `733146`이 나오면 재적재가 남아 있다.
+
+### C5. 길이 규칙
+
+```sql
+SELECT count(*) FILTER (WHERE duration < 30 OR duration > 1200) AS out_of_range,
+       min(duration) AS min_s, max(duration) AS max_s
+FROM music;
+```
+
+기대: `out_of_range` `0`. v2.1 번들의 길이 규칙(30~1200초)에 걸린 곡은 적재 자체를 안 했다.
+v2.2로 올라가면 60~360초로 바뀐다(D1).
+
+### C6. 인덱스
+
+```sql
+SELECT indexname, pg_size_pretty(pg_relation_size(indexname::regclass)) AS size
+FROM pg_indexes WHERE tablename = 'music' ORDER BY indexname;
+```
+
+기대 3개:
+
+| 인덱스 | 용도 | 크기 |
+|---|---|---|
+| `music_l1_gist` | `point(pc1,pc2)` 1레이어 범위 | 421 MB |
+| `music_l2_gist` | `point(pc3,pc4)` 2레이어 평면 최근접 | 421 MB |
+| `music_location_hnsw_idx` | 16차원 L2 유사도 | — |
+
+HNSW가 없으면 유사도 질의가 전체 스캔으로 떨어진다(결과는 맞고 느리다). 빌드에 3,943초 걸렸다.
+
+### C7. 지도 첫 화면 테이블
+
+```sql
+SELECT count(*) AS rows, count(DISTINCT layer) AS layers FROM map_sample;
+```
+
+기대: `1094` · `1`. 1레이어 대표곡만 미리 계산했다. 이게 없으면 첫 화면이 0.4 ms 대신 20,941 ms다.
+
+### C8. 좌표 분포 (표본 1%)
+
+```sql
+WITH s AS (SELECT location FROM music TABLESAMPLE SYSTEM (1))
+SELECT dim,
+       ROUND(AVG(val)::numeric, 3)    AS avg_val,
+       ROUND(STDDEV(val)::numeric, 3) AS std_val
+FROM s, unnest(s.location::real[]) WITH ORDINALITY AS t(val, dim)
+GROUP BY dim ORDER BY dim;
+```
+
+기대: 평균은 전 축 0 근처(|0.15| 이내), 표준편차는 축1 **6.36**에서 축16 **1.55**로 감소.
+전수로 재면 아티팩트와 소수점까지 같다(2026-09-12 대조 완료). 단 전수는 1억 600만 행을 펼치므로 표본으로 충분하다.
+
+축8(1.899)이 축9(2.223)보다 작아 단조 감소가 한 번 깨진다. fit 표본이 100만 곡이고 그 뒤 78만 곡을
+제외했기 때문이며 결함이 아니다.
+
+### C9. 유사도 검색이 실제로 도는지
+
+```sql
+-- 1) 좌표를 읽어 결과 셀을 복사한다
+SELECT location FROM music WHERE id = 1;
+
+-- 2) 복사한 값을 리터럴로 넣는다
+SELECT id, title, artist, location <-> '[여기에 붙여넣기]'::vector AS dist
+FROM music WHERE id <> 1
+ORDER BY location <-> '[여기에 붙여넣기]'::vector
+LIMIT 10;
+```
+
+기대: 10행이 나오고 거리가 대략 `2~4` 구간. 1위 거리가 `20`을 넘으면 질의 벡터가 제대로 안 넘어간 것이다
+(4절의 서브쿼리 함정). 실행 13.9 ms.
+
+### C10. 지연 확인
+
+DBeaver 하단 상태줄의 실행 시간을 본다. 기대(2026-09-11 실측, warm):
+
+| 질의 | 기대 |
+|---|---|
+| `SELECT * FROM map_sample WHERE layer = 1` | 0.4 ms |
+| 2레이어 사각 범위(4절) | 82 ms |
+| 16차원 유사도 top-10 | 13.9 ms |
+
+처음 한 번은 캐시가 비어 있어 훨씬 느리다. 두세 번 돌린 값으로 판단한다.
+
+---
+
+## 8. 하지 말 것
 
 - 자격증명을 저장소·문서·메신저·스크린샷에 남기기
 - 운영 DB에서 `UPDATE`/`DELETE`/`DROP`/`TRUNCATE` 실행. 스키마·데이터 변경은 적재 스크립트와 마이그레이션으로만 한다

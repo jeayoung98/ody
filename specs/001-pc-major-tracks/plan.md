@@ -17,7 +17,7 @@ tasks.md 생성됨. 게이트 독립 순수 로직·테스트는 2026-09-10 구�
 > | 보류 항목 B2 | ✅ 개정됨 |
 > | 처리 흐름 (전 단계) | ✅ **2026-09-11 재작성** — D16~D19 반영 |
 > | 조회·인덱스 및 성능 설계 | ✅ **2026-09-11 재작성** — data 실측 인덱스·질의·함정으로 교체 |
-> | Source Code 표 | ✅ **2026-09-11 갱신** — `MajorTrackReader` 시그니처, `MajorSelection` 롤백 자산 표기 |
+> | Source Code 표 | ✅ **2026-09-11 갱신** — `MajorTrackReader` 시그니처. `MajorSelection` 롤백 자산 표기는 2026-09-12 삭제로 대체됐다 |
 >
 > **D16~D19 확정 후 재작성 완료(2026-09-11).** 본문은 이제 격자 모델 기준이다.
 > 원안 전문은 spec 의 롤백 기록 절에만 남아 있다.
@@ -88,15 +88,15 @@ Neo4j 는 곡–장르 관계용이며 좌표 검색에 쓰지 않는다(data D9
 ### Source Code (repository root)
 
 기존 루트는 `backend/src/main/java/com/ssafy/backend/` 다(2026-09-10 재배치, S15P21A405-115).
-아래 표의 `MajorQueryResolver`·`MajorSelection` 은 구현됐고 나머지는 설계 제안이다.
+아래 표의 `MajorQueryResolver`·`MajorSelection` 은 구현됐다가 **2026-09-12 삭제**됐다(S15P21A405-236). 나머지는 설계 제안이다.
 
 | 위치 | 재사용·변경 설계 | 책임 |
 | --- | --- | --- |
 | music/controller/MusicController.java | 기존 GET·필드명 유지. 입력 DTO 바인딩으로 정리 가능 | HTTP 타입 해석·공통 응답, 업무 선정 로직 없음 |
 | music/service/MusicService.java | getMajor의 미구현 예외를 orchestration으로 교체 | 정책 조회 → 조건 변환 → 조회 호출 → 응답 조립 |
 | music/dto/MajorResponse.java, MusicDetail.java, Location.java | 우선 재사용, 타입·null 계약 검증 후 필요한 변경만 | wire 모델. 내부 조회 모델과 구분 |
-| music/service/MajorQueryResolver.java (제안) | 레벨-축 추출, 정책과 중심을 묶는 순수 변환 | 검증된 조건 생성; DB·HTTP 비의존 |
-| music/service/MajorSelection.java **(구현됨)** | 후보에 `youtubeCnt` DESC top-k. **D16 으로 서버 요구에서 빠졌다** | 롤백 자산. 인기 지표가 생기고 D15 를 되돌리면 그대로 쓴다 |
+| ~~music/service/MajorQueryResolver.java~~ **(2026-09-12 삭제)** | 레벨-축 추출. D19 로 `MajorQuery.axisX()`·`axisY()` 가 대체했다 | 복원 지점: tasks.md "삭제한 롤백 자산" |
+| ~~music/service/MajorSelection.java~~ **(2026-09-12 삭제)** | 후보에 `youtubeCnt` DESC top-k. D16 으로 서버 요구에서 빠졌고 `youtube_cnt` 는 전 행 0 이다 | 복원 지점: tasks.md "삭제한 롤백 자산" |
 | music/service/MajorSelectionPolicy.java (제안) ⟲*D16* | ~~서버 반경·k~~ → 상주 집합 크기·공간 균등 샘플링 파라미터 | 화면 격자 로직은 서버에 두지 않는다 |
 | music/retrieval/MajorTrackReader.java (제안) ⟲*D19* | 조회 port. ~~원형·top-k 계약~~ → **`(level, 누적 축 범위[], 크기)` → 상주 집합** | 1겹 `map_sample` 정적 / 2겹 이상 `<@ box` + `BETWEEN`. 무상태 |
 | music/retrieval/하위 어댑터 | **MyBatis mapper XML** (`classpath:mapper/**/*.xml`) + PostgreSQL | 1겹 `map_sample`, 2겹 이상 GiST + `BETWEEN`. 새 독립 검색엔진 생성 아님 |
@@ -115,7 +115,7 @@ Core 인증·공통 체계가 들어오면 재사용한다. 현재 예외 처리
    범위 파라미터 이름은 FE 구현 시 확정(BE2 제안 `pc{n}min`·`pc{n}max`).
    축 번호 범위·`min > max`·비유한 수·level 범위 검증은 B1 결정 후 검증기에 반영한다.
 3. 한 요청의 서빙 기준선을 고정한다. `music.location vector(16)` 662만행(data 스펙 18)이 유일 소스다.
-4. n→축 번호 2n-1, 2n을 계산한다(FR-003, `MajorQueryResolver` 구현 완료).
+4. n→축 번호 2n-1, 2n을 계산한다(FR-003, `MajorQuery.axisX()`·`axisY()`).
    **level=1 은 파라미터 없는 정적 분기**로 `map_sample` 을 읽는다(D19). 중심을 (0,0)이나 전체 영역으로 대체하지 않는다.
 5. level≥2 는 전달받은 **누적 축 범위를 그대로** 필터로 쓴다(D19). 서버가 범위를 만들어내지 않으며
    탐색 상태도 보관하지 않는다. 범위를 못 받으면 전역 후보로 축소 구현하지 않는다.

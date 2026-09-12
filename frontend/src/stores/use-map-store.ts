@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MapViewMode } from "@/constants";
 import type { LayerBox, MapCamera } from "@/types";
+import type { GoHomeResult } from "@/components/map/engine/map-engine";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
@@ -77,7 +78,8 @@ interface MapState extends EngineSnapshot {
   dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
   surfaceToMusic: (musicId: number) => void;
-  goHome: () => void;
+  /** 내 위치로 가기. 못 갔으면 이유를 돌려준다 (UI 가 안내를 띄운다) */
+  goHome: () => GoHomeResult;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
@@ -159,7 +161,7 @@ export const useMapStore = create<MapState>()(
         getMapEngine()?.surfaceToSong(musicId);
       },
       /** 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다 */
-      goHome: () => getMapEngine()?.goHome(),
+      goHome: () => getMapEngine()?.goHome() ?? "none",
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
 

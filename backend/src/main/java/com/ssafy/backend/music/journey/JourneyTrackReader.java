@@ -23,8 +23,9 @@ import com.ssafy.backend.music.dto.MusicDetail;
  *   <li>부수효과 없음. 조회 전용(FR-018).</li>
  * </ul>
  *
- * <p>ponytail: 인터페이스만 정의. 어댑터({@code JourneyTrackMapper}, MyBatis)는 BE 곡 테이블에
- * 정수 {@code id} PK + {@code mbid} UNIQUE + {@code pc1}~{@code pc16}({@code real}) 이 생긴 뒤.
+ * <p>구현은 {@link JourneyTrackReaderAdapter} 다(2026-09-12). 별도 매퍼를 두지 않고
+ * {@code MusicDetailMapper} 에 {@code mbid IN} 조회를 더했다 — 같은 테이블·같은 컬럼이라
+ * 매퍼를 나누면 좌표 컬럼 조각이 두 벌이 된다.
  */
 public interface JourneyTrackReader {
 

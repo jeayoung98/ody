@@ -40,8 +40,10 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 { "success": true, "data": { "content": [ {
   "musicId": 10234,
   "pc": [-0.4213, 1.0872, "...", -0.123],
-  "genreId": 0, "weight": 0,
-  "title": "...", "artist": "...", "playable": false
+  "genreId": 10, "weight": 0,
+  "title": "...", "artist": "...",
+  "youtubeUrl": "https://www.youtube.com/results?search_query=...",
+  "playable": true
 } ] }, "error": null }
 ```
 
@@ -49,10 +51,11 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 | --- | --- |
 | `musicId` | `music.id` (BIGINT, 1..6,624,399) |
 | `pc` | **정확히 16개** 배열. 클라이언트가 레이어 축으로 재투영하므로 전부 싣는다(D7 PCA-16) |
-| `genreId` | **비음수 정수(MUST)**. FE `draw-map.ts` 의 `spr[genreId % len]` 이 raw modulo 라 음수면 `drawImage` 예외 |
+| `genreId` | **비음수 정수(MUST)**. FE 는 `design-tokens.ts` 의 `genreIdx() = Math.abs(genreId) % len` 로 색·스프라이트를 고르므로 음수도 터지지는 않는다(2026-09-12 FE 확인, `origin/frontend/dev`). 서버가 음수를 보낼 이유가 없어 검증은 유지 |
 | `weight` | 별 크기·밝기·클라이언트 선별용. 인기 지표 부재로 **현재 균일값**(D17) |
+| `youtubeUrl` | 유튜브 **검색** URL. `music.youtube_url` 이 662만 행 전부 NULL 이라 저장값을 읽지 않고 `title`·`artist` 로 만든다(D12). 둘 다 `map_sample` 에 있어 조인이 필요 없다 — 0.4 ms 이점 유지. 검색어를 만들 수 없으면 null (2026-09-12, S15P21A405-249) |
 | `title` / `artist` | 표시용. `artist` 는 null 가능 |
-| `playable` | 재생 링크 유무. `youtube_url` 전 행 NULL 이라 **현재 전부 false** |
+| `playable` | 재생 링크 유무 = `youtubeUrl != null`. 제목·아티스트가 모두 빈 곱이 3,977개라 상수가 아니다. 1레이어 실측(2026-09-12): 1,094 / 1,094 **true** |
 
 `ghostOnly` 는 FE 타입이 "목 확인용" 이라 명시하므로 **서버가 보내지 않는다**(MUST NOT).
 상세 필드(`bpm`·`duration`·`album`·`genres`·`mbid`·`playCnt`·`youtubeCnt`)는 `/music/{id}` 담당이다.
@@ -66,7 +69,7 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 
 ### 미정
 - (P3/B4) 후보 0곡의 상태·본문. 빈 배열+200 을 명시한 근거가 없다
-- `genreId` 무장르 인덱스 번호, 멜론 코드 29종 → FE 색 인덱스 매핑 (FE 구현 후 통보)
+- 멜론 코드 29종 → FE 색 인덱스 매핑 (S15P21A405-240 대기). **무장르 인덱스는 10 으로 확정** — FE `constants/map.ts` 의 `NO_GENRE_ID` 와 같고 `GENRE_COLORS` 는 11칸이다(2026-09-12 확인). 매핑 확정 전까지는 장르 보유 1.0% 도 10 으로 내린다
 
 ## 3. Error Contract (확정, 기존 재사용)
 

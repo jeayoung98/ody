@@ -1,6 +1,7 @@
 package com.ssafy.backend.music;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -43,48 +44,79 @@ class MusicSearchReaderAdapterTests {
 
 	@Test
 	void search_buildsSubstringPattern_andOffsetFromPageTimesSize() {
-		when(mapper.countMatches(anyString())).thenReturn(137L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(row(1L)));
+		when(mapper.existsMatch(anyString())).thenReturn(true);
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(row(1L)));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
 		PageResult result = adapter.search("IU", 3, 10);
 
-		verify(mapper).findPage("%IU%", 10, 30L);
-		assertEquals(137, result.totalElements());
+		// q 는 소문자 원문(완전일치용), prefix 는 앞일치용, pattern 은 부분일치용.
+		// size+1 을 요청한다 — 초과분이 오면 다음 페이지가 있다는 뜻이다(S15P21A405-255).
+		// cap 은 offset + size + 1 — 단계별로 그만큼만 잘라도 그 판단까지 할 수 있다.
+		verify(mapper).findPage("iu", "iu%", "%IU%", 41L, 11, 30L);
 		assertEquals(1, result.content().size());
 	}
 
 	@Test
+	void hasNext_isTrue_whenOneMoreRowThanPageSizeCameBack() {
+		// 11건을 떠서 11건이 왔다 = 다음 페이지가 있다. 초과분은 응답에서 잘라낸다.
+		when(mapper.existsMatch(anyString())).thenReturn(true);
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong()))
+				.thenReturn(java.util.stream.LongStream.rangeClosed(1L, 11L).mapToObj(MusicSearchReaderAdapterTests::row).toList());
+		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
+
+		PageResult result = adapter.search("q", 0, 10);
+
+		assertTrue(result.hasNext());
+		assertEquals(10, result.content().size());
+		assertEquals(10L, result.content().get(9).id()); // 11번째는 잘려 나갔다
+	}
+
+	@Test
+	void hasNext_isFalse_whenPageIsNotFull() {
+		when(mapper.existsMatch(anyString())).thenReturn(true);
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong()))
+				.thenReturn(List.of(row(1L), row(2L)));
+		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
+
+		PageResult result = adapter.search("q", 0, 10);
+
+		assertFalse(result.hasNext());
+		assertEquals(2, result.content().size());
+	}
+
+	@Test
 	void search_escapesLikeWildcards_soPercentIsALiteral() {
-		when(mapper.countMatches(anyString())).thenReturn(0L);
+		when(mapper.existsMatch(anyString())).thenReturn(false);
 
 		adapter.search("50% _off_", 0, 10);
 
 		ArgumentCaptor<String> pattern = ArgumentCaptor.forClass(String.class);
-		verify(mapper).countMatches(pattern.capture());
+		verify(mapper).existsMatch(pattern.capture());
 		assertEquals("%50\\% \\_off\\_%", pattern.getValue());
 	}
 
 	@Test
 	void search_returnsEmptyWithoutPageQuery_whenNothingMatches() {
-		when(mapper.countMatches(anyString())).thenReturn(0L);
+		// 방패다. 0건일 때 5단계 질의를 돌리면 각 단계가 조기 종료에 실패해 풀스캔을 다섯 번 한다.
+		when(mapper.existsMatch(anyString())).thenReturn(false);
 
 		PageResult result = adapter.search("없는곡", 0, 10);
 
 		assertTrue(result.content().isEmpty());
-		assertEquals(0, result.totalElements());
-		verify(mapper, never()).findPage(anyString(), anyInt(), anyLong());
+		assertFalse(result.hasNext());
+		verify(mapper, never()).findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong());
 	}
 
 	@Test
-	void search_keepsTotal_whenPageIsBeyondLastPage() {
-		when(mapper.countMatches(anyString())).thenReturn(5L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of());
+	void search_returnsEmptyPage_whenPageIsBeyondLastPage() {
+		when(mapper.existsMatch(anyString())).thenReturn(true);
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of());
 
 		PageResult result = adapter.search("q", 9, 10);
 
-		assertTrue(result.content().isEmpty());
-		assertEquals(5, result.totalElements()); // 빈 페이지지만 총 매칭 수는 유지(FR-002)
+		assertTrue(result.content().isEmpty()); // 오류가 아니라 빈 목록이다(FR-002)
+		assertFalse(result.hasNext());
 		verify(mapper, never()).findGenresByMusicIds(anyList());
 	}
 
@@ -93,8 +125,8 @@ class MusicSearchReaderAdapterTests {
 		MusicSearchRow r = row(7L);
 		r.setPc1(0.125);
 		r.setPc16(-3.5);
-		when(mapper.countMatches(anyString())).thenReturn(1L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(r));
+		when(mapper.existsMatch(anyString())).thenReturn(true);
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(r));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
 		MusicSummary summary = adapter.search("q", 0, 10).content().get(0);
@@ -104,12 +136,11 @@ class MusicSearchReaderAdapterTests {
 	}
 
 	@Test
-	void search_groupsGenresPerTrack_andKeepsUnplayableTracks() {
-		MusicSearchRow withUrl = row(1L);
-		withUrl.setYoutubeUrl("https://y/1");
-		MusicSearchRow noUrl = row(2L); // youtubeUrl null — 제외하지 않는다 (FR-007)
-		when(mapper.countMatches(anyString())).thenReturn(2L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(withUrl, noUrl));
+	void search_groupsGenresPerTrack() {
+		MusicSearchRow first = row(1L);
+		MusicSearchRow second = row(2L);
+		when(mapper.existsMatch(anyString())).thenReturn(true);
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(first, second));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
 				genreRow(1L, "electronic"),
 				genreRow(1L, "rock")));
@@ -118,7 +149,6 @@ class MusicSearchReaderAdapterTests {
 
 		assertEquals(List.of("electronic", "rock"), content.get(0).genres());
 		assertEquals(List.of(), content.get(1).genres()); // 장르 링크 없는 곡
-		assertNull(content.get(1).youtubeUrl());
 		assertEquals(2, content.size());
 	}
 

@@ -82,3 +82,13 @@ description: "Task list: 노래 상세 조회 (Nearby 포함)"
 - ponytail: 프로덕션 신규 = DTO 5개(3개는 001·002와 동일 재생성) + port 1 + service/controller(detail만) + 도메인 에러 1 + 공통 검증 매핑 1(BE1 리뷰). ORM·캐시·거리계산 신규 없음(어댑터는 B-D).
 - T008은 BE1 소유 파일 → MR 리뷰 플래그(002 T005와 동일 변경, 병합 시 dedup).
 - `MUSIC_NOT_FOUND`는 BE2 도메인 에러로 정의 → 정본 §0.5 정합. api-spec `VALIDATION_ERROR`/`INTERNAL_ERROR` 명칭 불일치는 정본 갱신 대상(spec [정정]).
+
+## youtubeUrl 은 조회 시 만든다 (2026-09-12, S15P21A405-233)
+
+`music.youtube_url` 은 662만 행 전부 NULL 이고 채울 방법이 없다(규칙 6 + YouTube Data API 할당량, data 스펙 18 D12).
+그래서 Backend 가 조회 시 `https://www.youtube.com/results?search_query=<아티스트>+<제목>` 을 만들어 담는다. 만드는 곳은 `music/YoutubeSearchUrl` 하나다.
+
+**따라온 결과 둘 — 확인 필요**
+
+1. **`youtubeUrl: null` 인 곡이 사실상 사라진다.** 아티스트·제목이 둘 다 비어야만 null 이다. FR-007(재생 불가 곡을 제외하지 않고 null 유지)은 계약으로는 유효하지만 실제로는 거의 도달하지 않는다. 프론트의 "재생 불가" 표시 조건을 다시 볼 필요가 있다.
+2. **`MapPoint.playable` 은 그대로 전부 false 다.** 지도 별은 전부 흐리게 나오는데 검색·상세에서는 모든 곡에 링크가 있어 서로 어긋난다. `playable` 을 true 로 뒤집으면 FE 의 흐림 상태가 의미를 잃으므로 FE 확인 없이 정하지 않았다(S15P21A405-233 제외 범위).

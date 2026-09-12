@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.springframework.stereotype.Repository;
 
+import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MapPoint;
 import com.ssafy.backend.music.dto.MapPointRow;
 import com.ssafy.backend.music.mapper.MajorTrackMapper;
@@ -18,19 +19,22 @@ import com.ssafy.backend.music.mapper.MajorTrackMapper;
 public class MajorTrackReaderAdapter implements MajorTrackReader {
 
 	/**
-	 * FE 통보 대기 중인 잠정 장르 인덱스. <b>교체 지점은 {@link #genreIdOf} 한 곳뿐이다.</b>
+	 * 무장르 색 인덱스. <b>교체 지점은 {@link #genreIdOf} 한 곳뿐이다.</b>
 	 *
-	 * <p>FE 규약은 이미 구현돼 있다 — {@code frontend/src/constants/map.ts} 의 {@code GENRE_NAMES}
-	 * 10종이고 {@code genreId} 는 그 배열의 인덱스다. 그런데 DB {@code genre} 는 멜론 대분류 29행이라
-	 * 체계가 다르고(멜론은 록/메탈을 한 코드로 묶고, FE 에는 발라드·댄스·트로트·OST 가 없다),
-	 * 무장르용 색도 없다. 장르 보유 곡은 66,036개로 전체의 1.0% 라 지도의 99%가 무장르다.
-	 * 29→10 은 손실 있는 제품 결정이라 임의로 정하지 않는다(헌법 IX).
+	 * <p>FE {@code constants/map.ts} 의 {@code NO_GENRE_ID} 와 같은 값이다 —
+	 * {@code GENRE_NAMES}·{@code GENRE_COLORS} 는 11칸이고 마지막(10)이 무장르용 회청색이다
+	 * (2026-09-12 origin/frontend/dev 확인). 0 을 보내면 앰비언트 청록이라 지도가 한 색이 된다.
+	 *
+	 * <p>DB {@code genre} 는 멜론 대분류 29행이라 체계가 다르고(멜론은 록/메탈을 한 코드로 묶고,
+	 * FE 에는 발라드·댄스·트로트·OST 가 없다), 장르 보유 곡은 66,036개로 전체의 1.0% 다.
+	 * 29→10 은 손실 있는 제품 결정이라 임의로 정하지 않는다(헌법 IX). 매핑 확정 전까지는
+	 * 그 1.0% 도 무장르로 내린다 — 지도는 깨지지 않는다(FE 확인, S15P21A405-240).
 	 *
 	 * <p>ponytail: 매핑이 오면 {@link #genreIdOf} 본문만 바꾸고, XML 의 {@code findLayerOneSample}·
 	 * {@code findInAccumulatedBoxes} 에 {@code music_genre} 조인을 더한 뒤 {@link MapPointRow} 에
 	 * 장르 필드를 추가한다. 그 전까지 조인하지 않는 편이 map_sample 의 조인 절감 이점을 덜 깎는다.
 	 */
-	private static final int GENRE_ID_PENDING_FE_MAPPING = 0;
+	private static final int GENRE_ID_NO_GENRE = 10;
 
 	/**
 	 * 균일 가중치 (D17). 인기 지표가 없어 값으로 순위를 매길 수 없다 —
@@ -57,6 +61,9 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	}
 
 	private static MapPoint toMapPoint(MapPointRow row) {
+		// music.youtube_url 은 662만 행 전부 NULL 이라 읽지 않는다. map_sample 이 들고 있는
+		// title·artist 로 검색 URL 을 만든다 (D12) — 조인이 없어 0.4 ms 이점이 유지된다.
+		String youtubeUrl = YoutubeSearchUrl.of(row.getArtist(), row.getTitle());
 		return new MapPoint(
 				row.getMusicId(),
 				row.toPcList(),
@@ -64,12 +71,13 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 				UNIFORM_WEIGHT,
 				row.getTitle(),
 				row.getArtist(),
-				row.getYoutubeUrl() != null);
+				youtubeUrl,
+				youtubeUrl != null);
 	}
 
 	/** 장르 인덱스를 정하는 유일한 지점. FE 매핑이 오면 여기만 바꾼다. */
 	private static int genreIdOf(MapPointRow row) {
-		return GENRE_ID_PENDING_FE_MAPPING;
+		return GENRE_ID_NO_GENRE;
 	}
 
 	/**

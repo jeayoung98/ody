@@ -67,7 +67,7 @@ class MusicControllerTests {
 		for (double v : PCS) {
 			pc.add(v);
 		}
-		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", false);
+		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, false);
 	}
 
 	@Test

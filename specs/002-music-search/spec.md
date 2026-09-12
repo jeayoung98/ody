@@ -35,7 +35,7 @@
 
 **Acceptance Scenarios**:
 
-1. **Given** 인증된 요청과 매칭 곡이 있고, **When** `query`와 `page`로 검색하면, **Then** 200과 `success:true`, `data.content`(MusicSummary 배열), 페이지 정보(page/size/totalElements/totalPages/hasNext), `error:null`을 반환한다. (FR-001, FR-004)
+1. **Given** 인증된 요청과 매칭 곡이 있고, **When** `query`와 `page`로 검색하면, **Then** 200과 `success:true`, `data.content`(MusicSummary 배열), 페이지 정보(page/size/hasNext), `error:null`을 반환한다. (FR-001, FR-004)
 2. **Given** 매칭 곡이 있고, **When** 응답을 구성하면, **Then** 각 항목은 MusicSummary 필드(id, title, artist, album, genres, youtubeUrl, location pc1~pc16)를 포함하고 `location`은 해당 곡의 baseline 좌표와 일치한다. (FR-005, FR-006)
 3. **Given** 매칭 곡 중 `youtubeUrl`이 null인 곡이 있고, **When** 목록을 반환하면, **Then** 링크 부재만으로 제거하지 않고 `youtubeUrl:null`을 유지한다. (FR-007)
 4. **Given** 매칭 곡이 페이지 크기보다 많고, **When** `page`를 지정하면, **Then** 서버 고정 크기(10) 단위로 해당 페이지를 반환하고 `hasNext`로 다음 페이지 존재를 알린다. (FR-004)
@@ -70,13 +70,15 @@
 - **FR-001 — 검색 조회**: 시스템은 `GET /music/search`에서 `query`와 `page`로 매칭되는 곡 목록을 반환해야 한다(MUST). **근거**: [api-spec §3.1](../../docs/api-spec.md); 요구사항 SEARCH-01.
 - **FR-002 — 빈 결과**: 매칭 곡이 없으면 빈 `content` + 200으로 반환해야 하며, 오류로 처리해서는 안 된다(MUST). **근거**: api-spec §3.1.
 - **FR-003 — 인증**: `Authorization: Bearer {accessToken}` 인증을 요구해야 한다(MUST). **근거**: api-spec §0.1·§0.7·§3.1.
-- **FR-004 — 페이지네이션**: 응답은 `content`와 페이지 정보(page, size, totalElements, totalPages, hasNext)를 포함해야 하며, 페이지 크기는 서버에서 10으로 고정한다(MUST). 클라이언트는 `size`를 하드코딩하지 않는다. api-spec 예시의 `size:20`은 본문 "10 고정"과의 알려진 불일치(헌법 충돌표 기록)로, 본문 기준 10을 채택한다. **근거**: api-spec §0.3; 헌법 "발견된 충돌·불일치" 페이지 크기 항목.
+- **FR-004 — 페이지네이션**: 응답은 `content`와 페이지 정보(page, size, hasNext)를 포함해야 하며, 페이지 크기는 서버에서 10으로 고정한다(MUST). 총 개수(`totalElements`·`totalPages`)는 담지 않는다(MUST NOT) — 세려면 매 요청마다 660만 행을 끝까지 세어야 해서 응답의 ~7초를 차지했고, 프론트가 쓰지 않는다고 확인했다(2026-09-13, S15P21A405-255). 다음 페이지 유무는 `hasNext`로 알린다. 클라이언트는 `size`를 하드코딩하지 않는다. api-spec 예시의 `size:20`은 본문 "10 고정"과의 알려진 불일치(헌법 충돌표 기록)로, 본문 기준 10을 채택한다. **근거**: api-spec §0.3; 헌법 "발견된 충돌·불일치" 페이지 크기 항목.
 - **FR-005 — 곡 정보**: 각 항목은 MusicSummary 필드(id, title, artist, album, genres, youtubeUrl, location)를 유지해야 한다(MUST). 기존 타입·null 허용 범위를 임의로 좁히지 않는다. **근거**: api-spec §0.6.
 - **FR-006 — 고정 좌표**: 곡 좌표는 서빙 baseline `v2.1-pca16` 기준으로 진입 경로와 무관하게 동일해야 한다(MUST). 검색이 좌표·모델을 변경해서는 안 된다(MUST NOT). **근거**: 요구사항 §6 데이터-일관성.
 - **FR-007 — 재생 불가 곡 표시**: `youtubeUrl`이 null인 곡도 결과에서 제외하지 않고 `youtubeUrl:null`을 유지해야 한다(MUST). **근거**: 요구사항 SONG-04; api-spec §0.6.
 - **FR-008 — 오류 구조**: 검증 실패는 400 `INVALID_INPUT`, 내부 실패는 500 `INTERNAL_SERVER_ERROR`(master `GlobalErrorCode` 기준), 인증 실패는 401(코드는 B-A 확정)로 응답하고, 실패 본문은 `success:false`, `data:null`, `error:{code,message}`(master `ErrorResponse`)를 제공해야 한다(MUST). **근거**: master `common.GlobalErrorCode`/`GlobalExceptionHandler`; api-spec §0.2·§0.4. **[충돌]**: api-spec 정본 §0.5는 `VALIDATION_ERROR`/`INTERNAL_ERROR`를 명시 — master 구현과 코드명 불일치. 본 스펙은 master 기준을 채택하고 정본 §0.5 갱신을 충돌 항목으로 남긴다.
 - **FR-009 — 매칭 규칙**: 시스템은 `query`가 곡명 **또는** 아티스트명에 부분일치(substring)로 포함되는 곡을 매칭해야 한다(MUST). 대소문자를 구분하지 않는다(MUST). 앞뒤 공백은 무시하고, 공백만이거나 빈 `query`는 400 `INVALID_INPUT`으로 거절한다(MUST). 곡명·아티스트명 양쪽에 매칭되어도 곡은 결과에 한 번만 포함한다(MUST). **근거**: 2026-09-08 clarify; api-spec §2.7 사용자검색 부분일치 선례.
-- **FR-010 — 정렬 순서**: 검색 결과는 `youtubeCnt` 내림차순으로 정렬하고, 동률 시 `id` 오름차순으로 tie-break해야 한다(MUST). 이 정렬은 페이지 간 순서 안정성을 보장한다. **근거**: 2026-09-08 clarify.
+- **FR-010 — 정렬 순서**: 검색 결과는 **관련성 순**으로 정렬해야 한다(MUST). 순위는 ① 제목 완전일치 ② 아티스트 완전일치 ③ 제목 앞일치 ④ 아티스트 앞일치 ⑤ 나머지 부분일치 (완전일치가 필드 구분보다 앞서다 — 정확도가 더 강한 신호다) 이고, 같은 순위 안에서는 `id` 오름차순으로 tie-break 한다. 대소문자는 구분하지 않는다. 이 정렬은 페이지 간 순서 안정성을 보장한다.
+  **근거**: 2026-09-12 변경(S15P21A405-234). 직전 규칙은 `youtubeCnt` 내림차순이었으나(2026-09-08 clarify) 그 값이 662만 행 전부 0 이라 사실상 `id` 단독 정렬이었고 사용자에겐 무작위로 보였다. 또 그 정렬이 조기 종료를 막아 검색 응답 26초의 직접 원인이었다(운영 DB 실측).
+  **구현 제약**: 점수를 매겨 정렬하면(ORDER BY CASE) 일치 전체를 읽어야 해 26초로 되돌아간다. 단계별 조회(각 단계 `ORDER BY id LIMIT`)로 구현한다.
 
 ### Key Entities *(include if feature involves data)*
 
@@ -91,7 +93,7 @@
 - **SC-002**: 같은 좌표계 버전에서 동일 곡의 반환 PC1~PC16 차이는 0이며, 검색에 의한 좌표·모델 변경은 0건이다. **근거**: FR-006; 요구사항 §6.
 - **SC-003**: 실패 요청을 로그로 추적할 수 있으며, 로그·지표에 비밀정보·불필요한 개인정보 노출은 0건이다. **근거**: 요구사항 §6 로깅.
 
-- **SC-004**: query가 곡명·아티스트명에 부분일치(대소문자 무시)하는 곡을 빠짐없이 찾고, 결과는 youtubeCnt 내림차순·id 오름차순으로 정렬되어 같은 query·page 재요청 시 동일 순서를 반환한다. **근거**: FR-009·FR-010.
+- **SC-004**: query가 곡명·아티스트명에 부분일치(대소문자 무시)하는 곡을 빠짐없이 찾고, 결과는 관련성 순(제목 완전→아티스트 완전→제목 앞→아티스트 앞→나머지)·동순위 id 오름차순으로 정렬되어 같은 query·page 재요청 시 동일 순서를 반환한다. **근거**: FR-009·FR-010.
 
 **plan 단계로 미루는 사항**:
 - 검색 대상 저장소 확정(Postgres vs Neo4j) 및 `youtubeCnt`·`title`·`artist` 스키마 — BE4 확인.

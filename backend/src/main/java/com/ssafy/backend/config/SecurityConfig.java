@@ -54,7 +54,11 @@ public class SecurityConfig {
 								"/actuator/health", "/actuator/prometheus",
 								"/api/swagger-ui.html", "/api/swagger-ui/**", "/api/v3/api-docs/**")
 						.permitAll()
-						.anyRequest().authenticated())
+						// ponytail: FE 연동 테스트용 임시 해제 [S15P21A405-243]. 영구 정책 변경이 아니다.
+						// 원복 = 이 줄을 .anyRequest().authenticated() 로 되돌린다 (정본 §0.7 기본 거부, S15P21A405-33).
+						// 배포 중 급히 되돌릴 때는 코드가 아니라 nginx upstream 을 이전 Blue-Green 컨테이너로 돌린다.
+						// 해제 중에는 /api/user/detail 과 /api/playlist/** 가 공개 인터넷에 노출된다.
+						.anyRequest().permitAll())
 				.oauth2Login(oauth2 -> oauth2
 						.userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
 						.successHandler(oAuth2SuccessHandler))

@@ -9,6 +9,12 @@ const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io
 
 const nextConfig: NextConfig = {
   /**
+   * 배포는 **Node 프로세스**로 돈다 (포트 3000, nginx 가 `/bff/` 와 `/` 를 여기로 보낸다).
+   * 정적 export 로는 `src/app/bff/` 라우트 핸들러가 산출물에 없어서 모든 데이터 화면이 죽는다 —
+   * 실제로 그랬다 (S15P21A405-273). standalone 은 `.next/standalone/server.js` 하나로 뜬다.
+   */
+  output: "standalone",
+  /**
    * 브라우저가 백엔드를 직접 부르지 않고 Next 서버를 거치게 한다.
    *
    * 직접 부를 수 없는 이유가 두 가지다.

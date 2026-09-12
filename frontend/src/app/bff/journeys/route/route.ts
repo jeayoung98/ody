@@ -23,7 +23,7 @@ function toJourneyRoute(res: BackendJourneyResponse, startId: number, endId: num
 }
 
 /**
- * GET /api/journeys/route?start=<musicId>&end=<musicId>
+ * GET /bff/journeys/route?start=<musicId>&end=<musicId>
  *
  * `BACKEND_ACCESS_TOKEN` 이 있으면 배포 백엔드의 `/api/music/journey` 를 대신 호출한다.
  * 없으면 목 경로를 준다 — 목은 `mocks/songs.ts` 의 곡 ID 를 쓰므로 지도와 ID 가 맞는다.

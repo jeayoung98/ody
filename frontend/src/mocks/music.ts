@@ -1,6 +1,6 @@
 /**
  * 목 곡 상세/검색/여정. 좌표 데이터셋은 songs.ts 와 공유한다.
- * NEXT_PUBLIC_API_URL 이 실제 백엔드를 가리키면 이 파일과 src/app/api/* 는 쓰이지 않는다.
+ * NEXT_PUBLIC_API_URL 이 실제 백엔드를 가리키면 이 파일과 src/app/bff/* 는 쓰이지 않는다.
  */
 import { NEARBY_COUNT } from "@/constants";
 import type { JourneyRoute, Music, MusicDetail, MusicSearchResult, NearbyResponse } from "@/types";

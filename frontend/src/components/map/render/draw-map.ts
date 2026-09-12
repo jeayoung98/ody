@@ -81,16 +81,18 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine) {
   const H = e.H;
   const R = clamp(0.55 * e.cam.s, 60, Math.max(W, H) * 0.8);
   g.globalCompositeOperation = "lighter";
-  // 앵커: 190곡마다 하나 (결정적)
-  for (let i = 0; i < e.N; i += 190) {
-    if (e.alpha[i] < 0.05) continue;
+  // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
+  const step = Math.max(1, Math.floor(e.N / 22));
+  for (let i = 0; i < e.N; i += step) {
+    const a0 = e.alpha[i] * e.genreDim(i);
+    if (a0 < 0.05) continue;
     const s = e.songs[i];
     const px = e.pos[i * 2];
     const py = e.pos[i * 2 + 1];
     if (px < -R * 1.7 || px > W + R * 1.7 || py < -R * 1.7 || py > H + R * 1.7) continue;
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
-      g.globalAlpha = q.a * e.alpha[i];
+      g.globalAlpha = q.a * a0;
       g.drawImage(puffFor(q.k, s.genreId), px + q.dx * R - rr, py + q.dy * R - rr, rr * 2, rr * 2);
     }
   }
@@ -109,7 +111,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine) {
   const swy = Math.cos(t * 0.027) * 17 + Math.sin(t * 0.008 + 0.6) * 9;
   g.globalCompositeOperation = "lighter";
   for (let i = 0; i < e.N; i++) {
-    const a0 = e.alpha[i];
+    // 진입 배율에서는 상위 몇 개만 떠 있고, 확대하면 아래 순위가 드러난다 (REVEAL) — 장르 필터도 여기서 걸린다
+    const a0 = e.alpha[i] * e.revealAlpha(i);
     if (a0 < 0.01) continue;
     let px = e.pos[i * 2];
     let py = e.pos[i * 2 + 1];
@@ -170,7 +173,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.coverAlpha < 0.01) return;
   // 커버는 이 레이어의 대표곡(백엔드 선별) 중 화면 안에 있는 곡. 부족하면 격자 대표곡으로 채운다
   const candidates = new Set<number>();
-  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
+  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId) && e.revealAlpha(i) > 0.5) candidates.add(i);
   if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
   const list = [...candidates]
     .map((i) => ({ i, px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] }))
@@ -486,12 +489,40 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   const i = e.songs.findIndex((x) => x.musicId === e.ghost!.musicId);
   if (i < 0) return;
   const s = e.songs[i];
-  const k = e.ghostK() * GHOST.alpha;
-  const rr = 15 + Math.sin(e.time * 1.4) * 2;
+  const kk = e.ghostK();
+  const k = kk * GHOST.alpha;
+  const f = e.freeRect();
+  // 표식에서 화면 밖을 향하는 방향 (테두리에 붙어 있으므로 중앙 반대쪽이 곧 바깥이다)
+  let ox = p.x - f.cx;
+  let oy = p.y - f.cy;
+  const od = Math.hypot(ox, oy) || 1;
+  ox /= od;
+  oy /= od;
+  // 라벨은 화면 안쪽으로 — 테두리 밖으로 나가면 잘린다
+  const labelDir = oy > 0.35 ? -1 : 1;
+  // 등장: 화면 밖에서 테두리 자리로 밀려 들어오며 한 번 부풀고, 자리 잡은 뒤로는 계속 오르내린다
+  const slide = (1 - kk) * GHOST.enterSlidePx;
+  const bob = Math.sin(e.time * GHOST.bob.speed) * GHOST.bob.px * kk;
+  const pop = 1 + Math.sin(kk * Math.PI) * GHOST.popScale;
+  const cx = p.x + ox * (slide + bob);
+  const cy = p.y + oy * (slide + bob);
+  const rr = (14 + Math.sin(e.time * GHOST.bob.speed) * 2.2) * pop;
 
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
-  g.drawImage(glowSprites()[s.genreId % GENRE_COLORS.length], p.x - 26, p.y - 26, 52, 52);
+  const gr = 26 * pop;
+  g.drawImage(glowSprites()[s.genreId % GENRE_COLORS.length], cx - gr, cy - gr, gr * 2, gr * 2);
+
+  // 등장 파문 — 한 번 퍼지고 사라진다
+  if (kk < 1) {
+    g.globalCompositeOperation = "source-over";
+    g.globalAlpha = (1 - kk) * 0.5;
+    g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+    g.lineWidth = 1;
+    g.beginPath();
+    g.arc(cx, cy, rr + (1 - kk) * 34, 0, 6.284);
+    g.stroke();
+  }
 
   g.globalCompositeOperation = "source-over";
   g.globalAlpha = k * 1.6;
@@ -499,24 +530,46 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
   g.lineWidth = 1.3;
   g.beginPath();
-  g.arc(p.x, p.y, rr, 0, 6.284);
+  g.arc(cx, cy, rr, 0, 6.284);
+  g.stroke();
+  // 안쪽에 옅은 겹 링 하나 더 — 실제 별보다 흐릿하게 읽히도록
+  g.globalAlpha = k * 0.7;
+  g.beginPath();
+  g.arc(cx, cy, rr * 0.62, 0, 6.284);
   g.stroke();
   g.setLineDash([]);
 
-  g.globalAlpha = 1;
+  // 화면 밖을 가리키는 화살촉 — "이 방향 더 바깥에 있다"
+  g.globalAlpha = k * 1.9;
+  g.fillStyle = rgba(genreRgb(s.genreId), 0.9);
+  const ax = cx + ox * (rr + 6);
+  const ay = cy + oy * (rr + 6);
+  g.beginPath();
+  g.moveTo(ax + ox * 8, ay + oy * 8);
+  g.lineTo(ax - oy * 5.5, ay + ox * 5.5);
+  g.lineTo(ax + oy * 5.5, ay - ox * 5.5);
+  g.closePath();
+  g.fill();
+
+  g.globalAlpha = kk;
   g.textAlign = "center";
   g.textBaseline = "middle";
+  const label = "이 영역에 없는 곡";
+  g.font = `600 9px ${FONTS.mono}`;
+  const labelW = g.measureText(label).width;
   g.font = `500 10.5px ${FONTS.body}`;
   const title = fitText(g, s.title, 130);
-  const tw = g.measureText(title).width;
+  const tw = Math.max(labelW, g.measureText(title).width);
+  const ly = labelDir > 0 ? cy + rr + 5 : cy - rr - 41;
+  const lx = clamp(cx, f.x0 + tw / 2 + 12, f.x1 - tw / 2 - 12);
   g.fillStyle = MAP_COLORS.labelBg;
-  roundRect(g, p.x - tw / 2 - 7, p.y + rr + 5, tw + 14, 18, 6);
+  roundRect(g, lx - tw / 2 - 7, ly, tw + 14, 18, 6);
   g.fill();
-  g.fillStyle = "rgba(233,241,255,.9)";
-  g.fillText(title, p.x, p.y + rr + 14);
+  g.fillStyle = "rgba(233,241,255,.82)";
+  g.fillText(title, lx, ly + 9);
   g.font = `600 9px ${FONTS.mono}`;
-  g.fillStyle = "rgba(147,164,196,.75)";
-  g.fillText("다른 갈래에 있는 곡", p.x, p.y + rr + 30);
+  g.fillStyle = "rgba(147,164,196,.8)";
+  g.fillText(label, lx, ly + 25);
 }
 
 /** 선택 곡 강조 링 */

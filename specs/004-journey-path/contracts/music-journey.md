@@ -87,55 +87,60 @@
 
 ---
 
-## ② 게이트웨이 → 데이터 엔진 (BE2 ↔ BE4, **미확정 — B-Engine**)
+## ② 경로 산출 — 인프로세스 (rev.3, 2026-09-11 결정)
 
-**D4**: 검색·경로 서비스는 Python FastAPI이고 BE 게이트웨이가 HTTP로 호출한다.
+> **[무효]** rev.2 의 이 절은 *"게이트웨이 → 원격 파이썬 엔진 HTTP 호출"* 계약이었다.
+> 2026-09-11 팀 결정(D12)으로 **산출이 백엔드 프로세스 안으로 들어왔다.** 호출할 원격 엔진이 없으므로
+> 엔드포인트·타임아웃·재시도 계약이 전부 사라졌다. 방식(`axis`·λ·역 수·임계값)은 그대로다 —
+> **바뀐 것은 실행 위치뿐**이다.
 
-`data/specs/11_journey/spec.md`가 적은 형태:
+산출은 `JourneyPathFinder` 경계 뒤에 있다. 호출부는 "두 곡을 주면 중간 정거장 열이 온다"만 안다.
 
 ```
-GET /journeys?from={mbid}&to={mbid}&n=10&mode=axis
+EnginePath find(MusicDetail start, MusicDetail end)
 ```
 
-게이트웨이가 보내는 것:
-
-| 파라미터 | 값 | 비고 |
-| --- | --- | --- |
-| `from` | 출발곡 `mbid` | `MusicDetailReader.findDetail(start).mbid` |
-| `to` | 도착곡 `mbid` | 같음 |
-| `mode` | `axis` **고정** | D10 기본값. 클라이언트에 노출하지 않음 |
-| `n` | **보내지 않음** | 정거장 수는 엔진이 D3으로 정한다 |
-
-게이트웨이가 읽는 응답 필드:
-
-| 필드 | 용도 |
+| 항목 | 계약 |
 | --- | --- |
-| `reachable` | `false` → 422 `PATH_NOT_FOUND` |
-| `stations[].mbid` | 중간 정거장. **순서가 경로 순서**. 출발·도착 불포함 |
-| `stations[].progress` | 단조 증가 검사(카운터·로그) |
-| `n_stations` | `musicCnt` 검산 |
-| `endpoint_dist`, `far`, `mode`, `bundle` | 로그만 |
+| 입력 | `MusicDetail` 두 건. **좌표(16축)와 `artist`·`title` 이 채워져 있어야 한다** — 축 좌표계와 같은 녹음 판정에 쓴다 |
+| 모드 | 구현이 `axis` 로 고정. 실패 시 `linear` 폴백. **요청 파라미터로 승격하지 않는다**(FR-023) |
+| 역 수 | 구현이 끝점 거리로 정한다. 호출자가 넘기지 않는다(D3) |
+| 경로 없음 | **예외가 아니라** `reachable:false` → 422. D3 대로 정상 입력에서 오면 안 된다 |
+| 조회 어댑터 부재·재산출 상한 소진 | 예외 → 500. 422 와 섞지 않는다 |
+| 부수효과 | 없음 |
 
-나머지 필드(`rank`, `dist_from_prev`, `last_to_end`, `rules`, `leaf_id`, `node_d2`,
-`is_graph_edge_from_prev`, `path_nodes_d2`)는 쓰지 않는다.
+절차·파라미터·임계값의 출처는 `data/docs/BE_ALGORITHM_HANDOFF.md` §4 다. 백엔드가 새로 설계한 것이 없다.
 
-**호출 정책**: 타임아웃 2초(종단 3초에서 역산), **재시도 없음**(1회 재시도만 넣어도 최악 4초로 예산 초과).
-타임아웃·연결 실패·프로토콜 오류 → 500.
+### 산출이 쓰는 조회 계약
 
-### ⛔ BE4에 확인·요청할 것
+```
+List<TrackCandidate> findNearest(float[] point, int limit)
+```
 
-1. **엔드포인트 확정** — `retrieval/api.py`가 docstring뿐이다. 경로·파라미터명·오류 바디 형태 필요.
-   현재 docstring은 오류를 `404/422/503`으로 적는데, 각 코드의 의미와 바디 스키마를 알려주면 매핑을 맞춘다.
-2. **`stations`에 `mbid` 포함** — 현재 `journey.py::journey`는 `row`(행 인덱스)를 돌려준다.
-   행 인덱스는 번들 내부 값이라 게이트웨이가 쓸 수 없다. `mbid`가 필요하다.
-3. **스펙 11 AC1 성능 게이트 하향** — `axis` p95 ≤ 5초는 상위 게이트(요구사항 §6 종단 3초)를 넘는다.
-   실측 1.541초이므로 3초 이하로 바꿔도 통과한다.
-4. **스펙 11 규칙절 문구** — "아티스트당 ≤ 2"인데 `postprocess_rules.json`의 `artist_cap`은 **3**이고
-   구현은 파일 값을 읽는다. 문구가 최신이 아니다.
-5. **곡 테이블 `mbid` 컬럼** — BE 소유 곡 테이블에 정수 `id` PK + `mbid` UNIQUE가 필요하다(clarify).
-   좌표 컬럼은 `real`(float32) — 번들 dtype과 같아야 좌표 불변성이 성립한다.
-6. **머지 순서** — MR !17은 `S15P21A405-39` 위에 쌓여 있어 39 선행 머지가 필요하다(BE4 코멘트).
-   두 브랜치 모두 `data/dev` 미반영이라 게이트웨이 통합 검증은 그 이후다.
+여정 층 후보와 주변 탐색(005) 이웃이 **같은 질의**라 하나의 port 를 공유한다(D-005).
+
+```sql
+SELECT id, mbid, title, artist, duration, location
+FROM music ORDER BY location <-> :point LIMIT :limit
+```
+
+⚠️ **지점 좌표를 바인드 파라미터로 넘긴다.** 서브쿼리로 넘기면 `InitPlan` 이 되어 HNSW 를 못 쓴다 —
+실측 recall **0.0000**, 거리 0 인 자기 자신 대신 23.3 짜리가 1위로 나왔다. 조용히 틀린다.
+
+⚠️ **후처리 조건을 SQL 에 넣지 않는다.** pgvector 0.7.0 은 필터를 걸면 `LIMIT` 보다 적게 준다.
+그래서 층당 200개를 뽑아 애플리케이션에서 거른다.
+
+### 임계값
+
+유일 출처는 `data/serving/<bundle>/postprocess_rules.json` 이고, 백엔드는 `ody.serving` 설정으로 받는다
+(FR-024). 코드에 상수로 박지 않는다. 거리는 전부 **L2** — 코사인·내적으로 바꾸면 임계값이 무의미해진다.
+
+### BE4 에 남은 요청
+
+rev.2 의 요청 6건 중 **1·2·3·6번은 무효**다(원격 엔진·머지 순서·엔진 성능 게이트). 남은 것:
+
+- 스펙 11 규칙절이 "아티스트당 ≤ 2" 인데 `postprocess_rules.json` 의 `artist_cap` 은 **3** 이다. 문구 정정
+- `far` 노출 여부 — 핸드오프 §4.2 는 응답에 실으라 하고 FR-023 은 싣지 말라 한다(**B-Far2**, FE1·기획 협의)
 
 ---
 

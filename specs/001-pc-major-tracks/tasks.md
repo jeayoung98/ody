@@ -43,7 +43,7 @@
 **Purpose**: 모든 스토리의 종단 구현이 의존하는 기반. **T004 완료, T005 착수 가능**(B6 해소). T006 만 BE1 대기.
 
 - [X] T004 (2026-09-11 완료: `MajorTrackReader` + `MajorQuery` + `LayerBox` + `MapPoint`, 계약 테스트 7건) `MajorTrackReader` 조회 port 인터페이스 정의 (`backend/src/main/java/com/ssafy/backend/music/retrieval/MajorTrackReader.java`). 시그니처가 확정 가능해졌다 — `(level, 누적 축 범위[], 크기)` → 상주 집합(`MapPoint` 형태, D18). 스키마·ID 매핑은 `music.id`(BIGINT, 1..6,624,399) 기준
-- [ ] T005 ✅**착수 가능**(B6 해소) 곡 데이터 접근 어댑터. **MyBatis mapper + PostgreSQL 확정.** ~~pgvector 없음, postgres vs neo4j 미확인~~ → 실제로는 pgvector 0.7.0 + HNSW 빌드 완료, `music.location vector(16)` 662만행 적재 완료(data 스펙 18). 좌표 평면 조회는 **표현식 GiST**(`music_l1_gist`·`music_l2_gist`), 16차원 이웃은 HNSW. Neo4j 는 곡–장르 관계용이라 좌표에 쓰지 않는다(D9) (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
+- [X] T005 (2026-09-12 완료, S15P21A405-236) 곡 데이터 접근 어댑터 — `music/retrieval/MajorTrackReaderAdapter` + `MajorTrackMapper`(+ `resources/mapper/music/MajorTrackMapper.xml`). PostgreSQL·MyBatis. 좌표 평면은 표현식 GiST, 1레이어는 `map_sample` 정적 조회
 - [ ] T006 [P] ⛔ **BE1 이슈로 이관 대상 — BE2 브랜치에서 하지 않는다**: 전역 `GlobalErrorCode` 개명은 이 기능만의 일이 아니다. 한 번 시도해 커밋했다가(`6349665`) 리베이스 때 제외했다. 근거: (a) 옛 코드(`INVALID_INPUT`/`INTERNAL_SERVER_ERROR`) 참조가 **12파일**(main 3 + test 9: auth·user·playlist·music)로 늘었다, (b) dev 가 `GlobalErrorCode` 에 `FORBIDDEN` 을 §0.5 이름으로 추가해 이미 §0.5 방향으로 가고 있다, (c) BE1 이 같은 파일에서 인증·유저·플레이리스트를 동시에 올리는 중이라 충돌 비용이 계속 커진다. 계약 코드만 미리 enum 에 넣는 것은 호출부 없는 죽은 코드라 하지 않았다. music용 `ErrorCode` 구현 enum(`MusicErrorCode`) + 예외 매핑 보완: api-spec §0.5 계약 코드 `VALIDATION_ERROR`·`INVALID_TOKEN`·`TOKEN_EXPIRED`·`INTERNAL_ERROR` 정의(master 전역 `GlobalErrorCode`의 `INVALID_INPUT`/`INTERNAL_SERVER_ERROR`와 불일치 M4 → **전역 코드 정합은 BE1·팀 결정**). `GlobalExceptionHandler`에 (a) 검증 예외(타입/누락/제약) → **400 `VALIDATION_ERROR`**(M5), (b) music 내부 실패 → **500 `INTERNAL_ERROR`**(generic `INTERNAL_SERVER_ERROR` 대신, F1) 매핑 추가. **Core 인증 연동 자체는 B5(T022)** (`backend/src/main/java/com/ssafy/backend/music/`, `.../common/`). **이관 추적**: BE1 이슈 **미생성** (2026-09-10). 이슈 생성 후 여기에 키를 적고 T020·T021 의 선행을 그 키로 바꾼다. ⚠️ 키가 비는 동안 FR-010 은 실효 커버리지가 없다
 
 **Checkpoint**: T004 완료로 port 계약이 고정됐다 — T005 어댑터가 다음이다. **T006은 BE1 이관 대상**(이슈 키 미정) — 열리기 전에는 T020(A7)·T021(A8)의 계약 코드 검증을 할 수 없다. US 종단 흐름은 T005 에 의존.
@@ -59,20 +59,20 @@
 
 ### 지금 착수 가능 (미정 정책·인프라 독립; `backend/` 경로에 배치)
 
-- [X] T007 (2026-09-10 완료) [P] [US1] `MajorQueryResolver` 구현: level n → 축 번호 (2n-1, 2n), 해당 축 중심 추출. 순수 함수(DB·HTTP 비의존). 레벨 상한·생략 검증 미포함(B1) (`backend/src/main/java/com/ssafy/backend/music/service/MajorQueryResolver.java`)
-- [X] T008 (2026-09-10 완료: 4 tests) [P] [US1] Resolver 단위테스트 A9/A10: level=1→pc1·pc2, level=2→pc3·pc4, 이전 단계 중심으로 해석 안 함 (`backend/src/test/java/com/ssafy/backend/music/MajorQueryResolverTests.java`)
-- [X] T009 (2026-09-10 완료) [P] [US1] 대표곡 선정 순수 로직: 후보 리스트에 `youtubeCnt` DESC 정렬 후 상위 k. **k는 주입 파라미터**(하드코딩 금지, B4). `playCnt`·재생 링크로 순위 변경 안 함. 동률·null·부족 미포함(B4) (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`)
-- [X] T010 (2026-09-10 완료: 3 tests) [P] [US1] 선정 단위테스트 A14: 후보 조회수 [300,100,200], k=2 → [300,200]; `playCnt` 역순이어도 순서 불변 (`backend/src/test/java/com/ssafy/backend/music/MajorSelectionTests.java`)
-- [X] T011 (2026-09-10 완료: `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` / ⚠️ **D18 로 교체 예정** — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T012 (2026-09-10 완료: `major_itemWithoutYoutubeUrl_isKeptWithNullPreserved`) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [X] T007 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) `MajorQueryResolver` 구현: level n → 축 번호 (2n-1, 2n). D19 로 `MajorQuery.axisX()`·`axisY()` 가 같은 계산을 하게 되어 호출부가 사라졌다. 축 매핑 규칙(FR-003) 자체는 그대로 유지된다
+- [X] T008 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) Resolver 단위테스트 A9/A10. 같은 검증을 `MajorQueryContractTests`(T004, 7건)가 `MajorQuery.axisX/axisY` 기준으로 이어받는다
+- [X] T009 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) 대표곡 선정 순수 로직 `MajorSelection.topByYoutubeCnt`. D16 으로 서버는 인기순 선별을 하지 않고(클라이언트가 화면 픽셀 격자에서 한다), `youtube_cnt` 는 662만 행 전부 0 이다(data 스펙 18)
+- [X] T010 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) 선정 단위테스트 A14
+- [X] T011 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `major_successItem_carriesPc16AndBaselineCoordinates` + `major_itemOmitsDetailFields` / 원래 항목은 `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [X] T012 (2026-09-12 **D18 로 교체** → **S15P21A405-249 로 되돌림**: D18 당시엔 `MapPoint` 에 `youtubeUrl` 이 없었으나, FE 요청으로 2026-09-12 다시 **추가됐다**. `playable` 은 `youtubeUrl != null` 로 파생된다. 검증 테스트도 `youtubeUrl_isBuiltFromTitleAndArtist_notTheNullColumn` · `playable_isFalse_whenTitleAndArtistAreBothBlank` 로 교체됐다) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 
 ### 게이트 대기
 
-- [ ] T013 ⟲**D15 재정의** [BLOCKED: B2] [US1] ~~`MajorSelectionPolicy`: 레벨별 서버 반경 + 원형 내부 판정~~ → **격자 구역 판정**(격자 단위·칸 경계·칸별 선정 규칙). 원안 문구는 롤백용으로 남긴다 (`backend/src/main/java/com/ssafy/backend/music/service/MajorSelectionPolicy.java`)
-- [ ] T014 [BLOCKED: B3] [US1] 장르·이전 PC 선택 누적 제약을 현재 한 쌍 요청과 연결. 제약 미확보 시 전역 후보 축소 금지. 신규 세션/파라미터 임의 추가 금지 (`backend/src/main/java/com/ssafy/backend/music/service/`)
-- [ ] T015 [BLOCKED: B2/B3/B4/B6] [US1] `MusicService.getMajor` orchestration으로 미구현 예외 교체: 정책 조회 → 조건 변환 → Reader 호출 → 순위 보존 조립 (`backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`)
-- [ ] T016 ⟲**D15 재정의** [BLOCKED: B2] [US1] `MajorTrackReader` 어댑터 구현(MyBatis mapper): ~~"원형 내부" 후보에 `youtubeCnt` DESC top-k~~ → **1레이어는 `map_sample` 정적 조회, 2레이어 이후는 `point(...) <@ box(...)` + GiST 인덱스**(data 스펙 16 `map_layer_queries.sql` 이 질의 형태·함정 제공). 전역 선절단·ANN 대체 금지는 유지. **응답 필드를 채운다** — `pc[16]`·`genreId`·`weight`·`playable`. `map_sample` 에 없는 필드는 `music` 조인이 필요하니 **0.4 ms 이점을 재측정할 것**. `weight` 는 상수(D17), `genreId` 는 무장르 인덱스 통보 후. **B6 는 해소됨**(DB 적재 완료, 조회 계약 문서화) (`backend/src/main/java/com/ssafy/backend/music/retrieval/`, `backend/src/main/resources/mapper/`)
-- [ ] T017 ⟲**D15 보류** [BLOCKED: B2] [US1] ~~통합 테스트 A11/A12/A13~~ — A11~A14 가 D15 로 보류돼 대상이 없다. **SC-002(동일 버전 좌표 불변, 차이 0)는 유효**하므로 그 부분만 먼저 할 수 있다. 격자 모델의 새 수용 기준이 정해지면 그때 확장. 실 postgres fixture 사용 가능(DB 적재 완료) (`backend/src/test/java/com/ssafy/backend/music/`)
+- [~] T013 **무효**(D16) — 격자 구역 판정은 서버가 하지 않는다. 격자 단위가 화면 픽셀(86px)이라 줌에 따라 변해 서버가 적용할 수 없고, 인기순 선별도 클라이언트 몫이다. `MajorSelectionPolicy` 를 만들지 않았다. 원안 문구는 롤백용으로 남긴다
+- [~] T014 **부분**(S15P21A405-236) — 이전 PC 선택 누적은 `MajorQuery.accumulated` + `LayerBox` 로 전달 계약이 됐고 어댑터가 전부 적용한다(`candidate(N+1) ⊆ candidate(N)`). **장르 필터는 B3 잔여** — FE 매핑 미통보라 착수 불가
+- [X] T015 (2026-09-12 완료, S15P21A405-236) [US1] `MusicService.getMajor` 본체 — 미구현 예외 제거, `MajorQuery` 조립 → Reader 호출 → `MajorResponse` 반환. 응답 원소를 `MusicDetail` 에서 **`MapPoint`** 로 교체(D18). 컨트롤러 요청도 중심좌표에서 누적 축 범위로 개정(D19). **잠정 동작 하나**: 후보 0곡이면 200 + 빈 배열을 돌려준다 — B4 미확정 상태의 기본값이고 코드 주석에 남겼다
+- [X] T016 (2026-09-12 완료, S15P21A405-236) [US1] `MajorTrackReader` 어댑터 — level=1 은 `map_sample` 정적 조회, level>=2 는 `boxes[0]` 만 `point(...) <@ box(...)`(GiST) + 나머지는 `BETWEEN` heap 필터. 전역 선절단 없음. **잠정 둘**: `genreId` 는 0 고정(FE 29→10 매핑 미통보, 교체 지점은 `genreIdOf` 한 곳), `weight` 는 균일값 0(D17). **미측정**: `map_sample` 에 pc 16축이 없어 `music` 조인이 필요하다 — 0.4 ms 재측정은 T017 에 항목으로 올렸다. 매퍼는 한동안 `@MapperScan` 범위 밖에 두고 `SqlSession.getMapper()` 로 우회했으나, T301(S15P21A405-232)이 `backend/dev` 에 머지돼 `music.mapper` 표준 위치로 되돌렸다
+- [ ] T017 ⟲**D15 보류** [US1] ~~통합 테스트 A11/A12/A13~~ — A11~A14 가 D15 로 보류돼 대상이 없다. **SC-002(동일 버전 좌표 불변, 차이 0)는 유효**하므로 그 부분만 먼저 할 수 있다. 실 postgres fixture 사용 가능(DB 적재 완료). **S15P21A405-236 이 남긴 실측 항목 2개**: (1) `map_sample`+`music` 조인 후 1레이어 응답 시간 재측정 — 조인 없는 0.4 ms 가 얼마나 깎이는지, (2) level>=2 질의가 `music_l1_gist` 를 타는지 `EXPLAIN` 확인 — `BitmapAnd` 로 떨어지지 않는지. 둘 다 실 DB 접근이 필요하다
 
 **Checkpoint**: T007~T012 완료 시 순수 로직·wire 계약 독립 검증(MVP 부분). 종단 조회는 T013~T017 게이트 해소 후.
 
@@ -82,10 +82,10 @@
 
 **Goal**: `level=1`을 PC 값 없이 호출 가능(최상위 진입).
 
-**Independent Test**: `GET /music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
+**Independent Test**: `GET /api/api/music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
 
 - [X] T018 (2026-09-10 완료: `major_level1_returnsSuccessEnvelope`) [US2] MVC 슬라이스 테스트 A5: `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [ ] T019 ✅**착수 가능**(D19) [US2] level=1 PC 생략 시 조회 대상 = **`map_sample` 정적 결과**. 중심을 (0,0)/전체 영역으로 대체하지 않는다는 원칙은 유지 — 애초에 중심을 안 받는다. 초기 조회 분기 (`backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`)
+- [X] T019 (2026-09-12 완료, S15P21A405-236) [US2] level=1 은 범위 파라미터 없이 `map_sample` 정적 결과를 돌려준다. 중심을 (0,0)/전체 영역으로 대체하지 않는다 — 애초에 받지 않는다. level=1 은 `limit` 을 적용하지 않는다 — `map_sample` 1레이어는 이미 화면 크기로 계산된 정적 집합(실측 1,094칸)이라 1000 으로 자르면 별 94개가 사라진다. port javadoc 에 예외로 명시했다(D18: 정확한 수는 강제하지 않는다)
 
 **Checkpoint**: A5 계약은 T018로 유지. 최상위 실제 반환은 B2 후.
 
@@ -210,8 +210,8 @@ T029 는 dev 가 해소했으므로 A6 의 **토큰 없음·위조 부분은 지
 T006·T013~T017·T019·T020~T022·T024~T027·T030 이 이미 잡고 있어 중복 기재하지 않는다.
 이번 findings 는 전부 plan.md Source Code 구조표가 구현 상태를 못 따라간 드리프트다.
 
-- [ ] T032 plan.md Source Code 산문이 "아래 표의 `MajorQueryResolver`·`MajorSelection` 은 구현됐고" 라고 하지만 표에 `MajorSelection` 행이 없고 `MajorQueryResolver.java` 는 `(제안)` 표기 그대로다. 산문과 표를 일치시키고 구현 완료를 표기한다 per plan: Source Code structure (contradicts)
-- [ ] T033 구현된 `backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java`(T009)를 plan.md 구조표에 행으로 추가한다. 표의 `MajorSelectionPolicy.java (제안)` 는 별개 파일(T013, B2 대기)이므로 대체하지 않는다 per plan: Source Code structure · T009 (partial)
+- [~] T032 **불필요**(2026-09-12) — plan.md 산문이 가리키던 `MajorQueryResolver`·`MajorSelection` 이 삭제돼 산문·표를 함께 정리했다(S15P21A405-236)
+- [~] T033 **불필요**(2026-09-12) — 대상 파일 `MajorSelection.java` 가 삭제됐다. plan.md 구조표에는 삭제 사실과 복원 지점을 적었다(S15P21A405-236)
 - [ ] T034 `ObservabilityTests.java` 가 `backend/src/test/java/com/ssafy/backend/`(루트 패키지)에 있는데 plan 구조표의 테스트 경로는 `.../com/ssafy/backend/music/` 다. 기능 경계를 넘는 전역 관측 테스트라 위치는 타당하므로, 표에 전역 테스트 행을 넣거나 위치 근거를 명시한다 per plan: Source Code structure · T023 (partial)
 - [ ] T035 plan.md 구조표의 경로 표기가 재배치 전 형태(`src/test/java/...`, `music/controller/...`)로 남아 있다. 그 위 산문만 `backend/` 로 갱신됐으므로 표 경로에도 접두를 반영한다 per plan: Source Code structure (partial)
 
@@ -228,9 +228,9 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 | T016 | ⟲ 재정의 — 원형 top-k → `map_sample` 정적 + `<@ box` 실시간. **B6 해소로 B2 만 남음** |
 | T017 | ⟲ 보류 — A11~A13 이 보류라 대상 없음. SC-002 부분만 유효 |
 | T019 | level=1 조회 대상이 `map_sample` 로 해소 후보 |
-| T009·T010 | `MajorSelection.topByYoutubeCnt` 는 **원안 전용**이 됐다. 삭제하지 않는다 — 롤백 자산이고, 인기 지표가 채워지면 그대로 쓴다 |
+| T009·T010 | `MajorSelection.topByYoutubeCnt` 는 **원안 전용**이 됐고 **2026-09-12 삭제**했다(팀 결정, S15P21A405-236). 호출부가 없는 코드를 롤백 대비로 두는 대신 복원 지점을 문서에 남긴다 — 아래 "삭제한 롤백 자산" 절 |
 | T025 | k 계약이 "격자 칸 수"로 바뀔 수 있다(1레이어 실측 1,094칸) |
-| T007·T008 | 영향 없음 — 레벨→PC 축 쌍 매핑(FR-003)은 D15 에서 그대로 유지 |
+| T007·T008 | D15 기준 영향 없음 — 레벨→PC 축 쌍 매핑(FR-003)은 유지. **다만 D19 로 `MajorQuery.axisX/axisY` 가 같은 계산을 하게 돼 `MajorQueryResolver` 는 2026-09-12 삭제됐다**(아래 "삭제한 롤백 자산") |
 
 **새로 열린 것**: DB 적재 완료(662만행)와 data 의 조회 계약 문서화로 **B6 가 해소**됐다.
 남은 게이트는 B1(입력 검증)·B2(격자 파라미터·선정 규칙)·B3(누적 제약)·B4(결과 계약)다.
@@ -251,6 +251,18 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 - T013 격자 구역 판정 → **상주 집합 샘플링**으로 다시 좁혀진다. 화면 격자 로직은 서버에 두지 않는다
 - T016 1레이어 `map_sample` 정적 조회는 유지. 단 그 테이블의 의미가 "대표곡"이 아니라 **"상주 집합"** 이다
 - T009·T010 `MajorSelection.topByYoutubeCnt` — 인기순 선별이 클라이언트로 가면서 서버 요구에서 빠졌다.
+  **2026-09-12 삭제됨**(S15P21A405-236). 복원 방법은 아래.
+
+### 삭제한 롤백 자산 — 복원 지점
+
+`MajorSelection`·`MajorQueryResolver` 와 그 테스트 7건은 호출부가 없어 2026-09-12 에 삭제했다. 코드를 남기는 대신 여기에 복원 지점을 적는다. 롤백 조건(spec.md "롤백 조건" 절)이 성립하면 아래로 되살린다.
+
+| 항목 | 값 |
+|---|---|
+| 복원 지점 커밋 | `99c452c` (브랜치 `backend/feat/S15P21A405-236-major-resident-set-adapter`) |
+| 복원 명령 | `git checkout 99c452c -- backend/src/main/java/com/ssafy/backend/music/service/MajorSelection.java backend/src/main/java/com/ssafy/backend/music/service/MajorQueryResolver.java backend/src/test/java/com/ssafy/backend/music/MajorSelectionTests.java backend/src/test/java/com/ssafy/backend/music/MajorQueryResolverTests.java` |
+| 삭제 파일 | `MajorSelection.java`, `MajorQueryResolver.java`, `MajorSelectionTests.java`, `MajorQueryResolverTests.java` |
+| 삭제 사유 | `MajorSelection` = D16(서버 인기순 선별 없음) + `youtube_cnt` 전 행 0. `MajorQueryResolver` = D19 로 `MajorQuery.axisX/axisY` 가 대체 |
   롤백 자산으로 유지(D15 롤백 시 복귀)
 - T025 k 계약 → "상위 k" 가 아니라 **상주 집합 크기**(FE 전제 1000 vs data 실측 1,094)
 
@@ -282,7 +294,7 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 | 5 | 응답 항목 필드 구성 | ✅ **D18** — FE `MapPoint` |
 | 7 | 상주 집합 크기 | ✅ **D18** — 1000 은 규모 기준 |
 | 6 | 2레이어 이후 영역 파라미터 | ✅ **D19** — GET + 누적 축 범위, 클라이언트 캐싱 |
-| 8 | `genreId` | 🟡 **부분** — 무장르 전용 인덱스 추가 확정. 번호·멜론 29종 매핑 미정 |
+| 8 | `genreId` | 🟡 **부분** — 무장르 인덱스 **10 으로 확정**(FE `NO_GENRE_ID`, `GENRE_COLORS` 11칸 확인). S15P21A405-249 로 반영·배포됨. 멜론 29종 매핑만 미정(S15P21A405-240) |
 | 9 | 범위 파라미터 표기 | 🟡 **표기만** — 설계는 확정, 이름은 FE 구현 시 |
 
 **설계 미정은 사실상 끝났다.** 남은 둘은 FE 구현 후 통보받으면 닫힌다.
@@ -324,7 +336,8 @@ B1(입력 검증)·M4(에러 코드)·T030(`TOKEN_EXPIRED`)은 이 목록과 별
 - `MapPoint.pc` 는 정확히 16개 (D7 PCA-16)
 - `MapPoint.genreId >= 0` — FE `draw-map.ts` 가 raw modulo 라 음수면 `drawImage` 예외
 
-**안 한 것**: 구현체(T005·T016), 컨트롤러·`MajorResponse` 교체(T015), `weight`·`genreId` 채우기.
+**안 한 것**(작성 시점 기준): 구현체(T005·T016), 컨트롤러·`MajorResponse` 교체(T015), `weight`·`genreId` 채우기.
+→ 2026-09-12 갱신: T005·T016·T015 완료(S15P21A405-236), `genreId` 는 무장르 10 으로 채워졌다(S15P21A405-249). `weight` 는 인기 지표 부재로 여전히 상수다(D17).
 `MusicService` 는 `Optional<MajorTrackReader>` 로 받아 미구현을 드러낸다 — 임시 스키마·목 어댑터를 만들지 않는다.
 
 ⚠️ **`contracts/music-major.md` 가 원안 상태다.** 원형·`youtubeCnt` DESC·`MusicDetail` 응답으로 적혀 있어

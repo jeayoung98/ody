@@ -51,15 +51,15 @@ description: "Task list: 노래 상세 조회 (Nearby 포함)"
 - [ ] T103 [US3] 인증 테스트: 토큰 없음/위조/만료 → 401
 
 ## B-D: 저장소·KNN 어댑터 (BE4)
-- [ ] T201 곡 상세 저장소·스키마(`mbid/bpm/duration/play_cnt/youtube_cnt/pc1~pc16`) 확인 — BE4
-- [ ] T202 **거리 척도·KNN 실행 방식 확정**(pgvector 미프로비저닝 여부, 브루트포스 vs 인덱스) — BE4
-- [ ] T203 [US1·US2] `MusicDetailReader` MyBatis 어댑터 구현 in `music/detail/MusicDetailMapper.(java|xml)`: `findDetail`(id로 상세 1건), `findNeighbors`(자기 제외, distance ASC·id ASC, k=10, 재생불가 포함) — depends T201·T202
-- [ ] T204 [US2] KNN 인덱스 전략(pgvector 가능 시 ivfflat/hnsw, 불가 시 대안) — 실행계획 확인
+- [X] T201 곡 상세 저장소·스키마 확인 — **확정**: PostgreSQL `music`(6,624,399행 적재 완료), 컬럼 `id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location vector(16), play_cnt, youtube_cnt`. 좌표는 pc1~pc16 개별 컬럼이 아니라 pgvector `location vector(16)` 한 컬럼이다. `release_year·album·youtube_url` 은 전 행 NULL(data 스펙 18 AC4)
+- [X] T202 거리 척도·KNN 실행 방식 — **확정**: pgvector 0.7.0 프로비저닝됨. `music_location_hnsw_idx`(hnsw, `vector_l2_ops`) → 연산자 `<->`(L2). 실측 13.9ms. **함정**: 질의 벡터를 서브쿼리로 넘기면 InitPlan 이 되어 recall 0.0000 → 좌표를 먼저 읽어 바인드 파라미터로 넘긴다(recall 0.9995)
+- [X] T203 [US1·US2] `MusicDetailReader` MyBatis 어댑터 구현 (S15P21A405-231) — `music/detail/MusicDetailReaderAdapter.java`, `MusicDetailMapper.java`, `resources/mapper/music/MusicDetailMapper.xml`. **실측 정정 둘**: (1) 매퍼 인터페이스를 `*.mapper` 패키지에 두면 `@MapperScan` 이 빈으로 등록해 저장소의 모든 `@WebMvcTest` 슬라이스가 SqlSessionFactory 부재로 죽었다 → 한동안 스캔 범위 밖에 두고 `SqlSession.getMapper()` 로 우회했다. **T301(S15P21A405-232)이 `backend/dev` 에 머지돼 우회를 걷어내고 `music.mapper` 표준 위치로 되돌렸다**. (2) `ORDER BY distance, id` 로 정렬 키를 둘로 두면 HNSW 인덱스 순서를 못 쓰고 전체 정렬로 떨어진다 → SQL 은 거리로만 정렬하고 동률 id ASC 는 어댑터에서 준다
+- [ ] T204 [US2] KNN 인덱스 전략 — HNSW 는 이미 있다(T202). **남은 것은 실행계획 확인**: 어댑터 질의가 실제로 `music_location_hnsw_idx` 를 타는지, `hnsw.ef_search` 기본값으로 k=10 recall 이 충분한지. 실 DB 접근 필요
 - [ ] T205 [US1·US2] 실데이터 통합 테스트: 좌표 baseline 일치, 실제 최근접·자기 제외·결정성(FR-006·009) — depends T203
 - [ ] T206 Nearby 응답 예산(§6 유사곡 1초 매핑) 벤치 — depends T203
 
 ## B-Common: 전역 테스트 인프라 (BE-infra, 002와 공유)
-- [ ] T301 메인 `@MapperScan`을 별도 @Configuration으로 분리해 슬라이스 테스트에서 제외 — BE1/BE4 합의. 완료 시 testMapper mock 제거.
+- [X] T301 메인 `@MapperScan`을 `config/MyBatisConfig` 로 분리 (S15P21A405-232) — 평범한 `@Configuration` 은 `@WebMvcTest` 슬라이스가 스캔하지 않는다. 슬라이스 10개에서 매퍼 `@MockitoBean` 4개씩 제거하고 171개 통과 확인. 새 매퍼를 `<도메인>.mapper` 에 추가해도 이제 슬라이스가 깨지지 않는다.
 
 ---
 
@@ -82,3 +82,13 @@ description: "Task list: 노래 상세 조회 (Nearby 포함)"
 - ponytail: 프로덕션 신규 = DTO 5개(3개는 001·002와 동일 재생성) + port 1 + service/controller(detail만) + 도메인 에러 1 + 공통 검증 매핑 1(BE1 리뷰). ORM·캐시·거리계산 신규 없음(어댑터는 B-D).
 - T008은 BE1 소유 파일 → MR 리뷰 플래그(002 T005와 동일 변경, 병합 시 dedup).
 - `MUSIC_NOT_FOUND`는 BE2 도메인 에러로 정의 → 정본 §0.5 정합. api-spec `VALIDATION_ERROR`/`INTERNAL_ERROR` 명칭 불일치는 정본 갱신 대상(spec [정정]).
+
+## youtubeUrl 은 조회 시 만든다 (2026-09-12, S15P21A405-233)
+
+`music.youtube_url` 은 662만 행 전부 NULL 이고 채울 방법이 없다(규칙 6 + YouTube Data API 할당량, data 스펙 18 D12).
+그래서 Backend 가 조회 시 `https://www.youtube.com/results?search_query=<아티스트>+<제목>` 을 만들어 담는다. 만드는 곳은 `music/YoutubeSearchUrl` 하나다.
+
+**따라온 결과 둘 — 확인 필요**
+
+1. **`youtubeUrl: null` 인 곡이 사실상 사라진다.** 아티스트·제목이 둘 다 비어야만 null 이다. FR-007(재생 불가 곡을 제외하지 않고 null 유지)은 계약으로는 유효하지만 실제로는 거의 도달하지 않는다. 프론트의 "재생 불가" 표시 조건을 다시 볼 필요가 있다.
+2. **`MapPoint.playable` 은 그대로 전부 false 다.** 지도 별은 전부 흐리게 나오는데 검색·상세에서는 모든 곡에 링크가 있어 서로 어긋난다. `playable` 을 true 로 뒤집으면 FE 의 흐림 상태가 의미를 잃으므로 FE 확인 없이 정하지 않았다(S15P21A405-233 제외 범위).

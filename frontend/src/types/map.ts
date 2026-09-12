@@ -19,6 +19,11 @@ export interface MapPoint {
   artist: string | null;
   /** 미리듣기 링크 유무 (없으면 흐리게) */
   playable: boolean;
+  /**
+   * 목 확인용 — 어느 겹에도 상주하지 않는 곡. 검색해서 고르면 늘 고스트별로 뜬다 (MAP-12 UI 확인).
+   * 실서비스에서는 백엔드가 겹의 상주 집합만 내려주므로 이 플래그 없이 자연히 고스트가 된다.
+   */
+  ghostOnly?: boolean;
 }
 
 /** 특정 곡 기준 주변 탐색 응답 — 유사도는 16차원 임베딩 거리 */

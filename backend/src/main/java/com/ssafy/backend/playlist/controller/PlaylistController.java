@@ -38,7 +38,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/playlist")
+@RequestMapping("/api/playlist")
 @Validated
 @RequiredArgsConstructor
 @Tag(name = "Playlist", description = "플레이리스트 조회·생성·수정")

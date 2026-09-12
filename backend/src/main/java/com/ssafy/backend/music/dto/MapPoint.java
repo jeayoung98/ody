@@ -11,11 +11,16 @@ import java.util.List;
  *
  * @param musicId  {@code music.id} (1..6,624,399)
  * @param pc       PC 16개. 순서는 pc1..pc16
- * @param genreId  색상 코딩용. <b>비음수여야 한다</b> — FE {@code draw-map.ts} 의
- *                 {@code spr[genreId % GENRE_COLORS.length]} 가 raw modulo 라 음수면 예외가 난다
- * @param weight   별 크기·밝기·클라이언트 선별용 가중치. 인기 지표 부재로 현재는 균일값이다(D17)
- * @param artist   없을 수 있다
- * @param playable 재생 링크 유무. {@code youtube_url} 이 전 행 NULL 이라 현재는 전부 false
+ * @param genreId  색상 코딩용. <b>비음수여야 한다</b>. FE 는 {@code design-tokens.ts} 의
+ *                 {@code genreIdx() = Math.abs(genreId) % GENRE_COLORS.length} 로 색·스프라이트를 모두 고르므로
+ *                 음수가 가도 터지지는 않지만(2026-09-12 FE 확인, origin/frontend/dev), 서버가 음수를 보낼
+ *                 이유가 없어 검증은 유지한다
+ * @param weight     별 크기·밝기·클라이언트 선별용 가중치. 인기 지표 부재로 현재는 균일값이다(D17)
+ * @param artist     없을 수 있다
+ * @param youtubeUrl 유튜브 검색 URL. {@code music.youtube_url} 이 전 행 NULL 이라 저장값을 읽지 않고
+ *                   {@code title}·{@code artist} 로 만든다(D12) — 둘 다 {@code map_sample} 에 있어 조인이 필요 없다.
+ *                   검색어를 만들 수 없으면 {@code null}
+ * @param playable   재생 링크 유무 = {@code youtubeUrl != null}. 제목·아티스트가 모두 빈 곡이 3,977개라 상수가 아니다
  */
 public record MapPoint(
 		long musicId,
@@ -24,6 +29,7 @@ public record MapPoint(
 		int weight,
 		String title,
 		String artist,
+		String youtubeUrl,
 		boolean playable) {
 
 	/** 좌표 차원. data D7 로 PCA-16 확정, {@code manifest.k} 와 같아야 한다. */

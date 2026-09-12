@@ -32,7 +32,7 @@ class MusicSearchServiceTests {
 
 	private final MusicSearchReader reader = mock(MusicSearchReader.class);
 	private final MusicDetailReader detail = mock(MusicDetailReader.class);
-	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail));
+	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty());
 
 	@Test
 	void search_trimsQuery_passesSize10_assemblesPage() {
@@ -97,7 +97,7 @@ class MusicSearchServiceTests {
 
 	@Test
 	void search_noAdapter_throws() {
-		MusicService noReader = new MusicService(Optional.empty(), Optional.empty());
+		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty());
 
 		assertThrows(UnsupportedOperationException.class, () -> noReader.search("q", 0));
 	}

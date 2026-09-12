@@ -23,12 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
@@ -40,7 +36,6 @@ import com.ssafy.backend.music.service.MusicService;
 /**
  * 상세 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler·Jackson 직렬화 검증.
  * @JsonUnwrapped flat 직렬화(정본 §3.2)를 jsonPath로 실측한다.
- * ponytail: master @MapperScan이 testMapper를 슬라이스에 끌어와 실패 → 해당 매퍼만 @MockitoBean(002와 동일, T301 전까지).
  */
 // ponytail: master SecurityConfig가 슬라이스에 딸려와 security 빈 부재로 컨텍스트가 죽는다 →
 // JwtAuthenticationFilter는 Filter라 슬라이스에 스캔된다. 둘 다 제외하고 기본 시큐리티 필터도 끈다(BE-infra 소스 무수정).
@@ -56,17 +51,9 @@ class MusicDetailControllerTests {
 	@MockitoBean
 	private MusicService musicService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
@@ -90,7 +77,7 @@ class MusicDetailControllerTests {
 						neighbor(10999L, "https://youtu.be/z", 0.0510)));
 		when(musicService.getDetail(eq(10234L))).thenReturn(body);
 
-		mockMvc.perform(get("/music/detail").param("id", "10234"))
+		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.error").doesNotExist())
@@ -113,7 +100,7 @@ class MusicDetailControllerTests {
 		when(musicService.getDetail(anyLong()))
 				.thenReturn(new MusicDetailResponse(detail(null), List.of()));
 
-		mockMvc.perform(get("/music/detail").param("id", "10234"))
+		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.id").value(10234))
 				.andExpect(jsonPath("$.data.youtubeUrl").value(nullValue()))
@@ -126,7 +113,7 @@ class MusicDetailControllerTests {
 				.thenReturn(new MusicDetailResponse(detail("https://youtu.be/x"),
 						List.of(neighbor(10877L, null, 0.0412))));
 
-		mockMvc.perform(get("/music/detail").param("id", "10234"))
+		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.neighbors[0].id").value(10877))
 				.andExpect(jsonPath("$.data.neighbors[0].youtubeUrl").value(nullValue()));
@@ -137,7 +124,7 @@ class MusicDetailControllerTests {
 		when(musicService.getDetail(eq(999L)))
 				.thenThrow(new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
 
-		mockMvc.perform(get("/music/detail").param("id", "999"))
+		mockMvc.perform(get("/api/music/detail").param("id", "999"))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.data").doesNotExist())
@@ -146,7 +133,7 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_idZero_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/detail").param("id", "0"))
+		mockMvc.perform(get("/api/music/detail").param("id", "0"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
@@ -154,14 +141,14 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_nonNumericId_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/detail").param("id", "abc"))
+		mockMvc.perform(get("/api/music/detail").param("id", "abc"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test
 	void detail_missingId_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/music/detail"))
+		mockMvc.perform(get("/api/music/detail"))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
@@ -170,7 +157,7 @@ class MusicDetailControllerTests {
 	void detail_internalFailure_returns500() throws Exception {
 		when(musicService.getDetail(anyLong())).thenThrow(new RuntimeException("boom"));
 
-		mockMvc.perform(get("/music/detail").param("id", "10234"))
+		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isInternalServerError())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));

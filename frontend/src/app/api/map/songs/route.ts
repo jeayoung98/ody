@@ -1,12 +1,15 @@
 import { LAYER_SONG_COUNT } from "@/constants";
 import { fail, ok } from "@/lib/api-response";
-import { backendGet, BackendError, isBackendEnabled, toMapPoint, type BackendMusicDetail } from "@/lib/backend";
+import { backendGet, BackendError, isBackendEnabled, toResidentPoint, type BackendMapPoint } from "@/lib/backend";
 import { allSongs } from "@/mocks/songs";
 import type { MapPoint } from "@/types";
 
-/** `/api/music/major` 응답 (정본 §3.4) */
+/**
+ * `/api/music/major` 응답 (정본 §3.4). 원소는 **곡 요약이 아니라 지도 점**이다 —
+ * 2026-09-12 배포 스펙(`/api/v3/api-docs` MapPoint)에서 확인했다.
+ */
 interface BackendMajorResponse {
-  content: BackendMusicDetail[];
+  content: BackendMapPoint[];
 }
 
 /**
@@ -27,7 +30,7 @@ export async function GET(req: Request) {
     try {
       const qs = q.toString();
       const res = await backendGet<BackendMajorResponse>(`/api/music/major?${qs || "level=1"}`);
-      return ok(res.content.map(toMapPoint));
+      return ok(res.content.map(toResidentPoint));
     } catch (e) {
       const err = e as BackendError;
       return fail("INTERNAL_ERROR", err.message, err.status || 502);

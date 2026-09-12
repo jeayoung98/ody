@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { STORAGE_KEYS } from "@/constants";
+import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
@@ -29,7 +30,7 @@ interface MapViewProps {
 
 /**
  * 스테이지 전체를 채우는 별지도. 엔진을 소유하고 스토어/쿼리와 엔진을 연결한다.
- * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 곡 선택 / 친구 프로필
+ * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 그 곡으로 이동·재생·상세 / 친구 프로필
  */
 export default function MapView({ occludedRight }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
@@ -54,6 +55,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
+  const playSingle = usePlayerStore((s) => s.playSingle);
+  const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
@@ -206,13 +209,15 @@ export default function MapView({ occludedRight }: MapViewProps) {
         selectMusic(id);
         return;
       }
+      // 클릭 = 그 곡으로 이동 + 재생 + 상세 (MAP-08) — 보는 곡과 내 위치를 나누지 않는다
       selectMusic(id);
       openSong(id);
-      // 누른 별로 뷰만 옮긴다 — '나'는 재생할 때만 움직인다 (MAP-08)
-      if (useMapStore.getState().viewMode === "default") engine.focus(id);
+      engine.travelTo(id);
+      playSingle(id);
+      recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
       useTutorialStore.getState().complete("select");
     },
-    [engine, openFeed, openSong, selectMusic],
+    [engine, openFeed, openSong, playSingle, recordPlay, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;

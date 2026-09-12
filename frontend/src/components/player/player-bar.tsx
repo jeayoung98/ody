@@ -1,13 +1,11 @@
 "use client";
 
-import { useEffect } from "react";
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
-import { useTutorialStore } from "@/stores/use-tutorial-store";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
 
@@ -28,10 +26,6 @@ export default function PlayerBar() {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
-
-  useEffect(() => {
-    if (isPlaying) useTutorialStore.getState().complete("play");
-  }, [isPlaying]);
 
   const openContext = () => {
     if (currentMusicId == null) return;

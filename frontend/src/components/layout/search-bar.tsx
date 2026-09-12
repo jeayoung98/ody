@@ -25,7 +25,7 @@ export default function SearchBar() {
   };
 
   return (
-    <div className="absolute top-4 left-1/2 z-[22] w-[min(380px,32vw)] -translate-x-1/2">
+    <div className="absolute top-4 left-1/2 z-[22] w-[min(380px,32vw)] -translate-x-1/2" data-hud>
       <div className="glass flex items-center gap-[9px] rounded-pill! px-[13px] py-[9px]">
         <SearchIcon className="shrink-0 opacity-50" />
         <input

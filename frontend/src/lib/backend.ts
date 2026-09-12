@@ -144,6 +144,12 @@ export interface BackendMapPoint {
   weight: number;
   title: string;
   artist: string | null;
+  /**
+   * 유튜브 검색 URL. 제목·아티스트가 둘 다 비면 null 이고 `playable` 도 false 다.
+   * **배포가 이 필드를 아직 안 내려주는 동안에는 undefined 로 온다** (2026-09-12 기준) —
+   * 그래서 아래에서 null 로 받아 둔다.
+   */
+  youtubeUrl?: string | null;
   playable: boolean;
 }
 
@@ -160,6 +166,7 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
     weight: p.weight,
     title: p.title,
     artist: p.artist ?? null,
+    youtubeUrl: p.youtubeUrl ?? null,
     playable: p.playable,
   };
 }
@@ -182,6 +189,8 @@ export function toMapPoint(music: BackendMusicSummary): MapPoint {
     weight: 1,
     title: music.title,
     artist: music.artist,
+    // 검색·상세·주변곡은 이미 검색 URL 을 담아 준다 (S15P21A405-233). 조립하지 않고 그대로 쓴다
+    youtubeUrl: music.youtubeUrl ?? null,
     playable: music.youtubeUrl != null,
   };
 }

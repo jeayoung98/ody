@@ -425,7 +425,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.lineWidth = 1;
   const nodes: { id: number; x: number; y: number; rank: number }[] = [];
   p.ids.forEach((id, rank) => {
-    if (!e.isAlive(id)) return;
+    // 상주 여부는 묻지 않는다 — 이웃은 지도 집합 밖 곡이다. 자리를 못 잡은 곡만 건너뛴다
     const pp = e.probePos(id);
     if (!pp) return;
     nodes.push({ id, x: pp.x, y: pp.y, rank });

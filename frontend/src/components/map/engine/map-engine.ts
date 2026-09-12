@@ -152,6 +152,12 @@ export class MapEngine {
   meFlight: { ax: number; ay: number; bx: number; by: number; cx: number; cy: number; t0: number } | null = null;
   /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
   playingId: number | null = null;
+  /**
+   * "내 위치로 가기" 로 돌아갈 자리 — 재생으로 내 위치가 정해진 **그때의 겹**이다.
+   * 겹 이동은 서버 상태 없이 누적 범위를 매번 다시 보내는 구조라, `boxes` 만 들고 있으면
+   * 같은 곡 집합을 다시 받을 수 있다. 카메라는 돌아갈 때 곡 좌표로 다시 계산한다.
+   */
+  private home: { musicId: number; boxes: readonly LayerBox[] } | null = null;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -467,8 +473,17 @@ export class MapEngine {
    * 기준 곡을 남은 화면 중앙에 두고 유사곡 10곡을 두 겹 고리로 보기 좋게 배치한다 (실제 좌표 아님).
    * 카메라는 기준 곡으로 줌인되고, 곡들은 실제 위치에서 배치 위치로 미끄러져 들어온다.
    */
-  enterProbe(centerId: number, ids: number[]) {
-    if (!this.isAlive(centerId)) return;
+  /**
+   * 주변 탐색 진입 (MAP-10).
+   *
+   * **ID 가 아니라 곡을 통째로 받는다.** 이웃 10곡은 지도 상주 집합과 **별개 집합**이라
+   * (662만 곡 중 16차원상 가까운 10곡) 지도 목록에서 좌표를 찾을 수 없다 — 실측상 겹치는 곡이 0개다.
+   * 백엔드가 `pc[16]` 을 이미 주므로 그걸 받아 엔진에 편입한다 ({@link adopt}).
+   */
+  enterProbe(center: MapPoint, neighbors: MapPoint[]) {
+    this.adopt([center, ...neighbors]);
+    const centerId = center.musicId;
+    const ids = neighbors.map((n) => n.musicId);
     const now = performance.now();
     if (this.probe && this.probe.centerId === centerId && !this.probe.exitingAt) {
       this.probe.ids = ids;
@@ -483,6 +498,21 @@ export class MapEngine {
   }
 
   /** 주변 탐색 해제 — 곡들이 실제 자리로 돌아가고 카메라가 진입 전으로 복귀 */
+  /**
+   * 지도 목록에 없는 곡을 엔진에 **편입**한다 (주변 탐색 이웃처럼 별개 집합에서 온 곡).
+   *
+   * 좌표만 갖게 할 뿐 **상주 집합(subset)에는 넣지 않는다** — 넣으면 지도 구름의 일부가 되어
+   * 별밭에 섞이고 카메라 맞춤·파고들기 기준까지 흔든다. alpha 도 0 이라 지도 별로는 그려지지 않고,
+   * 연출 뷰가 자기 위치로만 그린다.
+   */
+  private adopt(points: MapPoint[]) {
+    const add = points.filter((p) => !this.index.has(p.musicId));
+    if (!add.length) return;
+    // keep 은 **기존 곡 수**다. 지금 있는 버퍼를 그만큼 그대로 옮기고 뒤만 새로 채운다
+    this.allocate([...this.songs, ...add], this.N);
+    this.project();
+  }
+
   exitProbe() {
     if (!this.probe || this.probe.exitingAt) return;
     this.probe.exitingAt = performance.now();
@@ -1089,6 +1119,8 @@ export class MapEngine {
       return;
     }
     this.travelToId = id;
+    // 이 겹에 상주하는 곡을 재생했을 때만 자리를 기억한다 — 없는 곡은 어디 사는지 모른다 (MAP-08)
+    this.home = { musicId: id, boxes: [...this.boxes] };
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
     const dx = to.x - this.me.x;
@@ -1112,6 +1144,78 @@ export class MapEngine {
   /** 재생 중인 곡이 이 겹 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08) */
   playingElsewhere() {
     return this.playingId != null && !this.isAlive(this.playingId);
+  }
+
+  // ------------------------------------------------------------------ 내 위치로 가기
+  /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
+  canGoHome() {
+    return this.home != null && this.index.has(this.home.musicId);
+  }
+
+  /**
+   * 누적 범위 `boxes` 를 layer 까지 적용했을 때의 상주 마스크.
+   * 서버가 고르는 top-k 까지는 알 수 없으므로 **범위 조건만** 건다 — 응답이 오면 갈아끼워진다.
+   */
+  private maskForBoxes(boxes: readonly LayerBox[], upTo: number) {
+    const m = this.residentMask(upTo);
+    for (let i = 0; i < this.N; i++) {
+      if (!m[i]) continue;
+      const pc = this.songs[i].pc;
+      for (let l = 0; l < upTo; l++) {
+        const b = boxes[l];
+        const x = pc[b.layer * 2];
+        const y = pc[b.layer * 2 + 1];
+        if (x < b.xMin || x > b.xMax || y < b.yMin || y > b.yMax) {
+          m[i] = 0;
+          break;
+        }
+      }
+    }
+    return m;
+  }
+
+  /**
+   * 재생으로 내 위치가 정해졌던 **그 겹·그 화면**으로 돌아간다.
+   *
+   * 같은 겹이면 카메라만 옮긴다. 다른 겹이면 누적 범위를 그때 것으로 되돌리고 겹 전환 연출을 태운다 —
+   * 범위가 바뀌면 그 조건으로 상주 집합을 다시 받아오고, 도착하면 `setLayerSongs` 가 갈아끼운다.
+   * 떠오르기가 계속 되도록 상위 겹 프레임도 누적 범위로 다시 쌓는다.
+   */
+  goHome() {
+    const h = this.home;
+    if (!h || this.anim || this.follow) return;
+    const i = this.index.get(h.musicId);
+    if (i == null) return;
+    const target = h.boxes.length;
+
+    // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
+    if (target === this.layer && this.isAlive(h.musicId)) {
+      this.focus(h.musicId, FOCUS.zoomMul);
+      return;
+    }
+
+    const ns = this.maskForBoxes(h.boxes, target);
+    ns[i] = 1; // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다
+    // 떠오르기용 상위 겹 프레임 재구성 (지금 스택은 다른 길로 파고든 것이라 쓸 수 없다)
+    this.stack = Array.from({ length: target }, (_, l) => {
+      const sub = this.maskForBoxes(h.boxes, l);
+      return { layer: l, cam: this.fitCam(l, sub, h.musicId), subset: sub };
+    });
+    this.boxes = [...h.boxes];
+
+    const song = this.songs[i];
+    const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
+    const f = this.freeRect();
+    const ax = LAYER_AXES[target];
+    this.touched = true;
+    this.morph(
+      target,
+      { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
+      ns,
+      `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      target > this.layer ? 1 : -1,
+    );
   }
 
   /**
@@ -1524,8 +1628,10 @@ export class MapEngine {
     }
     for (const id of extra) {
       const i = this.index.get(id);
-      if (i == null || !this.subset[i]) continue;
+      if (i == null) continue;
+      // 연출 위치가 있으면 상주 곡이 아니어도 집을 수 있다 (주변 탐색 이웃은 지도 집합 밖이다)
       const pp = this.probePos(id) ?? this.constellationPos(id);
+      if (!pp && !this.subset[i]) continue;
       if (pp) {
         // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
         const k = this.visible.findIndex((v) => v.i === i);
@@ -1555,6 +1661,7 @@ export class MapEngine {
       myMusicId: this.myId,
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
+      canGoHome: this.canGoHome(),
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

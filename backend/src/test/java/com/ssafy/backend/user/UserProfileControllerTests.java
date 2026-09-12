@@ -24,17 +24,13 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.config.SecurityConfig;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.controller.UserProfileController;
 import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
 import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserService;
 
 /**
@@ -54,17 +50,9 @@ class UserProfileControllerTests {
 	@MockitoBean
 	private UserService userService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(

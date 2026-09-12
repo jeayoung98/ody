@@ -23,7 +23,6 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.MusicErrorCode;
@@ -34,17 +33,13 @@ import com.ssafy.backend.music.dto.JourneyStop;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.service.JourneyService;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 
 /**
  * 경로 탐색 컨트롤러 슬라이스 테스트. quickstart C절.
  * 실제 MVC 바인딩·검증, 공통 GlobalExceptionHandler 매핑, Jackson flat 직렬화(정본 §3.3)를 실측한다.
  *
- * <p>슬라이스 구성은 003 MusicDetailControllerTests 와 같다 — master @MapperScan 이 끌어오는 매퍼와
- * SecurityConfig·JwtAuthenticationFilter 를 제외한다(BE-infra 소스 무수정).
+ * <p>슬라이스 구성은 003 MusicDetailControllerTests 와 같다 — SecurityConfig·JwtAuthenticationFilter 를 제외한다.
  */
 @WebMvcTest(controllers = JourneyController.class, excludeFilters = @ComponentScan.Filter(
 		type = FilterType.ASSIGNABLE_TYPE, classes = { SecurityConfig.class, JwtAuthenticationFilter.class }),
@@ -58,17 +53,9 @@ class JourneyControllerTests {
 	@MockitoBean
 	private JourneyService journeyService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);

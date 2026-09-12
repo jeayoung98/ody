@@ -20,7 +20,6 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.auth.controller.AuthController;
 import com.ssafy.backend.auth.dto.GoogleLoginResult;
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.auth.service.AuthService;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
@@ -28,9 +27,6 @@ import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.security.JwtTokenProvider;
 import com.ssafy.backend.security.TokenPair;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 
 /**
  * 구글 idToken 로그인 컨트롤러 슬라이스 테스트 (S15P21A405-122). mapper mock 이유는 MusicSearchControllerTests 참조.
@@ -51,17 +47,9 @@ class AuthGoogleLoginControllerTests {
 	@MockitoBean
 	private JwtTokenProvider jwtTokenProvider;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	@Test
 	void loginWithGoogle_success_returnsAccessTokenAndUser() throws Exception {

@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, ME_FLIGHT, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, ME_FLIGHT, ME_OFFSCREEN, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -7,6 +7,11 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
+/** 화면 좌표 단위벡터. 길이가 0이면 방향이 없다는 뜻이라 null */
+const unit = (x: number, y: number) => {
+  const d = Math.hypot(x, y);
+  return d < 1e-6 ? null : { x: x / d, y: y / d };
+};
 /** 인덱스 버퍼를 새 크기로. 앞쪽 keep 칸은 그대로 옮기고 뒤는 0 (곡은 뒤에 이어붙기만 한다) */
 const growF = (a: Float32Array, n: number, keep: number) => {
   const b = new Float32Array(n);
@@ -93,8 +98,11 @@ export class MapEngine {
   z = new Float32Array(0);
   /** 화면 안에 들어와 있는 상주 곡 수 — 다음 단계로 데려갈 후보다. 프레임마다 갱신 */
   viewportCount = 0;
-  /** 이 겹 별들을 다 감싸는 반지름 (중심 기준 px). 고스트별을 그 밖에 놓는다. 프레임마다 갱신 */
-  private ghostExtent = 0;
+  /**
+   * 이 겹 별들을 다 감싸는 반지름 (중심 기준 px). 고스트별과 화면 밖 '나' 표식을 그 밖에 놓는다.
+   * 프레임마다 갱신한다 — 둘 다 매 프레임 자리를 다시 잡아야 해서 조건부로 재 두면 한 박자 늦는다.
+   */
+  private cloudExtent = 0;
   N = 0;
 
   W = 1;
@@ -656,7 +664,7 @@ export class MapEngine {
    */
   ghostPos(): { x: number; y: number } | null {
     const dir = this.ghostDir();
-    return dir ? this.outsideCloudPos(dir, this.ghostExtent) : null;
+    return dir ? this.outsideCloudPos(dir, this.cloudExtent) : null;
   }
 
   /**
@@ -696,6 +704,64 @@ export class MapEngine {
     const p = this.ghostPos();
     if (!p || !this.ghost) return null;
     return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
+  }
+
+  // ------------------------------------------------------------------ 화면 밖 '나' (MAP-08)
+  /**
+   * 화면 밖으로 나간 '나' 표식의 자리와 방향. **null 이면 화면 안**이라 제자리에 그리면 된다.
+   *
+   * 내 위치는 곧 지금 재생 중인 곡이다 (MAP-08). 그래서 두 갈래로 갈린다.
+   * - 그 곡이 **이 겹에 상주하면** 실제 자리 방향. 화면 안으로 돌아오면 화살표는 사라진다.
+   * - **이 겹에 없으면** 파고들어온 경로를 거슬러 올라가 방향을 잰다 ({@link awayDir}).
+   *   자리가 이 겹에 없으니 화면 안이고 밖이고를 따질 것도 없이 늘 화살표다.
+   */
+  meArrow(): { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean } | null {
+    if (this.anim || this.follow || this.myId == null || this.constellationActive()) return null;
+    const id = this.playingId ?? this.myId;
+    const elsewhere = !this.isAlive(id);
+    let dir: { x: number; y: number } | null;
+    if (elsewhere) {
+      dir = this.awayDir(id);
+    } else {
+      const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+      const f = this.freeRect();
+      const m = ME_OFFSCREEN.inset;
+      if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
+      dir = unit(px - f.cx, py - f.cy);
+    }
+    if (!dir) return null;
+    /**
+     * 이 겹에 있는데 화면 밖인 경우는 **화면 테두리**에 붙인다 (Infinity) — 자리는 실재하고
+     * 화면만 못 담은 것이라 "저 끝 너머"가 맞다. 이 겹에 아예 없으면 고스트별과 같이
+     * 구름 바로 밖에 놓아 "이 무리 바깥"으로 읽히게 한다.
+     */
+    const p = this.outsideCloudPos(dir, elsewhere ? this.cloudExtent : Infinity);
+    return { x: p.x, y: p.y, dir, elsewhere };
+  }
+
+  /**
+   * 이 겹에 없는 곡의 방향 (화면 좌표 단위벡터).
+   *
+   * 파고들어온 경로(stack)를 **깊은 쪽부터** 거슬러 올라가 그 곡이 상주하던 첫 겹을 찾는다 —
+   * 바로 윗 겹에 없으면 그 위로 계속 올라간다. 그 겹에서 **내가 파고든 지점**
+   * (그 겹을 떠날 때의 카메라 중심) 에서 그 곡까지의 방향을 잰다.
+   * 스택은 이 겹에 머무는 동안 바뀌지 않으므로 **방향도 그대로 유지된다.**
+   *
+   * 어느 윗 겹에도 없으면 지금 겹 축으로라도 잰다 — 좌표는 16차원이 다 있으니
+   * 상주하지 않을 뿐 잴 수는 있다. 화살표가 소리 없이 사라지는 것보다 낫다.
+   */
+  private awayDir(id: number): { x: number; y: number } | null {
+    const i = this.index.get(id);
+    if (i == null) return null;
+    const pc = this.songs[i].pc;
+    for (let k = this.stack.length - 1; k >= 0; k--) {
+      const f = this.stack[k];
+      if (!f.subset[i]) continue;
+      // 월드 y 는 위가 양수, 화면 y 는 아래가 양수
+      const d = unit(pc[f.layer * 2] - f.cam.cx, -(pc[f.layer * 2 + 1] - f.cam.cy));
+      if (d) return d;
+    }
+    return unit(pc[this.dx()] - this.cam.cx, -(pc[this.dy()] - this.cam.cy));
   }
 
   /** 별자리가 화면을 차지하고 있는가 (해제 애니메이션 중이면 false) */
@@ -1424,8 +1490,8 @@ export class MapEngine {
   /** 프레임마다 HUD 용 값 갱신 */
   private updateReveal() {
     this.viewportCount = this.countInView();
-    // 고스트별은 구름을 감싸는 원 밖에 놓아야 하므로 그 반지름을 프레임마다 잰다
-    this.ghostExtent = this.ghost ? this.starRadius() : 0;
+    // 고스트별·화면 밖 '나' 는 구름을 감싸는 원 밖에 놓아야 하므로 그 반지름을 프레임마다 잰다
+    this.cloudExtent = this.starRadius();
   }
 
   /** 대표곡 선별 — 격자를 월드에 못박아 팬해도 승자가 바뀌지 않게 */

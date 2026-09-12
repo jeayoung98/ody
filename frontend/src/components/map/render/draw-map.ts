@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, STAR_SIZE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -513,24 +513,66 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
  * 내 위치 표식 — 맥동하는 두 겹 링 + 다이아몬드.
  * 지도의 "나"와 별자리 뷰의 "지금 듣는 곡" 둘 다 이걸 쓴다 (PATH-01).
  */
-function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: number) {
-  const rr = 13 + Math.sin(t * 1.6) * 2.6;
+/** 표식 반지름 — 화살촉을 그 바깥에 붙여야 해서 밖에서도 쓴다 */
+function meRadius(t: number) {
+  return 13 + Math.sin(t * 1.6) * 2.6;
+}
+
+/** 내 표식 색 세트. 듣는 곡이 이 겹 밖이면 보라로 바꿔 "여기가 아니다"를 색으로 말한다 */
+function meTheme(away: boolean) {
+  return away
+    ? { core: MAP_COLORS.meAway, ring: MAP_COLORS.meAwayRing, inner: MAP_COLORS.meAwayRingInner }
+    : { core: MAP_COLORS.me, ring: MAP_COLORS.meRing, inner: MAP_COLORS.meRingInner };
+}
+
+function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: number, away = false) {
+  const rr = meRadius(t);
+  const c = meTheme(away);
   g.save();
   g.translate(px, py);
   g.globalCompositeOperation = "lighter";
   g.beginPath();
   g.arc(0, 0, rr, 0, 6.284);
-  g.strokeStyle = MAP_COLORS.meRing;
+  g.strokeStyle = c.ring;
   g.lineWidth = 1.2;
   g.stroke();
   g.beginPath();
   g.arc(0, 0, rr * 0.62, 0, 6.284);
-  g.strokeStyle = MAP_COLORS.meRingInner;
+  g.strokeStyle = c.inner;
   g.stroke();
   g.rotate(Math.PI / 4);
-  g.fillStyle = MAP_COLORS.me;
+  g.fillStyle = c.core;
   g.fillRect(-4, -4, 8, 8);
   g.restore();
+}
+
+/**
+ * 화면 밖으로 나간 '나' (MAP-08). 가장자리에 표식을 붙이고 바깥을 가리키는 화살촉을 단다 —
+ * 고스트별과 같은 모양이라 "저쪽 바깥"이 같은 언어로 읽힌다.
+ */
+function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean }) {
+  const { x, y, dir, elsewhere } = off;
+  drawMeMarker(g, x, y, e.time, elsewhere);
+  const c = meTheme(elsewhere);
+  const a = ME_OFFSCREEN.arrow;
+  const rr = meRadius(e.time);
+  const ax = x + dir.x * (rr + a.gap);
+  const ay = y + dir.y * (rr + a.gap);
+  g.globalCompositeOperation = "source-over";
+  g.globalAlpha = 1;
+  g.fillStyle = c.core;
+  g.beginPath();
+  g.moveTo(ax + dir.x * a.len, ay + dir.y * a.len);
+  g.lineTo(ax - dir.y * a.half, ay + dir.x * a.half);
+  g.lineTo(ax + dir.y * a.half, ay - dir.x * a.half);
+  g.closePath();
+  g.fill();
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  g.font = `600 10px ${FONTS.mono}`;
+  g.fillStyle = c.core;
+  // 화살촉이 아래를 가리키면 라벨을 위로 올려 서로 겹치지 않게
+  g.fillText("나", x, dir.y > 0.4 ? y - 24 : y + 24);
 }
 
 /**
@@ -540,6 +582,12 @@ function drawMeMarker(g: CanvasRenderingContext2D, px: number, py: number, t: nu
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
+  // 화면 밖(또는 이 겹 밖)이면 자리 대신 방향을 그린다
+  const off = e.meArrow();
+  if (off) {
+    drawMeAway(g, e, off);
+    return;
+  }
   const { px, py } = e.worldToScreen(e.me.x, e.me.y);
   const elsewhere = e.playingElsewhere();
   // 날아오는 중이면 지나온 자리에 꼬리를 남긴다 (친구 우주선처럼)
@@ -567,7 +615,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   if (elsewhere) {
-    // 지금 듣는 곡이 이 겹에 없다 — 여기가 내 자리이고, 그 곡은 다른 갈래에 있다
+    // 방향조차 잴 수 없을 때만 여기로 온다 (meArrow 가 null) — 묵은 자리에 사실만 적어 둔다
     g.font = `600 9.5px ${FONTS.mono}`;
     const label = "다른 갈래에서 재생 중";
     const tw = g.measureText(label).width;

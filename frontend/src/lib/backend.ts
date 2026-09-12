@@ -14,8 +14,19 @@ import { PC_DIMS, type MapPoint } from "@/types";
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
 const BACKEND_ACCESS_TOKEN = process.env.BACKEND_ACCESS_TOKEN;
 
+/**
+ * 배포 백엔드를 부를지.
+ *
+ * 유저 테스트 동안 백엔드가 인증을 **한시 해제**해서 토큰 없이도 조회가 된다 (BACKEND-NOTES A-17).
+ * 그래서 기본값이 "부른다" 다 — 예전처럼 토큰 유무로 판단하면 토큰이 없는 팀원 전부가
+ * 목을 실데이터로 착각한 채 테스트하게 된다.
+ *
+ * 목으로 돌리려면 `USE_MOCK_API=1` 을 켠다 (백엔드가 내려갔거나, 목 화면을 일부러 보고 싶을 때).
+ * A-17 이 원복되면 인증이 다시 걸려 401 이 나는데, 그때는 `BACKEND_ACCESS_TOKEN` 을 넣거나
+ * 이 값을 켠다 — 조용히 목으로 떨어지지는 않는다.
+ */
 export function isBackendEnabled(): boolean {
-  return Boolean(BACKEND_ACCESS_TOKEN);
+  return process.env.USE_MOCK_API !== "1";
 }
 
 export class BackendError extends Error {
@@ -38,12 +49,9 @@ interface Envelope<T> {
 
 /** 배포 백엔드 GET 호출. 봉투를 벗겨 data 만 돌려준다 */
 export async function backendGet<T>(path: string): Promise<T> {
-  if (!BACKEND_ACCESS_TOKEN) {
-    throw new BackendError(500, "BACKEND_TOKEN_MISSING", "BACKEND_ACCESS_TOKEN 이 설정되지 않았습니다.");
-  }
-
+  // 토큰은 **있으면 붙인다.** A-17 해제 중에는 없어도 조회가 되고, 원복되면 이게 있어야 한다
   const res = await fetch(`${BACKEND_ORIGIN}${path}`, {
-    headers: { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` },
+    headers: BACKEND_ACCESS_TOKEN ? { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` } : {},
     cache: "no-store",
   });
 
@@ -61,6 +69,14 @@ export async function backendGet<T>(path: string): Promise<T> {
     );
   }
 
+  if (res.status === 401) {
+    // A-17(유저 테스트용 임시 인증 해제)이 원복된 신호다. 원인이 분명해야 토큰을 넣든 목으로 돌리든 한다
+    throw new BackendError(
+      401,
+      "BACKEND_AUTH_REQUIRED",
+      `${path} 가 401 입니다. 백엔드 인증이 다시 걸린 것으로 보입니다 (BACKEND-NOTES A-17 원복). BACKEND_ACCESS_TOKEN 을 넣거나 USE_MOCK_API=1 로 목을 쓰세요.`,
+    );
+  }
   if (!res.ok || !body.success || body.data == null) {
     throw new BackendError(res.status, body.error?.code ?? "UNKNOWN", body.error?.message ?? "백엔드 호출에 실패했습니다.");
   }

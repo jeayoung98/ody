@@ -6,6 +6,7 @@ import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { openYoutube } from "@/lib/youtube";
 import PlayerProgress from "./player-progress";
@@ -26,6 +27,19 @@ export default function PlayerBar() {
   const prev = usePlayerStore((s) => s.prev);
   const goHome = useMapStore((s) => s.goHome);
   const canGoHome = useMapStore((s) => s.canGoHome);
+  const viewMode = useMapStore((s) => s.viewMode);
+  const showToast = useToastStore((s) => s.show);
+  /**
+   * 임시 뷰(주변 탐색·별자리)가 떠 있으면 지도를 옮겨도 보이지 않는다.
+   * 그래서 **눌리기는 하되** 흐리게 두고, 왜 안 되는지 토스트로 알린다 — 눌렀는데 아무 일도
+   * 안 나는 게 제일 나쁘다.
+   */
+  const overlayOpen = viewMode !== "default";
+  const handleGoHome = () => {
+    const r = goHome();
+    if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
+    else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+  };
   const openSong = usePanelStore((s) => s.openSong);
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
@@ -61,11 +75,14 @@ export default function PlayerBar() {
       {/* 내 위치로 가기 — 재생으로 내 자리가 정해졌던 겹·화면으로 돌아간다 (MAP-08) */}
       <button
         type="button"
-        onClick={goHome}
+        onClick={handleGoHome}
         disabled={!canGoHome}
+        aria-disabled={overlayOpen}
         aria-label="내 위치로 가기"
-        title="내 위치로 가기"
-        className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent"
+        title={overlayOpen ? "뷰를 닫고 누르세요" : "내 위치로 가기"}
+        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent ${
+          overlayOpen ? "text-ink-4 hover:bg-transparent" : "text-ink-2 hover:bg-white/10 hover:text-teal"
+        }`}
       >
         <LocateIcon />
       </button>

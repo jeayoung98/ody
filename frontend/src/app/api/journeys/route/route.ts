@@ -1,5 +1,5 @@
 import { fail, failLive, ok, okLive } from "@/lib/api-response";
-import { backendGet, BackendError, isBackendEnabled, type BackendJourneyResponse } from "@/lib/backend";
+import { backendGet, BackendError, isBackendEnabled, toPcArray, type BackendJourneyResponse } from "@/lib/backend";
 import { mockJourney } from "@/mocks/music";
 import type { JourneyRoute } from "@/types";
 
@@ -17,6 +17,7 @@ function toJourneyRoute(res: BackendJourneyResponse, startId: number, endId: num
       // 엔진이 주는 step 은 최종 목록 기준 0부터 1씩 증가하는 연속값이다
       order: stop.step,
       genreName: stop.genres?.[0] ?? null,
+      pc: toPcArray(stop.location),
     })),
   };
 }

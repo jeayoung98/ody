@@ -10,7 +10,7 @@ import type { JourneyRoute } from "@/types";
 /** 경로 위 정거장 곡 목록 (곡 컴포넌트 · 장르 표시). 1루트 최대 30곡 */
 export default function JourneyStopList({ route }: { route: JourneyRoute | null }) {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
-  const openSong = usePanelStore((s) => s.openSong);
+  const openSong = usePanelStore((s) => s.openSongFromList);
   if (!route) return null;
 
   return (

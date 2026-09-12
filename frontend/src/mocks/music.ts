@@ -101,7 +101,7 @@ export function mockJourney(startId: number, endId: number): JourneyRoute {
   path.push(b);
   const stops = path.map((s, i) => {
     const m = mockMusic(s.musicId);
-    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId] };
+    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId], pc: [...s.pc] };
   });
   return { startMusicId: a.musicId, endMusicId: b.musicId, stops, totalDuration: stops.reduce((sum, s) => sum + (s.duration ?? 0), 0) };
 }

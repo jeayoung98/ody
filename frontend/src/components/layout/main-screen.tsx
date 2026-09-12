@@ -5,6 +5,7 @@ import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
+import Toast from "@/components/common/toast";
 import ReactionButton from "@/components/player/reaction-button";
 import Brand from "./brand";
 import HelpButton from "./help-button";
@@ -54,6 +55,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       <BottomBar />
       <ReactionButton />
       {overlay}
+      <Toast />
       <ConfirmDialog />
       {/* 설문 (S15P21A405-250) — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어낼 때 이 한 줄만 지우면 된다 */}
       <SurveyGate />

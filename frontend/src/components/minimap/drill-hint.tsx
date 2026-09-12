@@ -14,17 +14,18 @@ export default function DrillHint() {
   const gateOpen = useMapStore((s) => s.gateOpen);
   const atBottom = useMapStore((s) => s.atBottom);
   const inView = useMapStore((s) => s.viewportCount);
-  const needsZoom = zoomK < DRILL.gateZoomMul;
 
   const tone = atBottom ? "text-warn" : gateOpen ? "text-teal" : "text-ink-3";
 
+  // 화면 안이 비어 있어도 파고들 수 있다 — 가장 가까운 별을 가운데 두고 범위를 넓혀 보낸다
+  const sparse = inView < DRILL.minInView;
   const message = atBottom
     ? "마지막 레이어. 축소하면 떠오릅니다."
     : gateOpen
-      ? `벽에 닿았다 — 계속 확대하면 화면 안 ${inView.toLocaleString()}곡 기준으로 ${LAYER_NAMES[layer + 1]}${ro(LAYER_NAMES[layer + 1])} 파고들어 다시 ${LAYER_SONG_COUNT.toLocaleString()}곡이 깔립니다.`
-      : needsZoom
-        ? `확대할수록 별이 더 도드라집니다. ${DRILL.gateZoomMul}배까지 확대하면 화면 안 곡을 기준으로 다음 겹으로 갑니다.`
-        : `화면 안이 ${inView.toLocaleString()}곡뿐이라 더 들어갈 수 없어요. ${DRILL.minInView}곡 이상 담기게 조금 축소해보세요.`;
+      ? sparse
+        ? `벽에 닿았다 — 계속 확대하면 가장 가까운 별을 가운데 두고 ${LAYER_NAMES[layer + 1]}${ro(LAYER_NAMES[layer + 1])} 파고들어 다시 ${LAYER_SONG_COUNT.toLocaleString()}곡이 깔립니다.`
+        : `벽에 닿았다 — 계속 확대하면 화면 안 ${inView.toLocaleString()}곡 기준으로 ${LAYER_NAMES[layer + 1]}${ro(LAYER_NAMES[layer + 1])} 파고들어 다시 ${LAYER_SONG_COUNT.toLocaleString()}곡이 깔립니다.`
+      : `확대할수록 별이 더 도드라집니다. ${DRILL.gateZoomMul}배까지 확대하면 화면 안 곡을 기준으로 다음 겹으로 갑니다.`;
 
   return (
     <>

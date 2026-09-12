@@ -7,8 +7,10 @@ import { songById } from "./songs";
  * 16차원 좌표를 2D로 눌러 만든 고정 모양. 여기서는 곡 집합의 공분산 상위 두 축에
  * 투영하는 방식(간이 PCA)을 쓴다. **레이어와 무관하고, 같은 곡 집합이면 항상 같은 모양**이다.
  */
-export function mockConstellationLayout(musicIds: number[]): ConstellationLayout {
-  const rows = musicIds.map((id) => songById(id)?.pc ?? new Array(16).fill(0)).map((pc) => [...pc]);
+export function mockConstellationLayout(musicIds: number[], given?: { musicId: number; pc: number[] }[]): ConstellationLayout {
+  // 받은 좌표 > 목 곡 좌표 순으로 찾는다 — 목이 모르는 곡(배포 백엔드에서 온 곡)은 받은 것뿐이다
+  const byId = new Map((given ?? []).filter((p) => p.pc?.length === 16).map((p) => [p.musicId, p.pc]));
+  const rows = musicIds.map((id) => byId.get(id) ?? songById(id)?.pc ?? new Array(16).fill(0)).map((pc) => [...pc]);
   const n = rows.length;
   if (n === 0) return { points: [] };
 

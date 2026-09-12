@@ -58,7 +58,8 @@ public class JourneyService {
 	private final Optional<JourneyTrackReader> trackReader;
 	private final MeterRegistry meterRegistry;
 
-	// ponytail: 어댑터(엔진 클라이언트·정거장 매퍼)가 아직 없어 Optional 주입. 빈이 올라오면 자동 연결된다.
+	// 세 port 모두 어댑터가 붙었다(2026-09-12). Optional 은 유지한다 — 슬라이스 테스트가 일부만
+	// 올리고, 어댑터가 빠졌을 때 기동 실패 대신 500 + 진단 로그로 내리는 편이 원인을 빨리 찾게 한다.
 	public JourneyService(Optional<MusicDetailReader> detailReader,
 			Optional<JourneyPathFinder> pathFinder,
 			Optional<JourneyTrackReader> trackReader,

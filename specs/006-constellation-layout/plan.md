@@ -65,6 +65,8 @@
 
 ### 경계 (원칙 X) — 이번 브랜치의 커밋 분리
 
+**용어**: 이 문서의 Phase A·B 는 tasks.md 의 Phase 번호와 이렇게 대응한다 — **Phase A = tasks Phase 3(US1) + Phase 4(US3)**, **Phase B = tasks Phase 5(US2)**. 여기서는 커밋 경계로, tasks 에서는 작업 순서로 나눈 것이라 이름이 다르다.
+
 - **Phase A**: 배치 API 신설. `music/` 안에서만 끝난다.
 - **Phase B**: `PlaylistService.loadMusicDetails` 의 N+1 제거. 2026-09-13 합의로 이번 브랜치에 포함한다.
   **커밋을 분리한다** — `playlist/` 는 BE1 소유라 리뷰어가 그 변경만 따로 볼 수 있어야 하고, 문제가 생기면 배치 API 를 건드리지 않고 되돌릴 수 있어야 한다.
@@ -114,8 +116,15 @@ backend/src/test/java/com/ssafy/backend/music/
 ├── ConstellationServiceTests.java            # 신규 — 검증 분기, 왕복 1회, 부분결과 금지
 └── ConstellationControllerTests.java         # 신규 — 응답 봉투·상태코드
 
-# Phase B (커밋 분리)
-backend/src/main/java/com/ssafy/backend/playlist/service/PlaylistService.java
+# Phase B (커밋 분리) — playlist/ 는 BE1 소유라 커밋을 따로 낸다
+backend/src/main/java/com/ssafy/backend/playlist/service/PlaylistService.java   # loadMusicDetails 배치화
+backend/src/test/java/com/ssafy/backend/playlist/PlaylistServiceTests.java      # 왕복 1회·순서 유지·좌표 전달
+
+# Phase B 가 쓰는 music/ 쪽 조회 (커밋 1 에 포함 — 추가만 하고 아직 아무도 쓰지 않는다)
+backend/src/main/java/com/ssafy/backend/music/mapper/MusicDetailMapper.java     # 수정 — findByIds
+backend/src/main/resources/mapper/music/MusicDetailMapper.xml                   # 수정 — id IN 상세 select
+backend/src/main/java/com/ssafy/backend/music/detail/MusicDetailReader.java     # 수정 — findDetailsByIds
+backend/src/main/java/com/ssafy/backend/music/detail/MusicDetailReaderAdapter.java
 ```
 
 **Structure Decision**: 기존 `backend/` 단일 모듈의 `music` 도메인 안에 추가한다. 별자리는 곡 좌표에서 나오는
@@ -127,13 +136,18 @@ Spring·DB 없이 단위 테스트할 수 있게 한다 — `music/journey/` 가
 | 원칙 | 판정 | 설계에서 달라진 점 |
 | --- | --- | --- |
 | II. 계약 우선 | ✅ | `contracts/constellation-layout.md` 작성. "보장하지 않는 것"(부분집합 안정성, 지도 좌표와의 무관함)까지 명시해 프론트가 잘못 쓰는 경로를 막았다 |
-| III. 완료 전 검증 | ✅ | `quickstart.md` 에 FR ↔ 시나리오 대응표. 결정성은 골든 테스트(Q7)로 고정, 왕복 1회는 호출 횟수 세는 fake(Q10)로 고정 |
+| III. 완료 전 검증 | ✅ (단서 1건) | `quickstart.md` 에 FR ↔ 시나리오 대응표. 결정성(FR-004·005)은 반복·셔플 투영 비교(Q1·Q2), 부호 규약(FR-006)은 기대값을 박은 Q7, 왕복 1회는 호출 횟수 세는 fake(Q10). **단서**: 테스트를 구현보다 먼저 쓰지 않아 대부분 "실패를 본 적 없는 테스트" 다 — T032 만 변이 검사(응답에서 `location` 을 떨어뜨려 그 테스트만 실패하는지)로 실효성을 확인했다 |
 | V. 좌표 안정성 | ✅ | 계약 문서에 "응답 2D 는 서빙 좌표계가 아니다" 를 명시. 저장소는 읽기만 한다 |
 | VIII. 관측 가능성 | ✅ | 지표 3개와 확인 방법을 위에 명시. 새 계측 코드 없이 기존 Actuator 로 본다 |
 | IX. 암묵적 가정 금지 | ⚠️ 유지 | 미결정 2건을 계약 §6(C-1 경로, C-3 자릿수)에 남겼다. 곡 상한 30(C-2)·성능 목표·`playlist/` 권한은 2026-09-13 clarify 에서 결정됐다. 남은 둘은 구현을 막지 않는다 |
 | X. 아키텍처 경계 | ✅ | Phase B(`playlist/` N+1)를 이번 이슈 범위로 진행하기로 합의(2026-09-13). 커밋 분리로 리뷰·롤백 독립성을 확보한다 |
 
 **결론**: Phase A·B 모두 진행 가능. 남은 미결정(경로 표기)은 구현을 막지 않는다.
+
+**검증하지 못한 요구사항 2건** (2026-09-13 `/speckit-analyze`):
+- **FR-015 (401)**: `SecurityConfig` 가 한시 해제 상태(S15P21A405-243)라 지금은 확인 불가. S15P21A405-245 원복 후 검증 — tasks T033 에 예약.
+- **SC-002 (1초)**: 측정 작업이 없어 잠정 기준이 그대로 남는다 — tasks T034 에 실측 예약.
+둘 다 구현을 막지 않지만, 예약 없이 두면 영구 미검증으로 굳는다(헌법 III).
 
 ## Complexity Tracking
 

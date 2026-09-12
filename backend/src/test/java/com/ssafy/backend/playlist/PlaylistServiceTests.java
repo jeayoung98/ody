@@ -76,7 +76,8 @@ class PlaylistServiceTests {
 	}
 
 	private static MusicDetail music(long id, int duration) {
-		Location loc = new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+		// 곡마다 다른 좌표. 상세 응답이 좌표를 그대로 실어 보내는지 확인하려면 값이 구별돼야 한다.
+		Location loc = new Location(id * 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id * -0.25);
 		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", List.of("K-Pop"),
 				"https://youtu.be/x", loc, 10, 1);
 	}
@@ -184,6 +185,22 @@ class PlaylistServiceTests {
 		assertThat(response.musicCnt()).isEqualTo(2);
 		assertThat(response.totalDuration()).isEqualTo(300);
 		assertThat(response.musics()).extracting(MusicDetail::id).containsExactly(1L, 2L);
+	}
+
+	@Test
+	void getDetail_carriesTrackCoordinates_forTheConstellationOverlay() { // FR-010 (S15P21A405-265)
+		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of(1L, 2L));
+		when(musicDetailReader.findDetailsByIds(List.of(1L, 2L)))
+				.thenReturn(List.of(music(1L, 200), music(2L, 100)));
+
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "owner@gmail.com");
+
+		// 플리 별자리는 이 좌표로 그린다. 응답에서 location 이 빠지면 오버레이가 통째로 죽는다.
+		assertThat(response.musics()).allSatisfy(music -> assertThat(music.location()).isNotNull());
+		assertThat(response.musics().get(0).location().pc1()).isEqualTo(0.5);
+		assertThat(response.musics().get(0).location().pc16()).isEqualTo(-0.25);
+		assertThat(response.musics().get(1).location().pc1()).isEqualTo(1.0);
 	}
 
 	@Test

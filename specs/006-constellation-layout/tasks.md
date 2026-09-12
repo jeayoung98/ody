@@ -33,9 +33,9 @@ description: "Task list — 별자리 배치 (musicIds → 2D 고정 좌표)"
 
 ## Phase 2: Foundational (Blocking Prerequisites)
 
-**Purpose**: 없다. US1 과 US2 가 공유하는 선행 작업이 없어 이 단계를 비운다.
+**Purpose**: 없다. 한쪽이 끝나야 다른 쪽을 시작할 수 있는 **블로킹** 선행 작업이 없어 이 단계를 비운다.
 
-**주의 (블로커 아님)**: US1 과 US2 가 `MusicDetailMapper.java` · `MusicDetailMapper.xml` 을 각각 건드린다. 질의가 달라(좌표만 vs 상세 전체) 충돌하지 않지만, 두 스토리를 동시에 진행하면 같은 파일을 만진다.
+**단, 공유 파일은 있다 (블로커 아님)**: US1 과 US2 가 `MusicDetailMapper.java` · `MusicDetailMapper.xml` 을 각각 건드린다. 질의가 달라(좌표만 vs 상세 전체) 논리적으로 충돌하지 않지만, 두 스토리를 다른 사람이 동시에 진행하면 같은 파일에서 만난다 — 병합 충돌만 주의한다.
 
 **Checkpoint**: 바로 US1 을 시작할 수 있다.
 
@@ -50,6 +50,8 @@ description: "Task list — 별자리 배치 (musicIds → 2D 고정 좌표)"
 ### Tests for User Story 1 ⚠️
 
 > 먼저 쓰고, **실패하는 것을 확인한 뒤** 구현한다.
+>
+> ⚠️ **이번 실행에서는 지키지 못했다** — 구현을 먼저 쓰고 테스트를 뒤에 붙였다(아래 실행 기록 참조). 다음에 이 파일을 읽는 사람은 위 지시를 유효한 규칙으로 보되, 여기 테스트들이 "실패를 본 적 없는 테스트" 라는 점을 감안한다. T032 만 변이 검사로 실효성을 확인했다.
 
 - [X] T002 [P] [US1] 투영 단위 테스트 Q1~Q8(결정성·순서 무관·정규화·퇴화·부호 골든·입력 불변)을 `backend/src/test/java/com/ssafy/backend/music/constellation/PlanarProjectionTests.java` 에 작성
 - [X] T003 [P] [US1] 서비스 테스트 Q9(순서대로 4점)·Q10(reader 호출 1회)·Q13(reader 미주입 시 명시적 실패)을 `backend/src/test/java/com/ssafy/backend/music/ConstellationServiceTests.java` 에 작성 — reader 는 호출 횟수를 세는 fake 로 둔다
@@ -111,6 +113,7 @@ description: "Task list — 별자리 배치 (musicIds → 2D 고정 좌표)"
 - [X] T025 [US2] `findByIds(List<Long> ids)` 선언을 `backend/src/main/java/com/ssafy/backend/music/mapper/MusicDetailMapper.java` 에, `id IN (...)` 상세 select 를 `backend/src/main/resources/mapper/music/MusicDetailMapper.xml` 에 추가 — 기존 `findByMbids` 와 같은 컬럼 집합
 - [X] T026 [US2] `List<MusicDetail> findDetailsByIds(List<Long> ids)` 를 `backend/src/main/java/com/ssafy/backend/music/detail/MusicDetailReader.java` 에 추가하고 `MusicDetailReaderAdapter.java` 에 구현 — **순서 미보장·없는 id 는 빠짐** 을 `JourneyTrackReader` 와 같은 문구로 javadoc 에 명시
 - [X] T027 [US2] `backend/src/main/java/com/ssafy/backend/playlist/service/PlaylistService.java` 의 `loadMusicDetails` 를 일괄 조회로 바꾸고 `musicIds` 순서로 재조립 — US1 과 **커밋을 분리한다**
+- [X] T032 [US2] 플리 상세 응답이 곡 좌표를 그대로 싣는지 회귀 테스트를 `backend/src/test/java/com/ssafy/backend/playlist/PlaylistServiceTests.java` 에 추가 (FR-010) — "현행 유지" 라 구현 task 는 없었지만, `location` 이 빠지면 별자리 오버레이가 통째로 죽는데 아무 테스트도 잡지 못했다
 
 **Checkpoint**: 플레이리스트 상세가 곡 수와 무관하게 DB 1왕복 (SC-004).
 
@@ -122,6 +125,8 @@ description: "Task list — 별자리 배치 (musicIds → 2D 고정 좌표)"
 - [ ] T029 [P] `specs/006-constellation-layout/contracts/constellation-layout.md` §6 미결정(C-1 경로·C-2 상한·C-3 자릿수)을 MR 설명에 옮겨 FE1 확인을 요청한다
 - [ ] T030 [quickstart.md](quickstart.md) 의 수동 확인 절차를 실제로 한 번 돌린다 — 같은 요청 2회 + 순서 섞은 1회의 곡별 좌표가 일치하는지
 - [X] T031 `backend/` 에서 `./gradlew test` 와 `./gradlew build` 를 실행해 전체 통과를 확인한다 (CLAUDE.md §5 — 이것 없이 완료라고 하지 않는다)
+- [ ] T033 인증 401(FR-015) 검증을 예약한다 — `SecurityConfig` 가 현재 `.anyRequest().permitAll()`(한시 해제 S15P21A405-243)이라 지금은 확인할 수 없다. **S15P21A405-245(인증 원복)가 닫힌 뒤** `ConstellationControllerTests` 에 토큰 없는 요청 401 케이스를 넣는다. 그 이슈에 이 항목을 코멘트로 걸어 둔다 — 예약이 없으면 FR-015 는 영구 미검증으로 남는다
+- [ ] T034 SC-002 실측 — `infra/k6/` 에 30곡 배치 요청 smoke 시나리오를 넣고 한 번 돌린 뒤, 측정값(백분위·부하·환경 포함)을 spec 의 SC-002 에 반영해 **잠정 기준을 확정 기준으로 바꾼다.** k6 스크립트 추가는 `infra/` 소유(Infra)라 사전 합의가 필요하다 — 합의가 어려우면 백엔드 통합 테스트로 대체 측정하고 그 사실을 남긴다
 
 ---
 
@@ -203,7 +208,9 @@ Task: "T008 ConstellationLayoutRequest"
   구현(T006~T017)을 먼저 쓰고 테스트(T002~T005)를 뒤에 붙였다. 테스트가 실패하는 것을 본 적이 없으므로
   "테스트가 실제로 뭔가를 잡는다" 는 보장이 약하다. 결정성·순서 무관 테스트는 일부러 깨뜨려 확인해 볼 가치가 있다.
 - T029(MR 설명)·T030(수동 확인)은 하지 않았다. 이유는 완료 보고 참조.
-- 커밋은 아직 만들지 않았다. Phase 5 가 요구하는 `music/` ↔ `playlist/` 커밋 분리는 커밋 시점에 지켜야 한다.
+- 커밋 2개로 나눠 만들었다(`710b939` music/, `2be5b13` playlist/). 커밋1 단독 빌드를 임시 워크트리에서 실제로 돌려
+  `BUILD SUCCESSFUL · tests=255 failures=0` 을 확인했다 — 커밋2만 되돌려도 그린이다.
+- `/speckit-analyze` 결과 반영: T032(FR-010 회귀 테스트) 추가·적용, T033(401 검증 예약)·T034(SC-002 실측) 신설.
 
 ---
 

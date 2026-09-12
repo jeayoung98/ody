@@ -231,7 +231,9 @@ PC 누락만으로 검증 오류가 발생하는지 확인한다. 구체적인 �
   **근거**: [docs/api-spec.md §0.2·§0.4·§3.4 응답](../../docs/api-spec.md).
 - **FR-006 — 응답 항목 필드** ⟲ *2026-09-11 개정(D18). 원안은 "[대체된 요구사항 — 롤백 기록](#대체된-요구사항--롤백-기록-2026-09-11-d15)" 절에 전문 보존*:
   각 응답 항목은 FR-012 의 `MapPoint` 필드 집합을 담아야 한다(MUST) —
-  `musicId`·`pc[16]`·`genreId`·`weight`·`title`·`artist`·`playable`.
+  `musicId`·`pc[16]`·`genreId`·`weight`·`title`·`artist`·`youtubeUrl`·`playable`.
+  `youtubeUrl` 은 2026-09-12 추가됐다(S15P21A405-249) — 유튜브 **검색** URL 이며 `title`·`artist` 로 만든다(D12).
+  둘 다 `map_sample` 에 있어 조인이 생기지 않으므로 아래 0.4 ms 근거와 충돌하지 않는다.
   정본 §0.6 `MusicDetail` 의 상세 필드(`bpm`·`duration`·`album`·`genres`·`mbid`·`playCnt`·`youtubeCnt`)는
   이 조회에 담지 않는다(MUST NOT) — 상세는 `/music/{id}` 담당이다.
   좌표는 `location{pc1..pc16}` 객체가 아니라 **`pc` 배열**로 싣는다(클라이언트가 레이어 축으로 재투영).

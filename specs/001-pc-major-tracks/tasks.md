@@ -64,7 +64,7 @@
 - [X] T009 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) 대표곡 선정 순수 로직 `MajorSelection.topByYoutubeCnt`. D16 으로 서버는 인기순 선별을 하지 않고(클라이언트가 화면 픽셀 격자에서 한다), `youtube_cnt` 는 662만 행 전부 0 이다(data 스펙 18)
 - [X] T010 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) 선정 단위테스트 A14
 - [X] T011 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `major_successItem_carriesPc16AndBaselineCoordinates` + `major_itemOmitsDetailFields` / 원래 항목은 `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T012 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `MapPoint` 에는 `youtubeUrl` 이 없고 `playable` 로 표현된다. 어댑터 테스트 `playable_followsYoutubeUrlPresence` 가 대신 검증한다. 원래 항목은 `major_itemWithoutYoutubeUrl_isKeptWithNullPreserved`) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [X] T012 (2026-09-12 **D18 로 교체** → **S15P21A405-249 로 되돌림**: D18 당시엔 `MapPoint` 에 `youtubeUrl` 이 없었으나, FE 요청으로 2026-09-12 다시 **추가됐다**. `playable` 은 `youtubeUrl != null` 로 파생된다. 검증 테스트도 `youtubeUrl_isBuiltFromTitleAndArtist_notTheNullColumn` · `playable_isFalse_whenTitleAndArtistAreBothBlank` 로 교체됐다) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
 
 ### 게이트 대기
 
@@ -294,7 +294,7 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 | 5 | 응답 항목 필드 구성 | ✅ **D18** — FE `MapPoint` |
 | 7 | 상주 집합 크기 | ✅ **D18** — 1000 은 규모 기준 |
 | 6 | 2레이어 이후 영역 파라미터 | ✅ **D19** — GET + 누적 축 범위, 클라이언트 캐싱 |
-| 8 | `genreId` | 🟡 **부분** — 무장르 전용 인덱스 추가 확정. 번호·멜론 29종 매핑 미정 |
+| 8 | `genreId` | 🟡 **부분** — 무장르 인덱스 **10 으로 확정**(FE `NO_GENRE_ID`, `GENRE_COLORS` 11칸 확인). S15P21A405-249 로 반영·배포됨. 멜론 29종 매핑만 미정(S15P21A405-240) |
 | 9 | 범위 파라미터 표기 | 🟡 **표기만** — 설계는 확정, 이름은 FE 구현 시 |
 
 **설계 미정은 사실상 끝났다.** 남은 둘은 FE 구현 후 통보받으면 닫힌다.
@@ -336,7 +336,8 @@ B1(입력 검증)·M4(에러 코드)·T030(`TOKEN_EXPIRED`)은 이 목록과 별
 - `MapPoint.pc` 는 정확히 16개 (D7 PCA-16)
 - `MapPoint.genreId >= 0` — FE `draw-map.ts` 가 raw modulo 라 음수면 `drawImage` 예외
 
-**안 한 것**: 구현체(T005·T016), 컨트롤러·`MajorResponse` 교체(T015), `weight`·`genreId` 채우기.
+**안 한 것**(작성 시점 기준): 구현체(T005·T016), 컨트롤러·`MajorResponse` 교체(T015), `weight`·`genreId` 채우기.
+→ 2026-09-12 갱신: T005·T016·T015 완료(S15P21A405-236), `genreId` 는 무장르 10 으로 채워졌다(S15P21A405-249). `weight` 는 인기 지표 부재로 여전히 상수다(D17).
 `MusicService` 는 `Optional<MajorTrackReader>` 로 받아 미구현을 드러낸다 — 임시 스키마·목 어댑터를 만들지 않는다.
 
 ⚠️ **`contracts/music-major.md` 가 원안 상태다.** 원형·`youtubeCnt` DESC·`MusicDetail` 응답으로 적혀 있어

@@ -25,8 +25,13 @@ public interface MusicSearchMapper {
 			@Param("size") int size,
 			@Param("offset") long offset);
 
-	/** 같은 조건의 총 매칭 수. */
-	long countMatches(@Param("pattern") String pattern);
+	/**
+	 * 같은 조건으로 매칭이 하나라도 있는지 (S15P21A405-255).
+	 *
+	 * 총 건수를 세지 않는다 — 응답에 총 개수를 담지 않게 되면서 셀 이유가 없어졌고,
+	 * COUNT 는 검색어와 무관하게 660만 행을 끝까지 세어 ~7초를 고정으로 먹었다.
+	 */
+	boolean existsMatch(@Param("pattern") String pattern);
 
 	/** 주어진 곡들의 장르. musicIdList 가 비면 호출하지 않는다(IN () 는 문법 오류). */
 	List<MusicGenreRow> findGenresByMusicIds(@Param("musicIdList") List<Long> musicIdList);

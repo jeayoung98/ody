@@ -15,6 +15,7 @@
 | 기능 명세 (기준 문서) | [docs/rules/FEATURES.md](docs/rules/FEATURES.md) |
 | ERD·API 협의 항목 | [docs/rules/BACKEND-NOTES.md](docs/rules/BACKEND-NOTES.md) |
 | Frontend 코드 규칙 | [frontend/CLAUDE.md](frontend/CLAUDE.md) |
+| Frontend 성능 개선·트러블슈팅 기록 | [frontend/docs/performance/](frontend/docs/performance/) · [frontend/docs/troubleshooting/](frontend/docs/troubleshooting/) |
 | Backend | [backend/README.md](backend/README.md) |
 | Infra | [AGENTS.md](AGENTS.md), [docs/infra/](docs/infra/) |
 | `data/` 안 작업 | `data/AGENTS.md` |

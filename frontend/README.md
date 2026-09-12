@@ -13,7 +13,7 @@ npm install
 npm run dev        # http://localhost:3000
 ```
 
-`NEXT_PUBLIC_API_URL` 을 비워두면 `src/app/api/` 의 목 라우트로 붙고, 값을 주면 그 백엔드로 붙는다.
+`NEXT_PUBLIC_API_URL` 을 비워두면 `src/app/bff/` 의 목 라우트로 붙고, 값을 주면 그 백엔드로 붙는다.
 `.env.example` 을 복사해 `.env.local` 을 만든다.
 
 ```bash

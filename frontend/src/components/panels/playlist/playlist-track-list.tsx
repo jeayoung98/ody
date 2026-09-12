@@ -21,7 +21,7 @@ interface PlaylistTrackListProps {
 export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackListProps) {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playQueue = usePlayerStore((s) => s.playQueue);
-  const openSong = usePanelStore((s) => s.openSong);
+  const openSong = usePanelStore((s) => s.openSongFromList);
   const remove = useRemovePlaylistItemMutation();
   const startActivity = useStartActivity();
 

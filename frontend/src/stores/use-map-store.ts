@@ -1,11 +1,13 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MapViewMode } from "@/constants";
-import type { LayerBox, MapCamera } from "@/types";
+import type { LayerBox, MapCamera, MapPoint } from "@/types";
+import type { GoHomeResult } from "@/components/map/engine/map-engine";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
 const EMPTY_IDS: number[] = [];
+const EMPTY_POINTS: MapPoint[] = [];
 const EMPTY_BOXES: LayerBox[] = [];
 
 /** 엔진이 프레임마다 밀어 넣는 읽기 전용 스냅샷 (HUD 표시용) */
@@ -54,6 +56,11 @@ interface MapState extends EngineSnapshot {
    * 좌상단 `별자리 뷰` 택이 이 목록이 있을 때 뜨고, 그 택으로 뷰를 껐다 켠다 (PATH-01).
    */
   constellationMusicIds: number[];
+  /**
+   * 그 곡들의 16차원 좌표. 여정 경로 곡은 **지도 상주 집합 밖일 수 있어서** 엔진이 좌표를 모른다 —
+   * 배치를 만들려면 목록과 함께 받아 엔진에 편입해야 한다. 플리(목)처럼 좌표를 모르면 빈 배열
+   */
+  constellationPoints: MapPoint[];
 
   setViewMode: (mode: MapViewMode) => void;
   selectMusic: (musicId: number | null) => void;
@@ -61,9 +68,9 @@ interface MapState extends EngineSnapshot {
   enterNearby: (musicId: number) => void;
   exitNearby: () => void;
   /** 목록을 넣고 별자리 뷰를 바로 켠다. 주변 탐색이 켜져 있으면 닫힌다 (PATH-01-1) */
-  showConstellation: (musicIds: number[]) => void;
+  showConstellation: (musicIds: number[], points?: MapPoint[]) => void;
   /** 목록만 갈아끼운다 (뷰는 건드리지 않음) — 패널을 열었을 때 택만 뜨게 */
-  setConstellationList: (musicIds: number[]) => void;
+  setConstellationList: (musicIds: number[], points?: MapPoint[]) => void;
   /** 좌상단 택 — 별자리 뷰를 껐다 켰다 */
   toggleConstellationView: () => void;
   /** 목록까지 비운다 (경로 지우기) */
@@ -77,7 +84,8 @@ interface MapState extends EngineSnapshot {
   dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
   surfaceToMusic: (musicId: number) => void;
-  goHome: () => void;
+  /** 내 위치로 가기. 못 갔으면 이유를 돌려준다 (UI 가 안내를 띄운다) */
+  goHome: () => GoHomeResult;
   /** 다음 레이어로 파고들기 (게이트가 열려 있을 때만 동작) */
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
@@ -110,6 +118,7 @@ export const useMapStore = create<MapState>()(
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
+      constellationPoints: EMPTY_POINTS,
 
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
@@ -121,16 +130,17 @@ export const useMapStore = create<MapState>()(
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
       enterNearby: (musicId) => {
         set(
-          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS },
+          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS },
           false,
           "enterNearby",
         );
       },
       exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null }, false, "exitNearby"),
 
-      showConstellation: (constellationMusicIds) =>
-        set({ viewMode: "constellation", constellationMusicIds, nearbyCenterMusicId: null }, false, "showConstellation"),
-      setConstellationList: (constellationMusicIds) => set({ constellationMusicIds }, false, "setConstellationList"),
+      showConstellation: (constellationMusicIds, points = EMPTY_POINTS) =>
+        set({ viewMode: "constellation", constellationMusicIds, constellationPoints: points, nearbyCenterMusicId: null }, false, "showConstellation"),
+      setConstellationList: (constellationMusicIds, points = EMPTY_POINTS) =>
+        set({ constellationMusicIds, constellationPoints: points }, false, "setConstellationList"),
       toggleConstellationView: () =>
         set(
           (s) =>
@@ -141,7 +151,11 @@ export const useMapStore = create<MapState>()(
           "toggleConstellationView",
         ),
       clearConstellation: () =>
-        set((s) => ({ viewMode: s.viewMode === "constellation" ? "default" : s.viewMode, constellationMusicIds: EMPTY_IDS }), false, "clearConstellation"),
+        set(
+          (s) => ({ viewMode: s.viewMode === "constellation" ? "default" : s.viewMode, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS }),
+          false,
+          "clearConstellation",
+        ),
 
       focusMusic: (musicId) => {
         const engine = getMapEngine();
@@ -159,7 +173,7 @@ export const useMapStore = create<MapState>()(
         getMapEngine()?.surfaceToSong(musicId);
       },
       /** 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다 */
-      goHome: () => getMapEngine()?.goHome(),
+      goHome: () => getMapEngine()?.goHome() ?? "none",
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
 

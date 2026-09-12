@@ -1,6 +1,6 @@
 /**
  * 목 곡 상세/검색/여정. 좌표 데이터셋은 songs.ts 와 공유한다.
- * NEXT_PUBLIC_API_URL 이 실제 백엔드를 가리키면 이 파일과 src/app/api/* 는 쓰이지 않는다.
+ * NEXT_PUBLIC_API_URL 이 실제 백엔드를 가리키면 이 파일과 src/app/bff/* 는 쓰이지 않는다.
  */
 import { NEARBY_COUNT } from "@/constants";
 import type { JourneyRoute, Music, MusicDetail, MusicSearchResult, NearbyResponse } from "@/types";
@@ -61,7 +61,7 @@ export function mockSearch(keyword: string): MusicSearchResult[] {
   if (!q) return [];
   return allSongs()
     .filter((p) => p.title.toLowerCase().includes(q) || (p.artist ?? "").toLowerCase().includes(q))
-    .slice(0, 9)
+    .slice(0, 48)
     .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));
 }
 
@@ -101,7 +101,7 @@ export function mockJourney(startId: number, endId: number): JourneyRoute {
   path.push(b);
   const stops = path.map((s, i) => {
     const m = mockMusic(s.musicId);
-    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId] };
+    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId], pc: [...s.pc] };
   });
   return { startMusicId: a.musicId, endMusicId: b.musicId, stops, totalDuration: stops.reduce((sum, s) => sum + (s.duration ?? 0), 0) };
 }

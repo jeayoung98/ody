@@ -1,5 +1,5 @@
 import { fail, failLive, ok, okLive } from "@/lib/api-response";
-import { backendGet, BackendError, isBackendEnabled, type BackendJourneyResponse } from "@/lib/backend";
+import { backendGet, BackendError, isBackendEnabled, toPcArray, type BackendJourneyResponse } from "@/lib/backend";
 import { mockJourney } from "@/mocks/music";
 import type { JourneyRoute } from "@/types";
 
@@ -17,12 +17,13 @@ function toJourneyRoute(res: BackendJourneyResponse, startId: number, endId: num
       // 엔진이 주는 step 은 최종 목록 기준 0부터 1씩 증가하는 연속값이다
       order: stop.step,
       genreName: stop.genres?.[0] ?? null,
+      pc: toPcArray(stop.location),
     })),
   };
 }
 
 /**
- * GET /api/journeys/route?start=<musicId>&end=<musicId>
+ * GET /bff/journeys/route?start=<musicId>&end=<musicId>
  *
  * `BACKEND_ACCESS_TOKEN` 이 있으면 배포 백엔드의 `/api/music/journey` 를 대신 호출한다.
  * 없으면 목 경로를 준다 — 목은 `mocks/songs.ts` 의 곡 ID 를 쓰므로 지도와 ID 가 맞는다.

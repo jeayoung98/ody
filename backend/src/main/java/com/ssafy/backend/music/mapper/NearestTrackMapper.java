@@ -23,7 +23,7 @@ public interface NearestTrackMapper {
 	 * <p>비용은 웜 기준 1.2ms → 4.0ms 다. 층 20개면 80ms 로 예산 안이다.
 	 * <b>콜드는 350ms</b> 였다 — 첫 요청이나 인덱스가 캐시에서 밀린 뒤에 그만큼 난다(B-Latency).
 	 */
-	void raiseEfSearch(@Param("efSearch") int efSearch);
+	String raiseEfSearch(@Param("efSearch") int efSearch);
 
 	/**
 	 * 질의 좌표에서 가장 가까운 곡을 거리 오름차순으로.

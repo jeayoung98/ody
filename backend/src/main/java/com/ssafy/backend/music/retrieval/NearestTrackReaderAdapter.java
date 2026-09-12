@@ -23,8 +23,9 @@ import com.ssafy.backend.music.mapper.NearestTrackMapper;
  * <p>비용은 웜 1.2ms → 4.0ms. 층 20개면 80ms 로 종단 예산 안이다.
  * <b>콜드는 350ms</b> 였다(첫 요청·캐시 축출). 이 값이 B-Latency 의 실재 위험이다.
  *
- * <p>{@code SET LOCAL} 은 트랜잭션 범위이므로 {@link Transactional} 이 필요하다. 없으면 자동 커밋이라
- * 설정이 다음 질의까지 살아남지 않는다.
+ * <p>설정은 트랜잭션 범위({@code set_config(..., true)} = {@code SET LOCAL})이므로 {@link Transactional}
+ * 이 필요하다. 없으면 자동 커밋이라 설정이 다음 질의까지 살아남지 않는다. {@code SET LOCAL} 구문 자체는
+ * 바인드 파라미터를 못 받아 쓸 수 없다 — 매퍼 XML 주석 참고.
  */
 @Repository
 public class NearestTrackReaderAdapter implements NearestTrackReader {

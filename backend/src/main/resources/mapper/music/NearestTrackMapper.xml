@@ -26,9 +26,13 @@
 		WHERE 를 걸면 LIMIT 보다 적게 나온다. 필터는 애플리케이션이 건다(LayerCandidates).
 	-->
 
-	<update id="raiseEfSearch">
-		SET LOCAL hnsw.ef_search = #{efSearch}
-	</update>
+	<!--
+		SET LOCAL 은 유틸리티 구문이라 바인드 파라미터를 못 받는다 (2026-09-12: ERROR syntax error at
+		or near "$1"). 같은 일을 하는 함수 set_config 로 넘긴다 — 세 번째 인자 true 가 SET LOCAL 이다.
+	-->
+	<select id="raiseEfSearch" resultType="string">
+		SELECT set_config('hnsw.ef_search', CAST(#{efSearch} AS text), true)
+	</select>
 
 	<select id="findNearest" resultType="com.ssafy.backend.music.dto.TrackCandidateRow">
 		SELECT m.id AS music_id, m.mbid, m.title, m.artist, m.duration,

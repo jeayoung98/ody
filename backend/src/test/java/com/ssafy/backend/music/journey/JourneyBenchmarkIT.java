@@ -12,12 +12,14 @@ import java.util.Random;
 
 import javax.sql.DataSource;
 
+import org.apache.ibatis.builder.xml.XMLMapperBuilder;
 import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
 import org.apache.ibatis.mapping.Environment;
 import org.apache.ibatis.session.Configuration;
 import org.apache.ibatis.session.SqlSession;
 import org.apache.ibatis.session.SqlSessionFactory;
 import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.apache.ibatis.io.Resources;
 import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -75,8 +77,11 @@ class JourneyBenchmarkIT {
 	private static SqlSessionFactory factory;
 	private static long maxId;
 
+	/** 운영 매퍼 XML. 인터페이스 옆이 아니라 이 경로에 있어 직접 파싱해야 한다. */
+	private static final String MAPPER_XML = "mapper/music/NearestTrackMapper.xml";
+
 	@BeforeAll
-	static void connect() {
+	static void connect() throws Exception {
 		// 드라이버는 runtimeOnly 라 컴파일 시점에 클래스를 못 쓴다. 이름으로 받는 UnpooledDataSource 를 쓴다.
 		DataSource ds = new UnpooledDataSource("org.postgresql.Driver",
 				System.getenv("ODY_DB_URL"), System.getenv("ODY_DB_USER"), System.getenv("ODY_DB_PASSWORD"));
@@ -84,7 +89,11 @@ class JourneyBenchmarkIT {
 		Configuration cfg = new Configuration(
 				new Environment("it", new JdbcTransactionFactory(), ds));
 		cfg.setMapUnderscoreToCamelCase(true);
-		cfg.addMapper(NearestTrackMapper.class);
+		// 운영과 같은 SQL 로 재야 하므로 XML 을 그대로 읽는다. 파싱이 namespace 로 인터페이스까지 묶어
+		// 주므로 NearestTrackMapper 를 따로 addMapper 하면 중복 등록으로 터진다.
+		try (java.io.InputStream in = Resources.getResourceAsStream(MAPPER_XML)) {
+			new XMLMapperBuilder(in, cfg, MAPPER_XML, cfg.getSqlFragments()).parse();
+		}
 		cfg.addMapper(BenchMapper.class);
 		factory = new SqlSessionFactoryBuilder().build(cfg);
 
@@ -139,7 +148,7 @@ class JourneyBenchmarkIT {
 		}
 
 		latencies.sort(null);
-		long p95 = latencies.isEmpty() ? 0 : latencies.get((int) (latencies.size() * 0.95) - (latencies.size() > 1 ? 1 : 0));
+		long p95 = percentile(latencies);
 		stepMedians.sort(null);
 
 		System.out.printf("%n=== T047 / AC-J1~J6 (pairs=%d, seed=%d) ===%n", latencies.size(), SEED);
@@ -155,7 +164,15 @@ class JourneyBenchmarkIT {
 		assertThat(unreachable).as("AC-J1 경로 없음 0건").isZero();
 		assertThat(monotonicViolations).as("AC-J2 진행도 단조 증가").isZero();
 		assertThat(ruleViolations).as("AC-J3·J4 규칙 위반 0건").isZero();
+		// 이 값은 SSH 터널 왕복을 포함한다 — 운영은 앱과 DB 가 같은 호스트라 더 짧다. 상한으로 읽는다.
 		assertThat(p95).as("AC-J5 p95 <= %d ms", P95_BUDGET_MS).isLessThanOrEqualTo(P95_BUDGET_MS);
+	}
+
+	private static long percentile(List<Long> sorted) {
+		if (sorted.isEmpty()) {
+			return 0;
+		}
+		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
 	}
 
 	// ------------------------------------------------------------------ 보조
@@ -191,12 +208,16 @@ class JourneyBenchmarkIT {
 		return sb.append(']').toString();
 	}
 
+	/** 한 번에 묶어 읽고 경로 순서로 되돌린다 — mbid 낱개 조회는 왕복이 역 수만큼 난다. */
 	private List<TrackCandidate> resolve(BenchMapper bench, List<String> mbids) {
+		Map<String, TrackCandidate> byMbid = new HashMap<>();
+		for (TrackCandidateRow r : bench.findByMbids(mbids)) {
+			byMbid.put(r.getMbid(), new TrackCandidate(r.getMusicId(), r.getMbid(), r.getTitle(),
+					r.getArtist(), r.getDuration(), r.toVec(), 0));
+		}
 		List<TrackCandidate> out = new ArrayList<>(mbids.size());
 		for (String mbid : mbids) {
-			TrackCandidateRow r = bench.findByMbid(mbid);
-			out.add(new TrackCandidate(r.getMusicId(), r.getMbid(), r.getTitle(), r.getArtist(),
-					r.getDuration(), r.toVec(), 0));
+			out.add(byMbid.get(mbid));
 		}
 		return out;
 	}
@@ -266,6 +287,7 @@ class JourneyBenchmarkIT {
 		TrackCandidateRow findById(long id);
 
 		@org.apache.ibatis.annotations.Select("""
+				<script>
 				SELECT id AS music_id, mbid, title, artist, duration, 0 AS dist,
 				  (location::real[])[1] AS pc1, (location::real[])[2] AS pc2,
 				  (location::real[])[3] AS pc3, (location::real[])[4] AS pc4,
@@ -275,7 +297,9 @@ class JourneyBenchmarkIT {
 				  (location::real[])[11] AS pc11, (location::real[])[12] AS pc12,
 				  (location::real[])[13] AS pc13, (location::real[])[14] AS pc14,
 				  (location::real[])[15] AS pc15, (location::real[])[16] AS pc16
-				FROM music WHERE mbid = #{mbid}""")
-		TrackCandidateRow findByMbid(String mbid);
+				FROM music WHERE mbid IN
+				<foreach item="m" collection="mbids" open="(" separator="," close=")">#{m}</foreach>
+				</script>""")
+		List<TrackCandidateRow> findByMbids(@org.apache.ibatis.annotations.Param("mbids") List<String> mbids);
 	}
 }

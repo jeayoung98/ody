@@ -490,7 +490,7 @@ KNN·거리 산정 주석은 대표곡 정책의 승인 근거가 아니다.
 ### 롤백 시 함께 되돌릴 곳
 
 `plan.md` 보류 항목 B2 · `tasks.md` T013(`MajorSelectionPolicy` 원형 판정)·T016·T017 ·
-`MajorSelection.topByYoutubeCnt`(**2026-09-12 삭제** — 복원 지점은 `tasks.md` "삭제한 롤백 자산" 절) · 본 spec 의 A11~A14
+`MajorSelection.topByYoutubeCnt`(구현 완료, 원안 전용) · 본 spec 의 A11~A14
 
 ### 원안 전문 (복원용 — 수정 금지)
 

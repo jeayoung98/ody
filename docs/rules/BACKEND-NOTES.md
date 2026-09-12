@@ -63,7 +63,7 @@ A-17 해제 덕에 토큰 없이 아래가 **배포 백엔드의 실제 곡**으
 | 인증·온보딩 | 로그인·가입·닉네임·튜토리얼 | `/api/auth/**` | 있으나 미연결 | 목 (의도적, A-15·B-17) |
 | 플레이리스트 | 목록·상세·생성·곡 추가/삭제/순서 | `/api/playlists/**` | `/api/playlist/**` 8종 **있음** | 목 (프론트 미연결) |
 | 주변 사람·팔로우·반응 | 소셜 전반 | `/api/users/**` | 없음 | 목 (A-3·A-4) |
-| 레이어별 대표곡(커버)·곡의 대표 레이어 | 지도 커버 | `/api/map/layers/*`·`representative-layers` | 없음 | 목 (A-2·A-8) |
+| 레이어별 대표곡(커버) | 지도 커버 | `/api/map/layers/{layer}/representatives` | 없음 | 목 (A-2). **실데이터에서는 무효** — 목이 주는 ID 가 배포 백엔드 곡과 하나도 안 겹쳐(실측 0/40) 커버는 프론트 격자 선별로 폴백된다 |
 | 차트·피드·재생 로그 | 각 패널 | 해당 라우트 | 없음 | 목 (A-7) |
 | 별자리 배치 (PATH-01) | 여정·플리 별자리 뷰 | `/api/constellations/layout` | 없음 | 목 (A-9) — **프론트가 좌표를 함께 보내 우회 중**. 여정은 그려지지만 모양이 클라이언트 계산이다 |
 
@@ -100,7 +100,7 @@ A-17 해제 덕에 토큰 없이 아래가 **배포 백엔드의 실제 곡**으
 | `GET /api/hello` · `/api/test` · `/api/test/neo4j` · `/api/test/redis` | — | 확인용 엔드포인트. 프론트는 쓰지 않는다 |
 
 **백엔드에 아예 없는 것** (프론트는 목으로 돈다): 본인 조회(A-15), 주변 사용자·팔로우·반응(A-3·A-4),
-레이어별 대표곡·곡의 대표 레이어(A-2·A-8), 별자리 배치(A-9), 재생 로그(A-7), 차트, 플레이리스트 좋아요.
+레이어별 대표곡(A-2), 별자리 배치(A-9), 재생 로그(A-7), 차트, 플레이리스트 좋아요.
 
 ### 필드 대조 — 플레이리스트 (가장 크게 어긋난다)
 
@@ -173,7 +173,7 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-4 | `NearbyUser` 응답 | — | `viewingMusicId` **추가 필요** | 따라가기 시 좌표 두 개가 필요하다: `musicId`=재생 중(우주선 위치), `viewingMusicId`=인솔자가 보고 있는 상세 곡(뷰포트·우측 패널 기준) (SOCIAL-07) | 협의 전 |
 | A-5 | `GET /api/music/journey?start=&end=` | 두 곡 ID | `{musicCnt, totalDuration, path:[{step, …MusicDetail}]}` | **16차원 임베딩 거리 기준** 경로 (PATH-01). 프론트가 기대하던 `/api/journeys/route` + `JourneyRoute` 와 경로·형태가 다르다. **`path[].location`(pc1~16) 이 반드시 채워져 있어야 한다** — 경로 곡은 지도 상주 집합 밖일 수 있어서 프론트가 좌표를 알 길이 이것뿐이고, 비면 별자리(PATH-01)가 그려지지 않는다 (S15P21A405-264) | ✅ 구현·도달 가능 · 프론트가 훅에서 변환해 반영 완료 (2026-09-12) |
 | A-6 | `GET /api/map/nearby/{musicId}` | musicId | `{ center, neighbors[10] }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10) | 협의 전 |
-| A-8 | `GET /api/music/{id}/representative-layers` | musicId | `{ musicId, layers: number[] }` (오름차순) | 검색 결과를 누르면 그 곡이 **대표곡으로 노출되는 첫 레이어**로 이동해야 한다. 한 곡이 여러 레이어에서 대표곡일 수 있다. 클라이언트가 8개 레이어 대표곡을 전부 들고 있을 수 없으므로 서버가 계산해야 한다 (SEARCH-01) | 협의 전 |
+| A-8 | ~~`GET /api/music/{id}/representative-layers`~~ | — | — | **철회 — 만들지 않아도 된다.** 검색 결과를 누르면 그 곡이 대표곡인 첫 레이어로 자동 전환하려던 것이었는데, **SEARCH-01 이 v1.4 에서 바뀌어** 그 전환을 없애고 고스트별(MAP-12)로 대체했다. 프론트에 남아 있던 훅·목 라우트는 아무데서도 안 쓰여 삭제했다 (S15P21A405-269) | ❌ 철회 (2026-09-12) |
 | A-7 | `POST /api/music/{id}/play` | `{ source, playedMs }` | ok | 재생 로그 (`play_history`). `source` 값은 `MAP` / `JOURNEY` / `PLAYLIST` / `FOLLOW` | 협의 전 |
 | A-10 | `POST /api/auth/signup` | `{ email, password, nickname }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 가입 (AUTH-01) | ✅ 구현됨 (backend/dev, S15P21A405-121) · 프론트 반영 완료 |
 | A-11 | `POST /api/auth/login` | `{ email, password }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 로그인 (AUTH-02) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |

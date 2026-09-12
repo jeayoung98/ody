@@ -29,7 +29,6 @@ export const QUERY_KEYS = {
     /** 레이어별 대표곡 ID */
     representatives: (layer: number) => ["map", "representatives", layer] as const,
     /** 이 곡이 대표곡으로 노출되는 레이어 목록 */
-    representativeLayers: (musicId: number) => ["map", "representative-layers", musicId] as const,
     /** 특정 곡 기준 가까운 곡 */
     nearby: (musicId: number) => ["map", "nearby", musicId] as const,
   },

@@ -71,7 +71,6 @@ export const API_ENDPOINTS = {
     },
     // nearby 는 라우트 핸들러가 백엔드 `GET /api/music/detail?id=` 의 neighbors 로 만들어 준다
     representatives: (layer: number) => `/api/map/layers/${layer}/representatives`,
-    representativeLayers: (musicId: number) => `/api/music/${musicId}/representative-layers`,
     nearby: (musicId: number) => `/api/map/nearby/${musicId}`,
   },
 

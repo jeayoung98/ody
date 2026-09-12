@@ -8,6 +8,7 @@
  * 토큰이 있는데 실패하면 **목으로 조용히 떨어지지 않고 오류를 그대로 올린다** — 유저 테스트 중에
  * 실데이터인 줄 알고 목을 보는 일이 없어야 한다.
  */
+import { NO_GENRE_ID } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";
 
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
@@ -115,12 +116,16 @@ export function toPcArray(location: BackendLocation | null): number[] {
  *
  * `genreId` 와 `weight` 는 백엔드 응답에 없다 (B-21). 각각 별 색과 크기를 정하는 값이라
  * 없으면 지도가 단색·균일 크기로 보인다. 고정값을 넣어 두되 **없는 것을 지어내지는 않는다.**
+ *
+ * 장르는 `genres` 이름 배열만 오고 id 가 없으므로 **모르는 장르(무장르)** 로 둔다 —
+ * 0(앰비언트)으로 채우면 "장르를 모른다"가 "전부 앰비언트다"로 둔갑한다 (A-1-1).
+ * 실데이터는 662만 곡 중 1.0%만 장르가 붙어 있어 그 오해가 화면 거의 전부를 덮는다.
  */
 export function toMapPoint(music: BackendMusicSummary): MapPoint {
   return {
     musicId: music.id,
     pc: toPcArray(music.location),
-    genreId: 0,
+    genreId: NO_GENRE_ID,
     weight: 1,
     title: music.title,
     artist: music.artist,

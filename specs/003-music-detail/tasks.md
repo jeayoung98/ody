@@ -51,10 +51,10 @@ description: "Task list: 노래 상세 조회 (Nearby 포함)"
 - [ ] T103 [US3] 인증 테스트: 토큰 없음/위조/만료 → 401
 
 ## B-D: 저장소·KNN 어댑터 (BE4)
-- [ ] T201 곡 상세 저장소·스키마(`mbid/bpm/duration/play_cnt/youtube_cnt/pc1~pc16`) 확인 — BE4
-- [ ] T202 **거리 척도·KNN 실행 방식 확정**(pgvector 미프로비저닝 여부, 브루트포스 vs 인덱스) — BE4
-- [ ] T203 [US1·US2] `MusicDetailReader` MyBatis 어댑터 구현 in `music/detail/MusicDetailMapper.(java|xml)`: `findDetail`(id로 상세 1건), `findNeighbors`(자기 제외, distance ASC·id ASC, k=10, 재생불가 포함) — depends T201·T202
-- [ ] T204 [US2] KNN 인덱스 전략(pgvector 가능 시 ivfflat/hnsw, 불가 시 대안) — 실행계획 확인
+- [X] T201 곡 상세 저장소·스키마 확인 — **확정**: PostgreSQL `music`(6,624,399행 적재 완료), 컬럼 `id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location vector(16), play_cnt, youtube_cnt`. 좌표는 pc1~pc16 개별 컬럼이 아니라 pgvector `location vector(16)` 한 컬럼이다. `release_year·album·youtube_url` 은 전 행 NULL(data 스펙 18 AC4)
+- [X] T202 거리 척도·KNN 실행 방식 — **확정**: pgvector 0.7.0 프로비저닝됨. `music_location_hnsw_idx`(hnsw, `vector_l2_ops`) → 연산자 `<->`(L2). 실측 13.9ms. **함정**: 질의 벡터를 서브쿼리로 넘기면 InitPlan 이 되어 recall 0.0000 → 좌표를 먼저 읽어 바인드 파라미터로 넘긴다(recall 0.9995)
+- [X] T203 [US1·US2] `MusicDetailReader` MyBatis 어댑터 구현 (S15P21A405-231) — `music/detail/MusicDetailReaderAdapter.java`, `MusicDetailMapper.java`, `resources/mapper/music/MusicDetailMapper.xml`. **실측 정정 둘**: (1) 매퍼 인터페이스를 `*.mapper` 패키지에 두면 `@MapperScan` 이 빈으로 등록해 저장소의 모든 `@WebMvcTest` 슬라이스가 SqlSessionFactory 부재로 죽었다 → 한동안 스캔 범위 밖에 두고 `SqlSession.getMapper()` 로 우회했다. **T301(S15P21A405-232)이 `backend/dev` 에 머지돼 우회를 걷어내고 `music.mapper` 표준 위치로 되돌렸다**. (2) `ORDER BY distance, id` 로 정렬 키를 둘로 두면 HNSW 인덱스 순서를 못 쓰고 전체 정렬로 떨어진다 → SQL 은 거리로만 정렬하고 동률 id ASC 는 어댑터에서 준다
+- [ ] T204 [US2] KNN 인덱스 전략 — HNSW 는 이미 있다(T202). **남은 것은 실행계획 확인**: 어댑터 질의가 실제로 `music_location_hnsw_idx` 를 타는지, `hnsw.ef_search` 기본값으로 k=10 recall 이 충분한지. 실 DB 접근 필요
 - [ ] T205 [US1·US2] 실데이터 통합 테스트: 좌표 baseline 일치, 실제 최근접·자기 제외·결정성(FR-006·009) — depends T203
 - [ ] T206 Nearby 응답 예산(§6 유사곡 1초 매핑) 벤치 — depends T203
 

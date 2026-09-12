@@ -1,16 +1,39 @@
 import { LAYER_SONG_COUNT } from "@/constants";
-import { ok } from "@/lib/api-response";
+import { fail, ok } from "@/lib/api-response";
+import { backendGet, BackendError, isBackendEnabled, toMapPoint, type BackendMusicDetail } from "@/lib/backend";
 import { allSongs } from "@/mocks/songs";
 import type { MapPoint } from "@/types";
+
+/** `/api/music/major` 응답 (정본 §3.4) */
+interface BackendMajorResponse {
+  content: BackendMusicDetail[];
+}
 
 /**
  * 이 겹의 상주 집합 (PC 16개 포함). 실서비스 `GET /music/major` 의 목이다 (BACKEND-NOTES A-1).
  *
- * `level` 은 1-based (레이어 0 = level 1), 축 번호도 1-based 라 level n 의 평면은 pc(2n-1)·pc(2n) 이다.
- * level>=2 는 이전 겹들에서 좁힌 범위를 `pc{k}min` / `pc{k}max` 로 level-1 쌍 전부 받는다.
+ * `BACKEND_ACCESS_TOKEN` 이 있으면 배포 백엔드로 넘긴다.
+ * **지도와 주변 탐색·경로 탐색은 반드시 같은 출처여야 한다** — 지도만 목이면 탐색 결과의
+ * 곡 ID 가 지도에 없거나, 더 나쁘게는 숫자만 겹쳐 엉뚱한 별에 매칭된다 (BACKEND-NOTES B-22).
+ * 쿼리는 손대지 않고 그대로 넘긴다 — 겹마다 좁혀 온 누적 범위를 백엔드 MajorQuery 가 그대로 받는다.
+ *
+ * 목으로 답할 때: `level` 은 1-based (레이어 0 = level 1), 축 번호도 1-based 라 level n 의 평면은
+ * pc(2n-1)·pc(2n) 이다. level>=2 는 이전 겹들에서 좁힌 범위를 `pc{k}min` / `pc{k}max` 로 level-1 쌍 전부 받는다.
  */
-export function GET(req: Request) {
+export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
+
+  if (isBackendEnabled()) {
+    try {
+      const qs = q.toString();
+      const res = await backendGet<BackendMajorResponse>(`/api/music/major?${qs || "level=1"}`);
+      return ok(res.content.map(toMapPoint));
+    } catch (e) {
+      const err = e as BackendError;
+      return fail("INTERNAL_ERROR", err.message, err.status || 502);
+    }
+  }
+
   const level = Math.max(1, Math.round(Number(q.get("level") ?? 1)) || 1);
   // 레이어 0 = 전 우주. 범위 조건이 없어 결과가 늘 같다 (실서비스도 미리 계산해 둔 정적 집합이다)
   if (level === 1) return ok(topLevelSongs());

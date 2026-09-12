@@ -1,7 +1,62 @@
-import { ok } from "@/lib/api-response";
+import { fail, ok } from "@/lib/api-response";
+import {
+  backendGet,
+  BackendError,
+  isBackendEnabled,
+  toPcArray,
+  type BackendMusicDetailResponse,
+} from "@/lib/backend";
 import { mockMusicDetail } from "@/mocks/music";
+import type { Music, MusicDetail } from "@/types";
 
+/** 상세 패널에 노출하는 주성분 개수 */
+const SHOWN_PC_COUNT = 6;
+
+/**
+ * 백엔드 상세 응답 → 화면이 쓰는 MusicDetail.
+ *
+ * 백엔드에 없는 값은 **지어내지 않고 비운다.** `releaseYear` 는 응답에 없고,
+ * `albumCoverUrl`·`country`·`language`·`composer`·`lyricist`·`moods` 는 ERD 에도 없다
+ * (BACKEND-NOTES E-5). `relatedPlaylists` 는 조회 API 가 아직 없다.
+ */
+function toMusicDetail(res: BackendMusicDetailResponse): MusicDetail {
+  const pc = toPcArray(res.location);
+  return {
+    id: res.id,
+    mbid: res.mbid,
+    title: res.title,
+    artist: res.artist,
+    releaseYear: null,
+    bpm: res.bpm,
+    duration: res.duration,
+    album: res.album,
+    youtubeUrl: res.youtubeUrl,
+    location: res.location ? (pc as Music["location"]) : null,
+    playCnt: res.playCnt ?? 0,
+    youtubeCnt: res.youtubeCnt ?? 0,
+    // 백엔드는 장르를 **이름만** 준다. id 는 배열 순번을 채운 자리표시자이지 실제 genre.id 가 아니다 (B-21)
+    genres: (res.genres ?? []).map((name, i) => ({ id: i, name })),
+    principalComponents: pc
+      .slice(0, SHOWN_PC_COUNT)
+      .map((v, i) => ({ label: `PC${i + 1}`, value: Math.max(-1, Math.min(1, v / 2.5)) })),
+    nearby: res.neighbors.map((n) => ({ id: n.id, title: n.title, artist: n.artist })),
+    relatedPlaylists: [],
+  };
+}
+
+/** GET /api/music/{id} — 곡 상세. 백엔드 `GET /api/music/detail?id=` 이 주변곡까지 같이 준다 */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  return ok(mockMusicDetail(Number(id)));
+  const musicId = Number(id);
+  if (!musicId) return fail("VALIDATION_ERROR", "곡 ID 가 올바르지 않습니다.", 400);
+
+  if (!isBackendEnabled()) return ok(mockMusicDetail(musicId));
+
+  try {
+    const res = await backendGet<BackendMusicDetailResponse>(`/api/music/detail?id=${musicId}`);
+    return ok(toMusicDetail(res));
+  } catch (e) {
+    const err = e as BackendError;
+    return fail("MUSIC_NOT_FOUND", err.message, err.status || 502);
+  }
 }

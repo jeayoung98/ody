@@ -8,6 +8,18 @@ import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import type { SurveyOption, SurveyStep } from "@/types/survey";
 
+/** 고른 선택지 — 테두리만으로는 안 보여서 배경까지 칠하고 글자를 밝게 올린다 */
+const SELECTED_CLASS = "bg-violet/25! border-violet! text-white! shadow-glow-violet";
+
+/** 골랐다는 표시. 색만으로 구분하지 않게 모양도 같이 바뀐다 */
+function CheckIcon() {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
+      <path d="M3 8.5 6.5 12 13 4.5" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  );
+}
+
 /** 이 단계에서 보여줄 선택지 — 앞 단계 답에 따라 달라질 수 있다 */
 function optionsOf(step: SurveyStep, prev: string | undefined): SurveyOption[] {
   if (step.options) return step.options;
@@ -102,20 +114,27 @@ export default function SurveyCard() {
             <div key={index} className="flex flex-col gap-2">
               <p className="text-sm leading-relaxed text-ink">{question}</p>
               <div className="flex flex-wrap gap-2">
-                {options.map((o) => (
-                  <Button
-                    key={o.value}
-                    size="sm"
-                    active={answers[index]?.includes(o.value) ?? false}
-                    onClick={() =>
-                      setAnswer(index, (current) =>
-                        step.multiple ? (current.includes(o.value) ? current.filter((v) => v !== o.value) : [...current, o.value]) : [o.value],
-                      )
-                    }
-                  >
-                    {o.label}
-                  </Button>
-                ))}
+                {options.map((o) => {
+                  const on = answers[index]?.includes(o.value) ?? false;
+                  return (
+                    <Button
+                      key={o.value}
+                      size="sm"
+                      aria-pressed={on}
+                      // 공용 active 표시(테두리 발광)는 어두운 배경에서 눌렀는지가 잘 안 보인다.
+                      // 설문은 응답 강제라 "골랐다"가 확실해야 해서 배경까지 칠한다
+                      className={on ? SELECTED_CLASS : ""}
+                      onClick={() =>
+                        setAnswer(index, (current) =>
+                          step.multiple ? (current.includes(o.value) ? current.filter((v) => v !== o.value) : [...current, o.value]) : [o.value],
+                        )
+                      }
+                    >
+                      {on && <CheckIcon />}
+                      {o.label}
+                    </Button>
+                  );
+                })}
               </div>
             </div>
           ))}

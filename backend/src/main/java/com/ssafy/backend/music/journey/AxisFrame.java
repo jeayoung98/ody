@@ -54,6 +54,11 @@ public final class AxisFrame {
 		return new AxisFrame(start, dir, len);
 	}
 
+	/** 출발곡 좌표 A. DP 의 첫 전이가 여기서 출발한다. 복사본을 준다 — 축이 바뀌면 안 된다. */
+	public float[] layerStart() {
+		return a.clone();
+	}
+
 	/** 끝점 거리 {@code L}. */
 	public double length() {
 		return length;

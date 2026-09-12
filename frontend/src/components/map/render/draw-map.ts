@@ -247,29 +247,82 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   g.globalCompositeOperation = "source-over";
 }
 
-/** 대표성이 가장 높은 몇 곡은 앨범 커버로 띄운다 */
+/**
+ * 지금 커버를 띄우고 있는 곡의 **인덱스** (그린 순서 유지).
+ *
+ * 인덱스는 곡이 뒤에 이어붙어도 그대로라 프레임을 건너 들고 있어도 안전하다.
+ * 겹이 바뀌면 기준 축이 달라지므로 비운다.
+ */
+let coverIdx: number[] = [];
+let coverLayer = -1;
+
+/**
+ * 대표성이 가장 높은 몇 곡은 앨범 커버로 띄운다.
+ *
+ * **매 프레임 새로 뽑으면 줌할 때 통째로 갈린다.** 격자 칸이 배율에 반비례해서(`gw = 86 / cam.s`)
+ * 확대하면 칸 승자가 전부 바뀌고, 거기서 앞 N개를 잘라 쓰니 커버가 싹 교체된다
+ * (실측: 배율 21.8→34.2 에서 7개 전부 교체 — S15P21A405-276).
+ * `weight` 가 실데이터에서 전부 0 이라 정렬이 무의미한 것도 증폭시킨다 (B-21).
+ *
+ * 그래서 **있던 커버를 먼저 지키고**, 화면 밖으로 나갔거나 상주가 아니게 된 자리만 새로 채운다.
+ */
 function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.anim) return;
   const f = e.freeRect();
   const M = 42;
   const grow = clamp(0.86 + Math.log(Math.max(1, e.cam.s / 100)) * 0.13, 0.85, 1.35);
   if (e.coverAlpha < 0.01) return;
-  // 커버는 이 레이어의 대표곡(백엔드 선별) 중 화면 안에 있는 곡. 부족하면 격자 대표곡으로 채운다
-  const candidates = new Set<number>();
-  for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
-  if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
-  const list = [...candidates]
-    .map((i) => ({ i, px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] }))
-    .filter((it) => it.px > f.x0 + M && it.px < f.x1 - M && it.py > f.y0 + M && it.py < f.y1 - M)
-    .sort((a, b) => b.s.weight - a.s.weight);
-  const n = e.cam.s < 160 ? COVER_COUNT.far : COVER_COUNT.near;
+
+  // 겹이 바뀌면 축이 달라져 자리도 의미가 없다 — 처음부터 다시 뽑는다
+  if (coverLayer !== e.layer) {
+    coverIdx = [];
+    coverLayer = e.layer;
+  }
+
+  const n = e.cam.s < COVER_COUNT.nearScale ? COVER_COUNT.far : COVER_COUNT.near;
+  const gap2 = COVER_COUNT.minGapPx * COVER_COUNT.minGapPx;
+  /** 아직 이 겹에 살아 있고 화면 안(여백 M)인가 */
+  const usable = (i: number) => {
+    if (!e.subset[i]) return false;
+    const px = e.pos[i * 2];
+    const py = e.pos[i * 2 + 1];
+    return px > f.x0 + M && px < f.x1 - M && py > f.y0 + M && py < f.y1 - M;
+  };
+  /** 이미 고른 것들과 충분히 떨어져 있는가 (줌아웃하면 별이 모여 커버가 겹친다) */
+  const spaced = (i: number, picked: number[]) =>
+    picked.every((j) => (e.pos[i * 2] - e.pos[j * 2]) ** 2 + (e.pos[i * 2 + 1] - e.pos[j * 2 + 1]) ** 2 >= gap2);
+
+  // ① 있던 커버를 먼저 지킨다 — 이게 반짝임을 막는 핵심이다
+  const picked: number[] = [];
+  for (const i of coverIdx) {
+    if (picked.length >= n) break;
+    if (usable(i) && spaced(i, picked)) picked.push(i);
+  }
+  // ② 남는 자리만 새로 채운다. 후보는 예전과 같다 (백엔드 대표곡 → 없으면 격자 대표곡)
+  if (picked.length < n) {
+    const candidates = new Set<number>();
+    for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
+    if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
+    const fill = [...candidates].filter((i) => !picked.includes(i)).sort((a, b) => e.songs[b].weight - e.songs[a].weight);
+    // 처음(들고 있던 게 없다)에는 한 번에 채운다. 그 뒤로는 한 칸씩만 — 위 주석 참고
+    let room = coverIdx.length === 0 ? n : COVER_COUNT.fillPerFrame;
+    for (const i of fill) {
+      if (picked.length >= n || room <= 0) break;
+      if (usable(i) && spaced(i, picked)) {
+        picked.push(i);
+        room--;
+      }
+    }
+  }
+  coverIdx = picked;
+
   g.globalCompositeOperation = "source-over";
   g.globalAlpha = e.coverAlpha;
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.font = `500 9.5px ${FONTS.body}`;
-  for (let k = 0; k < Math.min(n, list.length); k++) {
-    const it = list[k];
+  for (const i of picked) {
+    const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     if (e.hoverId === it.s.musicId || e.selectedId === it.s.musicId) continue;
     const mag = magOf(it.s.weight);
     const S = (19 + Math.pow(mag, 1.4) * 14) * grow;

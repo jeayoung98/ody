@@ -29,11 +29,11 @@ import lombok.extern.slf4j.Slf4j;
 /**
  * 경로 탐색 게이트웨이 (정본 §3.3, 기능 ID JOURNEY-01).
  *
- * <p><b>경로 산출은 여기서 하지 않는다.</b> BE4 데이터 엔진(Python)이 축 통로 + Viterbi 로 만들고(D4, D10),
- * 이 서비스는 식별자 해석 · 엔진 호출 · 상세 조립 · 정본 계약 준수 · 오류 매핑을 담당한다(FR-017).
+ * <p><b>경로 산출은 여기서 하지 않는다.</b> {@code JourneyPathFinder} 경계 뒤에서 이뤄지고(rev.3 인프로세스,
+ * FR-017) 이 서비스는 식별자 해석 · 산출 호출 · 상세 조립 · 정본 계약 준수 · 오류 매핑을 담당한다.
  *
- * <p>흐름은 <b>DB 조회 2회 + 엔진 호출 1회</b>다(research R3). 출발·도착 상세를 먼저 읽어 mbid 를 얻고
- * (없는 곡 404 도 여기서 걸린다), 엔진이 준 중간 정거장 mbid 를 한 번에 조회해 양 끝을 붙인다.
+ * <p>흐름은 <b>DB 조회 2회 + 산출 1회</b>다(research R3). 출발·도착 상세를 먼저 읽어 좌표·mbid 를 얻고
+ * (없는 곡 404 도 여기서 걸린다), 산출이 준 중간 정거장 mbid 를 한 번에 조회해 양 끝을 붙인다.
  *
  * <p>MusicService 와 합치지 않고 따로 둔다 — MusicService 는 이미 검색·상세·대표곡을 갖고 있고
  * 여정은 의존하는 port 가 다르다.
@@ -45,6 +45,11 @@ public class JourneyService {
 	/** 정본 §3.3 계약 상한. 엔진 정거장 상한이 20 이라 실제로는 최대 22 다(D3). */
 	private static final int MAX_PATH_SIZE = 30;
 
+	/**
+	 * 산출 구간 전체 (T064). rev.2 에서는 원격 홉을 재던 이름인데 rev.3 에서 <b>인프로세스 산출</b>을
+	 * 재는 뜻으로 바뀌었다. <b>이름은 유지한다</b> — 대시보드·히스토그램 설정이 이 이름을 참조한다.
+	 * 내부 분해(층 조회 vs DP)는 {@code ody.journey.candidates} 가 맡는다.
+	 */
 	private static final String ENGINE_TIMER = "ody.journey.engine";
 	private static final String MONOTONIC_VIOLATION_COUNTER = "ody.journey.progress.not_monotonic";
 
@@ -53,7 +58,8 @@ public class JourneyService {
 	private final Optional<JourneyTrackReader> trackReader;
 	private final MeterRegistry meterRegistry;
 
-	// ponytail: 어댑터(엔진 클라이언트·정거장 매퍼)가 아직 없어 Optional 주입. 빈이 올라오면 자동 연결된다.
+	// 세 port 모두 어댑터가 붙었다(2026-09-12). Optional 은 유지한다 — 슬라이스 테스트가 일부만
+	// 올리고, 어댑터가 빠졌을 때 기동 실패 대신 500 + 진단 로그로 내리는 편이 원인을 빨리 찾게 한다.
 	public JourneyService(Optional<MusicDetailReader> detailReader,
 			Optional<JourneyPathFinder> pathFinder,
 			Optional<JourneyTrackReader> trackReader,
@@ -85,7 +91,7 @@ public class JourneyService {
 
 		MusicDetail endSong = findSong(reader, end);
 
-		EnginePath enginePath = callEngine(startSong.mbid(), endSong.mbid());
+		EnginePath enginePath = callEngine(startSong, endSong);
 		if (!enginePath.reachable()) {
 			throw new CustomException(MusicErrorCode.PATH_NOT_FOUND);
 		}
@@ -109,13 +115,13 @@ public class JourneyService {
 	 * 엔진 호출. 구간 지연을 재고, <b>어떤 실패도 422 로 내리지 않는다</b> — 엔진 부재·타임아웃은
 	 * 사용자가 곡을 바꿔 해결할 수 있는 실패가 아니다(2026-09-10 clarify).
 	 */
-	private EnginePath callEngine(String startMbid, String endMbid) {
+	private EnginePath callEngine(MusicDetail start, MusicDetail end) {
 		JourneyPathFinder finder = pathFinder.orElseThrow(
-				() -> unavailable("music/journey: 경로 산출 엔진 어댑터 대기 중 (B-Engine)"));
+				() -> unavailable("music/journey: 경로 산출 구현 대기 중"));
 
 		Timer.Sample sample = Timer.start(meterRegistry);
 		try {
-			return finder.find(startMbid, endMbid);
+			return finder.find(start, end);
 		} catch (CustomException e) {
 			throw e;
 		} catch (RuntimeException e) {

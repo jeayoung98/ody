@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.music.mapper.NearestTrackMapper">
+
+	<!--
+		좌표 최근접 조회. 여정 층 후보(004)와 주변 탐색 이웃(005)이 같은 질의를 쓴다.
+		근거: data/docs/BE_ALGORITHM_HANDOFF.md §3.2·§4.3 + 2026-09-12 운영 DB 실측.
+
+		실측(ody, PG 17.11, music 6,624,399행, id=1000000 기준):
+		  ef_search 40 (기본) : 40행,  웜 1.2 ms
+		  ef_search 200       : 200행, 웜 4.0 ms, 콜드 350 ms
+
+		⚠️ ef_search 기본값 40 이 LIMIT 보다 작으면 LIMIT 만큼 안 온다.
+		   HNSW 가 ef_search 개를 훑고 멈추기 때문이다. LIMIT 200 을 요청해도 40행이었다.
+		   limit 을 400·800 으로 올려도 소용없다 — 재질의로 풀리는 문제가 아니라서
+		   raiseEfSearch 를 질의 앞에 걸어야 한다.
+
+		⚠️ 콜드 350 ms. 첫 요청이나 인덱스가 캐시에서 밀린 뒤에 난다. 층 20개면 그만큼 곱해진다.
+
+		⚠️ 질의 좌표를 서브쿼리로 넘기지 않는다. 핸드오프 §3.2 함정 1 은 InitPlan 이 되어
+		   recall 0.0000 이 난다고 적었다. 2026-09-12 이 DB 에서는 InitPlan 이 떠도 HNSW 를
+		   정상으로 타고 답도 맞았다(1위가 거리 0 인 자기 자신, 0.9 ms) — 문서와 다르다.
+		   그래도 바인드로 넘긴다. 플래너 동작에 기대지 않는 편이 싸다.
+
+		후처리 조건을 넣지 않는다. pgvector 0.7.0 에는 iterative index scan 이 없어
+		WHERE 를 걸면 LIMIT 보다 적게 나온다. 필터는 애플리케이션이 건다(LayerCandidates).
+	-->
+
+	<!--
+		SET LOCAL 은 유틸리티 구문이라 바인드 파라미터를 못 받는다 (2026-09-12: ERROR syntax error at
+		or near "$1"). 같은 일을 하는 함수 set_config 로 넘긴다 — 세 번째 인자 true 가 SET LOCAL 이다.
+	-->
+	<select id="raiseEfSearch" resultType="string">
+		SELECT set_config('hnsw.ef_search', CAST(#{efSearch} AS text), true)
+	</select>
+
+	<select id="findNearest" resultType="com.ssafy.backend.music.dto.TrackCandidateRow">
+		SELECT m.id AS music_id, m.mbid, m.title, m.artist, m.duration,
+		       m.location &lt;-&gt; #{point}::vector AS dist,
+		       (m.location::real[])[1]  AS pc1,  (m.location::real[])[2]  AS pc2,
+		       (m.location::real[])[3]  AS pc3,  (m.location::real[])[4]  AS pc4,
+		       (m.location::real[])[5]  AS pc5,  (m.location::real[])[6]  AS pc6,
+		       (m.location::real[])[7]  AS pc7,  (m.location::real[])[8]  AS pc8,
+		       (m.location::real[])[9]  AS pc9,  (m.location::real[])[10] AS pc10,
+		       (m.location::real[])[11] AS pc11, (m.location::real[])[12] AS pc12,
+		       (m.location::real[])[13] AS pc13, (m.location::real[])[14] AS pc14,
+		       (m.location::real[])[15] AS pc15, (m.location::real[])[16] AS pc16
+		FROM music m
+		ORDER BY m.location &lt;-&gt; #{point}::vector
+		LIMIT #{limit}
+	</select>
+
+</mapper>

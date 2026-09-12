@@ -207,6 +207,11 @@ JwtAuthenticationFilter 제외 + 매퍼 `@MockitoBean` 이다(003 선례). 그 �
 
   **[2026-09-12] 완료** — `JourneyTrackReaderAdapter` + `MusicDetailMapper.findByMbids`. 별도 매퍼를 두지 않고 기존 `MusicDetailMapper` 에 `mbid IN` 조회를 더했다 — 같은 테이블·같은 컬럼이라 매퍼를 나누면 `locationColumns` 조각이 두 벌이 된다.
 
+  **[2026-09-12] 전 경로 확인** (`fullServicePathAssemblesResponse`, 실 DB 5쌍): 서비스 계층까지 태워
+  응답 조립을 검증했다 — `musicCnt == path.length`, `step` 0부터 연속, 양 끝이 출발·도착곡, 좌표·제목
+  채워짐, 곡 중복 0, `totalDuration` 합계 일치. 5쌍 전부 통과했고 정거장 15~20개(`musicCnt` 17~22),
+  `monotonic=true` 5/5 였다.
+
   **이게 없으면 API 가 동작하지 않는다.** `JourneyService.hydrate()` 가 port 를 `orElseThrow` 로 꺼내므로, 산출이 다 붙어도 **중간 정거장이 있는 모든 요청이 500** 이었다. 측정 하네스는 산출기만 직접 불러서 이 구멍을 덮고 있었다 — 벤치가 통과한다고 API 가 도는 것이 아니다.
 - [x] T046 `MusicDetailReader` 어댑터 — **[2026-09-12] `MusicDetailReaderAdapter` 가 `backend/dev` 에 이미 머지됨.** 좌표(16축)를 채우는지 확인만 하면 된다 — 002·003·005 와 공유. 이 기능은 `findDetail(id)` 만 쓴다. **rev.3: 좌표(16차원)가 응답에 필요하므로 이 어댑터가 좌표를 채워야 한다** — 산출의 축 좌표계가 출발·도착 좌표에서 시작한다 — **확인 완료**: `MusicDetailReaderAdapter.findDetail` 이 `locationColumns` 로 pc1~pc16 을 채운다.
 - [x] T047 [T045+T046+T053] quickstart D1~D7 실행 — **[2026-09-12] D-DATA 해소로 착수 가능.** 수용 기준은 핸드오프 §4.9 의 AC-J1~J6 를 함께 쓴다(무작위 40쌍 전부 reachable · 단조 증가 · 인접 역 거리 ≥ 1.6624 · 아티스트 4곡 이상 0건 · **p95 ≤ 2초** · far 쌍의 역 10~20개) — **rev.3: 측정 구간을 "엔진 / 게이트웨이" 가 아니라 "층 조회 / DP / 조립" 으로 나눈다.** 최악 케이스(층 재질의 상한 + 규칙 재산출 상한 소진)를 반드시 포함한다 — **타임아웃이 없어져 이 값이 곧 지연 상한이다** (SC-002, FR-025, B-Latency)

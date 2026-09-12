@@ -26,12 +26,17 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import com.ssafy.backend.music.detail.MusicDetailReaderAdapter;
+import com.ssafy.backend.music.dto.JourneyResponse;
+import com.ssafy.backend.music.dto.JourneyStop;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.TrackCandidateRow;
+import com.ssafy.backend.music.mapper.MusicDetailMapper;
 import com.ssafy.backend.music.mapper.NearestTrackMapper;
 import com.ssafy.backend.music.retrieval.NearestTrackReader;
 import com.ssafy.backend.music.retrieval.ServingRules;
+import com.ssafy.backend.music.service.JourneyService;
 import com.ssafy.backend.music.retrieval.TrackCandidate;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
@@ -72,6 +77,9 @@ class JourneyBenchmarkIT {
 	/** AC-J5 기준. 종단 3초 예산의 하위 목표다. */
 	private static final long P95_BUDGET_MS = 2000;
 
+	/** 전 경로는 조립까지 확인하는 것이 목적이라 표본이 적어도 된다. */
+	private static final int FULL_PATH_PAIRS = 5;
+
 	/** 최악 케이스는 질의가 3배라 표본을 줄인다. 분포가 아니라 상한을 보는 측정이다. */
 	private static final int WORST_PAIRS = 10;
 
@@ -85,7 +93,10 @@ class JourneyBenchmarkIT {
 	private static long maxId;
 
 	/** 운영 매퍼 XML. 인터페이스 옆이 아니라 이 경로에 있어 직접 파싱해야 한다. */
-	private static final String MAPPER_XML = "mapper/music/NearestTrackMapper.xml";
+	private static final String[] MAPPER_XMLS = {
+			"mapper/music/NearestTrackMapper.xml",
+			"mapper/music/MusicDetailMapper.xml",
+	};
 
 	@BeforeAll
 	static void connect() throws Exception {
@@ -98,8 +109,10 @@ class JourneyBenchmarkIT {
 		cfg.setMapUnderscoreToCamelCase(true);
 		// 운영과 같은 SQL 로 재야 하므로 XML 을 그대로 읽는다. 파싱이 namespace 로 인터페이스까지 묶어
 		// 주므로 NearestTrackMapper 를 따로 addMapper 하면 중복 등록으로 터진다.
-		try (java.io.InputStream in = Resources.getResourceAsStream(MAPPER_XML)) {
-			new XMLMapperBuilder(in, cfg, MAPPER_XML, cfg.getSqlFragments()).parse();
+		for (String xml : MAPPER_XMLS) {
+			try (java.io.InputStream in = Resources.getResourceAsStream(xml)) {
+				new XMLMapperBuilder(in, cfg, xml, cfg.getSqlFragments()).parse();
+			}
 		}
 		cfg.addMapper(BenchMapper.class);
 		factory = new SqlSessionFactoryBuilder().build(cfg);
@@ -180,6 +193,70 @@ class JourneyBenchmarkIT {
 			return 0;
 		}
 		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
+	}
+
+	/**
+	 * 서비스 계층까지 태우는 전 경로 확인 — 산출만 재는 다른 측정이 못 보는 구간이다.
+	 *
+	 * <p><b>왜 필요한가.</b> 다른 측정은 {@link AxisJourneyPathFinder} 를 직접 생성해 부른다. 그래서
+	 * {@code JourneyTrackReader} 구현체가 없던 동안에도 40쌍이 전부 통과했지만, 실제 요청은
+	 * 중간 정거장이 있는 한 전부 500 이었다(2026-09-12). <b>벤치 통과가 API 동작을 뜻하지 않는다.</b>
+	 *
+	 * <p>컨트롤러는 파라미터를 넘기는 일만 하므로 여기까지가 실질적인 전 경로다.
+	 */
+	@Test
+	void fullServicePathAssemblesResponse() {
+		Random rnd = new Random(SEED);
+		int checked = 0;
+
+		for (int i = 0; i < FULL_PATH_PAIRS; i++) {
+			try (SqlSession session = factory.openSession()) {
+				BenchMapper bench = session.getMapper(BenchMapper.class);
+				MusicDetail a = load(bench, rnd);
+				MusicDetail b = load(bench, rnd);
+				if (a == null || b == null || a.id().equals(b.id())) {
+					continue;
+				}
+
+				JourneyResponse res = serviceOn(session).getJourney(a.id(), b.id());
+
+				assertThat(res.path()).as("경로가 비어 있지 않다").isNotEmpty();
+				assertThat(res.musicCnt()).as("musicCnt 는 path 길이다 (FR-021)").isEqualTo(res.path().size());
+				assertThat(res.path().size()).as("계약 상한 30 (FR-008)").isLessThanOrEqualTo(30);
+				assertThat(res.path().get(0).music().id()).as("첫 원소가 출발곡").isEqualTo(a.id());
+				assertThat(res.path().get(res.path().size() - 1).music().id())
+						.as("마지막 원소가 도착곡").isEqualTo(b.id());
+
+				for (int k = 0; k < res.path().size(); k++) {
+					JourneyStop stop = res.path().get(k);
+					assertThat(stop.step()).as("step 은 0 부터 연속 (FR-005)").isEqualTo(k);
+					assertThat(stop.music().location()).as("좌표가 채워져 있다 (FR-016)").isNotNull();
+					assertThat(stop.music().title()).as("제목이 채워져 있다").isNotNull();
+				}
+				assertThat(res.path().stream().map(st -> st.music().id()).distinct().count())
+						.as("같은 곡이 두 번 나오지 않는다 (I6)").isEqualTo(res.path().size());
+
+				int expected = res.path().stream()
+						.mapToInt(st -> st.music().duration() == null ? 0 : st.music().duration()).sum();
+				assertThat(res.totalDuration()).as("totalDuration 은 duration 합 (FR-006)").isEqualTo(expected);
+				checked++;
+			}
+		}
+
+		System.out.printf("%n=== 전 경로 확인: %d 쌍 조립 성공 ===%n", checked);
+		assertThat(checked).as("최소 한 쌍은 검사했다").isPositive();
+	}
+
+	/** 운영과 같은 어댑터·서비스를 실 DB 세션 위에 조립한다. Spring 없이 생성자로만 엮는다. */
+	private JourneyService serviceOn(SqlSession session) {
+		MusicDetailMapper detailMapper = session.getMapper(MusicDetailMapper.class);
+		AxisJourneyPathFinder finder = new AxisJourneyPathFinder(
+				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry());
+		return new JourneyService(
+				Optional.of(new MusicDetailReaderAdapter(detailMapper)),
+				Optional.of(finder),
+				Optional.of(new JourneyTrackReaderAdapter(detailMapper)),
+				new SimpleMeterRegistry());
 	}
 
 	/**

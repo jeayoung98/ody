@@ -1,8 +1,8 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
-import { STORAGE_KEYS } from "@/constants";
-import type { LayerBox } from "@/types";
+import { HOVER_CARD, STORAGE_KEYS } from "@/constants";
+import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
@@ -11,6 +11,7 @@ import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { readStorage, writeStorage } from "@/lib/storage";
+import { openYoutube } from "@/lib/youtube";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -20,6 +21,7 @@ import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
 import { MapEngine } from "./engine/map-engine";
 import FloatingReactions from "./floating-reactions";
+import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { useViewport } from "./use-viewport";
@@ -31,12 +33,22 @@ interface MapViewProps {
 
 /**
  * 스테이지 전체를 채우는 별지도. 엔진을 소유하고 스토어/쿼리와 엔진을 연결한다.
- * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 그 곡으로 이동·재생·상세 / 친구 프로필
+ * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 그 곡 상세(뷰만 이동) / 친구 프로필
+ *
+ * **보는 곡과 내 위치는 다른 값이다** (S15P21A405-277). 클릭은 보는 곡만 바꾸고, 내 위치(우주선)는
+ * 재생했을 때만 옮겨간다 — 엔진 `FollowState` 주석이 적어 둔 SOCIAL-07 의 두 단계와 같은 구분이다.
  */
 export default function MapView({ occludedRight }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
   const { ref, size } = useViewport();
   const [hover, setHover] = useState(false);
+  /** 호버 카드에 띄울 곡. 카드가 DOM 이라 곡 자체를 들고 있어야 한다 */
+  const [hoverSong, setHoverSong] = useState<MapPoint | null>(null);
+  /** 카드가 켜져 있나. 꺼져도 사라지는 동안에는 `hoverSong` 이 남아 있는다 */
+  const [cardOn, setCardOn] = useState(false);
+  /** 호버 카드의 DOM. 마우스가 그 위인지 매번 다시 재려고 들고 있는다 */
+  const cardRef = useRef<HTMLDivElement>(null);
+  const hideTimer = useRef<number | null>(null);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
@@ -186,6 +198,36 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (home) writeStorage(STORAGE_KEYS.myHome, home);
   }, [home]);
 
+  /**
+   * 별에서 벗어나도 **곧바로 끄지 않는다.** 별과 카드 사이에는 틈이 있어서 카드로 가는 동안에는
+   * 아무것도 안 잡히는데, 그 순간 꺼 버리면 카드에 닿기 전에 사라진다 (실제로 그랬다).
+   */
+  const cancelHide = useCallback(() => {
+    if (hideTimer.current == null) return;
+    clearTimeout(hideTimer.current);
+    hideTimer.current = null;
+  }, []);
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current != null) return;
+    hideTimer.current = window.setTimeout(() => {
+      hideTimer.current = null;
+      setCardOn(false);
+    }, HOVER_CARD.graceMs);
+  }, []);
+  /**
+   * 다 사라진 뒤에야 떼어 낸다. 엔진의 호버도 여기서 푼다 —
+   * 먼저 풀면 카드가 자기 자리를 잃어서 사라지는 대신 **툭 없어진다.**
+   */
+  useEffect(() => {
+    if (cardOn || hoverSong == null) return;
+    const t = setTimeout(() => {
+      engine.setHover(null);
+      setHoverSong(null);
+    }, HOVER_CARD.fadeMs);
+    return () => clearTimeout(t);
+  }, [engine, cardOn, hoverSong]);
+  useEffect(() => cancelHide, [cancelHide]);
+
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
@@ -223,14 +265,27 @@ export default function MapView({ occludedRight }: MapViewProps) {
         else if (mode !== "nearby") engine.dragBy(dx, dy);
         return;
       }
+      // 카드 위로 넘어간 마우스는 "별에서 벗어난 것" 이 아니다 — 카드를 유지한다.
+      // 들어왔다/나갔다를 플래그로 기억하면 카드가 포인터 밑에서 사라질 때 굳는다 (지워진 요소는
+      // mouseleave 를 쏘지 않는다). 그래서 매번 지금 자리로 다시 잰다
+      if (cardRef.current?.contains(e.target as Node)) {
+        cancelHide();
+        return;
+      }
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
       const hitF = engine.hitFriend(mx, my);
       const hit = hitF ? null : engine.hitTest(mx, my);
-      engine.setHover(hit ? engine.songs[hit.i].musicId : null);
+      const song = hit ? engine.songs[hit.i] : null;
+      if (song) {
+        cancelHide();
+        engine.setHover(song.musicId);
+        setHoverSong(song);
+        setCardOn(true);
+      } else scheduleHide();
       setHover(!!hit || !!hitF);
     },
-    [engine],
+    [engine, cancelHide, scheduleHide],
   );
   const onMouseUp = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
@@ -267,21 +322,36 @@ export default function MapView({ occludedRight }: MapViewProps) {
         selectMusic(id);
         return;
       }
-      // 클릭 = 그 곡으로 이동 + 재생 + 상세 (MAP-08) — 보는 곡과 내 위치를 나누지 않는다
+      // 클릭 = **보기만** (S15P21A405-277). 상세를 열고 뷰만 그리로 옮긴다 —
+      // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
       selectMusic(id);
       openSong(id);
-      engine.travelTo(id);
-      playSingle(id);
-      recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
+      engine.viewSong(id);
       useTutorialStore.getState().complete("select");
     },
-    [engine, openFeed, openSong, playSingle, recordPlay, selectMusic],
+    [engine, openFeed, openSong, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;
-    engine.setHover(null);
+    scheduleHide();
     setHover(false);
-  }, [engine]);
+  }, [scheduleHide]);
+
+  /**
+   * 호버 카드의 재생 — 상세를 열면서 동시에 재생한다.
+   * 내 위치는 `currentMusicId` 가 바뀌는 것을 보고 위쪽 이펙트가 옮긴다 (재생 = 이동, 한 자리에서만).
+   */
+  const handleCardPlay = useCallback(
+    (s: MapPoint) => {
+      selectMusic(s.musicId);
+      openSong(s.musicId);
+      openYoutube(s.youtubeUrl);
+      playSingle(s.musicId);
+      recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 });
+      useTutorialStore.getState().complete("select");
+    },
+    [openSong, playSingle, recordPlay, selectMusic],
+  );
 
   const following = leaderEmail != null;
   const cursor = following ? "cursor-not-allowed" : pickTarget ? "cursor-crosshair" : hover ? "cursor-pointer" : "cursor-grab active:cursor-grabbing";
@@ -301,6 +371,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       <FloatingReactions />
+      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onPlay={handleCardPlay} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

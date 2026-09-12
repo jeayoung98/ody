@@ -411,6 +411,17 @@ export class MapEngine {
     this.hoverId = id;
   }
 
+  /**
+   * 호버 카드가 매 프레임 따라붙을 화면 좌표. 카드는 캔버스가 아니라 **DOM** 이라
+   * (S15P21A405-277 — 카드 위에 마우스를 올려도 사라지지 않아야 하고 진짜 버튼이 들어간다)
+   * 별의 지금 자리를 밖에서 물어볼 수 있어야 한다. 화면에서 빠진 곡이면 null 이다.
+   */
+  hoverAnchor(): { px: number; py: number } | null {
+    if (this.hoverId == null) return null;
+    const v = this.visible.find((x) => this.songs[x.i].musicId === this.hoverId);
+    return v ? { px: v.px, py: v.py } : null;
+  }
+
   setSelected(id: number | null) {
     // 고스트별로 띄운 곡이 아닌 다른 곡을 고르면 고스트는 사라진다 (MAP-12)
     if (this.ghost && id !== this.ghost.musicId) this.ghost = null;
@@ -1320,6 +1331,19 @@ export class MapEngine {
     const f = this.freeRect();
     const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
     this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
+  }
+
+  /**
+   * 곡을 **보기만** 한다 — 카메라만 그리로 가고 '나'는 제자리다 (S15P21A405-277).
+   * 지도에서 별을 눌렀을 때의 동작이다. 재생은 여기서 하지 않는다.
+   *
+   * 가운데 고정을 반드시 푼다. 안 풀면 `frame` 이 매 프레임 카메라를 재생 중인 곡으로
+   * 되돌려서, 옮겨 간 뷰가 곧바로 튕겨 돌아온다.
+   */
+  viewSong(id: number) {
+    if (this.follow || this.constellationActive()) return;
+    this.centerLock = false;
+    this.focus(id);
   }
 
   /**

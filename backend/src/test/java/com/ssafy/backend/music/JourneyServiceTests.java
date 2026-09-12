@@ -37,9 +37,9 @@ import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 /**
  * 경로 탐색 게이트웨이 서비스 유닛 (mock port). quickstart B절 + data-model §6 불변식 I1~I9.
  *
- * <p>검증 범위는 <b>조립</b>이다. 축 통로·Viterbi·후처리 규칙은 BE4 엔진이 보장하고
- * BE4 {@code tests/bench_journey.py} 가 측정한다(40쌍 실측: 단조 위반 0, 인접 역 거리 median p50 2.949).
- * 여기서 경로 품질을 다시 계산하지 않는다.
+ * <p>검증 범위는 <b>조립</b>이다. 축 통로·Viterbi·후처리 규칙은 {@code AxisJourneyPathFinder} 가
+ * 수행하고 {@code AxisJourneyPathFinderTests}·{@code ViterbiPathTests} 가 검증한다(rev.3 인프로세스 전환).
+ * 여기서는 산출을 mock 으로 두고 조립·오류 매핑만 본다 — 응답 계약이 그대로이므로 이 파일은 전환 전후로 같다.
  */
 class JourneyServiceTests {
 
@@ -353,12 +353,12 @@ class JourneyServiceTests {
 	}
 
 	@Test
-	void journey_engineThrows_becomesInternalErrorNot422() {
+	void journey_computeThrows_becomesInternalErrorNot422() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenThrow(new RuntimeException("connect timed out"));
 
-		// 엔진 부재·타임아웃을 422 로 내리지 않는다 (2026-09-10 clarify)
+		// 산출 실패(조회 어댑터 부재·재산출 상한 소진)를 422 로 내리지 않는다 — 곡을 바꿔 풀 수 있는 실패가 아니다
 		assertThatThrownBy(() -> service.getJourney(START_ID, END_ID))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode().getCode())
@@ -366,7 +366,7 @@ class JourneyServiceTests {
 	}
 
 	@Test
-	void journey_engineAdapterAbsent_becomesInternalErrorNot422() {
+	void journey_pathFinderAbsent_becomesInternalErrorNot422() {
 		JourneyService noEngine = new JourneyService(Optional.of(detailReader), Optional.empty(),
 				Optional.of(trackReader), meterRegistry);
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));

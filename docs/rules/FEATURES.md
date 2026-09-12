@@ -32,7 +32,7 @@
 | 본인 조회 | ⬜ `/api/auth/me` 없음. `GET /user/detail?email=` 은 이메일을 요구 — A-15 | 🟡 목 라우트로 동작 |
 | 공통 응답 봉투 `{success, data, error}` | ✅ `common/ApiResponse.java` | ✅ `src/lib/api.ts` 가 벗겨서 반환 |
 | 실시간(소켓) | 🟡 `WebSocketConfig` 만 있음 (테스트 컨트롤러) | ⬜ 미착수 |
-| 그 외 전 기능 (지도·검색·플리·여정·소셜·차트) | ⬜ 미착수 | 🟡 `src/app/api/` 목 라우트로 동작 중 |
+| 그 외 전 기능 (지도·검색·플리·여정·소셜·차트) | ⬜ 미착수 | 🟡 `src/app/bff/` 목 라우트로 동작 중 |
 
 ---
 

@@ -8,7 +8,7 @@ import type { SurveySubmission, SurveyTarget } from "@/types/survey";
 /**
  * 설문 응답 전송 (S15P21A405-250).
  *
- * 목 라우트(`/api/feedback`)로 보낸다. 백엔드가 준비되면 라우트 안만 바뀌고
+ * 목 라우트(`/bff/feedback`)로 보낸다. 백엔드가 준비되면 라우트 안만 바뀌고
  * 이 훅은 그대로다.
  *
  * `src/lib/api.ts` 의 공통 래퍼를 쓰지 않는다 — 그 래퍼는 `Authorization` 헤더를 붙이는데,
@@ -31,7 +31,7 @@ export function useSurveySubmit() {
         answeredAt: new Date().toISOString(),
       };
 
-      const res = await fetch("/api/feedback", {
+      const res = await fetch("/bff/feedback", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(body),

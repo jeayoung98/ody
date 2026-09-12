@@ -12,7 +12,7 @@ import { NextResponse } from "next/server";
  *    프로덕션에서는 404 를 돌려준다. 쓰는 파일도 PERF-LOG.md 하나로 고정해
  *    경로를 요청으로 바꿀 수 없게 한다.
  *
- * 목 API(`src/app/api/`)는 백엔드가 붙으면 통째로 사라지므로 이 라우트는 그 바깥에 둔다.
+ * 목 API(`src/app/bff/`)는 백엔드가 붙으면 통째로 사라지므로 이 라우트는 그 바깥에 둔다.
  */
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";

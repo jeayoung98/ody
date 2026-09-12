@@ -34,6 +34,11 @@ interface Frame {
   layer: number;
   cam: MapCamera;
   subset: Uint8Array<ArrayBufferLike>;
+  /**
+   * 그 겹에 **들어왔을 때의 배율**. 줌 한계와 게이트가 전부 이 값 기준이라 떠오를 때 되살려야 한다.
+   * 카메라(`cam`)는 떠날 때 확대돼 있던 값이라 이걸 대신 쓸 수 없다 (S15P21A405-271).
+   */
+  entryS: number;
 }
 
 interface Morph {
@@ -45,6 +50,8 @@ interface Morph {
   sub: string;
   /** 1 = 파고들기(확대해 들어간다), -1 = 떠오르기(물러난다) */
   dir: 1 | -1;
+  /** 도착한 겹의 진입 배율. 없으면 도착 카메라 배율을 쓴다 (파고들 때는 그게 맞다) */
+  entryS?: number;
 }
 
 /** 화면에 잡힌 친구 (그리기·히트테스트용) */
@@ -1100,7 +1107,7 @@ export class MapEngine {
    * from 은 지금 화면에 보이던 자리, to 는 새 겹에서의 자리이고, 각자 자기 자리에서
    * 화면 중앙을 기준으로 커지거나 작아지기만 한다. 별이 새 자리로 미끄러지지 않는다.
    */
-  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string, dir: 1 | -1 = 1) {
+  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string, dir: 1 | -1 = 1, entryS?: number) {
     // 레이어를 옮기면 고스트별은 사라진다 (MAP-12)
     this.ghost = null;
     for (let i = 0; i < this.N; i++) {
@@ -1113,7 +1120,7 @@ export class MapEngine {
     this.pressure = 0;
     this.camTarget = null;
     this.morphT = 0;
-    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir };
+    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir, entryS };
   }
 
   /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
@@ -1144,7 +1151,7 @@ export class MapEngine {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
     const box = this.drillBox();
     const inView = this.countInBox(box);
-    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
+    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
     this.boxes = [...this.boxes, box];
     const nl = this.layer + 1;
     // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
@@ -1224,7 +1231,7 @@ export class MapEngine {
     const f = this.freeRect();
     const c: MapCamera = { ...p.cam, cx: m.pc[dx] - (f.cx - this.W / 2) / p.cam.s, cy: m.pc[dy] + (f.cy - this.H / 2) / p.cam.s };
     const ax = LAYER_AXES[p.layer];
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1);
+    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1, p.entryS);
   }
 
   // ------------------------------------------------------------------ input
@@ -1532,7 +1539,9 @@ export class MapEngine {
     // 떠오르기용 상위 겹 프레임 재구성 (지금 스택은 다른 길로 파고든 것이라 쓸 수 없다)
     this.stack = Array.from({ length: target }, (_, l) => {
       const sub = this.maskForBoxes(h.boxes, l);
-      return { layer: l, cam: this.fitCam(l, sub, h.musicId), subset: sub };
+      // 다른 길로 파고든 스택을 버리고 새로 쌓는 자리다 — 그 겹의 맞춤 배율이 곧 진입 배율이다
+      const cam = this.fitCam(l, sub, h.musicId);
+      return { layer: l, cam, subset: sub, entryS: cam.s };
     });
     this.boxes = [...h.boxes];
 
@@ -1772,7 +1781,9 @@ export class MapEngine {
         this.anim = null;
         this.layer = a.layer;
         this.cam = a.cam;
-        this.entryS = a.cam.s;
+        // 떠오르기는 **그 겹에 원래 들어왔던 배율**로 되돌린다 — 떠날 때 확대돼 있던 배율을
+        // 진입 배율로 삼으면 그 겹의 줌아웃 한계가 그만큼 올라간다 (S15P21A405-271)
+        this.entryS = a.entryS ?? a.cam.s;
         this.subset = a.subset;
         this.rebuildAliveIdx();
         this.alpha = this.aTo.slice();

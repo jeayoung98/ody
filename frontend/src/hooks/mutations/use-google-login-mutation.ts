@@ -13,7 +13,7 @@ interface GoogleLoginResponse {
 
 /**
  * 구글 로그인 (AUTH-01/02). Google Identity Services 가 발급한 idToken 을 백엔드가 검증한다.
- * 응답에 사용자가 함께 오므로 본인 조회(`/api/auth/me`, 백엔드 미구현 — BACKEND-NOTES A-15) 없이도
+ * 응답에 사용자가 함께 오므로 본인 조회(`/bff/auth/me`, 백엔드 미구현 — BACKEND-NOTES A-15) 없이도
  * 신규 여부를 알 수 있다: `nickname` 이 비어 있으면 닉네임 설정이 필요한 신규 사용자다 (A-14).
  */
 export function useGoogleLoginMutation() {

@@ -11,6 +11,7 @@ import java.util.Optional;
 
 import org.springframework.stereotype.Repository;
 
+import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
@@ -49,7 +50,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				row.getDuration(),
 				row.getAlbum(),
 				genres,
-				row.getYoutubeUrl(),
+				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 				row.toLocation(),
 				row.getPlayCnt(),
 				row.getYoutubeCnt()));
@@ -76,7 +77,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 								row.getArtist(),
 								row.getAlbum(),
 								genres.getOrDefault(row.getId(), List.of()),
-								row.getYoutubeUrl(),
+								YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 								row.toLocation()),
 						row.getDistance()))
 				.toList();

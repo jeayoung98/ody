@@ -5,7 +5,8 @@
 	<!--
 		실제 테이블: public.music(id, mbid, title, artist, release_year, bpm, duration, album,
 		youtube_url, location vector(16), play_cnt, youtube_cnt) — 6,624,399행 적재 완료.
-		적재 결과상 release_year·album·youtube_url 은 전 행 NULL 이다(스펙 18 AC4). 그대로 내려보낸다.
+		적재 결과상 release_year·album·youtube_url 은 전 행 NULL 이다(스펙 18 AC4).
+		album 은 그대로 내려보내고, youtube_url 은 읽지 않는다 — YoutubeSearchUrl 이 조회 시 검색 URL 을 만든다(D12).
 
 		좌표는 location 을 real[] 로 캐스팅해 16축을 그대로 펼친다. 반올림·재계산 없음(FR-006).
 		data 팀 실측 질의와 같은 형태다: data/ingest/map_layer_queries.sql (origin/data/dev).
@@ -36,7 +37,7 @@
 		   NULLS LAST 는 값이 생겼을 때를 위한 것이다(Postgres 는 DESC 가 기본 NULLS FIRST).
 	-->
 	<select id="findPage" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
-		SELECT m.id, m.title, m.artist, m.album, m.youtube_url,
+		SELECT m.id, m.title, m.artist, m.album,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE <include refid="matchCondition"/>

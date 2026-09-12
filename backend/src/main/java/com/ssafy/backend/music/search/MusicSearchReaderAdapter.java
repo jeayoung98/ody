@@ -11,6 +11,7 @@ import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSearchRow;
+import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.mapper.MusicSearchMapper;
 
@@ -54,7 +55,7 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 						row.getArtist(),
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
-						row.getYoutubeUrl(),
+						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 						row.toLocation()))
 				.toList(), total);
 	}

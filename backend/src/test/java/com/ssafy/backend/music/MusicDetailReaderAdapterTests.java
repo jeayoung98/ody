@@ -133,14 +133,13 @@ class MusicDetailReaderAdapterTests {
 	}
 
 	@Test
-	void findNeighbors_keepsUnplayableTracks_andGroupsGenres() {
-		MusicDetailRow playable = row(1L);
-		playable.setDistance(0.1);
-		playable.setYoutubeUrl("https://y/1");
-		MusicDetailRow unplayable = row(2L); // youtubeUrl null — 제외하지 않는다
-		unplayable.setDistance(0.2);
+	void findNeighbors_groupsGenresPerTrack() {
+		MusicDetailRow first = row(1L);
+		first.setDistance(0.1);
+		MusicDetailRow second = row(2L);
+		second.setDistance(0.2);
 		when(mapper.findLocationText(7L)).thenReturn("[0.1]");
-		when(mapper.findNearest(anyLong(), anyString(), anyInt())).thenReturn(List.of(playable, unplayable));
+		when(mapper.findNearest(anyLong(), anyString(), anyInt())).thenReturn(List.of(first, second));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L)))
 				.thenReturn(List.of(genreRow(1L, "electronic"), genreRow(1L, "rock")));
 
@@ -149,6 +148,5 @@ class MusicDetailReaderAdapterTests {
 		assertEquals(2, neighbors.size());
 		assertEquals(List.of("electronic", "rock"), neighbors.get(0).music().genres());
 		assertEquals(List.of(), neighbors.get(1).music().genres());
-		assertNull(neighbors.get(1).music().youtubeUrl());
 	}
 }

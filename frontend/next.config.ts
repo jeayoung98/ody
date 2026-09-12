@@ -8,7 +8,6 @@ import { LIVE_API_PATHS } from "./src/constants/live-api-paths";
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
 
 const nextConfig: NextConfig = {
-  output: "standalone",
   /**
    * 배포는 **Node 프로세스**로 돈다 (포트 3000, nginx 가 `/bff/` 와 `/` 를 여기로 보낸다).
    * 정적 export 로는 `src/app/bff/` 라우트 핸들러가 산출물에 없어서 모든 데이터 화면이 죽는다 —

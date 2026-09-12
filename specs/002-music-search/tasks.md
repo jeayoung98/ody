@@ -94,7 +94,7 @@ B-D 해소 — BE4가 어댑터 구현을 BE2에 위임. 운영 DB는 PostgreSQL
 - [X] T303 [US1] `MusicSearchReader` MyBatis 어댑터 구현 per FR-001·FR-009·FR-010 (missing) — `MusicSearchMapper.xml`(classpath:mapper/music/)에 `title ILIKE '%'||#{query}||'%' OR artist ILIKE '%'||#{query}||'%'`, `ORDER BY youtube_cnt DESC, id ASC`, `LIMIT #{size} OFFSET #{page}*#{size}` + count 질의. `music/search/MusicSearchReaderAdapter`가 port를 구현해 매퍼에 위임.
 - [X] T304 [US1] `MusicSummary` 조립 per FR-005 (missing) — `genres`는 `music_genre`+`genre` 조인(곡당 0..n, collection resultMap), `album`·`youtube_url`은 적재 결과상 전 행 NULL이므로 null 그대로 싣는다(FR-007 재생 불가 곡 유지). `map-underscore-to-camel-case` 전제.
 - [X] T305 [US1] `location vector(16)` → `Location(pc1..pc16)` 매핑 per FR-006·SC-002 (missing) — pgvector 값을 저장값 그대로 읽어 담는다. 재계산·재투영·반올림 금지. JDBC가 `vector`를 문자열로 돌려주므로 SELECT에서 `(location::real[])[n]` 로 축을 펴거나 TypeHandler 중 하나를 택한다.
-- [X] T306 [US1] 어댑터 단위 테스트 per SC-004·Constitution III (missing) — 매퍼 mock 기준으로 page/size→offset 계산, totalElements 전달, query trim 전달을 검증한다. 실 DB(H2에 pgvector 없음) 통합 검증은 T204로 남는다.
+- [X] T306 [US1] 어댑터 단위 테스트 per SC-004·Constitution III (missing) — 매퍼 mock 기준으로 page/size→offset 계산, hasNext 판정(size+1 조회), query trim 전달을 검증한다. 실 DB(H2에 pgvector 없음) 통합 검증은 T204로 남는다.
 - [X] T307 substring 인덱스 미도입 상태를 기록한다 per plan: 성능 목표 p95<300ms (partial) — 6,624,399행에 `ILIKE %q%`는 순차 스캔이다. `pg_trgm` GIN 생성은 운영 DB 변경이라 BE4/Infra 합의 후(T203). 그 전까지 p95<300ms를 충족했다고 보고하지 않는다. **기록 완료**: 매퍼 XML 주석과 MR 에 남겼다. 측정도 인덱스도 하지 않았다.
 
 ## youtubeUrl 은 조회 시 만든다 (2026-09-12, S15P21A405-233)

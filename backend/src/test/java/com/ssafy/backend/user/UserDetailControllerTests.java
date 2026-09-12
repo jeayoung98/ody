@@ -81,7 +81,7 @@ class UserDetailControllerTests {
 	void detail_success_returnsUserDetailEnvelope() throws Exception {
 		when(userService.getDetail(eq("you@gmail.com"), eq("me@gmail.com"))).thenReturn(response(false));
 
-		mockMvc.perform(get("/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.error").doesNotExist())
@@ -96,14 +96,14 @@ class UserDetailControllerTests {
 	void detail_self_returnsIsMeTrue() throws Exception {
 		when(userService.getDetail(eq("me@gmail.com"), eq("me@gmail.com"))).thenReturn(response(true));
 
-		mockMvc.perform(get("/user/detail").param("email", "me@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "me@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.isMe").value(true));
 	}
 
 	@Test
 	void detail_missingEmail_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/user/detail").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").principal(principal("me@gmail.com")))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
@@ -111,7 +111,7 @@ class UserDetailControllerTests {
 
 	@Test
 	void detail_blankEmail_returnsInvalidInput() throws Exception {
-		mockMvc.perform(get("/user/detail").param("email", "  ").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "  ").principal(principal("me@gmail.com")))
 				.andExpect(status().isBadRequest())
 				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
@@ -121,7 +121,7 @@ class UserDetailControllerTests {
 		when(userService.getDetail(eq("nobody@gmail.com"), eq("me@gmail.com")))
 				.thenThrow(new CustomException(UserErrorCode.USER_NOT_FOUND));
 
-		mockMvc.perform(get("/user/detail").param("email", "nobody@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "nobody@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.error.code").value("USER_NOT_FOUND"));
@@ -132,7 +132,7 @@ class UserDetailControllerTests {
 		when(userService.getDetail(eq("you@gmail.com"), eq("me@gmail.com")))
 				.thenThrow(new CustomException(UserErrorCode.USER_PRIVATE));
 
-		mockMvc.perform(get("/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code").value("USER_PRIVATE"));
 	}

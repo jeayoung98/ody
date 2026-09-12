@@ -85,7 +85,7 @@ class PlaylistControllerTests {
 		when(playlistService.search(eq("owner@gmail.com"), eq("me@gmail.com")))
 				.thenReturn(List.of(new PlaylistSummary(42, "새벽 드라이브", 18, null)));
 
-		mockMvc.perform(get("/playlist/search").param("email", "owner@gmail.com").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/playlist/search").param("email", "owner@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content[0].playlistId").value(42))
 				.andExpect(jsonPath("$.data.content[0].musicCnt").value(18));
@@ -96,7 +96,7 @@ class PlaylistControllerTests {
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
 				.thenThrow(new CustomException(GlobalErrorCode.FORBIDDEN));
 
-		mockMvc.perform(get("/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
 				.andExpect(status().isForbidden())
 				.andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
 	}
@@ -109,7 +109,7 @@ class PlaylistControllerTests {
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
 				.thenReturn(new PlaylistDetailResponse(42, "드라이브", 1, 200, List.of(track)));
 
-		mockMvc.perform(get("/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
+		mockMvc.perform(get("/api/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.musicCnt").value(1))
 				.andExpect(jsonPath("$.data.musics[0].id").value(1));
@@ -120,7 +120,7 @@ class PlaylistControllerTests {
 		when(playlistService.create(eq("me@gmail.com"), eq("출근길"), eq(List.of())))
 				.thenReturn(new PlaylistCreateResponse(43, "출근길", 0));
 
-		mockMvc.perform(post("/playlist/create")
+		mockMvc.perform(post("/api/playlist/create")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistName\":\"출근길\",\"musicIdList\":[]}"))
@@ -133,7 +133,7 @@ class PlaylistControllerTests {
 		when(playlistService.create(eq("me@gmail.com"), eq("출근길"), eq(List.of())))
 				.thenThrow(new CustomException(PlaylistErrorCode.PLAYLIST_NAME_DUPLICATED));
 
-		mockMvc.perform(post("/playlist/create")
+		mockMvc.perform(post("/api/playlist/create")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistName\":\"출근길\",\"musicIdList\":[]}"))
@@ -146,7 +146,7 @@ class PlaylistControllerTests {
 		when(playlistService.insertMusic(eq(42L), eq(List.of(1L, 2L)), eq("me@gmail.com")))
 				.thenReturn(new PlaylistMusicInsertResponse(42, 1, 1, List.of(1L), 6));
 
-		mockMvc.perform(post("/playlist/music/insert")
+		mockMvc.perform(post("/api/playlist/music/insert")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistId\":42,\"musicIdList\":[1,2]}"))
@@ -157,7 +157,7 @@ class PlaylistControllerTests {
 
 	@Test
 	void insertMusic_emptyList_returnsInvalidInput() throws Exception {
-		mockMvc.perform(post("/playlist/music/insert")
+		mockMvc.perform(post("/api/playlist/music/insert")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistId\":42,\"musicIdList\":[]}"))
@@ -170,7 +170,7 @@ class PlaylistControllerTests {
 		when(playlistService.deleteMusic(eq(42L), eq(List.of(1L)), eq("me@gmail.com")))
 				.thenReturn(new PlaylistMusicDeleteResponse(42, 1, 18));
 
-		mockMvc.perform(post("/playlist/music/delete")
+		mockMvc.perform(post("/api/playlist/music/delete")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistId\":42,\"musicIdList\":[1]}"))
@@ -184,7 +184,7 @@ class PlaylistControllerTests {
 		when(playlistService.reorderMusic(eq(42L), eq(List.of(2L, 1L)), eq("me@gmail.com")))
 				.thenReturn(new PlaylistMusicReorderResponse(42, 2));
 
-		mockMvc.perform(post("/playlist/music/reorder")
+		mockMvc.perform(post("/api/playlist/music/reorder")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistId\":42,\"musicIdList\":[2,1]}"))
@@ -197,7 +197,7 @@ class PlaylistControllerTests {
 		when(playlistService.update(eq(42L), eq("새벽 드라이브 v2"), eq("me@gmail.com")))
 				.thenReturn(new PlaylistUpdateResponse(42, "새벽 드라이브 v2", 19));
 
-		mockMvc.perform(patch("/playlist/update")
+		mockMvc.perform(patch("/api/playlist/update")
 						.contentType(MediaType.APPLICATION_JSON)
 						.principal(principal("me@gmail.com"))
 						.content("{\"playlistId\":42,\"playlistName\":\"새벽 드라이브 v2\"}"))
@@ -207,7 +207,7 @@ class PlaylistControllerTests {
 
 	@Test
 	void delete_success_returns200() throws Exception {
-		mockMvc.perform(delete("/playlist/delete/42").principal(principal("me@gmail.com")))
+		mockMvc.perform(delete("/api/playlist/delete/42").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data").doesNotExist());
@@ -220,7 +220,7 @@ class PlaylistControllerTests {
 		org.mockito.Mockito.doThrow(new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND))
 				.when(playlistService).delete(999, "me@gmail.com");
 
-		mockMvc.perform(delete("/playlist/delete/999").principal(principal("me@gmail.com")))
+		mockMvc.perform(delete("/api/playlist/delete/999").principal(principal("me@gmail.com")))
 				.andExpect(status().isNotFound())
 				.andExpect(jsonPath("$.error.code").value("PLAYLIST_NOT_FOUND"));
 	}

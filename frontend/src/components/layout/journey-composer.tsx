@@ -17,6 +17,8 @@ import JourneyComposerSlot from "./journey-composer-slot";
 export default function JourneyComposer() {
   const [keyword, setKeyword] = useState("");
   const { data, isPending } = useMusicSearchQuery(keyword);
+  // 여기는 무한 스크롤을 안 붙였다 — 받아 둔 페이지만 편다 (첫 페이지 10곡, S15P21A405-267 범위 밖)
+  const results = data?.pages.flatMap((p) => p.items) ?? [];
   const startMusicId = useJourneyStore((s) => s.startMusicId);
   const endMusicId = useJourneyStore((s) => s.endMusicId);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
@@ -102,8 +104,8 @@ export default function JourneyComposer() {
       {searching && (
         <div className="max-h-[42vh] overflow-y-auto border-t border-line px-1.5 py-1.5">
           {isPending && <p className="lbl px-2 py-4 text-center">검색 중</p>}
-          {!isPending && (data?.length ?? 0) === 0 && <p className="lbl px-2 py-4 text-center">일치하는 곡이 없습니다</p>}
-          {data?.map((r) => (
+          {!isPending && results.length === 0 && <p className="lbl px-2 py-4 text-center">일치하는 곡이 없습니다</p>}
+          {results.map((r) => (
             <JourneyComposerResult
               key={r.id}
               result={r}

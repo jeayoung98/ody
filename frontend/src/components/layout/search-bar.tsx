@@ -12,7 +12,9 @@ import SearchResultList from "./search-result-list";
 export default function SearchBar() {
   const [keyword, setKeyword] = useState("");
   const [open, setOpen] = useState(false);
-  const { data, isPending } = useMusicSearchQuery(keyword);
+  const { data, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useMusicSearchQuery(keyword);
+  // 받아 둔 페이지를 한 줄로 편다 — 화면은 "끊김 없는 한 목록"으로 본다
+  const results = data?.pages.flatMap((p) => p.items) ?? [];
   const focusMusic = useMapStore((s) => s.focusMusic);
   const openSong = usePanelStore((s) => s.openSong);
 
@@ -44,7 +46,16 @@ export default function SearchBar() {
         />
         <span className="lbl">search</span>
       </div>
-      {open && keyword.trim() && <SearchResultList results={data ?? []} isLoading={isPending} onSelect={handleSelect} />}
+      {open && keyword.trim() && (
+        <SearchResultList
+          results={results}
+          isLoading={isPending}
+          onSelect={handleSelect}
+          hasMore={hasNextPage}
+          isLoadingMore={isFetchingNextPage}
+          onLoadMore={fetchNextPage}
+        />
+      )}
     </div>
   );
 }

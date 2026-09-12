@@ -61,7 +61,7 @@ export function mockSearch(keyword: string): MusicSearchResult[] {
   if (!q) return [];
   return allSongs()
     .filter((p) => p.title.toLowerCase().includes(q) || (p.artist ?? "").toLowerCase().includes(q))
-    .slice(0, 9)
+    .slice(0, 48)
     .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));
 }
 

@@ -1,11 +1,23 @@
 import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, ME_FLIGHT, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
-import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
+import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
+const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
+/** 인덱스 버퍼를 새 크기로. 앞쪽 keep 칸은 그대로 옮기고 뒤는 0 (곡은 뒤에 이어붙기만 한다) */
+const growF = (a: Float32Array, n: number, keep: number) => {
+  const b = new Float32Array(n);
+  if (keep > 0) b.set(a.subarray(0, Math.min(keep, a.length, n)));
+  return b;
+};
+const growU = (a: Uint8Array<ArrayBufferLike>, n: number) => {
+  const b = new Uint8Array(n);
+  b.set(a.subarray(0, Math.min(a.length, n)));
+  return b;
+};
 
 interface Frame {
   layer: number;
@@ -99,6 +111,12 @@ export class MapEngine {
 
   subset: Uint8Array<ArrayBufferLike> = new Uint8Array(0);
   private stack: Frame[] = [];
+  /**
+   * 겹마다 화면으로 좁혀 온 범위 (boxes[l] = 레이어 l 에서 담았던 사각형).
+   * 파고들 때 쌓고 떠오르면 그 아래를 버린다 — 이 누적이 다음 겹 요청의 조건이 된다.
+   * 길이 = 지금(또는 곧 도착할) 레이어 번호라, 서버 level 은 boxes.length + 1 이다.
+   */
+  boxes: readonly LayerBox[] = [];
   pos = new Float32Array(0);
   private from = new Float32Array(0);
   private to = new Float32Array(0);
@@ -106,6 +124,8 @@ export class MapEngine {
   /** 전환 중 **나가는 겹**의 화면 좌표·투명도 (들어오는 겹은 pos/alpha) */
   posOut = new Float32Array(0);
   alphaOut = new Float32Array(0);
+  /** 전환 진행도(이징 적용, 0 = 이전 겹 / 1 = 새 겹). 배경 깊이처럼 겹 단위 값을 섞을 때 쓴다 */
+  morphT = 0;
   private aFrom = new Float32Array(0);
   private aTo = new Float32Array(0);
   anim: Morph | null = null;
@@ -197,14 +217,19 @@ export class MapEngine {
     if (!this.inited) this.occludedRight = right;
   }
 
-  setSongs(songs: MapPoint[]) {
+  /**
+   * 곡 배열을 갈아끼우고 인덱스 기반 버퍼를 새 크기로 잡는다.
+   * 호출은 두 가지뿐이다 — 첫 진입(keep=0) 과 **뒤에 이어붙이기**(앞쪽 인덱스 유지).
+   * 그래서 이미 화면에 있던 별의 좌표·투명도는 그대로 남고, 새 곡만 0 에서 시작한다.
+   */
+  private allocate(songs: MapPoint[], keep: number) {
     this.songs = songs;
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
     // 깊이는 musicId 로 결정한다 (새로고침해도 같은 하늘)
-    this.z = new Float32Array(this.N);
-    for (let i = 0; i < this.N; i++) {
+    this.z = growF(this.z, this.N, keep);
+    for (let i = keep; i < this.N; i++) {
       let h = (songs[i].musicId * 2654435761) >>> 0;
       let g = 0;
       for (let k = 0; k < 4; k++) {
@@ -213,16 +238,27 @@ export class MapEngine {
       }
       this.z[i] = ((g - 2) / 1.6) * 0.75;
     }
+    this.pos = growF(this.pos, this.N * 2, keep * 2);
+    this.from = growF(this.from, this.N * 2, keep * 2);
+    this.to = growF(this.to, this.N * 2, keep * 2);
+    this.posOut = growF(this.posOut, this.N * 2, keep * 2);
+    this.alphaOut = growF(this.alphaOut, this.N, keep);
+    this.alpha = growF(this.alpha, this.N, keep);
+    this.aFrom = growF(this.aFrom, this.N, keep);
+    this.aTo = growF(this.aTo, this.N, keep);
+    // 상주 마스크는 인덱스 기반이라 쌓아둔 겹들 것까지 함께 늘린다
+    this.subset = growU(this.subset, this.N);
+    for (const f of this.stack) f.subset = growU(f.subset, this.N);
+    if (this.anim) this.anim.subset = growU(this.anim.subset, this.N);
+  }
+
+  /** 첫 진입 — 레이어 0(전 우주)의 상주 집합 */
+  setSongs(songs: MapPoint[]) {
+    this.allocate(songs, 0);
     this.subset = this.residentMask();
-    this.pos = new Float32Array(this.N * 2);
-    this.from = new Float32Array(this.N * 2);
-    this.to = new Float32Array(this.N * 2);
-    this.posOut = new Float32Array(this.N * 2);
-    this.alphaOut = new Float32Array(this.N);
-    this.alpha = Float32Array.from(this.subset);
-    this.aFrom = new Float32Array(this.N);
-    this.aTo = new Float32Array(this.N);
+    this.alpha.set(this.subset);
     this.stack = [];
+    this.boxes = [];
     this.layer = 0;
     if (this.myId == null || !this.index.has(this.myId)) this.myId = this.centerMost();
     const m = this.songs[this.index.get(this.myId!)!];
@@ -232,6 +268,60 @@ export class MapEngine {
     this.inited = true;
     this.rebuildAliveIdx();
     this.project();
+  }
+
+  /**
+   * 이 겹의 상주 집합이 도착했다 (겹마다 서버에서 받는다 — BACKEND-NOTES A-1).
+   * 못 보던 곡은 배열 뒤에 이어붙이고, 상주 마스크를 받은 집합으로 갈아끼운다.
+   * 파고드는 전환 중에 도착하면 그 전환의 **도착 지점만** 바뀌어 한 번의 연출로 끝난다.
+   */
+  setLayerSongs(layer: number, songs: MapPoint[]) {
+    if (!this.inited) {
+      this.setSongs(songs);
+      return;
+    }
+    // 지나간 겹의 응답 (전환 중이면 도착할 겹이 기준)
+    if (layer !== (this.anim?.layer ?? this.layer)) return;
+    const add = songs.filter((s) => !this.index.has(s.musicId));
+    if (add.length) this.allocate([...this.songs, ...add], this.N);
+    const ns = new Uint8Array(this.N);
+    for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
+    // 이미 그 집합이면 다시 연출하지 않는다 (떠오르기는 쌓아둔 집합으로 이미 돌아가 있다)
+    if (sameMask(this.anim?.subset ?? this.subset, ns)) return;
+    // 내 곡이 이 겹에 없으면 가장 가까운 상주 곡으로 옮긴다 (카메라 기준점이 있어야 한다)
+    if (!ns[this.index.get(this.myId!)!]) this.myId = this.nearestIn(ns, this.myId!, layer);
+    const ax = LAYER_AXES[layer];
+    this.morph(
+      layer,
+      this.anim ? this.fitCam(layer, ns, this.myId!) : { ...this.cam },
+      ns,
+      this.anim?.big ?? `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
+      this.anim?.sub ?? `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      this.anim?.dir ?? 1,
+    );
+  }
+
+  /** 마스크 안에서 기준 곡과 가장 가까운 곡 (그 겹 두 축 기준) */
+  private nearestIn(mask: Uint8Array, fromId: number, layer: number) {
+    const c = this.songs[this.index.get(fromId)!];
+    const dx = layer * 2;
+    const dy = dx + 1;
+    let best = -1;
+    let bd = Infinity;
+    for (let i = 0; i < this.N; i++) {
+      if (!mask[i]) continue;
+      const d = (this.songs[i].pc[dx] - c.pc[dx]) ** 2 + (this.songs[i].pc[dy] - c.pc[dy]) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    return best >= 0 ? this.songs[best].musicId : fromId;
+  }
+
+  /** 곡 데이터가 들어와 엔진이 살아 있는가 */
+  get ready() {
+    return this.inited;
   }
 
   /** 초기 내 곡 (setSongs 전에 호출). 데이터가 오면 그 자리에서 시작한다 */
@@ -646,6 +736,17 @@ export class MapEngine {
     return { x: cam.cx + (px - this.W / 2) / cam.s, y: cam.cy - (py - this.H / 2) / cam.s };
   }
 
+  /**
+   * 지금 화면에 담긴 영역을 이 겹의 축 범위로 (countInView 가 세는 사각형과 같다).
+   * 파고들 때 이 범위를 누적에 쌓아 다음 겹 상주 집합을 요청한다.
+   */
+  private viewBox(): LayerBox {
+    const f = this.freeRect();
+    const lo = this.screenToWorld(f.x0, f.y1);
+    const hi = this.screenToWorld(f.x1, f.y0);
+    return { layer: this.layer, xMin: lo.x, xMax: hi.x, yMin: lo.y, yMax: hi.y };
+  }
+
   /** 깊이 시차 — 앞쪽(z>0) 별이 조금 더 크게 움직인다 (프로토타입 par) */
   private par(i: number) {
     return 1 + this.z[i] * STAR_VIEW.parallax;
@@ -720,6 +821,7 @@ export class MapEngine {
     }
     this.pressure = 0;
     this.camTarget = null;
+    this.morphT = 0;
     this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir };
   }
 
@@ -743,18 +845,20 @@ export class MapEngine {
 
   /**
    * 한 겹 파고들기.
-   * **화면 안에 담긴 곡이 다음 겹의 기준**이다 — 그 영역으로 다음 겹 상주 집합을 받아
-   * 새 두 축으로 뿌린다. 목에서는 받아올 데이터가 같은 1,000곡이라 집합을 그대로 쓴다
-   * (실서비스에서는 이 자리에서 그 영역의 다음 겹 곡을 받아온다 — BACKEND-NOTES A-1).
+   * **화면 안에 담긴 곡이 다음 겹의 기준**이다 — 그 영역(viewBox)을 누적 범위에 쌓으면
+   * 그 조건으로 다음 겹 상주 집합을 받아오고, 도착하면 setLayerSongs 가 갈아끼운다.
+   * 응답이 오기 전까지는 지금 겹 곡을 그대로 새 두 축에 뿌려 둔다 (BACKEND-NOTES A-1).
    */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
     const inView = this.countInView();
     if (inView < DRILL.minInView) return;
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
+    this.boxes = [...this.boxes, this.viewBox()];
     const nl = this.layer + 1;
-    // 다음 겹의 상주 집합 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
+    // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
     const ns = this.residentMask(nl);
+    for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
     const ax = LAYER_AXES[nl];
     this.morph(
       nl,
@@ -765,10 +869,11 @@ export class MapEngine {
     );
   }
 
-  /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원 */
+  /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */
   ascend() {
     if (this.anim || !this.stack.length || this.follow) return;
     const p = this.stack.pop()!;
+    this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
     const m = this.songs[this.index.get(this.myId!)!];
@@ -949,9 +1054,10 @@ export class MapEngine {
    */
   surfaceToSong(id: number) {
     if (this.follow || this.anim || !this.index.has(id)) return;
-    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 그 겹에는 이 곡도 있다
-    const ns = this.residentMask(0);
+    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 처음 받아 둔 그 집합이고, 그 겹에는 이 곡도 있다
+    const ns = this.stack[0]?.subset ?? this.subset.slice();
     this.stack = [];
+    this.boxes = [];
     this.selectedId = id;
     const ax = LAYER_AXES[0];
     const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
@@ -1070,6 +1176,8 @@ export class MapEngine {
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
     const cam: MapCamera = { s, cx: view.x - (fr.cx - this.W / 2) / s, cy: view.y + (fr.cy - this.H / 2) / s };
+    // 인솔자를 따라 겹을 옮겨도 누적 범위는 맞춰 둔다 (그 겹 상주 집합을 받아야 하므로)
+    this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
     // 우주선·내 위치는 새 레이어 좌표로 옮긴다
     this.friendPos.delete(f.leader.email);
     this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
@@ -1119,6 +1227,7 @@ export class MapEngine {
       const sOut = dir > 0 ? lerp(1, DRILL.dive.out, eOut) : lerp(1, DRILL.dive.in, eOut);
       const sIn = dir > 0 ? lerp(DRILL.dive.in, 1, e) : lerp(DRILL.dive.out, 1, e);
       // 두 겹이 겹쳐 있는 구간을 넉넉히 둔다 — 안 그러면 전환 중간이 텅 비어 깜빡인다
+      this.morphT = e;
       const aOut = Math.pow(1 - e, 1.15);
       const aIn = Math.min(1, Math.max(0, (e - 0.04) / 0.52));
       for (let i = 0; i < this.N; i++) {
@@ -1139,6 +1248,7 @@ export class MapEngine {
         this.rebuildAliveIdx();
         this.alpha = this.aTo.slice();
         this.alphaOut.fill(0);
+        this.morphT = 0;
         const w = this.worldOf(this.myId!);
         if (w) this.me = { ...w };
         if (this.selectedId != null && !this.isAlive(this.selectedId)) this.selectedId = null;
@@ -1365,6 +1475,8 @@ export class MapEngine {
   private publish() {
     const snap: Partial<EngineSnapshot> = {
       layer: this.layer,
+      // 파고들기·떠오르기 때만 새 배열이 되므로 참조 비교로 변화가 잡힌다
+      boxes: this.boxes,
       residentCount: this.residentCount(),
       viewportCount: this.viewportCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,

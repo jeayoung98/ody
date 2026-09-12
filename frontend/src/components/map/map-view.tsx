@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { STORAGE_KEYS } from "@/constants";
+import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
@@ -29,7 +30,7 @@ interface MapViewProps {
 
 /**
  * 스테이지 전체를 채우는 별지도. 엔진을 소유하고 스토어/쿼리와 엔진을 연결한다.
- * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 곡 선택 / 친구 프로필
+ * 입력: 휠 = 확대(게이트 열리면 압력 → 파고들기/떠오르기) · 드래그 = 이동 · 클릭 = 그 곡으로 이동·재생·상세 / 친구 프로필
  */
 export default function MapView({ occludedRight }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
@@ -37,7 +38,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const [hover, setHover] = useState(false);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
 
-  const { data: songs } = useMapSongsQuery();
+  // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
+  const boxes = useMapStore((s) => s.boxes);
+  const { data: songs } = useMapSongsQuery(boxes);
   const layer = useMapStore((s) => s.layer);
   const { data: friends } = useNearbyUsersQuery(layer);
   const { data: representatives } = useRepresentativesQuery(layer);
@@ -52,6 +55,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
+  const playSingle = usePlayerStore((s) => s.playSingle);
+  const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
@@ -78,13 +83,12 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   useEffect(() => engine.setOcclusion(occludedRight), [engine, occludedRight]);
 
-  // 데이터 주입. 저장된 내 곡이 있으면 그 자리에서 시작
+  // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {
     if (!songs) return;
-    const saved = readStorage<number>(STORAGE_KEYS.myMusicId);
-    engine.setInitialMy(saved);
-    engine.setSongs(songs);
-  }, [engine, songs]);
+    if (!engine.ready) engine.setInitialMy(readStorage<number>(STORAGE_KEYS.myMusicId));
+    engine.setLayerSongs(boxes.length, songs);
+  }, [engine, boxes, songs]);
   // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
   useEffect(() => {
     if (friends) engine.setFriends(layer, friends);
@@ -205,13 +209,15 @@ export default function MapView({ occludedRight }: MapViewProps) {
         selectMusic(id);
         return;
       }
+      // 클릭 = 그 곡으로 이동 + 재생 + 상세 (MAP-08) — 보는 곡과 내 위치를 나누지 않는다
       selectMusic(id);
       openSong(id);
-      // 누른 별로 뷰만 옮긴다 — '나'는 재생할 때만 움직인다 (MAP-08)
-      if (useMapStore.getState().viewMode === "default") engine.focus(id);
+      engine.travelTo(id);
+      playSingle(id);
+      recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
       useTutorialStore.getState().complete("select");
     },
-    [engine, openFeed, openSong, selectMusic],
+    [engine, openFeed, openSong, playSingle, recordPlay, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;

@@ -3,7 +3,7 @@
  * 값이 바뀌면 양쪽을 함께 고친다.
  */
 
-/** 장르 팔레트 (프로토타입 기준 10색). 인덱스 = genreId % 10 */
+/** 장르 팔레트. 인덱스 = genreId (constants/map.ts GENRE_NAMES 와 같은 순서) */
 export const GENRE_COLORS: ReadonlyArray<readonly [number, number, number]> = [
   [79, 227, 206], // 앰비언트
   [56, 198, 255], // 일렉트로닉
@@ -15,10 +15,19 @@ export const GENRE_COLORS: ReadonlyArray<readonly [number, number, number]> = [
   [255, 139, 107], // 록
   [255, 92, 122], // 메탈
   [123, 227, 156], // 포크·컨트리
+  [126, 138, 158], // 무장르 — 장르 정보가 없는 곡. 채도를 뺀 회청색이라 "값이 없다"로 읽힌다
 ];
 
+/**
+ * 팔레트 인덱스. 팔레트 밖 genreId(미정 장르·음수)가 와도 배열 밖을 짚지 않는다.
+ * 스프라이트 배열도 GENRE_COLORS 와 길이가 같으므로 색·스프라이트 모두 이 함수로 고른다.
+ */
+export function genreIdx(genreId: number): number {
+  return Math.abs(genreId) % GENRE_COLORS.length;
+}
+
 export function genreRgb(genreId: number): readonly [number, number, number] {
-  return GENRE_COLORS[Math.abs(genreId) % GENRE_COLORS.length];
+  return GENRE_COLORS[genreIdx(genreId)];
 }
 
 export function rgba(rgb: readonly [number, number, number], a: number): string {

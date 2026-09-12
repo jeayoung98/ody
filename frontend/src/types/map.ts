@@ -38,3 +38,17 @@ export interface MapCamera {
   cy: number;
   s: number;
 }
+
+/**
+ * 한 겹에서 뷰포트가 좁힌 사각 범위 (백엔드 `LayerBox` 와 1:1).
+ * 레이어 l 의 평면은 pc[2l]·pc[2l+1] 이고, 서버 쪽 level 은 1-based 라 level = l + 1 이다.
+ * 이 범위를 겹마다 쌓아 다음 겹 상주 집합을 요청한다 — 누적이 candidate(N+1) ⊆ candidate(N) 을 만든다.
+ */
+export interface LayerBox {
+  /** 0-based 레이어 번호 */
+  layer: number;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
+}

@@ -1,15 +1,21 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { MapViewMode } from "@/constants";
-import type { MapCamera } from "@/types";
+import type { LayerBox, MapCamera } from "@/types";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /** 빈 목록은 항상 같은 참조를 써서 셀렉터가 매번 새 배열을 만들지 않게 한다 */
 const EMPTY_IDS: number[] = [];
+const EMPTY_BOXES: LayerBox[] = [];
 
 /** 엔진이 프레임마다 밀어 넣는 읽기 전용 스냅샷 (HUD 표시용) */
 export interface EngineSnapshot {
   layer: number;
+  /**
+   * 겹마다 화면으로 좁혀 온 누적 범위 (길이 = 현재 레이어 번호).
+   * 다음 겹 상주 집합을 요청하는 조건이라 이게 바뀌면 곡을 새로 받는다.
+   */
+  boxes: readonly LayerBox[];
   camera: MapCamera;
   /** 이 레이어에 상주하는 곡 수 */
   residentCount: number;
@@ -81,6 +87,7 @@ export const useMapStore = create<MapState>()(
   devtools(
     (set) => ({
       layer: 0,
+      boxes: EMPTY_BOXES,
       camera: { cx: 0, cy: 0, s: 100 },
       residentCount: 0,
       viewportCount: 0,

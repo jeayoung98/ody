@@ -21,6 +21,19 @@ export function readStorage<T>(key: string): T | null {
   return null;
 }
 
+/** 값이 들어 있는 저장소를 알려준다. 토큰을 갱신할 때 원래 범위를 유지하려고 쓴다 */
+export function readStorageScope(key: string): StorageScope | null {
+  if (typeof window === "undefined") return null;
+  for (const scope of SCOPES) {
+    try {
+      if (pick(scope).getItem(key)) return scope;
+    } catch {
+      /* ignore */
+    }
+  }
+  return null;
+}
+
 export function writeStorage<T>(key: string, value: T, scope: StorageScope = "local"): void {
   if (typeof window === "undefined") return;
   try {

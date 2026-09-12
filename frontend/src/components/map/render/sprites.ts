@@ -1,4 +1,5 @@
-import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
+import { NO_GENRE_ID } from "@/constants";
+import { GENRE_COLORS, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapPoint, NearbyUser } from "@/types";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
@@ -54,7 +55,7 @@ export function skyStars(): SkyStar[] {
     u: rnd(),
     v: rnd(),
     m: Math.pow(rnd(), 1.9),
-    spr: Math.floor(rnd() * GENRE_COLORS.length),
+    spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
     lum: Math.pow(rnd(), 0.7),
   }));
   return sky;
@@ -103,7 +104,7 @@ function puffBases(): HTMLCanvasElement[] {
 }
 
 export function puffFor(k: number, genreId: number): HTMLCanvasElement {
-  const key = `${k}:${genreId % GENRE_COLORS.length}`;
+  const key = `${k}:${genreIdx(genreId)}`;
   let c = puffTint.get(key);
   if (c) return c;
   c = document.createElement("canvas");

@@ -15,7 +15,6 @@ const NO_REISSUE_PATHS: readonly string[] = [
   API_ENDPOINTS.auth.reissue,
   API_ENDPOINTS.auth.login,
   API_ENDPOINTS.auth.signup,
-  API_ENDPOINTS.auth.loginGoogle,
   API_ENDPOINTS.auth.exchange,
 ];
 
@@ -92,7 +91,9 @@ function request(path: string, init?: RequestInit): Promise<Response> {
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   let res = await request(path, init);
 
-  if (res.status === 401 && !NO_REISSUE_PATHS.includes(path) && (await reissueAccessToken())) {
+  // 토큰이 아예 없으면 재발급해봐야 소용없다 (로그인 전 401)
+  const canReissue = res.status === 401 && !NO_REISSUE_PATHS.includes(path) && readStorage<string>(STORAGE_KEYS.accessToken) != null;
+  if (canReissue && (await reissueAccessToken())) {
     res = await request(path, init);
   }
 

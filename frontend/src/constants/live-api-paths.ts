@@ -1,36 +1,29 @@
 /**
- * 배포된 백엔드가 **실제로 구현했고 nginx 가 백엔드로 넘겨주는** 경로만 모았다.
+ * `next.config.ts` 의 rewrite 가 배포 백엔드(`BACKEND_ORIGIN`)로 **그대로 흘려보낼** 경로.
+ * 여기 없는 경로는 `src/app/api/` 라우트 핸들러가 받는다.
  *
- * 여기 적힌 경로는 `next.config.ts` 의 rewrite 가 실서버(`BACKEND_ORIGIN`)로 프록시하고,
- * 나머지는 그대로 `src/app/api/` 목 라우트가 받는다. 그래서 실연동과 목이 한 앱에서 공존한다.
+ * **지금은 비어 있다.** 로그인이 목이라 브라우저에 백엔드가 인정하는 토큰이 없어서, 요청을
+ * 그대로 흘려보내면 인증이 필요한 API 가 전부 401 이 된다. 그래서 실데이터가 필요한
+ * 주변 탐색·경로 탐색은 라우트 핸들러가 서버 토큰(`BACKEND_ACCESS_TOKEN`)을 붙여
+ * 대신 호출한다 (`src/lib/backend.ts`).
  *
- * 와일드카드를 쓰지 않고 한 줄씩 적는 이유: 백엔드에 없는 경로(`/api/auth/me` 등)까지
- * 프록시로 넘어가면 목 라우트가 가려져 404 가 된다. **확인된 것만 넣는다.**
+ * 로그인을 실연동으로 되돌릴 때는 아래 주석을 풀고 `api-endpoints.ts` 의 auth 경로를
+ * 실경로(`PATCH /api/user/profile`, `PATCH /api/user/tutorial-completed`)로 바꾸면 된다.
+ * 그때는 브라우저가 진짜 accessToken 을 들고 있으므로 흘려보내는 방식이 맞다.
  *
- * 확인 방법·시점: 2026-09-12, `https://j15a405.p.ssafy.io` 실호출 + 배포 브랜치
- * (`origin/backend/jenkins`) 컨트롤러 대조. 배포본이 바뀌면 이 목록을 다시 확인한다.
+ * 아래 목록은 2026-09-12 에 `https://j15a405.p.ssafy.io` 로 실호출해 도달을 확인한 것이다.
  */
-export const LIVE_API_PATHS = [
-  // AuthController — /api/auth (가입·로그인·교환·재발급은 permitAll)
-  "/api/auth/signup",
-  "/api/auth/login",
-  "/api/auth/login/google",
-  "/api/auth/exchange",
-  "/api/auth/reissue",
-  "/api/auth/logout",
-  "/api/auth/withdraw",
-
-  // UserAvailabilityController — permitAll
-  "/api/users/nickname-available",
-
-  // UserOnboardingController / UserProfileController — 둘 다 PATCH, 토큰 주체 본인 대상
-  "/api/user/tutorial-completed",
-  "/api/user/profile",
-
-  // JourneyController — MusicController 와 달리 이미 /api 아래에 있다
-  "/api/music/journey",
-
-  // Spring Security 기본 OAuth 경로. /api 아래가 아니지만 nginx 가 프록시한다
-  "/oauth2/authorization/:provider",
-  "/login/oauth2/code/:provider",
-] as const;
+export const LIVE_API_PATHS: readonly string[] = [
+  // "/api/auth/signup",
+  // "/api/auth/login",
+  // "/api/auth/login/google",
+  // "/api/auth/exchange",
+  // "/api/auth/reissue",
+  // "/api/auth/logout",
+  // "/api/auth/withdraw",
+  // "/api/users/nickname-available",
+  // "/api/user/tutorial-completed",
+  // "/api/user/profile",
+  // "/oauth2/authorization/:provider",
+  // "/login/oauth2/code/:provider",
+];

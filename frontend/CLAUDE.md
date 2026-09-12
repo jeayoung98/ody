@@ -127,6 +127,34 @@ docs/                     # 팀 컨벤션·기능 명세 문서
 - 훅 파일 하나에 훅 하나. 관련 응답 타입은 `src/types` 도메인 타입을 쓰고, 훅 전용 타입만 훅 파일에 둔다.
 - 뮤테이션 성공 시 무효화할 키는 `QUERY_KEYS`에서 가져온다.
 
+### 실데이터 연결 — 실호출은 **반드시** 콘솔에 남긴다
+
+라우트 핸들러(`src/app/api/`)가 배포 백엔드를 **서버에서 대신** 부르기 때문에, 브라우저는 결과물만 보고
+그게 실데이터인지 목인지 알 수 없다. 표시를 빼먹으면 목을 실데이터로 알고 테스트하게 된다.
+
+**새 라우트를 실데이터에 붙이거나 기존 라우트의 백엔드 호출을 고칠 때마다** 아래를 지킨다.
+
+- 백엔드를 부른 경로를 `upstream` 변수로 빼고 **`try` 바깥**에 둔다. `catch` 에서도 써야 한다.
+- 성공은 `ok()` 가 아니라 **`okLive(data, upstream)`**, 실패는 `fail()` 이 아니라 **`failLive(code, message, status, upstream)`** 로 답한다 (`src/lib/api-response.ts`).
+- **실패에도 반드시 붙인다.** 실패를 감추면 실데이터인 줄 알고 빈 화면을 보게 된다.
+- **목으로 답하는 분기에는 붙이지 않는다.** 목이 콘솔에 섞이면 이 규칙의 목적과 정반대가 된다.
+- 백엔드 실패를 목으로 조용히 대체하지 않는다. 오류를 그대로 올린다.
+
+```ts
+const upstream = `/api/music/detail?id=${musicId}`;   // try 밖
+try {
+  const res = await backendGet<BackendMusicDetailResponse>(upstream);
+  return okLive(toMusicDetail(res), upstream);
+} catch (e) {
+  const err = e as BackendError;
+  return failLive("MUSIC_NOT_FOUND", err.message, err.status || 502, upstream);
+}
+```
+
+찍는 쪽은 건드릴 일이 없다 — `src/lib/api.ts` 통로가 표시를 보고 `src/lib/live-log.ts` 로 넘긴다.
+콘솔에는 프론트 경로 · 백엔드 경로 · 상태 · 소요시간 · 데이터(배열이면 건수)가 남고, 실패면 오류 코드와 메시지가 남는다.
+개발 빌드에서만 찍는다.
+
 ### 상수
 - 반복되거나 의미 있는 값은 전부 `src/constants/`에 상수로 뺀다. 매직 스트링/넘버를 코드에 직접 쓰지 않는다.
 - 필수 상수 파일

@@ -795,55 +795,6 @@ function drawSelected(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "source-over";
 }
 
-/** 호버 카드 — 커버와 기본 정보 */
-function drawHover(g: CanvasRenderingContext2D, e: MapEngine) {
-  if (e.hoverId == null) return;
-  const v = e.visible.find((x) => e.songs[x.i].musicId === e.hoverId);
-  if (!v) return;
-  const s = e.songs[v.i];
-  const w = 284;
-  const h = 76;
-  const f = e.freeRect();
-  const bx = clamp(v.px - w / 2, Math.max(8, f.x0 + 8), Math.max(8, Math.min(e.W, f.x1) - w - 8));
-  const top = Math.max(8, f.y0 + 6);
-  const bot = Math.max(top, Math.min(e.H, f.y1) - h - 6);
-  const by = clamp(v.py - h - 22 < top ? v.py + 22 : v.py - h - 22, top, bot);
-  g.globalCompositeOperation = "source-over";
-  g.fillStyle = "rgba(7,11,21,.95)";
-  g.beginPath();
-  g.roundRect(bx, by, w, h, 12);
-  g.fill();
-  g.strokeStyle = "rgba(255,255,255,.17)";
-  g.lineWidth = 1;
-  g.stroke();
-  const S = 54;
-  const ax = bx + 11;
-  const ay = by + 11;
-  g.save();
-  g.beginPath();
-  g.roundRect(ax, ay, S, S, 8);
-  g.clip();
-  g.drawImage(coverFor(s), ax, ay, S, S);
-  g.restore();
-  g.beginPath();
-  g.roundRect(ax, ay, S, S, 8);
-  g.strokeStyle = "rgba(255,255,255,.15)";
-  g.stroke();
-  const tx = ax + S + 12;
-  const tw = w - S - 36;
-  g.textAlign = "left";
-  g.textBaseline = "alphabetic";
-  g.font = `600 12.5px ${FONTS.body}`;
-  g.fillStyle = "#e9f1ff";
-  g.fillText(fitText(g, s.title, tw), tx, by + 28);
-  g.font = `400 10.5px ${FONTS.body}`;
-  g.fillStyle = "#93a4c4";
-  g.fillText(fitText(g, s.artist ?? "", tw), tx, by + 44);
-  g.font = `500 8.5px ${FONTS.mono}`;
-  g.fillStyle = s.playable ? "#5a6b8c" : "#ffc46b";
-  g.fillText(fitText(g, `▶ ${s.weight.toLocaleString()}${s.playable ? "" : " · 재생 불가"}`, tw), tx, by + 61);
-}
-
 /** 스크롤 압력 — 원 가이드 없이 문구와 얇은 게이지만 */
 function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.anim || e.pressure < 0.01) return;
@@ -885,7 +836,6 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawSelected(g, e);
   drawGhost(g, e);
   drawMe(g, e);
-  drawHover(g, e);
 
   drawConstellation(g, e, currentMusicId);
   drawProbe(g, e);

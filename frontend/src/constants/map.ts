@@ -376,3 +376,16 @@ export const FOCUS = {
  * 0.14 ≈ 60fps 에서 약 300ms — 패널 전환(--duration-normal)과 비슷하게 움직인다.
  */
 export const OCCLUSION_EASE = 0.14;
+
+/**
+ * 별 호버 카드 (DOM). 캔버스로 그리던 것을 옮겼다 — 카드 위에 마우스를 올려도 사라지지 않아야 하고
+ * 재생 버튼이 들어가야 하기 때문이다 (S15P21A405-277).
+ */
+export const HOVER_CARD = {
+  w: 300,
+  h: 76,
+  /** 별과 카드 사이 틈(px). 이만큼 떨어뜨려야 가리키던 별이 카드에 가리지 않는다 */
+  gap: 22,
+  /** 화면 가장자리와의 최소 여백(px) */
+  margin: 8,
+} as const;

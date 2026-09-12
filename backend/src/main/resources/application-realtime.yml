@@ -26,21 +26,23 @@ realtime:
     - { layer: 6, axis-x: 11, axis-y: 12 }
     - { layer: 7, axis-x: 13, axis-y: 14 }
     - { layer: 8, axis-x: 15, axis-y: 16 }
-  # 축별 전역 min/max — ★★ 실측 전 임의값(B-4). 실데이터 분포로 교체 전 시연 금지.
+  # 축별 전역 정규화 min/max — 실측값(6,624,399곡, music.location p01/p99, 2026-09).
+  #  raw min/max 는 아웃라이어로 격자 붕괴 → p01/p99 경계 + 바깥은 edge 셀 clamp(Normalizer).
+  #  분산 감소로 축마다 스케일 다름(PC1 std 6.36 → PC16 1.55) → 공용 범위 금지.
   axis-range:
-    - { axis: 1,  min: -10.0, max: 10.0 }
-    - { axis: 2,  min: -10.0, max: 10.0 }
-    - { axis: 3,  min: -10.0, max: 10.0 }
-    - { axis: 4,  min: -10.0, max: 10.0 }
-    - { axis: 5,  min: -10.0, max: 10.0 }
-    - { axis: 6,  min: -10.0, max: 10.0 }
-    - { axis: 7,  min: -10.0, max: 10.0 }
-    - { axis: 8,  min: -10.0, max: 10.0 }
-    - { axis: 9,  min: -10.0, max: 10.0 }
-    - { axis: 10, min: -10.0, max: 10.0 }
-    - { axis: 11, min: -10.0, max: 10.0 }
-    - { axis: 12, min: -10.0, max: 10.0 }
-    - { axis: 13, min: -10.0, max: 10.0 }
-    - { axis: 14, min: -10.0, max: 10.0 }
-    - { axis: 15, min: -10.0, max: 10.0 }
-    - { axis: 16, min: -10.0, max: 10.0 }
+    - { axis: 1 , min:  -13.63, max:  14.36 }
+    - { axis: 2 , min:  -10.25, max:  20.47 }
+    - { axis: 3 , min:   -8.75, max:  10.52 }
+    - { axis: 4 , min:   -7.45, max:  10.16 }
+    - { axis: 5 , min:   -7.74, max:  11.52 }
+    - { axis: 6 , min:   -6.27, max:  12.19 }
+    - { axis: 7 , min:   -7.03, max:   6.07 }
+    - { axis: 8 , min:   -3.88, max:   6.13 }
+    - { axis: 9 , min:   -4.60, max:   7.40 }
+    - { axis: 10, min:   -4.44, max:   6.27 }
+    - { axis: 11, min:   -5.46, max:   4.18 }
+    - { axis: 12, min:   -4.23, max:   4.97 }
+    - { axis: 13, min:   -4.07, max:   4.54 }
+    - { axis: 14, min:   -4.39, max:   4.86 }
+    - { axis: 15, min:   -4.29, max:   4.60 }
+    - { axis: 16, min:   -3.89, max:   4.16 }

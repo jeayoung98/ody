@@ -124,6 +124,8 @@ export class MapEngine {
   /** 전환 중 **나가는 겹**의 화면 좌표·투명도 (들어오는 겹은 pos/alpha) */
   posOut = new Float32Array(0);
   alphaOut = new Float32Array(0);
+  /** 전환 진행도(이징 적용, 0 = 이전 겹 / 1 = 새 겹). 배경 깊이처럼 겹 단위 값을 섞을 때 쓴다 */
+  morphT = 0;
   private aFrom = new Float32Array(0);
   private aTo = new Float32Array(0);
   anim: Morph | null = null;
@@ -852,6 +854,7 @@ export class MapEngine {
     }
     this.pressure = 0;
     this.camTarget = null;
+    this.morphT = 0;
     this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir };
   }
 
@@ -1257,6 +1260,7 @@ export class MapEngine {
       const sOut = dir > 0 ? lerp(1, DRILL.dive.out, eOut) : lerp(1, DRILL.dive.in, eOut);
       const sIn = dir > 0 ? lerp(DRILL.dive.in, 1, e) : lerp(DRILL.dive.out, 1, e);
       // 두 겹이 겹쳐 있는 구간을 넉넉히 둔다 — 안 그러면 전환 중간이 텅 비어 깜빡인다
+      this.morphT = e;
       const aOut = Math.pow(1 - e, 1.15);
       const aIn = Math.min(1, Math.max(0, (e - 0.04) / 0.52));
       for (let i = 0; i < this.N; i++) {
@@ -1277,6 +1281,7 @@ export class MapEngine {
         this.rebuildAliveIdx();
         this.alpha = this.aTo.slice();
         this.alphaOut.fill(0);
+        this.morphT = 0;
         const w = this.worldOf(this.myId!);
         if (w) this.me = { ...w };
         if (this.selectedId != null && !this.isAlive(this.selectedId)) this.selectedId = null;

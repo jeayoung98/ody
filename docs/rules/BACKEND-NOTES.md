@@ -44,13 +44,13 @@ swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼
 | B-19 | `PATCH /api/user/tutorial-completed` · `PATCH /api/user/profile` | 둘 다 도달 가능. 본문 없음/`{nickname?, imageUrl?}`, 토큰 주체 본인 대상이라 email 을 받지 않는다 | — | ✅ 프론트 반영 완료 |
 | B-20 | 구글 OAuth 리다이렉트 착지점 | 진입(`/oauth2/authorization/google`)은 정상 302 이고 `redirect_uri` 도 맞다. 다만 콜백 뒤 프론트로 되돌리는 `app.oauth.frontend-redirect-uri` **서버 설정값은 확인할 수 없었다** | 로컬(`localhost:3000`)에서 구글 로그인 테스트. 배포 SPA 주소로 고정돼 있으면 로컬 개발자는 구글 로그인을 못 한다 | 협의 전 (B-11 연장) |
 
-| B-21 | **곡 응답에 `genreId` 와 `weight` 가 없다** | `MusicSummary`·`MusicDetail` 은 `genres` 를 **이름 문자열 배열**로만 준다. 별 크기·밝기용 가중치도 없다 | 지도의 별 **색(장르)**과 **크기**. 지금은 `genreId: 0`, `weight: 1` 고정이라 실데이터로 그리면 단색·균일 크기가 된다 (`draw-map.ts` 가 `GENRE_COLORS[genreId % n]` 을 쓴다) | 협의 전 (**필요**) |
+| B-21 | **곡 응답에 `genreId` 와 `weight` 가 없다** | `MusicSummary`·`MusicDetail` 은 `genres` 를 **이름 문자열 배열**로만 준다. 별 크기·밝기용 가중치도 없다 | 지도의 별 **색(장르)**과 **크기**. 프론트는 `genreId: NO_GENRE_ID(10)`(무장르 회청색), `weight: 1` 로 둔다 — 0(앰비언트)으로 채우면 "장르를 모른다"가 "전부 앰비언트다"로 둔갑하기 때문이다(A-1-1). 그래서 실데이터로 그리면 **회청색 단색·균일 크기**가 된다 | 협의 전 (**필요**) |
 | B-22 | **지도 상주 집합이 `/api` 아래에 없어서 곡 ID 가 서로 안 맞는다** | 지도 원본은 `/music/major` 인데 B-16 때문에 못 부른다. 그래서 지도는 목(`mocks/songs.ts`)이고 주변 탐색·경로 탐색만 실데이터가 된다. **목 곡 ID 는 1..N 이라 실제 곡 ID 1..N 과 숫자가 겹친다** — 틀린 곡이 맞는 것처럼 매칭돼 보인다 | 주변 탐색·경로 탐색 결과를 지도 위에 그리는 것 전부. 지도와 탐색 결과는 **같은 출처**여야 한다 | 협의 전 (**막힘**) |
 
 **요약 — 백엔드·인프라에 필요한 것:**
 
 1. **`/api` 접두 정렬 배포 (B-16) — 가장 급하다.** 이것 하나로 곡 검색·상세·대표곡·플레이리스트가 전부 살아나고, B-22(지도 ID 불일치)와 B-18(Swagger 500)도 같이 풀린다. 코드는 이미 `backend/dev`·`master` 에 있고 **배포만 안 올라갔다.**
-2. `genreId`·`weight` 를 곡 응답에 추가 (B-21). 지도 색·크기가 여기 묶여 있다.
+2. `genreId`·`weight` 를 곡 응답에 추가 (B-21). 지도 색·크기가 여기 묶여 있다. 장르를 모르는 곡은 **무장르(10)** 로 (A-1-1 확정). 29종 → 10종 매핑은 보류 중이다 (A-1-2).
 3. `CORS_ALLOWED_ORIGINS` 정상화 (B-17). 지금은 프론트가 서버 프록시로 우회 중이라 급하지는 않다.
 
 ---
@@ -73,8 +73,9 @@ swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼
 
 | # | API | 요청 | 응답 | 이유 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| A-1 | `GET /music/major` (목: `/api/map/songs`) | `level` (1-based) + 누적 범위 `pc{k}min`·`pc{k}max` 를 **level-1 쌍 전부**. level=1 은 파라미터 없음 | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | **겹마다 그 겹의 상주 집합을 받는다** (2026-09-11 BE 김효정 ↔ FE 윤주하 확정, D15~D19). 프론트가 파고들 때 화면 범위를 누적에 쌓고 떠오르면 버린다 — 서버는 탐색 상태를 갖지 않는다. 레이어 l ↔ level l+1, 평면은 pc(2l+1)·pc(2l+2) | 협의 중 (프론트 반영 완료) |
-| A-1-1 | `MapPoint.genreId` | — | 장르를 모르는 곡은 **무장르 인덱스(10)** 로 내려준다. 음수 금지 | 실데이터는 662만 중 6.6만(1.0%)만 장르가 있다. 0 으로 채우면 지도가 전부 "앰비언트" 색이 된다. 프론트에 `GENRE_NAMES[10] = "무장르"` 와 회청색을 추가했다. 멜론 코드 29종 → 10색 대응표는 아직 없다 — **누가 어떻게 매핑할지 미정** | 협의 중 (프론트 반영 완료) |
+| A-1 | `GET /music/major` (목: `/api/map/songs`) | `level` (1-based) + 누적 범위 `pc{k}min`·`pc{k}max` 를 **level-1 쌍 전부**. level=1 은 파라미터 없음 | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | **겹마다 그 겹의 상주 집합을 받는다** (2026-09-11 BE 김효정 ↔ FE 윤주하 확정, D15~D19). 프론트가 파고들 때 화면 범위를 누적에 쌓고 떠오르면 버린다 — 서버는 탐색 상태를 갖지 않는다. 레이어 l ↔ level l+1, 평면은 pc(2l+1)·pc(2l+2). **파라미터 표기는 `pc{k}min`·`pc{k}max` 로 확정** (2026-09-12 BE 제안 ↔ FE 확인 — 프론트가 이미 그대로 보내고 있다: `constants/api-endpoints.ts` `map.songs`) | 협의 중 (표기 확정 · 프론트 반영 완료) |
+| A-1-1 | `MapPoint.genreId` | — | 장르를 모르는 곡은 **무장르 인덱스(10)** 로 내려준다. 음수 금지 | 실데이터는 662만 중 6.6만(1.0%)만 장르가 있다. 0 으로 채우면 지도가 전부 "앰비언트" 색이 된다. 프론트는 `GENRE_NAMES[10] = "무장르"` · `GENRE_COLORS[10] = rgb(126,138,158)` 회청색을 쓰고, 백엔드 응답에 genreId 가 없을 때의 fallback 도 10 이다 (`lib/backend.ts` `toMapPoint`). **2026-09-12 BE 문의 ↔ FE 확정.** 멜론 코드 29종 → 10색 대응표는 **보류** (A-1-2) | 확정 (프론트 반영 완료) |
+| A-1-2 | 장르 체계 (멜론 대분류 29종 ↔ FE `GENRE_NAMES` 10종) | — | 29종을 10종으로 접는 표, 또는 `GENRE_NAMES` 를 29종으로 늘리기 | 두 체계가 서로 다르다 — 멜론은 록/메탈을 한 코드로 묶는데 FE 는 `록`·`메탈` 이 따로고, 멜론의 발라드·댄스·트로트·OST·국악·인디에 대응하는 FE 항목이 없다. **어느 쪽에 맞출지 정해지지 않아 보류** (2026-09-12). 그동안 장르가 붙은 1.0% 도 무장르(10)로 내려도 지도는 깨지지 않는다 | **보류** (팀 결정 대기) |
 | A-2 | `GET /api/map/layers/{layer}/representatives` | layer | `{ layer, musicIds[] }` | 레이어마다 **다른 대표곡**을 앨범 커버로 띄운다. 선별 기준은 백엔드가 정함 | 협의 전 |
 | A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | 협의 전 |
 | A-4 | `NearbyUser` 응답 | — | `viewingMusicId` **추가 필요** | 따라가기 시 좌표 두 개가 필요하다: `musicId`=재생 중(우주선 위치), `viewingMusicId`=인솔자가 보고 있는 상세 곡(뷰포트·우측 패널 기준) (SOCIAL-07) | 협의 전 |

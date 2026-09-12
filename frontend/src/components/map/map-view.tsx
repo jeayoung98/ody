@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
 import { STORAGE_KEYS } from "@/constants";
+import type { LayerBox } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
@@ -51,6 +52,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const { data: layout } = useConstellationLayoutQuery(constellationMusicIds, constellationPoints);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
   const myMusicId = useMapStore((s) => s.myMusicId);
+  const home = useMapStore((s) => s.home);
   const selectMusic = useMapStore((s) => s.selectMusic);
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
   const openSong = usePanelStore((s) => s.openSong);
@@ -112,7 +114,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
   // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {
     if (!songs) return;
-    if (!engine.ready) engine.setInitialMy(readStorage<number>(STORAGE_KEYS.myMusicId));
+    if (!engine.ready) {
+      engine.setInitialMy(readStorage<number>(STORAGE_KEYS.myMusicId));
+      // 돌아갈 자리까지 되살려야 새로고침 뒤에도 "내 위치로 가기" 가 먹는다 (S15P21A405-275)
+      engine.restoreHome(readStorage<{ musicId: number; boxes: LayerBox[] }>(STORAGE_KEYS.myHome));
+    }
     engine.setLayerSongs(boxes.length, songs);
   }, [engine, boxes, songs]);
   // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
@@ -138,9 +144,28 @@ export default function MapView({ occludedRight }: MapViewProps) {
   }, [engine, viewMode, constellationMusicIds, constellationPoints, layout]);
   useEffect(() => engine.setSelected(selectedMusicId), [engine, selectedMusicId]);
 
+  /**
+   * 새로고침으로 되살린 곡 — 플레이어바에만 얹고 **지도는 건드리지 않는다** (S15P21A405-275).
+   * `travelTo` 를 태우면 내 자리를 지금 겹 기준으로 다시 잡아서, 되살린 `home` 의 겹 정보가 날아간다.
+   */
+  const restoredPlaying = useRef<number | null>(null);
+  const restoreLastPlayed = usePlayerStore((s) => s.restoreLast);
+  useEffect(() => {
+    const saved = readStorage<number>(STORAGE_KEYS.playingMusicId);
+    if (saved == null) return;
+    restoredPlaying.current = saved;
+    restoreLastPlayed(saved);
+  }, [restoreLastPlayed]);
+
   // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)
   useEffect(() => {
-    if (currentMusicId != null) engine.travelTo(currentMusicId);
+    if (currentMusicId == null) return;
+    // 되살린 값은 "지금 막 재생한 것" 이 아니다 — 한 번만 흘려보낸다
+    if (currentMusicId === restoredPlaying.current) {
+      restoredPlaying.current = null;
+      return;
+    }
+    engine.travelTo(currentMusicId);
   }, [engine, currentMusicId]);
 
   // 따라가기 (SOCIAL-06 ~ 09)
@@ -153,10 +178,13 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (leader) engine.startFollow(leader);
   }, [engine, leaderEmail, friends]);
 
-  // 내 곡 영구 저장
+  // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {
     if (myMusicId != null) writeStorage(STORAGE_KEYS.myMusicId, myMusicId);
   }, [myMusicId]);
+  useEffect(() => {
+    if (home) writeStorage(STORAGE_KEYS.myHome, home);
+  }, [home]);
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {

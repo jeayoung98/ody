@@ -36,8 +36,13 @@ export interface EngineSnapshot {
   pressureDir: 1 | -1 | 0;
   /** 모프 진행 중 안내 문구 */
   morph: { big: string; sub: string } | null;
-  /** 내 곡 = 내 위치. 파고들 때 구멍 밖이면 엔진이 바꿀 수 있다 */
+  /** 내 곡 = 내 위치. 곡을 재생해야 생긴다 — 없으면 표식을 그리지 않는다 */
   myMusicId: number | null;
+  /**
+   * "내 위치로 가기" 가 돌아갈 자리. 겹까지 되돌아가야 해서 누적 범위(`boxes`)가 함께 온다.
+   * 새로고침 뒤에도 살아 있도록 localStorage 에 저장한다 (S15P21A405-275).
+   */
+  home: { musicId: number; boxes: readonly LayerBox[] } | null;
   /** 고스트별로 띄운 곡 (MAP-12). 없으면 null */
   ghostMusicId: number | null;
   /** 재생 중인 곡이 이 겹 밖인가 (MAP-08) */
@@ -110,6 +115,7 @@ export const useMapStore = create<MapState>()(
       pressureDir: 0,
       morph: null,
       myMusicId: null,
+      home: null,
       ghostMusicId: null,
       playingElsewhere: false,
       canGoHome: false,

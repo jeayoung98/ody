@@ -140,7 +140,8 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 		Set<Long> banned = new HashSet<>();
 
 		for (int attempt = 0; attempt <= MAX_REPAIR; attempt++) {
-			List<List<TrackCandidate>> usable = banned.isEmpty() ? layers : without(layers, banned);
+			List<List<TrackCandidate>> usable = banned.isEmpty() ? layers
+					: layers.stream().map(l -> l.stream().filter(c -> !banned.contains(c.id())).toList()).toList();
 			if (usable.stream().anyMatch(List::isEmpty)) {
 				return null;
 			}
@@ -196,14 +197,6 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 				.map(Map.Entry::getKey)
 				.sorted()                       // 결정성 — 벌점 적용 순서를 고정한다
 				.toList();
-	}
-
-	private static List<List<TrackCandidate>> without(List<List<TrackCandidate>> layers, Set<Long> banned) {
-		List<List<TrackCandidate>> out = new ArrayList<>(layers.size());
-		for (List<TrackCandidate> layer : layers) {
-			out.add(layer.stream().filter(c -> !banned.contains(c.id())).toList());
-		}
-		return out;
 	}
 
 	/**

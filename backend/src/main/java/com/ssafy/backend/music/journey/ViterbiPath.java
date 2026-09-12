@@ -1,6 +1,7 @@
 package com.ssafy.backend.music.journey;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -57,6 +58,7 @@ final class ViterbiPath {
 		}
 
 		// 0층은 출발곡 하나. p(A) = 0 이므로 모든 후보가 p(v) > p(u) 를 만족한다.
+		float[] startVec = frame.layerStart();   // clone 이라 루프 밖에서 한 번만 받는다
 		double[] prevCost = { 0.0 };
 		List<TrackCandidate> prevLayer = null;
 		List<int[]> back = new ArrayList<>(layers.size() + 1);
@@ -75,7 +77,7 @@ final class ViterbiPath {
 						continue;
 					}
 					double step = (prevLayer == null)
-							? v.distanceTo(frame.layerStart())
+							? v.distanceTo(startVec)
 							: v.distanceTo(prevLayer.get(ui).vec());
 					if (step < tauDup) {
 						continue;                                   // 제자리걸음 차단
@@ -97,7 +99,7 @@ final class ViterbiPath {
 				from[vi] = bestU;
 			}
 
-			if (allInfinite(cost)) {
+			if (Arrays.stream(cost).allMatch(c -> c == INF)) {
 				return null;                                        // 이 층에서 끊겼다
 			}
 			back.add(from);
@@ -141,14 +143,5 @@ final class ViterbiPath {
 			return 0.0;
 		}
 		return artistPenalty.getOrDefault(v.artist(), 0.0);
-	}
-
-	private static boolean allInfinite(double[] cost) {
-		for (double c : cost) {
-			if (c != INF) {
-				return false;
-			}
-		}
-		return true;
 	}
 }

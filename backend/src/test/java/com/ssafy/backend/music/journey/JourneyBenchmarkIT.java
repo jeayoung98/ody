@@ -188,10 +188,8 @@ class JourneyBenchmarkIT {
 		assertThat(p95).as("AC-J5 p95 <= %d ms", P95_BUDGET_MS).isLessThanOrEqualTo(P95_BUDGET_MS);
 	}
 
-	private static long percentile(List<Long> sorted) {
-		if (sorted.isEmpty()) {
-			return 0;
-		}
+	/** 정렬된 목록의 p95. 빈 목록은 호출하지 않는다. */
+	private static <T> T percentile(List<T> sorted) {
 		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
 	}
 
@@ -361,9 +359,9 @@ class JourneyBenchmarkIT {
 		linearMedians.sort(null);
 		System.out.printf("%n=== SC-005 axis 대 linear (쌍 %d) ===%n", compared);
 		System.out.printf("axis   median p50 / p95 : %.3f / %.3f%n",
-				axisMedians.get(axisMedians.size() / 2), pct(axisMedians));
+				axisMedians.get(axisMedians.size() / 2), percentile(axisMedians));
 		System.out.printf("linear median p50 / p95 : %.3f / %.3f%n",
-				linearMedians.get(linearMedians.size() / 2), pct(linearMedians));
+				linearMedians.get(linearMedians.size() / 2), percentile(linearMedians));
 		System.out.printf("쌍별 axis 승             : %d / %d%n", axisWins, compared);
 
 		assertThat(axisMedians.get(axisMedians.size() / 2))
@@ -385,10 +383,6 @@ class JourneyBenchmarkIT {
 				av, bv, new HashSet<>());
 		return finder.linear(reader, frame, guard,
 				frame.stationCount(RULES.farEndpointDist()));
-	}
-
-	private static double pct(List<Double> sorted) {
-		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
 	}
 
 	// ------------------------------------------------------------------ 보조

@@ -833,54 +833,22 @@ export class MapEngine {
   /**
    * 화면 밖으로 나간 '나' 표식의 자리와 방향. **null 이면 화면 안**이라 제자리에 그리면 된다.
    *
-   * 내 위치는 곧 지금 재생 중인 곡이다 (MAP-08). 그래서 두 갈래로 갈린다.
-   * - 그 곡이 **이 겹에 상주하면** 실제 자리 방향. 화면 안으로 돌아오면 화살표는 사라진다.
-   * - **이 겹에 없으면** 파고들어온 경로를 거슬러 올라가 방향을 잰다 ({@link awayDir}).
-   *   자리가 이 겹에 없으니 화면 안이고 밖이고를 따질 것도 없이 늘 화살표다.
+   * 기준은 언제나 **'나'가 실제로 서 있는 자리**(`me`)다. 재생 곡이 이 겹에 없어도 '나'는 따라가지
+   * 않고 있던 자리에 남으므로 (MAP-08), 그 경우에도 자리는 그대로고 `elsewhere` 로 라벨만 갈린다.
+   * 재생 곡 쪽을 가리키면 안 된다 — 그건 '나'가 아니라 그 곡의 방향이고, 그러면 "내 위치로 가기"
+   * 로 가운데에 데려다 놔도 화살표가 계속 딴 데를 가리켜 안 간 것처럼 보인다.
    */
   meArrow(): { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean } | null {
     if (this.anim || this.follow || this.myId == null || this.constellationActive()) return null;
-    const id = this.playingId ?? this.myId;
-    const elsewhere = !this.isAlive(id);
-    let dir: { x: number; y: number } | null;
-    if (elsewhere) {
-      dir = this.awayDir(id);
-    } else {
-      const { px, py } = this.worldToScreen(this.me.x, this.me.y);
-      const f = this.freeRect();
-      const m = ME_OFFSCREEN.inset;
-      if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
-      dir = unit(px - f.cx, py - f.cy);
-    }
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    const f = this.freeRect();
+    const m = ME_OFFSCREEN.inset;
+    if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
+    const dir = unit(px - f.cx, py - f.cy);
     if (!dir) return null;
-    // 둘 다 "화면 밖"이므로 가장자리에 붙인다. HUD 에 가리면 edgePos 가 안쪽으로 물러난다
+    // 화면 밖이므로 가장자리에 붙인다. HUD 에 가리면 edgePos 가 안쪽으로 물러난다
     const p = this.edgePos(dir);
-    return { x: p.x, y: p.y, dir, elsewhere };
-  }
-
-  /**
-   * 이 겹에 없는 곡의 방향 (화면 좌표 단위벡터).
-   *
-   * 파고들어온 경로(stack)를 **깊은 쪽부터** 거슬러 올라가 그 곡이 상주하던 첫 겹을 찾는다 —
-   * 바로 윗 겹에 없으면 그 위로 계속 올라간다. 그 겹에서 **내가 파고든 지점**
-   * (그 겹을 떠날 때의 카메라 중심) 에서 그 곡까지의 방향을 잰다.
-   * 스택은 이 겹에 머무는 동안 바뀌지 않으므로 **방향도 그대로 유지된다.**
-   *
-   * 어느 윗 겹에도 없으면 지금 겹 축으로라도 잰다 — 좌표는 16차원이 다 있으니
-   * 상주하지 않을 뿐 잴 수는 있다. 화살표가 소리 없이 사라지는 것보다 낫다.
-   */
-  private awayDir(id: number): { x: number; y: number } | null {
-    const i = this.index.get(id);
-    if (i == null) return null;
-    const pc = this.songs[i].pc;
-    for (let k = this.stack.length - 1; k >= 0; k--) {
-      const f = this.stack[k];
-      if (!f.subset[i]) continue;
-      // 월드 y 는 위가 양수, 화면 y 는 아래가 양수
-      const d = unit(pc[f.layer * 2] - f.cam.cx, -(pc[f.layer * 2 + 1] - f.cam.cy));
-      if (d) return d;
-    }
-    return unit(pc[this.dx()] - this.cam.cx, -(pc[this.dy()] - this.cam.cy));
+    return { x: p.x, y: p.y, dir, elsewhere: this.playingElsewhere() };
   }
 
   /** 별자리가 화면을 차지하고 있는가 (해제 애니메이션 중이면 false) */
@@ -1622,9 +1590,9 @@ export class MapEngine {
      */
     const viewBusy = (!!this.probe && !this.probe.exitingAt) || this.constellationActive();
     if (this.centerLock && !this.camTarget && !this.anim && !this.follow && !viewBusy) {
-      const id = this.playingId ?? this.myId;
-      const w = id != null ? this.worldOf(id) : null;
-      if (w) {
+      // '나'가 실제로 서 있는 자리(me). 재생 곡이 이 겹에 없으면 '나'는 그 곡을 따라가지 않는다 (MAP-08)
+      const w = this.me;
+      {
         const f = this.freeRect();
         const cx = w.x - (f.cx - this.W / 2) / this.cam.s;
         const cy = w.y + (f.cy - this.H / 2) / this.cam.s;

@@ -596,7 +596,7 @@ function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number;
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
-  // 화면 밖(또는 이 겹 밖)이면 자리 대신 방향을 그린다
+  // 화면 밖이면 자리 대신 가장자리 화살표를 그린다
   const off = e.meArrow();
   if (off) {
     drawMeAway(g, e, off);
@@ -629,7 +629,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   if (elsewhere) {
-    // 방향조차 잴 수 없을 때만 여기로 온다 (meArrow 가 null) — 묵은 자리에 사실만 적어 둔다
+    // '나'는 재생 곡을 따라가지 않고 있던 자리에 남는다 (MAP-08) — 그 자리에 사실만 적어 둔다
     g.font = `600 9.5px ${FONTS.mono}`;
     const label = "다른 갈래에서 재생 중";
     const tw = g.measureText(label).width;

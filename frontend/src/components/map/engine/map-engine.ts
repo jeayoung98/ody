@@ -198,7 +198,7 @@ export class MapEngine {
   /** 상주 별들이 차지하는 월드 범위. 카메라를 이 근처에 붙잡아 둔다 */
   private bbox = { x0: -1, x1: 1, y0: -1, y1: 1 };
   /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
-  constellation: { ids: number[]; layout: ConstellationPoint[]; t0: number; exitingAt: number | null } | null = null;
+  constellation: { ids: number[]; layout: ConstellationPoint[]; box: { x0: number; x1: number; y0: number; y1: number }; t0: number; exitingAt: number | null } | null = null;
   /** 이 겹에 없는 곡을 "범위 밖에 있다"고 치고 띄우는 유령 별 (MAP-12). 검색에서만 만든다 */
   ghost: { musicId: number; t0: number } | null = null;
 
@@ -543,7 +543,7 @@ export class MapEngine {
    * 별밭에 섞이고 카메라 맞춤·파고들기 기준까지 흔든다. alpha 도 0 이라 지도 별로는 그려지지 않고,
    * 연출 뷰가 자기 위치로만 그린다.
    */
-  private adopt(points: MapPoint[]) {
+  adopt(points: MapPoint[]) {
     const add = points.filter((p) => !this.index.has(p.musicId));
     if (!add.length) return;
     // keep 은 **기존 곡 수**다. 지금 있는 버퍼를 그만큼 그대로 옮기고 뒤만 새로 채운다
@@ -607,9 +607,10 @@ export class MapEngine {
     if (valid.length < 2) return;
     if (this.constellation && !this.constellation.exitingAt && sameIds(this.constellation.ids, valid)) {
       this.constellation.layout = layout;
+      this.constellation.box = this.layoutBox(layout);
       return;
     }
-    this.constellation = { ids: valid, layout, t0: performance.now(), exitingAt: null };
+    this.constellation = { ids: valid, layout, box: this.layoutBox(layout), t0: performance.now(), exitingAt: null };
     this.route = valid;
     this.overlayReset();
   }
@@ -642,13 +643,52 @@ export class MapEngine {
     const p = c.layout.find((q) => q.musicId === id);
     if (!p) return real;
     const f = this.constellationRect();
-    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * CONSTELLATION.radiusRatio;
+    const fit = this.constellationFit();
     const k = this.constellationK();
     const o = this.overlay;
     // 오버레이 안에서의 이동·확대를 배치 위에 얹는다
-    const tx = f.cx + p.x * R * o.zoom + o.dx;
-    const ty = f.cy - p.y * R * o.zoom + o.dy;
+    const tx = f.cx + (p.x - fit.bx) * fit.s * o.zoom + o.dx;
+    const ty = f.cy - (p.y - fit.by) * fit.s * o.zoom + o.dy;
     return { x: lerp(real.x, tx, k), y: lerp(real.y, ty, k) };
+  }
+
+  /**
+   * 배치를 남은 영역에 **여백만 남기고 꽉 차게** 맞추는 변환.
+   *
+   * 백엔드 좌표는 -1~1 로 정규화돼 있지만 그 안 어디에 몰려 있을지는 모른다. 고정 반지름을 곱하면
+   * 몰려 있는 배치가 몰린 채로 작게 나와 한 덩어리로 보인다. 그래서 **배치 자체의 바운딩박스**를
+   * 재서 그것이 영역을 채우게 키운다. 가로·세로 같은 배율이라 모양은 그대로다
+   * (PATH-01 — 플리 모양이 상품으로 성립해야 한다).
+   */
+  private constellationFit() {
+    const b = this.constellation?.box;
+    const f = this.constellationRect();
+    if (!b) return { s: 1, bx: 0, by: 0 };
+    const p = CONSTELLATION.pad;
+    const fw = f.x1 - f.x0;
+    const fh = f.y1 - f.y0;
+    // 점이 하나뿐이거나 일직선이면 그 축은 넓이가 0 이다 — 다른 축 배율만 남게 크게 잡는다
+    const w = b.x1 - b.x0;
+    const h = b.y1 - b.y0;
+    const sx = w > 1e-4 ? Math.max(1, fw - Math.min(p.maxPx, fw * p.ratio) * 2) / w : Infinity;
+    const sy = h > 1e-4 ? Math.max(1, fh - Math.min(p.maxPx, fh * p.ratio) * 2) / h : Infinity;
+    const s = Math.min(sx, sy);
+    return { s: Number.isFinite(s) ? s : 1, bx: (b.x0 + b.x1) / 2, by: (b.y0 + b.y1) / 2 };
+  }
+
+  /** 배치 좌표의 바운딩박스 (화면과 무관하므로 배치가 바뀔 때만 잰다) */
+  private layoutBox(layout: ConstellationPoint[]) {
+    let x0 = Infinity;
+    let x1 = -Infinity;
+    let y0 = Infinity;
+    let y1 = -Infinity;
+    for (const p of layout) {
+      x0 = Math.min(x0, p.x);
+      x1 = Math.max(x1, p.x);
+      y0 = Math.min(y0, p.y);
+      y1 = Math.max(y1, p.y);
+    }
+    return Number.isFinite(x0) ? { x0, x1, y0, y1 } : { x0: 0, x1: 0, y0: 0, y1: 0 };
   }
 
   constellationIdSet(): Set<number> | null {

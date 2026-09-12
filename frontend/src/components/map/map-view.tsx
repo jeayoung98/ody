@@ -47,7 +47,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
-  const { data: layout } = useConstellationLayoutQuery(constellationMusicIds);
+  const constellationPoints = useMapStore((s) => s.constellationPoints);
+  const { data: layout } = useConstellationLayoutQuery(constellationMusicIds, constellationPoints);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
   const myMusicId = useMapStore((s) => s.myMusicId);
   const selectMusic = useMapStore((s) => s.selectMusic);
@@ -129,9 +130,12 @@ export default function MapView({ occludedRight }: MapViewProps) {
   }, [engine, viewMode, nearby]);
   // 별자리 오버레이 뷰: 배치가 도착하면 대형으로 모이고, 뷰를 닫으면 제자리로 흩어진다 (PATH-01)
   useEffect(() => {
-    if (viewMode === "constellation" && layout) engine.enterConstellation(constellationMusicIds, layout.points);
-    else if (viewMode !== "constellation") engine.exitConstellation();
-  }, [engine, viewMode, constellationMusicIds, layout]);
+    if (viewMode === "constellation" && layout) {
+      // 경로 곡은 이 겹 상주 집합 밖일 수 있다 — 먼저 편입해야 별자리에 다 그려진다
+      engine.adopt(constellationPoints);
+      engine.enterConstellation(constellationMusicIds, layout.points);
+    } else if (viewMode !== "constellation") engine.exitConstellation();
+  }, [engine, viewMode, constellationMusicIds, constellationPoints, layout]);
   useEffect(() => engine.setSelected(selectedMusicId), [engine, selectedMusicId]);
 
   // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)

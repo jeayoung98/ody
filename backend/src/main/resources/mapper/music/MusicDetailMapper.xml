@@ -43,8 +43,8 @@
 		HNSW 인덱스 순서를 쓰지 못하고 전체 정렬로 떨어진다. 동률 tie-break 는 어댑터가 한다.
 	-->
 	<select id="findNearest" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.youtube_url, m.play_cnt, m.youtube_cnt,
+		<!-- NeighborTrack 은 MusicSummary + distance 뿐이다. mbid·bpm·duration·play_cnt·youtube_cnt 는 읽지 않는다. -->
+		SELECT m.id, m.title, m.artist, m.album, m.youtube_url,
 		       m.location &lt;-&gt; #{qvec}::vector AS distance,
 		<include refid="locationColumns"/>
 		FROM music m

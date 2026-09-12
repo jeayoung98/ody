@@ -110,6 +110,16 @@ class MusicDetailReaderAdapterTests {
 	}
 
 	@Test
+	void findNeighbors_skipsGenreQuery_whenNoNeighborFound() {
+		// 빈 목록으로 장르를 조회하면 IN () 가 되어 SQL 문법 오류다.
+		when(mapper.findLocationText(7L)).thenReturn("[0.1]");
+		when(mapper.findNearest(anyLong(), anyString(), anyInt())).thenReturn(List.of());
+
+		assertTrue(adapter.findNeighbors(7L, 10).isEmpty());
+		verify(mapper, never()).findGenresByMusicIds(anyList());
+	}
+
+	@Test
 	void findNeighbors_breaksDistanceTiesByIdAscending() {
 		// SQL 은 거리 하나로만 정렬한다(HNSW 순서 유지). 동률 정렬은 어댑터 책임.
 		MusicDetailRow far = row(1L);

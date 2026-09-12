@@ -65,10 +65,6 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 		}
 
 		List<MusicDetailRow> rows = mapper.findNearest(id, qvec, k);
-		if (rows.isEmpty()) {
-			return List.of();
-		}
-
 		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
 		return rows.stream()
 				// SQL 은 거리 하나로만 정렬한다(HNSW 인덱스 순서 유지). 동률 id 오름차순은 여기서 준다.
@@ -87,8 +83,11 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				.toList();
 	}
 
-	/** 곡들의 장르를 한 번에 읽어 곡별로 묶는다(N+1 회피). */
+	/** 곡들의 장르를 한 번에 읽어 곡별로 묶는다(N+1 회피). 빈 목록이면 질의하지 않는다(IN () 는 문법 오류). */
 	private Map<Long, List<String>> findGenres(List<Long> musicIds) {
+		if (musicIds.isEmpty()) {
+			return Map.of();
+		}
 		return mapper.findGenresByMusicIds(musicIds).stream()
 				.collect(groupingBy(MusicGenreRow::getMusicId, mapping(MusicGenreRow::getName, toList())));
 	}

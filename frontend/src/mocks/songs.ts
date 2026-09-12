@@ -104,14 +104,19 @@ export function allSongs(): MapPoint[] {
     const vals = [s.x, s.y, ...s.rest];
     const pc = vals.map((v, d) => Math.round(((v - stats[d].m) / stats[d].sd) * 1000) / 1000);
     const kr = rnd();
+    const title = kr < 0.34 ? pick(TK) : `${pick(TA)} ${pick(TB)}`;
+    const artist = kr < 0.3 ? pick(AK) : `${pick(AA)} ${pick(AB)}`;
+    // 실서비스는 백엔드가 만들어 준다 (규칙 6: 검색 URL 만). 목은 모양만 맞춘다
+    const playable = rnd() > 0.115;
     return {
       musicId: i + 1,
       pc,
       genreId: s.gi,
       weight: Math.round(Math.pow(10, 2.6 + s.mag * 4.2)),
-      title: kr < 0.34 ? pick(TK) : `${pick(TA)} ${pick(TB)}`,
-      artist: kr < 0.3 ? pick(AK) : `${pick(AA)} ${pick(AB)}`,
-      playable: rnd() > 0.115,
+      title,
+      artist,
+      youtubeUrl: playable ? `https://www.youtube.com/results?search_query=${encodeURIComponent(`${artist} ${title}`)}` : null,
+      playable,
     };
   });
   cache.push(ghostOnlySong());
@@ -131,6 +136,7 @@ function ghostOnlySong(): MapPoint {
     weight: 48_000,
     title: "고스트별",
     artist: "다른 갈래",
+    youtubeUrl: "https://www.youtube.com/results?search_query=%EA%B3%A0%EC%8A%A4%ED%8A%B8%EB%B3%84",
     playable: true,
     ghostOnly: true,
   };

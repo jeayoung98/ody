@@ -27,8 +27,14 @@ export default function PlaylistPanel() {
   // 뷰를 켜지는 않고 목록만 걸어둔다 — 켜는 건 사용자가 택을 눌렀을 때
   const items = data?.items;
   useEffect(() => {
-    if (items && items.length >= 2) setConstellationList(items.map((it) => it.musicId));
-  }, [items, setConstellationList]);
+    if (!items || items.length < 2 || playlistId == null) return;
+    // 목록이 어디서 왔는지 함께 남긴다 — 이 안의 곡을 누르면 단일 재생이 아니라 이 플리로 이어진다
+    setConstellationList(
+      items.map((it) => it.musicId),
+      undefined,
+      { kind: "playlist", playlistId },
+    );
+  }, [items, playlistId, setConstellationList]);
 
   return (
     <Box title="플레이리스트" code="PATH-06" actions={<PanelCloseButton />}>

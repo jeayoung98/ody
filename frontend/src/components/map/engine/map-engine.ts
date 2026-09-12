@@ -108,6 +108,11 @@ export class MapEngine {
   W = 1;
   H = 1;
   occludedRight = 76;
+  /**
+   * 지도 위에 떠 있는 HUD 상자들 (화면 좌표). 화면 밖 표식을 여기에 가리지 않게 놓는다.
+   * 상수로 박지 않고 **실제 DOM 을 재서** 받는다 — 패널이 열리고 닫히면 달라지기 때문이다.
+   */
+  private obstacles: { x0: number; y0: number; x1: number; y1: number }[] = [];
   /** 패널이 열리고 닫히면 여기가 먼저 바뀌고 occludedRight 가 프레임마다 따라간다 */
   private occludedTarget = 76;
 
@@ -158,6 +163,12 @@ export class MapEngine {
    * 같은 곡 집합을 다시 받을 수 있다. 카메라는 돌아갈 때 곡 좌표로 다시 계산한다.
    */
   private home: { musicId: number; boxes: readonly LayerBox[] } | null = null;
+  /**
+   * 겹 전환이 끝나면 이 곡을 가운데로 다시 맞춘다.
+   * 전환 중에 상주 집합 응답이 오면 `setLayerSongs` 가 목표 카메라를 `fitCam` 으로 다시 계산해
+   * 가운데 맞춤이 덮인다 — 마지막에 한 번 더 잡아 준다.
+   */
+  private centerAfterMorph: number | null = null;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -736,6 +747,62 @@ export class MapEngine {
     return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
   }
 
+  /** 떠 있는 HUD 상자를 갱신한다 (map-view 가 DOM 을 재서 넘긴다) */
+  setObstacles(rects: { x0: number; y0: number; x1: number; y1: number }[]) {
+    this.obstacles = rects;
+  }
+
+  /**
+   * 화면 밖 표식을 놓을 자리 — **가장자리에 최대한 붙인다.**
+   *
+   * 지도가 보이는 사각형을 {@link ME_OFFSCREEN.edgeGap} 만큼 줄인 상자의 **테두리 위**에서 고른다.
+   * 방향이 만나는 점이 HUD 에 가리면 안쪽으로 물러나지 않고 **테두리를 따라 미끄러져** 빈 자리를
+   * 찾는다 — 안으로 물러나면 "지금 보는 화면 위에 떠 있다"로 읽히기 때문이다.
+   * 고르는 기준은 원래 방향과의 **각도 차이가 가장 작은** 빈 자리다.
+   */
+  private edgePos(dir: { x: number; y: number }) {
+    const f = this.freeRect();
+    const g = ME_OFFSCREEN.edgeGap;
+    const x0 = f.x0 + g;
+    const y0 = f.y0 + g;
+    const x1 = Math.max(x0 + 1, f.x1 - g);
+    const y1 = Math.max(y0 + 1, f.y1 - g);
+    const want = Math.atan2(dir.y, dir.x);
+    const step = 10;
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    let fallback: { x: number; y: number } | null = null;
+    let fallbackD = Infinity;
+    const consider = (x: number, y: number) => {
+      // 중심에서 본 각도가 원하는 방향과 얼마나 다른가 (-π~π 로 감싼다)
+      let d = Math.abs(Math.atan2(y - f.cy, x - f.cx) - want);
+      if (d > Math.PI) d = Math.PI * 2 - d;
+      if (d < fallbackD) {
+        fallbackD = d;
+        fallback = { x, y };
+      }
+      if (this.blocked(x, y) || d >= bestD) return;
+      bestD = d;
+      best = { x, y };
+    };
+    for (let x = x0; x <= x1; x += step) {
+      consider(x, y0);
+      consider(x, y1);
+    }
+    for (let y = y0; y <= y1; y += step) {
+      consider(x0, y);
+      consider(x1, y);
+    }
+    // 테두리가 전부 막혔으면 방향만이라도 맞춘다
+    return best ?? fallback ?? { x: f.cx, y: f.cy };
+  }
+
+  /** 그 점이 HUD 상자(간격 포함) 안인가 */
+  private blocked(x: number, y: number) {
+    const g = ME_OFFSCREEN.edgeGap;
+    return this.obstacles.some((o) => x > o.x0 - g && x < o.x1 + g && y > o.y0 - g && y < o.y1 + g);
+  }
+
   // ------------------------------------------------------------------ 화면 밖 '나' (MAP-08)
   /**
    * 화면 밖으로 나간 '나' 표식의 자리와 방향. **null 이면 화면 안**이라 제자리에 그리면 된다.
@@ -760,12 +827,8 @@ export class MapEngine {
       dir = unit(px - f.cx, py - f.cy);
     }
     if (!dir) return null;
-    /**
-     * 이 겹에 있는데 화면 밖인 경우는 **화면 테두리**에 붙인다 (Infinity) — 자리는 실재하고
-     * 화면만 못 담은 것이라 "저 끝 너머"가 맞다. 이 겹에 아예 없으면 고스트별과 같이
-     * 구름 바로 밖에 놓아 "이 무리 바깥"으로 읽히게 한다.
-     */
-    const p = this.outsideCloudPos(dir, elsewhere ? this.cloudExtent : Infinity);
+    // 둘 다 "화면 밖"이므로 가장자리에 붙인다. HUD 에 가리면 edgePos 가 안쪽으로 물러난다
+    const p = this.edgePos(dir);
     return { x: p.x, y: p.y, dir, elsewhere };
   }
 
@@ -1204,6 +1267,7 @@ export class MapEngine {
     this.boxes = [...h.boxes];
 
     const song = this.songs[i];
+    this.centerAfterMorph = h.musicId;
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
     const ax = LAYER_AXES[target];
@@ -1423,6 +1487,12 @@ export class MapEngine {
         if (w) this.me = { ...w };
         if (this.selectedId != null && !this.isAlive(this.selectedId)) this.selectedId = null;
         this.project();
+        // 내 위치로 가기: 응답이 중간에 도착해 카메라가 덮였을 수 있으므로 마지막에 가운데로 잡는다
+        if (this.centerAfterMorph != null) {
+          const id = this.centerAfterMorph;
+          this.centerAfterMorph = null;
+          this.focus(id, FOCUS.zoomMul);
+        }
       }
     } else {
       if (this.pressure > 0) this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);

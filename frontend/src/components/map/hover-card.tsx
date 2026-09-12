@@ -19,6 +19,8 @@ interface HoverCardProps {
    * 지워진 요소는 mouseleave 를 쏘지 않기 때문이다. 실제로 그래서 호버가 영영 안 잡혔다.
    */
   cardRef: RefObject<HTMLDivElement | null>;
+  /** 켜져 있나. 꺼지면 사라지는 중이다 — 다 사라질 때까지는 그대로 붙어 있는다 */
+  on: boolean;
   /** 카드의 재생 버튼 */
   onPlay: (song: MapPoint) => void;
 }
@@ -30,7 +32,7 @@ interface HoverCardProps {
  * 자리는 카메라가 움직일 때마다 바뀐다. 매 프레임 setState 하면 지도 전체가 리렌더되므로
  * rAF 에서 `style.transform` 만 직접 쓴다 — 리렌더는 곡이 바뀔 때만 일어난다.
  */
-export default function HoverCard({ engine, song, cardRef, onPlay }: HoverCardProps) {
+export default function HoverCard({ engine, song, cardRef, on, onPlay }: HoverCardProps) {
   // 커버는 캔버스로 만들어 쓰던 것을 그대로 쓴다 (곡마다 같은 그림이어야 지도와 어긋나지 않는다)
   const cover = useMemo(() => (song ? coverFor(song).toDataURL() : null), [song]);
   const musicId = song?.musicId ?? null;
@@ -43,6 +45,8 @@ export default function HoverCard({ engine, song, cardRef, onPlay }: HoverCardPr
       raf = requestAnimationFrame(follow);
       const el = cardRef.current;
       if (!el) return;
+      // 나타날 때 한 프레임 늦게 켜야 0 → 1 전환이 실제로 재생된다 (처음 그려질 때는 투명하다)
+      el.style.opacity = on ? "1" : "0";
       const a = engine.hoverAnchor();
       // 별이 화면 밖으로 나가면 카드도 숨긴다 (자리를 못 잡으니 마지막 자리에 남으면 안 된다)
       if (!a) {
@@ -60,7 +64,7 @@ export default function HoverCard({ engine, song, cardRef, onPlay }: HoverCardPr
     };
     raf = requestAnimationFrame(follow);
     return () => cancelAnimationFrame(raf);
-  }, [engine, cardRef, musicId]);
+  }, [engine, cardRef, musicId, on]);
 
   if (!song) return null;
 
@@ -73,7 +77,15 @@ export default function HoverCard({ engine, song, cardRef, onPlay }: HoverCardPr
       ref={cardRef}
       onMouseDown={(e) => e.stopPropagation()}
       onMouseUp={(e) => e.stopPropagation()}
-      style={{ width: HOVER_CARD.w, height: HOVER_CARD.h, visibility: "hidden" }}
+      style={{
+        width: HOVER_CARD.w,
+        height: HOVER_CARD.h,
+        visibility: "hidden",
+        opacity: 0,
+        transition: `opacity ${HOVER_CARD.fadeMs}ms ease-out`,
+        // 사라지는 중인 카드가 그 밑의 별을 가로채면 안 된다
+        pointerEvents: on ? "auto" : "none",
+      }}
       className="glass absolute top-0 left-0 z-[25] flex cursor-default items-center gap-3 px-2.5 will-change-transform"
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}

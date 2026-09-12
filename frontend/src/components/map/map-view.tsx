@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
-import { STORAGE_KEYS } from "@/constants";
+import { HOVER_CARD, STORAGE_KEYS } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -44,8 +44,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const [hover, setHover] = useState(false);
   /** 호버 카드에 띄울 곡. 카드가 DOM 이라 곡 자체를 들고 있어야 한다 */
   const [hoverSong, setHoverSong] = useState<MapPoint | null>(null);
+  /** 카드가 켜져 있나. 꺼져도 사라지는 동안에는 `hoverSong` 이 남아 있는다 */
+  const [cardOn, setCardOn] = useState(false);
   /** 호버 카드의 DOM. 마우스가 그 위인지 매번 다시 재려고 들고 있는다 */
   const cardRef = useRef<HTMLDivElement>(null);
+  const hideTimer = useRef<number | null>(null);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
@@ -195,6 +198,36 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (home) writeStorage(STORAGE_KEYS.myHome, home);
   }, [home]);
 
+  /**
+   * 별에서 벗어나도 **곧바로 끄지 않는다.** 별과 카드 사이에는 틈이 있어서 카드로 가는 동안에는
+   * 아무것도 안 잡히는데, 그 순간 꺼 버리면 카드에 닿기 전에 사라진다 (실제로 그랬다).
+   */
+  const cancelHide = useCallback(() => {
+    if (hideTimer.current == null) return;
+    clearTimeout(hideTimer.current);
+    hideTimer.current = null;
+  }, []);
+  const scheduleHide = useCallback(() => {
+    if (hideTimer.current != null) return;
+    hideTimer.current = window.setTimeout(() => {
+      hideTimer.current = null;
+      setCardOn(false);
+    }, HOVER_CARD.graceMs);
+  }, []);
+  /**
+   * 다 사라진 뒤에야 떼어 낸다. 엔진의 호버도 여기서 푼다 —
+   * 먼저 풀면 카드가 자기 자리를 잃어서 사라지는 대신 **툭 없어진다.**
+   */
+  useEffect(() => {
+    if (cardOn || hoverSong == null) return;
+    const t = setTimeout(() => {
+      engine.setHover(null);
+      setHoverSong(null);
+    }, HOVER_CARD.fadeMs);
+    return () => clearTimeout(t);
+  }, [engine, cardOn, hoverSong]);
+  useEffect(() => cancelHide, [cancelHide]);
+
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
@@ -235,17 +268,24 @@ export default function MapView({ occludedRight }: MapViewProps) {
       // 카드 위로 넘어간 마우스는 "별에서 벗어난 것" 이 아니다 — 카드를 유지한다.
       // 들어왔다/나갔다를 플래그로 기억하면 카드가 포인터 밑에서 사라질 때 굳는다 (지워진 요소는
       // mouseleave 를 쏘지 않는다). 그래서 매번 지금 자리로 다시 잰다
-      if (cardRef.current?.contains(e.target as Node)) return;
+      if (cardRef.current?.contains(e.target as Node)) {
+        cancelHide();
+        return;
+      }
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
       const hitF = engine.hitFriend(mx, my);
       const hit = hitF ? null : engine.hitTest(mx, my);
       const song = hit ? engine.songs[hit.i] : null;
-      engine.setHover(song?.musicId ?? null);
-      setHoverSong(song);
+      if (song) {
+        cancelHide();
+        engine.setHover(song.musicId);
+        setHoverSong(song);
+        setCardOn(true);
+      } else scheduleHide();
       setHover(!!hit || !!hitF);
     },
-    [engine],
+    [engine, cancelHide, scheduleHide],
   );
   const onMouseUp = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
@@ -293,10 +333,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;
-    engine.setHover(null);
-    setHoverSong(null);
+    scheduleHide();
     setHover(false);
-  }, [engine]);
+  }, [scheduleHide]);
 
   /**
    * 호버 카드의 재생 — 상세를 열면서 동시에 재생한다.
@@ -332,7 +371,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       <FloatingReactions />
-      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} onPlay={handleCardPlay} />
+      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onPlay={handleCardPlay} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

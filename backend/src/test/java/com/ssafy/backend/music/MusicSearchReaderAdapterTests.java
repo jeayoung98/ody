@@ -14,14 +14,13 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 
-import org.apache.ibatis.session.SqlSession;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSearchRow;
 import com.ssafy.backend.music.dto.MusicSummary;
-import com.ssafy.backend.music.search.MusicSearchMapper;
+import com.ssafy.backend.music.mapper.MusicSearchMapper;
 import com.ssafy.backend.music.search.MusicSearchReader.PageResult;
 import com.ssafy.backend.music.search.MusicSearchReaderAdapter;
 
@@ -32,13 +31,7 @@ import com.ssafy.backend.music.search.MusicSearchReaderAdapter;
 class MusicSearchReaderAdapterTests {
 
 	private final MusicSearchMapper mapper = mock(MusicSearchMapper.class);
-	private final MusicSearchReaderAdapter adapter = new MusicSearchReaderAdapter(sqlSessionReturning(mapper));
-
-	private static SqlSession sqlSessionReturning(MusicSearchMapper mapper) {
-		SqlSession sqlSession = mock(SqlSession.class);
-		when(sqlSession.getMapper(MusicSearchMapper.class)).thenReturn(mapper);
-		return sqlSession;
-	}
+	private final MusicSearchReaderAdapter adapter = new MusicSearchReaderAdapter(mapper);
 
 	private static MusicSearchRow row(long id) {
 		MusicSearchRow r = new MusicSearchRow();

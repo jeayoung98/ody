@@ -7,12 +7,12 @@ import static java.util.stream.Collectors.toList;
 import java.util.List;
 import java.util.Map;
 
-import org.apache.ibatis.session.SqlSession;
 import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSearchRow;
 import com.ssafy.backend.music.dto.MusicSummary;
+import com.ssafy.backend.music.mapper.MusicSearchMapper;
 
 /**
  * {@link MusicSearchReader} 의 MyBatis 어댑터 (정본 §3.1, 헌법 X: BE2 계약 / 실행 분리).
@@ -25,10 +25,8 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 
 	private final MusicSearchMapper mapper;
 
-	public MusicSearchReaderAdapter(SqlSession sqlSession) {
-		// 매퍼를 스프링 빈으로 두지 않는 이유는 MusicSearchMapper javadoc 참조.
-		// 여기서 바인딩이 깨지면 컨텍스트 로딩 단계에서 바로 드러난다(BackendApplicationTests).
-		this.mapper = sqlSession.getMapper(MusicSearchMapper.class);
+	public MusicSearchReaderAdapter(MusicSearchMapper mapper) {
+		this.mapper = mapper;
 	}
 
 	@Override

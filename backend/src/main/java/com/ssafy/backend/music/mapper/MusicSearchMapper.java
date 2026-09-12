@@ -1,4 +1,4 @@
-package com.ssafy.backend.music.search;
+package com.ssafy.backend.music.mapper;
 
 import java.util.List;
 
@@ -7,19 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSearchRow;
 
-/**
- * 노래 검색 MyBatis 매퍼 ({@code MusicSearchReader} port 어댑터가 쓰는 실행 계층).
- *
- * 패키지 위치가 {@code *.mapper} 가 아닌 이유: {@code BackendApplication} 의
- * {@code @MapperScan("com.ssafy.backend.*.mapper")} 에 잡히면 이 인터페이스가 스프링 빈이 되고,
- * 그러면 저장소의 모든 {@code @WebMvcTest} 슬라이스가 SqlSessionFactory 부재로 죽는다
- * (매퍼가 늘 때마다 슬라이스 테스트 10개에 @MockitoBean 을 한 줄씩 더해야 한다).
- * 여기서는 빈을 만들지 않고 어댑터가 {@code SqlSession.getMapper()} 로 받는다 —
- * XML namespace 가 이 인터페이스를 바인딩하므로 타입 안전성은 같다.
- *
- * ponytail: 근본 해결은 T301(@MapperScan 을 별도 @Configuration 으로 분리, BE-infra 소유).
- * 그게 되면 이 인터페이스를 {@code music.mapper} 로 옮기고 다른 매퍼들과 같은 모양으로 되돌린다.
- */
+/** 노래 검색 MyBatis 매퍼 ({@code MusicSearchReader} 어댑터가 쓰는 실행 계층). */
 public interface MusicSearchMapper {
 
 	/** title·artist ILIKE 부분일치, youtube_cnt DESC(NULLS LAST)·id ASC, offset/limit. */

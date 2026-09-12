@@ -28,6 +28,13 @@
 		m.title ILIKE #{pattern} ESCAPE '\' OR m.artist ILIKE #{pattern} ESCAPE '\'
 	</sql>
 
+	<!--
+		⚠️ youtube_cnt 는 전 행 0 이다(data 스펙 18: "play_cnt·youtube_cnt 는 0 으로 채운다").
+		   따라서 아래 정렬은 사실상 id ASC 단독이고, 사용자에게는 무작위 순서로 보인다.
+		   FR-010 이 정한 youtubeCnt 내림차순은 값이 생기기 전까지 의미가 없다.
+		   정렬 기준 재정의는 S15P21A405-234. 페이지 간 순서 안정성은 id 꼬리가 계속 보장한다.
+		   NULLS LAST 는 값이 생겼을 때를 위한 것이다(Postgres 는 DESC 가 기본 NULLS FIRST).
+	-->
 	<select id="findPage" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
 		SELECT m.id, m.title, m.artist, m.album, m.youtube_url,
 		<include refid="locationColumns"/>

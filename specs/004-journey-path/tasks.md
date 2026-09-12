@@ -253,7 +253,7 @@ JwtAuthenticationFilter 제외 + 매퍼 `@MockitoBean` 이다(003 선례). 그 �
 ### 산출 구현 (합성 좌표로 검증 — D-DATA 무관)
 
 - [X] T053 **축 좌표계 + 역 수 + 층 지점 계산** — `L = ‖B − A‖`, 진행도 `p`, 축 이탈 `r`, 역 수 `L ≤ 10.7 → 10` / 초과 시 `clamp(round(10 + (L − 10.7)), 10, 20)`, 층 지점 `c_k = A + k/(n+1)·(B − A)`. **`L == 0` 은 2곡 경로로 끊는다**(FR-012 — 기존 `JourneyService` 의 `start == end` 분기와는 다른 경우다). 먼 곡을 거절하지 않는다
-- [ ] T054 **층 후보 조회 어댑터** — T049 port 의 MyBatis 구현. **[2026-09-12] 선행 충족** — `music`(6,624,399행) · `location vector(16)` · `music_location_hnsw_idx`(L2). SQL 은 핸드오프 §4.3 그대로:
+- [X] T054 **층 후보 조회 어댑터** — T049 port 의 MyBatis 구현. **[2026-09-12] 선행 충족** — `music`(6,624,399행) · `location vector(16)` · `music_location_hnsw_idx`(L2). SQL 은 핸드오프 §4.3 그대로:
 
       ```sql
       SELECT id, mbid, title, artist, duration, location

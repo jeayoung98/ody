@@ -38,7 +38,9 @@
 		  단계마다 ORDER BY id LIMIT 을 두면 각각 PK 목차를 따라가다 채워지면 멈춘다(love 기준 3.9ms).
 
 		단계는 서로 겹치지 않게 자른다. 아래 단계는 위 단계의 조건을 제외한다.
-		  0 제목 완전일치 / 1 제목 앞일치 / 2 아티스트 완전일치 / 3 아티스트 앞일치 / 4 나머지 부분일치
+		  0 제목 완전일치 / 1 아티스트 완전일치 / 2 제목 앞일치 / 3 아티스트 앞일치 / 4 나머지 부분일치
+		  완전일치를 필드보다 앞에 둔다 — 정확도가 제목·가수 구분보다 강한 신호다. 'radiohead' 를 치면
+		  그 이름의 가수를 원하지, 제목이 'Radiohead ...' 로 시작하는 곱을 원하는 게 아니다.
 
 		내부 단계는 id 만 고르고 바깥에서 music 을 PK 로 다시 읽는다. 좀은 행만 넘기면 되므로
 		좁히기 단계가 가벼지고, 좌표 16캕을 5번 반복하지 않아도 된다.
@@ -64,11 +66,12 @@
 			 ORDER BY m.id LIMIT #{cap})
 			UNION ALL
 			(SELECT m.id, 1 AS tier FROM music m
-			 WHERE <include refid="titlePrefixed"/> AND lower(m.title) &lt;&gt; #{q}
+			 WHERE <include refid="artistLower"/> = #{q} AND lower(m.title) &lt;&gt; #{q}
 			 ORDER BY m.id LIMIT #{cap})
 			UNION ALL
 			(SELECT m.id, 2 AS tier FROM music m
-			 WHERE <include refid="artistLower"/> = #{q} AND NOT (<include refid="titlePrefixed"/>)
+			 WHERE <include refid="titlePrefixed"/> AND lower(m.title) &lt;&gt; #{q}
+			   AND <include refid="artistLower"/> &lt;&gt; #{q}
 			 ORDER BY m.id LIMIT #{cap})
 			UNION ALL
 			(SELECT m.id, 3 AS tier FROM music m

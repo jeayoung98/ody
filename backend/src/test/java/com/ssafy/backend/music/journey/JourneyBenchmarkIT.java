@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -172,6 +173,87 @@ class JourneyBenchmarkIT {
 		if (sorted.isEmpty()) {
 			return 0;
 		}
+		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
+	}
+
+	/**
+	 * SC-005 — 같은 쌍에서 {@code axis} 의 인접 역 거리 median 이 {@code linear} 보다 작다.
+	 *
+	 * <p>운영 요청 경로가 아니라 이 검증 경로에서만 두 모드를 나란히 돌린다(FR-010).
+	 * 데이터 파트 기준선은 p50 2.949 대 3.430 이다(R10).
+	 */
+	@Test
+	void axisStationsAreCloserThanLinear() {
+		Random rnd = new Random(SEED);
+		List<Double> axisMedians = new ArrayList<>(PAIRS);
+		List<Double> linearMedians = new ArrayList<>(PAIRS);
+		int axisWins = 0;
+		int compared = 0;
+
+		for (int i = 0; i < PAIRS; i++) {
+			try (SqlSession session = factory.openSession()) {
+				BenchMapper bench = session.getMapper(BenchMapper.class);
+				MusicDetail a = load(bench, rnd);
+				MusicDetail b = load(bench, rnd);
+				if (a == null || b == null || a.id().equals(b.id())) {
+					continue;
+				}
+
+				NearestTrackReader reader = adapterOn(session);
+				AxisJourneyPathFinder finder =
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry());
+
+				EnginePath axis = finder.find(a, b);
+				if (!axis.reachable() || axis.stationMbids().isEmpty()) {
+					continue;
+				}
+				List<TrackCandidate> linear = linearStops(finder, reader, a, b);
+				if (linear == null || linear.isEmpty()) {
+					continue;
+				}
+
+				double am = medianStep(a, resolve(bench, axis.stationMbids()), b);
+				double lm = medianStep(a, linear, b);
+				axisMedians.add(am);
+				linearMedians.add(lm);
+				compared++;
+				if (am < lm) {
+					axisWins++;
+				}
+			}
+		}
+
+		axisMedians.sort(null);
+		linearMedians.sort(null);
+		System.out.printf("%n=== SC-005 axis 대 linear (쌍 %d) ===%n", compared);
+		System.out.printf("axis   median p50 / p95 : %.3f / %.3f%n",
+				axisMedians.get(axisMedians.size() / 2), pct(axisMedians));
+		System.out.printf("linear median p50 / p95 : %.3f / %.3f%n",
+				linearMedians.get(linearMedians.size() / 2), pct(linearMedians));
+		System.out.printf("쌍별 axis 승             : %d / %d%n", axisWins, compared);
+
+		assertThat(axisMedians.get(axisMedians.size() / 2))
+				.as("SC-005 axis median p50 < linear median p50")
+				.isLessThan(linearMedians.get(linearMedians.size() / 2));
+	}
+
+	/** {@code linear} 를 폴백이 아니라 직접 불러 같은 쌍을 두 모드로 잰다. */
+	private List<TrackCandidate> linearStops(AxisJourneyPathFinder finder, NearestTrackReader reader,
+			MusicDetail a, MusicDetail b) {
+		float[] av = a.location().toArray();
+		float[] bv = b.location().toArray();
+		AxisFrame frame = AxisFrame.of(av, bv);
+		if (frame.degenerate()) {
+			return null;
+		}
+		LayerCandidates.EndpointGuard guard = new LayerCandidates.EndpointGuard(a.id(), b.id(),
+				SameRecording.key(a.title(), a.artist()), SameRecording.key(b.title(), b.artist()),
+				av, bv, new HashSet<>());
+		return finder.linear(reader, frame, guard,
+				frame.stationCount(RULES.farEndpointDist()));
+	}
+
+	private static double pct(List<Double> sorted) {
 		return sorted.get(Math.min(sorted.size() - 1, (int) (sorted.size() * 0.95)));
 	}
 

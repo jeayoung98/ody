@@ -211,8 +211,11 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 	 *
 	 * <p><b>진행도가 역행할 수 있다</b> — 보간 지점마다 독립으로 고르기 때문이고, 이 모드의 알려진
 	 * 성질이라 결함이 아니다(같은 40쌍에서 21건). 요청 파라미터로 승격하지 않는다(FR-023).
+	 *
+	 * <p>패키지 전용인 이유: SC-005(축 대 선형 인접 역 거리 median 비교)를 재려면 검증 경로가
+	 * 이 모드를 직접 불러야 한다. 운영 요청 경로에서는 폴백으로만 쓴다(FR-010).
 	 */
-	private List<TrackCandidate> linear(NearestTrackReader r, AxisFrame frame, EndpointGuard guard, int n) {
+	List<TrackCandidate> linear(NearestTrackReader r, AxisFrame frame, EndpointGuard guard, int n) {
 		List<TrackCandidate> picked = new ArrayList<>(n);
 		Set<Long> used = new HashSet<>();
 		Set<String> usedKeys = new HashSet<>();

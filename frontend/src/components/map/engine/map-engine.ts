@@ -964,18 +964,64 @@ export class MapEngine {
     return this.songs[b].musicId;
   }
 
-  /** 카메라 맞춤: 기준 곡을 남은 화면 중앙에, 상주 집합의 97%가 들어오게 */
+  /**
+   * 카메라 맞춤: 기준 곡을 남은 화면 중앙에.
+   *
+   * - **레이어 0**: 지금까지의 규칙 그대로. 중심에서의 거리 97분위를 화면 44% 반지름에 맞춘다.
+   * - **파고든 겹(1 이상)**: 거리 분위수는 꼬리에 끌려가 알맹이를 작게 모은다. 파고들기는
+   *   "그 부분만 확대해 들어간다" 는 컨셉이라 들어간 순간 화면이 꽉 차야 하므로,
+   *   **가로·세로를 따로 잰 분위수 상자**가 화면의 {@link DRILL.deepFit.fill} 을 채우게 맞춘다.
+   */
   private fitCam(layer: number, mask: Uint8Array<ArrayBufferLike>, centerId: number): MapCamera {
     const dx = layer * 2;
     const dy = layer * 2 + 1;
     const c = this.songs[this.index.get(centerId)!];
+    const f = this.freeRect();
+    if (layer === 0) {
+      const s = this.fitRadial(dx, dy, mask, c.pc);
+      return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
+    }
+    /**
+     * 파고든 겹은 **구름 한가운데**를 본다. 기준 곡에 맞추면 그 곡이 무리 가장자리일 때
+     * 절반이 화면 밖으로 나간다 — 실측상 상주 1,000곡 중 40%만 화면에 들어왔다.
+     * "이 부분을 확대해 들어왔다" 는 컨셉이라 들어온 영역 전체가 보여야 한다.
+     */
+    const b = this.fitBox(dx, dy, mask);
+    return { cx: b.cx - (f.cx - this.W / 2) / b.s, cy: b.cy + (f.cy - this.H / 2) / b.s, s: b.s };
+  }
+
+  /** 레이어 0 맞춤 — 기준 곡에서의 거리 분위수를 화면 반지름에 맞춘다 */
+  private fitRadial(dx: number, dy: number, mask: Uint8Array<ArrayBufferLike>, c: number[]) {
     const d: number[] = [];
-    for (let i = 0; i < this.N; i++) if (mask[i]) d.push(Math.hypot(this.songs[i].pc[dx] - c.pc[dx], this.songs[i].pc[dy] - c.pc[dy]));
+    for (let i = 0; i < this.N; i++) if (mask[i]) d.push(Math.hypot(this.songs[i].pc[dx] - c[dx], this.songs[i].pc[dy] - c[dy]));
     d.sort((a, b) => a - b);
     const r = d[Math.floor(d.length * DRILL.fitQuantile)] || 1;
     const f = this.freeRect();
-    const s = Math.min(f.x1 - f.x0, f.y1 - f.y0) * DRILL.fitRadiusRatio / r;
-    return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
+    return (Math.min(f.x1 - f.x0, f.y1 - f.y0) * DRILL.fitRadiusRatio) / r;
+  }
+
+  /**
+   * 파고든 겹 맞춤 — 분위수 상자가 화면을 꽉 채우는 배율(가로·세로 중 더 빡빡한 쪽)과
+   * 그 상자의 한가운데(월드 좌표).
+   */
+  private fitBox(dx: number, dy: number, mask: Uint8Array<ArrayBufferLike>) {
+    const xs: number[] = [];
+    const ys: number[] = [];
+    for (let i = 0; i < this.N; i++) {
+      if (!mask[i]) continue;
+      xs.push(this.songs[i].pc[dx]);
+      ys.push(this.songs[i].pc[dy]);
+    }
+    if (!xs.length) return { s: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
+    xs.sort((a, b) => a - b);
+    ys.sort((a, b) => a - b);
+    const lo = Math.floor((xs.length - 1) * DRILL.deepFit.trim);
+    const hi = Math.ceil((xs.length - 1) * (1 - DRILL.deepFit.trim));
+    const w = Math.max(1e-6, xs[hi] - xs[lo]);
+    const h = Math.max(1e-6, ys[hi] - ys[lo]);
+    const f = this.freeRect();
+    const s = Math.min(((f.x1 - f.x0) * DRILL.deepFit.fill) / w, ((f.y1 - f.y0) * DRILL.deepFit.fill) / h);
+    return { s, cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
   }
 
   // ------------------------------------------------------------------ layer transitions
@@ -1015,7 +1061,7 @@ export class MapEngine {
    * 어긋나면 압력만 차오르고 내려가지는 않아서 휠이 먹통이 된다 (확대도 멈춰 있으므로).
    */
   gateOpen() {
-    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough() && this.countInView() >= DRILL.minInView;
+    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough();
   }
 
   /**
@@ -1026,10 +1072,10 @@ export class MapEngine {
    */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
-    const inView = this.countInView();
-    if (inView < DRILL.minInView) return;
+    const box = this.drillBox();
+    const inView = this.countInBox(box);
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
-    this.boxes = [...this.boxes, this.viewBox()];
+    this.boxes = [...this.boxes, box];
     const nl = this.layer + 1;
     // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
     const ns = this.residentMask(nl);
@@ -1042,6 +1088,59 @@ export class MapEngine {
       `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${inView.toLocaleString()}곡 기준`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
     );
+  }
+
+  /** 그 범위 안에 있는 상주 곡 수 */
+  private countInBox(b: LayerBox) {
+    const dx = b.layer * 2;
+    const dy = b.layer * 2 + 1;
+    let n = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i]) continue;
+      const p = this.songs[i].pc;
+      if (p[dx] >= b.xMin && p[dx] <= b.xMax && p[dy] >= b.yMin && p[dy] <= b.yMax) n++;
+    }
+    return n;
+  }
+
+  /**
+   * 다음 겹으로 가져갈 범위.
+   *
+   * 백엔드에는 **점이 아니라 사각형**을 보낸다 (`pc{k}min`/`pc{k}max`). 그래서 "가장 가까운 별을
+   * 보낸다" 는 대신 **그 별을 가운데 두는 사각형**을 만든다.
+   *
+   * 화면 안에 곡이 충분하면 보던 화면 그대로가 기준이다. 모자라면 — 빈 곳을 확대한 경우 —
+   * 화면 중앙에서 **가장 가까운 곡**을 찾아 그 곡을 가운데 두고, 최소 곡 수가 담길 때까지
+   * 화면 비율 그대로 넓힌다. 빈 곳에서 확대했다고 파고들지 못하면 휠이 먹통으로 느껴진다.
+   */
+  private drillBox(): LayerBox {
+    const view = this.viewBox();
+    if (this.countInBox(view) >= DRILL.minInView) return view;
+    const dx = this.dx();
+    const dy = this.dy();
+    const f = this.freeRect();
+    const c = this.screenToWorld(f.cx, f.cy);
+    let best = -1;
+    let bd = Infinity;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i]) continue;
+      const p = this.songs[i].pc;
+      const d = (p[dx] - c.x) ** 2 + (p[dy] - c.y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = i;
+      }
+    }
+    if (best < 0) return view;
+    const p = this.songs[best].pc;
+    const hw = (view.xMax - view.xMin) / 2;
+    const hh = (view.yMax - view.yMin) / 2;
+    let box = view;
+    for (let k = 1; k <= DRILL.nearestGrowMax; k *= DRILL.nearestGrowStep) {
+      box = { layer: this.layer, xMin: p[dx] - hw * k, xMax: p[dx] + hw * k, yMin: p[dy] - hh * k, yMax: p[dy] + hh * k };
+      if (this.countInBox(box) >= DRILL.minInView) break;
+    }
+    return box;
   }
 
   /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */
@@ -1066,7 +1165,9 @@ export class MapEngine {
     this.centerLock = false;
     const zoomIn = deltaY < 0;
     const canDig = zoomIn && this.gateOpen();
-    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * DRILL.riseScaleRatio;
+    // 파고든 겹에서는 진입 배율이 곧 축소 한계다 — 거기서 더 줄이려 하면 바로 떠오르기다
+    const riseAt = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.riseScaleRatio;
+    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * riseAt;
     if (canDig || canRise) {
       this.pressureDir = canDig ? 1 : -1;
       this.pressure = Math.min(1, this.pressure + Math.abs(deltaY) * DRILL.pressurePerDelta);
@@ -1080,8 +1181,10 @@ export class MapEngine {
     this.touched = true;
     const w = this.screenToWorld(mx, my);
     const want = this.cam.s * Math.exp(-deltaY * WHEEL_ZOOM);
-    // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게)
-    this.cam.s = Math.min(this.entryS * DRILL.zoomRange.max, Math.max(this.entryS * DRILL.zoomRange.min, want));
+    // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게).
+    // 파고든 겹의 축소 한계는 진입 배율 자체다 — 그 아래는 빈 우주만 보여 줄 뿐이다
+    const minK = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.zoomRange.min;
+    this.cam.s = Math.min(this.entryS * DRILL.zoomRange.max, Math.max(this.entryS * minK, want));
     this.cam.cx = w.x - (mx - this.W / 2) / this.cam.s;
     this.cam.cy = w.y + (my - this.H / 2) / this.cam.s;
     this.clampCam();

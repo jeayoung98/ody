@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.music.retrieval.MajorTrackMapper">
+
+	<!--
+		근거: data/ingest/map_layer_queries.sql (origin/data/dev), 2026-09-11 실측.
+		- map_sample: layer, gx, gy, music_id, x, y, title, artist — 1레이어 1,094행이 미리 계산돼 있다
+		- music_l1_gist / music_l2_gist: point((location::real[])[n], [n+1]) 위의 표현식 GiST
+
+		⚠️ 사각 범위에 GiST 를 두 번 쓰지 않는다. 플래너가 BitmapAnd 로 묶어 145 ms 가 355 ms 가 된다.
+		   선택도 높은 1겹 인덱스 하나 + heap 필터가 2.4배 빠르다. 그래서 boxes[0] 만 point <@ box 다.
+
+		⚠️ 축 번호는 ${} 로 넣는다. #{} 바인드 파라미터를 첨자에 쓰면 인덱스의 표현식과 문자열이
+		   달라져 music_l1_gist 를 타지 못한다. 값은 LayerBox.layer(int) 에서 2n-1·2n 으로 계산되고
+		   어댑터가 1..16 범위를 검사한다 — 외부 문자열이 들어오지 않는다.
+	-->
+
+	<sql id="locationColumns">
+		(m.location::real[])[1]  AS pc1,  (m.location::real[])[2]  AS pc2,
+		(m.location::real[])[3]  AS pc3,  (m.location::real[])[4]  AS pc4,
+		(m.location::real[])[5]  AS pc5,  (m.location::real[])[6]  AS pc6,
+		(m.location::real[])[7]  AS pc7,  (m.location::real[])[8]  AS pc8,
+		(m.location::real[])[9]  AS pc9,  (m.location::real[])[10] AS pc10,
+		(m.location::real[])[11] AS pc11, (m.location::real[])[12] AS pc12,
+		(m.location::real[])[13] AS pc13, (m.location::real[])[14] AS pc14,
+		(m.location::real[])[15] AS pc15, (m.location::real[])[16] AS pc16
+	</sql>
+
+	<!--
+		map_sample 에는 pc 16축이 없어 music 조인이 필요하다(MapPoint.pc 계약).
+		조인 없는 0.4 ms 는 이 조인만큼 깎인다 — 실 DB 재측정 대상(T016 지시).
+		장르는 조인하지 않는다: 29종 멜론 코드를 FE 10종으로 접는 매핑이 아직 없다.
+	-->
+	<select id="findLayerOneSample" resultType="com.ssafy.backend.music.dto.MapPointRow">
+		SELECT s.music_id, s.title, s.artist, m.youtube_url,
+		<include refid="locationColumns"/>
+		FROM map_sample s
+		JOIN music m ON m.id = s.music_id
+		WHERE s.layer = 1
+		LIMIT #{limit}
+	</select>
+
+	<select id="findInAccumulatedBoxes" resultType="com.ssafy.backend.music.dto.MapPointRow">
+		SELECT m.id AS music_id, m.title, m.artist, m.youtube_url,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE
+		<foreach item="box" index="i" collection="boxes" separator=" AND ">
+			<choose>
+				<when test="i == 0">
+					point((m.location::real[])[${box.axisX}], (m.location::real[])[${box.axisY}])
+					&lt;@ box(point(#{box.xMin}, #{box.yMin}), point(#{box.xMax}, #{box.yMax}))
+				</when>
+				<otherwise>
+					(m.location::real[])[${box.axisX}] BETWEEN #{box.xMin} AND #{box.xMax}
+					AND (m.location::real[])[${box.axisY}] BETWEEN #{box.yMin} AND #{box.yMax}
+				</otherwise>
+			</choose>
+		</foreach>
+		LIMIT #{limit}
+	</select>
+</mapper>

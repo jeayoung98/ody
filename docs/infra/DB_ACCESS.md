@@ -26,6 +26,28 @@ ssh -i <키경로> ubuntu@j15a405.p.ssafy.io
 sudo cat /etc/ody/postgres.env
 ```
 
+### 키 파일은 어디에 두나
+
+`~/.ssh/` 에 둔다. Windows는 `C:\Users\<사용자>\.ssh\J15A405T.pem`.
+
+**저장소 안에 두지 않는다.** `.gitignore`에 `*.pem`이 있지만 경로를 옮기다 빠져나가는 사고가 흔하다.
+키가 커밋되면 파일을 지워도 git 이력에 남아 키를 새로 발급해야 한다.
+
+넣은 다음 권한을 좁힌다. 안 하면 SSH가 키를 거부한다(`UNPROTECTED PRIVATE KEY FILE` /
+`Permissions for ... are too open`).
+
+```powershell
+# PowerShell
+icacls "$env:USERPROFILE\.ssh\J15A405T.pem" /inheritance:r /grant:r "$($env:USERNAME):R"
+```
+
+```bash
+# Git Bash / macOS / Linux
+chmod 600 ~/.ssh/J15A405T.pem
+```
+
+DBeaver는 경로만 지정하면 되므로 위치 자체는 자유지만, `.ssh`가 관례이고 `ssh` 명령도 같은 자리를 본다.
+
 ---
 
 ## 1. 컨테이너 IP 확인

@@ -1,7 +1,7 @@
 /**
  * 목 곡 데이터셋 — 16차원 PC 벡터를 가진 곡 N개.
  * 별지도/모프 프로토타입의 생성 규칙을 따른다: 밀도 봉우리 22개 주변에 군집, 장르는 색·성향으로만.
- * 여기는 **우주 전체**(카탈로그)다 — 겹의 상주 집합은 /api/map/songs 라우트가 이 중에서 골라 내려준다.
+ * 여기는 **우주 전체**(카탈로그)다 — 겹의 상주 집합은 /bff/map/songs 라우트가 이 중에서 골라 내려준다.
  */
 import { GENRE_NAMES, LAYER_SONG_COUNT, NO_GENRE_ID } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";

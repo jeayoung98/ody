@@ -57,6 +57,13 @@ export const MAP_COLORS = {
   me: PALETTE.teal,
   meRing: "rgba(79,227,206,.55)",
   meRingInner: "rgba(79,227,206,.28)",
+  /**
+   * 지금 듣는 곡이 **이 겹에 없을 때**의 내 표식 (MAP-08). 청록이면 "여기 있다"로 읽히므로
+   * 다른 색을 쓴다 — 고스트별과 같은 보라 계열이라 "이 겹 밖"이 같은 언어로 전달된다.
+   */
+  meAway: "rgba(166,124,255,.95)",
+  meAwayRing: "rgba(166,124,255,.5)",
+  meAwayRingInner: "rgba(166,124,255,.26)",
   nearbyLine: "rgba(79,227,206,.28)",
   nearbyNode: "rgba(150,180,240,.42)",
   probeDim: "rgba(4,6,13,.88)",

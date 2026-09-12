@@ -1,0 +1,281 @@
+package com.ssafy.backend.music.journey;
+
+import static org.assertj.core.api.Assertions.assertThat;
+
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Random;
+
+import javax.sql.DataSource;
+
+import org.apache.ibatis.datasource.unpooled.UnpooledDataSource;
+import org.apache.ibatis.mapping.Environment;
+import org.apache.ibatis.session.Configuration;
+import org.apache.ibatis.session.SqlSession;
+import org.apache.ibatis.session.SqlSessionFactory;
+import org.apache.ibatis.session.SqlSessionFactoryBuilder;
+import org.apache.ibatis.transaction.jdbc.JdbcTransactionFactory;
+import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+
+import com.ssafy.backend.music.dto.Location;
+import com.ssafy.backend.music.dto.MusicDetail;
+import com.ssafy.backend.music.dto.TrackCandidateRow;
+import com.ssafy.backend.music.mapper.NearestTrackMapper;
+import com.ssafy.backend.music.retrieval.NearestTrackReader;
+import com.ssafy.backend.music.retrieval.ServingRules;
+import com.ssafy.backend.music.retrieval.TrackCandidate;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
+/**
+ * 실 DB 대상 여정 산출 측정 (T047, 수용 기준 AC-J1~J6).
+ *
+ * <p><b>환경변수가 없으면 통째로 건너뛴다</b> — CI 와 평소 {@code ./gradlew test} 는 영향받지 않는다.
+ *
+ * <h2>돌리는 법</h2>
+ *
+ * <p>터미널 1 — SSH 터널(컨테이너 IP 는 {@code docker inspect ody-postgres} 로 확인):
+ * <pre>
+ * ssh -i ~/.ssh/J15A405T.pem -L 15432:&lt;컨테이너IP&gt;:5432 ubuntu@j15a405.p.ssafy.io
+ * </pre>
+ *
+ * <p>터미널 2 — 자격증명을 환경변수로 주고 실행. <b>값은 이 저장소에 남기지 않는다.</b>
+ * <pre>
+ * export ODY_DB_URL='jdbc:postgresql://localhost:15432/ody'
+ * export ODY_DB_USER='ody_app'
+ * export ODY_DB_PASSWORD='...'
+ * ./gradlew test --tests '*JourneyBenchmarkIT' -i
+ * </pre>
+ *
+ * <p>Spring 을 띄우지 않는다. Redis·Neo4j·OAuth 가 필요 없고 측정 대상(층 질의 + DP)만 엮는다.
+ * 게이트웨이 오버헤드(출발·도착 상세 조회 2회 + 응답 조립)는 여기에 포함되지 않는다 —
+ * 종단 예산은 그만큼을 더해 판단한다.
+ */
+@EnabledIfEnvironmentVariable(named = "ODY_DB_URL", matches = ".+")
+class JourneyBenchmarkIT {
+
+	/** 핸드오프 §4.9 AC-J1~J6 이 쓰는 표본 수. */
+	private static final int PAIRS = 40;
+
+	/** 재현 가능한 쌍 추출. 참조 구현 벤치마크와 같은 씨앗이다. */
+	private static final long SEED = 42;
+
+	/** AC-J5 기준. 종단 3초 예산의 하위 목표다. */
+	private static final long P95_BUDGET_MS = 2000;
+
+	private static final ServingRules RULES =
+			new ServingRules("v2.1-pca16", 1.6624, 3, 4.912, 30, 1200, 10.7);
+
+	private static SqlSessionFactory factory;
+	private static long maxId;
+
+	@BeforeAll
+	static void connect() {
+		// 드라이버는 runtimeOnly 라 컴파일 시점에 클래스를 못 쓴다. 이름으로 받는 UnpooledDataSource 를 쓴다.
+		DataSource ds = new UnpooledDataSource("org.postgresql.Driver",
+				System.getenv("ODY_DB_URL"), System.getenv("ODY_DB_USER"), System.getenv("ODY_DB_PASSWORD"));
+
+		Configuration cfg = new Configuration(
+				new Environment("it", new JdbcTransactionFactory(), ds));
+		cfg.setMapUnderscoreToCamelCase(true);
+		cfg.addMapper(NearestTrackMapper.class);
+		cfg.addMapper(BenchMapper.class);
+		factory = new SqlSessionFactoryBuilder().build(cfg);
+
+		try (SqlSession s = factory.openSession()) {
+			maxId = s.getMapper(BenchMapper.class).maxId();
+		}
+	}
+
+	@Test
+	void journeyMeetsAcceptanceCriteria() {
+		Random rnd = new Random(SEED);
+		List<Long> latencies = new ArrayList<>(PAIRS);
+		int unreachable = 0;
+		int monotonicViolations = 0;
+		int ruleViolations = 0;
+		int farPairs = 0;
+		List<Double> stepMedians = new ArrayList<>(PAIRS);
+
+		for (int i = 0; i < PAIRS; i++) {
+			try (SqlSession session = factory.openSession()) {
+				BenchMapper bench = session.getMapper(BenchMapper.class);
+				MusicDetail a = load(bench, rnd);
+				MusicDetail b = load(bench, rnd);
+				if (a == null || b == null || a.id().equals(b.id())) {
+					continue;
+				}
+
+				NearestTrackReader reader = adapterOn(session);
+				AxisJourneyPathFinder finder =
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry());
+
+				long t0 = System.nanoTime();
+				EnginePath path = finder.find(a, b);
+				latencies.add((System.nanoTime() - t0) / 1_000_000);
+
+				if (!path.reachable()) {
+					unreachable++;
+					continue;
+				}
+				if (path.far()) {
+					farPairs++;
+				}
+				if (!path.progressMonotonic()) {
+					monotonicViolations++;
+				}
+				List<TrackCandidate> stops = resolve(bench, path.stationMbids());
+				if (violatesRules(stops, a, b)) {
+					ruleViolations++;
+				}
+				stepMedians.add(medianStep(a, stops, b));
+			}
+		}
+
+		latencies.sort(null);
+		long p95 = latencies.isEmpty() ? 0 : latencies.get((int) (latencies.size() * 0.95) - (latencies.size() > 1 ? 1 : 0));
+		stepMedians.sort(null);
+
+		System.out.printf("%n=== T047 / AC-J1~J6 (pairs=%d, seed=%d) ===%n", latencies.size(), SEED);
+		System.out.printf("AC-J1 unreachable        : %d%n", unreachable);
+		System.out.printf("AC-J2 progress 역행       : %d%n", monotonicViolations);
+		System.out.printf("AC-J3/J4 규칙 위반        : %d%n", ruleViolations);
+		System.out.printf("AC-J5 지연 p50/p95/max   : %d / %d / %d ms%n",
+				latencies.get(latencies.size() / 2), p95, latencies.get(latencies.size() - 1));
+		System.out.printf("AC-J6 far 쌍             : %d%n", farPairs);
+		System.out.printf("인접 역 거리 median p50  : %.3f%n",
+				stepMedians.isEmpty() ? -1 : stepMedians.get(stepMedians.size() / 2));
+
+		assertThat(unreachable).as("AC-J1 경로 없음 0건").isZero();
+		assertThat(monotonicViolations).as("AC-J2 진행도 단조 증가").isZero();
+		assertThat(ruleViolations).as("AC-J3·J4 규칙 위반 0건").isZero();
+		assertThat(p95).as("AC-J5 p95 <= %d ms", P95_BUDGET_MS).isLessThanOrEqualTo(P95_BUDGET_MS);
+	}
+
+	// ------------------------------------------------------------------ 보조
+
+	private MusicDetail load(BenchMapper bench, Random rnd) {
+		TrackCandidateRow row = bench.findById(1 + (long) (rnd.nextDouble() * maxId));
+		if (row == null) {
+			return null;
+		}
+		float[] v = row.toVec();
+		Location l = new Location(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7],
+				v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]);
+		return new MusicDetail(row.getMusicId(), row.getMbid(), row.getTitle(), row.getArtist(),
+				null, row.getDuration(), null, List.of(), null, l, 0, 0);
+	}
+
+	private NearestTrackReader adapterOn(SqlSession session) {
+		NearestTrackMapper mapper = session.getMapper(NearestTrackMapper.class);
+		return (point, limit) -> {
+			mapper.raiseEfSearch(Math.max(200, limit));
+			return mapper.findNearest(literal(point), limit).stream()
+					.map(r -> new TrackCandidate(r.getMusicId(), r.getMbid(), r.getTitle(),
+							r.getArtist(), r.getDuration(), r.toVec(), r.getDist()))
+					.toList();
+		};
+	}
+
+	private static String literal(float[] p) {
+		StringBuilder sb = new StringBuilder("[");
+		for (int i = 0; i < p.length; i++) {
+			sb.append(i == 0 ? "" : ",").append(p[i]);
+		}
+		return sb.append(']').toString();
+	}
+
+	private List<TrackCandidate> resolve(BenchMapper bench, List<String> mbids) {
+		List<TrackCandidate> out = new ArrayList<>(mbids.size());
+		for (String mbid : mbids) {
+			TrackCandidateRow r = bench.findByMbid(mbid);
+			out.add(new TrackCandidate(r.getMusicId(), r.getMbid(), r.getTitle(), r.getArtist(),
+					r.getDuration(), r.toVec(), 0));
+		}
+		return out;
+	}
+
+	/** AC-J3 인접 역 거리 >= tau_dup · AC-J4 아티스트 상한·같은 녹음 중복. */
+	private boolean violatesRules(List<TrackCandidate> stops, MusicDetail a, MusicDetail b) {
+		Map<String, Integer> byArtist = new HashMap<>();
+		for (TrackCandidate c : stops) {
+			if (c.artist() != null) {
+				byArtist.merge(c.artist(), 1, Integer::sum);
+			}
+		}
+		if (byArtist.values().stream().anyMatch(n -> n > RULES.artistCap())) {
+			return true;
+		}
+		if (stops.stream().map(TrackCandidate::id).distinct().count() != stops.size()) {
+			return true;
+		}
+		float[] prev = a.location().toArray();
+		for (TrackCandidate c : stops) {
+			if (c.distanceTo(prev) < RULES.tauDup()) {
+				return true;
+			}
+			prev = c.vec();
+		}
+		return dist(prev, b.location().toArray()) < RULES.tauDup();
+	}
+
+	private double medianStep(MusicDetail a, List<TrackCandidate> stops, MusicDetail b) {
+		List<Double> steps = new ArrayList<>();
+		float[] prev = a.location().toArray();
+		for (TrackCandidate c : stops) {
+			steps.add(c.distanceTo(prev));
+			prev = c.vec();
+		}
+		steps.add(dist(prev, b.location().toArray()));
+		steps.sort(Comparator.naturalOrder());
+		return steps.get(steps.size() / 2);
+	}
+
+	private static double dist(float[] x, float[] y) {
+		double s = 0;
+		for (int i = 0; i < x.length; i++) {
+			double d = x[i] - y[i];
+			s += d * d;
+		}
+		return Math.sqrt(s);
+	}
+
+	/** 측정 전용 조회. 운영 코드에 넣지 않는다. */
+	public interface BenchMapper {
+
+		@org.apache.ibatis.annotations.Select("SELECT max(id) FROM music")
+		long maxId();
+
+		@org.apache.ibatis.annotations.Select("""
+				SELECT id AS music_id, mbid, title, artist, duration, 0 AS dist,
+				  (location::real[])[1] AS pc1, (location::real[])[2] AS pc2,
+				  (location::real[])[3] AS pc3, (location::real[])[4] AS pc4,
+				  (location::real[])[5] AS pc5, (location::real[])[6] AS pc6,
+				  (location::real[])[7] AS pc7, (location::real[])[8] AS pc8,
+				  (location::real[])[9] AS pc9, (location::real[])[10] AS pc10,
+				  (location::real[])[11] AS pc11, (location::real[])[12] AS pc12,
+				  (location::real[])[13] AS pc13, (location::real[])[14] AS pc14,
+				  (location::real[])[15] AS pc15, (location::real[])[16] AS pc16
+				FROM music WHERE id = #{id}""")
+		TrackCandidateRow findById(long id);
+
+		@org.apache.ibatis.annotations.Select("""
+				SELECT id AS music_id, mbid, title, artist, duration, 0 AS dist,
+				  (location::real[])[1] AS pc1, (location::real[])[2] AS pc2,
+				  (location::real[])[3] AS pc3, (location::real[])[4] AS pc4,
+				  (location::real[])[5] AS pc5, (location::real[])[6] AS pc6,
+				  (location::real[])[7] AS pc7, (location::real[])[8] AS pc8,
+				  (location::real[])[9] AS pc9, (location::real[])[10] AS pc10,
+				  (location::real[])[11] AS pc11, (location::real[])[12] AS pc12,
+				  (location::real[])[13] AS pc13, (location::real[])[14] AS pc14,
+				  (location::real[])[15] AS pc15, (location::real[])[16] AS pc16
+				FROM music WHERE mbid = #{mbid}""")
+		TrackCandidateRow findByMbid(String mbid);
+	}
+}

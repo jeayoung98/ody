@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.music.search.MusicSearchMapper">
+
+	<!--
+		실제 테이블: public.music(id, mbid, title, artist, release_year, bpm, duration, album,
+		youtube_url, location vector(16), play_cnt, youtube_cnt) — 6,624,399행 적재 완료.
+		적재 결과상 release_year·album·youtube_url 은 전 행 NULL 이다(스펙 18 AC4). 그대로 내려보낸다.
+
+		좌표는 location 을 real[] 로 캐스팅해 16축을 그대로 펼친다. 반올림·재계산 없음(FR-006).
+		data 팀 실측 질의와 같은 형태다: data/ingest/map_layer_queries.sql (origin/data/dev).
+
+		pattern 은 어댑터가 만든 ILIKE 패턴이다(사용자 입력의 %, _, \ 는 어댑터에서 이스케이프).
+	-->
+
+	<sql id="locationColumns">
+		(m.location::real[])[1]  AS pc1,  (m.location::real[])[2]  AS pc2,
+		(m.location::real[])[3]  AS pc3,  (m.location::real[])[4]  AS pc4,
+		(m.location::real[])[5]  AS pc5,  (m.location::real[])[6]  AS pc6,
+		(m.location::real[])[7]  AS pc7,  (m.location::real[])[8]  AS pc8,
+		(m.location::real[])[9]  AS pc9,  (m.location::real[])[10] AS pc10,
+		(m.location::real[])[11] AS pc11, (m.location::real[])[12] AS pc12,
+		(m.location::real[])[13] AS pc13, (m.location::real[])[14] AS pc14,
+		(m.location::real[])[15] AS pc15, (m.location::real[])[16] AS pc16
+	</sql>
+
+	<sql id="matchCondition">
+		m.title ILIKE #{pattern} ESCAPE '\' OR m.artist ILIKE #{pattern} ESCAPE '\'
+	</sql>
+
+	<select id="findPage" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
+		SELECT m.id, m.title, m.artist, m.album, m.youtube_url,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE <include refid="matchCondition"/>
+		ORDER BY m.youtube_cnt DESC NULLS LAST, m.id ASC
+		LIMIT #{size} OFFSET #{offset}
+	</select>
+
+	<select id="countMatches" resultType="long">
+		SELECT COUNT(*)
+		FROM music m
+		WHERE <include refid="matchCondition"/>
+	</select>
+
+	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">
+		SELECT mg.music_id, g.name
+		FROM music_genre mg
+		JOIN genre g ON g.id = mg.genre_id
+		WHERE mg.music_id IN
+		<foreach item="musicId" collection="musicIdList" open="(" separator="," close=")">
+			#{musicId}
+		</foreach>
+		ORDER BY mg.music_id, g.name
+	</select>
+</mapper>

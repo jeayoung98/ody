@@ -1,4 +1,4 @@
-package com.ssafy.backend.music.detail;
+package com.ssafy.backend.music.mapper;
 
 import java.util.List;
 
@@ -7,17 +7,7 @@ import org.apache.ibatis.annotations.Param;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 
-/**
- * 노래 상세·주변곡 MyBatis 매퍼 ({@code MusicDetailReader} 어댑터가 쓰는 실행 계층).
- *
- * 패키지 위치가 {@code *.mapper} 가 아닌 이유: {@code BackendApplication} 의
- * {@code @MapperScan("com.ssafy.backend.*.mapper")} 에 잡히면 이 인터페이스가 스프링 빈이 되고,
- * 그러면 저장소의 모든 {@code @WebMvcTest} 슬라이스가 SqlSessionFactory 부재로 죽는다.
- * 여기서는 빈을 만들지 않고 어댑터가 {@code SqlSession.getMapper()} 로 받는다 —
- * XML namespace 가 이 인터페이스를 바인딩하므로 타입 안전성은 같다.
- *
- * ponytail: 근본 해결은 @MapperScan 을 별도 @Configuration 으로 분리하는 것(BE-infra 소유).
- */
+/** 노래 상세·주변곡 MyBatis 매퍼 ({@code MusicDetailReader} 어댑터가 쓰는 실행 계층). */
 public interface MusicDetailMapper {
 
 	/** 상세 1건. 없으면 null. */

@@ -15,10 +15,9 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 
-import org.apache.ibatis.session.SqlSession;
 import org.junit.jupiter.api.Test;
 
-import com.ssafy.backend.music.detail.MusicDetailMapper;
+import com.ssafy.backend.music.mapper.MusicDetailMapper;
 import com.ssafy.backend.music.detail.MusicDetailReaderAdapter;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
@@ -32,13 +31,7 @@ import com.ssafy.backend.music.dto.NeighborTrack;
 class MusicDetailReaderAdapterTests {
 
 	private final MusicDetailMapper mapper = mock(MusicDetailMapper.class);
-	private final MusicDetailReaderAdapter adapter = new MusicDetailReaderAdapter(sqlSessionReturning(mapper));
-
-	private static SqlSession sqlSessionReturning(MusicDetailMapper mapper) {
-		SqlSession sqlSession = mock(SqlSession.class);
-		when(sqlSession.getMapper(MusicDetailMapper.class)).thenReturn(mapper);
-		return sqlSession;
-	}
+	private final MusicDetailReaderAdapter adapter = new MusicDetailReaderAdapter(mapper);
 
 	private static MusicDetailRow row(long id) {
 		MusicDetailRow r = new MusicDetailRow();

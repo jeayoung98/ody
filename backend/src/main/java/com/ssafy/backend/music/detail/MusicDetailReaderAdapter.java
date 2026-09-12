@@ -9,7 +9,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
-import org.apache.ibatis.session.SqlSession;
 import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.music.dto.MusicDetail;
@@ -17,6 +16,7 @@ import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.NeighborTrack;
+import com.ssafy.backend.music.mapper.MusicDetailMapper;
 
 /**
  * {@link MusicDetailReader} 의 MyBatis 어댑터 (정본 §3.2, 헌법 X: BE2 계약 / 실행 분리).
@@ -29,9 +29,8 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 
 	private final MusicDetailMapper mapper;
 
-	public MusicDetailReaderAdapter(SqlSession sqlSession) {
-		// 매퍼를 스프링 빈으로 두지 않는 이유는 MusicDetailMapper javadoc 참조.
-		this.mapper = sqlSession.getMapper(MusicDetailMapper.class);
+	public MusicDetailReaderAdapter(MusicDetailMapper mapper) {
+		this.mapper = mapper;
 	}
 
 	@Override

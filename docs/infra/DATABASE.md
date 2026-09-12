@@ -7,6 +7,8 @@ Flyway/Liquibase와 projection 동기화 방식은 실제 domain 도입 전에 �
 두 DB는 app-node의 `ody-internal` network에서만 접근한다. PostgreSQL은 `ody-postgres-data`, Neo4j는
 `ody-neo4j-data`와 `ody-neo4j-logs` named volume을 사용한다. host port는 publish하지 않는다.
 
+GUI(DBeaver, Neo4j Browser)로 보려면 SSH tunnel이 필요하다. 절차는 `DB_ACCESS.md`.
+
 실제 credential은 app-node의 `/etc/ody/postgres.env`, `neo4j.env`, `backend.env`에만 있다.
 Repository에는 운영 credential이나 production Compose를 보관하지 않는다.
 

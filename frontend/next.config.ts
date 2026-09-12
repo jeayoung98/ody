@@ -8,6 +8,7 @@ import { LIVE_API_PATHS } from "./src/constants/live-api-paths";
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
 
 const nextConfig: NextConfig = {
+  output: "standalone",
   /**
    * 브라우저가 백엔드를 직접 부르지 않고 Next 서버를 거치게 한다.
    *

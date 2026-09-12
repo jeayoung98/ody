@@ -112,6 +112,43 @@ export function toPcArray(location: BackendLocation | null): number[] {
 }
 
 /**
+ * `/api/music/major` 의 content 원소.
+ *
+ * **MusicSummary 가 아니다.** 백엔드가 지도 계약에 맞춰 따로 만든 DTO 라 좌표가 `pc1..pc16` 객체가
+ * 아니라 **16칸 배열**이고, `genreId`·`weight`·`playable` 이 이미 계산돼 있다 — 곧 프론트
+ * {@link MapPoint} 와 필드가 같다. 그래서 {@link toMapPoint} 로 변환하면 안 된다
+ * (그 함수는 `{id, location, youtubeUrl}` 을 읽어서, 여기 넣으면 id·좌표가 통째로 사라진다).
+ * 2026-09-12 배포된 `/api/v3/api-docs` 의 MapPoint 스키마로 확인했다.
+ */
+export interface BackendMapPoint {
+  musicId: number;
+  /** PC 16개. 순서는 pc1..pc16 */
+  pc: number[];
+  genreId: number;
+  weight: number;
+  title: string;
+  artist: string | null;
+  playable: boolean;
+}
+
+/**
+ * 상주 집합 원소 → 지도 위의 점. 필드가 같으므로 **그대로 통과시킨다.**
+ * 좌표 길이만 16으로 맞춘다 — 엔진이 겹마다 `pc[2l]`·`pc[2l+1]` 을 짚어서, 짧으면 undefined 가
+ * 흘러들어 화면 좌표가 NaN 이 되고 별이 통째로 사라진다.
+ */
+export function toResidentPoint(p: BackendMapPoint): MapPoint {
+  return {
+    musicId: p.musicId,
+    pc: Array.from({ length: PC_DIMS }, (_, i) => p.pc?.[i] ?? 0),
+    genreId: p.genreId,
+    weight: p.weight,
+    title: p.title,
+    artist: p.artist ?? null,
+    playable: p.playable,
+  };
+}
+
+/**
  * 백엔드 곡 → 지도 위의 점.
  *
  * `genreId` 와 `weight` 는 백엔드 응답에 없다 (B-21). 각각 별 색과 크기를 정하는 값이라

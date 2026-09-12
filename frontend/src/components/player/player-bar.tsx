@@ -6,6 +6,7 @@ import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { openYoutube } from "@/lib/youtube";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
 
@@ -40,6 +41,15 @@ export default function PlayerBar() {
   };
 
   const canPlay = data ? data.youtubeUrl != null : currentMusicId != null;
+
+  /**
+   * 음원은 앱 밖에서 듣는다 (규칙 6 — 자세한 건 `lib/youtube.ts`).
+   * **멈춤 → 재생** 으로 넘어갈 때만 새 탭을 연다. 멈출 때도 열면 탭이 계속 쌓인다.
+   */
+  const handleToggle = () => {
+    if (!isPlaying) openYoutube(data?.youtubeUrl);
+    toggle();
+  };
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : null;
 
@@ -69,7 +79,7 @@ export default function PlayerBar() {
       <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={toggle} disabled={!canPlay}>
+      <TransportButton label={isPlaying ? "정지" : "유튜브에서 듣기"} primary onClick={handleToggle} disabled={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
       <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>

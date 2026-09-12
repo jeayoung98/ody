@@ -8,6 +8,7 @@ import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutatio
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { openYoutube } from "@/lib/youtube";
 import type { MusicDetail } from "@/types";
 import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
 
@@ -22,7 +23,12 @@ export default function SongActions({ music }: { music: MusicDetail }) {
 
   const canPlay = music.youtubeUrl != null;
 
+  /**
+   * 앱 안에서는 소리를 내지 않는다 (규칙 6). 유튜브 검색 결과를 새 탭으로 넘기고,
+   * 앱에는 "이 곡을 듣는 중" 이라는 상태만 남긴다 — 내 표식이 그 곡으로 이동한다 (MAP-08).
+   */
   const handlePlay = () => {
+    openYoutube(music.youtubeUrl);
     playSingle(music.id);
     recordPlay.mutate({ musicId: music.id, source: "MAP", playedMs: 0 });
   };
@@ -31,7 +37,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
     <div className="relative flex flex-col gap-2">
       <div className="flex gap-2">
         <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay} disabled={!canPlay}>
-          <PlayIcon size={13} /> {canPlay ? "재생" : "재생 불가"}
+          <PlayIcon size={13} /> {canPlay ? "유튜브에서 듣기" : "재생 불가"}
         </Button>
         <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
           ＋ 플리
@@ -63,6 +69,11 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       {!canPlay && (
         <Note>
           이 곡은 음원 연결이 없습니다. 지도에는 계속 표시되지만 재생은 되지 않아요. <span className="text-ink-4">SONG-04</span>
+        </Note>
+      )}
+      {canPlay && (
+        <Note>
+          음원은 앱 밖에서 듣습니다 — 누르면 <b>유튜브 검색 결과가 새 탭</b>으로 열려요. <span className="text-ink-4">SONG-03</span>
         </Note>
       )}
       {menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}

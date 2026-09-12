@@ -152,6 +152,12 @@ export class MapEngine {
   meFlight: { ax: number; ay: number; bx: number; by: number; cx: number; cy: number; t0: number } | null = null;
   /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
   playingId: number | null = null;
+  /**
+   * "내 위치로 가기" 로 돌아갈 자리 — 재생으로 내 위치가 정해진 **그때의 겹**이다.
+   * 겹 이동은 서버 상태 없이 누적 범위를 매번 다시 보내는 구조라, `boxes` 만 들고 있으면
+   * 같은 곡 집합을 다시 받을 수 있다. 카메라는 돌아갈 때 곡 좌표로 다시 계산한다.
+   */
+  private home: { musicId: number; boxes: readonly LayerBox[] } | null = null;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -1113,6 +1119,8 @@ export class MapEngine {
       return;
     }
     this.travelToId = id;
+    // 이 겹에 상주하는 곡을 재생했을 때만 자리를 기억한다 — 없는 곡은 어디 사는지 모른다 (MAP-08)
+    this.home = { musicId: id, boxes: [...this.boxes] };
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
     const dx = to.x - this.me.x;
@@ -1136,6 +1144,78 @@ export class MapEngine {
   /** 재생 중인 곡이 이 겹 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08) */
   playingElsewhere() {
     return this.playingId != null && !this.isAlive(this.playingId);
+  }
+
+  // ------------------------------------------------------------------ 내 위치로 가기
+  /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
+  canGoHome() {
+    return this.home != null && this.index.has(this.home.musicId);
+  }
+
+  /**
+   * 누적 범위 `boxes` 를 layer 까지 적용했을 때의 상주 마스크.
+   * 서버가 고르는 top-k 까지는 알 수 없으므로 **범위 조건만** 건다 — 응답이 오면 갈아끼워진다.
+   */
+  private maskForBoxes(boxes: readonly LayerBox[], upTo: number) {
+    const m = this.residentMask(upTo);
+    for (let i = 0; i < this.N; i++) {
+      if (!m[i]) continue;
+      const pc = this.songs[i].pc;
+      for (let l = 0; l < upTo; l++) {
+        const b = boxes[l];
+        const x = pc[b.layer * 2];
+        const y = pc[b.layer * 2 + 1];
+        if (x < b.xMin || x > b.xMax || y < b.yMin || y > b.yMax) {
+          m[i] = 0;
+          break;
+        }
+      }
+    }
+    return m;
+  }
+
+  /**
+   * 재생으로 내 위치가 정해졌던 **그 겹·그 화면**으로 돌아간다.
+   *
+   * 같은 겹이면 카메라만 옮긴다. 다른 겹이면 누적 범위를 그때 것으로 되돌리고 겹 전환 연출을 태운다 —
+   * 범위가 바뀌면 그 조건으로 상주 집합을 다시 받아오고, 도착하면 `setLayerSongs` 가 갈아끼운다.
+   * 떠오르기가 계속 되도록 상위 겹 프레임도 누적 범위로 다시 쌓는다.
+   */
+  goHome() {
+    const h = this.home;
+    if (!h || this.anim || this.follow) return;
+    const i = this.index.get(h.musicId);
+    if (i == null) return;
+    const target = h.boxes.length;
+
+    // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
+    if (target === this.layer && this.isAlive(h.musicId)) {
+      this.focus(h.musicId, FOCUS.zoomMul);
+      return;
+    }
+
+    const ns = this.maskForBoxes(h.boxes, target);
+    ns[i] = 1; // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다
+    // 떠오르기용 상위 겹 프레임 재구성 (지금 스택은 다른 길로 파고든 것이라 쓸 수 없다)
+    this.stack = Array.from({ length: target }, (_, l) => {
+      const sub = this.maskForBoxes(h.boxes, l);
+      return { layer: l, cam: this.fitCam(l, sub, h.musicId), subset: sub };
+    });
+    this.boxes = [...h.boxes];
+
+    const song = this.songs[i];
+    const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
+    const f = this.freeRect();
+    const ax = LAYER_AXES[target];
+    this.touched = true;
+    this.morph(
+      target,
+      { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
+      ns,
+      `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      target > this.layer ? 1 : -1,
+    );
   }
 
   /**
@@ -1581,6 +1661,7 @@ export class MapEngine {
       myMusicId: this.myId,
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
+      canGoHome: this.canGoHome(),
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

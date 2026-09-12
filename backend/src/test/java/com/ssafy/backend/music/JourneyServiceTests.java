@@ -2,6 +2,7 @@ package com.ssafy.backend.music;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
@@ -95,7 +96,7 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, endDuration)));
 
 		List<MusicDetail> ordered = stations(stationCount);
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(enginePath(mbidsOf(ordered)));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(mbidsOf(ordered)));
 
 		List<MusicDetail> shuffled = new ArrayList<>(ordered);
 		Collections.reverse(shuffled);
@@ -170,7 +171,7 @@ class JourneyServiceTests {
 	void journey_nullDurationCountsAsZero() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, null)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(enginePath(List.of("s0")));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0")));
 		when(trackReader.findDetailsByMbids(anyList()))
 				.thenReturn(List.of(song(1000L, "s0", null)));
 
@@ -184,7 +185,7 @@ class JourneyServiceTests {
 	void journey_notPlayableStationIsKept() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(enginePath(List.of("s0")));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0")));
 		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al",
 				List.of("K-Pop"), null, loc(0.5), 1, 0);
 		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(notPlayable));
@@ -202,7 +203,7 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		// 진행도가 뒤로 감 — linear 모드가 40쌍 중 21쌍에서 내는 현상(D10 근거)
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(new EnginePath(true,
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(new EnginePath(true,
 				List.of("s0", "s1"), List.of(0.7, 0.3), 8.4, false, "axis", "v2.1-pca16"));
 		when(trackReader.findDetailsByMbids(anyList()))
 				.thenReturn(List.of(song(1000L, "s0", 100), song(1001L, "s1", 100)));
@@ -236,7 +237,7 @@ class JourneyServiceTests {
 	void journey_duplicateStationFromEngine_fails() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(enginePath(List.of("s0", "s0")));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0", "s0")));
 		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(song(1000L, "s0", 100)));
 
 		// I6: 같은 곡이 두 번 나오는 응답을 내지 않는다
@@ -267,7 +268,7 @@ class JourneyServiceTests {
 	void journey_noIntermediateStations_returnsTwoSongPath() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(enginePath(List.of()));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of()));
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
 
@@ -328,7 +329,7 @@ class JourneyServiceTests {
 	void journey_unreachable_throwsPathNotFound() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(
 				new EnginePath(false, List.of(), List.of(), 21.0, true, "axis", null));
 
 		assertThatThrownBy(() -> service.getJourney(START_ID, END_ID))
@@ -341,7 +342,7 @@ class JourneyServiceTests {
 	void journey_missingStationDetail_failsInsteadOfPartialPath() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(START_MBID, END_MBID)).thenReturn(enginePath(List.of("s0", "s1")));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0", "s1")));
 		// B10: 2건 요청했는데 1건만 온다
 		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(song(1000L, "s0", 100)));
 
@@ -355,7 +356,7 @@ class JourneyServiceTests {
 	void journey_engineThrows_becomesInternalErrorNot422() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(anyString(), anyString())).thenThrow(new RuntimeException("connect timed out"));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenThrow(new RuntimeException("connect timed out"));
 
 		// 엔진 부재·타임아웃을 422 로 내리지 않는다 (2026-09-10 clarify)
 		assertThatThrownBy(() -> service.getJourney(START_ID, END_ID))
@@ -403,7 +404,8 @@ class JourneyServiceTests {
 		// 조회 4회 외의 상호작용이 없어야 한다. findNeighbors 도 부르지 않는다(이 기능 범위 밖)
 		verify(detailReader).findDetail(START_ID);
 		verify(detailReader).findDetail(END_ID);
-		verify(pathFinder).find(START_MBID, END_MBID);
+		// 산출에 넘기는 것이 조회해 온 상세 그대로여야 한다 — 좌표·아티스트가 축 좌표계와 같은 녹음 판정에 쓰인다
+		verify(pathFinder).find(song(START_ID, START_MBID, 275), song(END_ID, END_MBID, 205));
 		verify(trackReader).findDetailsByMbids(anyList());
 		verifyNoMoreInteractions(detailReader, pathFinder, trackReader);
 	}

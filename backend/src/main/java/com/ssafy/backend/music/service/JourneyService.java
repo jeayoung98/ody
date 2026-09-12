@@ -85,7 +85,7 @@ public class JourneyService {
 
 		MusicDetail endSong = findSong(reader, end);
 
-		EnginePath enginePath = callEngine(startSong.mbid(), endSong.mbid());
+		EnginePath enginePath = callEngine(startSong, endSong);
 		if (!enginePath.reachable()) {
 			throw new CustomException(MusicErrorCode.PATH_NOT_FOUND);
 		}
@@ -109,13 +109,13 @@ public class JourneyService {
 	 * 엔진 호출. 구간 지연을 재고, <b>어떤 실패도 422 로 내리지 않는다</b> — 엔진 부재·타임아웃은
 	 * 사용자가 곡을 바꿔 해결할 수 있는 실패가 아니다(2026-09-10 clarify).
 	 */
-	private EnginePath callEngine(String startMbid, String endMbid) {
+	private EnginePath callEngine(MusicDetail start, MusicDetail end) {
 		JourneyPathFinder finder = pathFinder.orElseThrow(
-				() -> unavailable("music/journey: 경로 산출 엔진 어댑터 대기 중 (B-Engine)"));
+				() -> unavailable("music/journey: 경로 산출 구현 대기 중"));
 
 		Timer.Sample sample = Timer.start(meterRegistry);
 		try {
-			return finder.find(startMbid, endMbid);
+			return finder.find(start, end);
 		} catch (CustomException e) {
 			throw e;
 		} catch (RuntimeException e) {

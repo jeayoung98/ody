@@ -237,9 +237,9 @@ JwtAuthenticationFilter 제외 + 매퍼 `@MockitoBean` 이다(003 선례). 그 �
 
 ### 계약·경계
 
-- [ ] T049 [P] **층 후보 조회 port 인터페이스** 생성 — `backend/src/main/java/com/ssafy/backend/music/journey/` 아래. 계약: **지점 좌표(16차원)를 값으로 받고** 근처 후보 N개를 거리와 함께 돌려준다. javadoc 에 세 가지를 명시한다 — (a) **필터를 조회에 넣지 않는다**(넣으면 요청보다 적게 돌아온다) (b) **기준점을 조회 안에서 계산하지 않는다**(근사 인덱스가 쓰이지 않고 조용히 틀린다) (c) 근사이므로 순서가 흔들릴 수 있어 **호출자가 안정 정렬한다**(FR-013). 005 의 이웃 조회와 같은 port 로 묶을 수 있는지 함께 판단한다 (D-005)
-- [ ] T050 [P] **규칙 정의 로딩 경계** 생성 — 같은 녹음 컷·아티스트 상한·길이 범위·원거리 임계값과 번들 버전을 읽는 경계(FR-024). **값을 Java 상수로 박지 않는다.** **[2026-09-12] 출처가 확정됐다** — `data/serving/v2.1-pca16/postprocess_rules.json` 이 유일 출처이고 값은 핸드오프 §2 표에 있다(`tau_dup` 1.6624 · `artist_cap` 3 · `tau_far` 4.912 · `length_range_s` 30~1200 · `hub_penalty` OFF · far 10.7 · λ 2.0). 따라서 **경계 정의 + 실 로딩까지 이 태스크에서 한다.** 설정으로 빼 번들 교체 때 함께 바꾼다. 거리는 전부 L2 — 코사인·내적으로 바꾸면 임계값이 전부 무의미해진다
-- [ ] T051 `JourneyPathFinder` **서명 변경 + javadoc 개정** — javadoc 의 "산출 방식과 파라미터는 이 인터페이스 뒤에 있고 **게이트웨이가 Java로 재구현하지 않는다**(FR-017)"·"엔진 부재·타임아웃은 예외로 던진다"·"어댑터는 BE4 가 `retrieval/api.py` 를 구현한 뒤" 가 **모두 틀려졌다**. 경로 없음이 예외가 아니라 `reachable:false` 라는 계약은 유지한다 (422/500 구분 때문).
+- [X] T049 [P] **층 후보 조회 port 인터페이스** 생성 — `backend/src/main/java/com/ssafy/backend/music/journey/` 아래. 계약: **지점 좌표(16차원)를 값으로 받고** 근처 후보 N개를 거리와 함께 돌려준다. javadoc 에 세 가지를 명시한다 — (a) **필터를 조회에 넣지 않는다**(넣으면 요청보다 적게 돌아온다) (b) **기준점을 조회 안에서 계산하지 않는다**(근사 인덱스가 쓰이지 않고 조용히 틀린다) (c) 근사이므로 순서가 흔들릴 수 있어 **호출자가 안정 정렬한다**(FR-013). 005 의 이웃 조회와 같은 port 로 묶을 수 있는지 함께 판단한다 (D-005)
+- [X] T050 [P] **규칙 정의 로딩 경계** 생성 — 같은 녹음 컷·아티스트 상한·길이 범위·원거리 임계값과 번들 버전을 읽는 경계(FR-024). **값을 Java 상수로 박지 않는다.** **[2026-09-12] 출처가 확정됐다** — `data/serving/v2.1-pca16/postprocess_rules.json` 이 유일 출처이고 값은 핸드오프 §2 표에 있다(`tau_dup` 1.6624 · `artist_cap` 3 · `tau_far` 4.912 · `length_range_s` 30~1200 · `hub_penalty` OFF · far 10.7 · λ 2.0). 따라서 **경계 정의 + 실 로딩까지 이 태스크에서 한다.** 설정으로 빼 번들 교체 때 함께 바꾼다. 거리는 전부 L2 — 코사인·내적으로 바꾸면 임계값이 전부 무의미해진다
+- [X] T051 `JourneyPathFinder` **서명 변경 + javadoc 개정** — javadoc 의 "산출 방식과 파라미터는 이 인터페이스 뒤에 있고 **게이트웨이가 Java로 재구현하지 않는다**(FR-017)"·"엔진 부재·타임아웃은 예외로 던진다"·"어댑터는 BE4 가 `retrieval/api.py` 를 구현한 뒤" 가 **모두 틀려졌다**. 경로 없음이 예외가 아니라 `reachable:false` 라는 계약은 유지한다 (422/500 구분 때문).
 
   **⚠️ 서명을 바꿔야 한다 — 2026-09-11 구현 착수 중 발견.** 현재 `EnginePath find(String startMbid, String endMbid)` 는 **출발·도착 좌표를 전달하지 못한다.** 원격 엔진은 mbid 로 자기 번들에서 좌표를 찾았지만, 인프로세스 산출은 축 좌표계를 만들려면 A·B 의 16차원 좌표가 필요하고, 같은 녹음 필터에는 A·B 의 아티스트·제목도 필요하다.
 
@@ -248,7 +248,7 @@ JwtAuthenticationFilter 제외 + 매퍼 `@MockitoBean` 이다(003 선례). 그 �
   호출부(`JourneyService`)는 404 판정을 위해 **이미 `MusicDetail` 두 건을 들고 있다.** 따라서 `EnginePath find(MusicDetail start, MusicDetail end)` 로 바꾸고 추가 조회를 만들지 않는다.
 
   **영향 범위**: `JourneyService.callEngine` 1곳 + `JourneyServiceTests` 의 `pathFinder.find(...)` 스텁 10곳. 전부 기계적 치환이며 **조립·오류 매핑 단언은 그대로다**. `JourneyControllerTests` 는 서비스를 목으로 두므로 영향 없다
-- [ ] T052 [P] `EnginePath` javadoc 개정 — "BE4 데이터 엔진의 경로 응답"·"`bundle` 은 로그 전용, 대조하지 않는다" 재서술. **`bundle` 을 어디서 읽을지 미확정임을 javadoc 에 남긴다**(D-RULES). `progressMonotonic()` 의 뜻이 "남이 준 값 검증" 에서 "자기 산출물 자기 검증" 으로 바뀐 것도 적는다(FR-020)
+- [X] T052 [P] `EnginePath` javadoc 개정 — "BE4 데이터 엔진의 경로 응답"·"`bundle` 은 로그 전용, 대조하지 않는다" 재서술. **`bundle` 을 어디서 읽을지 미확정임을 javadoc 에 남긴다**(D-RULES). `progressMonotonic()` 의 뜻이 "남이 준 값 검증" 에서 "자기 산출물 자기 검증" 으로 바뀐 것도 적는다(FR-020)
 
 ### 산출 구현 (합성 좌표로 검증 — D-DATA 무관)
 

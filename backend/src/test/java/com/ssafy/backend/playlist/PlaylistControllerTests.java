@@ -26,7 +26,6 @@ import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.PlaylistErrorCode;
@@ -41,11 +40,8 @@ import com.ssafy.backend.playlist.dto.PlaylistMusicInsertResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicReorderResponse;
 import com.ssafy.backend.playlist.dto.PlaylistSummary;
 import com.ssafy.backend.playlist.dto.PlaylistUpdateResponse;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.playlist.service.PlaylistService;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 
 /**
  * 플레이리스트 컨트롤러 슬라이스 테스트 (@WebMvcTest). mapper mock 이유는 MusicSearchControllerTests 참조.
@@ -63,17 +59,9 @@ class PlaylistControllerTests {
 	@MockitoBean
 	private PlaylistService playlistService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(

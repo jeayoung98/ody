@@ -62,6 +62,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 - Subject: 50자 이내, 마침표/특수기호 없음, 개조식. 영문이면 동사 원형 + 첫 글자 대문자 (`Add`, `Fix`, 과거형 금지)
 - Body: 빈 줄 뒤에 **무엇을/왜** 바꿨는지 상세히
 - Footer(선택): `Resolves: #n` / `Fixes: #n` / `Ref: #n` / `Related to: #n, #m`
+- **도구 기여 표기 금지.** 커밋과 MR 설명 어디에도 `Co-Authored-By: <도구>` · `Generated with <도구>` 같은 줄을 넣지 않는다 ([CONVENTIONS.md §1](../docs/rules/CONVENTIONS.md)). 커밋 내역은 사람 기준으로 읽힌다
 - 예:
   ```
   feat: 음악 지도 화면 구현

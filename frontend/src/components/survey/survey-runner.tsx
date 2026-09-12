@@ -1,8 +1,9 @@
 "use client";
 
-import { useMemo } from "react";
+import { useEffect, useMemo } from "react";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { useSurveyStore } from "@/stores/use-survey-store";
 import { useSurveyTrigger } from "@/hooks/survey/use-survey-trigger";
 import type { SurveyTarget } from "@/types/survey";
 import SurveyCard from "./survey-card";
@@ -24,6 +25,20 @@ export default function SurveyRunner() {
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
+  const noteListened = useSurveyStore((s) => s.noteListened);
+
+  /**
+   * 곡별 청취 시간을 장부에 쌓는다.
+   *
+   * 비교 상대(앞 곡·기준곡)를 얼마나 들었는지 알려면 지나간 뒤에도 기록이 남아야 한다.
+   * 곡이 바뀌는 순간(cleanup) 방금까지 듣던 곡의 체류 시간을 더한다 — 이 정리가
+   * `useSurveyTrigger` 의 effect 보다 먼저 돌아서, 판단할 때는 최신값이 들어 있다.
+   */
+  useEffect(() => {
+    if (currentMusicId == null) return;
+    const from = Date.now();
+    return () => noteListened(currentMusicId, Date.now() - from);
+  }, [currentMusicId, noteListened]);
 
   /**
    * 지금 무엇을 평가해야 하는지 정한다.

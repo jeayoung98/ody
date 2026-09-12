@@ -38,20 +38,37 @@ swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼
 
 | # | 항목 | 확인된 사실 | 없으면 안 되는 것 | 상태 |
 | --- | --- | --- | --- | --- |
-| B-16 | **`/api` 접두가 없는 컨트롤러는 프론트가 부를 수 없다** | 배포 nginx 가 백엔드로 넘기는 건 `/api/`, `/oauth2/`, `/login/oauth2/` 뿐이다. `/music/**` `/playlist/**` `/user/detail` 은 전부 SPA `index.html` 로 떨어진다 (200 text/html) | 곡 검색·상세·대표곡, 플레이리스트 8종, 남의 프로필 — **구현돼 있는데 전부 못 쓴다.** `/api` 접두 정렬(S15P21A405-213·222)을 배포까지 올려야 한다 | 협의 전 (**막힘**) |
-| B-17 | **CORS 가 모든 오리진을 거부한다** | `Origin` 헤더가 붙으면 origin 과 무관하게 `403 Invalid CORS request`. `https://j15a405.p.ssafy.io` 자기 자신을 넣어도 403 이다 — 서버의 `CORS_ALLOWED_ORIGINS` 값이 맞지 않다 | 브라우저에서 백엔드를 직접 호출하는 모든 경로. 프론트는 Next rewrite 프록시로 우회했다(S15P21A405-221) — **정상화되면 프록시를 걷어낼 수 있다** | 협의 전 (**우회 중**) |
-| B-18 | **Swagger 스펙이 500 이라 문서를 못 본다** | `/swagger-ui/index.html` 은 200 인데 nginx 가 `/v3/api-docs` → `/v3/api-docs/` 로 301 을 걸고, springdoc 이 그 trailing slash 를 group 이름으로 받아 500 을 낸다. UI 에 `Failed to load API definition` 만 뜬다 | 프론트가 계약을 확인할 방법. `backend/dev` 의 S15P21A405-222(문서를 `/api/` 아래로 이동)가 이걸 고치므로 **배포만 올리면 된다** | 협의 전 |
+| B-16 | ~~`/api` 접두가 없는 컨트롤러는 프론트가 부를 수 없다~~ | **해결.** 2026-09-12 배포에서 `MusicController`·`PlaylistController`·`UserController` 가 전부 `/api/**` 로 정렬됐다. 배포 서버 `/api/v3/api-docs` 로 27개 경로를 직접 확인했고, 구 경로(`/music/**`·`/playlist/**`)는 이제 SPA 로 떨어진다 | 곡 검색·상세·대표곡·플레이리스트 8종·남의 프로필이 모두 살아났다 | ✅ 해결 (2026-09-12 배포 확인) |
+| B-17 | **CORS 가 모든 오리진을 거부한다** | `Origin` 헤더가 붙으면 origin 과 무관하게 `403 Invalid CORS request`. `https://j15a405.p.ssafy.io` 자기 자신도, `http://localhost:3000` 도 403 이다 — 서버의 `CORS_ALLOWED_ORIGINS` 값이 맞지 않다. **2026-09-12 재확인, 그대로다** | 브라우저에서 백엔드를 직접 호출하는 모든 경로. 프론트는 Next rewrite 프록시로 우회 중이다(S15P21A405-221) — **정상화되면 프록시를 걷어내고 로그인을 실연동으로 되돌릴 수 있다** | 협의 전 (**우회 중**) |
+| B-18 | ~~Swagger 스펙이 500 이라 문서를 못 본다~~ | **해결.** 문서가 `/api/` 아래로 옮겨졌다 — `/api/swagger-ui/index.html` 200, `/api/v3/api-docs` 200(인증 불필요). 구 경로 `/v3/api-docs/` 는 이제 401 이다 | 프론트가 계약을 확인할 방법이 생겼다. 이후 계약 대조는 **배포된 api-docs 를 기준**으로 한다 | ✅ 해결 (2026-09-12 배포 확인) |
 | B-19 | `PATCH /api/user/tutorial-completed` · `PATCH /api/user/profile` | 둘 다 도달 가능. 본문 없음/`{nickname?, imageUrl?}`, 토큰 주체 본인 대상이라 email 을 받지 않는다 | — | ✅ 프론트 반영 완료 |
 | B-20 | 구글 OAuth 리다이렉트 착지점 | 진입(`/oauth2/authorization/google`)은 정상 302 이고 `redirect_uri` 도 맞다. 다만 콜백 뒤 프론트로 되돌리는 `app.oauth.frontend-redirect-uri` **서버 설정값은 확인할 수 없었다** | 로컬(`localhost:3000`)에서 구글 로그인 테스트. 배포 SPA 주소로 고정돼 있으면 로컬 개발자는 구글 로그인을 못 한다 | 협의 전 (B-11 연장) |
 
-| B-21 | **곡 응답에 `genreId` 와 `weight` 가 없다** | `MusicSummary`·`MusicDetail` 은 `genres` 를 **이름 문자열 배열**로만 준다. 별 크기·밝기용 가중치도 없다 | 지도의 별 **색(장르)**과 **크기**. 프론트는 `genreId: NO_GENRE_ID(10)`(무장르 회청색), `weight: 1` 로 둔다 — 0(앰비언트)으로 채우면 "장르를 모른다"가 "전부 앰비언트다"로 둔갑하기 때문이다(A-1-1). 그래서 실데이터로 그리면 **회청색 단색·균일 크기**가 된다 | 협의 전 (**필요**) |
-| B-22 | **지도 상주 집합이 `/api` 아래에 없어서 곡 ID 가 서로 안 맞는다** | 지도 원본은 `/music/major` 인데 B-16 때문에 못 부른다. 그래서 지도는 목(`mocks/songs.ts`)이고 주변 탐색·경로 탐색만 실데이터가 된다. **목 곡 ID 는 1..N 이라 실제 곡 ID 1..N 과 숫자가 겹친다** — 틀린 곡이 맞는 것처럼 매칭돼 보인다 | 주변 탐색·경로 탐색 결과를 지도 위에 그리는 것 전부. 지도와 탐색 결과는 **같은 출처**여야 한다 | 협의 전 (**막힘**) |
+| B-21 | **`genreId`·`weight`·`playable` 이 고정값이다** | 필드는 생겼다 (`MapPoint`). 다만 값이 상수다 — `genreId=0`(`GENRE_ID_PENDING_FE_MAPPING`), `weight=0`(`UNIFORM_WEIGHT`, play_cnt·youtube_cnt 가 662만 행 전부 0), `playable=youtube_url != null` 인데 그 컬럼이 전 행 NULL | ① genreId 0 은 **앰비언트**라 지도 99%가 앰비언트 색으로 칠해진다 → **무장르(10)로 바꿔야 한다** (A-1-1 회신 완료, 배포엔 미반영). ② weight 0 이면 `magOf` 가 0 이라 별이 전부 최소 크기 — 크기 채널이 죽는다. ③ playable — S15P21A405-233 이 `youtubeUrl` 을 YouTube **검색 URL** 로 만들어 담았는데 **검색·상세·주변곡 3곳뿐이고 `major` 는 빠졌다.** `major` 는 여전히 `youtube_url` 컬럼(전 행 NULL)을 읽어 `playable=false` 다. **2026-09-12 실측:** major 1,094곡 전부 `genreId=0`·`weight=0`·`playable=false`. 반면 주변 탐색 결과는 `playable=true` 이고 프론트 fallback 때문에 `genreId=10`(회색) 이라 **같은 곡이 지도에서는 청록·재생 불가, 주변 탐색에서는 회색·재생 가능**으로 보인다 | 협의 중 (**필드는 반영됨 / 값 3건 필요**) |
+| B-22 | ~~지도 상주 집합이 `/api` 아래에 없어서 곡 ID 가 서로 안 맞는다~~ | **해결.** `GET /api/music/major` 가 도달 가능해져 지도·주변 탐색·경로 탐색이 **같은 출처**를 쓴다 | 프론트는 `BACKEND_ACCESS_TOKEN` 만 있으면 네 경로가 전부 실데이터로 돈다 (S15P21A405-242) | ✅ 해결 (2026-09-12 배포 확인) |
+
+### 실데이터 / 목 현황 (2026-09-12 실호출 확인)
+
+A-17 해제 덕에 토큰 없이 아래가 **배포 백엔드의 실제 곡**으로 돈다. 나머지는 목이다.
+
+| 기능 | 화면 | 프론트 라우트 | 백엔드 | 상태 |
+| --- | --- | --- | --- | --- |
+| 지도 상주 집합 (MAP-01·04) | 별지도 본체 · 겹 이동 | `/api/map/songs` | `GET /api/music/major` | ✅ 실데이터 (레이어 0 = 1,094곡, 파고들기 level=2 누적 범위까지 확인) |
+| 곡 검색 (SEARCH-01) | 상단 검색창 | `/api/music/search` | `GET /api/music/search` | ✅ 실데이터 (175,569건 중 10건 페이지) |
+| 곡 상세 | 우측 곡 상세 패널 | `/api/music/[id]` | `GET /api/music/detail` | ✅ 실데이터 |
+| 주변 탐색 (MAP-10) | 하단 `주변 탐색` | `/api/map/nearby/[musicId]` | `/api/music/detail` 의 neighbors | ✅ 실데이터 (10곡) |
+| 경로 탐색 (JOURNEY·PATH-01) | 여정 패널 | `/api/journeys/route` | `GET /api/music/journey` | ❌ **백엔드 500** (A-18) |
+| 인증·온보딩 | 로그인·가입·닉네임·튜토리얼 | `/api/auth/**` | 있으나 미연결 | 목 (의도적, A-15·B-17) |
+| 플레이리스트 | 목록·상세·생성·곡 추가/삭제/순서 | `/api/playlists/**` | `/api/playlist/**` 8종 **있음** | 목 (프론트 미연결) |
+| 주변 사람·팔로우·반응 | 소셜 전반 | `/api/users/**` | 없음 | 목 (A-3·A-4) |
+| 레이어별 대표곡(커버)·곡의 대표 레이어 | 지도 커버 | `/api/map/layers/*`·`representative-layers` | 없음 | 목 (A-2·A-8) |
+| 차트·피드·별자리 배치·재생 로그 | 각 패널 | 해당 라우트 | 없음 | 목 (A-9·A-7) |
 
 **요약 — 백엔드·인프라에 필요한 것:**
 
-1. **`/api` 접두 정렬 배포 (B-16) — 가장 급하다.** 이것 하나로 곡 검색·상세·대표곡·플레이리스트가 전부 살아나고, B-22(지도 ID 불일치)와 B-18(Swagger 500)도 같이 풀린다. 코드는 이미 `backend/dev`·`master` 에 있고 **배포만 안 올라갔다.**
-2. `genreId`·`weight` 를 곡 응답에 추가 (B-21). 지도 색·크기가 여기 묶여 있다. 장르를 모르는 곡은 **무장르(10)** 로 (A-1-1 확정). 29종 → 10종 매핑은 보류 중이다 (A-1-2).
-3. `CORS_ALLOWED_ORIGINS` 정상화 (B-17). 지금은 프론트가 서버 프록시로 우회 중이라 급하지는 않다.
+1. **`genreId`·`weight`·`playable` 값 (B-21).** `/api` 정렬이 배포되면서 지도·검색·상세·경로가 전부 살아났고, 이제 남은 건 값이다. 특히 **genreId 를 0 → 무장르(10)** 로 바꾸는 것 (A-1-1 에서 확정, 교체 지점은 `MajorTrackReaderAdapter.genreIdOf` 한 곳).
+2. **유저 테스트 동안 조회 API 를 토큰 없이 열기 (A-17).** 로그인을 태우지 않기로 해서 요청한 **임시** 조치다. 읽기 전용만 열고, 테스트가 끝나거나 로그인 실연동이 붙으면 **되돌린다.**
+3. `CORS_ALLOWED_ORIGINS` 정상화 (B-17). 지금은 프론트가 서버 프록시로 우회 중이라 급하지는 않지만, 이게 풀려야 로그인을 실연동으로 되돌린다.
 
 ---
 
@@ -73,8 +90,8 @@ swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼
 
 | # | API | 요청 | 응답 | 이유 | 상태 |
 | --- | --- | --- | --- | --- | --- |
-| A-1 | `GET /music/major` (목: `/api/map/songs`) | `level` (1-based) + 누적 범위 `pc{k}min`·`pc{k}max` 를 **level-1 쌍 전부**. level=1 은 파라미터 없음 | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | **겹마다 그 겹의 상주 집합을 받는다** (2026-09-11 BE 김효정 ↔ FE 윤주하 확정, D15~D19). 프론트가 파고들 때 화면 범위를 누적에 쌓고 떠오르면 버린다 — 서버는 탐색 상태를 갖지 않는다. 레이어 l ↔ level l+1, 평면은 pc(2l+1)·pc(2l+2). **파라미터 표기는 `pc{k}min`·`pc{k}max` 로 확정** (2026-09-12 BE 제안 ↔ FE 확인 — 프론트가 이미 그대로 보내고 있다: `constants/api-endpoints.ts` `map.songs`) | 협의 중 (표기 확정 · 프론트 반영 완료) |
-| A-1-1 | `MapPoint.genreId` | — | 장르를 모르는 곡은 **무장르 인덱스(10)** 로 내려준다. 음수 금지 | 실데이터는 662만 중 6.6만(1.0%)만 장르가 있다. 0 으로 채우면 지도가 전부 "앰비언트" 색이 된다. 프론트는 `GENRE_NAMES[10] = "무장르"` · `GENRE_COLORS[10] = rgb(126,138,158)` 회청색을 쓰고, 백엔드 응답에 genreId 가 없을 때의 fallback 도 10 이다 (`lib/backend.ts` `toMapPoint`). **2026-09-12 BE 문의 ↔ FE 확정.** 멜론 코드 29종 → 10색 대응표는 **보류** (A-1-2) | 확정 (프론트 반영 완료) |
+| A-1 | `GET /music/major` (목: `/api/map/songs`) | `level` (1-based) + 누적 범위 `pc{k}min`·`pc{k}max` 를 **level-1 쌍 전부**. level=1 은 파라미터 없음 | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | **겹마다 그 겹의 상주 집합을 받는다** (2026-09-11 BE 김효정 ↔ FE 윤주하 확정, D15~D19). 프론트가 파고들 때 화면 범위를 누적에 쌓고 떠오르면 버린다 — 서버는 탐색 상태를 갖지 않는다. 레이어 l ↔ level l+1, 평면은 pc(2l+1)·pc(2l+2). **파라미터 표기는 `pc{k}min`·`pc{k}max` 로 확정** (2026-09-12 BE 제안 ↔ FE 확인 — 프론트가 이미 그대로 보내고 있다: `constants/api-endpoints.ts` `map.songs`) | ✅ 반영됨 (2026-09-12 배포 확인 — 응답 원소는 `MusicSummary` 가 아니라 **`MapPoint`** 다) |
+| A-1-1 | `MapPoint.genreId` | — | 장르를 모르는 곡은 **무장르 인덱스(10)** 로 내려준다. 음수 금지 | 실데이터는 662만 중 6.6만(1.0%)만 장르가 있다. 0 으로 채우면 지도가 전부 "앰비언트" 색이 된다. 프론트는 `GENRE_NAMES[10] = "무장르"` · `GENRE_COLORS[10] = rgb(126,138,158)` 회청색을 쓰고, 백엔드 응답에 genreId 가 없을 때의 fallback 도 10 이다 (`lib/backend.ts` `toMapPoint`). **2026-09-12 BE 문의 ↔ FE 확정.** 멜론 코드 29종 → 10색 대응표는 **보류** (A-1-2) | 확정 (프론트 반영 완료 · **배포는 아직 0** → 백엔드 `genreIdOf` 교체 대기) |
 | A-1-2 | 장르 체계 (멜론 대분류 29종 ↔ FE `GENRE_NAMES` 10종) | — | 29종을 10종으로 접는 표, 또는 `GENRE_NAMES` 를 29종으로 늘리기 | 두 체계가 서로 다르다 — 멜론은 록/메탈을 한 코드로 묶는데 FE 는 `록`·`메탈` 이 따로고, 멜론의 발라드·댄스·트로트·OST·국악·인디에 대응하는 FE 항목이 없다. **어느 쪽에 맞출지 정해지지 않아 보류** (2026-09-12). 그동안 장르가 붙은 1.0% 도 무장르(10)로 내려도 지도는 깨지지 않는다 | **보류** (팀 결정 대기) |
 | A-2 | `GET /api/map/layers/{layer}/representatives` | layer | `{ layer, musicIds[] }` | 레이어마다 **다른 대표곡**을 앨범 커버로 띄운다. 선별 기준은 백엔드가 정함 | 협의 전 |
 | A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | 협의 전 |
@@ -91,6 +108,8 @@ swagger 를 서빙하고, `backend/dev` 는 swagger 를 `/api/` 아래로 옮겼
 | A-15 | **본인 조회 API** | 없음 (Bearer 토큰) | `User` (email, nickname, isPublic, tutorialCompleted, imageUrl …) | 프론트는 `GET /api/auth/me` 를 쓰는데 **백엔드에 없다.** `GET /user/detail?email=` 은 이메일을 파라미터로 요구하지만, 로그인 직후 프론트는 JWT 안의 이메일을 모른다(디코딩하지 않는다). 토큰 주체 기준으로 본인을 돌려주는 엔드포인트가 필요하다 | 협의 전 (**필요**) |
 | A-16 | `/user/detail` 경로 접두 | — | — | `/api` 로 통일하는 방향으로 확인됨. 다만 **배포본은 아직 `/user/...` 라 nginx 를 못 넘는다** — B-16 이 본질적인 문제다 | 협의 중 (B-16 으로 승계) |
 | A-9 | `POST /api/constellations/layout` | `{ musicIds: number[] }` (최대 30) | `{ points: [{ musicId, x, y }] }` — `x`, `y` 는 `-1 ~ 1` 정규화 좌표 | **별자리 오버레이의 모양** (PATH-01). 16차원 좌표를 2D로 압축한 고정 배치다. 레이어와 무관하게 **같은 곡 집합이면 항상 같은 모양**이어야 한다 — 플리 모양(예: 강아지)이 상품이 되려면 모양이 고정·재현 가능해야 하고, 나중에 "누가 만든 모양"으로 저장·거래하려면 서버에 있어야 한다. 클라이언트 MDS 로도 계산은 되지만 그러면 모양이 클라이언트 구현에 종속된다 | 협의 전 |
+| A-17 | **유저 테스트 기간 한정 — 조회 API 를 토큰 없이 열어 둔다** | — | — | 유저 테스트에서 **로그인을 태우지 않기로 했다.** 테스트 참가자에게 가입·로그인을 시키면 (a) 지도를 보기도 전에 이탈하고 (b) 실계정·비밀번호가 생겨 뒷정리가 필요하며 (c) 우리가 보려는 건 지도 탐색·주변 탐색·경로 탐색이지 인증 흐름이 아니다. 그런데 지금 백엔드는 `anyRequest().authenticated()` 라 조회 API 가 전부 401 이고, 프론트는 서버 토큰(`BACKEND_ACCESS_TOKEN`)으로 우회 중인데 **그 토큰도 결국 누군가 로그인해서 발급받아야** 한다. 그래서 백엔드에 조회 API 를 한시적으로 열어 달라고 요청했다. 대상은 **읽기 전용**(`/api/music/**` = major·search·detail·journey)이고, 쓰기(플레이리스트 생성·프로필 수정·재생 로그)와 `/api/auth/**` 는 그대로 둔다. **되돌릴 조건:** 유저 테스트 종료 시점. 또는 로그인 실연동(S15P21A405-242 후속)이 붙는 시점 중 **먼저 오는 쪽**. **남는 위험:** 공개 호스트라 그동안 곡 데이터셋이 누구에게나 열린다 — 되돌리기 전에는 발표·운영으로 넘기지 않는다. 프론트 코드는 바뀌지 않는다 (토큰이 있으면 그대로 Bearer 로 붙이고, 없으면 안 붙일 뿐이다). **2026-09-12 배포 확인 — 다만 범위가 요청보다 넓다:** 구현이 `anyRequest().permitAll()` 이라 `/api/playlist/**`(생성·삭제 포함)와 `/api/user/detail` 까지 무인증으로 열렸다. 읽기 전용만 여는 게 원래 요청이었다 | **적용됨 (임시 · 되돌릴 것 · 범위 확인 필요)** |
+| A-18 | **`GET /api/music/journey` 가 항상 500 이다** | `start`·`end` 곡 ID | — | 2026-09-12 인증 해제 후 실호출. 시도한 네 쌍(`1:2`, `10181:6624334`, `80:1`, `4803049:5219664`) 전부 `INTERNAL_SERVER_ERROR` 였다. 컨트롤러·서비스가 인증 주체를 쓰지 않으므로 **임시 permitAll 탓이 아니다**. `JourneyService` 가 여러 지점에서 `INTERNAL_SERVER_ERROR` 를 던진다. 이게 막히면 **여정 경로 탐색(JOURNEY·PATH-01)이 유저 테스트에서 통째로 못 쓰인다** — 목으로 되돌릴 수도 없다. 목 곡 ID(1..N)가 실제 곡 ID 와 숫자만 겹쳐 엉뚱한 별에 매칭되기 때문이다(B-22 와 같은 함정) | **협의 전 (막힘)** |
 
 ---
 

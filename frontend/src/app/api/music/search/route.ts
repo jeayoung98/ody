@@ -1,4 +1,4 @@
-import { fail, ok } from "@/lib/api-response";
+import { failLive, ok, okLive } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, type BackendMusicDetail } from "@/lib/backend";
 import { mockSearch } from "@/mocks/music";
 import type { MusicSearchResult } from "@/types";
@@ -20,12 +20,13 @@ export async function GET(req: Request) {
 
   if (!isBackendEnabled()) return ok(mockSearch(q));
 
+  const upstream = `/api/music/search?query=${encodeURIComponent(q)}&page=0`;
   try {
-    const res = await backendGet<BackendSearchResponse>(`/api/music/search?query=${encodeURIComponent(q)}&page=0`);
+    const res = await backendGet<BackendSearchResponse>(upstream);
     const results: MusicSearchResult[] = res.content.map((m) => ({ id: m.id, title: m.title, artist: m.artist }));
-    return ok(results);
+    return okLive(results, upstream);
   } catch (e) {
     const err = e as BackendError;
-    return fail("INTERNAL_ERROR", err.message, err.status || 502);
+    return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);
   }
 }

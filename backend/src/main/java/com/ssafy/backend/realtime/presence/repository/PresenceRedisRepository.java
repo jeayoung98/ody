@@ -1,8 +1,10 @@
 package com.ssafy.backend.realtime.presence.repository;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.data.redis.core.Cursor;
@@ -71,6 +73,21 @@ public class PresenceRedisRepository {
 	public Long currentLayer(String email) {
 		Object v = redis.opsForHash().get(PRESENCE_USER_PREFIX + email, "layer");
 		return v == null ? null : Long.valueOf(v.toString());
+	}
+
+	/** CONNECT — presence 생성, 사용자가 마지막으로 들은곡 위에 있음 (단순 좌표값 받기용, 다른사람에게 보이지 않음.) */
+	public void connect(String email, long epoch, long ttlMs) {
+		long now = System.currentTimeMillis();
+		Map<String, String> fields = new HashMap<>();
+		fields.put("epoch", Long.toString(epoch));
+		fields.put("connectedAt", Long.toString(now));
+		redis.opsForHash().putAll(PRESENCE_USER_PREFIX + email, fields);
+		redis.opsForZSet().add(EXPIRY_KEY, email, (double) (now + ttlMs));
+	}
+
+	/** join(복원) — 사용자의 현재 레이어만 기록(활성 청취 구조는 건드리지 않는다, (가)). */
+	public void setLayer(String email, int layer) {
+		redis.opsForHash().put(PRESENCE_USER_PREFIX + email, "layer", Integer.toString(layer));
 	}
 
 	// ---- 스크립트 연산 ----

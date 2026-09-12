@@ -1,5 +1,7 @@
 package com.ssafy.backend.music;
 
+import static java.util.Objects.requireNonNullElse;
+
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 
@@ -25,14 +27,10 @@ public final class YoutubeSearchUrl {
 	 *         (적재 실측상 제목이 빈 문자열인 곡이 3,977개 있다)
 	 */
 	public static String of(String artist, String title) {
-		String query = (blankToEmpty(artist) + " " + blankToEmpty(title)).trim();
+		String query = (requireNonNullElse(artist, "") + " " + requireNonNullElse(title, "")).trim();
 		if (query.isEmpty()) {
 			return null;
 		}
 		return SEARCH_BASE + URLEncoder.encode(query, StandardCharsets.UTF_8);
-	}
-
-	private static String blankToEmpty(String value) {
-		return value == null ? "" : value.trim();
 	}
 }

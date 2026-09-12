@@ -169,6 +169,14 @@ export class MapEngine {
    * 가운데 맞춤이 덮인다 — 마지막에 한 번 더 잡아 준다.
    */
   private centerAfterMorph: number | null = null;
+  /**
+   * '나'를 화면 가운데 붙들어 둔다.
+   *
+   * 재생하거나 "내 위치로 가기" 로 가운데에 맞춘 순간 켜지고, **사용자가 직접 밀거나 확대하면 꺼진다.**
+   * 켜져 있는 동안은 우측 패널이 열리고 닫혀 **지도가 보이는 영역이 달라져도** 그 가운데를 따라간다 —
+   * 상세가 열리면 왼쪽으로 치우친 가운데, 닫으면 화면 가운데로 부드럽게 돌아온다.
+   */
+  private centerLock = false;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -1046,6 +1054,8 @@ export class MapEngine {
   /** 휠. 게이트가 열리면 배율은 멈추고 압력만 찬다 */
   wheel(deltaY: number, mx: number, my: number): "zoom" | "pressure" | "blocked" {
     if (this.anim || this.follow) return "blocked";
+    // 확대·축소도 "내가 화면을 움직인" 것이다 — 가운데 고정을 푼다
+    this.centerLock = false;
     const zoomIn = deltaY < 0;
     const canDig = zoomIn && this.gateOpen();
     const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * DRILL.riseScaleRatio;
@@ -1075,6 +1085,7 @@ export class MapEngine {
     if (this.anim || this.follow) return;
     this.camTarget = null;
     this.touched = true;
+    this.centerLock = false;
     this.cam.cx -= dx / this.cam.s;
     this.cam.cy += dy / this.cam.s;
     this.clampCam();
@@ -1102,6 +1113,7 @@ export class MapEngine {
    * targetLayer 는 "그 곡이 대표곡으로 노출되는 첫 레이어"다 (SEARCH-01).
    */
   focusSong(id: number, targetLayer?: number | null) {
+    this.centerLock = false;
     if (this.follow || this.anim || !this.index.has(id)) return;
     this.selectedId = id;
     const s = this.songs[this.index.get(id)!];
@@ -1184,6 +1196,7 @@ export class MapEngine {
     this.travelToId = id;
     // 이 겹에 상주하는 곡을 재생했을 때만 자리를 기억한다 — 없는 곡은 어디 사는지 모른다 (MAP-08)
     this.home = { musicId: id, boxes: [...this.boxes] };
+    this.centerLock = true;
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
     const dx = to.x - this.me.x;
@@ -1254,6 +1267,7 @@ export class MapEngine {
     // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
     if (target === this.layer && this.isAlive(h.musicId)) {
       this.focus(h.musicId, FOCUS.zoomMul);
+      this.centerLock = true;
       return;
     }
 
@@ -1449,6 +1463,26 @@ export class MapEngine {
       if (Math.abs(this.occludedRight - this.occludedTarget) < 0.5) this.occludedRight = this.occludedTarget;
     }
 
+    /**
+     * 가운데 고정. 패널이 열리고 닫히면 `occludedRight` 가 부드럽게 변하므로,
+     * 여기서 매 프레임 다시 맞추면 '나'도 그 속도로 자연스럽게 따라간다.
+     * 배율은 건드리지 않는다 — 가운데로 "옮기는" 것이지 확대하는 게 아니다.
+     */
+    if (this.centerLock && !this.camTarget && !this.anim && !this.follow && !this.probe && !this.constellationActive()) {
+      const id = this.playingId ?? this.myId;
+      const w = id != null && this.isAlive(id) ? this.worldOf(id) : null;
+      if (w) {
+        const f = this.freeRect();
+        const cx = w.x - (f.cx - this.W / 2) / this.cam.s;
+        const cy = w.y + (f.cy - this.H / 2) / this.cam.s;
+        if (Math.abs(cx - this.cam.cx) * this.cam.s > 0.4 || Math.abs(cy - this.cam.cy) * this.cam.s > 0.4) {
+          this.cam.cx = lerp(this.cam.cx, cx, OCCLUSION_EASE);
+          this.cam.cy = lerp(this.cam.cy, cy, OCCLUSION_EASE);
+          this.project();
+        }
+      }
+    }
+
     // 모프 진행 — 두 겹을 화면 중앙 기준으로 확대·축소하며 교차한다 (별을 새 자리로 옮기지 않는다)
     if (this.anim) {
       const t = Math.min(1, (now - this.anim.t0) / DRILL.morphMs);
@@ -1492,6 +1526,7 @@ export class MapEngine {
           const id = this.centerAfterMorph;
           this.centerAfterMorph = null;
           this.focus(id, FOCUS.zoomMul);
+          this.centerLock = true;
         }
       }
     } else {

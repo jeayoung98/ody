@@ -1,6 +1,7 @@
 import { API_ENDPOINTS, STORAGE_KEYS } from "@/constants";
 import type { ApiErrorCode, ApiResponse } from "@/types";
 import { readStorage, readStorageScope, writeStorage } from "./storage";
+import { logLiveResponse } from "./live-log";
 
 /**
  * 비워둔다. 브라우저는 백엔드를 직접 부르지 않고 Next 서버의 rewrite 프록시를 거친다
@@ -89,6 +90,7 @@ function request(path: string, init?: RequestInit): Promise<Response> {
  * - 실패면 code 를 담은 ApiError 를 던진다 (§0.4, §0.5)
  */
 export async function api<T>(path: string, init?: RequestInit): Promise<T> {
+  const t0 = performance.now();
   let res = await request(path, init);
 
   // 토큰이 아예 없으면 재발급해봐야 소용없다 (로그인 전 401)
@@ -98,6 +100,9 @@ export async function api<T>(path: string, init?: RequestInit): Promise<T> {
   }
 
   const body = (await res.json().catch(() => null)) as ApiResponse<T> | null;
+
+  // 배포 백엔드에서 온 응답만 콘솔에 남긴다 (개발 빌드 한정). 목은 찍지 않는다
+  logLiveResponse(path, res, body, performance.now() - t0);
 
   if (!body) throw new ApiError(res.status, "INTERNAL_ERROR", "응답을 읽을 수 없습니다.");
   if (!body.success) throw new ApiError(res.status, body.error?.code ?? "UNKNOWN", body.error?.message ?? "요청에 실패했습니다.");

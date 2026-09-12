@@ -21,8 +21,12 @@ export const API_ENDPOINTS = {
     me: "/api/auth/me",
     /** 목. 백엔드 `POST /api/auth/logout` 이 있다 */
     logout: "/api/auth/logout",
-    /** 목. 백엔드 진입점은 `/oauth2/authorization/google` 이다 */
-    googleLogin: "/oauth2/authorization/google",
+    /**
+     * 구글 idToken 로그인 (S15P21A405-129). `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
+     * 목이 없는 유일한 인증 경로라 실제로 쓰려면 `live-api-paths.ts` 에 이 경로를 넣어야 한다.
+     * 백엔드의 리다이렉트 진입점 `/oauth2/authorization/google` 은 그 흐름을 쓰지 않으므로 여기 두지 않는다.
+     */
+    googleLogin: "/api/auth/login/google",
     /** 목. 백엔드 `POST /api/auth/signup` 이 있다 — 본문 `{email, password, nickname}` */
     signup: "/api/auth/signup",
     /** 목. 백엔드 `POST /api/auth/login` 이 있다 — 본문 `{email, password}` */

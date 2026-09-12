@@ -24,6 +24,14 @@ public interface MusicDetailMapper {
 			@Param("qvec") String qvec,
 			@Param("k") int k);
 
+	/**
+	 * mbid 목록으로 상세를 일괄 조회한다 (여정 정거장 조립용).
+	 *
+	 * <p><b>순서를 보장하지 않는다</b> — {@code IN} 은 입력 순서를 보존하지 않는다.
+	 * 호출자가 mbid 키로 재조립한다. 없는 mbid 는 결과에서 빠진다(예외 아님).
+	 */
+	List<MusicDetailRow> findByMbids(@Param("mbidList") List<String> mbidList);
+
 	/** 주어진 곡들의 장르. musicIdList 가 비면 호출하지 않는다(IN () 는 문법 오류). */
 	List<MusicGenreRow> findGenresByMusicIds(@Param("musicIdList") List<Long> musicIdList);
 }

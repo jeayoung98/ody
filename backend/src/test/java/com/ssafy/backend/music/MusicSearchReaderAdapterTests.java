@@ -44,12 +44,14 @@ class MusicSearchReaderAdapterTests {
 	@Test
 	void search_buildsSubstringPattern_andOffsetFromPageTimesSize() {
 		when(mapper.countMatches(anyString())).thenReturn(137L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(row(1L)));
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(row(1L)));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
 		PageResult result = adapter.search("IU", 3, 10);
 
-		verify(mapper).findPage("%IU%", 10, 30L);
+		// q 는 소문자 원문(완전일치용), prefix 는 앞일치용, pattern 은 부분일치용.
+		// cap 은 offset + size — 단계별로 그만큼만 잘라도 해당 페이지를 채울 수 있다.
+		verify(mapper).findPage("iu", "iu%", "%IU%", 40L, 10, 30L);
 		assertEquals(137, result.totalElements());
 		assertEquals(1, result.content().size());
 	}
@@ -73,13 +75,13 @@ class MusicSearchReaderAdapterTests {
 
 		assertTrue(result.content().isEmpty());
 		assertEquals(0, result.totalElements());
-		verify(mapper, never()).findPage(anyString(), anyInt(), anyLong());
+		verify(mapper, never()).findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong());
 	}
 
 	@Test
 	void search_keepsTotal_whenPageIsBeyondLastPage() {
 		when(mapper.countMatches(anyString())).thenReturn(5L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of());
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of());
 
 		PageResult result = adapter.search("q", 9, 10);
 
@@ -94,7 +96,7 @@ class MusicSearchReaderAdapterTests {
 		r.setPc1(0.125);
 		r.setPc16(-3.5);
 		when(mapper.countMatches(anyString())).thenReturn(1L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(r));
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(r));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
 		MusicSummary summary = adapter.search("q", 0, 10).content().get(0);
@@ -108,7 +110,7 @@ class MusicSearchReaderAdapterTests {
 		MusicSearchRow first = row(1L);
 		MusicSearchRow second = row(2L);
 		when(mapper.countMatches(anyString())).thenReturn(2L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(first, second));
+		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(first, second));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
 				genreRow(1L, "electronic"),
 				genreRow(1L, "rock")));

@@ -108,7 +108,7 @@
 
 **MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `playCnt`(int), `youtubeCnt`(int).
 
-**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `playable`(boolean, 재생 링크 유무).
+**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `playable`(boolean, `youtubeUrl != null`).
 좌표를 `Location` 객체가 아니라 배열로 싣는 유일한 DTO다 — 클라이언트가 레이어 축 `pc(2n-1)`·`pc(2n)` 으로 재투영하기 때문.
 
 **PlaylistTrack**: `id`(int, 곡 ID), `title`, `artist`, `duration`(int, 초), `youtubeUrl`(string\|null).
@@ -293,6 +293,7 @@ body: `idToken`(String, required).
 } ], "page": 0, "size": 20, "totalElements": 137, "totalPages": 7, "hasNext": true }, "error": null }
 ```
 - 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
+- **정렬은 관련성 순**: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 → 나머지 부분일치. 같은 순위 안에서는 `id` 오름차순. 대소문자 구분 없음 (2026-09-12 변경, S15P21A405-234 — 이전은 `youtubeCnt` 내림차순이었으나 값이 전 행 0 이라 무작위였다).
 
 ### 3.2 노래 상세 조회
 `GET /api/music/detail` · 인증 필요. param: `id`(int, required).
@@ -366,7 +367,7 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 | 요청 | `level` + 중심좌표 `pc1`~`pc16` | `level` + **누적 축 범위**(1레이어는 파라미터 없음) |
 | 조회 구역 | 서버가 레벨별 **반경**으로 정하는 **원형** | **격자**. 구역 선택·이동은 **클라이언트 뷰포트** |
 | 선정 | 서버가 `youtubeCnt` **내림차순 상위 k** | 서버는 **공간 균등 상주 집합**, 인기순은 **클라이언트** |
-| 응답 | `MusicDetail` (12필드, `location` 객체) | **`MapPoint`** (7필드, `pc` 배열) |
+| 응답 | `MusicDetail` (12필드, `location` 객체) | **`MapPoint`** (8필드, `pc` 배열) |
 | 1레이어 | 다른 레벨과 동일 처리 | **정적 사전 계산** |
 
 **왜**: FE 가 이 모델로 이미 구현했고(`map-engine.ts`), data 가 거기 맞춰 인프라를 만들었으며(스펙 16 `map_sample`·GiST),

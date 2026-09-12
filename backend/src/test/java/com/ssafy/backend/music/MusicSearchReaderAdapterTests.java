@@ -104,12 +104,11 @@ class MusicSearchReaderAdapterTests {
 	}
 
 	@Test
-	void search_groupsGenresPerTrack_andKeepsUnplayableTracks() {
-		MusicSearchRow withUrl = row(1L);
-		withUrl.setYoutubeUrl("https://y/1");
-		MusicSearchRow noUrl = row(2L); // youtubeUrl null — 제외하지 않는다 (FR-007)
+	void search_groupsGenresPerTrack() {
+		MusicSearchRow first = row(1L);
+		MusicSearchRow second = row(2L);
 		when(mapper.countMatches(anyString())).thenReturn(2L);
-		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(withUrl, noUrl));
+		when(mapper.findPage(anyString(), anyInt(), anyLong())).thenReturn(List.of(first, second));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
 				genreRow(1L, "electronic"),
 				genreRow(1L, "rock")));
@@ -118,7 +117,6 @@ class MusicSearchReaderAdapterTests {
 
 		assertEquals(List.of("electronic", "rock"), content.get(0).genres());
 		assertEquals(List.of(), content.get(1).genres()); // 장르 링크 없는 곡
-		assertNull(content.get(1).youtubeUrl());
 		assertEquals(2, content.size());
 	}
 

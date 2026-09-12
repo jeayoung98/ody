@@ -2,7 +2,7 @@ import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAME
 import { FONTS, MAP_COLORS, NEBULA_WASH, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
-import { coverFor, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32 } from "./sprites";
+import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -40,7 +40,19 @@ function appear(id: number, t: number) {
   return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
 }
 
-function drawBackground(g: CanvasRenderingContext2D, W: number, H: number, t: number, depth: number) {
+/**
+ * 지금 겹의 깊이 0~1. 전환 중에는 두 겹 사이 소수로 건너간다 —
+ * 끝나는 순간 배경이 툭 바뀌면 그것부터 눈에 띈다.
+ */
+function depthOf(e: MapEngine) {
+  const l = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
+  return l / (LAYER_COUNT - 1);
+}
+
+function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number) {
+  const W = e.W;
+  const H = e.H;
+  const t = e.time;
   g.globalCompositeOperation = "source-over";
   g.fillStyle = MAP_COLORS.background;
   g.fillRect(0, 0, W, H);
@@ -70,9 +82,9 @@ function drawBackground(g: CanvasRenderingContext2D, W: number, H: number, t: nu
   const sky = skyStars();
   // 확대해서 들어온 겹이므로 별을 **덜어내지 않는다.** 밝기만 낮춰 클릭 대상인 상주 곡과 층을 가른다
   const dim = 1 - depth * LAYER_DEPTH.maxStarDim;
-  const field = (ox: number, oy: number, sizeK: number, aK: number, n = sky.length) => {
+  const field = (ox: number, oy: number, sizeK: number, aK: number, stars: SkyStar[] = sky, n = stars.length) => {
     for (let k = 0; k < n; k++) {
-      const bg = sky[k];
+      const bg = stars[k];
       const px = ((((bg.u - ox) % 1) + 1) % 1) * (W + 64) - 32;
       const py = ((((bg.v - oy) % 1) + 1) % 1) * (H + 64) - 32;
       const d = (1.3 + Math.pow(bg.m, 1.5) * 4.2) * sizeK;
@@ -80,17 +92,27 @@ function drawBackground(g: CanvasRenderingContext2D, W: number, H: number, t: nu
       g.drawImage(spr[bg.spr], px - d / 2, py - d / 2, d, d);
     }
   };
+  // 가장 먼 별밭은 카메라와 무관하다 — 아무리 밀어도 제자리인 것이 오히려 "아주 멀다"로 읽힌다
   field(t * 0.0052, -t * 0.0019, 1, dim);
   /**
-   * 0겹(우주)을 뺀 겹에는 원경 별밭을 두 겹 더 깐다.
-   * 파고들수록 상주 곡은 화면 가운데로 모이는데, 그 바깥이 빈 하늘이면 "확대해 들어왔다"가 아니라
-   * "곡이 줄었다"로 읽힌다. 같은 별밭을 위치·크기·밝기만 어긋나게 겹쳐 화면 전체를 배경 별로 채운다.
+   * 0겹(우주)을 뺀 겹에는 별밭을 세 겹 더 깐다.
+   * 파고들수록 상주 곡은 화면 가운데로 모이는데(fitCam 이 97%를 화면 짧은 변 44% 반지름 안에 넣는다),
+   * 그 바깥이 빈 하늘이면 "확대해 들어왔다"가 아니라 "별 뭉치 하나가 떠 있다"로 읽힌다.
+   * 그래서 ① 화면 전체를 별로 채우고 ② **카메라를 따라 시차를 두고 함께 밀리게** 한다 —
+   * 지도를 밀 때 배경이 가만히 있으면 상주 구름만 미끄러져 뭉치의 경계가 그대로 드러난다.
    * farK 는 0겹 → 1겹 한 칸에서 0 → 1 로 차오른다 — 전환 중 깊이가 소수라 별밭이 툭 켜지지 않는다.
    */
   const farK = Math.min(1, depth * (LAYER_COUNT - 1));
   if (farK > 0.01) {
-    field(t * 0.0026 + 0.37, -t * 0.0009 + 0.61, 0.92, dim * LAYER_DEPTH.farFieldAlpha * farK);
-    field(t * 0.0013 + 0.71, -t * 0.0004 + 0.23, 0.8, dim * LAYER_DEPTH.farFieldAlpha * 0.82 * farK, Math.round(sky.length * 0.7));
+    // 월드 원점이 화면에서 밀린 양(타일 단위). 별과 같은 식으로 움직이므로 같은 세계에 있는 것처럼 보인다
+    const camU = (e.cam.cx * e.cam.s) / (W + 64);
+    const camV = -(e.cam.cy * e.cam.s) / (H + 64);
+    const par = LAYER_DEPTH.parallax;
+    const A = LAYER_DEPTH.farFieldAlpha;
+    field(camU * par.mid + t * 0.0026 + 0.37, camV * par.mid - t * 0.0009 + 0.61, 0.92, dim * A * farK);
+    field(camU * par.far + t * 0.0013 + 0.71, camV * par.far - t * 0.0004 + 0.23, 0.8, dim * A * 0.82 * farK, sky, Math.round(sky.length * 0.7));
+    // 가장 가까운 별먼지 — 상주 별과 거의 같은 평면에서, 같은 크기대로 섞인다
+    field(camU * par.near + 0.14, camV * par.near + 0.42, 1.4, dim * LAYER_DEPTH.dustAlpha * farK, dustStars());
   }
   g.globalAlpha = 1;
 }
@@ -140,6 +162,14 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const W = e.W;
   const H = e.H;
   const t = e.time;
+  /**
+   * 파고든 겹에서는 **비대표 상주 별**(클릭 대상이 아닌 별)을 키우고 밝힌다.
+   * 0겹에서는 1 이라 지금 모습 그대로다. 깊이 들어갈수록 별밭이 촘촘해져,
+   * 클릭 가능한 대표 별이 빈 하늘에 홀로 뜬 게 아니라 별밭 속에 섞여 보인다.
+   */
+  const fieldK = Math.min(1, depthOf(e) * (LAYER_COUNT - 1));
+  const fieldSize = 1 + (LAYER_DEPTH.fieldStarSize - 1) * fieldK;
+  const fieldAlpha = 1 + (LAYER_DEPTH.fieldStarAlpha - 1) * fieldK;
   const grow = clamp(0.86 + Math.log(Math.max(1, e.cam.s / 100)) * 0.13, 0.86, 1.5);
   const pset = e.probeIdSet();
   const cset = e.constellationIdSet();
@@ -168,8 +198,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * appear(s.musicId, t);
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
-      d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow;
-      alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t);
+      d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow * fieldSize;
+      alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t) * fieldAlpha;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;
@@ -736,9 +766,8 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 
 /** 한 프레임 */
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
-  // 전환 중에는 배경 깊이(어둡기·원경 별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
-  const depthLayer = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
-  drawBackground(g, e.W, e.H, e.time, depthLayer / (LAYER_COUNT - 1));
+  // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
+  drawBackground(g, e, depthOf(e));
   if (e.anim) {
     // 나가는 겹은 **별만** 훅 지나가게 그린다. 성운까지 겹쳐 그리면 가산 합성이라 화면이 하얗게 뜬다
     drawStars(g, e, true);

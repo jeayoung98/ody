@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { STORAGE_KEYS } from "@/constants";
+import { removeStorage, writeStorage } from "@/lib/storage";
 import { useMapStore } from "./use-map-store";
 
 /** 재생 컨텍스트. 플리와 여정은 동시에 있을 수 없다 — 하나 켜지면 하나 꺼진다 */
@@ -16,6 +18,14 @@ interface PlayerState {
   queue: number[];
   queueIndex: number;
 
+  /**
+   * 새로고침 복원 (S15P21A405-275). **소리는 다시 틀지 않는다** — 음원은 앱 밖에서 듣기 때문에
+   * (규칙 6) 복원할 소리가 없다. 어떤 곡이었는지만 되살려 플레이어바에서 이어 들을 수 있게 한다.
+   *
+   * 스토어를 만들 때 localStorage 를 읽으면 **서버 렌더와 값이 달라 하이드레이션이 깨진다** —
+   * 그래서 클라이언트가 붙은 뒤에 한 번 부른다.
+   */
+  restoreLast: (musicId: number) => void;
   playSingle: (musicId: number) => void;
   playQueue: (context: Exclude<PlayContext, { kind: "single" }>, musicIds: number[], startIndex?: number) => void;
   toggle: () => void;
@@ -33,6 +43,11 @@ export const usePlayerStore = create<PlayerState>()(
       context: { kind: "single" },
       queue: [],
       queueIndex: 0,
+
+      restoreLast: (musicId) => {
+        if (get().currentMusicId != null) return;
+        set({ currentMusicId: musicId, isPlaying: false }, false, "restoreLast");
+      },
 
       /**
        * 곡 하나를 재생한다.
@@ -117,3 +132,17 @@ export const usePlayerStore = create<PlayerState>()(
     { name: "player-store" },
   ),
 );
+
+/**
+ * 재생 중인 곡을 localStorage 에 남긴다 (S15P21A405-275).
+ *
+ * 바뀌는 자리가 다섯 군데(playSingle·playQueue·next·prev·stop)라 각각에 넣으면 언젠가 하나를 빠뜨린다.
+ * 여기서 한 번만 구독해 **바뀔 때만** 쓴다.
+ */
+let persistedMusicId: number | null = null;
+usePlayerStore.subscribe((s) => {
+  if (s.currentMusicId === persistedMusicId) return;
+  persistedMusicId = s.currentMusicId;
+  if (s.currentMusicId == null) removeStorage(STORAGE_KEYS.playingMusicId);
+  else writeStorage(STORAGE_KEYS.playingMusicId, s.currentMusicId);
+});

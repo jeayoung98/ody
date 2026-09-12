@@ -175,7 +175,7 @@ export class MapEngine {
    * 겹 이동은 서버 상태 없이 누적 범위를 매번 다시 보내는 구조라, `boxes` 만 들고 있으면
    * 같은 곡 집합을 다시 받을 수 있다. 카메라는 돌아갈 때 곡 좌표로 다시 계산한다.
    */
-  private home: { musicId: number; boxes: readonly LayerBox[] } | null = null;
+  home: { musicId: number; boxes: readonly LayerBox[] } | null = null;
   /**
    * 겹 전환이 끝나면 이 곡을 가운데로 다시 맞춘다.
    * 전환 중에 상주 집합 응답이 오면 `setLayerSongs` 가 목표 카메라를 `fitCam` 으로 다시 계산해
@@ -308,10 +308,18 @@ export class MapEngine {
     this.stack = [];
     this.boxes = [];
     this.layer = 0;
-    if (this.myId == null || !this.index.has(this.myId)) this.myId = this.centerMost();
-    const m = this.songs[this.index.get(this.myId!)!];
-    this.me = { x: m.pc[0], y: m.pc[1] };
-    this.cam = this.fitCam(0, this.subset, this.myId!);
+    /**
+     * **없으면 비워 둔다.** 예전에는 아무 곡이나(`centerMost`) 내 자리로 잡았는데, 그러면 한 번도
+     * 재생한 적 없는 사람에게도 엉뚱한 곳에 '나' 가 떴다. 내 자리는 **곡을 재생해야 생긴다**
+     * (S15P21A405-275). 카메라 맞춤은 `fitAnchor` 가 대신 기준점을 찾는다.
+     */
+    if (this.myId != null && !this.index.has(this.myId)) this.myId = null;
+    const anchor = this.fitAnchor(this.subset, 0);
+    if (this.myId != null) {
+      const m = this.songs[this.index.get(this.myId)!];
+      this.me = { x: m.pc[0], y: m.pc[1] };
+    }
+    this.cam = this.fitCam(0, this.subset, anchor);
     this.entryS = this.cam.s;
     this.inited = true;
     this.rebuildAliveIdx();
@@ -356,8 +364,11 @@ export class MapEngine {
    * 남의 곡 자리로 간다.
    */
   private fitAnchor(mask: Uint8Array, layer: number) {
-    const id = this.myId!;
-    return mask[this.index.get(id)!] ? id : this.nearestIn(mask, id, layer);
+    // 내 자리가 아직 없을 수 있다 (한 번도 재생 안 한 사람). 그때는 무리 한가운데를 기준으로 본다
+    const id = this.myId ?? this.centerMost();
+    const i = this.index.get(id);
+    if (i == null) return this.centerMost();
+    return mask[i] ? id : this.nearestIn(mask, id, layer);
   }
 
   /** 마스크 안에서 기준 곡과 가장 가까운 곡 (그 겹 두 축 기준) */
@@ -386,6 +397,14 @@ export class MapEngine {
   /** 초기 내 곡 (setSongs 전에 호출). 데이터가 오면 그 자리에서 시작한다 */
   setInitialMy(id: number | null) {
     this.myId = id;
+  }
+
+  /**
+   * 새로고침 복원 — 저장해 둔 "돌아갈 자리" 를 되살린다 (S15P21A405-275).
+   * 첫 진입에만 부른다. 이미 재생해서 자리가 생겼으면 덮지 않는다.
+   */
+  restoreHome(home: { musicId: number; boxes: readonly LayerBox[] } | null) {
+    if (home && this.home == null) this.home = home;
   }
 
   setHover(id: number | null) {
@@ -1227,9 +1246,17 @@ export class MapEngine {
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
-    const m = this.songs[this.index.get(this.myId!)!];
+    const mi = this.myId != null ? this.index.get(this.myId) : undefined;
     const f = this.freeRect();
-    const c: MapCamera = { ...p.cam, cx: m.pc[dx] - (f.cx - this.W / 2) / p.cam.s, cy: m.pc[dy] + (f.cy - this.H / 2) / p.cam.s };
+    // 내 자리가 있으면 그 곡을 가운데 두고 떠오른다. 없으면 두고 온 카메라 그대로
+    const c: MapCamera =
+      mi == null
+        ? { ...p.cam }
+        : {
+            ...p.cam,
+            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / p.cam.s,
+            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / p.cam.s,
+          };
     const ax = LAYER_AXES[p.layer];
     this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1, p.entryS);
   }
@@ -1789,7 +1816,7 @@ export class MapEngine {
         this.alpha = this.aTo.slice();
         this.alphaOut.fill(0);
         this.morphT = 0;
-        const w = this.worldOf(this.myId!);
+        const w = this.myId != null ? this.worldOf(this.myId) : null;
         if (w) this.me = { ...w };
         if (this.selectedId != null && !this.isAlive(this.selectedId)) this.selectedId = null;
         this.project();
@@ -2042,6 +2069,8 @@ export class MapEngine {
       pressureDir: this.pressure > 0.01 ? this.pressureDir : 0,
       morph: this.anim ? { big: this.anim.big, sub: this.anim.sub } : null,
       myMusicId: this.myId,
+      // travelTo 때만 새 객체가 되므로 참조 비교로 변화가 잡힌다
+      home: this.home,
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
       canGoHome: this.canGoHome(),

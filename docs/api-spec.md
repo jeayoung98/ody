@@ -51,9 +51,14 @@
 
 응답:
 ```json
-{ "success": true, "data": { "content": [], "page": 0, "size": 20, "totalElements": 137, "totalPages": 7, "hasNext": true }, "error": null }
+{ "success": true, "data": { "content": [], "page": 0, "size": 10, "hasNext": true }, "error": null }
 ```
 - 페이지 크기는 서버에서 **10 고정**. 응답 `size`는 클라이언트 하드코딩 방지용 참고값.
+- `totalElements`·`totalPages`는 **없다** (S15P21A405-255). 프론트가 쓰지 않는다고 확인했고, 총 개수를 세려면
+  매 요청마다 대상 테이블을 끝까지 세어야 한다 — 검색에서는 그것만으로 응답의 약 7초를 차지했다.
+  다음 페이지 유무는 `hasNext`로 판단한다(구현은 `size+1`건을 떠서 초과분 유무로 본다).
+- 되살려야 할 화면이 생기면 세는 비용을 먼저 재고 **그 API에만** 담는다. 공통 규약으로 되돌리지 않는다.
+- ⚠ 아래 §5 유저 검색·팔로우 목록 예시에는 두 필드가 아직 남아 있다. BE1 확인 후 정리한다.
 
 ### 0.4 HTTP 상태 코드 매핑
 
@@ -290,10 +295,11 @@ body: `idToken`(String, required).
   "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
   "genres": ["K-Pop"], "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
   "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }
-} ], "page": 0, "size": 20, "totalElements": 137, "totalPages": 7, "hasNext": true }, "error": null }
+} ], "page": 0, "size": 10, "hasNext": true }, "error": null }
 ```
 - 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
 - **정렬은 관련성 순**: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 → 나머지 부분일치. 같은 순위 안에서는 `id` 오름차순. 대소문자 구분 없음 (2026-09-12 변경, S15P21A405-234 — 이전은 `youtubeCnt` 내림차순이었으나 값이 전 행 0 이라 무작위였다).
+- **총 개수(`totalElements`·`totalPages`)는 내려주지 않는다** (2026-09-13, S15P21A405-255). §0.3 참고. 페이지 이동은 `hasNext`로 판단한다.
 
 ### 3.2 노래 상세 조회
 `GET /api/music/detail` · 인증 필요. param: `id`(int, required).

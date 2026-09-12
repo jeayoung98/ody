@@ -10,10 +10,12 @@
   "content": [ { "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
     "genres": ["K-Pop"], "youtubeUrl": "https://youtu.be/x",
     "location": { "pc1": -0.4213, "...": "...", "pc16": -0.123 } } ],
-  "page": 0, "size": 10, "totalElements": 137, "totalPages": 14, "hasNext": true
+  "page": 0, "size": 10, "hasNext": true
 }, "error": null }
 ```
-- 결과 없음 → `content: []`, 200. youtubeUrl null 포함. 정렬 youtubeCnt DESC, id ASC.
+- 결과 없음 → `content: []`, 200. youtubeUrl null 포함.
+- 정렬은 관련성 순 (제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 → 나머지 부분일치), 같은 순위 안에서는 id ASC (S15P21A405-234).
+- `totalElements`·`totalPages` 는 없다 (S15P21A405-255). 세는 질의 하나가 응답의 ~7초였고 FE 가 쓰지 않는다. 다음 페이지 유무는 `hasNext`.
 
 **실패** (`ApiResponse.fail`, `error:{code,message}`):
 | 상황 | HTTP | code (master GlobalErrorCode) |
@@ -28,8 +30,8 @@
 
 ```
 interface MusicSearchReader {
-    PageResult search(String query, int page, int size);  // substring(title|artist, ci), youtubeCnt DESC id ASC
-    record PageResult(List<MusicSummary> content, long totalElements) {}
+    PageResult search(String query, int page, int size);  // substring(title|artist, ci), 관련성 순
+    record PageResult(List<MusicSummary> content, boolean hasNext) {}
 }
 ```
 - 어댑터 = **MyBatis `MusicSearchMapper`** (B-D 후 구현). 시그니처는 BE4 합의 대상.

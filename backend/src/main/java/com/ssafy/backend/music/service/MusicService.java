@@ -60,17 +60,14 @@ public class MusicService {
 	}
 
 	/**
-	 * 노래 검색 (정본 §3.1). query 부분일치(대소문자 무시), youtubeCnt DESC·id ASC, 페이지 크기 10 고정.
+	 * 노래 검색 (정본 §3.1). query 부분일치(대소문자 무시), 관련성 순, 페이지 크기 10 고정.
 	 * 매칭·정렬 실행은 BE4 조회 port에 위임하고, 여기서는 조건 전달과 응답 조립만 한다.
 	 */
 	public PageResponse<MusicSummary> search(String query, int page) {
 		MusicSearchReader reader = searchReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/search: BE4 검색 어댑터 대기 중 (B-D)"));
 		MusicSearchReader.PageResult result = reader.search(query.trim(), page, PAGE_SIZE);
-		long total = result.totalElements();
-		int totalPages = (int) ((total + PAGE_SIZE - 1) / PAGE_SIZE);
-		boolean hasNext = (long) (page + 1) * PAGE_SIZE < total;
-		return new PageResponse<>(result.content(), page, PAGE_SIZE, total, totalPages, hasNext);
+		return new PageResponse<>(result.content(), page, PAGE_SIZE, result.hasNext());
 	}
 
 	/**

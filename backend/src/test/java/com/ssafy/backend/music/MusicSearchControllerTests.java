@@ -60,7 +60,7 @@ class MusicSearchControllerTests {
 	void search_success_returnsPagedEnvelope() throws Exception {
 		PageResponse<MusicSummary> page = new PageResponse<>(
 				List.of(song(10234L, "Love wins all", "IU", "https://youtu.be/x")),
-				0, 10, 137, 14, true);
+				0, 10, true);
 		when(musicService.search(eq("IU"), eq(0))).thenReturn(page);
 
 		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
@@ -71,15 +71,17 @@ class MusicSearchControllerTests {
 				.andExpect(jsonPath("$.data.content[0].location.pc1").value(-0.4213))
 				.andExpect(jsonPath("$.data.page").value(0))
 				.andExpect(jsonPath("$.data.size").value(10))
-				.andExpect(jsonPath("$.data.totalElements").value(137))
-				.andExpect(jsonPath("$.data.hasNext").value(true));
+				.andExpect(jsonPath("$.data.hasNext").value(true))
+				// 총 개수는 응답에 없다 (S15P21A405-255). 남겨두면 FE 가 다시 의존하게 된다.
+				.andExpect(jsonPath("$.data.totalElements").doesNotExist())
+				.andExpect(jsonPath("$.data.totalPages").doesNotExist());
 	}
 
 	@Test
 	void search_preservesServiceOrder() throws Exception {
 		PageResponse<MusicSummary> page = new PageResponse<>(
 				List.of(song(1L, "A", "x", "https://y/1"), song(2L, "B", "y", "https://y/2")),
-				0, 10, 2, 1, false);
+				0, 10, false);
 		when(musicService.search(anyString(), anyInt())).thenReturn(page);
 
 		mockMvc.perform(get("/api/music/search").param("query", "wins").param("page", "0"))
@@ -91,7 +93,7 @@ class MusicSearchControllerTests {
 	@Test
 	void search_emptyResult_returns200EmptyContent() throws Exception {
 		when(musicService.search(anyString(), anyInt()))
-				.thenReturn(new PageResponse<>(List.of(), 0, 10, 0, 0, false));
+				.thenReturn(new PageResponse<>(List.of(), 0, 10, false));
 
 		mockMvc.perform(get("/api/music/search").param("query", "zzzznomatch").param("page", "0"))
 				.andExpect(status().isOk())

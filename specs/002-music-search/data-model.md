@@ -25,7 +25,9 @@
 
 ## PageResponse<T> (§0.3)
 
-content, page, size(=10), totalElements, totalPages, hasNext.
+content, page, size(=10), hasNext.
+
+`totalElements`·`totalPages` 는 2026-09-13 에 제거했다 (S15P21A405-255). 총 개수를 세려면 매 요청마다 대상 테이블을 끝까지 세어야 하고, 검색에서는 그것만으로 응답의 ~7초를 차지했다. FE 가 쓰지 않는다고 확인했다. `hasNext` 는 `size+1` 건을 떠서 초과분 유무로 판단한다.
 
 ## 공통 응답/에러 (master 실물)
 

@@ -38,16 +38,22 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 		String prefix = escapeLike(lowered) + "%";
 		long offset = (long) page * size;
 
-		// countMatches 가 0 이면 findPage 를 아예 돌리지 않는다. 단순한 최적화가 아니라
+		// 매칭이 하나도 없으면 findPage 를 아예 돌리지 않는다. 단순한 최적화가 아니라
 		// 관련성 질의가 5단계라, 매칭 0건일 때 각 단계가 조기 종료에 실패해 5배로 느려지는 것을 막는다.
-		// ponytail: lower(title)·lower(artist) 색인이 붙으면 이 방방이는 필요 없다 (S15P21A405-255).
-		long total = mapper.countMatches(pattern);
-		List<MusicSearchRow> rows = total == 0
-				? List.of()
-				: mapper.findPage(lowered, prefix, pattern, offset + size, size, offset);
+		// ponytail: lower(title)·lower(artist) 색인이 붙으면 이 방패는 필요 없다 (S15P21A405-255).
+		//
+		// size+1 건을 떠서 초과분이 있었는지로 hasNext 를 판단한다. 총 건수를 세지 않는 이유는
+		// PageResult 주석 참고 — 세는 질의 하나가 응답 시간의 ~7초였다.
+		List<MusicSearchRow> rows = mapper.existsMatch(pattern)
+				? mapper.findPage(lowered, prefix, pattern, offset + size + 1, size + 1, offset)
+				: List.of();
+		boolean hasNext = rows.size() > size;
+		if (hasNext) {
+			rows = rows.subList(0, size);
+		}
 		if (rows.isEmpty()) {
 			// 매칭 0건이거나 page 가 마지막 페이지를 넘었다. 오류가 아니라 빈 목록이다(FR-002).
-			return new PageResult(List.of(), total);
+			return new PageResult(List.of(), false);
 		}
 
 		// 페이지에 실린 곡들의 장르를 한 번에 읽어 곡별로 묶는다(N+1 회피).
@@ -65,7 +71,7 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 						row.toLocation()))
-				.toList(), total);
+				.toList(), hasNext);
 	}
 
 	/**

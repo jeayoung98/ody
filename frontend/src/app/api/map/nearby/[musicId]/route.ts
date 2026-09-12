@@ -1,4 +1,4 @@
-import { fail, ok } from "@/lib/api-response";
+import { fail, failLive, ok, okLive } from "@/lib/api-response";
 import {
   backendGet,
   BackendError,
@@ -22,15 +22,16 @@ export async function GET(_req: Request, { params }: { params: Promise<{ musicId
 
   if (!isBackendEnabled()) return ok(mockNearby(id));
 
+  const upstream = `/api/music/detail?id=${id}`;
   try {
-    const res = await backendGet<BackendMusicDetailResponse>(`/api/music/detail?id=${id}`);
+    const res = await backendGet<BackendMusicDetailResponse>(upstream);
     const nearby: NearbyResponse = {
       center: toMapPoint(res),
       neighbors: res.neighbors.map(toMapPoint),
     };
-    return ok(nearby);
+    return okLive(nearby, upstream);
   } catch (e) {
     const err = e as BackendError;
-    return fail("MUSIC_NOT_FOUND", err.message, err.status || 502);
+    return failLive("MUSIC_NOT_FOUND", err.message, err.status || 502, upstream);
   }
 }

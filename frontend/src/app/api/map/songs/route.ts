@@ -1,5 +1,5 @@
 import { LAYER_SONG_COUNT } from "@/constants";
-import { fail, ok } from "@/lib/api-response";
+import { failLive, ok, okLive } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, toResidentPoint, type BackendMapPoint } from "@/lib/backend";
 import { allSongs } from "@/mocks/songs";
 import type { MapPoint } from "@/types";
@@ -27,13 +27,14 @@ export async function GET(req: Request) {
   const q = new URL(req.url).searchParams;
 
   if (isBackendEnabled()) {
+    const qs = q.toString();
+    const upstream = `/api/music/major?${qs || "level=1"}`;
     try {
-      const qs = q.toString();
-      const res = await backendGet<BackendMajorResponse>(`/api/music/major?${qs || "level=1"}`);
-      return ok(res.content.map(toResidentPoint));
+      const res = await backendGet<BackendMajorResponse>(upstream);
+      return okLive(res.content.map(toResidentPoint), upstream);
     } catch (e) {
       const err = e as BackendError;
-      return fail("INTERNAL_ERROR", err.message, err.status || 502);
+      return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);
     }
   }
 

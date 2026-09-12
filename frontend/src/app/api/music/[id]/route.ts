@@ -1,4 +1,4 @@
-import { fail, ok } from "@/lib/api-response";
+import { fail, failLive, ok, okLive } from "@/lib/api-response";
 import {
   backendGet,
   BackendError,
@@ -52,11 +52,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
 
   if (!isBackendEnabled()) return ok(mockMusicDetail(musicId));
 
+  const upstream = `/api/music/detail?id=${musicId}`;
   try {
-    const res = await backendGet<BackendMusicDetailResponse>(`/api/music/detail?id=${musicId}`);
-    return ok(toMusicDetail(res));
+    const res = await backendGet<BackendMusicDetailResponse>(upstream);
+    return okLive(toMusicDetail(res), upstream);
   } catch (e) {
     const err = e as BackendError;
-    return fail("MUSIC_NOT_FOUND", err.message, err.status || 502);
+    return failLive("MUSIC_NOT_FOUND", err.message, err.status || 502, upstream);
   }
 }

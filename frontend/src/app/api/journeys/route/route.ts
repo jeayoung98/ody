@@ -1,4 +1,4 @@
-import { fail, ok } from "@/lib/api-response";
+import { fail, failLive, ok, okLive } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, type BackendJourneyResponse } from "@/lib/backend";
 import { mockJourney } from "@/mocks/music";
 import type { JourneyRoute } from "@/types";
@@ -35,11 +35,12 @@ export async function GET(req: Request) {
 
   if (!isBackendEnabled()) return ok(mockJourney(start, end));
 
+  const upstream = `/api/music/journey?start=${start}&end=${end}`;
   try {
-    const res = await backendGet<BackendJourneyResponse>(`/api/music/journey?start=${start}&end=${end}`);
-    return ok(toJourneyRoute(res, start, end));
+    const res = await backendGet<BackendJourneyResponse>(upstream);
+    return okLive(toJourneyRoute(res, start, end), upstream);
   } catch (e) {
     const err = e as BackendError;
-    return fail("PATH_NOT_FOUND", err.message, err.status || 502);
+    return failLive("PATH_NOT_FOUND", err.message, err.status || 502, upstream);
   }
 }

@@ -18,7 +18,7 @@ import jakarta.validation.constraints.NotBlank;
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/api/user")
 @Validated
 @RequiredArgsConstructor
 @Tag(name = "User", description = "사용자 상세 조회")

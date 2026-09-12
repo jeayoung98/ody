@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GENRE_DIM, GHOST, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, PROBE, REPRESENTATIVE_GRID_PX, REVEAL, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -75,6 +75,16 @@ export class MapEngine {
   songs: MapPoint[] = [];
   private index = new Map<number, number>();
   private byWeight: number[] = [];
+  /** 재생수 순위 (0 = 1위). 확대할수록 이 순위 아래까지 별이 드러난다 (REVEAL) */
+  private rank = new Int32Array(0);
+  /** 드러나는 재생수 순위 경계. 프레임마다 갱신 */
+  revealCount = 0;
+  /** 실제로 화면에 떠 있는 별 수 (끈 장르까지 반영). 프레임마다 갱신 */
+  shownCount = 0;
+  /** 이 겹 별들을 다 감싸는 반지름 (중심 기준 px). 고스트별을 그 밖에 놓는다. 프레임마다 갱신 */
+  private ghostExtent = 0;
+  /** 필터에서 켜 둔 장르. 꺼진 장르는 지워지지 않고 GENRE_DIM 만큼 흐려진다 */
+  litGenres = new Set<number>();
   N = 0;
 
   W = 1;
@@ -182,11 +192,13 @@ export class MapEngine {
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
-    this.subset = new Uint8Array(this.N).fill(1);
+    this.rank = new Int32Array(this.N);
+    this.byWeight.forEach((idx, r) => (this.rank[idx] = r));
+    this.subset = this.residentMask();
     this.pos = new Float32Array(this.N * 2);
     this.from = new Float32Array(this.N * 2);
     this.to = new Float32Array(this.N * 2);
-    this.alpha = new Float32Array(this.N).fill(1);
+    this.alpha = Float32Array.from(this.subset);
     this.aFrom = new Float32Array(this.N);
     this.aTo = new Float32Array(this.N);
     this.stack = [];
@@ -214,6 +226,16 @@ export class MapEngine {
     // 고스트별로 띄운 곡이 아닌 다른 곡을 고르면 고스트는 사라진다 (MAP-12)
     if (this.ghost && id !== this.ghost.musicId) this.ghost = null;
     this.selectedId = id;
+  }
+
+  /** 켜 둔 장르 목록 (보기 필터). 전부 켜져 있으면 모두 1배 */
+  setLitGenres(genreIds: number[]) {
+    this.litGenres = new Set(genreIds);
+  }
+
+  /** 이 별의 장르가 필터에서 꺼져 있으면 흐리게 (형태만 남는다) */
+  genreDim(i: number) {
+    return this.litGenres.size === 0 || this.litGenres.has(this.songs[i].genreId) ? 1 : GENRE_DIM;
   }
 
   setCallbacks(cb: {
@@ -396,37 +418,75 @@ export class MapEngine {
       return;
     }
     this.ghost = { musicId: id, t0: performance.now() };
+    this.frameGhost();
+  }
+
+  /**
+   * 고스트별이 뜰 때 뷰를 물러나게 한다 — 확대해 들어온 상태에서는 구름이 화면을 다 채워서
+   * "구름 밖"이 화면에 없다. 구름 끝을 화면 안으로 들이고 고스트 쪽 바깥 공간을 보여준다.
+   */
+  private frameGhost() {
+    const dir = this.ghostDir();
+    if (!dir || this.follow || this.anim) return;
+    const extent = this.starRadius();
+    if (extent < 1) return;
+    const f = this.freeRect();
+    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) / 2;
+    // 구름이 화면보다 크면 그만큼 축소한다 (이미 작으면 배율은 그대로)
+    const target = R * GHOST.viewCloudRatio;
+    const s = extent > target ? this.cam.s * (target / extent) : this.cam.s;
+    // 고스트가 뜨는 쪽으로 옮겨 그 바깥이 보이게. 화면 y 는 아래가 양수, 월드 y 는 위가 양수
+    const shift = (R * GHOST.viewShiftRatio) / s;
+    this.touched = true;
+    this.camTarget = { s, cx: this.cam.cx + dir.x * shift, cy: this.cam.cy - dir.y * shift };
   }
 
   clearGhost() {
     this.ghost = null;
   }
 
-  /**
-   * 고스트별의 화면 위치 — **레이어 0(전 우주) 좌표에서 내 곡으로부터의 방향**을 재어
-   * 화면 가장자리 안쪽에 놓는다. 실제 별들과 섞이지 않으면서 "저쪽 바깥"이 전달된다.
-   */
-  ghostPos(): { x: number; y: number } | null {
+  /** 고스트별 방향 (화면 좌표 단위벡터) — 레이어 0 좌표에서 내 곡 → 그 곡 */
+  private ghostDir(): { x: number; y: number } | null {
     if (!this.ghost) return null;
     const i = this.index.get(this.ghost.musicId);
     const myI = this.myId != null ? this.index.get(this.myId) : undefined;
     if (i == null || myI == null) return null;
     const a = this.songs[i].pc;
     const b = this.songs[myI].pc;
-    let dx = a[0] - b[0];
-    let dy = a[1] - b[1];
-    const d = Math.hypot(dx, dy);
-    if (d < 1e-6) {
-      dx = 0;
-      dy = 1;
-    } else {
-      dx /= d;
-      dy /= d;
-    }
-    const f = this.freeRect();
-    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * GHOST.radiusRatio;
+    const dx = a[0] - b[0];
     // 월드 y 는 위가 양수, 화면 y 는 아래가 양수
-    return { x: f.cx + dx * R, y: f.cy - dy * R };
+    const dy = -(a[1] - b[1]);
+    const d = Math.hypot(dx, dy);
+    return d < 1e-6 ? { x: 0, y: -1 } : { x: dx / d, y: dy / d };
+  }
+
+  /**
+   * 지금 겹의 별들을 다 감싸는 반지름 (화면 중심 기준 px).
+   * 방향별 최댓값이 아니라 **전체를 감싸는 원**이어야 한다 — 방향 기준으로 재면 그 방향으로는 밖이어도
+   * 옆으로는 별이 남아서 구름에 박힌 것처럼 보인다.
+   */
+  private starRadius() {
+    const f = this.freeRect();
+    let max = 0;
+    for (let i = 0; i < this.N; i++) {
+      if (!this.subset[i] || this.alpha[i] < 0.5 || this.revealAlpha(i) < 0.5) continue;
+      const d = Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy);
+      if (d > max) max = d;
+    }
+    return max;
+  }
+
+  /**
+   * 고스트별의 화면 위치 — 방향은 레이어 0 좌표에서 내 곡으로부터, 거리는
+   * **이 겹 별들을 다 감싸는 반지름 + 여백**. 구름 안에는 어떤 경우에도 들어가지 않는다.
+   * (구름이 화면을 넘어가면 표식도 화면 밖이다 — 그래서 뜰 때 frameGhost 가 뷰를 물러나게 한다)
+   */
+  ghostPos(): { x: number; y: number } | null {
+    const dir = this.ghostDir();
+    if (!dir) return null;
+    const f = this.freeRect();
+    const t = this.ghostExtent + GHOST.cloudMargin;
+    return { x: f.cx + dir.x * t, y: f.cy + dir.y * t };
   }
 
   /** 고스트별 페이드 진행도 */
@@ -529,22 +589,6 @@ export class MapEngine {
     return { cx: c.pc[dx] - (f.cx - this.W / 2) / s, cy: c.pc[dy] + (f.cy - this.H / 2) / s, s };
   }
 
-  private holeRadius() {
-    return DRILL.holeRatio * Math.min(this.W, this.H);
-  }
-
-  /** 구멍(보이지 않는 원) 안에 있는 상주 곡 인덱스 */
-  private inHole(): number[] {
-    const f = this.freeRect();
-    const R = this.holeRadius();
-    const out: number[] = [];
-    for (let i = 0; i < this.N; i++) {
-      if (!this.subset[i]) continue;
-      if (Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy) <= R) out.push(i);
-    }
-    return out;
-  }
-
   private outward(x: number, y: number, out: Float32Array, k: number) {
     const f = this.freeRect();
     let dx = x - f.cx;
@@ -593,41 +637,24 @@ export class MapEngine {
    * 어긋나면 압력만 차오르고 내려가지는 않아서 휠이 먹통이 된다 (확대도 멈춰 있으므로).
    */
   gateOpen() {
-    if (this.layer >= LAYER_COUNT - 1 || !this.zoomedEnough()) return false;
-    const n = this.inHole().length;
-    return n <= DRILL.gate && n >= DRILL.minKeep;
+    return this.layer < LAYER_COUNT - 1 && this.zoomedEnough();
   }
 
-  /** 한 겹 파고들기 — 구멍 안 곡만 데려가 다음 두 축으로 재투영 */
+  /**
+   * 한 겹 파고들기 — 상주 집합을 **그대로** 데려가 다음 두 축으로 재투영한다.
+   * 겹이 바뀌면 진입 배율이 다시 잡히므로, 드러난 별 수도 REVEAL.base 로 돌아간다.
+   */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
-    const keep = this.inHole();
-    if (keep.length > DRILL.gate || keep.length < DRILL.minKeep) return;
-    // 내 곡이 구멍 밖이면 구멍 중앙 곡으로 재지정
-    const f = this.freeRect();
-    const myI = this.myId != null ? this.index.get(this.myId) : undefined;
-    if (myI == null || !keep.includes(myI)) {
-      let b = keep[0];
-      let bd = 1e9;
-      for (const i of keep) {
-        const d = Math.hypot(this.pos[i * 2] - f.cx, this.pos[i * 2 + 1] - f.cy);
-        if (d < bd) {
-          bd = d;
-          b = i;
-        }
-      }
-      this.myId = this.songs[b].musicId;
-    }
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice() });
-    const ns = new Uint8Array(this.N);
-    for (const i of keep) ns[i] = 1;
+    const ns = this.subset.slice();
     const nl = this.layer + 1;
     const ax = LAYER_AXES[nl];
     this.morph(
       nl,
       this.fitCam(nl, ns, this.myId!),
       ns,
-      `${LAYER_NAMES[nl]}으로 파고드는 중 — ${keep.length.toLocaleString()}곡`,
+      `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — ${this.residentCount().toLocaleString()}곡`,
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
     );
   }
@@ -789,10 +816,10 @@ export class MapEngine {
    */
   surfaceToSong(id: number) {
     if (this.follow || this.anim || !this.index.has(id)) return;
-    this.ghost = null;
+    // 상주 집합으로 되돌린다 — 확인용 곡이 여기서 상주로 바뀌면 겹의 곡 수가 어긋난다
+    const ns = this.residentMask();
     this.stack = [];
     this.selectedId = id;
-    const ns = new Uint8Array(this.N).fill(1);
     const ax = LAYER_AXES[0];
     const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
     const f = this.freeRect();
@@ -1012,6 +1039,7 @@ export class MapEngine {
     if (Math.abs(this.coverAlpha - coverTarget) < 0.005) this.coverAlpha = coverTarget;
     if (Math.abs(this.friendAlpha - friendTarget) < 0.005) this.friendAlpha = friendTarget;
 
+    this.updateReveal();
     this.updateFriends();
     if (!this.anim) this.pickRepresentatives();
     this.publish();
@@ -1091,6 +1119,42 @@ export class MapEngine {
     }
   }
 
+  /** 상주 집합 마스크. ghostOnly 곡(목 확인용)은 어느 겹에도 상주하지 않는다 */
+  private residentMask() {
+    const m = new Uint8Array(this.N);
+    for (let i = 0; i < this.N; i++) m[i] = this.songs[i].ghostOnly ? 0 : 1;
+    return m;
+  }
+
+  /** 이 겹에 상주하는 곡 수 */
+  residentCount() {
+    let n = 0;
+    for (let i = 0; i < this.N; i++) n += this.subset[i];
+    return n;
+  }
+
+  /** 드러나는 순위 경계와 실제로 떠 있는 별 수 — 진입 배율에서 REVEAL.base, 확대할수록 상주 수까지 늘어난다 */
+  private updateReveal() {
+    const k = Math.max(1, this.zoomK());
+    this.revealCount = Math.min(this.residentCount(), Math.round(REVEAL.base * Math.pow(k, REVEAL.exp)));
+    let n = 0;
+    for (let i = 0; i < this.N; i++) if (this.subset[i] && this.revealAlpha(i) >= 0.5) n++;
+    this.shownCount = n;
+    // 고스트별은 구름을 감싸는 원 밖에 놓아야 하므로 그 반지름을 프레임마다 잰다
+    this.ghostExtent = this.ghost ? this.starRadius() : 0;
+  }
+
+  /**
+   * 이 별이 지금 얼마나 드러나 있는가 (0 = 안 보임).
+   * 재생수 순위가 revealCount 안쪽이면 1, 그 아래 REVEAL.fade 순위까지는 옅게, 더 아래는 0.
+   * 필터에서 꺼진 장르는 여기에 GENRE_DIM 이 곱해져 형태만 남는다 (0.5 미만이라 대표곡·클릭 대상에서는 빠진다).
+   */
+  revealAlpha(i: number) {
+    const over = this.rank[i] - this.revealCount;
+    const a = over < 0 ? 1 : Math.max(0, 1 - over / REVEAL.fade);
+    return a * this.genreDim(i);
+  }
+
   /** 대표곡 선별 — 격자를 월드에 못박아 팬해도 승자가 바뀌지 않게 */
   private pickRepresentatives() {
     this.visible = [];
@@ -1100,7 +1164,7 @@ export class MapEngine {
     const dx = this.dx();
     const dy = this.dy();
     for (const i of this.byWeight) {
-      if (!this.subset[i] || this.alpha[i] < 0.5) continue;
+      if (!this.subset[i] || this.alpha[i] < 0.5 || this.revealAlpha(i) < 0.5) continue;
       const px = this.pos[i * 2];
       const py = this.pos[i * 2 + 1];
       if (px < -20 || px > this.W + 20 || py < -20 || py > this.H + 20) continue;
@@ -1136,14 +1200,12 @@ export class MapEngine {
   }
 
   private publish() {
-    const resident = this.subset.reduce((a, b) => a + b, 0);
-    const holeCount = this.anim ? this.lastSnap.holeCount ?? 0 : this.inHoleCountFast();
     const snap: Partial<EngineSnapshot> = {
       layer: this.layer,
-      residentCount: resident,
-      holeCount,
+      residentCount: this.residentCount(),
+      revealedCount: this.shownCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
-      gateOpen: !this.anim && this.layer < LAYER_COUNT - 1 && this.zoomedEnough() && holeCount <= DRILL.gate && holeCount >= DRILL.minKeep,
+      gateOpen: !this.anim && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,
       canRise: this.stack.length > 0,
       pressure: Math.round(this.pressure * 100) / 100,
@@ -1165,11 +1227,4 @@ export class MapEngine {
     }
   }
 
-  private holeTick = 0;
-  private holeCache = 0;
-  private inHoleCountFast() {
-    // 4,000곡 순회는 가볍지만 매 프레임 할 필요는 없다
-    if (++this.holeTick % 6 === 1) this.holeCache = this.inHole().length;
-    return this.holeCache;
-  }
 }

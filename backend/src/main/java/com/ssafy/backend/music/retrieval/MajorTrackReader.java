@@ -29,7 +29,9 @@ public interface MajorTrackReader {
 	 * 조건에 해당하는 레이어 상주 집합을 돌려준다.
 	 *
 	 * @return 최대 {@code query.limit()} 개. 순서는 의미를 갖지 않는다 —
-	 *         표시 순위는 클라이언트가 {@code weight} 로 정한다(D16·D17)
+	 *         표시 순위는 클라이언트가 {@code weight} 로 정한다(D16·D17).
+	 *         <b>예외</b>: {@code level=1} 은 미리 계산된 정적 집합을 그대로 돌려주므로
+	 *         {@code limit} 보다 많을 수 있다(실측 1,094칸). 계약이 정확한 수를 강제하지 않는다(D18)
 	 */
 	List<MapPoint> findResidentSet(MajorQuery query);
 }

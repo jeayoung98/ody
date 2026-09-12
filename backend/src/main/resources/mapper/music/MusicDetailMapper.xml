@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.music.mapper.MusicDetailMapper">
+
+	<!--
+		실제 테이블: public.music(id, mbid, title, artist, release_year, bpm, duration, album,
+		youtube_url, location vector(16), play_cnt, youtube_cnt) — 6,624,399행 적재 완료.
+		적재 결과상 release_year·album·youtube_url 은 전 행 NULL 이다(스펙 18 AC4). 그대로 내려보낸다.
+		거리 인덱스: music_location_hnsw_idx (hnsw, vector_l2_ops) → 연산자는 <-> (L2).
+
+		⚠️ 질의 벡터를 서브쿼리로 넘기지 않는다.
+		   ORDER BY location <-> (SELECT location FROM music WHERE id = #{id})  ← 금지.
+		   실행계획에서 InitPlan 으로 들어가 HNSW 가 값을 제대로 쓰지 못한다(recall 0.0000).
+		   좌표를 findLocationText 로 먼저 읽어 바인드 파라미터로 넘긴다(recall 0.9995).
+		   근거: data/ingest/map_layer_queries.sql (origin/data/dev), 2026-09-11 실측.
+	-->
+
+	<sql id="locationColumns">
+		(m.location::real[])[1]  AS pc1,  (m.location::real[])[2]  AS pc2,
+		(m.location::real[])[3]  AS pc3,  (m.location::real[])[4]  AS pc4,
+		(m.location::real[])[5]  AS pc5,  (m.location::real[])[6]  AS pc6,
+		(m.location::real[])[7]  AS pc7,  (m.location::real[])[8]  AS pc8,
+		(m.location::real[])[9]  AS pc9,  (m.location::real[])[10] AS pc10,
+		(m.location::real[])[11] AS pc11, (m.location::real[])[12] AS pc12,
+		(m.location::real[])[13] AS pc13, (m.location::real[])[14] AS pc14,
+		(m.location::real[])[15] AS pc15, (m.location::real[])[16] AS pc16
+	</sql>
+
+	<select id="findById" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
+		       m.youtube_url, m.play_cnt, m.youtube_cnt,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.id = #{id}
+	</select>
+
+	<select id="findLocationText" resultType="string">
+		SELECT location::text FROM music WHERE id = #{id}
+	</select>
+
+	<!--
+		ORDER BY 에 거리 하나만 둔다. id tie-break 를 SQL 에 넣으면 정렬 키가 둘이 되어
+		HNSW 인덱스 순서를 쓰지 못하고 전체 정렬로 떨어진다. 동률 tie-break 는 어댑터가 한다.
+	-->
+	<select id="findNearest" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		<!-- NeighborTrack 은 MusicSummary + distance 뿐이다. mbid·bpm·duration·play_cnt·youtube_cnt 는 읽지 않는다. -->
+		SELECT m.id, m.title, m.artist, m.album, m.youtube_url,
+		       m.location &lt;-&gt; #{qvec}::vector AS distance,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.id &lt;&gt; #{id}
+		ORDER BY m.location &lt;-&gt; #{qvec}::vector
+		LIMIT #{k}
+	</select>
+
+	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">
+		SELECT mg.music_id, g.name
+		FROM music_genre mg
+		JOIN genre g ON g.id = mg.genre_id
+		WHERE mg.music_id IN
+		<foreach item="musicId" collection="musicIdList" open="(" separator="," close=")">
+			#{musicId}
+		</foreach>
+		ORDER BY mg.music_id, g.name
+	</select>
+</mapper>

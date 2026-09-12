@@ -37,7 +37,7 @@
 
 BE2(효정) 업무 로직 / BE4(재영) 조회 / BE1(준서) 공통 계층 경계(team-roles §5·§12·헌법 X)를 보존한다.
 - Controller: HTTP 타입 해석·`ApiResponse` 조립만. 선정 로직 없음.
-- `MajorQueryResolver`(제안): `level` n → 축 번호 `2n-1, 2n` 추출, 중심 결합. DB·HTTP 비의존 순수 함수.
+- ~~`MajorQueryResolver`(제안)~~: `level` n → 축 번호 `2n-1, 2n` 추출. 구현했다가 **2026-09-12 삭제** — D19 로 `MajorQuery.axisX()`·`axisY()` 가 같은 계산을 한다(S15P21A405-236).
 - `MajorSelectionPolicy`(제안): 서버 레벨별 반경·k·경계 규칙 참조. **값 자체는 B2·B4 확정 후 주입**, 숨은 기본값 없음.
 - `MajorTrackReader`(제안 port): BE4와 합의할 조회 인터페이스. 원형+누적 필터+top-k 계약을 표현.
 

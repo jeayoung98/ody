@@ -99,7 +99,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   // 주변 탐색: 유사곡 10곡이 오면 연출 뷰로 진입, 모드가 꺼지면 복귀
   useEffect(() => {
-    if (viewMode === "nearby" && nearby) engine.enterProbe(nearby.center.musicId, nearby.neighbors.map((n) => n.musicId));
+    if (viewMode === "nearby" && nearby) engine.enterProbe(nearby.center, nearby.neighbors);
     else if (viewMode !== "nearby") engine.exitProbe();
   }, [engine, viewMode, nearby]);
   // 별자리 오버레이 뷰: 배치가 도착하면 대형으로 모이고, 뷰를 닫으면 제자리로 흩어진다 (PATH-01)

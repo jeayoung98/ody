@@ -467,8 +467,17 @@ export class MapEngine {
    * 기준 곡을 남은 화면 중앙에 두고 유사곡 10곡을 두 겹 고리로 보기 좋게 배치한다 (실제 좌표 아님).
    * 카메라는 기준 곡으로 줌인되고, 곡들은 실제 위치에서 배치 위치로 미끄러져 들어온다.
    */
-  enterProbe(centerId: number, ids: number[]) {
-    if (!this.isAlive(centerId)) return;
+  /**
+   * 주변 탐색 진입 (MAP-10).
+   *
+   * **ID 가 아니라 곡을 통째로 받는다.** 이웃 10곡은 지도 상주 집합과 **별개 집합**이라
+   * (662만 곡 중 16차원상 가까운 10곡) 지도 목록에서 좌표를 찾을 수 없다 — 실측상 겹치는 곡이 0개다.
+   * 백엔드가 `pc[16]` 을 이미 주므로 그걸 받아 엔진에 편입한다 ({@link adopt}).
+   */
+  enterProbe(center: MapPoint, neighbors: MapPoint[]) {
+    this.adopt([center, ...neighbors]);
+    const centerId = center.musicId;
+    const ids = neighbors.map((n) => n.musicId);
     const now = performance.now();
     if (this.probe && this.probe.centerId === centerId && !this.probe.exitingAt) {
       this.probe.ids = ids;
@@ -483,6 +492,21 @@ export class MapEngine {
   }
 
   /** 주변 탐색 해제 — 곡들이 실제 자리로 돌아가고 카메라가 진입 전으로 복귀 */
+  /**
+   * 지도 목록에 없는 곡을 엔진에 **편입**한다 (주변 탐색 이웃처럼 별개 집합에서 온 곡).
+   *
+   * 좌표만 갖게 할 뿐 **상주 집합(subset)에는 넣지 않는다** — 넣으면 지도 구름의 일부가 되어
+   * 별밭에 섞이고 카메라 맞춤·파고들기 기준까지 흔든다. alpha 도 0 이라 지도 별로는 그려지지 않고,
+   * 연출 뷰가 자기 위치로만 그린다.
+   */
+  private adopt(points: MapPoint[]) {
+    const add = points.filter((p) => !this.index.has(p.musicId));
+    if (!add.length) return;
+    // keep 은 **기존 곡 수**다. 지금 있는 버퍼를 그만큼 그대로 옮기고 뒤만 새로 채운다
+    this.allocate([...this.songs, ...add], this.N);
+    this.project();
+  }
+
   exitProbe() {
     if (!this.probe || this.probe.exitingAt) return;
     this.probe.exitingAt = performance.now();
@@ -1524,8 +1548,10 @@ export class MapEngine {
     }
     for (const id of extra) {
       const i = this.index.get(id);
-      if (i == null || !this.subset[i]) continue;
+      if (i == null) continue;
+      // 연출 위치가 있으면 상주 곡이 아니어도 집을 수 있다 (주변 탐색 이웃은 지도 집합 밖이다)
       const pp = this.probePos(id) ?? this.constellationPos(id);
+      if (!pp && !this.subset[i]) continue;
       if (pp) {
         // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
         const k = this.visible.findIndex((v) => v.i === i);

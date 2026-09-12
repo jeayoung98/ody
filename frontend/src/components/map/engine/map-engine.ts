@@ -327,6 +327,7 @@ export class MapEngine {
     if (add.length) this.allocate([...this.songs, ...add], this.N);
     const ns = new Uint8Array(this.N);
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
+    this.keepPinned(ns, layer);
     // 이미 그 집합이면 다시 연출하지 않는다 (떠오르기는 쌓아둔 집합으로 이미 돌아가 있다)
     if (sameMask(this.anim?.subset ?? this.subset, ns)) return;
     const ax = LAYER_AXES[layer];
@@ -833,22 +834,55 @@ export class MapEngine {
   /**
    * 화면 밖으로 나간 '나' 표식의 자리와 방향. **null 이면 화면 안**이라 제자리에 그리면 된다.
    *
-   * 기준은 언제나 **'나'가 실제로 서 있는 자리**(`me`)다. 재생 곡이 이 겹에 없어도 '나'는 따라가지
-   * 않고 있던 자리에 남으므로 (MAP-08), 그 경우에도 자리는 그대로고 `elsewhere` 로 라벨만 갈린다.
-   * 재생 곡 쪽을 가리키면 안 된다 — 그건 '나'가 아니라 그 곡의 방향이고, 그러면 "내 위치로 가기"
-   * 로 가운데에 데려다 놔도 화살표가 계속 딴 데를 가리켜 안 간 것처럼 보인다.
+   * 내 위치는 곧 지금 재생 중인 곡이다 (MAP-08). 그래서 두 갈래로 갈린다.
+   * - 그 곡이 **이 겹에 상주하면** 실제 자리 방향. 화면 안으로 돌아오면 화살표는 사라진다.
+   * - **이 겹에 없으면** 파고들어온 경로를 거슬러 올라가 방향을 잰다 ({@link awayDir}).
+   *   자리가 이 겹에 없으니 화면 안이고 밖이고를 따질 것도 없이 늘 화살표다 — 글씨로 알리지 않고
+   *   가생이에 붙은 옅은 점으로만 알린다. 돌아오는 길은 "내 위치로 가기" 가 맡는다.
    */
   meArrow(): { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean } | null {
     if (this.anim || this.follow || this.myId == null || this.constellationActive()) return null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
-    const f = this.freeRect();
-    const m = ME_OFFSCREEN.inset;
-    if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
-    const dir = unit(px - f.cx, py - f.cy);
+    const id = this.playingId ?? this.myId;
+    const elsewhere = !this.isAlive(id);
+    let dir: { x: number; y: number } | null;
+    if (elsewhere) {
+      dir = this.awayDir(id);
+    } else {
+      const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+      const f = this.freeRect();
+      const m = ME_OFFSCREEN.inset;
+      if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
+      dir = unit(px - f.cx, py - f.cy);
+    }
     if (!dir) return null;
-    // 화면 밖이므로 가장자리에 붙인다. HUD 에 가리면 edgePos 가 안쪽으로 물러난다
+    // 둘 다 "화면 밖"이므로 가장자리에 붙인다. HUD 에 가리면 edgePos 가 안쪽으로 물러난다
     const p = this.edgePos(dir);
-    return { x: p.x, y: p.y, dir, elsewhere: this.playingElsewhere() };
+    return { x: p.x, y: p.y, dir, elsewhere };
+  }
+
+  /**
+   * 이 겹에 없는 곡의 방향 (화면 좌표 단위벡터).
+   *
+   * 파고들어온 경로(stack)를 **깊은 쪽부터** 거슬러 올라가 그 곡이 상주하던 첫 겹을 찾는다 —
+   * 바로 윗 겹에 없으면 그 위로 계속 올라간다. 그 겹에서 **내가 파고든 지점**
+   * (그 겹을 떠날 때의 카메라 중심) 에서 그 곡까지의 방향을 잰다.
+   * 스택은 이 겹에 머무는 동안 바뀌지 않으므로 **방향도 그대로 유지된다.**
+   *
+   * 어느 윗 겹에도 없으면 지금 겹 축으로라도 잰다 — 좌표는 16차원이 다 있으니
+   * 상주하지 않을 뿐 잴 수는 있다. 화살표가 소리 없이 사라지는 것보다 낫다.
+   */
+  private awayDir(id: number): { x: number; y: number } | null {
+    const i = this.index.get(id);
+    if (i == null) return null;
+    const pc = this.songs[i].pc;
+    for (let k = this.stack.length - 1; k >= 0; k--) {
+      const f = this.stack[k];
+      if (!f.subset[i]) continue;
+      // 월드 y 는 위가 양수, 화면 y 는 아래가 양수
+      const d = unit(pc[f.layer * 2] - f.cam.cx, -(pc[f.layer * 2 + 1] - f.cam.cy));
+      if (d) return d;
+    }
+    return unit(pc[this.dx()] - this.cam.cx, -(pc[this.dy()] - this.cam.cy));
   }
 
   /** 별자리가 화면을 차지하고 있는가 (해제 애니메이션 중이면 false) */
@@ -1273,18 +1307,24 @@ export class MapEngine {
   /**
    * 곡 재생 → 내 위치가 그 곡으로 걸어간다 (MAP-08).
    * 그 곡이 이 겹에 없으면 **움직이지 않고 있던 자리에 남는다** — 없는 곳으로 데려가지 않고,
-   * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 표식에 "다른 갈래에서 재생 중"이 붙는다.
+   * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 가생이에 옅은 점으로 방향만 뜬다.
    */
   travelTo(id: number) {
     if (!this.index.has(id)) return;
     this.playingId = id;
+    /**
+     * 이 겹에 없는 곡(주변 탐색에서 고른 이웃 곡 등)이어도 **자리는 기억한다.**
+     * 기억해 두지 않으면 "내 위치로 가기" 가 한참 전에 재생한 딴 곡으로 데려간다 —
+     * 화살표는 지금 곡 쪽을 가리키는데 버튼은 딴 데로 가니 안 먹은 것처럼 보인다.
+     */
+    this.home = { musicId: id, boxes: [...this.boxes] };
+    // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
+    if (this.pinned && this.pinned.id !== id) this.pinned = null;
     if (!this.isAlive(id)) {
       this.travelToId = null;
       return;
     }
     this.travelToId = id;
-    // 이 겹에 상주하는 곡을 재생했을 때만 자리를 기억한다 — 없는 곡은 어디 사는지 모른다 (MAP-08)
-    this.home = { musicId: id, boxes: [...this.boxes] };
     this.centerLock = true;
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
@@ -1326,6 +1366,42 @@ export class MapEngine {
     const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
     this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
     this.centerLock = true;
+  }
+
+  /**
+   * "내 위치로 가기" 로 데려다 놓은 곡을 **그 겹에 붙들어 둔다.**
+   *
+   * 서버 top-k 에 없는 곡일 수 있어서(주변 탐색에서 고른 이웃 곡이 그렇다) 그냥 두면 상주 집합
+   * 응답이 도착하는 순간 도로 빠진다 — 카메라만 제자리고 표식은 다시 가생이 화살표가 된다.
+   * 겹을 옮기면 그 겹의 규칙을 따라야 하므로 **못 박은 겹에서만** 유효하다.
+   */
+  private pinned: { id: number; layer: number } | null = null;
+
+  /** 못 박은 곡을 이 겹 상주 마스크에 되살린다 */
+  private keepPinned(mask: Uint8Array, layer: number) {
+    if (!this.pinned || this.pinned.layer !== layer) return;
+    const i = this.index.get(this.pinned.id);
+    if (i != null) mask[i] = 1;
+  }
+
+  /**
+   * "내 위치로 가기" 로 도착한 자리에 '나'를 앉힌다.
+   *
+   * 명시적으로 누른 버튼이므로, 그 곡이 이 겹 상주 집합에 없더라도 그 한 곡만 끼워 넣고
+   * '나'를 그 자리로 옮긴다 — 카메라만 가고 표식은 딴 데 있으면 "안 갔다" 로 보인다.
+   */
+  private settleHome(i: number) {
+    const id = this.songs[i].musicId;
+    this.pinned = { id, layer: this.layer };
+    if (!this.subset[i]) {
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      this.rebuildAliveIdx();
+      this.project();
+    }
+    this.myId = id;
+    this.me = { ...this.worldOf(id)! };
+    this.meFlight = null;
   }
 
   /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
@@ -1386,12 +1462,15 @@ export class MapEngine {
 
     // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
     if (target === this.layer) {
+      this.settleHome(i);
       this.centerOn(h.musicId, FOCUS.zoomMul);
       return "moved";
     }
 
     const ns = this.maskForBoxes(h.boxes, target);
-    ns[i] = 1; // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다
+    // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다 — 응답이 와도 빠지지 않게 못 박는다
+    this.pinned = { id: h.musicId, layer: target };
+    ns[i] = 1;
     // 떠오르기용 상위 겹 프레임 재구성 (지금 스택은 다른 길로 파고든 것이라 쓸 수 없다)
     this.stack = Array.from({ length: target }, (_, l) => {
       const sub = this.maskForBoxes(h.boxes, l);
@@ -1401,6 +1480,9 @@ export class MapEngine {
 
     const song = this.songs[i];
     this.centerAfterMorph = h.musicId;
+    // 도착하면 '나'도 그 자리에 앉는다 — 모프 끝에서 me 가 myId 로 맞춰진다
+    this.myId = h.musicId;
+    this.meFlight = null;
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
     const ax = LAYER_AXES[target];
@@ -1590,9 +1672,9 @@ export class MapEngine {
      */
     const viewBusy = (!!this.probe && !this.probe.exitingAt) || this.constellationActive();
     if (this.centerLock && !this.camTarget && !this.anim && !this.follow && !viewBusy) {
-      // '나'가 실제로 서 있는 자리(me). 재생 곡이 이 겹에 없으면 '나'는 그 곡을 따라가지 않는다 (MAP-08)
-      const w = this.me;
-      {
+      const id = this.playingId ?? this.myId;
+      const w = id != null ? this.worldOf(id) : null;
+      if (w) {
         const f = this.freeRect();
         const cx = w.x - (f.cx - this.W / 2) / this.cam.s;
         const cy = w.y + (f.cy - this.H / 2) / this.cam.s;

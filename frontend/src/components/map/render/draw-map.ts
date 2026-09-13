@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -595,6 +595,21 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     g.font = `500 8.5px ${FONTS.mono}`;
     g.fillStyle = "rgba(147,164,196,.7)";
     g.fillText(`#${n.rank + 1} · ${s.artist ?? ""}`, n.x, n.y + 34);
+    /**
+     * 선택한 이웃에는 라벨 셋째 줄로 **"둘러보기 ›" 링크**를 단다 (S15P21A405-288) — 이웃을 누르는 것만으로는
+     * 건너가지 않으므로(선택·재생만), 건너가는 길이 시선이 있는 자리에 글씨로 보여야 한다. 떠다니는 버튼을
+     * 얹는 대신 이미 있는 라벨 묶음 안에 넣는다. 히트 영역은 엔진에 적어 두고 클릭은 map-view 가 받는다
+     */
+    if (n.id === e.selectedId && n.id !== cur.centerId) {
+      const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
+      g.globalAlpha = n.a * pulse;
+      g.font = `600 10px ${FONTS.body}`;
+      g.fillStyle = MAP_COLORS.me;
+      const label = "둘러보기 ›";
+      const lw = g.measureText(label).width;
+      g.fillText(label, n.x, n.y + HOP_LINK.dy);
+      e.hopLink = { id: n.id, x: n.x - lw / 2 - HOP_LINK.padX, y: n.y + HOP_LINK.dy - HOP_LINK.h / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h };
+    }
   }
   g.globalAlpha = 1;
 
@@ -880,6 +895,44 @@ function drawSelected(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "source-over";
 }
 
+/**
+ * 별을 꾹 누르는 중 — 그 별 둘레로 링이 차오른다 (S15P21A405-288). 다 차면 그 별 주변으로 파고든다.
+ * 휠 압력(drawPressure)과 같은 뜻의 다른 손짓이라 같은 청록을 쓴다
+ */
+function drawHold(g: CanvasRenderingContext2D, e: MapEngine) {
+  const h = e.hold;
+  if (!h) return;
+  const p = e.screenPosOf(h.id);
+  if (!p) return;
+  const k = e.holdK();
+  if (k < 0.02) return;
+  const a0 = -Math.PI / 2;
+  g.globalCompositeOperation = "lighter";
+  // 바탕 링 — 어디까지 차야 하는지
+  g.beginPath();
+  g.arc(p.x, p.y, HOLD.r, 0, 6.284);
+  g.strokeStyle = `rgba(79,227,206,${0.18 * Math.min(1, k * 4)})`;
+  g.lineWidth = 1;
+  g.stroke();
+  // 차오르는 호
+  g.beginPath();
+  g.arc(p.x, p.y, HOLD.r, a0, a0 + 6.284 * k);
+  g.strokeStyle = `rgba(79,227,206,${0.55 + 0.4 * k})`;
+  g.lineWidth = 2.2;
+  g.lineCap = "round";
+  g.stroke();
+  g.lineCap = "butt";
+  // 안쪽이 서서히 밝아진다 — 파고들 준비가 되는 느낌
+  const glow = g.createRadialGradient(p.x, p.y, 0, p.x, p.y, HOLD.r);
+  glow.addColorStop(0, `rgba(79,227,206,${0.22 * k * k})`);
+  glow.addColorStop(1, "rgba(79,227,206,0)");
+  g.fillStyle = glow;
+  g.beginPath();
+  g.arc(p.x, p.y, HOLD.r, 0, 6.284);
+  g.fill();
+  g.globalCompositeOperation = "source-over";
+}
+
 /** 스크롤 압력 — 원 가이드 없이 문구와 얇은 게이지만 */
 function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.anim || e.pressure < 0.01) return;
@@ -905,6 +958,8 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 
 /** 한 프레임 */
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
+  // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
+  e.hopLink = null;
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
   drawBackground(g, e, depthOf(e));
   if (e.anim) {
@@ -928,5 +983,6 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawConstellation(g, e, currentMusicId);
   drawProbe(g, e);
   if (meOnRing) drawMe(g, e);
+  drawHold(g, e);
   drawPressure(g, e);
 }

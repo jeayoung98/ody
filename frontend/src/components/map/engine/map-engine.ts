@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, ME_FLIGHT, ME_OFFSCREEN, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -216,6 +216,13 @@ export class MapEngine {
    * probePos 로 다시 잰다 (고리가 밀리거나 드래그돼도 우주선이 별에서 떨어지지 않게)
    */
   meHop: { x: number; y: number; t0: number } | null = null;
+  /**
+   * 주변 탐색 중 선택한 이웃 라벨 밑의 "둘러보기 ›" 링크 히트 영역 (S15P21A405-288).
+   * 그리는 쪽(drawProbe)이 매 프레임 채우고, 없으면 null — 글씨가 있는 곳이 곧 누를 수 있는 곳이어야 한다
+   */
+  hopLink: { id: number; x: number; y: number; w: number; h: number } | null = null;
+  /** 별을 꾹 누르는 중 — 링이 차오른다. 다 차면 그 별 주변으로 파고든다 (S15P21A405-288) */
+  hold: { id: number; t0: number } | null = null;
   /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
   playingId: number | null = null;
   /**
@@ -1698,6 +1705,34 @@ export class MapEngine {
       `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
       targetLayer > this.layer ? 1 : -1,
     );
+  }
+
+  /** 라벨 링크 위인가 — 히트 영역은 그리는 쪽이 적어 둔 것이다 */
+  hitHopLink(mx: number, my: number): { id: number } | null {
+    const l = this.hopLink;
+    if (!l) return null;
+    return mx >= l.x && mx <= l.x + l.w && my >= l.y && my <= l.y + l.h ? { id: l.id } : null;
+  }
+
+  startHold(id: number) {
+    this.hold = { id, t0: performance.now() };
+  }
+
+  cancelHold() {
+    this.hold = null;
+  }
+
+  /** 누르기 진행도 0~1 */
+  holdK(now = performance.now()) {
+    return this.hold ? Math.min(1, (now - this.hold.t0) / HOLD.ms) : 0;
+  }
+
+  /** 곡의 화면 자리 — 오버레이(주변 탐색·별자리)에 있으면 연출 자리, 아니면 지도 자리 */
+  screenPosOf(id: number): { x: number; y: number } | null {
+    const ov = this.probePos(id) ?? this.constellationPos(id);
+    if (ov) return ov;
+    const i = this.index.get(id);
+    return i == null ? null : { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {

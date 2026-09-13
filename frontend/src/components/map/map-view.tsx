@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
-import { HOVER_CARD, STORAGE_KEYS } from "@/constants";
+import { HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -22,7 +22,6 @@ import { registerMapEngine } from "./engine/engine-registry";
 import { MapEngine } from "./engine/map-engine";
 import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
-import HopChip from "./hop-chip";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { useViewport } from "./use-viewport";
@@ -262,9 +261,48 @@ export default function MapView({ occludedRight }: MapViewProps) {
     },
     [engine],
   );
-  const onMouseDown = useCallback((e: MouseEvent<HTMLDivElement>) => {
-    drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
-  }, []);
+  /**
+   * 길게 누르기 = 그 별 주변으로 **파고들기** (S15P21A405-288). 휠 압력으로 다음 겹에 파고드는 것과 같은 은유다.
+   * 누르는 동안 별 둘레로 링이 차오르고(drawHold), 다 차면 그 별이 주변 탐색의 중심이 된다.
+   * 움직이면(드래그) 취소, 놓으면 취소 — 다 찬 뒤의 mouseup 은 클릭으로 치지 않는다 (재생돼 버리면 안 된다)
+   */
+  const holdTimer = useRef<number | null>(null);
+  const holdFired = useRef(false);
+  const cancelHold = useCallback(() => {
+    if (holdTimer.current != null) {
+      clearTimeout(holdTimer.current);
+      holdTimer.current = null;
+    }
+    engine.cancelHold();
+  }, [engine]);
+  useEffect(() => cancelHold, [cancelHold]);
+
+  const onMouseDown = useCallback(
+    (e: MouseEvent<HTMLDivElement>) => {
+      drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
+      holdFired.current = false;
+      if (engine.follow) return;
+      const map = useMapStore.getState();
+      // 기본 뷰와 주변 뷰에서만. 별자리 뷰나 여정 지정 중에는 누르기가 다른 뜻이 된다
+      if (map.viewMode === "constellation" || useJourneyStore.getState().pickTarget) return;
+      const r = e.currentTarget.getBoundingClientRect();
+      const hit = engine.hitTest(e.clientX - r.left, e.clientY - r.top);
+      if (!hit) return;
+      const id = engine.songs[hit.i].musicId;
+      // 지금 중심을 눌러도 갈 데가 없다
+      if (map.viewMode === "nearby" && id === map.nearbyCenterMusicId) return;
+      engine.startHold(id);
+      holdTimer.current = window.setTimeout(() => {
+        holdTimer.current = null;
+        engine.cancelHold();
+        holdFired.current = true;
+        drag.current = null;
+        useMapStore.getState().enterNearby(id);
+        useTutorialStore.getState().complete("nearby");
+      }, HOLD.ms);
+    },
+    [engine],
+  );
   const onMouseMove = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
@@ -274,6 +312,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
         drag.current.x = e.clientX;
         drag.current.y = e.clientY;
+        // 움직였으면 누르기가 아니라 드래그다
+        if (drag.current.moved > HOLD.moveTol) cancelHold();
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
         if (mode === "constellation") engine.overlayPan(dx, dy);
@@ -301,9 +341,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
         setHoverSong(song);
         setCardOn(true);
       } else scheduleHide();
-      setHover(!!hit || !!hitF);
+      setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my));
     },
-    [engine, cancelHide, scheduleHide],
+    [engine, cancelHide, scheduleHide, cancelHold],
   );
   /**
    * 곡을 **재생**한다 — 상세를 열면서 동시에. 호버 카드의 재생 버튼과 선택된 별 재클릭이 여기로 온다.
@@ -347,12 +387,24 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   const onMouseUp = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
+      cancelHold();
       const d = drag.current;
       drag.current = null;
+      // 길게 눌러서 이미 파고들었으면 이 mouseup 은 클릭이 아니다
+      if (holdFired.current) {
+        holdFired.current = false;
+        return;
+      }
       if (!d || d.moved > 5) return;
       const r = e.currentTarget.getBoundingClientRect();
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
+      // 선택한 이웃 라벨 밑 "둘러보기 ›" 링크 — 그 별 주변으로 건너간다 (S15P21A405-288)
+      const link = engine.hitHopLink(mx, my);
+      if (link) {
+        useMapStore.getState().enterNearby(link.id);
+        return;
+      }
       const fr = engine.hitFriend(mx, my);
       if (fr) {
         openFeed(fr.user.email);
@@ -385,13 +437,14 @@ export default function MapView({ occludedRight }: MapViewProps) {
       }
       pressSong(song);
     },
-    [engine, openFeed, openSong, pressSong, selectMusic],
+    [engine, cancelHold, openFeed, openSong, pressSong, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;
+    cancelHold();
     scheduleHide();
     setHover(false);
-  }, [scheduleHide]);
+  }, [scheduleHide, cancelHold]);
 
   /** 카드 본문 클릭 — 지도에서 별을 누른 것과 같다 */
   const handleCardOpen = useCallback(
@@ -424,7 +477,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <LayerToast />
       <FloatingReactions />
       <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onOpen={handleCardOpen} onPlay={playSong} />
-      <HopChip engine={engine} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

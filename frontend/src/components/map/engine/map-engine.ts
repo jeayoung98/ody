@@ -67,8 +67,18 @@ export interface ProbeRing {
   centerId: number;
   ids: number[];
   t0: number;
+  /** 오버레이 공간에서의 중심 자리 (목표). 밀려나는 중이면 `fx/fy` 에서 여기로 미끄러진다 */
   ax: number;
   ay: number;
+  fx: number;
+  fy: number;
+  /**
+   * 지금 고리에서 물러난 시각. 그때부터 자기 중심으로 오므라들어(prevScale) 작은 뭉치가 되고
+   * 새 중심 반대편으로 밀려난다(prevDist) — 새 고리와 겹치지 않게 (S15P21A405-285)
+   */
+  demotedAt: number | null;
+  /** 건너가기로 생긴 고리 — 이웃이 지도 자리에서 날아오지 않고 **중심에서 펼쳐져** 나온다 */
+  unfold: boolean;
   /** 밀려나 사라지기 시작한 시각 (고리 수 한도를 넘었을 때) */
   leavingAt: number | null;
 }
@@ -620,7 +630,30 @@ export class MapEngine {
       // 건너가기 — 새 중심은 **지금 그 별이 있는 자리**에서 자라난다. 그래야 누른 별이 그대로 중심이 된다.
       // 어느 고리에도 없는 곡(패널에서 고른 곡 등)이면 지금 중심 자리에서 시작한다
       const at = this.overlayPosOf(centerId) ?? (cur ? { x: cur.ax, y: cur.ay } : { x: 0, y: 0 });
-      p.rings.push({ centerId, ids, t0: now, ax: at.x, ay: at.y, leavingAt: null });
+      if (cur) {
+        // 이전 고리는 자기 중심으로 오므라들며 새 중심 반대편으로 밀려난다 — 어디서 왔는지는 남고, 겹치지는 않는다
+        const dx = cur.ax - at.x;
+        const dy = cur.ay - at.y;
+        const d = Math.hypot(dx, dy);
+        const u = d > 1e-6 ? { x: dx / d, y: dy / d } : { x: 0, y: -1 };
+        const R = this.ringR();
+        // 뭉치가 남은 화면 안에 들도록 밀어내는 거리를 줄인다 — 새 중심은 화면 가운데로 오므로
+        // 뭉치의 화면 자리는 가운데 + 이 벡터다. 패널이 열려 화면이 좁으면 그대로 두면 밖으로 나간다
+        const f = this.freeRect();
+        let vx = u.x * R * PROBE.prevDist;
+        let vy = u.y * R * PROBE.prevDist;
+        const bx = Math.max(1, (f.x1 - f.x0) / 2 - R * PROBE.prevScale - 24);
+        const by = Math.max(1, (f.y1 - f.y0) / 2 - R * PROBE.prevScale - 24);
+        const fit = Math.min(1, bx / Math.max(1e-6, Math.abs(vx)), by / Math.max(1e-6, Math.abs(vy)));
+        vx *= fit;
+        vy *= fit;
+        cur.fx = cur.ax;
+        cur.fy = cur.ay;
+        cur.ax = at.x + vx;
+        cur.ay = at.y + vy;
+        cur.demotedAt = now;
+      }
+      p.rings.push({ centerId, ids, t0: now, ax: at.x, ay: at.y, fx: at.x, fy: at.y, demotedAt: null, unfold: true, leavingAt: null });
       const alive = p.rings.filter((r) => !r.leavingAt);
       for (const r of alive.slice(0, Math.max(0, alive.length - PROBE.maxRings))) r.leavingAt = now;
       // 새 중심이 화면 가운데로 오도록 오버레이를 민다. 드래그로 밀어 둔 양은 출발점에 접어 넣는다
@@ -634,7 +667,7 @@ export class MapEngine {
     }
     const back = p?.back ?? { ...this.cam };
     this.probe = {
-      rings: [{ centerId, ids, t0: now, ax: 0, ay: 0, leavingAt: null }],
+      rings: [{ centerId, ids, t0: now, ax: 0, ay: 0, fx: 0, fy: 0, demotedAt: null, unfold: false, leavingAt: null }],
       exitingAt: null,
       back,
       offFrom: { x: 0, y: 0 },
@@ -695,28 +728,60 @@ export class MapEngine {
     return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
   }
 
-  /** 고리 중심에서 이웃까지의 상대 자리 (두 겹 고리, 유사한 곡이 안쪽) */
+  /** 고리 반지름(px) — 남은 화면의 짧은 변 기준 */
+  private ringR() {
+    const f = this.freeRect();
+    return Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
+  }
+
+  /** 물러난 고리의 진행도 0~1 (오므라들고 밀려나는 정도) */
+  private demoteK(r: ProbeRing, now = performance.now()) {
+    return r.demotedAt ? easeInOut(Math.min(1, (now - r.demotedAt) / PROBE.enterMs)) : 0;
+  }
+
+  /** 고리 크기 배수 — 지금 고리 1, 물러난 고리는 prevScale 로 */
+  ringScale(r: ProbeRing, now = performance.now()) {
+    return lerp(1, PROBE.prevScale, this.demoteK(r, now));
+  }
+
+  /** 고리 중심의 오버레이 자리 (밀려나는 중이면 그 사이) */
+  private ringAnchor(r: ProbeRing, now = performance.now()) {
+    const k = this.demoteK(r, now);
+    return { x: lerp(r.fx, r.ax, k), y: lerp(r.fy, r.ay, k) };
+  }
+
+  /** 고리 중심에서 이웃까지의 상대 자리 (두 겹 고리, 유사한 곡이 안쪽). 물러난 고리는 오므라든 크기로 */
   private ringSlot(r: ProbeRing, id: number) {
     const rank = r.ids.indexOf(id);
     if (rank < 0) return null;
-    const f = this.freeRect();
     const n = Math.max(1, r.ids.length);
-    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
+    const R = this.ringR() * this.ringScale(r);
     const ring = rank % 2 === 0 ? PROBE.innerRing : 1;
     const jitter = (((id * 2654435761) >>> 0) % 1000) / 1000 - 0.5;
     const ang = -Math.PI / 2 + (rank / n) * Math.PI * 2 + jitter * 0.25;
     return { x: Math.cos(ang) * R * ring, y: Math.sin(ang) * R * ring };
   }
 
-  /** 곡이 오버레이 공간에서 놓이는 자리와 그 고리. 여러 고리에 있으면 **가장 새 고리**를 따른다 */
+  /**
+   * 곡이 오버레이 공간에서 놓이는 자리와 그 고리.
+   * **중심이었던 곡은 자기 고리를 따른다** — 이전 중심은 대개 새 중심의 이웃이기도 해서, 새 고리를 우선하면
+   * 뭉치에서 떨어져 새 고리 안에 그려지고 뭉치는 중심 없이 남는다. 새 고리에서 그 자리로 가는 선은
+   * 그대로 두 중심을 잇는 선이 된다. 그 외 곡은 여러 고리에 있으면 **가장 새 고리**를 따른다
+   */
   private overlaySlot(id: number): { x: number; y: number; ring: ProbeRing } | null {
     const p = this.probe;
     if (!p) return null;
     for (let i = p.rings.length - 1; i >= 0; i--) {
       const r = p.rings[i];
-      if (r.centerId === id) return { x: r.ax, y: r.ay, ring: r };
+      if (r.centerId === id) return { ...this.ringAnchor(r), ring: r };
+    }
+    for (let i = p.rings.length - 1; i >= 0; i--) {
+      const r = p.rings[i];
       const sl = this.ringSlot(r, id);
-      if (sl) return { x: r.ax + sl.x, y: r.ay + sl.y, ring: r };
+      if (sl) {
+        const a = this.ringAnchor(r);
+        return { x: a.x + sl.x, y: a.y + sl.y, ring: r };
+      }
     }
     return null;
   }
@@ -753,7 +818,17 @@ export class MapEngine {
     const off = this.probeOffset();
     const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
     // 밀려나는 고리의 곡도 제자리로 돌아가지 않고 **그 자리에서 옅어진다** — 돌아가면 화면을 가로질러 튄다
-    const k = p.exitingAt ? this.probeK() : sl.ring.leavingAt ? 1 : this.ringK(sl.ring);
+    if (p.exitingAt) {
+      const k = this.probeK();
+      return { x: lerp(real.x, target.x, k), y: lerp(real.y, target.y, k) };
+    }
+    if (sl.ring.leavingAt) return target;
+    // 건너가기로 생긴 고리의 이웃은 지도 자리가 아니라 **중심에서 펼쳐져** 나온다 — 누른 별이 열리는 것으로 읽히게
+    const k = this.ringK(sl.ring);
+    if (sl.ring.unfold && sl.ring.centerId !== id) {
+      const a = this.ringAnchor(sl.ring);
+      return { x: lerp(f.cx + off.x + a.x, target.x, k), y: lerp(f.cy + off.y + a.y, target.y, k) };
+    }
     return { x: lerp(real.x, target.x, k), y: lerp(real.y, target.y, k) };
   }
 

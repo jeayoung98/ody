@@ -111,6 +111,13 @@ music_genre  id BIGINT PK · music_id BIGINT NOT NULL · genre_id BIGINT NOT NUL
 `album_mbid` 는 커버 아트 키다. BE 가 조회 시 `https://coverartarchive.org/release/{album_mbid}/front-250` 을 만든다(릴리스 60개 실호출 98.3% 응답 → 곡 기준 약 68%). 이미지는 저장하지 않는다.
 BE 가 `music.album_mbid VARCHAR(36)` 을 2026-09-13 추가했다. COPY 컬럼 목록(`load_postgres.sh`)이 이 컬럼을 포함한다.
 
+### 운영 DB 재적재 실측 (2026-09-13)
+- **TRUNCATE 불가** — BE 의 `playlist_item` 이 `music` 을 FK 로 참조한다. `load_postgres.sh` 의 `ODY_ALLOW_RELOAD=1` 경로는 **UPDATE 조인**이다: CSV 를 임시 테이블에 COPY(62초) → HNSW·GiST 드롭 → `UPDATE music … FROM music_stage WHERE id = id AND mbid = mbid` → GiST 재생성 → `VACUUM ANALYZE`. 기존 행·카운터·플레이리스트 무손상.
+- 5단계 결과: `album_filled` **6,580,215** · `release_year_filled` **6,384,141** · `album_mbid_filled` **4,567,869** · `bpm_null` **0** · `youtube_url` 0. Pink Floyd 'Time' → `The Dark Side of the Moon` / 1973 / `d6e9d69f-…`. CSV 리포트와 한 자리도 다르지 않다.
+- 재적재 전 확인: `play_cnt`/`youtube_cnt` 사용 0, BE 추가 곡 0, genre 29, links 71,285 — BE 가 쓴 데이터 없음.
+- `music_l2_gist` 가 서버에 없었다(09-11 이후 사라짐). 이번에 다시 만들어졌다. BE 가 만든 `idx_music_vec_1_to_4`·`idx_music_pc1_4` 가 따로 있다 — 정의 확인 필요.
+- 컨테이너 `/tmp/hnsw.sql` 이 이전 실행의 다른 소유자 파일로 남아 `Permission denied`. 스크립트는 이제 실행마다 새 파일명을 쓴다.
+
 ### 자원은 재시작 없이 올렸다
 ```bash
 docker update --memory 4g --memory-swap 4g --cpus 2 ody-postgres   # cgroup v2, 다운타임 0

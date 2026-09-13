@@ -640,6 +640,10 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
       g.arc(c.x, c.y, 12, 0, 6.284);
       g.stroke();
     }
+    // 제목은 늘 옅게 붙여 둔다 — 어디서 건너왔는지 이름으로 읽히고, 누를 수 있는 자리라는 힌트가 된다.
+    // 선택되면 아래에서 또렷한 라벨을 위에 덧그린다
+    if (e.selectedId !== c.id) drawLabel(c.x, c.y, s, "이전 중심", c.a * 1.6, false);
+    g.globalCompositeOperation = "lighter";
   }
 
   // 기준 곡 강조 + 라벨

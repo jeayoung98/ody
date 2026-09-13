@@ -21,6 +21,14 @@ interface SurveyState {
    */
   listenedMs: Record<number, number>;
   /**
+   * **지금 듣고 있는 곡과 그 곡이 현재 곡이 된 시각.**
+   *
+   * 장부(`listenedMs`)는 곡을 떠날 때 마감된다. 그래서 **아직 듣고 있는 곡은 장부에 없다** —
+   * 설문 카드는 그 곡이 재생 중일 때 뜨므로, 장부만 읽으면 늘 0 이 나간다.
+   * 실제로 그랬다: 답한 행의 `listened_sec` 이 전부 0 이었다.
+   */
+  since: { musicId: number; at: number } | null;
+  /**
    * 이미 전송한 행. `${sessionId}:${rank}` 를 키로 쓴다 — 서버의 `UNIQUE(session_id, rank)` 와
    * 같은 기준이다. 무응답 행을 보낸 뒤 같은 곡을 또 묻거나 보내는 낭비를 막는다.
    */
@@ -28,7 +36,10 @@ interface SurveyState {
 
   open: (prompt: SurveyPrompt) => void;
   close: () => void;
+  beginListening: (musicId: number, at: number) => void;
   noteListened: (musicId: number, ms: number) => void;
+  /** 그 곡을 지금까지 들은 시간(ms) — 마감된 장부 + 아직 안 끝난 이번 체류 */
+  elapsedMs: (musicId: number) => number;
   markSent: (target: SurveyTarget) => void;
   hasSent: (target: SurveyTarget) => boolean;
 }
@@ -39,6 +50,7 @@ const keyOf = (t: SurveyTarget) => `${t.sessionId}:${t.rank}`;
 export const useSurveyStore = create<SurveyState>()((set, get) => ({
   prompt: null,
   listenedMs: {},
+  since: null,
   sent: new Set(),
 
   open: (prompt) => {
@@ -51,8 +63,21 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
 
   close: () => set({ prompt: null }),
 
+  beginListening: (musicId, at) => set({ since: { musicId, at } }),
+
   noteListened: (musicId, ms) =>
-    set((s) => ({ listenedMs: { ...s.listenedMs, [musicId]: (s.listenedMs[musicId] ?? 0) + ms } })),
+    set((s) => ({
+      listenedMs: { ...s.listenedMs, [musicId]: (s.listenedMs[musicId] ?? 0) + ms },
+      // 마감했으니 이번 체류는 끝났다. 안 지우면 뒤에 한 번 더 더해진다
+      since: s.since?.musicId === musicId ? null : s.since,
+    })),
+
+  elapsedMs: (musicId) => {
+    const s = get();
+    const closed = s.listenedMs[musicId] ?? 0;
+    const open = s.since?.musicId === musicId ? Date.now() - s.since.at : 0;
+    return closed + open;
+  },
 
   markSent: (target) => set((s) => ({ sent: new Set(s.sent).add(keyOf(target)) })),
 

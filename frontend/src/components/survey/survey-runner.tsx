@@ -41,7 +41,9 @@ export default function SurveyRunner() {
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
 
+  const beginListening = useSurveyStore((s) => s.beginListening);
   const noteListened = useSurveyStore((s) => s.noteListened);
+  const elapsedMs = useSurveyStore((s) => s.elapsedMs);
   const markSent = useSurveyStore((s) => s.markSent);
   const hasSent = useSurveyStore((s) => s.hasSent);
 
@@ -93,10 +95,12 @@ export default function SurveyRunner() {
     if (currentMusicId == null) return;
     const from = Date.now();
     const left = prompt?.target ?? null;
+    // 카드가 재생 도중에 뜬다 — 그때 "지금까지 몇 초"를 알려면 시작 시각이 스토어에 있어야 한다
+    beginListening(currentMusicId, from);
 
     const settle = (skipped: boolean) => {
-      const listenedMs = Date.now() - from;
-      noteListened(currentMusicId, listenedMs);
+      const listenedMs = elapsedMs(currentMusicId); // 마감 전에 읽는다 — 이번 체류가 포함돼야 한다
+      noteListened(currentMusicId, Date.now() - from);
       if (!left || hasSent(left)) return;
       // 20초를 넘겼으면 설문이 떠 있다 — 그건 카드가 제출로 처리한다
       if (!SURVEY_FORCED && listenedMs >= SURVEY_MIN_LISTEN_MS) return;

@@ -1,5 +1,6 @@
 import { NO_GENRE_ID } from "@/constants";
-import { GENRE_COLORS, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
+import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
+import { starColorIdx } from "./star-look";
 import type { MapPoint, NearbyUser } from "@/types";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
@@ -124,8 +125,9 @@ function puffBases(): HTMLCanvasElement[] {
   return puffBase;
 }
 
-export function puffFor(k: number, genreId: number): HTMLCanvasElement {
-  const key = `${k}:${genreIdx(genreId)}`;
+/** 성운 조각. `colorIdx` 는 GENRE_COLORS 인덱스 — 별과 같은 색이어야 하므로 star-look 이 정한 값을 받는다 */
+export function puffFor(k: number, colorIdx: number): HTMLCanvasElement {
+  const key = `${k}:${colorIdx}`;
   let c = puffTint.get(key);
   if (c) return c;
   c = document.createElement("canvas");
@@ -133,7 +135,7 @@ export function puffFor(k: number, genreId: number): HTMLCanvasElement {
   const g = c.getContext("2d")!;
   g.drawImage(puffBases()[k], 0, 0);
   g.globalCompositeOperation = "source-in";
-  g.fillStyle = rgba(genreRgb(genreId), 1);
+  g.fillStyle = rgba(GENRE_COLORS[colorIdx], 1);
   g.fillRect(0, 0, PUFF_N, PUFF_N);
   puffTint.set(key, c);
   return c;
@@ -201,8 +203,10 @@ export function coverFor(s: MapPoint): HTMLCanvasElement {
   c.width = c.height = N;
   const g = c.getContext("2d")!;
   const r = mulberry32(((s.musicId + 1) * 2246822519) >>> 0);
-  const A = genreRgb(s.genreId);
-  const B = genreRgb(s.genreId + (r() < 0.5 ? 2 : 6));
+  // 커버 색은 별 색에서 나온다 — 지도의 별과 호버 카드 커버가 어긋나면 다른 곡처럼 보인다
+  const ci = starColorIdx(s);
+  const A = GENRE_COLORS[ci];
+  const B = GENRE_COLORS[(ci + (r() < 0.5 ? 2 : 6)) % GENRE_COLORS.length];
   const gr = g.createLinearGradient(0, 0, N * (0.3 + r()), N);
   gr.addColorStop(0, rgba(A, 1));
   gr.addColorStop(1, rgba(B, 1));

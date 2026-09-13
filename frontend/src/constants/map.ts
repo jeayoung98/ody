@@ -210,8 +210,16 @@ export const OVERLAY_ZOOM = { min: 0.6, max: 4 } as const;
 /** 휠 확대 계수 (배율 = exp(-deltaY × 이 값)) */
 export const WHEEL_ZOOM = 0.0015;
 
-/** 별 스프라이트 지름 범위(px) */
-export const STAR_SIZE = { min: 6.5, max: 31 } as const;
+/** 별 스프라이트 지름 범위(px). 실데이터 weight 가 0 이라 전부 min 에 몰려 있던 것을 키웠다 (S15P21A405-283) */
+export const STAR_SIZE = { min: 9, max: 40 } as const;
+
+/**
+ * 별 크기·색을 **임시로 musicId 해시**로 정한다 (S15P21A405-283).
+ * 실데이터에서 weight(재생수)가 전부 0 이고 genreId 도 곡 구별이 없어서, 실값으로 그리면 모든 별이
+ * 같은 최소 크기·같은 색이 된다. 조회수·장르 매핑이 오면 해당 스위치를 false 로 내리면 원래 계산으로 돌아간다.
+ * Math.random 이 아니라 해시인 이유: 프레임·새로고침마다 바뀌면 안 되고 히트테스트와 어긋나면 안 된다.
+ */
+export const STAR_LOOK = { randomSize: true, randomColor: true } as const;
 
 /** 대표곡 선별: 화면 격자 간격(px). 한 칸에 재생수 1위만 대표곡이 된다 */
 export const REPRESENTATIVE_GRID_PX = 86;

@@ -38,19 +38,46 @@ run_sql() { docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$P
 echo "== 0. 적재 전 상태"
 run_sql "SELECT 'music' AS t, count(*) FROM music UNION ALL SELECT 'genre', count(*) FROM genre UNION ALL SELECT 'music_genre', count(*) FROM music_genre;"
 
-# 재적재(D17) 안전장치 — 이 스크립트는 빈 테이블에 COPY 한다. 행이 있으면 중복 적재가 되므로 멈춘다.
-# 다시 채우려면 사람이 ODY_ALLOW_RELOAD=1 을 주고 실행한다. 그때만 세 테이블을 TRUNCATE 한다(id 는 mbid 순이라 재적재해도 같다, D13).
-# map_sample 은 music_id 만 참조하고 id 가 불변이라 그대로 둔다. GiST 두 개는 COPY 중 유지된다(느려지지만 21초짜리라 내리지 않는다).
+# 재적재(D17) — 이 스크립트의 본 경로는 빈 테이블에 COPY 한다. 행이 있으면 중복 적재가 되므로 멈춘다.
+# 다시 채우려면 사람이 ODY_ALLOW_RELOAD=1 을 주고 실행한다. 그때는 TRUNCATE 가 아니라 **UPDATE 조인**이다:
+#   - BE 의 playlist_item 이 music 을 FK 로 참조해서 TRUNCATE 가 막힌다(2026-09-13 실측). CASCADE 는 플레이리스트를 지운다.
+#   - CSV 를 임시 테이블에 COPY 하고 id 로 조인해 album·release_year·album_mbid·bpm 네 컬럼만 덧씌운다.
+#     기존 행·play_cnt·youtube_cnt·BE 가 추가한 곡·genre·music_genre 는 그대로다. id 는 mbid 순이라 CSV 와 DB 가 같다(D13).
+#   - UPDATE 중 인덱스 유지 비용을 피하려고 HNSW·GiST 를 내리고 GiST 는 바로 다시 만든다(각 21초). HNSW 는 7단계에서.
+#   - location 은 바꾸지 않는다. map_sample 도 그대로다.
 EXISTING=$(docker exec -i "$CONTAINER" bash -lc 'psql -tA -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT count(*) FROM music;"' | tr -d '[:space:]')
+RELOAD=0
 if [ "${EXISTING:-0}" != "0" ]; then
   if [ "${ODY_ALLOW_RELOAD:-0}" != "1" ]; then
     echo "!! music 에 ${EXISTING} 행이 있다. 재적재면 ODY_ALLOW_RELOAD=1 bash load_postgres.sh <dir> 로 다시 실행한다. 중단." >&2
     exit 1
   fi
-  echo "== 0b. 재적재 — music·music_genre·genre TRUNCATE (ODY_ALLOW_RELOAD=1)"
-  run_sql "TRUNCATE music, music_genre, genre;"
+  RELOAD=1
+  echo "== 0b. 재적재 모드 — music ${EXISTING}행에 UPDATE 조인 (album·release_year·album_mbid·bpm). genre·music_genre 는 건드리지 않는다"
+  docker cp "$CSV_DIR/music.csv" "$CONTAINER:/tmp/music.csv"
+  docker exec -i "$CONTAINER" bash -lc "cat > /tmp/reload.sql" <<'SQL'
+\timing on
+SET maintenance_work_mem = '2GB';
+SET max_parallel_maintenance_workers = 0;
+CREATE TEMP TABLE music_stage (LIKE music INCLUDING DEFAULTS);
+COPY music_stage (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid)
+  FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true, FORCE_NOT_NULL (title));
+SELECT count(*) AS stage_rows FROM music_stage;
+DROP INDEX IF EXISTS music_location_hnsw_idx;
+DROP INDEX IF EXISTS music_l1_gist;
+DROP INDEX IF EXISTS music_l2_gist;
+UPDATE music m
+   SET album = s.album, release_year = s.release_year, album_mbid = s.album_mbid, bpm = s.bpm
+  FROM music_stage s
+ WHERE m.id = s.id AND m.mbid = s.mbid;
+CREATE INDEX music_l1_gist ON music USING gist (point((location::real[])[1], (location::real[])[2]));
+CREATE INDEX music_l2_gist ON music USING gist (point((location::real[])[3], (location::real[])[4]));
+VACUUM ANALYZE music;
+SQL
+  docker exec -i "$CONTAINER" bash -lc 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/reload.sql'
 fi
 
+if [ "$RELOAD" = "0" ]; then
 echo "== 1. CSV 를 컨테이너로"
 for f in music.csv genre.csv music_genre.csv; do
   docker cp "$CSV_DIR/$f" "$CONTAINER:/tmp/$f"
@@ -78,6 +105,8 @@ run_sql "DO \\\$\\\$ DECLARE m bigint; g bigint; l bigint; BEGIN
   IF g <> $EXPECT_GENRE THEN RAISE EXCEPTION 'genre % != %', g, $EXPECT_GENRE; END IF;
   IF l <> $EXPECT_LINKS THEN RAISE EXCEPTION 'music_genre % != %', l, $EXPECT_LINKS; END IF;
 END \\\$\\\$;"
+
+fi   # RELOAD=0 (빈 테이블 COPY 경로) 끝. 아래 검증은 두 경로 공통.
 
 echo "== 5. 채워진 컬럼 (스펙 18 AC4, D17) — 기대 album ≈ 6,580,000 · release_year ≈ 6,384,000 · album_mbid ≈ 4,568,000 · bpm NULL 0 · youtube_url 0"
 run_sql "SELECT count(*) FILTER (WHERE album IS NOT NULL AND album <> '') AS album_filled,

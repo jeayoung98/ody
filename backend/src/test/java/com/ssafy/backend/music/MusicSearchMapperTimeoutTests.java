@@ -38,14 +38,8 @@ class MusicSearchMapperTimeoutTests {
 
 	@Test
 	void findPage_hasQueryTimeout() {
-		// 관련성 5단계 질의. 색인이 없거나 색인 표현식과 어긋나면 단계마다 660만 행을 훑는다.
+		// 관련성 4단계 질의. 색인이 없거나 색인 표현식과 어긋나면 단계마다 660만 행을 훑는다.
 		assertEquals(TIMEOUT_SECONDS, configuration.getMappedStatement(NS + ".findPage").getTimeout());
-	}
-
-	@Test
-	void existsMatch_hasQueryTimeout() {
-		// 부분일치(%q%)라 색인으로 줄지 않는다. 0건 검색어에서 단독으로 9.5초를 쓴다(배포 실측).
-		assertEquals(TIMEOUT_SECONDS, configuration.getMappedStatement(NS + ".existsMatch").getTimeout());
 	}
 
 	@Test

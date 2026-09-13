@@ -62,6 +62,17 @@ interface Morph {
   mode: "dive" | "fade";
 }
 
+/** 주변 탐색의 고리 하나 — 중심 곡과 그 이웃. `ax/ay` 는 오버레이 공간에서의 중심 자리 */
+export interface ProbeRing {
+  centerId: number;
+  ids: number[];
+  t0: number;
+  ax: number;
+  ay: number;
+  /** 밀려나 사라지기 시작한 시각 (고리 수 한도를 넘었을 때) */
+  leavingAt: number | null;
+}
+
 /** 화면에 잡힌 친구 (그리기·히트테스트용) */
 export interface VisibleFriend {
   user: NearbyUser;
@@ -218,7 +229,20 @@ export class MapEngine {
   hoverId: number | null = null;
   nearby: { centerId: number; ids: number[] } | null = null;
   /** 주변 탐색 연출 상태. back = 진입 전 카메라 */
-  probe: { centerId: number; ids: number[]; t0: number; exitingAt: number | null; back: MapCamera } | null = null;
+  /**
+   * 주변 탐색 뷰 (MAP-10). 고리(중심 + 이웃 10곡)를 최대 `PROBE.maxRings` 개 이어 붙인다 (S15P21A405-285).
+   * 고리 자리는 **오버레이 공간**(첫 고리 중심 = 원점)에 두고, `off` + `pan` 으로 화면에 옮긴다 —
+   * 새 중심이 화면 가운데로 오도록 `off` 가 움직이고, 드래그는 `pan` 에 쌓인다
+   */
+  probe: {
+    rings: ProbeRing[];
+    exitingAt: number | null;
+    back: MapCamera;
+    offFrom: { x: number; y: number };
+    offTo: { x: number; y: number };
+    offT0: number;
+    pan: { x: number; y: number };
+  } | null = null;
   /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
   route: number[] = [];
   /** 별자리 뷰 안에서의 이동·확대. 지도 카메라와 별개다 (오버레이는 화면 좌표 배치) */
@@ -585,13 +609,39 @@ export class MapEngine {
     const centerId = center.musicId;
     const ids = neighbors.map((n) => n.musicId);
     const now = performance.now();
-    if (this.probe && this.probe.centerId === centerId && !this.probe.exitingAt) {
-      this.probe.ids = ids;
+    const p = this.probe;
+    if (p && !p.exitingAt) {
+      const cur = this.currentRing();
+      if (cur && cur.centerId === centerId) {
+        cur.ids = ids;
+        this.nearby = { centerId, ids };
+        return;
+      }
+      // 건너가기 — 새 중심은 **지금 그 별이 있는 자리**에서 자라난다. 그래야 누른 별이 그대로 중심이 된다.
+      // 어느 고리에도 없는 곡(패널에서 고른 곡 등)이면 지금 중심 자리에서 시작한다
+      const at = this.overlayPosOf(centerId) ?? (cur ? { x: cur.ax, y: cur.ay } : { x: 0, y: 0 });
+      p.rings.push({ centerId, ids, t0: now, ax: at.x, ay: at.y, leavingAt: null });
+      const alive = p.rings.filter((r) => !r.leavingAt);
+      for (const r of alive.slice(0, Math.max(0, alive.length - PROBE.maxRings))) r.leavingAt = now;
+      // 새 중심이 화면 가운데로 오도록 오버레이를 민다. 드래그로 밀어 둔 양은 출발점에 접어 넣는다
+      p.offFrom = this.probeOffset(now);
+      p.pan = { x: 0, y: 0 };
+      p.offTo = { x: -at.x, y: -at.y };
+      p.offT0 = now;
       this.nearby = { centerId, ids };
+      this.selectedId = centerId;
       return;
     }
-    const back = this.probe?.back ?? { ...this.cam };
-    this.probe = { centerId, ids, t0: now, exitingAt: null, back };
+    const back = p?.back ?? { ...this.cam };
+    this.probe = {
+      rings: [{ centerId, ids, t0: now, ax: 0, ay: 0, leavingAt: null }],
+      exitingAt: null,
+      back,
+      offFrom: { x: 0, y: 0 },
+      offTo: { x: 0, y: 0 },
+      offT0: now,
+      pan: { x: 0, y: 0 },
+    };
     this.nearby = { centerId, ids };
     this.selectedId = centerId;
     this.focus(centerId, PROBE.zoomMul);
@@ -620,42 +670,103 @@ export class MapEngine {
     if (!this.follow) this.camTarget = { ...this.probe.back };
   }
 
-  /** 프로브 진행도 0~1 (진입 중 오르고, 해제 중 내려간다) */
+  /** 지금 고리 (밀려나는 중이 아닌 마지막 고리) */
+  currentRing(): ProbeRing | null {
+    const p = this.probe;
+    if (!p) return null;
+    for (let i = p.rings.length - 1; i >= 0; i--) if (!p.rings[i].leavingAt) return p.rings[i];
+    return null;
+  }
+
+  /** 주변 탐색 중 드래그 — 오버레이 전체를 민다. 고리 하나 반지름 안에서만 (다 밀어내면 빈 화면이 된다) */
+  probePan(dx: number, dy: number) {
+    const p = this.probe;
+    if (!p || p.exitingAt) return;
+    const f = this.freeRect();
+    const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
+    p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx));
+    p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy));
+  }
+
+  /** 오버레이 공간 → 화면 중심 기준 이동량. 새 중심으로 미끄러지는 중이면 그 사이 값 */
+  private probeOffset(now = performance.now()) {
+    const p = this.probe!;
+    const k = easeInOut(Math.min(1, (now - p.offT0) / PROBE.enterMs));
+    return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
+  }
+
+  /** 고리 중심에서 이웃까지의 상대 자리 (두 겹 고리, 유사한 곡이 안쪽) */
+  private ringSlot(r: ProbeRing, id: number) {
+    const rank = r.ids.indexOf(id);
+    if (rank < 0) return null;
+    const f = this.freeRect();
+    const n = Math.max(1, r.ids.length);
+    const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
+    const ring = rank % 2 === 0 ? PROBE.innerRing : 1;
+    const jitter = (((id * 2654435761) >>> 0) % 1000) / 1000 - 0.5;
+    const ang = -Math.PI / 2 + (rank / n) * Math.PI * 2 + jitter * 0.25;
+    return { x: Math.cos(ang) * R * ring, y: Math.sin(ang) * R * ring };
+  }
+
+  /** 곡이 오버레이 공간에서 놓이는 자리와 그 고리. 여러 고리에 있으면 **가장 새 고리**를 따른다 */
+  private overlaySlot(id: number): { x: number; y: number; ring: ProbeRing } | null {
+    const p = this.probe;
+    if (!p) return null;
+    for (let i = p.rings.length - 1; i >= 0; i--) {
+      const r = p.rings[i];
+      if (r.centerId === id) return { x: r.ax, y: r.ay, ring: r };
+      const sl = this.ringSlot(r, id);
+      if (sl) return { x: r.ax + sl.x, y: r.ay + sl.y, ring: r };
+    }
+    return null;
+  }
+
+  private overlayPosOf(id: number) {
+    const sl = this.overlaySlot(id);
+    return sl ? { x: sl.x, y: sl.y } : null;
+  }
+
+  /** 프로브 전체 진행도 0~1 (진입 중 오르고, 해제 중 내려간다) */
   probeK(now = performance.now()) {
     const p = this.probe;
     if (!p) return 0;
     if (p.exitingAt) return 1 - easeInOut(Math.min(1, (now - p.exitingAt) / PROBE.exitMs));
-    return easeInOut(Math.min(1, (now - p.t0) / PROBE.enterMs));
+    return easeInOut(Math.min(1, (now - p.rings[0].t0) / PROBE.enterMs));
   }
 
-  /** 프로브 곡의 화면 위치 — 실제 위치와 연출 배치 위치를 진행도로 보간 */
+  /** 고리 하나의 진행도 — 생길 때 오르고, 밀려날 때 내려간다 */
+  ringK(r: ProbeRing, now = performance.now()) {
+    if (r.leavingAt) return 1 - easeInOut(Math.min(1, (now - r.leavingAt) / PROBE.exitMs));
+    return easeInOut(Math.min(1, (now - r.t0) / PROBE.enterMs));
+  }
+
+  /** 프로브 곡의 화면 위치 — 실제 위치와 연출 배치 위치를 그 고리의 진행도로 보간 */
   probePos(id: number): { x: number; y: number } | null {
     const p = this.probe;
     if (!p) return null;
     const i = this.index.get(id);
     if (i == null) return null;
     const real = { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
+    const sl = this.overlaySlot(id);
+    if (!sl) return real;
     const f = this.freeRect();
-    let target: { x: number; y: number };
-    if (id === p.centerId) target = { x: f.cx, y: f.cy };
-    else {
-      const rank = p.ids.indexOf(id);
-      if (rank < 0) return real;
-      const n = Math.max(1, p.ids.length);
-      const R = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
-      // 바깥·안쪽 고리를 번갈아 — 유사한 곡(앞 순위)이 안쪽
-      const ring = rank % 2 === 0 ? PROBE.innerRing : 1;
-      const jitter = (((id * 2654435761) >>> 0) % 1000) / 1000 - 0.5;
-      const ang = -Math.PI / 2 + (rank / n) * Math.PI * 2 + jitter * 0.25;
-      target = { x: f.cx + Math.cos(ang) * R * ring, y: f.cy + Math.sin(ang) * R * ring };
-    }
-    const k = this.probeK();
+    const off = this.probeOffset();
+    const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
+    // 밀려나는 고리의 곡도 제자리로 돌아가지 않고 **그 자리에서 옅어진다** — 돌아가면 화면을 가로질러 튄다
+    const k = p.exitingAt ? this.probeK() : sl.ring.leavingAt ? 1 : this.ringK(sl.ring);
     return { x: lerp(real.x, target.x, k), y: lerp(real.y, target.y, k) };
   }
 
-  probeIdSet(): Set<number> | null {
+  /** 프로브에 걸린 곡 전부. `clickable` 이면 밀려나는 고리는 뺀다 */
+  probeIdSet(clickable = false): Set<number> | null {
     if (!this.probe) return null;
-    return new Set([this.probe.centerId, ...this.probe.ids]);
+    const out = new Set<number>();
+    for (const r of this.probe.rings) {
+      if (clickable && r.leavingAt) continue;
+      out.add(r.centerId);
+      for (const id of r.ids) out.add(id);
+    }
+    return out;
   }
 
   // ------------------------------------------------------------------ 별자리 오버레이 뷰 (PATH-01)
@@ -771,7 +882,7 @@ export class MapEngine {
    */
   clickableOverlayIds(): Set<number> | null {
     if (this.constellationActive()) return this.constellationIdSet();
-    if (this.probe && !this.probe.exitingAt) return this.probeIdSet();
+    if (this.probe && !this.probe.exitingAt) return this.probeIdSet(true);
     return null;
   }
 
@@ -2011,6 +2122,8 @@ export class MapEngine {
     // 오버레이 해제 애니메이션이 끝나면 정리. **둘 다 지운다** — 별자리를 안 지우면 닫힌 뒤에도
     // 그 곡 집합이 남아서 클릭 게이트가 계속 걸리고, 지도의 별이 영영 안 눌린다 (S15P21A405-270)
     if (this.probe?.exitingAt && now - this.probe.exitingAt > PROBE.exitMs) this.probe = null;
+    // 밀려난 고리는 다 옅어진 뒤 뗀다
+    if (this.probe) this.probe.rings = this.probe.rings.filter((r) => !r.leavingAt || now - r.leavingAt <= PROBE.exitMs);
     if (this.constellation?.exitingAt && now - this.constellation.exitingAt > CONSTELLATION.exitMs) this.constellation = null;
     const probing = !!this.probe && !this.probe.exitingAt;
     const coverTarget = !this.anim && !probing && this.repLayer === this.layer ? 1 : 0;
@@ -2165,10 +2278,7 @@ export class MapEngine {
     const extra = new Set<number>();
     if (this.selectedId != null) extra.add(this.selectedId);
     if (this.constellation) for (const id of this.constellation.ids) extra.add(id);
-    if (this.probe) {
-      extra.add(this.probe.centerId);
-      for (const id of this.probe.ids) extra.add(id);
-    }
+    if (this.probe) for (const id of this.probeIdSet(true)!) extra.add(id);
     for (const id of extra) {
       const i = this.index.get(id);
       if (i == null) continue;

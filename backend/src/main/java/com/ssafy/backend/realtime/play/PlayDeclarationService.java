@@ -13,6 +13,7 @@ import com.ssafy.backend.realtime.common.RealtimeEventBus;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper.Placement;
 import com.ssafy.backend.realtime.mapper.PlayHistoryMapper;
+import com.ssafy.backend.realtime.meeting.MeetingService;
 import com.ssafy.backend.realtime.play.dto.PlayHistoryRow;
 import com.ssafy.backend.realtime.play.dto.PlayResponse;
 import com.ssafy.backend.realtime.port.MusicLocationPort;
@@ -42,6 +43,7 @@ public class PlayDeclarationService {
 	private final CoordinateMapper coordinateMapper;
 	private final RealtimeEventBus eventBus;
 	private final PlayHistoryMapper playHistoryMapper;
+	private final MeetingService meetingService;
 
 	/**
 	 * 재생 선언. 현재 레이어에서 musicId 의 서버 좌표를 계산해 위치를 이동시킨다.
@@ -106,7 +108,9 @@ public class PlayDeclarationService {
 		history.setPlayedMs(0L);
 		playHistoryMapper.insert(history);
 
-		// TODO(④): 위에서 받은 마주침 후보들로 '마주친 횟수'를 기록한다(3분 안에 또 만나면 안 세는 쿨다운).
+		// 7) 마주침 기록 — 위 후보들과의 만남을 뒤에서(비동기) 세어 준다(3분 쿨다운, 응답 안 막음).
+		meetingService.recordMeetings(email, meeting);
+
 		return new PlayResponse(history.getId(), musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 	}
 

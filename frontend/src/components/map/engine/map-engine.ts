@@ -1703,7 +1703,11 @@ export class MapEngine {
   hitTest(mx: number, my: number): VisibleStar | null {
     let best: VisibleStar | null = null;
     let bd = 1e9;
+    // 오버레이(별자리·주변 탐색)가 떠 있으면 그 안의 곡만 잡힌다 — 어둡게 덮인 뒷별이 호버·클릭에
+    // 걸리면 카드가 엉뚱한 곡으로 뜬다 (S15P21A405-288). 클릭 게이트와 같은 집합을 쓴다
+    const gate = this.clickableOverlayIds();
     for (const v of this.visible) {
+      if (gate && !gate.has(this.songs[v.i].musicId)) continue;
       const d = (v.px - mx) ** 2 + (v.py - my) ** 2;
       if (d < v.r * v.r && d < bd) {
         bd = d;

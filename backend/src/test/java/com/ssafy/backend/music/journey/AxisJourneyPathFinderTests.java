@@ -42,7 +42,7 @@ class AxisJourneyPathFinderTests {
 
 	private static MusicDetail song(long id, String title, String artist, double x, double y) {
 		return new MusicDetail(id, "m" + id, title, artist, 120.0, 200, "album",
-				List.of("K-Pop"), "https://youtu.be/" + id, loc(x, y), 1, 0);
+				List.of("K-Pop"), "https://youtu.be/" + id, null, loc(x, y), 1, 0);
 	}
 
 	private static TrackCandidate cand(long id, String title, String artist, double x, double y) {

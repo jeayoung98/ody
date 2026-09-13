@@ -63,7 +63,7 @@ class JourneyControllerTests {
 
 	private static MusicDetail song(long id, String mbid, String youtubeUrl, int duration) {
 		return new MusicDetail(id, mbid, "Love wins all", "IU", 128.4, duration, "The Winning",
-				List.of("K-Pop"), youtubeUrl, loc(), 1428, 3);
+				List.of("K-Pop"), youtubeUrl, null, loc(), 1428, 3);
 	}
 
 	/** 정거장 n개 + 양 끝 = n+2 곡 경로. */

@@ -76,7 +76,7 @@ class PlaylistServiceTests {
 	private static MusicDetail music(long id, int duration) {
 		Location loc = new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", List.of("K-Pop"),
-				"https://youtu.be/x", loc, 10, 1);
+				"https://youtu.be/x", null, loc, 10, 1);
 	}
 
 	// ---- search (§4.1) ----

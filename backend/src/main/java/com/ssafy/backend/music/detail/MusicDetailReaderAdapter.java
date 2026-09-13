@@ -1,5 +1,6 @@
 package com.ssafy.backend.music.detail;
 
+import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -49,6 +50,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				row.getAlbum(),
 				genres,
 				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+				VIDEO_ID_NOT_LOADED,
 				row.toLocation(),
 				row.getPlayCnt(),
 				row.getYoutubeCnt()));
@@ -69,6 +71,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+						VIDEO_ID_NOT_LOADED,
 						row.toLocation()))
 				.toList();
 	}

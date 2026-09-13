@@ -65,7 +65,7 @@ class NearbyControllerTests {
 				new NearbyCenter(1000000L, "Manifesto", "CCCP", loc()),
 				List.of(new NeighborTrack(
 						new MusicSummary(1024529L, "The Last Dj", "Tom Petty", null, List.of(),
-								"https://y/x", loc()),
+								"https://y/x", null, loc()),
 						2.4643)),
 				false);
 	}

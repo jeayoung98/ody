@@ -1,5 +1,6 @@
 package com.ssafy.backend.music.search;
 
+import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -70,6 +71,7 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+						VIDEO_ID_NOT_LOADED,
 						row.toLocation()))
 				.toList(), hasNext);
 	}

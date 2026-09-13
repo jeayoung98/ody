@@ -107,13 +107,19 @@
 
 ### 0.6 공통 DTO
 
-**MusicSummary** (검색 결과 / 주변곡 / 경로 노드): `id`(int), `title`(string), `artist`(string), `album`(string\|null), `genres`(list\|string\|null), `youtubeUrl`(string\|null, null이면 재생 불가), `location`(Location).
+**MusicSummary** (검색 결과 / 주변곡 / 경로 노드): `id`(int), `title`(string), `artist`(string), `album`(string\|null), `genres`(list\|string\|null), `youtubeUrl`(string\|null, null이면 재생 불가), `videoId`(string(11)\|null), `location`(Location).
 
 **Location**: `pc1`~`pc16` (각 float).
 
 **MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `playCnt`(int), `youtubeCnt`(int).
 
-**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `playable`(boolean, `youtubeUrl != null`).
+**`videoId` 규약** (2026-09-13, S15P21A405-57 · spec 006): 유튜브 영상 식별자 11자다. `youtubeUrl` 이 **검색** URL 이라 그 곡이라는 보장이 없는 반면, `videoId` 는 **확인된 영상**이다 — 곡 길이 ±3초(공식 채널 `- Topic`·VEVO 는 ±30초) 일치와 `embeddable` 을 확인한 것만 담는다. 조건을 못 넘기면 담지 않는다.
+- **키는 항상 있고 값이 `null` 일 수 있다.** 키 자체가 빠지지 않는다 (`"videoId":null`)
+- **가산 필드다.** `youtubeUrl`·`playable` 의 의미는 바뀌지 않는다. 클라이언트는 `videoId` 유무로 재생 **방식**을, `playable` 로 재생 **가능 여부**를 판단한다
+- `videoId` 가 없으면 기존대로 `youtubeUrl` 로 폴백한다
+- **적재 전까지 전 곡 `null` 이다.** 저장소·적재 배치는 미정이며, 매핑률 실측은 66%다(S15P21A405-40 코멘트)
+
+**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `videoId`(string(11)\|null, 확인된 영상 — 위 `videoId` 규약 참고), `playable`(boolean, `youtubeUrl != null`).
 좌표를 `Location` 객체가 아니라 배열로 싣는 유일한 DTO다 — 클라이언트가 레이어 축 `pc(2n-1)`·`pc(2n)` 으로 재투영하기 때문.
 
 **PlaylistTrack**: `id`(int, 곡 ID), `title`, `artist`, `duration`(int, 초), `youtubeUrl`(string\|null).
@@ -379,7 +385,7 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 | 요청 | `level` + 중심좌표 `pc1`~`pc16` | `level` + **누적 축 범위**(1레이어는 파라미터 없음) |
 | 조회 구역 | 서버가 레벨별 **반경**으로 정하는 **원형** | **격자**. 구역 선택·이동은 **클라이언트 뷰포트** |
 | 선정 | 서버가 `youtubeCnt` **내림차순 상위 k** | 서버는 **공간 균등 상주 집합**, 인기순은 **클라이언트** |
-| 응답 | `MusicDetail` (12필드, `location` 객체) | **`MapPoint`** (8필드, `pc` 배열) |
+| 응답 | `MusicDetail` (13필드, `location` 객체) | **`MapPoint`** (9필드, `pc` 배열) |
 | 1레이어 | 다른 레벨과 동일 처리 | **정적 사전 계산** |
 
 **왜**: FE 가 이 모델로 이미 구현했고(`map-engine.ts`), data 가 거기 맞춰 인프라를 만들었으며(스펙 16 `map_sample`·GiST),

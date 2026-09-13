@@ -334,13 +334,19 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const hitF = engine.hitFriend(mx, my);
       const hit = hitF ? null : engine.hitTest(mx, my);
       const song = hit ? engine.songs[hit.i] : null;
-      if (song) {
+      // 주변 탐색 중에는 호버 카드를 띄우지 않는다 (S15P21A405-288) — 고리 별에는 제목·순위 라벨이 이미 붙어 있고,
+      // 카드가 뜨면 이웃 라벨과 "둘러보기 ›" 링크를 가린다. 별 위 강조 링과 커서만 남긴다
+      const inNearby = useMapStore.getState().viewMode === "nearby";
+      if (song && !inNearby) {
         cancelHide();
         engine.setHover(song.musicId);
         heldSong.current = song;
         setHoverSong(song);
         setCardOn(true);
-      } else scheduleHide();
+      } else {
+        if (inNearby) engine.setHover(song?.musicId ?? null);
+        scheduleHide();
+      }
       setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my));
     },
     [engine, cancelHide, scheduleHide, cancelHold],

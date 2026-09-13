@@ -3,6 +3,7 @@
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useQueueAutoAdvance } from "@/hooks/use-queue-auto-advance";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -44,6 +45,8 @@ export default function PlayerBar() {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
+  // 큐 재생 중 곡이 끝나면 다음 곡으로 (S15P21A405-258). 같은 쿼리를 보므로 요청이 안 늘어난다
+  useQueueAutoAdvance();
 
   const openContext = () => {
     if (currentMusicId == null) return;
@@ -100,7 +103,7 @@ export default function PlayerBar() {
         <p className="truncate text-[10px] text-ink-3">
           {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
         </p>
-        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} />
+        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} durationSec={data?.duration} />
       </button>
       {queue.length > 0 && (
         <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import AlbumCover from "@/components/common/album-cover";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
 import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
+import { useBlockingStore } from "@/stores/use-blocking-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import type { SurveyReason, SurveySong } from "@/types/survey";
 
@@ -80,6 +81,20 @@ export default function SurveyCard() {
     verdict: null,
     reason: null,
   });
+
+  /**
+   * 카드가 떠 있는 동안 자동 넘김을 막는다 (S15P21A405-258).
+   *
+   * 재생 코드를 직접 붙잡지 않는다 — 공용 플래그만 올린다. 설문을 통째로 지워도
+   * 그 플래그는 늘 비어 있는 상태가 되어 재생이 원래대로 돈다.
+   */
+  const block = useBlockingStore((s) => s.block);
+  const unblock = useBlockingStore((s) => s.unblock);
+  useEffect(() => {
+    if (!prompt) return;
+    block("survey");
+    return () => unblock("survey");
+  }, [prompt, block, unblock]);
 
   // 대상이 바뀌면 답을 새로 시작한다 (effect 안 setState 대신 "adjusting state during render")
   const key = prompt ? `${prompt.target.sessionId}:${prompt.target.rank}` : "";

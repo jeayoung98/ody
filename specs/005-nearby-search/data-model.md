@@ -79,13 +79,14 @@ select(candidates, queryVec, queryTrack, rules, limit) -> List<TrackCandidate>
 | 2 | `dist < rules.tauDup` | FR-018 (a) 기준점과 같은 녹음 |
 | 3 | 기준점 곡과 같은 `(artist,title)` 키 | FR-018 (c) |
 | 4 | 이미 담은 이웃과 같은 키 | FR-018 (b) |
-| 5 | 같은 아티스트가 `rules.artistCap` 이상 | FR-019 |
+| 5 | 같은 아티스트가 `rules.artistCap` 이상 (**아티스트가 비어 있으면 세지 않는다**) | FR-019 |
 | 6 | `duration` 이 길이 범위 밖 | FR-020, `rules.lengthAllowed()` |
 
 10곡이 차면 중단. 마지막에 `(distance, id)` 안정 정렬(FR-008, R10).
 
 - 키 정규화는 `SameRecording.key()` — `lower(trim(title))` + `lower(trim(artist))`. **둘 중 하나라도 비면 `null`** 이고 null 키는 서로 같지 않다(제목 빈 곡 3,977개)
 - 아티스트 비교도 같은 정규화를 쓴다. 원문 비교는 대소문자·공백으로 상한을 빠져나간다(R8)
+- **아티스트가 빈 문자열이면 상한 카운트에서 빼고 통과시킨다.** 운영에 14,862건(0.22%) 있고, 한 덩어리로 세면 무관한 곡들이 자리 3개를 나눠 갖는다 — `SameRecording` 이 빈 키를 `null` 로 두는 것과 같은 이유다
 - `duration` 이 `null` 이면 길이 규칙을 적용하지 않고 통과시킨다(`ServingRules.lengthAllowed` 의 기존 동작)
 
 ### 4-3. `ServingRules` — 재사용, 손대지 않는다

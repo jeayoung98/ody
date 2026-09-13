@@ -3,57 +3,53 @@ package com.ssafy.backend.realtime.session;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.atomic.AtomicLong;
 
 import org.springframework.stereotype.Component;
 
 /**
- * wsSessionId ↔ email 매핑, sessionEpoch, 세션 단위 seq 발급(R-07).
- * 단일 인스턴스용 in-memory. 다중화 시 Redis 로 이전(R-09).
+ * wsSessionId ↔ (email, epoch) 매핑. 단일 인스턴스용 in-memory(다중화 시 Redis 이전 — R-09).
+ * epoch = 재접속마다 +1 하는 세션 세대. 오래된 세션의 정리(leave/expiry)가 새 세션 presence 를 지우지 못하게 하는 가드용, 버전관리 (FR-005).
+ * seq(델타 순번, R-07)는 RT-22 팬아웃에서 사용 — 이번 범위 밖.
  *
- * 골격 단계: register/unregister 만 실동작, epoch·seq 는 시그니처+TODO.
- * TODO(정책): 같은 email 두 번째 CONNECT 허용/기존 세션 종료 확정 필요.
+ * TODO(정책): 같은 email 두 번째 CONNECT 시 기존 활성 세션 정리 정책(멀티세션) 확정.
  */
 @Component
 public class WebSocketSessionRegistry {
 
-	private final Map<String, String> sessionToUser = new ConcurrentHashMap<>();
-
-	/**
-	 * CONNECT 시 명단올리기
-	 * @param wsSessionId
-	 * @param email
-	 */
-	public void register(String wsSessionId, String email) {
-		sessionToUser.put(wsSessionId, email);
+	/** 세션 정보 — email 과 그 세션의 epoch. */
+	public record SessionInfo(String email, long epoch) {
 	}
 
-	/**
-	 * DISCONNECT 시 명단에서 삭제
-	 * @param wsSessionId
-	 * @return
-	 */
-	public Optional<String> unregister(String wsSessionId) {
-		return Optional.ofNullable(sessionToUser.remove(wsSessionId));
+	private final Map<String, SessionInfo> sessions = new ConcurrentHashMap<>();
+	private final Map<String, AtomicLong> epochByEmail = new ConcurrentHashMap<>();
+
+	/** CONNECT 시 등록 — 새 epoch 발급·저장하고 반환. */
+	public long register(String wsSessionId, String email) {
+		long epoch = epochByEmail.computeIfAbsent(email, k -> new AtomicLong()).incrementAndGet();
+		sessions.put(wsSessionId, new SessionInfo(email, epoch));
+		return epoch;
 	}
 
-	/**
-	 * 다중탭으로 열었을 때 하나만 지워지면 명단에서 바로 삭제하지 않음
-	 * @param email
-	 * @param excludedSessionId
-	 * @return
-	 */
+	/** DISCONNECT 시 제거 — 해당 세션 정보 반환. */
+	public Optional<SessionInfo> unregister(String wsSessionId) {
+		return Optional.ofNullable(sessions.remove(wsSessionId));
+	}
+
+	/** 멀티탭: 같은 email 의 다른 세션이 남아 있으면 true(하나 끊겨도 정리 보류). */
 	public boolean hasOtherSession(String email, String excludedSessionId) {
-		return sessionToUser.entrySet().stream()
-				.anyMatch(e -> e.getValue().equals(email) && !e.getKey().equals(excludedSessionId));
+		return sessions.entrySet().stream()
+				.anyMatch(e -> e.getValue().email().equals(email) && !e.getKey().equals(excludedSessionId));
 	}
 
-	/** 재접속마다 증가하는 세션 epoch(만료·구세션 정리 경쟁 방지, FR-005). */
-	public long nextEpoch(String email) {
-		throw new UnsupportedOperationException("TODO(내부작업)");
+	/** 세션 id 로 그 세션의 epoch 조회(명시적 /presence/leave 용). */
+	public Optional<Long> epochOf(String wsSessionId) {
+		SessionInfo info = sessions.get(wsSessionId);
+		return info == null ? Optional.empty() : Optional.of(info.epoch());
 	}
 
-	/** 세션 단위 단조 증가 seq(FR-041, R-07). */
+	/** 세션 단위 단조 증가 seq(델타 순번, R-07) — RT-22 팬아웃에서 구현. */
 	public long nextSeq(String email) {
-		throw new UnsupportedOperationException("TODO(내부작업)");
+		throw new UnsupportedOperationException("TODO(RT-22 팬아웃)");
 	}
 }

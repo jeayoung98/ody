@@ -5,10 +5,10 @@
 	<!-- 테이블: db/explore_feedback.sql. 같은 (session_id, rank) 재요청은 답만 갱신한다. -->
 	<select id="upsert" resultType="long">
 		INSERT INTO explore_feedback (
-			session_id, mode, rank, anchor_music_id, target_music_id, prev_music_id, music_id,
+			session_id, anonymous_id, mode, rank, anchor_music_id, target_music_id, prev_music_id, music_id,
 			verdict, reason, listened_sec, skipped, user_email, bundle, rules)
 		VALUES (
-			CAST(#{sessionId} AS uuid), #{mode}, #{rank}, #{anchorMusicId}, #{targetMusicId}, #{prevMusicId}, #{musicId},
+			CAST(#{sessionId} AS uuid), CAST(#{anonymousId} AS uuid), #{mode}, #{rank}, #{anchorMusicId}, #{targetMusicId}, #{prevMusicId}, #{musicId},
 			#{verdict}, #{reason}, #{listenedSec}, #{skipped}, #{userEmail}, #{bundle}, #{rules})
 		ON CONFLICT (session_id, rank) DO UPDATE SET
 			verdict = EXCLUDED.verdict,
@@ -16,6 +16,7 @@
 			listened_sec = EXCLUDED.listened_sec,
 			skipped = EXCLUDED.skipped,
 			user_email = COALESCE(EXCLUDED.user_email, explore_feedback.user_email),
+			anonymous_id = COALESCE(EXCLUDED.anonymous_id, explore_feedback.anonymous_id),
 			updated_at = now()
 		RETURNING id
 	</select>

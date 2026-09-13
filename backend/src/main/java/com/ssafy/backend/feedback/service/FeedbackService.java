@@ -30,6 +30,7 @@ public class FeedbackService {
 		validate(request);
 		FeedbackRow row = new FeedbackRow();
 		row.setSessionId(request.sessionId().toString());
+		row.setAnonymousId(request.anonymousId() == null ? null : request.anonymousId().toString());
 		row.setMode(request.mode());
 		row.setRank(request.rank());
 		row.setAnchorMusicId(request.anchorMusicId());
@@ -54,8 +55,8 @@ public class FeedbackService {
 		if (!journey && (r.targetMusicId() != null || r.prevMusicId() != null)) {
 			throw new CustomException(GlobalErrorCode.INVALID_INPUT);   // 주변 탐색엔 도착곡·앞 역 없음
 		}
-		if (r.reason() != null && !Boolean.FALSE.equals(r.verdict())) {
-			throw new CustomException(GlobalErrorCode.INVALID_INPUT);   // 이유는 부정 응답에만
+		if ((r.reason() != null) != Boolean.FALSE.equals(r.verdict())) {
+			throw new CustomException(GlobalErrorCode.INVALID_INPUT);   // 이유는 부정 응답에만, 부정 응답엔 반드시
 		}
 	}
 

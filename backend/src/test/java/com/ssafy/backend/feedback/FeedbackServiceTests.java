@@ -27,9 +27,10 @@ class FeedbackServiceTests {
 	private final ServingRules rules = new ServingRules("v2.1-pca16", 1.6624, 3, 4.912, 30, 1200, 10.7);
 	private final FeedbackService service = new FeedbackService(mapper, rules);
 	private final UUID session = UUID.randomUUID();
+	private final UUID anon = UUID.randomUUID();
 
 	private FeedbackRequest nearby(Boolean verdict, String reason) {
-		return new FeedbackRequest(session, "nearby", 3, 1L, null, null, 55L, verdict, reason, 42, false);
+		return new FeedbackRequest(session, anon, "nearby", 3, 1L, null, null, 55L, verdict, reason, 42, false);
 	}
 
 	@Test
@@ -46,6 +47,7 @@ class FeedbackServiceTests {
 		assertThat(row.getRules()).isEqualTo("dup=1.6624,cap=3,far=4.912,len=30-1200");
 		assertThat(row.getUserEmail()).isEqualTo("me@gmail.com");
 		assertThat(row.getSessionId()).isEqualTo(session.toString());
+		assertThat(row.getAnonymousId()).isEqualTo(anon.toString());
 	}
 
 	@Test
@@ -55,18 +57,19 @@ class FeedbackServiceTests {
 	}
 
 	@Test
-	void validate_reasonWithoutNegativeVerdict_rejected() {
+	void validate_reasonIffNegativeVerdict() {
+		assertInvalid(nearby(false, null));   // 부정 응답엔 이유 필수
 		assertInvalid(nearby(true, "dup"));
 		assertInvalid(nearby(null, "dup"));
 	}
 
 	@Test
 	void validate_journeyNeedsTarget_nearbyForbidsTargetAndPrev() {
-		assertInvalid(new FeedbackRequest(session, "journey", 1, 1L, null, 1L, 55L, true, null, null, null));
-		assertInvalid(new FeedbackRequest(session, "nearby", 1, 1L, 9L, null, 55L, true, null, null, null));
+		assertInvalid(new FeedbackRequest(session, null, "journey", 1, 1L, null, 1L, 55L, true, null, null, null));
+		assertInvalid(new FeedbackRequest(session, null, "nearby", 1, 1L, 9L, null, 55L, true, null, null, null));
 		when(mapper.upsert(any())).thenReturn(2L);
 		assertThat(service.save(
-				new FeedbackRequest(session, "journey", 1, 1L, 9L, 1L, 55L, true, null, null, null), null)
+				new FeedbackRequest(session, null, "journey", 1, 1L, 9L, 1L, 55L, true, null, null, null), null)
 				.feedbackId()).isEqualTo(2L);
 	}
 

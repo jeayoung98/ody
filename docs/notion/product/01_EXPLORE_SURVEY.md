@@ -18,9 +18,9 @@
 | 범위 탐색(여정) | 앞 곡에서 자연스럽게 이어졌나요? | 👍 / 👎 | 갑자기 바뀜 · 템포 다름 · 같은 곡 반복 · 음악 아님 |
 
 규칙
-- 강제하지 않는다. 몇 초 뒤 자동으로 사라진다. 무응답도 `verdict=null` 로 보낸다(스킵·청취 시간은 남는다).
-- 스킵 순간에도 띄운다. 의견이 가장 강한 순간이다.
-- 비로그인 사용자 응답도 저장한다.
+- **20초 이상 들은 곡에만 뜬다.** 20초가 지나면 설문이 강제로 뜨고, 응답해야 다음 동작(다음 곡·스킵·이동)이 가능하다. 👎 이면 이유 칩 하나를 반드시 고른다.
+- 20초 전에 끝났거나 스킵한 곡은 설문을 띄우지 않는다. 대신 `verdict=null` 로 그래도 보낸다. 어떤 곡을 빨리 넘겼는지가 그 자체로 신호다(`skipped`, `listened_sec`).
+- 비로그인 사용자 응답도 저장한다. 사람 구분은 브라우저 localStorage 의 UUID(`anonymous_id`)로 한다. 응답 100건이 1명인지 10명인지 알아야 정밀도를 믿을 수 있다.
 - 5점 척도·자유 텍스트 없음. 내부 채점이 O/X 라 척도를 맞추고, 탭 수를 늘리지 않는다. "고민되면 👎".
 
 이유 칩 4개는 내부 결함 코드와 1:1 이고 각각 고칠 곳이 다르다. 그래서 이 4개만 받는다.
@@ -39,14 +39,15 @@ row 1개 = 곡 1개 재생. 테이블 `explore_feedback` (DDL `backend/src/main/
 | 컬럼 | 뜻 |
 |---|---|
 | `session_id` | 탐색 1회. 결과 목록을 받을 때 FE 가 uuid 생성 |
+| `anonymous_id` | 사람 1명(근사). 브라우저 localStorage 의 uuid. 시크릿 모드·기기 변경은 다른 사람으로 잡힌다(감수) |
 | `mode` | `nearby` / `journey` |
 | `rank` | nearby: 이웃 순위 1~10 / journey: `path[].step` 1~ |
 | `anchor_music_id` | nearby: 기준곡 / journey: 출발곡 |
 | `target_music_id` | journey: 도착곡 |
 | `prev_music_id` | journey: 앞 역 (1역은 출발곡) |
 | `music_id` | 평가 대상 곡 |
-| `verdict` | true / false / NULL(무응답) |
-| `reason` | `dup` `mood` `tempo` `spoken` / NULL |
+| `verdict` | true / false / NULL(20초 전 종료·스킵. 설문 안 뜸) |
+| `reason` | `dup` `mood` `tempo` `spoken`. `verdict=false` 면 필수, 아니면 NULL. 단일 선택 |
 | `listened_sec`, `skipped` | 암묵 신호. 사용자에게 묻지 않고 자동 수집 |
 | `user_email` | 로그인 시. 비로그인 NULL |
 | `bundle`, `rules` | 서버가 찍는 좌표계 버전(`v2.1-pca16`)과 임계값 스냅샷(`dup=1.6624,cap=3,far=4.912,len=30-1200`). 규칙 바꾼 뒤 전후 비교 |
@@ -69,13 +70,15 @@ row 1개 = 곡 1개 재생. 테이블 `explore_feedback` (DDL `backend/src/main/
 FE 연동 메모
 - 주변 탐색: `/api/music/nearby` 응답을 받을 때 `sessionId` 생성. 곡마다 `rank` = `neighbors` 순서(1부터), `anchorMusicId` = `center.id`.
 - 여정: `/api/music/journey` 응답을 받을 때 `sessionId` 생성. `rank` = `path[].step`, `anchorMusicId` = `path[0].id`, `targetMusicId` = 마지막 곡, `prevMusicId` = `path[step-1].id`. 출발곡(step 0)은 설문 없음.
+- `anonymousId`: `localStorage["ody_anon_id"]` 가 없으면 `crypto.randomUUID()` 로 만들어 저장. 모든 설문 요청에 실어 보낸다. 로그인 사용자도 보낸다(로그인 전후를 잇는다).
 - 곡이 끝나거나 스킵될 때 fire-and-forget. 응답을 기다려 UI 를 막지 않는다.
 
 ## 5. 뽑을 수 있는 것 (분석 SQL)
 
-정밀도 = 응답한 곡 중 👍 비율. 번들·규칙별로 나눠 배포 전후를 비교한다.
+정밀도 = 응답한 곡 중 👍 비율. 번들·규칙별로 나눠 배포 전후를 비교한다. `people` 이 한 자리면 수치 자체를 보고하지 않는다.
 ```sql
 SELECT mode, bundle, rules,
+       count(DISTINCT anonymous_id) AS people,        -- 이 수가 작으면 아래 정밀도를 믿지 않는다
        count(*) FILTER (WHERE verdict IS NOT NULL) AS answered,
        round(avg(verdict::int) FILTER (WHERE verdict IS NOT NULL), 3) AS precision,
        round(avg(skipped::int), 3) AS skip_rate
@@ -130,6 +133,7 @@ GROUP BY skipped, verdict ORDER BY skipped, verdict;
 
 ## 6. 아직 안 한 것
 
-- 프론트 설문 UI (별도 이슈).
+- 프론트 설문 UI (별도 이슈). 20초 타이머·강제 모달·localStorage UUID 는 FE 몫.
+- 사람당 응답 상한. 한 사람이 수백 건 보내면 정밀도가 그 사람 취향이 된다. 분석 시 `anonymous_id` 별로 최대 N건만 표본화하는 쿼리를 나중에.
 - 여정 방식(linear/axis) 컬럼. 여정 응답이 방식을 노출하지 않아(FR-023) 지금은 기록 불가. 응답에 방식이 추가되면 컬럼 하나 추가.
 - 집계 API. 위 SQL 을 직접 실행한다. 대시보드가 필요해지면 그때.

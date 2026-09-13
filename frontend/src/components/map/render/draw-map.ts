@@ -92,15 +92,15 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   // 가장 먼 별밭은 카메라와 무관하다 — 아무리 밀어도 제자리인 것이 오히려 "아주 멀다"로 읽힌다
   field(t * 0.0052, -t * 0.0019, 1, dim);
   /**
-   * 0겹(우주)을 뺀 겹에는 별밭을 세 겹 더 깐다.
+   * 별밭을 세 겹 더 깐다.
    * 파고들수록 상주 곡은 화면 가운데로 모이는데(fitCam 이 97%를 화면 짧은 변 44% 반지름 안에 넣는다),
    * 그 바깥이 빈 하늘이면 "확대해 들어왔다"가 아니라 "별 뭉치 하나가 떠 있다"로 읽힌다.
    * 그래서 ① 화면 전체를 별로 채우고 ② **카메라를 따라 시차를 두고 함께 밀리게** 한다 —
    * 지도를 밀 때 배경이 가만히 있으면 상주 구름만 미끄러져 뭉치의 경계가 그대로 드러난다.
-   * farK 는 0겹 → 1겹 한 칸에서 0 → 1 로 차오른다 — 전환 중 깊이가 소수라 별밭이 툭 켜지지 않는다.
+   * 처음엔 0겹(우주)을 뺐지만, 0겹도 상주 구름 바깥이 빈 하늘로 보여 **모든 겹에 깐다** (S15P21A405-283).
    */
-  const farK = Math.min(1, depth * (LAYER_COUNT - 1));
-  if (farK > 0.01) {
+  const farK = 1;
+  {
     // 월드 원점이 화면에서 밀린 양(타일 단위). 별과 같은 식으로 움직이므로 같은 세계에 있는 것처럼 보인다
     const camU = (e.cam.cx * e.cam.s) / (W + 64);
     const camV = -(e.cam.cy * e.cam.s) / (H + 64);
@@ -196,9 +196,9 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
       // 집을 수 없는 별이라 눌리는 별(0.42~1)과 확실히 갈라놓는다 — 임시 랜덤 크기로 배경도 커진 뒤로
-      // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.22
-      d = (2.4 + Math.pow(mag, 1.6) * 4.2) * grow * fieldSize;
-      alpha = (0.06 + lumOf(i, mag) * 0.16) * twinkle(s.musicId, t) * fieldAlpha;
+      // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.13
+      d = (2.2 + Math.pow(mag, 1.6) * 3.6) * grow * fieldSize;
+      alpha = (0.04 + lumOf(i, mag) * 0.09) * twinkle(s.musicId, t) * fieldAlpha;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;

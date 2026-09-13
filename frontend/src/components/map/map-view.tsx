@@ -276,7 +276,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
         if (mode === "constellation") engine.overlayPan(dx, dy);
-        else if (mode !== "nearby") engine.dragBy(dx, dy);
+        // 주변 탐색 중에는 지도 대신 탐색 별 뷰를 민다 (S15P21A405-285)
+        else if (mode === "nearby") engine.probePan(dx, dy);
+        else engine.dragBy(dx, dy);
         return;
       }
       // 카드 위로 넘어간 마우스는 "별에서 벗어난 것" 이 아니다 — 카드를 유지한다.
@@ -332,6 +334,15 @@ export default function MapView({ occludedRight }: MapViewProps) {
       // 닫힌 뒤에도 가두면 지도의 별이 영영 안 눌린다 — 실제로 그랬다 (S15P21A405-270)
       const overlayIds = engine.clickableOverlayIds();
       if (overlayIds && !overlayIds.has(id)) return;
+      // 주변 탐색 중 이웃을 누르면 그 곡으로 **건너간다** — 새 중심이 되어 가운데로 오고 그 이웃이 더해진다 (S15P21A405-285).
+      // 카메라는 옮기지 않는다 (뷰가 오버레이를 밀어 맞춘다)
+      const map = useMapStore.getState();
+      if (map.viewMode === "nearby") {
+        selectMusic(id);
+        openSong(id);
+        if (id !== map.nearbyCenterMusicId) map.enterNearby(id);
+        return;
+      }
       // 여정 지정 모드면 클릭이 출발·도착 칸을 번갈아 채운다 (JOURNEY-01)
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {

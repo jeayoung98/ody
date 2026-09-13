@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -480,12 +480,13 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const k = e.probeK();
   if (k < 0.01) return;
   const spr = glowSprites();
-  const center = e.probePos(p.centerId);
+  const cur = e.currentRing() ?? p.rings[p.rings.length - 1];
+  const center = e.probePos(cur.centerId);
   if (!center) return;
   const tx = center.x;
   const ty = center.y;
 
-  // 전체를 어둡게 덮는다 (진행도에 따라)
+  // 전체를 어둡게 덮는다 (진행도에 따라) — 지금 중심을 기준으로
   g.globalCompositeOperation = "source-over";
   const f = e.freeRect();
   const Rv = Math.min(f.x1 - f.x0, f.y1 - f.y0) * 0.5;
@@ -496,38 +497,76 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fillStyle = vg;
   g.fillRect(0, 0, e.W, e.H);
 
-  // 기준곡 → 유사곡 별자리선
-  g.save();
-  g.globalCompositeOperation = "lighter";
-  g.setLineDash([3, 5]);
-  g.lineDashOffset = -((e.time * 16) % 8);
-  g.lineWidth = 1;
-  const nodes: { id: number; x: number; y: number; rank: number }[] = [];
-  p.ids.forEach((id, rank) => {
-    // 상주 여부는 묻지 않는다 — 이웃은 지도 집합 밖 곡이다. 자리를 못 잡은 곡만 건너뛴다
-    const pp = e.probePos(id);
-    if (!pp) return;
-    nodes.push({ id, x: pp.x, y: pp.y, rank });
-    g.strokeStyle = `rgba(150,180,240,${0.3 * k})`;
-    g.beginPath();
-    g.moveTo(tx, ty);
-    g.lineTo(pp.x, pp.y);
-    g.stroke();
-  });
-  g.setLineDash([]);
-  g.restore();
+  /**
+   * 고리마다 그린다 (S15P21A405-285). 같은 곡이 두 고리에 있으면 **가장 새 고리**에서 한 번만 —
+   * probePos 도 그 고리를 따르므로 선과 별이 어긋나지 않는다. 지금 고리가 아닌 것은 옅게(prevAlpha) 깔린다
+   */
+  type Node = { id: number; x: number; y: number; rank: number; a: number; cur: boolean; sc: number };
+  const placed = new Set<number>();
+  const nodes: Node[] = [];
+  const centers: { id: number; x: number; y: number; a: number; cur: boolean; sc: number }[] = [];
+  for (let ri = p.rings.length - 1; ri >= 0; ri--) {
+    const r = p.rings[ri];
+    const isCur = r === cur;
+    const sc = e.ringScale(r);
+    // 물러난 고리는 오므라드는 만큼 옅어진다 — 뭉치가 될 때 밝기가 그대로면 새 고리보다 눈에 띈다
+    const a = k * e.ringK(r) * (isCur ? 1 : PROBE.prevAlpha);
+    if (a < 0.01) continue;
+    const c = e.probePos(r.centerId);
+    if (!c) continue;
+    if (!placed.has(r.centerId)) {
+      placed.add(r.centerId);
+      centers.push({ id: r.centerId, x: c.x, y: c.y, a, cur: isCur, sc });
+    }
+    // 이전 중심 → 이 중심: 어디서 건너왔는지 잇는 선
+    if (ri > 0) {
+      const prev = e.probePos(p.rings[ri - 1].centerId);
+      if (prev) {
+        g.save();
+        g.globalCompositeOperation = "lighter";
+        g.strokeStyle = `rgba(150,180,240,${0.22 * k * e.ringK(p.rings[ri - 1])})`;
+        g.lineWidth = 1;
+        g.beginPath();
+        g.moveTo(prev.x, prev.y);
+        g.lineTo(c.x, c.y);
+        g.stroke();
+        g.restore();
+      }
+    }
+    g.save();
+    g.globalCompositeOperation = "lighter";
+    g.setLineDash([3, 5]);
+    g.lineDashOffset = -((e.time * 16) % 8);
+    g.lineWidth = 1;
+    r.ids.forEach((id, rank) => {
+      // 상주 여부는 묻지 않는다 — 이웃은 지도 집합 밖 곡이다. 자리를 못 잡은 곡만 건너뛴다
+      const pp = e.probePos(id);
+      if (!pp) return;
+      if (!placed.has(id)) {
+        placed.add(id);
+        nodes.push({ id, x: pp.x, y: pp.y, rank, a, cur: isCur, sc });
+      }
+      g.strokeStyle = `rgba(150,180,240,${0.3 * a})`;
+      g.beginPath();
+      g.moveTo(c.x, c.y);
+      g.lineTo(pp.x, pp.y);
+      g.stroke();
+    });
+    g.setLineDash([]);
+    g.restore();
+  }
 
   // 유사곡 별 (밝게) + 순위·제목
   g.globalCompositeOperation = "lighter";
   for (const n of nodes) {
     const s = e.songs.find((x) => x.musicId === n.id)!;
-    const d = 22 + (1 - n.rank / Math.max(1, nodes.length)) * 10;
-    g.globalAlpha = 0.95 * k * (s.playable ? 1 : 0.55);
+    const d = (22 + (1 - n.rank / 10) * 10) * n.sc;
+    g.globalAlpha = 0.95 * n.a * (s.playable ? 1 : 0.55);
     g.drawImage(spr[starColorIdx(s)], n.x - d / 2, n.y - d / 2, d, d);
-    g.globalAlpha = k;
+    g.globalAlpha = n.a;
     g.fillStyle = MAP_COLORS.core;
     g.beginPath();
-    g.arc(n.x, n.y, 2.4, 0, 6.284);
+    g.arc(n.x, n.y, 2.4 * n.sc, 0, 6.284);
     g.fill();
     if (e.hoverId === n.id || e.selectedId === n.id) {
       g.strokeStyle = rgba(starRgb(s), 0.9);
@@ -540,9 +579,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "source-over";
   g.textAlign = "center";
   g.textBaseline = "middle";
+  // 라벨은 지금 고리에만 — 옅은 고리까지 글자를 달면 읽히지 않고 어지럽기만 하다
   for (const n of nodes) {
+    if (!n.cur) continue;
     const s = e.songs.find((x) => x.musicId === n.id)!;
-    g.globalAlpha = k;
+    g.globalAlpha = n.a;
     g.font = `500 10.5px ${FONTS.body}`;
     const title = fitText(g, s.title, 110);
     const tw = g.measureText(title).width;
@@ -557,13 +598,31 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   }
   g.globalAlpha = 1;
 
-  // 기준 곡 강조 + 라벨
-  const song = e.songs.find((s) => s.musicId === p.centerId)!;
-  const frgb = starRgb(song);
-  const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
+  // 이전 중심 — 옅게, 링 없이
   g.globalCompositeOperation = "lighter";
-  g.globalAlpha = k;
-  g.drawImage(spr[starColorIdx(song)], tx - 22, ty - 22, 44, 44);
+  for (const c of centers) {
+    if (c.cur) continue;
+    const s = e.songs.find((x) => x.musicId === c.id)!;
+    g.globalAlpha = c.a;
+    const cd = 32 * c.sc;
+    g.drawImage(spr[starColorIdx(s)], c.x - cd / 2, c.y - cd / 2, cd, cd);
+    g.fillStyle = MAP_COLORS.core;
+    g.beginPath();
+    g.arc(c.x, c.y, 2.4, 0, 6.284);
+    g.fill();
+  }
+
+  // 기준 곡 강조 + 라벨
+  const song = e.songs.find((s) => s.musicId === cur.centerId)!;
+  const frgb = starRgb(song);
+  // 건너온 중심은 열리면서 한 번 부풀었다 가라앉는다 (누른 별이 열리는 느낌)
+  const rk = e.ringK(cur);
+  const pop = cur.unfold ? 1 + 0.55 * Math.sin(Math.PI * rk) : 1;
+  const rr = (19 + Math.sin(e.time * 2.2) * 2.4) * pop;
+  const ck = k * rk;
+  g.globalAlpha = ck;
+  const cd = 44 * pop;
+  g.drawImage(spr[starColorIdx(song)], tx - cd / 2, ty - cd / 2, cd, cd);
   g.beginPath();
   g.arc(tx, ty, rr, 0, 6.284);
   g.strokeStyle = rgba(frgb, 0.85);
@@ -584,7 +643,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fillText(song.title, tx, ty + rr + 15.5);
   g.font = `500 9.5px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(`NEARBY · 유사도 상위 ${p.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + 30);
+  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + 30);
   g.globalAlpha = 1;
 }
 

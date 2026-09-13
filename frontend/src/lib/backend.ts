@@ -10,6 +10,7 @@
  */
 import { NO_GENRE_ID } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";
+import type { Music } from "@/types";
 
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
 const BACKEND_ACCESS_TOKEN = process.env.BACKEND_ACCESS_TOKEN;
@@ -115,6 +116,19 @@ export interface BackendMusicDetailResponse extends BackendMusicDetail {
   neighbors: (BackendMusicSummary & { distance: number })[];
 }
 
+/**
+ * `/api/playlist/detail?playlistId=` 응답 (BACKEND-NOTES 필드 대조).
+ * 소유자·시각·좋아요·무드 태그는 없고, 곡은 `musics: MusicDetail[]` 로 평탄하게 온다 — `location` 이 pc1~pc16 이라
+ * 별자리 좌표를 여기서 그대로 얻는다 (S15P21A405-214)
+ */
+export interface BackendPlaylistDetailResponse {
+  playlistId: number;
+  playlistName: string;
+  musicCnt: number;
+  totalDuration: number;
+  musics: BackendMusicDetail[];
+}
+
 /** `/api/music/journey` 응답 — path 원소는 step + MusicDetail 평탄 전개 */
 export interface BackendJourneyResponse {
   musicCnt: number;
@@ -181,6 +195,27 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
  * 0(앰비언트)으로 채우면 "장르를 모른다"가 "전부 앰비언트다"로 둔갑한다 (A-1-1).
  * 실데이터는 662만 곡 중 1.0%만 장르가 붙어 있어 그 오해가 화면 거의 전부를 덮는다.
  */
+/**
+ * 백엔드 MusicDetail → ERD `Music`. 백엔드에 없는 값은 **지어내지 않고 비운다** — `releaseYear` 는 응답에 없다.
+ * 곡 상세·플리 상세가 같은 변환을 쓴다
+ */
+export function toMusic(res: BackendMusicDetail): Music {
+  return {
+    id: res.id,
+    mbid: res.mbid,
+    title: res.title,
+    artist: res.artist,
+    releaseYear: null,
+    bpm: res.bpm,
+    duration: res.duration,
+    album: res.album,
+    youtubeUrl: res.youtubeUrl,
+    location: res.location ? (toPcArray(res.location) as Music["location"]) : null,
+    playCnt: res.playCnt ?? 0,
+    youtubeCnt: res.youtubeCnt ?? 0,
+  };
+}
+
 export function toMapPoint(music: BackendMusicSummary): MapPoint {
   return {
     musicId: music.id,

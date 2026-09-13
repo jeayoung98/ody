@@ -10,6 +10,7 @@
 | 저장소 전체 (이 파일) | 파트 소유권 · 기능 명세 동기화 · 계약 |
 | **Jira-first 워크플로우 (이슈·브랜치·커밋 강제)** | [.claude/rules/jira-workflow.md](.claude/rules/jira-workflow.md) |
 | 강제 훅 | [.claude/hooks/](.claude/hooks/) · 설정값 [.claude/jira-config.json](.claude/jira-config.json) |
+| **모호한 요청은 코드를 훑기 전에 되묻는다 (토큰 절약)** | [docs/rules/AGENT-SCOPE.md](docs/rules/AGENT-SCOPE.md) |
 | **팀 공통 규칙·명세 모음** | [docs/rules/](docs/rules/) |
 | Git 컨벤션 (커밋 메시지 형식) | [docs/rules/CONVENTIONS.md](docs/rules/CONVENTIONS.md) |
 | 기능 명세 (기준 문서) | [docs/rules/FEATURES.md](docs/rules/FEATURES.md) |

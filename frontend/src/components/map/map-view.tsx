@@ -61,7 +61,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
   const constellationPoints = useMapStore((s) => s.constellationPoints);
-  const { data: layout } = useConstellationLayoutQuery(constellationMusicIds, constellationPoints);
+  const { data: layout } = useConstellationLayoutQuery(constellationMusicIds);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
   const myMusicId = useMapStore((s) => s.myMusicId);
   const home = useMapStore((s) => s.home);

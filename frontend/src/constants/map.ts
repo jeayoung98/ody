@@ -103,6 +103,12 @@ export const NEARBY_COUNT = 10;
 export const JOURNEY_MAX_SONGS = 30;
 
 /**
+ * 별자리 배치 요청에 실을 수 있는 곡 수 (`POST /api/constellations/layout`).
+ * 백엔드가 2개 미만·30개 초과·중복을 거부한다. 플레이리스트는 이보다 길 수 있어서 잘라 보낸다.
+ */
+export const CONSTELLATION_MAX_SONGS = 30;
+
+/**
  * 파고들기(드릴) 규칙.
  * 한 겹 안에서 진입 배율의 gateZoomMul 배까지는 순수 확대다 — 확대할수록 별이 더 드러난다 (REVEAL).
  * 그 임계치를 넘겨 계속 밀면 압력이 차오르고, 상주 집합을 그대로 들고 다음 겹의 두 축으로 재투영한다.

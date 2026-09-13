@@ -10,6 +10,7 @@ import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
+import com.ssafy.backend.music.retrieval.SameRecording;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.music.dto.MusicDetail;

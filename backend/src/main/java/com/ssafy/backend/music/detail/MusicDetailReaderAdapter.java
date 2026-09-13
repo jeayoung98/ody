@@ -5,7 +5,6 @@ import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 
-import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -17,7 +16,6 @@ import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSummary;
-import com.ssafy.backend.music.dto.NeighborTrack;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
 
 /**
@@ -59,30 +57,22 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 	}
 
 	@Override
-	public List<NeighborTrack> findNeighbors(long id, int k) {
-		// 함정 회피: 좌표를 먼저 읽어 바인드 파라미터로 넘긴다. 서브쿼리로 넘기면 recall 0.0000.
-		String qvec = mapper.findLocationText(id);
-		if (qvec == null) {
-			return List.of(); // 없는 곡이거나 좌표가 없는 곡
+	public List<MusicSummary> findSummariesByMbids(List<String> mbids) {
+		if (mbids.isEmpty()) {
+			return List.of();               // IN () 는 문법 오류
 		}
-
-		List<MusicDetailRow> rows = mapper.findNearest(id, qvec, k);
+		List<MusicDetailRow> rows = mapper.findByMbids(mbids);
 		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
 		return rows.stream()
-				// SQL 은 거리 하나로만 정렬한다(HNSW 인덱스 순서 유지). 동률 id 오름차순은 여기서 준다.
-				.sorted(Comparator.comparingDouble(MusicDetailRow::getDistance)
-						.thenComparingLong(MusicDetailRow::getId))
-				.map(row -> new NeighborTrack(
-						new MusicSummary(
-								row.getId(),
-								row.getTitle(),
-								row.getArtist(),
-								row.getAlbum(),
-								genres.getOrDefault(row.getId(), List.of()),
-								YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-								VIDEO_ID_NOT_LOADED,
-								row.toLocation()),
-						row.getDistance()))
+				.map(row -> new MusicSummary(
+						row.getId(),
+						row.getTitle(),
+						row.getArtist(),
+						row.getAlbum(),
+						genres.getOrDefault(row.getId(), List.of()),
+						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+						VIDEO_ID_NOT_LOADED,
+						row.toLocation()))
 				.toList();
 	}
 

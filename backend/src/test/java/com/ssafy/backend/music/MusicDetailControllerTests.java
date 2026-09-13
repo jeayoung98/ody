@@ -32,6 +32,7 @@ import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.NeighborTrack;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.service.NearbyService;
 
 /**
  * 상세 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler·Jackson 직렬화 검증.
@@ -50,6 +51,9 @@ class MusicDetailControllerTests {
 
 	@MockitoBean
 	private MusicService musicService;
+
+	@MockitoBean
+	private NearbyService nearbyService;
 
 
 
@@ -74,7 +78,7 @@ class MusicDetailControllerTests {
 	void detail_success_returnsFlatDetailWithNeighbors() throws Exception {
 		MusicDetailResponse body = new MusicDetailResponse(detail("https://youtu.be/x"),
 				List.of(neighbor(10877L, "https://youtu.be/y", 0.0412),
-						neighbor(10999L, "https://youtu.be/z", 0.0510)));
+						neighbor(10999L, "https://youtu.be/z", 0.0510)), false);
 		when(musicService.getDetail(eq(10234L))).thenReturn(body);
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
@@ -98,7 +102,7 @@ class MusicDetailControllerTests {
 	@Test
 	void detail_targetNotPlayable_returns200WithNullUrl() throws Exception {
 		when(musicService.getDetail(anyLong()))
-				.thenReturn(new MusicDetailResponse(detail(null), List.of()));
+				.thenReturn(new MusicDetailResponse(detail(null), List.of(), false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -111,7 +115,7 @@ class MusicDetailControllerTests {
 	void detail_neighborNotPlayable_keptInList() throws Exception {
 		when(musicService.getDetail(anyLong()))
 				.thenReturn(new MusicDetailResponse(detail("https://youtu.be/x"),
-						List.of(neighbor(10877L, null, 0.0412))));
+						List.of(neighbor(10877L, null, 0.0412)), false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())

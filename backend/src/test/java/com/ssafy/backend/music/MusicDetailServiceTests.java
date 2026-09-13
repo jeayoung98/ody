@@ -2,7 +2,6 @@ package com.ssafy.backend.music;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -21,6 +20,7 @@ import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.NeighborTrack;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.service.NearbyService;
 
 /**
  * 상세 서비스 유닛 (mock port). 조립·pass-through·404·B-D 대기 동작 검증.
@@ -42,39 +42,76 @@ class MusicDetailServiceTests {
 				distance);
 	}
 
-	@Test
-	void getDetail_assemblesDetailAndNeighbors_requesting10() {
-		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
-		when(reader.findDetail(10234L)).thenReturn(Optional.of(detail()));
-		when(reader.findNeighbors(eq(10234L), eq(10)))
-				.thenReturn(List.of(neighbor(1L, 0.01), neighbor(2L, 0.02)));
-		MusicService service = new MusicService(Optional.empty(), Optional.of(reader), Optional.empty());
+	private static MusicService serviceWith(MusicDetailReader reader, NearbyService nearby) {
+		return new MusicService(Optional.empty(), Optional.ofNullable(reader), Optional.empty(), nearby);
+	}
 
-		MusicDetailResponse res = service.getDetail(10234L);
+	@Test
+	void getDetail_assemblesDetailAndNeighbors_fromSharedSelection() {
+		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
+		NearbyService nearby = Mockito.mock(NearbyService.class);
+		when(reader.findDetail(10234L)).thenReturn(Optional.of(detail()));
+		when(nearby.neighborsOf(Mockito.any())).thenReturn(
+				new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01), neighbor(2L, 0.02)), false));
+
+		MusicDetailResponse res = serviceWith(reader, nearby).getDetail(10234L);
 
 		assertThat(res.detail().id()).isEqualTo(10234L);
 		assertThat(res.neighbors()).hasSize(2);
 		assertThat(res.neighbors().get(0).distance()).isEqualTo(0.01);
-		verify(reader).findNeighbors(10234L, 10); // 고정 10곡 요청 (정본 §3.2)
+		assertThat(res.lowSimilarity()).isFalse();
 	}
 
 	@Test
 	void getDetail_fewerNeighborsThan10_passesThrough() {
 		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
+		NearbyService nearby = Mockito.mock(NearbyService.class);
 		when(reader.findDetail(10234L)).thenReturn(Optional.of(detail()));
-		when(reader.findNeighbors(10234L, 10)).thenReturn(List.of(neighbor(1L, 0.01)));
-		MusicService service = new MusicService(Optional.empty(), Optional.of(reader), Optional.empty());
+		when(nearby.neighborsOf(Mockito.any()))
+				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
 
-		assertThat(service.getDetail(10234L).neighbors()).hasSize(1);
+		assertThat(serviceWith(reader, nearby).getDetail(10234L).neighbors()).hasSize(1);
+	}
+
+	/** E2 — 유사도 낮음 표시가 곡 상세 응답에도 그대로 실린다 (005 SC-006). */
+	@Test
+	void getDetail_carriesLowSimilarityFromSharedSelection() {
+		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
+		NearbyService nearby = Mockito.mock(NearbyService.class);
+		when(reader.findDetail(10234L)).thenReturn(Optional.of(detail()));
+		when(nearby.neighborsOf(Mockito.any()))
+				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 5.0)), true));
+
+		assertThat(serviceWith(reader, nearby).getDetail(10234L).lowSimilarity()).isTrue();
+	}
+
+	/**
+	 * E1 — 곡 상세와 주변 탐색이 <b>같은 선정 결과</b>를 쓴다 (005 FR-023, SC-006).
+	 *
+	 * <p>둘이 같은 목록을 준다는 것을 규칙을 두 번 흉내 내서가 아니라 <b>같은 메서드를 지나간다는 사실</b>로
+	 * 확인한다. 규칙이 갈라지려면 이 호출이 사라져야 하고, 그러면 이 테스트가 깨진다.
+	 */
+	@Test
+	void getDetail_delegatesNeighborSelectionToSharedPath() {
+		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
+		NearbyService nearby = Mockito.mock(NearbyService.class);
+		MusicDetail center = detail();
+		when(reader.findDetail(10234L)).thenReturn(Optional.of(center));
+		when(nearby.neighborsOf(center))
+				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
+
+		serviceWith(reader, nearby).getDetail(10234L);
+
+		verify(nearby).neighborsOf(center);
+		verify(reader, Mockito.never()).findSummariesByMbids(Mockito.anyList());
 	}
 
 	@Test
 	void getDetail_missingSong_throwsMusicNotFound() {
 		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
 		when(reader.findDetail(999L)).thenReturn(Optional.empty());
-		MusicService service = new MusicService(Optional.empty(), Optional.of(reader), Optional.empty());
 
-		assertThatThrownBy(() -> service.getDetail(999L))
+		assertThatThrownBy(() -> serviceWith(reader, Mockito.mock(NearbyService.class)).getDetail(999L))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
 				.isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND);
@@ -82,9 +119,7 @@ class MusicDetailServiceTests {
 
 	@Test
 	void getDetail_noReader_throwsUnsupported() {
-		MusicService service = new MusicService(Optional.empty(), Optional.empty(), Optional.empty());
-
-		assertThatThrownBy(() -> service.getDetail(10234L))
+		assertThatThrownBy(() -> serviceWith(null, Mockito.mock(NearbyService.class)).getDetail(10234L))
 				.isInstanceOf(UnsupportedOperationException.class);
 	}
 }

@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import com.ssafy.backend.music.retrieval.SameRecording;
 import com.ssafy.backend.music.detail.MusicDetailReaderAdapter;
 import com.ssafy.backend.music.dto.JourneyResponse;
 import com.ssafy.backend.music.dto.JourneyStop;

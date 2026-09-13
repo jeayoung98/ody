@@ -195,8 +195,10 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * appear(s.musicId, t);
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
-      d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow * fieldSize;
-      alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t) * fieldAlpha;
+      // 집을 수 없는 별이라 눌리는 별(0.42~1)과 확실히 갈라놓는다 — 임시 랜덤 크기로 배경도 커진 뒤로
+      // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.22
+      d = (2.4 + Math.pow(mag, 1.6) * 4.2) * grow * fieldSize;
+      alpha = (0.06 + lumOf(i, mag) * 0.16) * twinkle(s.musicId, t) * fieldAlpha;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;

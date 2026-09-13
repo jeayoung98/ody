@@ -39,7 +39,7 @@
 | S2 전처리 | 추출 특징 + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` `mbid` + `f_000..f_269` f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인. 잡은 `spark/jobs/preprocess.py` |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` `mbid` + pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet`. 잡은 `spark/jobs/pca.py` |
 | S4 트리 배정 | coords + `map_tree/tree.json` + `split_axes.npz` | `node_paths/` `mbid` + `leaf_id` + `node_d1` + `node_d2` | 말단 노드 일치 100%. 표본 5,000곡 실측 완료. 잡은 `spark/jobs/tree_assign.py` |
-| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R9 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
+| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R10 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | 원래 문장: `check_contract.py --strict --prev` 통과. **`--prev` 는 적용 불가 — 아래 S6 절 참조.** 대체 기준은 `--strict` 통과 + 내용 대조. 잡은 `spark/jobs/artifact_export.py` |
 
 ## S1 대표행 선택 — 제출본 2,946만 → 곡 740만
@@ -52,6 +52,7 @@ census 제출본 29,460,584
   → 2~5. MBID 당 1행 선택
   → 곡 7,404,506
   → (S5 가 R1~R9 로 780,107 더 자름)  →  6,624,399
+  → (R10 제목 잡음 33,646 더 자름. 2026-09-14 추가)  →  6,590,753
 ```
 
 ### 선택 규칙 (완전 결정적)
@@ -201,6 +202,8 @@ root 에서 시작해 깊이 6 까지 한 칸씩
 S1 대표행 7,404,506
   → 규칙 R1~R9 적용        제외 780,107 (10.54%)
   → 남는 곡 6,624,399
+  → R10 제목 잡음 (v4)     신규 제외 33,646 (0.45%)   누적 813,753 (10.99%)
+  → 남는 곡 6,590,753
 ```
 
 행을 지우지 않는다. 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`, `flag_*` 로 표시한다(`data/AGENTS.md` 규칙 2). 임계값은 `pipeline/exclusion_rules.json`(v3)에서만 읽고 잡 코드에 숫자를 적지 않는다(규칙 9). 테스트가 하드코딩 여부를 검사한다.
@@ -217,6 +220,7 @@ S1 대표행 7,404,506
 | R7_samplerate | 0 | 0 | **꺼짐**. `flag_low_sr` 만 만든다 |
 | R8_silence | 116 | 78 | 하위 분위 음량 + 무음률 높음 |
 | R9_corrupt | 0 | 0 | **꺼짐**. `flag_clipped` 만 만든다 |
+| R10_title_noise | 48,952 | 33,646 | 제목이 곡을 식별하지 못하는 행. `lower(trim(title_raw))` 가 JSON 정규식 5종 중 하나에 맞음: `[untitled]`·`Untitled 3`(단독), 빈 제목·구두점만, `Track 01`(track/pista/piste/titel/faixa/traccia), `Intro`·`Outro`·`Skit`·`Interlude` 단독, `Unknown`·`Sans Titre`·`無題`. **v4 추가(2026-09-14, S15P21A405-299)** — 기준 카탈로그 `catalog_v2` 는 R1~R9 라 R10 열은 `catalog_v2` 에서 재계산한 값이다. 숫자만 제목(`1999`·`22`)과 `untitled` 부분 일치(`Untitled (How Does It Feel)`)는 실제 곡이라 넣지 않았다 |
 
 R5·R6 은 거리 보호가 있다. 대표와 좌표 거리가 `protect_dist`(4.0) 를 넘는 멤버는 제목이 같아도 접지 않는다. 근거는 같은 녹음의 제출본 거리 p90 이 5.18 이고 제목만 같은 묶음의 멤버 거리 median 이 5.34 라는 감사 A6·A7 이다.
 

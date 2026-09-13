@@ -57,7 +57,10 @@ def test_rules_come_from_json_only(rules_pair):
     """임계값은 JSON 에서만 온다. 잡 소스에 숫자를 적지 않는다(규칙 9)."""
     rules, digest = rules_pair
     assert list(rules) == ["R1_length", "R2_nonmusic", "R3_no_key", "R4_cohort", "R5_dup_canonical",
-                           "R6_dup_version", "R7_samplerate", "R8_silence", "R9_corrupt"]
+                           "R6_dup_version", "R7_samplerate", "R8_silence", "R9_corrupt",
+                           "R10_title_noise"]
+    assert rules["R10_title_noise"]["enabled"] is True
+    assert len(rules["R10_title_noise"]["params"]["patterns"]) == 5
     assert rules["R7_samplerate"]["enabled"] is False
     assert rules["R9_corrupt"]["enabled"] is False
     assert len(digest) == 16
@@ -115,6 +118,23 @@ def test_group_key_is_empty_without_artist_or_title():
     assert S5.r6_group_key("artist", "") == ""
     assert S5.r6_group_key("artist", "!!!") == "", "정규화 후 남는 글자가 없으면 묶지 않는다"
     assert S5.r6_group_key("artist", "Song (2011 Remaster)") == "artist||song"
+
+
+R10_HITS = [None, "[untitled]", "untitled", "Untitled 3", "Untitled #12", "", "  ", "...", "$",
+            "Track 01", "Track 7", "Pista 3", "Titel 08", "Intro", "Outro (Prod. 8Cee)", "Interlude",
+            "Skit 2", "Unknown", "Unknown Track", "Sans Titre", "無題", "제목 없음"]
+R10_KEEP = ["Untitled Love Song", "Untitled (How Does It Feel)", "Introspection", "Track of Time",
+            "Unknown Soldier", "Unknown Pleasures", "1999", "22", "7", "Intro to the Blues",
+            "Skit Skat", "夏", "Us", "Time"]
+
+
+def test_r10_title_noise_samples(rules_pair):
+    """R10 은 제목이 곡을 식별하지 못하는 행만 잡는다. 진짜 곡 제목은 통과한다."""
+    rules, _ = rules_pair
+    for title in R10_HITS:
+        assert S5.row_masks({"title_raw": title}, rules)["R10_title_noise"], title
+    for title in R10_KEEP:
+        assert not S5.row_masks({"title_raw": title}, rules)["R10_title_noise"], title
 
 
 def test_job_imports_without_pyspark():
@@ -175,6 +195,25 @@ def _artist_norm(work, wanted):
             if mbid in wanted:
                 out[mbid] = artist
     return out
+
+
+R10_HITS_TOTAL = 48_952            # 규칙 basis 기록값 (2026-09-14)
+R10_NEW_EXCLUDED = 33_646          # R1~R9 미적중 행 중 R10 적중
+
+
+def test_r10_counts_match_basis(catalog, rules_pair):
+    """R10 적중 수가 JSON basis 에 적은 실측과 같다. 기준 카탈로그(R1~R9)에는 R10 이 없어 신규 제외로 센다."""
+    rules, _ = rules_pair
+    rule = rules["R10_title_noise"]
+    total = new = 0
+    for rg in range(catalog.metadata.num_row_groups):
+        table = catalog.read_row_group(rg, columns=["title_raw", "excluded"])
+        for title, excluded in zip(table.column("title_raw").to_pylist(), table.column("excluded").to_pylist()):
+            if S5.is_title_noise(title, rule):
+                total += 1
+                new += not excluded
+    assert (total, new) == (R10_HITS_TOTAL, R10_NEW_EXCLUDED)
+    assert (TOTAL_EXCLUDED + new) / CATALOG_ROWS < 0.15
 
 
 def test_catalog_row_count(catalog):

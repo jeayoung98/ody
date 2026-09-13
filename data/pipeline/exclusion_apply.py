@@ -113,6 +113,13 @@ def compute(meta, X, R):
     # R3
     masks["R3_no_key"] = ((meta["title_raw"] == "") & (meta["artist_raw"] == "")).to_numpy() if rules["R3_no_key"].get("enabled") else np.zeros(N, bool)
 
+    # R10 제목 잡음: lower(trim(title)) 가 JSON 정규식 중 하나에 맞으면
+    r = rules["R10_title_noise"]
+    tnorm = meta["title_raw"].fillna("").str.strip().str.lower()
+    m10 = np.zeros(N, bool)
+    for pat in r["params"]["patterns"].values(): m10 |= tnorm.str.contains(pat, regex=True).to_numpy()
+    masks["R10_title_noise"] = m10 if r.get("enabled") else np.zeros(N, bool)
+
     # R4 (명시용)
     coh = set(rules["R4_cohort"]["params"]["fingerprints"])
     masks["R4_cohort"] = ~meta["fingerprint"].isin(coh).to_numpy()

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """S5 카탈로그 제외 규칙 (spec 20, Jira S15P21A405-128).
 
-    S1 대표행 7,404,506  →  규칙 R1~R9  →  제외 780,107  →  남는 곡 6,624,399
+    S1 대표행 7,404,506  →  규칙 R1~R10  →  제외 813,753  →  남는 곡 6,590,753
 
 곡 수를 줄이는 두 번째이자 마지막 단계다. 첫 번째는 S1(`manifest_rows.py`).
 **삭제가 아니라 표시다**(규칙 2). 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`,
@@ -22,6 +22,8 @@ numpy 기준 구현은 `pipeline/exclusion_apply.py`, 임계값은 `pipeline/exc
     R7 samplerate  enabled=false. flag_low_sr 만 만든다
     R8 silence     average_loudness 하위 분위 + (dynamic_complexity 낮음 or 무음률 높음)
     R9 corrupt     enabled=false. flag_clipped 만 만든다
+    R10 title_noise 제목이 곡을 식별하지 못하는 행. lower(trim(title_raw)) 가 JSON 의 정규식
+                   (untitled·빈 제목·Track N·Intro/Outro 단독·Unknown) 중 하나에 맞으면 제외
 
 ## 이식하지 않는 것
 dry-run 리포트, 브릿지 풀 Hit@10 재검증, 서빙 번들 내보내기. 앞의 둘은 fit·QA 산물이고
@@ -107,6 +109,17 @@ def r6_key(title):
     return key, sorted(keep), dropped, unknown
 
 
+def title_noise_norm(title):
+    """R10 입력. JSON params.normalize = lower(trim(title_raw)) 와 같다."""
+    return (title or "").strip().lower()
+
+
+def is_title_noise(title, rule):
+    """R10 행 판정. 정규식은 JSON 에서만 온다. Spark 쪽은 같은 문자열을 rlike 에 넣는다."""
+    t = title_noise_norm(title)
+    return any(re.search(p, t) for p in rule["params"]["patterns"].values())
+
+
 def has_no_modifier(title):
     """R6 대표 선정의 1순위. 제거 수식어도 미분류 블록도 없는 제목."""
     _key, _keep, dropped, unknown = r6_key(title)
@@ -184,6 +197,8 @@ def row_masks(row, rules, tags=(), loud_q=None):
             hit = _r8(row, p, loud_q)
         elif rid == "R9_corrupt":
             hit = int(row.get("n_clipped_features") or 0) >= p["min_clipped_features"]
+        elif rid == "R10_title_noise":
+            hit = is_title_noise(row.get("title_raw"), rule)
         else:
             continue                           # R5·R6 은 fold_group 이 판정한다
         out[rid] = bool(hit) and enabled
@@ -283,6 +298,10 @@ def apply_rules(df, rules, loud_q):
     p1 = rules["R1_length"]["params"]
     p2 = rules["R2_nonmusic"]["params"]
     p8 = rules["R8_silence"]["params"]
+    title_norm = F.lower(F.trim(F.coalesce(F.col("title_raw"), F.lit(""))))
+    title_noise = F.lit(False)
+    for pattern in rules["R10_title_noise"]["params"]["patterns"].values():
+        title_noise = title_noise | title_norm.rlike(pattern)
     length, sr = F.col("length"), F.col("sample_rate")
     tagged = F.coalesce(F.col("has_tag"), F.lit(False))
     exempt = F.coalesce(F.col("has_exempt_tag"), F.lit(False))
@@ -301,6 +320,7 @@ def apply_rules(df, rules, loud_q):
                           | (F.col("silence60") > F.lit(float(p8["silence60_gt"]))))),
         "R9_corrupt": (F.coalesce(F.col("n_clipped_features"), F.lit(0))
                        >= F.lit(rules["R9_corrupt"]["params"]["min_clipped_features"])),
+        "R10_title_noise": title_noise,
     }
     out = df
     for rid, expr in masks.items():

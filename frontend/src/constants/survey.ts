@@ -23,6 +23,12 @@ export const SURVEY_FORCE_KEY = "ody:survey-force";
 export const SURVEY_ANON_KEY = "ody_anon_id";
 
 /**
+ * 평가 대상 곡에 붙는 말. **모드가 달라도 같다** — 비교 상대(`compareLabel`)는 기준곡이냐
+ * 앞 역이냐로 갈리지만, 평가 대상은 양쪽 다 "방금 들은 그 곡" 하나로 같은 것을 가리킨다.
+ */
+export const SURVEY_TARGET_LABEL = "방금 들은 곡";
+
+/**
  * 이유 칩 — **백엔드 결함 코드와 1:1** 이다. 각각 고칠 곳이 다르다.
  *
  * - `dup` 같은 녹음의 다른 판 → `tau_dup` 상향

@@ -45,7 +45,7 @@ export function useNearbyTargets(center: Track | null | undefined, neighbors: re
 
     neighbors.forEach((n, i) => {
       const target: SurveyTarget = { sessionId, mode: "nearby", rank: i + 1, anchorMusicId: center.musicId, musicId: n.musicId };
-      table.set(n.musicId, { target, compareTitle: center.title });
+      table.set(n.musicId, { target, compareTitle: center.title, targetTitle: n.title });
     });
     return table;
   }, [sessionId, center, neighbors]);
@@ -79,7 +79,7 @@ export function useJourneyTargets(stops: readonly Track[] | undefined) {
         prevMusicId: stops[i].musicId,
         musicId: stop.musicId,
       };
-      table.set(stop.musicId, { target, compareTitle: stops[i].title });
+      table.set(stop.musicId, { target, compareTitle: stops[i].title, targetTitle: stop.title });
     });
     return table;
   }, [sessionId, stops]);

@@ -69,6 +69,8 @@ export interface SurveyPrompt {
   target: SurveyTarget;
   /** 비교 상대 곡 제목. nearby 는 기준곡, journey 는 앞 역 */
   compareTitle: string;
+  /** 평가 대상 곡 제목 — 방금 들은 곡. 상대만 보여주면 둘 중 뭘 묻는지 알 수 없다 */
+  targetTitle: string;
 }
 
 /**

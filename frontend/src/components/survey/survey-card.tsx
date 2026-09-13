@@ -3,7 +3,7 @@
 import { useState } from "react";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
-import { SURVEYS } from "@/constants/survey";
+import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import type { SurveyReason } from "@/types/survey";
@@ -69,13 +69,20 @@ export default function SurveyCard() {
       <div className="w-full max-w-sm animate-tin" role="dialog" aria-modal="true" aria-label="설문">
         <Box title="잠깐만요">
           {/*
-            비교 상대를 **제목으로 따로 보여준다.** 이웃을 두어 번 건너가면 기준곡이 뭐였는지
-            기억하지 못하는데, 카드가 화면을 덮어서 지도로 확인할 수도 없다.
+            **두 곡을 같이 보여준다.** 한쪽만 있으면 그게 방금 들은 곡인지 비교 상대인지
+            알 수 없다 — 실제로 그랬다. 이웃을 두어 번 건너가면 기준곡도 기억나지 않는데
+            카드가 화면을 덮어서 지도로 확인할 수도 없다.
+
             문장에 끼워 넣지 않는 이유는 조사다 — 제목 받침에 따라 와/과 가 갈린다.
+            라벨을 왼쪽에 세로로 맞춘 것은 곡 상세 패널(발매 국가 · 작곡가 …)과 같은 꼴이고,
+            아래가 평가 대상이라는 것은 보라색 라벨과 굵기로 가른다(색만으로 가르지 않는다).
           */}
-          <div className="flex flex-col gap-1">
+          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 rounded-box-xs border border-line bg-void-3/50 px-3 py-2.5">
             <span className="lbl">{definition.compareLabel}</span>
-            <p className="font-display text-base leading-snug font-semibold break-keep text-ink">{prompt.compareTitle}</p>
+            <p className="text-sm leading-snug break-keep text-ink-2">{prompt.compareTitle}</p>
+            <div className="col-span-2 my-2 h-px bg-line" />
+            <span className="lbl text-violet!">{SURVEY_TARGET_LABEL}</span>
+            <p className="font-display text-[15px] leading-snug font-semibold break-keep text-ink">{prompt.targetTitle}</p>
           </div>
 
           <div className="flex flex-col gap-2">

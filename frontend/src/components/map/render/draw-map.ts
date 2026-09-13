@@ -32,9 +32,21 @@ function appear(id: number, t: number) {
     seenAt.set(id, { first: t, last: t });
     return 0;
   }
+  // 한동안 안 그려졌다면(집합에서 빠졌다가 돌아온 별) 다시 처음부터 밝아진다 — 안 그러면 예전에 본
+  // 별은 기록이 남아 있어 **뚝** 하고 나온다 (S15P21A405-284)
+  if ((t - e.last) * 1000 > STAR_VIEW.reappearGapMs) e.first = t;
   e.last = t;
   if (seenAt.size > 4000 && t - e.first > 3) seenAt.delete(id);
   return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
+}
+/**
+ * 화면 밖이지만 살아 있는 별은 "본 것" 으로 친다 — 지도를 밀어 다시 들어올 때는 페이드하지 않는다.
+ * 페이드는 **집합에 없던 별이 생길 때**만이다
+ */
+function touch(id: number, t: number) {
+  const e = seenAt.get(id);
+  if (e) e.last = t;
+  else seenAt.set(id, { first: t, last: t });
 }
 
 /**
@@ -179,10 +191,16 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     if (a0 < 0.01) continue;
     let px = P[i * 2];
     let py = P[i * 2 + 1];
-    if (px < -20 || px > W + 20 || py < -20 || py > H + 20) continue;
     const s = e.songs[i];
+    if (px < -20 || px > W + 20 || py < -20 || py > H + 20) {
+      if (!out) touch(s.musicId, t);
+      continue;
+    }
     if (pset?.has(s.musicId) || cset?.has(s.musicId)) continue; // 프로브·별자리 곡은 따로 그린다
     const mag = starMag(s);
+    // 새로 생긴 별은 어느 급이든 380ms 동안 밝아진다. 겹 전환 중 응답이 늦게 도착해 집합이 바뀌면
+    // 별이 중간 알파로 **뚝** 나타났다 — 그 자리를 여기서 잡는다 (S15P21A405-284). 나가는 겹은 이미 보이던 별이다
+    const born = out ? 1 : appear(s.musicId, t);
     const on = e.chosen.has(i);
     let d: number;
     let alpha: number;
@@ -191,14 +209,13 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = 1;
     } else if (on) {
       d = (STAR_SIZE.min + Math.pow(mag, 1.75) * (STAR_SIZE.max - STAR_SIZE.min)) * grow;
-      // 새로 도드라진 별은 툭 튀지 않게 380ms 동안 밝아진다 (프로토타입 appear)
-      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * appear(s.musicId, t);
+      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * born;
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
       // 집을 수 없는 별이라 눌리는 별(0.42~1)과 확실히 갈라놓는다 — 임시 랜덤 크기로 배경도 커진 뒤로
       // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.13
       d = (2.2 + Math.pow(mag, 1.6) * 3.6) * grow * fieldSize;
-      alpha = (0.04 + lumOf(i, mag) * 0.09) * twinkle(s.musicId, t) * fieldAlpha;
+      alpha = (0.04 + lumOf(i, mag) * 0.09) * twinkle(s.musicId, t) * fieldAlpha * born;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;

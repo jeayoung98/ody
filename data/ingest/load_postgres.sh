@@ -38,6 +38,19 @@ run_sql() { docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$P
 echo "== 0. 적재 전 상태"
 run_sql "SELECT 'music' AS t, count(*) FROM music UNION ALL SELECT 'genre', count(*) FROM genre UNION ALL SELECT 'music_genre', count(*) FROM music_genre;"
 
+# 재적재(D17) 안전장치 — 이 스크립트는 빈 테이블에 COPY 한다. 행이 있으면 중복 적재가 되므로 멈춘다.
+# 다시 채우려면 사람이 ODY_ALLOW_RELOAD=1 을 주고 실행한다. 그때만 세 테이블을 TRUNCATE 한다(id 는 mbid 순이라 재적재해도 같다, D13).
+# map_sample 은 music_id 만 참조하고 id 가 불변이라 그대로 둔다. GiST 두 개는 COPY 중 유지된다(느려지지만 21초짜리라 내리지 않는다).
+EXISTING=$(docker exec -i "$CONTAINER" bash -lc 'psql -tA -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT count(*) FROM music;"' | tr -d '[:space:]')
+if [ "${EXISTING:-0}" != "0" ]; then
+  if [ "${ODY_ALLOW_RELOAD:-0}" != "1" ]; then
+    echo "!! music 에 ${EXISTING} 행이 있다. 재적재면 ODY_ALLOW_RELOAD=1 bash load_postgres.sh <dir> 로 다시 실행한다. 중단." >&2
+    exit 1
+  fi
+  echo "== 0b. 재적재 — music·music_genre·genre TRUNCATE (ODY_ALLOW_RELOAD=1)"
+  run_sql "TRUNCATE music, music_genre, genre;"
+fi
+
 echo "== 1. CSV 를 컨테이너로"
 for f in music.csv genre.csv music_genre.csv; do
   docker cp "$CSV_DIR/$f" "$CONTAINER:/tmp/$f"

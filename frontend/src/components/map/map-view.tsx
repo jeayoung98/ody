@@ -22,6 +22,7 @@ import { registerMapEngine } from "./engine/engine-registry";
 import { MapEngine } from "./engine/map-engine";
 import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
+import HopChip from "./hop-chip";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { useViewport } from "./use-viewport";
@@ -423,6 +424,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <LayerToast />
       <FloatingReactions />
       <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onOpen={handleCardOpen} onPlay={playSong} />
+      <HopChip engine={engine} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

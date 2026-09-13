@@ -52,6 +52,11 @@ interface Morph {
   dir: 1 | -1;
   /** 도착한 겹의 진입 배율. 없으면 도착 카메라 배율을 쓴다 (파고들 때는 그게 맞다) */
   entryS?: number;
+  /**
+   * dive = 교차 확대(겹을 옮긴다). fade = 같은 자리에서 집합만 바꾸는 교차 페이드 —
+   * 전환이 끝난 뒤 겹 응답이 도착해 임시 집합을 실제 집합으로 바꿀 때 쓴다 (S15P21A405-284)
+   */
+  mode: "dive" | "fade";
 }
 
 /** 화면에 잡힌 친구 (그리기·히트테스트용) */
@@ -155,6 +160,12 @@ export class MapEngine {
   private aFrom = new Float32Array(0);
   private aTo = new Float32Array(0);
   anim: Morph | null = null;
+  /**
+   * 압력이 차는 동안 미리 정해 둔 다음 겹 요청 범위 (`boxes` + 다음 상자). 화면이 그 키로 곡을
+   * **미리 받아** 두면 파고든 순간 실제 집합이 이미 있어 임시 집합 → 실제 집합 교체가 안 보인다 (S15P21A405-284).
+   * 압력이 빠지거나 카메라가 움직이면 버린다 — 상자는 그 순간 화면에서 나오기 때문이다
+   */
+  prefetch: readonly LayerBox[] | null = null;
 
   pressure = 0;
   pressureDir: 1 | -1 | 0 = 0;
@@ -345,14 +356,22 @@ export class MapEngine {
     this.keepPinned(ns, layer);
     // 이미 그 집합이면 다시 연출하지 않는다 (떠오르기는 쌓아둔 집합으로 이미 돌아가 있다)
     if (sameMask(this.anim?.subset ?? this.subset, ns)) return;
+    // 전환 중이면 목적지만 바꿔 끼운다 — 다시 시작하면 전환이 두 번 보인다 (S15P21A405-284)
+    if (this.anim) {
+      this.retarget(this.fitCam(layer, ns, this.fitAnchor(ns, layer)), ns);
+      return;
+    }
+    // 전환이 끝난 뒤 도착한 응답: 같은 자리에서 집합만 교차 페이드한다. 다이빙을 다시 하지 않는다
     const ax = LAYER_AXES[layer];
     this.morph(
       layer,
-      this.anim ? this.fitCam(layer, ns, this.fitAnchor(ns, layer)) : { ...this.cam },
+      { ...this.cam },
       ns,
-      this.anim?.big ?? `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
-      this.anim?.sub ?? `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
-      this.anim?.dir ?? 1,
+      `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
+      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      1,
+      this.entryS,
+      "fade",
     );
   }
 
@@ -1137,20 +1156,42 @@ export class MapEngine {
    * from 은 지금 화면에 보이던 자리, to 는 새 겹에서의 자리이고, 각자 자기 자리에서
    * 화면 중앙을 기준으로 커지거나 작아지기만 한다. 별이 새 자리로 미끄러지지 않는다.
    */
-  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string, dir: 1 | -1 = 1, entryS?: number) {
+  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string, dir: 1 | -1 = 1, entryS?: number, mode: "dive" | "fade" = "dive") {
     // 레이어를 옮기면 고스트별은 사라진다 (MAP-12)
     this.ghost = null;
     for (let i = 0; i < this.N; i++) {
       this.from[i * 2] = this.pos[i * 2];
       this.from[i * 2 + 1] = this.pos[i * 2 + 1];
       this.aFrom[i] = this.alpha[i];
-      this.aTo[i] = newSubset[i] ? 1 : 0;
-      this.proj(i, newLayer, newCam, this.to, i * 2);
     }
+    this.aimAt(newLayer, newCam, newSubset);
     this.pressure = 0;
+    this.prefetch = null;
     this.camTarget = null;
     this.morphT = 0;
-    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir, entryS };
+    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir, entryS, mode };
+  }
+
+  /** 도착 자리·알파를 다시 계산한다. 진행 중인 전환의 목적지만 바꿀 때도 쓴다 */
+  private aimAt(layer: number, cam: MapCamera, subset: Uint8Array<ArrayBufferLike>) {
+    for (let i = 0; i < this.N; i++) {
+      this.aTo[i] = subset[i] ? 1 : 0;
+      this.proj(i, layer, cam, this.to, i * 2);
+    }
+  }
+
+  /**
+   * 진행 중인 전환의 **목적지만** 바꾼다 — 시작 시각·출발 자리는 그대로다.
+   * 파고들기는 임시 집합으로 먼저 출발하고 겹 응답은 나중에 오는데, 그때 morph 를 다시 부르면
+   * 전환이 처음부터 다시 시작돼 **두 번 일어난 것처럼** 보였다 (S15P21A405-284).
+   * 들어오는 겹은 초반에 거의 안 보이므로 자리를 바꿔 끼워도 튀지 않는다.
+   */
+  private retarget(cam: MapCamera, subset: Uint8Array<ArrayBufferLike>) {
+    const a = this.anim;
+    if (!a) return;
+    this.aimAt(a.layer, cam, subset);
+    a.cam = cam;
+    a.subset = subset;
   }
 
   /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
@@ -1179,7 +1220,8 @@ export class MapEngine {
    */
   descend() {
     if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
-    const box = this.drillBox();
+    // 미리 받게 알린 상자가 있으면 **그 상자 그대로** 쓴다 — 조금이라도 다르면 캐시 키가 갈려 미리 받은 게 헛일이다
+    const box = this.prefetch?.[this.layer] ?? this.drillBox();
     const inView = this.countInBox(box);
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
     this.boxes = [...this.boxes, box];
@@ -1285,6 +1327,8 @@ export class MapEngine {
     const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * riseAt;
     if (canDig || canRise) {
       this.pressureDir = canDig ? 1 : -1;
+      // 압력이 차는 동안 카메라는 멈춰 있으므로 지금 상자가 곧 파고들 때의 상자다 — 미리 받게 알린다
+      if (canDig && !this.prefetch) this.prefetch = [...this.boxes, this.drillBox()];
       this.pressure = Math.min(1, this.pressure + Math.abs(deltaY) * DRILL.pressurePerDelta);
       if (this.pressure >= 1) {
         if (canDig) this.descend();
@@ -1294,6 +1338,7 @@ export class MapEngine {
     }
     this.camTarget = null;
     this.touched = true;
+    this.prefetch = null;
     const w = this.screenToWorld(mx, my);
     const want = this.cam.s * Math.exp(-deltaY * WHEEL_ZOOM);
     // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게).
@@ -1310,6 +1355,7 @@ export class MapEngine {
   dragBy(dx: number, dy: number) {
     if (this.anim || this.follow) return;
     this.camTarget = null;
+    this.prefetch = null;
     this.touched = true;
     this.centerLock = false;
     this.cam.cx -= dx / this.cam.s;
@@ -1806,19 +1852,21 @@ export class MapEngine {
 
     // 모프 진행 — 두 겹을 화면 중앙 기준으로 확대·축소하며 교차한다 (별을 새 자리로 옮기지 않는다)
     if (this.anim) {
-      const t = Math.min(1, (now - this.anim.t0) / DRILL.morphMs);
+      const fade = this.anim.mode === "fade";
+      const t = Math.min(1, (now - this.anim.t0) / (fade ? DRILL.swapMs : DRILL.morphMs));
       const e = easeInOut(t);
       const f = this.freeRect();
       const dir = this.anim.dir;
       // 나가는 겹: 파고들면 계속 확대, 떠오르면 줄어든다. 들어오는 겹은 그 반대쪽에서 제 크기로 온다
-      // 나가는 겹은 뒤로 갈수록 가속해 화면 밖으로 빠진다 (후욱)
+      // 나가는 겹은 뒤로 갈수록 가속해 화면 밖으로 빠진다 (후욱). fade 모드는 자리를 그대로 둔다
       const eOut = Math.pow(e, DRILL.dive.outEase);
-      const sOut = dir > 0 ? lerp(1, DRILL.dive.out, eOut) : lerp(1, DRILL.dive.in, eOut);
-      const sIn = dir > 0 ? lerp(DRILL.dive.in, 1, e) : lerp(DRILL.dive.out, 1, e);
-      // 두 겹이 겹쳐 있는 구간을 넉넉히 둔다 — 안 그러면 전환 중간이 텅 비어 깜빡인다
+      const sOut = fade ? 1 : dir > 0 ? lerp(1, DRILL.dive.out, eOut) : lerp(1, DRILL.dive.in, eOut);
+      const sIn = fade ? 1 : dir > 0 ? lerp(DRILL.dive.in, 1, e) : lerp(DRILL.dive.out, 1, e);
+      // 두 겹이 겹쳐 있는 구간을 넉넉히 둔다 — 안 그러면 전환 중간이 텅 비어 깜빡인다.
+      // 들어오는 겹은 일찍 드러나야 "다음 겹으로 이어진다" 로 읽힌다 (S15P21A405-284)
       this.morphT = e;
-      const aOut = Math.pow(1 - e, 1.15);
-      const aIn = Math.min(1, Math.max(0, (e - 0.04) / 0.52));
+      const aOut = fade ? 1 - e : Math.pow(1 - e, 1.15);
+      const aIn = fade ? e : Math.min(1, Math.max(0, e / 0.42));
       for (let i = 0; i < this.N; i++) {
         this.posOut[i * 2] = f.cx + (this.from[i * 2] - f.cx) * sOut;
         this.posOut[i * 2 + 1] = f.cy + (this.from[i * 2 + 1] - f.cy) * sOut;
@@ -1857,7 +1905,10 @@ export class MapEngine {
         }
       }
     } else {
-      if (this.pressure > 0) this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
+      if (this.pressure > 0) {
+        this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
+        if (this.pressure === 0) this.prefetch = null;
+      }
       // 카메라 목표 추적
       if (this.camTarget) {
         const k = 1 - Math.pow(0.001, 16 / 1000) * 0.85;
@@ -2091,6 +2142,8 @@ export class MapEngine {
       canRise: this.stack.length > 0,
       pressure: Math.round(this.pressure * 100) / 100,
       pressureDir: this.pressure > 0.01 ? this.pressureDir : 0,
+      // 압력 시작·해제 때만 새 배열이 되므로 참조 비교로 변화가 잡힌다
+      prefetchBoxes: this.prefetch,
       morph: this.anim ? { big: this.anim.big, sub: this.anim.sub } : null,
       myMusicId: this.myId,
       // travelTo 때만 새 객체가 되므로 참조 비교로 변화가 잡힌다

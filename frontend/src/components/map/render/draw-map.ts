@@ -209,18 +209,26 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     if (e.hoverId === s.musicId) alpha = Math.min(1, alpha + 0.3);
     g.globalAlpha = alpha;
     g.drawImage(spr[genreIdx(s.genreId)], px - d / 2, py - d / 2, d, d);
-    // 전환 중 나가는 별은 지나간 자리에 잔상을 남긴다 — 가장자리로 훅 빠지는 게 보이게
-    if (out && e.anim) {
+    // 전환 중 나가는 별은 지나간 자리에 잔상을 남긴다 — 가장자리로 훅 빠지는 게 보이게.
+    // 선은 가늘고 길게, 꼬리는 투명하게 흘려 **쭉 이어지는 궤적**으로 (S15P21A405-284).
+    // 빠져나갈수록(morphT) 길어진다 — 가속과 함께 늘어나야 "속도가 붙는다" 로 읽힌다
+    if (out && e.anim && e.anim.mode === "dive" && alpha > 0.03) {
       const f2 = e.freeRect();
       const tx = px - f2.cx;
       const ty = py - f2.cy;
       const td = Math.hypot(tx, ty) || 1;
-      const len = Math.min(90, td * 0.22) * (e.anim.dir > 0 ? 1 : -1);
-      g.globalAlpha = alpha * 0.5;
-      g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
-      g.lineWidth = Math.max(0.8, d * 0.18);
+      const len = Math.min(260, td * (0.18 + 0.6 * e.morphT)) * (e.anim.dir > 0 ? 1 : -1);
+      const x0 = px - (tx / td) * len;
+      const y0 = py - (ty / td) * len;
+      const tail = g.createLinearGradient(x0, y0, px, py);
+      const rgb = genreRgb(s.genreId);
+      tail.addColorStop(0, rgba(rgb, 0));
+      tail.addColorStop(1, rgba(rgb, 0.85));
+      g.globalAlpha = Math.min(1, alpha * 0.9);
+      g.strokeStyle = tail;
+      g.lineWidth = Math.max(0.5, d * 0.07);
       g.beginPath();
-      g.moveTo(px - (tx / td) * len, py - (ty / td) * len);
+      g.moveTo(x0, y0);
       g.lineTo(px, py);
       g.stroke();
     }

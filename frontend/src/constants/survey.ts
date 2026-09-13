@@ -1,42 +1,41 @@
 /**
- * 설문 문항·상수 (S15P21A405-250).
+ * 설문 문항·상수 (S15P21A405-294).
  *
- * **문항을 바꾸려면 이 파일만 고친다.** 단계 수가 늘어도 카드 컴포넌트는 그대로다 —
- * 단계는 `steps` 배열의 길이로 결정된다.
+ * **문항을 바꾸려면 이 파일만 고친다.** 다만 `reason` 값은 백엔드
+ * `explore_feedback.reason` 의 CHECK 제약과 같아야 한다 — 없는 값을 보내면 DB 가 거부한다.
  *
- * 문항을 바꿨으면 `SURVEY_VERSION` 도 올린다. 안 올리면 예전 응답과 섞여
- * 버전 간 비교가 불가능해진다.
+ * 정본: `docs/api-spec.md` 5.1 · `docs/notion/product/01_EXPLORE_SURVEY.md`
  *
  * **최종 배포 때 걷어낼 기능이다.** survey 관련 파일과 함께 삭제된다.
  */
 import type { SurveyDefinition } from "@/types/survey";
 
-/** 문항이 바뀌면 올린다 */
-export const SURVEY_VERSION = "v1";
-
-/** 이만큼 들은 뒤에야 묻는다. 자동재생이 붙으면 실제 청취 시간으로 잰다 */
+/** 이만큼 들은 뒤에야 묻는다. 못 채우고 떠난 곡은 묻지 않고 무응답 행만 보낸다 */
 export const SURVEY_MIN_LISTEN_MS = 20_000;
 
-/**
- * 개발용 — 청취 시간을 기다리지 않고 즉시 띄운다.
- *
- * `?survey=force` 로 켜고 `?survey=off` 로 끈다. 한 번 켜면 그 탭이 닫힐 때까지 유지된다 —
- * 화면 진입 직후 라우터가 쿼리를 지워버려서 쿼리만 보면 금방 사라지기 때문이다.
- */
+/** 개발용 — 이 쿼리가 붙으면 청취 시간과 무관하게 즉시 띄운다 (`?survey=force`) */
 export const SURVEY_FORCE_PARAM = "survey";
 
 /** 위 강제 플래그를 탭 세션에 남겨두는 자리 */
 export const SURVEY_FORCE_KEY = "ody:survey-force";
 
-/** 판단이 안 설 때 고르는 값. 분석에서 제외한다 */
-export const SURVEY_UNSURE = "unsure";
+/** 익명 사용자 식별자를 담는 자리. 정본이 이 키를 지정한다 */
+export const SURVEY_ANON_KEY = "ody_anon_id";
 
-/** 이유 축 — 사용자 말로 쓴다. PCA 축과 1:1로 대응하지 않는다 */
-const AXES = {
-  mood: "분위기",
-  tempo: "빠르기",
-  timbre: "목소리·악기 소리",
-} as const;
+/**
+ * 이유 칩 — **백엔드 결함 코드와 1:1** 이다. 각각 고칠 곳이 다르다.
+ *
+ * - `dup` 같은 녹음의 다른 판 → `tau_dup` 상향
+ * - `mood` 소리 자체가 다름 → `tau_far` 하향·hub 벌점. 가까운 거리에서도 많으면 좌표 문제
+ * - `tempo` 분위기는 비슷한데 빠르기 차이 → bpm 차이 벌점
+ * - `spoken` 말·낭독·효과음 → 정제 규칙에서 제외
+ */
+const REASONS = [
+  { value: "dup", label: "같은 곡이잖아" },
+  { value: "mood", label: "분위기 다름" },
+  { value: "tempo", label: "템포 다름" },
+  { value: "spoken", label: "음악 아님" },
+] as const;
 
 /**
  * 주변 탐색 — "기준곡과 비슷한가"를 묻는다.
@@ -45,83 +44,20 @@ const AXES = {
  * 유사도가 섞여서 거리 기반 알고리즘을 평가할 수 없다.
  */
 const NEARBY: SurveyDefinition = {
-  kind: "nearby",
-  steps: [
-    {
-      question: "이 곡, 이전 곡과 비슷하게 들리나요?",
-      multiple: false,
-      options: [
-        { value: "similar", label: "비슷해요" },
-        { value: "different", label: "달라요" },
-        { value: SURVEY_UNSURE, label: "잘 모르겠어요", terminal: true },
-      ],
-    },
-    {
-      // 긍정·부정 양쪽 다 이유를 묻는다 — 무엇이 잘 맞았는지도 개선에 쓰인다
-      multiple: true,
-      question: "어떤 점이 그랬나요?",
-      questionByPrev: {
-        similar: "어떤 점이 비슷했나요?",
-        different: "어떤 점이 달랐나요?",
-      },
-      optionsByPrev: {
-        similar: [
-          { value: "mood", label: AXES.mood },
-          { value: "tempo", label: AXES.tempo },
-          { value: "timbre", label: AXES.timbre },
-          // 같은 곡의 다른 버전(라이브·리마스터)이 이웃으로 뜨는 건 중복 판정 실패다
-          { value: "same_song", label: "같은 곡 같아요" },
-        ],
-        different: [
-          { value: "mood", label: AXES.mood },
-          { value: "tempo", label: AXES.tempo },
-          { value: "timbre", label: AXES.timbre },
-        ],
-      },
-    },
-  ],
+  mode: "nearby",
+  question: "기준곡과 비슷했나요?",
+  yes: "네, 비슷해요",
+  reasonQuestion: "어떤 점이 아쉬웠나요?",
+  reasons: REASONS,
 };
 
-/**
- * 경로 탐색 — "앞 곡에서 자연스럽게 이어지는가"를 묻는다.
- *
- * 경로 전체가 아니라 **방금 들은 전환 한 곳**만 평가하게 한다. 전체를 묻으면
- * 다 듣지 않은 사용자가 답할 수 없고, 고칠 위치도 특정되지 않는다.
- */
-const TRANSITION: SurveyDefinition = {
-  kind: "transition",
-  steps: [
-    {
-      question: "앞 곡에서 이 곡으로 자연스럽게 이어졌나요?",
-      multiple: false,
-      options: [
-        { value: "smooth", label: "자연스러워요" },
-        { value: "abrupt", label: "어색해요" },
-        { value: SURVEY_UNSURE, label: "잘 모르겠어요", terminal: true },
-      ],
-    },
-    {
-      multiple: true,
-      question: "어떤 점이 그랬나요?",
-      questionByPrev: {
-        smooth: "어떤 점이 좋았나요?",
-        abrupt: "어떤 점이 어색했나요?",
-      },
-      optionsByPrev: {
-        smooth: [
-          { value: "mood_flow", label: "분위기가 이어짐" },
-          { value: "tempo_flow", label: "빠르기가 이어짐" },
-          { value: "timbre_flow", label: "목소리·악기 소리가 이어짐" },
-        ],
-        abrupt: [
-          { value: "mood_jump", label: "분위기가 갑자기 바뀜" },
-          { value: "tempo_jump", label: "빠르기가 갑자기 바뀜" },
-          // 같은 녹음이 반복되는 건 중복 판정이나 다양성 규칙 쪽 문제다
-          { value: "too_similar", label: "너무 비슷해서 반복 같음" },
-        ],
-      },
-    },
-  ],
+/** 경로 탐색 — "앞 곡에서 자연스럽게 이어졌는가"를 묻는다 */
+const JOURNEY: SurveyDefinition = {
+  mode: "journey",
+  question: "앞 곡에서 자연스럽게 이어졌나요?",
+  yes: "네, 자연스러워요",
+  reasonQuestion: "어떤 점이 아쉬웠나요?",
+  reasons: REASONS,
 };
 
-export const SURVEYS = { nearby: NEARBY, transition: TRANSITION } as const;
+export const SURVEYS = { nearby: NEARBY, journey: JOURNEY } as const;

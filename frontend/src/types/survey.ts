@@ -1,5 +1,8 @@
 /**
- * 사용자 설문 (S15P21A405-250).
+ * 탐색 설문 (S15P21A405-294).
+ *
+ * **`explore_feedback` 테이블·`POST /api/feedback` 계약을 그대로 옮긴 것이다.**
+ * 필드를 바꾸려면 백엔드와 함께 바꾼다 — 정본은 `docs/api-spec.md` 5.1 이다.
  *
  * **최종 배포 때 걷어낼 기능이다.** 이 파일과 survey 관련 파일은 전부 함께 삭제된다.
  * 기존 도메인 타입(`music.ts` 등)에 설문용 필드를 섞지 않는다.
@@ -7,80 +10,69 @@
 import type { Id } from "./common";
 
 /** 어떤 탐색을 평가하는가 */
-export type SurveyKind = "nearby" | "transition";
+export type SurveyMode = "nearby" | "journey";
 
-/** 선택지 하나. `value` 가 그대로 서버에 저장된다 */
-export interface SurveyOption {
-  value: string;
+/** 부정 응답의 이유. 백엔드 CHECK 제약과 같은 값이어야 한다 */
+export type SurveyReason = "dup" | "mood" | "tempo" | "spoken";
+
+export interface SurveyReasonOption {
+  value: SurveyReason;
   label: string;
-  /**
-   * 이 선택지를 고르면 설문을 여기서 끝낸다 (다음 단계로 안 간다).
-   * "잘 모르겠어요" 처럼 이유를 물을 필요가 없는 응답에 쓴다.
-   */
-  terminal?: boolean;
 }
 
 /**
- * 설문 한 단계.
+ * 한 종류(주변/경로)의 설문 정의.
  *
- * 단계 수는 이 배열의 길이로 결정된다 — 카드 컴포넌트는 단계 개수를 모른다.
- * 2단계가 4단계로 늘어도 `constants/survey.ts` 만 고치면 된다.
+ * 단계는 늘 둘이다 — 판정 한 번, 부정일 때 이유 한 번. 백엔드가 `verdict` 하나와
+ * `reason` 하나만 받으므로 단계를 늘리려면 테이블부터 바꿔야 한다.
  */
-export interface SurveyStep {
-  /** 화면에 보이는 질문 */
-  question: string;
-  /** 복수 선택 허용 여부. false 면 고르는 즉시 다음 단계로 넘어간다 */
-  multiple: boolean;
-  /**
-   * 앞 단계에서 무엇을 골랐는지에 따라 선택지가 달라지는 경우가 있다
-   * (비슷해요 → "어떤 점이 비슷했나요", 달라요 → "어떤 점이 달랐나요").
-   * 키가 앞 단계의 `value`, 값이 그때 보여줄 선택지다.
-   * `question` 도 같이 바뀌면 `questionByPrev` 를 쓴다.
-   */
-  optionsByPrev?: Record<string, SurveyOption[]>;
-  questionByPrev?: Record<string, string>;
-  /** 앞 단계와 무관하게 고정된 선택지 */
-  options?: SurveyOption[];
-}
-
-/** 한 종류(주변/전환)의 설문 정의 */
 export interface SurveyDefinition {
-  kind: SurveyKind;
-  steps: SurveyStep[];
+  mode: SurveyMode;
+  question: string;
+  /** 긍정 답의 문구. 질문마다 자연스러운 말이 달라서 따로 둔다 */
+  yes: string;
+  reasonQuestion: string;
+  reasons: readonly SurveyReasonOption[];
 }
 
-/** 평가 대상을 가리키는 값. 주변인지 전환인지에 따라 채워지는 필드가 다르다 */
+/**
+ * 평가 대상을 가리키는 값. **탐색 결과를 받는 순간 만들어 곡마다 들고 있는다.**
+ *
+ * `sessionId` 와 `rank` 가 행의 식별자다(`UNIQUE(session_id, rank)`). 그래서 같은 곡을
+ * 다시 평가하면 새 행이 아니라 같은 행이 갱신된다.
+ */
 export interface SurveyTarget {
-  kind: SurveyKind;
-  /** 평가한 곡 */
-  musicId: Id;
-  /** 주변 탐색 — 기준곡 */
-  centerMusicId?: Id;
-  /** 주변 탐색 — 이웃 목록에서 몇 번째였나 (0-based) */
-  rank?: number;
-  /** 경로 탐색 — 출발·도착곡 */
-  startMusicId?: Id;
-  endMusicId?: Id;
-  /** 경로 탐색 — 직전에 들은 곡 (이 곡으로 이어진 전환을 평가한다) */
+  /** 탐색 1회. 주변·경로 응답을 받을 때 만든다 */
+  sessionId: string;
+  mode: SurveyMode;
+  /** nearby: 이웃 순서(1부터) / journey: 정거장 step. 0(기준곡·출발곡)은 설문 대상이 아니다 */
+  rank: number;
+  /** nearby: 기준곡 / journey: 출발곡 */
+  anchorMusicId: Id;
+  /** journey: 도착곡 */
+  targetMusicId?: Id;
+  /** journey: 앞 역 (1역은 출발곡) */
   prevMusicId?: Id;
-  /** 경로 탐색 — 경로에서 몇 번째 정거장인가 */
-  position?: number;
-  /** 경로 탐색 — 전체 정거장 수 */
-  totalStops?: number;
+  /** 평가 대상 곡 */
+  musicId: Id;
 }
 
-/** 서버로 보내는 한 건의 응답 */
+/**
+ * 서버로 보내는 한 건. 곡 하나가 끝날 때마다 1건이다.
+ *
+ * `verdict` 와 `reason` 의 관계를 DB 가 강제한다:
+ * `CHECK ((verdict = false) = (reason IS NOT NULL))` — 부정이면 이유가 **반드시** 있어야 하고,
+ * 긍정이거나 무응답이면 이유가 **없어야** 한다. 어기면 저장이 거부된다.
+ */
 export interface SurveySubmission extends SurveyTarget {
-  /** 단계별로 고른 값. `steps` 와 같은 순서 */
-  answers: string[][];
-  /** 익명 사용자 ID (localStorage 에 보관) */
+  /** 브라우저 localStorage UUID. 비로그인 배포에서 사람을 구분하는 유일한 값 */
   anonymousId: string;
-  /** 문항 버전 — 문항이 바뀌면 올린다. 이전 응답과 섞이면 안 된다 */
-  surveyVersion: string;
-  /** 강제 수집분인가. 자발적 응답과 구분해서 분석할 수 있게 */
-  forced: boolean;
-  /** 질문이 뜬 시각부터 제출까지 걸린 시간(ms). 너무 빠르면 대충 찍은 응답일 수 있다 */
-  elapsedMs: number;
-  /** 클라이언트 시각 (ISO) */
-  answeredAt: string;
+  /** true 비슷·자연스러움 / false 아님 / null 20초 전 종료·스킵 */
+  verdict: boolean | null;
+  /** `verdict === false` 일 때만 채운다 */
+  reason: SurveyReason | null;
+  /** 실제 들은 초 */
+  listenedSec: number;
+  /** 사용자가 넘겼는가 */
+  skipped: boolean;
 }

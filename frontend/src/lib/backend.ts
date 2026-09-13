@@ -85,6 +85,43 @@ export async function backendGet<T>(path: string): Promise<T> {
   return body.data;
 }
 
+/**
+ * 배포 백엔드 POST 호출. 봉투를 벗겨 data 만 돌려준다.
+ *
+ * **브라우저가 직접 부를 수 없어서 이 통로가 필요하다.** 배포 백엔드는 `Origin` 이 붙은 요청을
+ * 전부 `403 Invalid CORS request` 로 막는다 (BACKEND-NOTES B-17). 브라우저 요청에는 `Origin` 이
+ * 늘 붙으므로 rewrite 로 그대로 흘려보내도 403 이 된다. 서버에서 대신 부르면 그 헤더가 없다.
+ */
+export async function backendPost<T>(path: string, payload: unknown): Promise<T> {
+  const res = await fetch(`${BACKEND_ORIGIN}${path}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(BACKEND_ACCESS_TOKEN ? { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` } : {}),
+    },
+    body: JSON.stringify(payload),
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  let body: Envelope<T> | null = null;
+  try {
+    body = JSON.parse(text) as Envelope<T>;
+  } catch {
+    throw new BackendError(
+      res.status,
+      "BACKEND_PATH_NOT_PROXIED",
+      `${path} 가 JSON 을 주지 않았습니다. nginx 가 이 경로를 백엔드로 넘기지 않는 것으로 보입니다 (B-16).`,
+    );
+  }
+
+  if (!res.ok || !body.success) {
+    throw new BackendError(res.status, body.error?.code ?? "UNKNOWN", body.error?.message ?? "백엔드 호출에 실패했습니다.");
+  }
+
+  return body.data as T;
+}
+
 // ---------------------------------------------------------------------------
 // 배포 백엔드가 내려주는 형태 (정본 §0.6). 프론트 도메인 타입과 필드가 달라 여기서만 쓴다.
 // ---------------------------------------------------------------------------

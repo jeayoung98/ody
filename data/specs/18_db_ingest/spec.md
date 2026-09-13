@@ -1,6 +1,6 @@
 # 18 적재 파이프라인 (music·genre·music_genre + Neo4j) — spec
 
-상태 🔶(2026-09-11 적재·인덱스 완료 → 2026-09-13 D17 재적재 대기) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · **S15P21A405-291**(album·release_year 재패스) · 결정 **D11**, **D13**, **D16**, **D17** · 선행: 스펙 17 T1(Postgres 자원 상향)
+상태 ✅(2026-09-11 적재 → 2026-09-13 D17 재적재·HNSW 재빌드 완료) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · **S15P21A405-291**(album·release_year 재패스) · 결정 **D11**, **D13**, **D16**, **D17** · 선행: 스펙 17 T1(Postgres 자원 상향)
 
 > **D17 (2026-09-13)** — `album`·`release_year` 를 채우고 `album_mbid` 를 새로 적재한다. D11 의 "1차 NULL" 은 해제됐다.
 > 재료는 덤프 메타데이터 재패스 `ingest/meta_pass.py` → `meta_merge.py` → `work/v2_meta.parquet`. 커버리지 album **99.33%** · release_year **96.37%** · album_mbid **68.96%**.
@@ -117,6 +117,10 @@ BE 가 `music.album_mbid VARCHAR(36)` 을 2026-09-13 추가했다. COPY 컬럼 �
 - 재적재 전 확인: `play_cnt`/`youtube_cnt` 사용 0, BE 추가 곡 0, genre 29, links 71,285 — BE 가 쓴 데이터 없음.
 - `music_l2_gist` 가 서버에 없었다(09-11 이후 사라짐). 이번에 다시 만들어졌다. BE 가 만든 `idx_music_vec_1_to_4`·`idx_music_pc1_4` 가 따로 있다 — 정의 확인 필요.
 - 컨테이너 `/tmp/hnsw.sql` 이 이전 실행의 다른 소유자 파일로 남아 `Permission denied`. 스크립트는 이제 실행마다 새 파일명을 쓴다.
+- HNSW 재빌드 **1:09:33** (`maintenance_work_mem` 6GB, 컨테이너 8GB, 병렬 0). 2GB 로 시작한 첫 시도는 취소했다 — 09-11 의 65분 실측이 6GB 값이고 2GB 는 275만 튜플부터 디스크 경로다. 재빌드 중 BE 유사도 검색은 전체 스캔으로 동작했다.
+- `pg_indexes` 의 `PK_MUSIC` 은 대문자 이름이라 `indexname::regclass` 가 실패한다. `quote_ident(indexname)::regclass` 로.
+
+상태: ✅ 재적재·인덱스 완료 (2026-09-13).
 
 ### 자원은 재시작 없이 올렸다
 ```bash

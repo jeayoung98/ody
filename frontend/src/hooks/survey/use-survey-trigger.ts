@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { SURVEY_FORCE_KEY, SURVEY_FORCE_PARAM, SURVEY_MIN_LISTEN_MS } from "@/constants/survey";
 import { useSurveyStore } from "@/stores/use-survey-store";
-import type { SurveyPrompt, SurveyTarget } from "@/types/survey";
+import type { SurveyPrompt } from "@/types/survey";
 
 /**
  * `?survey=force` 를 **모듈이 처음 불릴 때 한 번만** 읽는다.
@@ -33,14 +33,8 @@ function readForced(): boolean {
 
 export const SURVEY_FORCED = readForced();
 
-/**
- * 카드에서 **비교 상대로 보여주는 곡**. 두 모드가 가리키는 것이 다르다 —
- * 주변 탐색은 기준곡(`anchorMusicId`), 경로 탐색은 바로 앞 역(`prevMusicId`)이다.
- * 경로의 `anchorMusicId` 는 출발곡이라 비교 상대가 아니다.
- */
-function compareMusicId(t: SurveyTarget): number {
-  return t.mode === "journey" ? (t.prevMusicId ?? t.anchorMusicId) : t.anchorMusicId;
-}
+/** 강제 모드에서는 청취 시간을 안 본다 — 후보 중 가장 가까운 것을 그냥 쓴다 */
+const RESOLVE_MIN_MS = SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS;
 
 /**
  * 언제 설문을 띄울지 판단한다 (S15P21A405-294).
@@ -63,7 +57,7 @@ function compareMusicId(t: SurveyTarget): number {
 export function useSurveyTrigger(prompt: SurveyPrompt | null) {
   const open = useSurveyStore((s) => s.open);
   const hasSent = useSurveyStore((s) => s.hasSent);
-  const elapsedMs = useSurveyStore((s) => s.elapsedMs);
+  const resolve = useSurveyStore((s) => s.resolve);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -73,17 +67,18 @@ export function useSurveyTrigger(prompt: SurveyPrompt | null) {
 
     /**
      * 비교 상대를 얼마나 들었는지는 **이미 지나간 값이라 더 늘지 않는다** — 지금 재생 중인 곡은
-     * 평가 대상 하나뿐이다. 그래서 여기서 한 번 보고 모자라면 타이머를 걸지 않는다.
+     * 평가 대상 하나뿐이다. 그래서 여기서 한 번 정하고, 하나도 못 채웠으면 타이머를 안 건다.
      */
-    if (!SURVEY_FORCED && elapsedMs(compareMusicId(prompt.target)) < SURVEY_MIN_LISTEN_MS) return;
+    const resolved = resolve(prompt, RESOLVE_MIN_MS);
+    if (!resolved) return;
 
     // TODO(자동재생): 실제 재생이 붙으면 이 지연을 "실제 청취 시간 >= SURVEY_MIN_LISTEN_MS" 로 바꾼다
-    timer.current = setTimeout(() => open(prompt), SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS);
+    timer.current = setTimeout(() => open(resolved), SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS);
 
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
     // target 은 객체라 매 렌더 새 참조일 수 있다 — 값으로 비교해 타이머가 리셋되지 않게 한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, open, hasSent, elapsedMs]);
+  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, open, hasSent, resolve]);
 }

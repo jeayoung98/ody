@@ -66,11 +66,36 @@ export interface SurveyTarget {
  * 상속하는 `SurveyTarget` 밖에 둔다 — 안에 넣으면 표시용 값이 그대로 요청에 실린다.
  */
 export interface SurveyPrompt {
+  /** `journey` 는 `prevMusicId` 가 아직 확정이 아니다 — 아래 `candidates` 로 정해진다 */
   target: SurveyTarget;
-  /** 비교 상대. nearby 는 기준곡, journey 는 앞 역 */
-  compare: SurveySong;
   /** 평가 대상 — 방금 들은 곡. 상대만 보여주면 둘 중 뭘 묻는지 알 수 없다 */
   subject: SurveySong;
+  /**
+   * 비교 상대 후보. **가까운 것부터** 늘어놓는다.
+   *
+   * 주변 탐색은 늘 하나다 — 기준곡. 이웃을 몇 곡 듣든 중심은 안 바뀐다.
+   *
+   * 경로 탐색은 앞 역부터 거슬러 올라간다. 앞 역을 5초만 듣고 넘겼으면 그 전환은 사용자가
+   * 겪지 못한 것이라, **실제로 들은 가장 가까운 역**이 비교 상대가 된다.
+   * 안 그러면 한 곡 건너뛴 대가로 그 다음 평가까지 통째로 날아간다.
+   */
+  candidates: readonly SurveyCompare[];
+}
+
+/** 비교 상대 후보 하나 */
+export interface SurveyCompare {
+  musicId: Id;
+  song: SurveySong;
+}
+
+/**
+ * 비교 상대가 정해진 상태. **스토어는 이것만 들고 있다** — 카드가 보여주는 것도,
+ * 서버로 나가는 `prevMusicId` 도 여기서 확정된 값이다.
+ */
+export interface ResolvedPrompt {
+  target: SurveyTarget;
+  subject: SurveySong;
+  compare: SurveySong;
 }
 
 /**

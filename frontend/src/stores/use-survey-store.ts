@@ -8,11 +8,11 @@
  * 폴더째 삭제할 수 있다. 평가 대상은 띄우는 쪽이 인자로 넘긴다.
  */
 import { create } from "zustand";
-import type { SurveyPrompt, SurveyTarget } from "@/types/survey";
+import type { ResolvedPrompt, SurveyPrompt, SurveyTarget } from "@/types/survey";
 
 interface SurveyState {
   /** 지금 묻고 있는 것. null 이면 설문이 떠 있지 않다 */
-  prompt: SurveyPrompt | null;
+  prompt: ResolvedPrompt | null;
   /**
    * 곡별 누적 청취 시간(ms).
    *
@@ -34,7 +34,17 @@ interface SurveyState {
    */
   sent: Set<string>;
 
-  open: (prompt: SurveyPrompt) => void;
+  /**
+   * 비교 상대를 확정한다 — **20초 이상 들은 가장 가까운 후보**.
+   *
+   * 주변 탐색은 후보가 기준곡 하나라 "기준곡을 20초 들었나" 를 묻는 것과 같다.
+   * 경로 탐색은 앞 역부터 거슬러 올라간다 — 5초만 듣고 넘긴 역은 그 전환을 겪지 못한
+   * 것이라 건너뛰고, 실제로 들은 역과 비교한다. `prevMusicId` 도 그 역으로 바꿔 보낸다.
+   *
+   * 하나도 못 채웠으면 `null` — 물을 수 없는 질문이다.
+   */
+  resolve: (prompt: SurveyPrompt, minListenMs: number) => ResolvedPrompt | null;
+  open: (prompt: ResolvedPrompt) => void;
   close: () => void;
   beginListening: (musicId: number, at: number) => void;
   noteListened: (musicId: number, ms: number) => void;
@@ -52,6 +62,14 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
   listenedMs: {},
   since: null,
   sent: new Set(),
+
+  resolve: (prompt, minListenMs) => {
+    const heard = prompt.candidates.find((c) => get().elapsedMs(c.musicId) >= minListenMs);
+    if (!heard) return null;
+    // 경로 탐색은 건너뛴 역을 지나 실제로 들은 역을 가리키게 된다 — 서버에도 그 역을 보낸다
+    const target = prompt.target.mode === "journey" ? { ...prompt.target, prevMusicId: heard.musicId } : prompt.target;
+    return { target, subject: prompt.subject, compare: heard.song };
+  },
 
   open: (prompt) => {
     // 답하는 중이면 새 질문으로 갈아치우지 않는다. 자동재생(S15P21A405-258)이 붙으면

@@ -44,6 +44,7 @@ export default function SurveyRunner() {
   const beginListening = useSurveyStore((s) => s.beginListening);
   const noteListened = useSurveyStore((s) => s.noteListened);
   const elapsedMs = useSurveyStore((s) => s.elapsedMs);
+  const resolve = useSurveyStore((s) => s.resolve);
   const markSent = useSurveyStore((s) => s.markSent);
   const hasSent = useSurveyStore((s) => s.hasSent);
 
@@ -119,12 +120,14 @@ export default function SurveyRunner() {
       const listenedMs = elapsedMs(currentMusicId); // 마감 전에 읽는다 — 이번 체류가 포함돼야 한다
       noteListened(currentMusicId, Date.now() - from);
 
-      const left = promptRef.current?.target ?? null;
-      if (!left || hasSent(left)) return;
+      const leaving = promptRef.current;
+      if (!leaving || hasSent(leaving.target)) return;
       // 20초를 넘겼으면 설문이 떴거나 뜰 조건이었다 — 그건 카드가 제출로 처리한다
       if (!SURVEY_FORCED && listenedMs >= SURVEY_MIN_LISTEN_MS) return;
-      sendUnanswered({ target: left, listenedMs, skipped, durationSec: promptRef.current?.subject.durationSec });
-      markSent(left);
+      // 무응답 행도 비교 상대를 같은 규칙으로 정한다 — 안 그러면 건너뛴 역이 앞 곡으로 실린다
+      const target = resolve(leaving, SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS)?.target ?? leaving.target;
+      sendUnanswered({ target, listenedMs, skipped, durationSec: leaving.subject.durationSec });
+      markSent(target);
     };
 
     // 탭을 닫거나 숨기면 곡이 바뀌지 않는다 — 그 자리에서 정리해 보낸다

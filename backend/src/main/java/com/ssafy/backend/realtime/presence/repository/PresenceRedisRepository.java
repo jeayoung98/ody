@@ -37,7 +37,7 @@ public class PresenceRedisRepository {
 
 	/** 하트비트 = ZADD XX(존재할 때만 갱신). ZAddArgs 자바 API 대신 이식성 높은 인라인 Lua. */
 	private static final DefaultRedisScript<Long> TOUCH_SCRIPT = new DefaultRedisScript<>(
-			"return redis.call('ZADD', KEYS[1], 'XX', ARGV[1], ARGV[2])", Long.class);
+			"return redis.call('ZADD', KEYS[1], 'XX', 'CH', ARGV[1], ARGV[2])", Long.class);
 
 	private final StringRedisTemplate redis;
 	private final DefaultRedisScript<List> presenceJoinScript;
@@ -51,10 +51,14 @@ public class PresenceRedisRepository {
 
 	// ---- 비스크립트 연산 ----
 
-	/** 하트비트 — presence:expiry 만료 시각 갱신(존재할 때만). */
-	public void touch(String email, long ttlMs) {
+	/**
+	 * 하트비트 — presence:expiry 만료 시각 갱신(존재할 때만, ZADD XX CH).
+	 * @return true=갱신됨(살아있음), false=만료큐에 없음(이미 sweep 됨 → STALE, 클라 resync 필요).
+	 */
+	public boolean touch(String email, long ttlMs) {
 		long score = System.currentTimeMillis() + ttlMs;
-		redis.execute(TOUCH_SCRIPT, List.of(EXPIRY_KEY), Long.toString(score), email);
+		Long n = redis.execute(TOUCH_SCRIPT, List.of(EXPIRY_KEY), Long.toString(score), email);
+		return n != null && n > 0;
 	}
 
 	/** Sweep 대상 — 만료 시각 경과 email 목록. */

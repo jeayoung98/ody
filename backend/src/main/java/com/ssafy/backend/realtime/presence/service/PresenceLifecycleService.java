@@ -45,9 +45,9 @@ public class PresenceLifecycleService {
 		presenceRedisRepository.connect(email, epoch, ttlMs);
 	}
 
-	/** 하트비트 — 만료 시각 갱신(FR-022). */
-	public void heartbeat(String email) {
-		presenceRedisRepository.touch(email, ttlMs);
+	/** 하트비트 — 만료 시각 갱신(FR-022). @return false 면 이미 sweep 됨(STALE) → 컨트롤러가 resync 유도. */
+	public boolean heartbeat(String email) {
+		return presenceRedisRepository.touch(email, ttlMs);
 	}
 
 	/**

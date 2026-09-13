@@ -7,6 +7,7 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 import org.springframework.context.annotation.Profile;
 
+import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
 import com.ssafy.backend.realtime.common.RealtimeErrorSender;
 import com.ssafy.backend.realtime.presence.dto.JoinRequest;
 import com.ssafy.backend.realtime.presence.dto.ViewportRequest;
@@ -37,7 +38,11 @@ public class PresenceStompController {
 	/** 아직 접속 중임 증명 — 만료 시각 갱신. */
 	@MessageMapping("/presence/heartbeat")
 	public void heartbeat(Principal principal) {
-		lifecycleService.heartbeat(principal.getName());
+		boolean alive = lifecycleService.heartbeat(principal.getName());
+		if (!alive) {
+			// 이미 sweep 돼 만료큐에서 빠짐 → 클라는 살아있다 오해. STALE 회신해 resync 유도(P3-f).
+			errorSender.send(principal.getName(), WsCode.PRESENCE_STALE, "presence expired, resync required");
+		}
 	}
 
 	/** 명시적 종료 — 그 세션의 epoch 로 정리(세션 제거는 DISCONNECT 가 담당). */

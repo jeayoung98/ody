@@ -21,7 +21,7 @@ class CoordinateMapperTest {
 			ar.add(new RealtimeProperties.AxisRange(a, -10.0, 10.0));
 		}
 		RealtimeProperties.Viewport vp = new RealtimeProperties.Viewport(grid, 36, 64, 250, 5000);
-		return new CoordinateMapper(new RealtimeProperties(null, null, vp, null, ar));
+		return new CoordinateMapper(new RealtimeProperties(null, null, vp,  ar));
 	}
 
 	@Test
@@ -85,7 +85,7 @@ class CoordinateMapperTest {
 		List<RealtimeProperties.AxisRange> bad = List.of(
 				new RealtimeProperties.AxisRange(1, 5.0, 5.0),
 				new RealtimeProperties.AxisRange(2, -1.0, 1.0));
-		assertThatThrownBy(() -> new CoordinateMapper(new RealtimeProperties(null, null, vp, null, bad)))
+		assertThatThrownBy(() -> new CoordinateMapper(new RealtimeProperties(null, null, vp,  bad)))
 				.isInstanceOf(IllegalStateException.class);
 	}
 }

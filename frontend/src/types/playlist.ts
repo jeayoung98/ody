@@ -23,8 +23,8 @@ export interface PlaylistItem {
   playlistId: Id;
   /** 곡 ID */
   musicId: Id;
-  /** 추가 시각 */
-  addedAt: ISODateString;
+  /** 추가 시각. 백엔드 상세 응답(`/api/playlist/detail`)에는 없어 null 로 온다 — BACKEND-NOTES 필드 대조 */
+  addedAt: ISODateString | null;
 }
 
 /** 곡 정보가 조인된 플레이리스트 항목 (조회용) */
@@ -32,8 +32,16 @@ export interface PlaylistItemWithMusic extends PlaylistItem {
   music: Music;
 }
 
-/** 플레이리스트 상세 패널 응답 */
-export interface PlaylistDetail extends Playlist {
+/**
+ * 플레이리스트 상세 패널 응답.
+ * 백엔드 `PlaylistDetailResponse` 에는 소유자(`email`)·생성/수정 시각·좋아요·무드 태그가 **없다**
+ * (BACKEND-NOTES 필드 대조). 실연동(S15P21A405-214)에서는 지어내지 않고 null/빈값으로 채운다 —
+ * 그래서 이 세 필드는 ERD 와 달리 null 을 허용한다
+ */
+export interface PlaylistDetail extends Omit<Playlist, "email" | "createdAt" | "updatedAt"> {
+  email: Email | null;
+  createdAt: ISODateString | null;
+  updatedAt: ISODateString | null;
   ownerNickname: string | null;
   /** 무드 태그 (최대 3개) */
   moodTags: string[];

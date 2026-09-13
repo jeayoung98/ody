@@ -121,7 +121,13 @@ A-17 해제 덕에 토큰 없이 아래가 **배포 백엔드의 실제 곡**으
 `DELETE .../items/{musicId}` 로 하나씩 지우는데, 백엔드는 **둘 다 POST 에 `musicIdList` 배열**이다
 (`/api/playlist/music/insert`, `/api/playlist/music/delete`). 순서 변경(`/music/reorder`)은 **백엔드에만** 있다.
 
-**그래서 지금 실연동하면 화면이 깨진다** — 피드의 `좋아요한 플리`, 플리 상세의 무드 태그 3개,
+**2026-09-13 — 상세 조회만 먼저 실연동했다 (S15P21A405-214).** `GET /bff/playlists/{id}` 가 `GET /api/playlist/detail?playlistId=`
+를 대신 부르고, 백엔드에 없는 필드는 **지어내지 않고 비운다** — `email`·`createdAt`·`updatedAt`·`addedAt` 은 null,
+`ownerNickname` null, `moodTags` 빈 배열, `likeCnt` null·`isLiked` false. 소유자가 없어 `isMine` 은 늘 false 다(편집 UI 안 뜸).
+`musics[].location`(pc1~pc16) 은 `Music.location` 으로 옮겨 별자리 좌표로 쓴다 — 플리 패널이 이제 좌표까지 넘긴다.
+목록(`/bff/playlists`, `mine`, `liked`)·생성·수정·삭제·곡 추가/삭제는 **아직 목**이다 (`search?email=` 은 로그인 실연동 뒤에야 내 이메일이 있다).
+
+**그래서 나머지를 실연동하면 화면이 깨진다** — 피드의 `좋아요한 플리`, 플리 상세의 무드 태그 3개,
 `만든 사람` 표시가 전부 받을 데이터가 없다. 이건 FEATURES 의 PATH-06·유저플로우 13·14 항목이라
 **프론트가 임의로 뺄 수 없다.** 팀 결정이 필요하다 (아래 요약 6번).
 

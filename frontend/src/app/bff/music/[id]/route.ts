@@ -3,11 +3,12 @@ import {
   backendGet,
   BackendError,
   isBackendEnabled,
+  toMusic,
   toPcArray,
   type BackendMusicDetailResponse,
 } from "@/lib/backend";
 import { mockMusicDetail } from "@/mocks/music";
-import type { Music, MusicDetail } from "@/types";
+import type { MusicDetail } from "@/types";
 
 /** 상세 패널에 노출하는 주성분 개수 */
 const SHOWN_PC_COUNT = 6;
@@ -22,18 +23,7 @@ const SHOWN_PC_COUNT = 6;
 function toMusicDetail(res: BackendMusicDetailResponse): MusicDetail {
   const pc = toPcArray(res.location);
   return {
-    id: res.id,
-    mbid: res.mbid,
-    title: res.title,
-    artist: res.artist,
-    releaseYear: null,
-    bpm: res.bpm,
-    duration: res.duration,
-    album: res.album,
-    youtubeUrl: res.youtubeUrl,
-    location: res.location ? (pc as Music["location"]) : null,
-    playCnt: res.playCnt ?? 0,
-    youtubeCnt: res.youtubeCnt ?? 0,
+    ...toMusic(res),
     // 백엔드는 장르를 **이름만** 준다. id 는 배열 순번을 채운 자리표시자이지 실제 genre.id 가 아니다 (B-21)
     genres: (res.genres ?? []).map((name, i) => ({ id: i, name })),
     principalComponents: pc

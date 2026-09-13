@@ -150,9 +150,9 @@ SET maintenance_work_mem = '2GB';                                   # 세션 단
 
 **`album`** — 같은 이유다. canonical dump 의 release group 조인이 필요하다.
 
-**`youtube_url`** — **채울 방법이 없다.** 규칙 6 이 음원 재생·다운로드·임베드를 금지하고 검색 URL 만 허용한다. D5 기록으로 YouTube Data API 는 하루 100곡 할당량이고 스크래핑은 약관 위반이다. 662만 곡이면 66,000일이 걸린다.
+**`youtube_url`** — **전곡은 채우지 않는다(D11).** D5 기록으로 YouTube Data API 는 하루 100곡 할당량이고 스크래핑은 약관 위반이다. 662만 곡이면 66,000일이 걸린다. 규칙 6 개정(D15, 2026-09-13)으로 `map_sample` 과 검색 상위에 한해 공식 플레이어 임베드용 `video_id` 를 확보한다(길이 ±3초·`embeddable` 조건, 미달 NULL). 확보 스크립트는 별도 이슈다.
 
-대신 조회 시 **검색 URL 을 만들어 응답에 담는다.** 저장하는 값이 아니라 계산 필드이고, 만드는 쪽은 Backend 다(D12). 규칙 6 상 검색 URL 만 허용한다: `https://www.youtube.com/results?search_query=<아티스트>+<제목>` (URL 인코딩). 컬럼은 나중을 위해 남긴다.
+`video_id` 없는 곡은 조회 시 **검색 URL 을 만들어 응답에 담는다.** 저장하는 값이 아니라 계산 필드이고, 만드는 쪽은 Backend 다(D12). 규칙 6 상 `video_id` 없는 곡은 검색 URL 만: `https://www.youtube.com/results?search_query=<아티스트>+<제목>` (URL 인코딩). 컬럼은 나중을 위해 남긴다.
 
 ## genre 테이블
 

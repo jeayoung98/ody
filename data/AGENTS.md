@@ -19,7 +19,10 @@
 3. **fit·트리 재학습은 별도 결정.** 전처리·PCA·트리 파라미터는 `model_bundle.npz`/`split_axes.npz` 를 적용만 한다. 좌표가 바뀌면 major 버전이며 게이트 재등록.
 4. **원본·특징·좌표 parquet·kNN 그래프는 커밋하지 않는다** (`.gitignore`). 검증 수치는 산출 코드와 같은 커밋에.
 5. 정성(청취) 결과로 좌표·규칙을 즉석 수정하지 않는다. 관찰만 기록, 변경은 `specs/DECISIONS.md` 에 새 번호로.
-6. 음원 재생·다운로드·임베드 금지. 링크는 YouTube **검색** URL 만.
+6. 음원 파일 재생·다운로드·스크래핑 금지. 재생은 공식 플레이어 임베드(YouTube IFrame Player)로만 한다.
+   `video_id` 확보 대상은 `map_sample` 과 검색 상위로 한정한다 — 전곡 적재는 D11 대로 하지 않는다.
+   확보 조건: 곡 길이 ±3초(공식 채널은 ±30초) 일치 + `status.embeddable == true`. 미달이면 비워 둔다.
+   `video_id` 없는 곡의 링크는 YouTube **검색** URL 만. (D15)
 7. 출처 표기: Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17.
 8. 한국 곡 매칭은 한글 완전일치만. 로마자 추측 매칭 금지.
 9. 후처리 임계값(τ_dup·artist_cap·τ_far·길이)은 `postprocess_rules.json` 에서 읽는다. 하드코딩 금지.

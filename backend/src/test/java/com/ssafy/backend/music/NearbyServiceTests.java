@@ -68,7 +68,7 @@ class NearbyServiceTests {
 
 	private void given(long centerId, List<TrackCandidate> candidates) {
 		when(detailReader.findDetail(centerId)).thenReturn(Optional.of(detail(centerId)));
-		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(40)))
+		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(200)))
 				.thenReturn(candidates);
 		when(detailReader.findSummariesByMbids(anyList()))
 				.thenAnswer(inv -> {
@@ -136,7 +136,7 @@ class NearbyServiceTests {
 	}
 
 	@Test
-	@DisplayName("C8 후보를 40개 요청하고 선정 조건을 조회에 넘기지 않는다")
+	@DisplayName("C8 후보를 200개 요청하고 선정 조건을 조회에 넘기지 않는다")
 	void c8_candidateCount() {
 		given(1, List.of(cand(2, 3.0)));
 
@@ -144,7 +144,7 @@ class NearbyServiceTests {
 
 		ArgumentCaptor<Integer> limit = ArgumentCaptor.forClass(Integer.class);
 		verify(nearestReader).findNearest(org.mockito.ArgumentMatchers.any(), limit.capture());
-		assertThat(limit.getValue()).isEqualTo(40);
+		assertThat(limit.getValue()).isEqualTo(200);
 	}
 
 	@Test
@@ -156,7 +156,7 @@ class NearbyServiceTests {
 
 		verify(detailReader).findDetail(1L);
 		verify(detailReader).findSummariesByMbids(anyList());
-		verify(nearestReader).findNearest(org.mockito.ArgumentMatchers.any(), eq(40));
+		verify(nearestReader).findNearest(org.mockito.ArgumentMatchers.any(), eq(200));
 		org.mockito.Mockito.verifyNoMoreInteractions(detailReader, nearestReader);
 	}
 
@@ -164,7 +164,7 @@ class NearbyServiceTests {
 	@DisplayName("T038 선정된 곡의 상세를 못 찾으면 부분 목록을 성공으로 내지 않는다")
 	void t038_missingSummaryFails() {
 		when(detailReader.findDetail(1)).thenReturn(Optional.of(detail(1)));
-		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(40)))
+		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(200)))
 				.thenReturn(List.of(cand(2, 3.0), cand(3, 3.5)));
 		when(detailReader.findSummariesByMbids(anyList())).thenReturn(List.of(summary(2)));
 

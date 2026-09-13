@@ -41,12 +41,34 @@ public class NearbyService {
 	/**
 	 * 뽑을 후보 수. <b>필요한 수가 아니라 넉넉한 수</b>다 — 조회에 필터를 넣을 수 없어 여기서 거른다.
 	 *
-	 * <p><b>2026-09-13 운영 실측으로 정했다.</b> 무작위 700곡에서 규칙을 통과한 10곡을 모으는 데 필요한
-	 * 후보는 중앙값 11 · 상위 1% 16 · <b>최악 25</b> 였고 30위를 넘긴 곡은 0건이었다. 40 은 최악의 1.6배
-	 * 여유이고, HNSW {@code ef_search} 기본값이 정확히 40 이라 <b>설정 상향이 불필요해진다</b> —
-	 * 100 을 쓰면 웜 1.2ms 가 4.0ms 로, 콜드는 350ms 가 된다.
+	 * <p><b>조회 어댑터가 {@code hnsw.ef_search} 를 200 으로 고정한다.</b> 색인은 어느 쪽이든 200개를 훑으므로,
+	 * {@code LIMIT} 을 그보다 작게 두면 <b>이미 지불한 작업을 버리는 것</b>이다. 그래서 200 에 맞춘다.
+	 *
+	 * <p><b>2026-09-13 운영 실측.</b> 무작위 5,000곡을 깊이 200 까지 훑어 규칙을 통과한 10곡을 모으는 데
+	 * 필요한 후보 순위를 쟀다 — 중앙값 11 · p90 12 · p99 17 · <b>p999 41 · 최악 189</b>. 꼬리가 길다.
+	 *
+	 * <pre>
+	 *   후보   미달률          조회 비용(웜 중앙값, 곡 20개 x 2회)
+	 *    20    0.38% (19)      -
+	 *    40    0.12%  (6)      3.06 ms
+	 *    60    0.04%  (2)      2.97 ms
+	 *    80    0.02%  (1)      2.92 ms
+	 *   200    0%     (0)      3.18 ms   &lt;- 채택
+	 * </pre>
+	 *
+	 * <p>비용이 평평한 이유가 위의 {@code ef_search} 고정이다. 미달률만 보고 고르면 되고, 200 에서 0 이 된다.
+	 *
+	 * <p>처음에는 40 이었다 — 깊이 100 에서 끊긴 측정으로 "최악 25" 를 봤기 때문이다. <b>꼬리를 못 본
+	 * 측정이었다.</b> 로컬 실행에서 50곡 중 1건이 5곡만 반환한 것(오디오북 지역, 아티스트 상한에 막힘)이
+	 * 단서였고, 깊이 200 으로 다시 재자 최악이 189 로 나왔다.
+	 *
+	 * <p><b>주의 — 2026-09-13 현재 이 값이 실제로 적용되지 않는다.</b> 조회 어댑터가 {@code ef_search} 를
+	 * 올리려고 {@code set_config(..., true)} 를 부르는데 <b>앱 경로에서 그 설정이 살아남지 않는다</b> —
+	 * 지표 {@code ody.nearby.candidate_size} 로 실측하면 200 을 요청해도 <b>매번 정확히 40개</b>가 온다
+	 * (색인 기본 탐색폭). 여정(004)의 층 후보 200 도 같은 경로라 같은 영향을 받는다.
+	 * 원인 규명과 수정은 이 기능 범위 밖이라 별건으로 다룬다.
 	 */
-	static final int CANDIDATE_COUNT = 40;
+	static final int CANDIDATE_COUNT = 200;
 
 	/** 후보 조회 구간. 콜드(색인이 캐시에서 밀린 뒤)가 어디서 나는지 게이트웨이 구간과 분리해 본다. */
 	private static final String CANDIDATE_TIMER = "ody.nearby.candidates";
@@ -58,6 +80,9 @@ public class NearbyService {
 	 * 여기가 0 이 아니면 {@link #CANDIDATE_COUNT} 를 재검토한다(SC-008).
 	 */
 	private static final String SHORT_RESULT_COUNTER = "ody.nearby.short_result";
+
+	/** 조회가 실제로 돌려준 후보 수. 요청한 {@value #CANDIDATE_COUNT} 보다 적으면 색인 탐색폭이 잘랐다는 뜻이다. */
+	private static final String CANDIDATE_SIZE_SUMMARY = "ody.nearby.candidate_size";
 
 	private final Optional<NearestTrackReader> nearestReader;
 	private final MusicDetailReader detailReader;
@@ -105,6 +130,9 @@ public class NearbyService {
 		Timer.Sample sample = Timer.start(meterRegistry);
 		List<TrackCandidate> candidates = reader.findNearest(center.location().toArray(), CANDIDATE_COUNT);
 		sample.stop(meterRegistry.timer(CANDIDATE_TIMER));
+		// 실제로 몇 개를 받았는지. 요청한 수보다 적으면 색인 탐색폭(ef_search) 이 그만큼 잘라낸 것이다 —
+		// 오류가 나지 않는 경로라 지표로만 드러난다(핸드오프 §3.2 함정 2).
+		meterRegistry.summary(CANDIDATE_SIZE_SUMMARY).record(candidates.size());
 
 		TrackCandidate queryTrack = new TrackCandidate(
 				center.id(), center.mbid(), center.title(), center.artist(),

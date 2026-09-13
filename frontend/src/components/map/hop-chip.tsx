@@ -82,12 +82,13 @@ export default function HopChip({ engine }: HopChipProps) {
         e.stopPropagation();
         enterNearby(musicId);
       }}
-      title={`${song.title} 주변으로 건너가기`}
+      aria-label={`${song.title} 주변 둘러보기`}
+      title="여기서 둘러보기"
       style={{ visibility: "hidden" }}
-      className="glass animate-tin absolute top-0 left-0 z-[25] flex h-8 cursor-pointer items-center gap-1.5 rounded-pill! border-teal/40! pr-3 pl-2.5 text-[12px] whitespace-nowrap text-ink shadow-glow-teal will-change-transform transition-colors hover:bg-glass-3 hover:text-teal"
+      // 글자 없이 아이콘만 — 별 곁에 붙는 것이라 작아야 고리를 어지럽히지 않는다. 뜻은 툴팁으로
+      className="glass animate-tin absolute top-0 left-0 z-[25] grid h-7 w-7 cursor-pointer place-items-center rounded-full! border-teal/40! text-teal shadow-glow-teal will-change-transform transition-colors hover:bg-glass-3 hover:text-white"
     >
-      <RadarIcon size={13} className="text-teal" />
-      여기서 둘러보기
+      <RadarIcon size={13} />
     </button>
   );
 }

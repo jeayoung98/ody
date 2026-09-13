@@ -21,6 +21,8 @@ interface HoverCardProps {
   cardRef: RefObject<HTMLDivElement | null>;
   /** 켜져 있나. 꺼지면 사라지는 중이다 — 다 사라질 때까지는 그대로 붙어 있는다 */
   on: boolean;
+  /** 카드 본문 클릭 — 곡 상세를 연다 (지도에서 별을 누른 것과 같다) */
+  onOpen: (song: MapPoint) => void;
   /** 카드의 재생 버튼 */
   onPlay: (song: MapPoint) => void;
 }
@@ -32,7 +34,7 @@ interface HoverCardProps {
  * 자리는 카메라가 움직일 때마다 바뀐다. 매 프레임 setState 하면 지도 전체가 리렌더되므로
  * rAF 에서 `style.transform` 만 직접 쓴다 — 리렌더는 곡이 바뀔 때만 일어난다.
  */
-export default function HoverCard({ engine, song, cardRef, on, onPlay }: HoverCardProps) {
+export default function HoverCard({ engine, song, cardRef, on, onOpen, onPlay }: HoverCardProps) {
   // 커버는 캔버스로 만들어 쓰던 것을 그대로 쓴다 (곡마다 같은 그림이어야 지도와 어긋나지 않는다)
   const cover = useMemo(() => (song ? coverFor(song).toDataURL() : null), [song]);
   const musicId = song?.musicId ?? null;
@@ -72,11 +74,13 @@ export default function HoverCard({ engine, song, cardRef, on, onPlay }: HoverCa
     // z-[25]: HUD 층(계기판·레일·검색·하단바 20~24) 바로 위. 밑에 깔리면 가려진 자리에서
     // 재생 버튼을 누를 수 없다 — 캔버스로 그리던 시절엔 늘 HUD 밑이었다.
     // 토스트·배너·다이얼로그(30 이상)보다는 아래다. 카드 위에서 누른 것은 지도에 넘기지 않는다 —
-    // 안 그러면 카드를 잡고 지도가 끌린다
+    // 안 그러면 카드를 잡고 지도가 끌린다. 대신 본문 클릭은 **여기서** 상세를 연다 (S15P21A405-280) —
+    // 보이는 카드를 눌렀는데 아무 일도 없으면 고장으로 읽힌다
     <div
       ref={cardRef}
       onMouseDown={(e) => e.stopPropagation()}
       onMouseUp={(e) => e.stopPropagation()}
+      onClick={() => onOpen(song)}
       style={{
         width: HOVER_CARD.w,
         height: HOVER_CARD.h,
@@ -86,7 +90,7 @@ export default function HoverCard({ engine, song, cardRef, on, onPlay }: HoverCa
         // 사라지는 중인 카드가 그 밑의 별을 가로채면 안 된다
         pointerEvents: on ? "auto" : "none",
       }}
-      className="glass absolute top-0 left-0 z-[25] flex cursor-default items-center gap-3 px-2.5 will-change-transform"
+      className="glass absolute top-0 left-0 z-[25] flex cursor-pointer items-center gap-3 px-2.5 will-change-transform"
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}
       <span
@@ -101,10 +105,14 @@ export default function HoverCard({ engine, song, cardRef, on, onPlay }: HoverCa
           {song.playable ? "" : " · 재생 불가"}
         </p>
       </span>
-      {/* 여기서 재생하면 상세까지 함께 열린다 — 지도 클릭(보기만)과 갈라지는 자리 */}
+      {/* 여기서 재생하면 상세까지 함께 열린다 — 지도 클릭(보기만)과 갈라지는 자리.
+          본문의 onOpen 까지 타면 viewSong 과 travelTo 가 같은 프레임에 겹친다 — 여기서 끊는다 */}
       <button
         type="button"
-        onClick={() => onPlay(song)}
+        onClick={(e) => {
+          e.stopPropagation();
+          onPlay(song);
+        }}
         disabled={!song.playable}
         aria-label={`${song.title} 재생`}
         title={song.playable ? "재생하고 상세 보기" : "재생할 수 없는 곡"}

@@ -144,7 +144,7 @@ class JourneyBenchmarkIT {
 
 				NearestTrackReader reader = adapterOn(session);
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				long t0 = System.nanoTime();
 				EnginePath path = finder.find(a, b);
@@ -250,7 +250,7 @@ class JourneyBenchmarkIT {
 	private JourneyService serviceOn(SqlSession session) {
 		MusicDetailMapper detailMapper = session.getMapper(MusicDetailMapper.class);
 		AxisJourneyPathFinder finder = new AxisJourneyPathFinder(
-				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
+				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 		return new JourneyService(
 				Optional.of(new MusicDetailReaderAdapter(detailMapper)),
 				Optional.of(finder),
@@ -289,7 +289,7 @@ class JourneyBenchmarkIT {
 					return rows.subList(0, Math.min(rows.size(), LayerCandidates.MIN_LAYER - 1));
 				};
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
+						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				long t0 = System.nanoTime();
 				finder.find(a, b);
@@ -334,7 +334,7 @@ class JourneyBenchmarkIT {
 
 				NearestTrackReader reader = adapterOn(session);
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				EnginePath axis = finder.find(a, b);
 				if (!axis.reachable() || axis.stationMbids().isEmpty()) {
@@ -383,7 +383,7 @@ class JourneyBenchmarkIT {
 				SameRecording.key(a.title(), a.artist()), SameRecording.key(b.title(), b.artist()),
 				av, bv, new HashSet<>());
 		return finder.linear(reader, frame, guard,
-				frame.stationCount(RULES.farEndpointDist()));
+				frame.stationCount(2.5, AxisJourneyPathFinder.MAX_STATIONS));
 	}
 
 	// ------------------------------------------------------------------ 보조

@@ -27,7 +27,7 @@
 | --- | --- | --- |
 | `musicCnt` | `int` | `path.size()`. `start == end`면 1, 그 외 `n_stations + 2` (FR-006, FR-021) |
 | `totalDuration` | `int` | `path` 모든 곡 `duration` 합(초). `duration`이 null인 곡은 0으로 더한다 (FR-006) |
-| `path` | `List<JourneyStop>` | 길이 1~30(계약 상한). 엔진 상한 20이라 실제 최대 22 (FR-008) |
+| `path` | `List<JourneyStop>` | 길이 1~30(계약 상한). 산출 상한 18이라 실제 최대 20 (FR-008, 007) |
 
 ### `JourneyStop`
 

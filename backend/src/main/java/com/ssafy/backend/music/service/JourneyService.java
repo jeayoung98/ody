@@ -42,7 +42,12 @@ import lombok.extern.slf4j.Slf4j;
 @Service
 public class JourneyService {
 
-	/** 정본 §3.3 계약 상한. 엔진 정거장 상한이 20 이라 실제로는 최대 22 다(D3). */
+	/**
+	 * 정본 §3.3 계약 상한. <b>산출 정거장 상한이 18 이라 실제로는 최대 20곡이다</b>(007, S15P21A405-286).
+	 *
+	 * <p>구조적으로 도달할 수 없는 방어선이다. 그래도 남겨 두는 이유는 여기 걸리면 데이터가 아니라
+	 * <b>산출이 자기 상한을 어긴 것</b>이기 때문이다 — 그때는 잘라내지 않고 실패시킨다(FR-005).
+	 */
 	private static final int MAX_PATH_SIZE = 30;
 
 	/**

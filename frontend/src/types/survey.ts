@@ -81,6 +81,14 @@ export interface SurveyPrompt {
 export interface SurveySong {
   title: string;
   artist: string | null;
+  /**
+   * 곡 길이(초). **청취 시간의 상한**이다 — 카드를 띄워두거나 탭을 놔두면 시계는 계속 도는데
+   * 곡 길이보다 오래 들었다는 값은 거짓이라 여기서 자른다.
+   *
+   * 지금은 경로 탐색만 받는다. 주변 탐색 응답(`neighbors`)에는 `duration` 이 없다
+   * (BACKEND-NOTES A-22) — 그때는 자를 수 없어 서버 상한(32767)만 적용된다.
+   */
+  durationSec?: number | null;
   /** 커버가 없을 때 깔 색. 탐색 응답이 주는 것만 쓴다 */
   genreId: number | null;
   /**

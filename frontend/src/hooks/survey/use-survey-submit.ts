@@ -19,6 +19,27 @@ interface SubmitInput {
   reason: SurveyReason | null;
   listenedMs: number;
   skipped: boolean;
+  /** 곡 길이(초). 청취 시간의 상한 — 없으면 서버 상한만 건다 */
+  durationSec?: number | null;
+}
+
+/**
+ * 서버 `listened_sec` 은 `smallint` 이고 백엔드가 `@Max(32767)` 로 막는다.
+ * 넘기면 400 이라 행이 통째로 버려진다.
+ */
+const LISTENED_SEC_MAX = 32767;
+
+/**
+ * 실제로 들었을 수 있는 최대치로 자른다.
+ *
+ * 시계는 그 곡이 **현재 곡으로 머문 시간**을 재는데, 카드를 띄워두거나 탭을 놔두면 계속 돈다.
+ * 3분짜리 곡을 2시간 들었다는 값이 나오면 그건 청취 시간이 아니라 자리 비운 시간이다.
+ * 곡 길이를 아는 경우(경로 탐색) 거기서 자르고, 모르면 서버 상한에만 맞춘다.
+ */
+function clampListened(ms: number, durationSec?: number | null): number {
+  const sec = Math.max(0, Math.round(ms / 1000));
+  const cap = durationSec != null && durationSec > 0 ? Math.min(durationSec, LISTENED_SEC_MAX) : LISTENED_SEC_MAX;
+  return Math.min(sec, cap);
 }
 
 /**
@@ -33,7 +54,7 @@ function buildRow(input: SubmitInput): SurveySubmission {
     anonymousId: getAnonymousId(),
     verdict: input.verdict,
     reason: input.verdict === false ? input.reason : null,
-    listenedSec: Math.max(0, Math.round(input.listenedMs / 1000)),
+    listenedSec: clampListened(input.listenedMs, input.durationSec),
     skipped: input.skipped,
   };
 }

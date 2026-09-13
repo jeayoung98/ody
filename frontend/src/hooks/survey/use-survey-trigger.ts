@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { SURVEY_FORCE_KEY, SURVEY_FORCE_PARAM, SURVEY_MIN_LISTEN_MS } from "@/constants/survey";
 import { useSurveyStore } from "@/stores/use-survey-store";
-import type { SurveyPrompt } from "@/types/survey";
+import type { SurveyPrompt, SurveyTarget } from "@/types/survey";
 
 /**
  * `?survey=force` 를 **모듈이 처음 불릴 때 한 번만** 읽는다.
@@ -34,11 +34,23 @@ function readForced(): boolean {
 export const SURVEY_FORCED = readForced();
 
 /**
+ * 카드에서 **비교 상대로 보여주는 곡**. 두 모드가 가리키는 것이 다르다 —
+ * 주변 탐색은 기준곡(`anchorMusicId`), 경로 탐색은 바로 앞 역(`prevMusicId`)이다.
+ * 경로의 `anchorMusicId` 는 출발곡이라 비교 상대가 아니다.
+ */
+function compareMusicId(t: SurveyTarget): number {
+  return t.mode === "journey" ? (t.prevMusicId ?? t.anchorMusicId) : t.anchorMusicId;
+}
+
+/**
  * 언제 설문을 띄울지 판단한다 (S15P21A405-294).
  *
- * **20초 이상 들어야 묻는다.** 못 채우고 떠난 곡은 묻지 않고 무응답 행만 보낸다
- * (`survey-runner` 가 처리한다) — 스킵한 곡이 통계에서 통째로 빠지면 정밀도가 실제보다
- * 좋게 나오기 때문이다.
+ * **두 곡을 다 20초 이상 들었을 때만 묻는다.** 평가 대상만이 아니라 **비교 상대도** 그렇다 —
+ * 주변 탐색은 기준곡, 경로 탐색은 앞 곡이다. 2초 듣고 지나친 곡을 기준으로 "비슷했나요" 를
+ * 물으면 답이 기억이 아니라 짐작이 된다.
+ *
+ * 못 채우고 떠난 곡은 묻지 않고 무응답 행만 보낸다 (`survey-runner` 가 처리한다) —
+ * 스킵한 곡이 통계에서 통째로 빠지면 정밀도가 실제보다 좋게 나오기 때문이다.
  *
  * ⚠️ **청취 시간은 아직 근사값이다.** 앱 안에서 실제 음원을 재생하지 않아(규칙 6)
  * "얼마나 들었는지"를 알 수 없어서, **그 곡이 현재 곡으로 머문 시간**으로 대신 잰다.
@@ -51,12 +63,19 @@ export const SURVEY_FORCED = readForced();
 export function useSurveyTrigger(prompt: SurveyPrompt | null) {
   const open = useSurveyStore((s) => s.open);
   const hasSent = useSurveyStore((s) => s.hasSent);
+  const elapsedMs = useSurveyStore((s) => s.elapsedMs);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
     if (!prompt) return;
     if (hasSent(prompt.target)) return;
+
+    /**
+     * 비교 상대를 얼마나 들었는지는 **이미 지나간 값이라 더 늘지 않는다** — 지금 재생 중인 곡은
+     * 평가 대상 하나뿐이다. 그래서 여기서 한 번 보고 모자라면 타이머를 걸지 않는다.
+     */
+    if (!SURVEY_FORCED && elapsedMs(compareMusicId(prompt.target)) < SURVEY_MIN_LISTEN_MS) return;
 
     // TODO(자동재생): 실제 재생이 붙으면 이 지연을 "실제 청취 시간 >= SURVEY_MIN_LISTEN_MS" 로 바꾼다
     timer.current = setTimeout(() => open(prompt), SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS);
@@ -66,5 +85,5 @@ export function useSurveyTrigger(prompt: SurveyPrompt | null) {
     };
     // target 은 객체라 매 렌더 새 참조일 수 있다 — 값으로 비교해 타이머가 리셋되지 않게 한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, open, hasSent]);
+  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, open, hasSent, elapsedMs]);
 }

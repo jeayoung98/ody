@@ -32,21 +32,22 @@ function CheckIcon() {
  */
 function SurveySongRow({ label, song, highlight = false }: { label: string; song: SurveySong; highlight?: boolean }) {
   return (
-    <div className="flex flex-col gap-1">
-      <span className={`lbl ${highlight ? "text-violet!" : ""}`}>{label}</span>
-      <div className="flex items-center gap-2.5">
-        <AlbumCover coverUrl={song.coverUrl} genreId={song.genreId} alt="" size={highlight ? 40 : 34} />
+    <div className="flex flex-col gap-1.5">
+      {/* `lbl` 유틸(9.5px 모노 대문자 + 자간)은 여기서 안 쓴다 — 한글이 읽히지 않는다 */}
+      <span className={`text-[12.5px] leading-none font-semibold ${highlight ? "text-violet" : "text-ink-3"}`}>{label}</span>
+      <div className="flex items-center gap-3">
+        <AlbumCover coverUrl={song.coverUrl} genreId={song.genreId} alt="" size={highlight ? 46 : 38} />
         <div className="min-w-0 flex-1">
           <p
             className={
               highlight
-                ? "font-display text-[15px] leading-snug font-semibold break-keep text-ink"
-                : "text-sm leading-snug break-keep text-ink-2"
+                ? "font-display text-[18px] leading-tight font-semibold break-keep text-ink"
+                : "text-[15px] leading-tight break-keep text-ink-2"
             }
           >
             {song.title}
           </p>
-          <p className={`truncate text-[11px] ${highlight ? "text-ink-2" : "text-ink-3"}`}>{song.artist ?? "Unknown"}</p>
+          <p className={`mt-1 truncate text-[13px] ${highlight ? "text-ink-2" : "text-ink-3"}`}>{song.artist ?? "Unknown"}</p>
         </div>
       </div>
     </div>
@@ -89,7 +90,7 @@ export default function SurveyCard() {
   const definition = SURVEYS[target.mode];
 
   const send = (verdict: boolean, reason: SurveyReason | null) => {
-    submit.mutate({ target, verdict, reason, listenedMs: elapsedMs(target.musicId), skipped: false });
+    submit.mutate({ target, verdict, reason, listenedMs: elapsedMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
     markSent(target);
     close();
   };
@@ -99,7 +100,7 @@ export default function SurveyCard() {
   return (
     // 바깥 클릭으로 닫히지 않는다 — onClick 핸들러를 달지 않는 것이 그 구현이다
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-overlay backdrop-blur-sm">
-      <div className="w-full max-w-sm animate-tin" role="dialog" aria-modal="true" aria-label="설문">
+      <div className="w-full max-w-md animate-tin" role="dialog" aria-modal="true" aria-label="설문">
         <Box title="잠깐만요">
           {/*
             **두 곡을 같이 보여준다.** 한쪽만 있으면 그게 방금 들은 곡인지 비교 상대인지
@@ -116,13 +117,13 @@ export default function SurveyCard() {
           </div>
 
           <div className="flex flex-col gap-2">
-            <p className="text-sm leading-relaxed text-ink">{definition.question}</p>
+            <p className="text-base leading-relaxed font-medium text-ink">{definition.question}</p>
             <div className="flex flex-wrap gap-2">
-              <Button size="sm" onClick={() => send(true, null)}>
+              <Button size="md" onClick={() => send(true, null)}>
                 {definition.yes}
               </Button>
               <Button
-                size="sm"
+                size="md"
                 aria-pressed={askingReason}
                 className={askingReason ? SELECTED_CLASS : ""}
                 onClick={() => setState((s) => ({ ...s, verdict: false }))}
@@ -135,12 +136,12 @@ export default function SurveyCard() {
 
           {askingReason && (
             <div className="flex flex-col gap-2">
-              <p className="text-sm leading-relaxed text-ink">{definition.reasonQuestion}</p>
+              <p className="text-base leading-relaxed font-medium text-ink">{definition.reasonQuestion}</p>
               <div className="flex flex-wrap gap-2">
                 {definition.reasons.map((r) => (
                   <Button
                     key={r.value}
-                    size="sm"
+                    size="md"
                     aria-pressed={state.reason === r.value}
                     className={state.reason === r.value ? SELECTED_CLASS : ""}
                     onClick={() => setState((s) => ({ ...s, reason: r.value }))}
@@ -152,8 +153,8 @@ export default function SurveyCard() {
               </div>
               <div className="mt-1 flex items-center justify-between gap-2">
                 {/* 이유 없는 부정은 서버가 거부한다 — 고르기 전에는 제출을 막는다 */}
-                <span className="text-[10px] text-ink-3">이유를 하나 골라주세요</span>
-                <Button variant="primary" size="sm" disabled={state.reason == null} onClick={() => send(false, state.reason)}>
+                <span className="text-[12.5px] text-ink-3">이유를 하나 골라주세요</span>
+                <Button variant="primary" size="md" disabled={state.reason == null} onClick={() => send(false, state.reason)}>
                   제출
                 </Button>
               </div>

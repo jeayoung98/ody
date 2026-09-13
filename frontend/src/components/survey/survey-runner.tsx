@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { SURVEY_MIN_LISTEN_MS } from "@/constants/survey";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
@@ -73,6 +73,7 @@ export default function SurveyRunner() {
           title: s.title,
           artist: s.artist,
           genreId: s.genreName == null ? null : indexOfGenre(s.genreName),
+          durationSec: s.duration,
         })),
       [journey.data],
     ),
@@ -83,10 +84,23 @@ export default function SurveyRunner() {
   const prompt = currentMusicId != null && table ? (table.get(currentMusicId) ?? null) : null;
 
   /**
+   * 떠나는 순간의 평가 대상을 붙들어 둔다.
+   *
+   * 아래 effect 는 **곡이 실제로 바뀔 때만** 돌아야 하는데(그래야 "넘겼다"가 참이다), 그러면
+   * 그 안의 `prompt` 는 곡을 틀던 시점 값에 묶인다. 목록이 나중에 도착해 평가 대상이 된 곡을
+   * 놓치므로, 대상은 ref 로 따로 최신값을 본다.
+   */
+  const promptRef = useRef<typeof prompt>(null);
+  useEffect(() => {
+    promptRef.current = prompt;
+  }, [prompt]);
+
+  /**
    * 곡별 청취 시간을 장부에 쌓고, **20초를 못 채우고 떠난 곡은 무응답 행으로 보낸다.**
    *
-   * 곡이 바뀌는 순간(cleanup)이 유일한 기회다. 그때 얼마나 들었는지가 확정되고, 그 뒤로는
-   * 그 곡이 화면에서 사라져 다시 물을 수도 보낼 수도 없다.
+   * 의존은 `currentMusicId` **하나뿐이다.** 여기에 세션·순번을 넣으면, 곡은 그대로인데 이웃
+   * 목록만 갈린 순간(다른 별로 건너가기)에도 cleanup 이 돌아 **재생 중인 곡을 "넘겼다"고**
+   * 기록해 보낸다. 실제로 그랬다.
    *
    * 스킵한 곡을 통째로 빼면 정밀도가 실제보다 좋게 나온다 — 짧게 듣고 넘긴 곡이야말로
    * 추천이 틀렸을 가능성이 높기 때문이다. 그래서 묻지 않고 행만 남긴다.
@@ -94,17 +108,22 @@ export default function SurveyRunner() {
   useEffect(() => {
     if (currentMusicId == null) return;
     const from = Date.now();
-    const left = prompt?.target ?? null;
     // 카드가 재생 도중에 뜬다 — 그때 "지금까지 몇 초"를 알려면 시작 시각이 스토어에 있어야 한다
     beginListening(currentMusicId, from);
 
+    // 탭 숨김(pagehide)과 곡 바뀜(cleanup)이 잇따라 오면 장부에 같은 시간이 두 번 들어간다
+    let settled = false;
     const settle = (skipped: boolean) => {
+      if (settled) return;
+      settled = true;
       const listenedMs = elapsedMs(currentMusicId); // 마감 전에 읽는다 — 이번 체류가 포함돼야 한다
       noteListened(currentMusicId, Date.now() - from);
+
+      const left = promptRef.current?.target ?? null;
       if (!left || hasSent(left)) return;
-      // 20초를 넘겼으면 설문이 떠 있다 — 그건 카드가 제출로 처리한다
+      // 20초를 넘겼으면 설문이 떴거나 뜰 조건이었다 — 그건 카드가 제출로 처리한다
       if (!SURVEY_FORCED && listenedMs >= SURVEY_MIN_LISTEN_MS) return;
-      sendUnanswered({ target: left, listenedMs, skipped });
+      sendUnanswered({ target: left, listenedMs, skipped, durationSec: promptRef.current?.subject.durationSec });
       markSent(left);
     };
 
@@ -117,7 +136,7 @@ export default function SurveyRunner() {
       settle(true); // 곡이 바뀐 것은 사용자가 넘긴 것으로 본다
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMusicId, prompt?.target.sessionId, prompt?.target.rank]);
+  }, [currentMusicId]);
 
   useSurveyTrigger(prompt);
 

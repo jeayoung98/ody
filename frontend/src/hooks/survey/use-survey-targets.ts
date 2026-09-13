@@ -10,7 +10,7 @@ interface Track extends SurveySong {
 
 /** 화면용 값만 떼어낸다. `musicId` 는 전송 타입이 따로 들고 있어서 여기선 뺀다 */
 function show(t: Track): SurveySong {
-  return { title: t.title, artist: t.artist, genreId: t.genreId, coverUrl: t.coverUrl };
+  return { title: t.title, artist: t.artist, genreId: t.genreId, coverUrl: t.coverUrl, durationSec: t.durationSec };
 }
 
 /**

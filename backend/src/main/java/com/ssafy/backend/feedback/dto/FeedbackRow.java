@@ -9,6 +9,7 @@ import lombok.Setter;
 public class FeedbackRow {
 
 	private String sessionId;
+	private String anonymousId;
 	private String mode;
 	private int rank;
 	private long anchorMusicId;

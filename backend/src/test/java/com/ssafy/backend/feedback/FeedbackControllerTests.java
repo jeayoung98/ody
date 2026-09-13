@@ -38,7 +38,7 @@ import com.ssafy.backend.security.JwtAuthenticationFilter;
 class FeedbackControllerTests {
 
 	private static final String BODY = """
-			{"sessionId":"6f1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b","mode":"nearby","rank":3,
+			{"sessionId":"6f1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b","anonymousId":"0b6a0d8e-1c2f-4a3b-9d4e-5f6a7b8c9d0e","mode":"nearby","rank":3,
 			 "anchorMusicId":1,"musicId":55,"verdict":false,"reason":"mood","listenedSec":42,"skipped":true}
 			""";
 

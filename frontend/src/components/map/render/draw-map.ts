@@ -1,15 +1,12 @@
 import { CONSTELLATION, COVER_COUNT, GHOST, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, STAR_SIZE, STAR_VIEW } from "@/constants";
-import { FONTS, MAP_COLORS, NEBULA_WASH, genreIdx, genreRgb, rgba } from "@/constants/design-tokens";
+import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
+import { starColorIdx, starMag, starRgb } from "./star-look";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
-/** 가중치 → 0~1 등급 (로그 스케일, 재생수 10^2.6 ~ 10^6.8) */
-function magOf(weight: number) {
-  return clamp((Math.log10(Math.max(1, weight)) - 2.6) / 4.2, 0, 1);
-}
 /** 밝기는 크기와 느슨하게만 연동 */
 function lumOf(i: number, mag: number) {
   return clamp(0.28 * mag + 0.72 * Math.pow(((i * 7919) % 1000) / 1000, 0.8), 0, 1);
@@ -95,15 +92,15 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   // 가장 먼 별밭은 카메라와 무관하다 — 아무리 밀어도 제자리인 것이 오히려 "아주 멀다"로 읽힌다
   field(t * 0.0052, -t * 0.0019, 1, dim);
   /**
-   * 0겹(우주)을 뺀 겹에는 별밭을 세 겹 더 깐다.
+   * 별밭을 세 겹 더 깐다.
    * 파고들수록 상주 곡은 화면 가운데로 모이는데(fitCam 이 97%를 화면 짧은 변 44% 반지름 안에 넣는다),
    * 그 바깥이 빈 하늘이면 "확대해 들어왔다"가 아니라 "별 뭉치 하나가 떠 있다"로 읽힌다.
    * 그래서 ① 화면 전체를 별로 채우고 ② **카메라를 따라 시차를 두고 함께 밀리게** 한다 —
    * 지도를 밀 때 배경이 가만히 있으면 상주 구름만 미끄러져 뭉치의 경계가 그대로 드러난다.
-   * farK 는 0겹 → 1겹 한 칸에서 0 → 1 로 차오른다 — 전환 중 깊이가 소수라 별밭이 툭 켜지지 않는다.
+   * 처음엔 0겹(우주)을 뺐지만, 0겹도 상주 구름 바깥이 빈 하늘로 보여 **모든 겹에 깐다** (S15P21A405-283).
    */
-  const farK = Math.min(1, depth * (LAYER_COUNT - 1));
-  if (farK > 0.01) {
+  const farK = 1;
+  {
     // 월드 원점이 화면에서 밀린 양(타일 단위). 별과 같은 식으로 움직이므로 같은 세계에 있는 것처럼 보인다
     const camU = (e.cam.cx * e.cam.s) / (W + 64);
     const camV = -(e.cam.cy * e.cam.s) / (H + 64);
@@ -148,7 +145,7 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
       g.globalAlpha = q.a * a0;
-      g.drawImage(puffFor(q.k, s.genreId), px + q.dx * R - rr, py + q.dy * R - rr, rr * 2, rr * 2);
+      g.drawImage(puffFor(q.k, starColorIdx(s)), px + q.dx * R - rr, py + q.dy * R - rr, rr * 2, rr * 2);
     }
   }
   g.globalAlpha = 1;
@@ -185,7 +182,7 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     if (px < -20 || px > W + 20 || py < -20 || py > H + 20) continue;
     const s = e.songs[i];
     if (pset?.has(s.musicId) || cset?.has(s.musicId)) continue; // 프로브·별자리 곡은 따로 그린다
-    const mag = magOf(s.weight);
+    const mag = starMag(s);
     const on = e.chosen.has(i);
     let d: number;
     let alpha: number;
@@ -198,8 +195,10 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * appear(s.musicId, t);
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
-      d = (2.8 + Math.pow(mag, 1.6) * 5.6) * grow * fieldSize;
-      alpha = (0.14 + lumOf(i, mag) * 0.34) * twinkle(s.musicId, t) * fieldAlpha;
+      // 집을 수 없는 별이라 눌리는 별(0.42~1)과 확실히 갈라놓는다 — 임시 랜덤 크기로 배경도 커진 뒤로
+      // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.13
+      d = (2.2 + Math.pow(mag, 1.6) * 3.6) * grow * fieldSize;
+      alpha = (0.04 + lumOf(i, mag) * 0.09) * twinkle(s.musicId, t) * fieldAlpha;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;
@@ -208,7 +207,7 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     alpha *= a0;
     if (e.hoverId === s.musicId) alpha = Math.min(1, alpha + 0.3);
     g.globalAlpha = alpha;
-    g.drawImage(spr[genreIdx(s.genreId)], px - d / 2, py - d / 2, d, d);
+    g.drawImage(spr[starColorIdx(s)], px - d / 2, py - d / 2, d, d);
     // 전환 중 나가는 별은 지나간 자리에 잔상을 남긴다 — 가장자리로 훅 빠지는 게 보이게
     if (out && e.anim) {
       const f2 = e.freeRect();
@@ -217,7 +216,7 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       const td = Math.hypot(tx, ty) || 1;
       const len = Math.min(90, td * 0.22) * (e.anim.dir > 0 ? 1 : -1);
       g.globalAlpha = alpha * 0.5;
-      g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+      g.strokeStyle = rgba(starRgb(s), 0.9);
       g.lineWidth = Math.max(0.8, d * 0.18);
       g.beginPath();
       g.moveTo(px - (tx / td) * len, py - (ty / td) * len);
@@ -231,7 +230,7 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       g.arc(px, py, 0.95 + Math.pow(mag, 1.75) * 2.3, 0, 6.284);
       g.fill();
       if (mag > 0.88) {
-        g.strokeStyle = rgba(genreRgb(s.genreId), 0.22 * alpha);
+        g.strokeStyle = rgba(starRgb(s), 0.22 * alpha);
         g.lineWidth = 1;
         const len = d * 0.7;
         g.beginPath();
@@ -324,7 +323,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     if (e.hoverId === it.s.musicId || e.selectedId === it.s.musicId) continue;
-    const mag = magOf(it.s.weight);
+    const mag = starMag(it.s);
     const S = (19 + Math.pow(mag, 1.4) * 14) * grow;
     const x = it.px - S / 2;
     const y = it.py - S / 2;
@@ -398,7 +397,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     const d = cur ? 34 : 24;
     g.globalCompositeOperation = "lighter";
     g.globalAlpha = k * a * (s.playable ? 1 : 0.55);
-    g.drawImage(spr[genreIdx(s.genreId)], p.x - d / 2, p.y - d / 2, d, d);
+    g.drawImage(spr[starColorIdx(s)], p.x - d / 2, p.y - d / 2, d, d);
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = k * a;
     g.beginPath();
@@ -410,7 +409,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     g.stroke();
     if (e.hoverId === p.id || e.selectedId === p.id) {
       g.globalAlpha = k;
-      g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+      g.strokeStyle = rgba(starRgb(s), 0.9);
       g.lineWidth = 1.4;
       g.beginPath();
       g.arc(p.x, p.y, 13, 0, 6.284);
@@ -497,14 +496,14 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     const s = e.songs.find((x) => x.musicId === n.id)!;
     const d = 22 + (1 - n.rank / Math.max(1, nodes.length)) * 10;
     g.globalAlpha = 0.95 * k * (s.playable ? 1 : 0.55);
-    g.drawImage(spr[genreIdx(s.genreId)], n.x - d / 2, n.y - d / 2, d, d);
+    g.drawImage(spr[starColorIdx(s)], n.x - d / 2, n.y - d / 2, d, d);
     g.globalAlpha = k;
     g.fillStyle = MAP_COLORS.core;
     g.beginPath();
     g.arc(n.x, n.y, 2.4, 0, 6.284);
     g.fill();
     if (e.hoverId === n.id || e.selectedId === n.id) {
-      g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+      g.strokeStyle = rgba(starRgb(s), 0.9);
       g.lineWidth = 1.4;
       g.beginPath();
       g.arc(n.x, n.y, 12, 0, 6.284);
@@ -533,11 +532,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
 
   // 기준 곡 강조 + 라벨
   const song = e.songs.find((s) => s.musicId === p.centerId)!;
-  const frgb = genreRgb(song.genreId);
+  const frgb = starRgb(song);
   const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
-  g.drawImage(spr[genreIdx(song.genreId)], tx - 22, ty - 22, 44, 44);
+  g.drawImage(spr[starColorIdx(song)], tx - 22, ty - 22, 44, 44);
   g.beginPath();
   g.arc(tx, ty, rr, 0, 6.284);
   g.strokeStyle = rgba(frgb, 0.85);
@@ -718,13 +717,13 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = k;
   const gr = 26 * pop;
-  g.drawImage(glowSprites()[genreIdx(s.genreId)], cx - gr, cy - gr, gr * 2, gr * 2);
+  g.drawImage(glowSprites()[starColorIdx(s)], cx - gr, cy - gr, gr * 2, gr * 2);
 
   // 등장 파문 — 한 번 퍼지고 사라진다
   if (kk < 1) {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = (1 - kk) * 0.5;
-    g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+    g.strokeStyle = rgba(starRgb(s), 0.9);
     g.lineWidth = 1;
     g.beginPath();
     g.arc(cx, cy, rr + (1 - kk) * 34, 0, 6.284);
@@ -734,7 +733,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "source-over";
   g.globalAlpha = k * 1.6;
   g.setLineDash([4, 5]);
-  g.strokeStyle = rgba(genreRgb(s.genreId), 0.9);
+  g.strokeStyle = rgba(starRgb(s), 0.9);
   g.lineWidth = 1.3;
   g.beginPath();
   g.arc(cx, cy, rr, 0, 6.284);
@@ -748,7 +747,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
 
   // 화면 밖을 가리키는 화살촉 — "이 방향 더 바깥에 있다"
   g.globalAlpha = k * 1.9;
-  g.fillStyle = rgba(genreRgb(s.genreId), 0.9);
+  g.fillStyle = rgba(starRgb(s), 0.9);
   const ax = cx + ox * (rr + 6);
   const ay = cy + oy * (rr + 6);
   g.beginPath();
@@ -789,7 +788,7 @@ function drawSelected(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalCompositeOperation = "lighter";
   g.beginPath();
   g.arc(px, py, rr, 0, 6.284);
-  g.strokeStyle = rgba(genreRgb(song.genreId), 0.85);
+  g.strokeStyle = rgba(starRgb(song), 0.85);
   g.lineWidth = 1.6;
   g.stroke();
   g.globalCompositeOperation = "source-over";

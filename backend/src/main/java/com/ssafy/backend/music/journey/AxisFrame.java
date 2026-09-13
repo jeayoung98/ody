@@ -125,25 +125,45 @@ public final class AxisFrame {
 	}
 
 	/**
-	 * 역 수 (D3, 핸드오프 §4.2). <b>먼 곡을 거절하지 않고 역만 늘린다.</b>
+	 * 역 수. <b>끝점 거리에 비례한다</b> (007, S15P21A405-286).
 	 *
 	 * <pre>
-	 * L &lt;= farDist  ->  10
-	 * L &gt;  farDist  ->  clamp(round(10 + (L − farDist)), 10, 20)
+	 * n = clamp(floor(L / spacing) - 1, 0, cap)
 	 * </pre>
 	 *
-	 * @param farDist 먼 여정 기준 거리. 설정에서 온다({@code ServingRules.farEndpointDist}, 기본 10.7)
+	 * <p><b>2026-09-13 실측으로 D3 의 "하한 10 · 기울기 1:1 · 상한 20" 을 대체했다.</b> 그 세 숫자는
+	 * 2026-09-07 에 측정 없이 정해졌고 근거가 기록돼 있지 않았다. 하한 10 때문에 끝점 거리 3.2 인
+	 * 쌍에도 역 11칸을 나눠, 축 방향 한 칸이 <b>0.29</b> 인데 그 지점 최근접 곡은 2.3 떨어져 있었다 —
+	 * 한 걸음의 대부분이 앞이 아니라 옆으로 갔고 경로가 직선의 <b>8.6배</b>를 돌았다.
+	 *
+	 * <p>{@code spacing} 은 <b>코퍼스 최근접 반경</b>이다. 축 위 임의 지점 60곳에서 실제 최근접 곡까지의
+	 * 거리를 재 <b>p50 2.272 · p90 2.684 · max 3.168</b> 를 얻었고 기본값 2.5 는 그 p60~70 이다.
+	 * 이보다 잘게 나누면 이웃한 두 역이 같은 동네에서 뽑혀 진행이 되지 않는다(FR-002).
+	 *
+	 * <p><b>이 값은 좌표계 {@code v2.1-pca16} 에 귀속된다</b>(FR-006). 번들을 바꾸면 거리 눈금이
+	 * 통째로 달라지므로 다시 재야 한다. 설정 키는 {@code ody.journey.station-spacing} 이다.
+	 *
+	 * <p><b>하한은 0 이다</b>(FR-004). 끝점이 {@code spacing} 보다 가까우면 중간에 넣을 자리가 없어
+	 * 출발·도착 2곡만 반환한다 — 오류가 아니라 정상 응답이다. 층 질의도 0회 나간다.
+	 *
+	 * <p>{@code farDist} 를 더 이상 받지 않는다. {@link #far(double)} 는 남아 있고 관측 로그가 쓴다.
+	 *
+	 * @param spacing 이웃 역 사이 축 방향 간격의 하한. 0 보다 커야 한다
+	 * @param cap     역 수 상한. 음수일 수 없다. 운영값 18 (출발·도착 포함 20곡)
 	 */
-	public int stationCount(double farDist) {
-		if (length <= farDist) {
-			return 10;
+	public int stationCount(double spacing, int cap) {
+		if (spacing <= 0) {
+			throw new IllegalArgumentException("spacing 은 0 보다 커야 한다: " + spacing);
+		}
+		if (cap < 0) {
+			throw new IllegalArgumentException("cap 은 음수일 수 없다: " + cap);
 		}
 		// Math.clamp 는 Java 21 부터다. 이 프로젝트는 17 이라 직접 자른다.
-		long n = Math.round(10 + (length - farDist));
-		return (int) Math.min(20, Math.max(10, n));
+		int n = (int) Math.floor(length / spacing) - 1;
+		return Math.min(cap, Math.max(0, n));
 	}
 
-	/** 먼 여정인가 ({@code L > farDist}). 역 수를 늘리는 기준이며 응답에는 싣지 않는다(FR-023). */
+	/** 먼 여정인가 ({@code L > farDist}). 관측 로그에만 쓰고 응답에는 싣지 않는다(FR-023). 역 수와는 무관하다(007). */
 	public boolean far(double farDist) {
 		return length > farDist;
 	}

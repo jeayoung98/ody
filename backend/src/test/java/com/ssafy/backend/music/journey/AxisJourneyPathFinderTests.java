@@ -9,6 +9,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.Set;
 
 import org.junit.jupiter.api.Test;
@@ -65,10 +66,10 @@ class AxisJourneyPathFinderTests {
 	}
 
 	private static AxisJourneyPathFinder finderOf(List<TrackCandidate> pool) {
-		return new AxisJourneyPathFinder(Optional.of(readerOf(pool)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
+		return new AxisJourneyPathFinder(Optional.of(readerOf(pool)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 	}
 
-	/** A=(0,0) → B=(60,0). L=60 이라 먼 여정이고 역이 20개다. */
+	/** A=(0,0) → B=(60,0). L=60 이라 상한 18역에 붙는다(007). */
 	private static MusicDetail start() {
 		return song(1, "start", "sa", 0, 0);
 	}
@@ -164,7 +165,7 @@ class AxisJourneyPathFinderTests {
 	@Test
 	void find_throwsWhenReaderAbsent() {
 		AxisJourneyPathFinder finder =
-				new AxisJourneyPathFinder(Optional.empty(), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
+				new AxisJourneyPathFinder(Optional.empty(), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 		assertThatThrownBy(() -> finder.find(start(), end()))
 				.isInstanceOf(CustomException.class)
@@ -255,5 +256,39 @@ class AxisJourneyPathFinderTests {
 			}
 		}
 		return count;
+	}
+
+	// ------------------------------- 끝점이 가까운 쌍 (007, S15P21A405-286)
+	// 역 수 하한이 10 에서 0 으로 바뀌면서 처음 실행되는 경로다. 코드상으로는 이미
+	// 안전했지만(ViterbiPath.solve 가 빈 층에서 List.of() 를 준다) 한 번도 돌아본 적이
+	// 없어 여기서 고정한다.
+
+	@Test
+	void closePair_yieldsReachablePathWithNoStations() {
+		// L = 2.0 < spacing 2.5 -> 중간에 넣을 자리가 없다
+		AxisJourneyPathFinder finder = finderOf(spread(40, "a"));
+		EnginePath path = finder.find(song(1, "start", "sa", 0, 0), song(2, "end", "eb", 2, 0));
+
+		assertThat(path.reachable()).isTrue();          // 422 가 아니다
+		assertThat(path.stationMbids()).isEmpty();      // 출발·도착만 남는다
+		assertThat(path.progresses()).isEmpty();
+		assertThat(path.mode()).isEqualTo("axis");      // linear 폴백으로 새지 않는다
+	}
+
+	@Test
+	void closePair_doesNotQueryLayers() {
+		// 역이 0개면 층 질의도 0회여야 한다. 헛도는 조회가 남아 있으면 여기서 잡힌다.
+		AtomicInteger calls = new AtomicInteger();
+		NearestTrackReader counting = (point, limit) -> {
+			calls.incrementAndGet();
+			return List.of();
+		};
+		AxisJourneyPathFinder finder = new AxisJourneyPathFinder(Optional.of(counting), RULES,
+				new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
+
+		EnginePath path = finder.find(song(1, "start", "sa", 0, 0), song(2, "end", "eb", 2, 0));
+
+		assertThat(calls).hasValue(0);
+		assertThat(path.reachable()).isTrue();
 	}
 }

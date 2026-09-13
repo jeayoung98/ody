@@ -264,6 +264,10 @@ class JourneyServiceTests {
 		verifyNoInteractions(pathFinder, trackReader);
 	}
 
+	/**
+	 * 정거장이 하나도 없는 경우. 원래는 "중복 제거로 전부 사라진" 예외 상황이었는데,
+	 * 007(S15P21A405-286)부터 <b>끝점이 최근접 반경보다 가까우면 정상적으로 여기 온다</b>.
+	 */
 	@Test
 	void journey_noIntermediateStations_returnsTwoSongPath() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
@@ -279,14 +283,14 @@ class JourneyServiceTests {
 	}
 
 	@Test
-	void journey_engineUpperBound_twentyStations_isAccepted() {
-		givenJourney(20, 275, 205);
+	void journey_engineUpperBound_eighteenStations_isAccepted() {
+		givenJourney(18, 275, 205);
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
 
-		// B8: 정거장 20개 → 22곡. 축소 없음
-		assertThat(res.musicCnt()).isEqualTo(22);
-		assertThat(res.path()).hasSize(22);
+		// B8: 정거장 18개 → 20곡. 축소 없음 (007 로 상한이 20→18 로 내려갔다)
+		assertThat(res.musicCnt()).isEqualTo(20);
+		assertThat(res.path()).hasSize(20);
 	}
 
 	@Test

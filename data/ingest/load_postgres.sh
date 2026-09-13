@@ -55,7 +55,8 @@ if [ "${EXISTING:-0}" != "0" ]; then
   RELOAD=1
   echo "== 0b. 재적재 모드 — music ${EXISTING}행에 UPDATE 조인 (album·release_year·album_mbid·bpm). genre·music_genre 는 건드리지 않는다"
   docker cp "$CSV_DIR/music.csv" "$CONTAINER:/tmp/music.csv"
-  docker exec -i "$CONTAINER" bash -lc "cat > /tmp/reload.sql" <<'SQL'
+  RELOAD_SQL="/tmp/reload_$(date +%s).sql"   # 컨테이너 /tmp 에 남은 이전 파일과 소유자가 다르면 덮어쓰기가 막힌다. 매번 새 이름.
+  docker exec -i "$CONTAINER" bash -lc "cat > $RELOAD_SQL" <<'SQL'
 \timing on
 SET maintenance_work_mem = '2GB';
 SET max_parallel_maintenance_workers = 0;
@@ -74,7 +75,7 @@ CREATE INDEX music_l1_gist ON music USING gist (point((location::real[])[1], (lo
 CREATE INDEX music_l2_gist ON music USING gist (point((location::real[])[3], (location::real[])[4]));
 VACUUM ANALYZE music;
 SQL
-  docker exec -i "$CONTAINER" bash -lc 'psql -v ON_ERROR_STOP=1 -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/reload.sql'
+  docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB -f $RELOAD_SQL"
 fi
 
 if [ "$RELOAD" = "0" ]; then
@@ -121,13 +122,14 @@ echo "== 6. 좌표 차원과 표본"
 run_sql "SELECT vector_dims(location) AS dims, count(*) FROM music WHERE location IS NOT NULL GROUP BY 1;"
 
 echo "== 7. HNSW 다시 만들기 — 병렬을 끄지 않으면 /dev/shm 64MB 에 걸려 실패한다"
-docker exec -i "$CONTAINER" bash -lc "cat > /tmp/hnsw.sql" <<'SQL'
+HNSW_SQL="/tmp/hnsw_$(date +%s).sql"   # 지난 실행 파일이 다른 유저 소유로 남아 Permission denied 가 났다(2026-09-13). 매번 새 이름.
+docker exec -i "$CONTAINER" bash -lc "cat > $HNSW_SQL" <<'SQL'
 \timing on
 SET maintenance_work_mem = '2GB';
 SET max_parallel_maintenance_workers = 0;
 CREATE INDEX music_location_hnsw_idx ON music USING hnsw (location vector_l2_ops);
 SQL
-docker exec -i "$CONTAINER" bash -lc 'psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/hnsw.sql'
+docker exec -i "$CONTAINER" bash -lc "psql -U \$POSTGRES_USER -d \$POSTGRES_DB -f $HNSW_SQL"
 
 echo "== 8. BE 에게 전달할 값"
 run_sql "SELECT max(id) AS max_music_id, max(id) + 1 AS next_id_for_backend FROM music;"

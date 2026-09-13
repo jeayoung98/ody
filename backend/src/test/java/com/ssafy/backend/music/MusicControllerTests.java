@@ -36,6 +36,7 @@ import com.ssafy.backend.music.dto.MajorResponse;
 import com.ssafy.backend.music.dto.MapPoint;
 import com.ssafy.backend.music.retrieval.LayerBox;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.service.NearbyService;
 
 /**
  * 대표곡 컨트롤러 슬라이스 테스트 (@WebMvcTest). 에러코드는 master GlobalErrorCode 기준.
@@ -54,6 +55,9 @@ class MusicControllerTests {
 	@MockitoBean
 	private MusicService musicService;
 
+	@MockitoBean
+	private NearbyService nearbyService;
+
 
 
 
@@ -67,7 +71,7 @@ class MusicControllerTests {
 		for (double v : PCS) {
 			pc.add(v);
 		}
-		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, false);
+		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, null, false);
 	}
 
 	@Test

@@ -4,6 +4,7 @@
 
 - `team/`: 모든 팀원이 보는 개념과 1차 확인 가이드
 - `owner/`: 인프라 담당자가 구축, 변경, 복구할 때 사용하는 상세 문서
+- `product/`: 서비스 기능 문서. `01_EXPLORE_SURVEY.md` 탐색 설문(주변·범위 탐색 곡 단위 피드백) 방식·테이블·분석 쿼리
 
 기술 설정의 Source of Truth는 `docs/infra/`와 `infra/`다. Notion에서 내용을 수정했다면 같은 변경을
 Repository 원본에도 반영한다. 실제 서버 적용 여부는 `docs/infra/STATUS.md`를 기준으로 확인한다.

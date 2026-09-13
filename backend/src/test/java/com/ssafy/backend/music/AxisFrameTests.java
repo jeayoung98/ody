@@ -114,26 +114,62 @@ class AxisFrameTests {
 		}
 	}
 
-	// -------------------------------------------------------------- T061 역 수
+	// ------------------------------------------------ 역 수 (007, S15P21A405-286)
+	// 2026-09-13 개정. 이전 기대값(하한 10 · 기울기 1:1 · 상한 20)은 2026-09-07 D3 에서
+	// 측정 없이 정해진 값이었다. 실측으로 "축 방향 간격이 최근접 반경 이상" 규칙으로 바뀌었다.
+	// 경계값은 007 contracts/station-count.md 표와 같다.
 
-	@Test
-	void stationCount_isTenWhenNotFar() {
-		assertThat(AxisFrame.of(v(0, 0), v(5, 0)).stationCount(10.7)).isEqualTo(10);
-		// 경계: L == farDist 는 먼 여정이 아니다
-		assertThat(AxisFrame.of(v(0, 0), v(10.7, 0)).stationCount(10.7)).isEqualTo(10);
+	private static final double S = 2.5;    // 최근접 반경 실측 p50 2.272, 운영 기본값 2.5
+	private static final int CAP = 18;      // 출발·도착 포함 20곡
+
+	private static int stations(double length) {
+		return AxisFrame.of(v(0, 0), v(length, 0)).stationCount(S, CAP);
 	}
 
 	@Test
-	void stationCount_growsWithDistanceBeyondThreshold() {
-		// L = 15.7 -> round(10 + 5.0) = 15
-		assertThat(AxisFrame.of(v(0, 0), v(15.7, 0)).stationCount(10.7)).isEqualTo(15);
+	void stationCount_isZeroWhenEndpointsCloserThanSpacing() {
+		// 중간에 넣을 자리가 없다. 출발·도착 2곡만 나가는 것이 정상이다 (FR-004)
+		assertThat(stations(0.0)).isZero();
+		assertThat(stations(2.4)).isZero();
+		assertThat(stations(2.5)).isZero();
+		assertThat(stations(4.9)).isZero();
 	}
 
 	@Test
-	void stationCount_clampsAtTwenty_neverRejectsFarPair() {
-		// 아주 먼 쌍도 거절하지 않고 상한 20 으로 붙는다 (D3)
-		assertThat(AxisFrame.of(v(0, 0), v(100, 0)).stationCount(10.7)).isEqualTo(20);
-		assertThat(AxisFrame.of(v(0, 0), v(1000, 0)).stationCount(10.7)).isEqualTo(20);
+	void stationCount_growsWithDistance() {
+		assertThat(stations(5.0)).isEqualTo(1);        // 첫 정거장이 생기는 지점
+		assertThat(stations(7.5)).isEqualTo(2);
+		assertThat(stations(15.52)).isEqualTo(5);      // 무작위 쌍 거리 중앙값 -> 7곡
+		assertThat(stations(25.77)).isEqualTo(9);      // 2026-09-13 측정 중 가장 먼 쌍 -> 11곡
+	}
+
+	@Test
+	void stationCount_clampsAtCap_neverRejectsFarPair() {
+		// 먼 쌍도 거절하지 않고 상한에 붙는다. 무작위 쌍의 0.4% 만 여기 온다
+		assertThat(stations(47.5)).isEqualTo(CAP);
+		assertThat(stations(58.58)).isEqualTo(CAP);    // 코퍼스 실측 최대 거리
+		assertThat(stations(1000.0)).isEqualTo(CAP);
+	}
+
+	@Test
+	void stationCount_keepsAxisGapAtLeastSpacing() {
+		// FR-002 사후 조건: n 이 0 이거나 축 방향 한 칸이 spacing 이상이다.
+		// 이것이 깨지면 이웃한 두 역이 같은 동네에서 뽑혀 경로가 진행하지 않는다.
+		for (double length = 0.5; length <= 60.0; length += 0.5) {
+			int n = stations(length);
+			if (n > 0 && n < CAP) {
+				assertThat(length / (n + 1)).as("L=%s n=%s", length, n).isGreaterThanOrEqualTo(S);
+			}
+		}
+	}
+
+	@Test
+	void stationCount_rejectsNonsenseArguments() {
+		// 설정 오타를 조용히 삼키면 n 이 무한대가 된다
+		AxisFrame f = AxisFrame.of(v(0, 0), v(10, 0));
+		assertThatThrownBy(() -> f.stationCount(0.0, CAP)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> f.stationCount(-1.0, CAP)).isInstanceOf(IllegalArgumentException.class);
+		assertThatThrownBy(() -> f.stationCount(S, -1)).isInstanceOf(IllegalArgumentException.class);
 	}
 
 	@Test

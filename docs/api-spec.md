@@ -107,13 +107,19 @@
 
 ### 0.6 공통 DTO
 
-**MusicSummary** (검색 결과 / 주변곡 / 경로 노드): `id`(int), `title`(string), `artist`(string), `album`(string\|null), `genres`(list\|string\|null), `youtubeUrl`(string\|null, null이면 재생 불가), `location`(Location).
+**MusicSummary** (검색 결과 / 주변곡 / 경로 노드): `id`(int), `title`(string), `artist`(string), `album`(string\|null), `genres`(list\|string\|null), `youtubeUrl`(string\|null, null이면 재생 불가), `videoId`(string(11)\|null), `location`(Location).
 
 **Location**: `pc1`~`pc16` (각 float).
 
 **MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `playCnt`(int), `youtubeCnt`(int).
 
-**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `playable`(boolean, `youtubeUrl != null`).
+**`videoId` 규약** (2026-09-13, S15P21A405-57 · spec 006): 유튜브 영상 식별자 11자다. `youtubeUrl` 이 **검색** URL 이라 그 곡이라는 보장이 없는 반면, `videoId` 는 **확인된 영상**이다 — 곡 길이 ±3초(공식 채널 `- Topic`·VEVO 는 ±30초) 일치와 `embeddable` 을 확인한 것만 담는다. 조건을 못 넘기면 담지 않는다.
+- **키는 항상 있고 값이 `null` 일 수 있다.** 키 자체가 빠지지 않는다 (`"videoId":null`)
+- **가산 필드다.** `youtubeUrl`·`playable` 의 의미는 바뀌지 않는다. 클라이언트는 `videoId` 유무로 재생 **방식**을, `playable` 로 재생 **가능 여부**를 판단한다
+- `videoId` 가 없으면 기존대로 `youtubeUrl` 로 폴백한다
+- **적재 전까지 전 곡 `null` 이다.** 저장소·적재 배치는 미정이며, 매핑률 실측은 66%다(S15P21A405-40 코멘트)
+
+**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `videoId`(string(11)\|null, 확인된 영상 — 위 `videoId` 규약 참고), `playable`(boolean, `youtubeUrl != null`).
 좌표를 `Location` 객체가 아니라 배열로 싣는 유일한 DTO다 — 클라이언트가 레이어 축 `pc(2n-1)`·`pc(2n)` 으로 재투영하기 때문.
 
 **PlaylistTrack**: `id`(int, 곡 ID), `title`, `artist`, `duration`(int, 초), `youtubeUrl`(string\|null).
@@ -317,9 +323,17 @@ body: `idToken`(String, required).
   } ]
 }, "error": null }
 ```
-- `neighbors`는 임베딩 공간 최근접 10곡, `distance` 오름차순. 자기 자신 제외. 재생 불가(`youtubeUrl == null`) 곡도 포함. 거리 척도는 서빙 baseline(`v2.1-pca16`) 기준. 에러: `MUSIC_NOT_FOUND`.
+- `neighbors`는 **선정 규칙을 통과한 최대 10곡**, `distance` 오름차순(동률 시 `id` 오름차순). 자기 자신 제외. 재생 불가 곡도 포함. 거리 척도는 서빙 baseline(`v2.1-pca16`) 기준. 에러: `MUSIC_NOT_FOUND`.
+- **선정 규칙은 §3.5 주변 탐색과 동일하다** — 같은 곡을 기준으로 하면 두 API 의 목록이 같다. 규칙 정의는 §3.5 참조.
+- 응답에 **`lowSimilarity`**(boolean)가 함께 온다. 마지막 이웃 거리가 원거리 임계값을 넘었다는 뜻이고 오류가 아니다. 운영 실측 발동률 약 **9%**.
+
+> ⚠️ **2026-09-13 개정 (D-003, 이슈 S15P21A405-59).** 이전에는 최근접 10곡을 그대로 잘라 줬다.
+> 지금은 규칙을 통과한 곡만 담기므로 **10곡보다 적을 수 있고**, `lowSimilarity` 필드가 추가됐다.
+> 곡 상세와 주변 탐색이 같은 곡에 다른 목록을 주던 문제를 없애기 위한 변경이다.
 
 ### 3.3 경로 탐색
+
+> **2026-09-13 개정 (BE2, S15P21A405-286)** — 정거장 수 규칙과 곡 수 범위가 바뀌었다. 이전 문구의 "30곡 이하로 줄인다"와 "등분"은 구현과 달랐다(줄이지 않고 오류, `axis`+DP). 근거는 `specs/007-journey-station-count/`.
 `GET /api/music/journey` · 인증 필요. param: `start`(int, required, 시작곡 ID), `end`(int, required, 끝곡 ID).
 ```json
 { "success": true, "data": {
@@ -333,9 +347,10 @@ body: `idToken`(String, required).
 }, "error": null }
 ```
 - `path`는 시작곡을 `step: 0`으로 포함하고 끝곡까지 순서대로 나열.
-- `path`는 출발곡·도착곡 포함 **최대 30곡**. 초과 경로는 서버가 30곡 이하로 줄인 뒤 최종 목록 기준으로 곡 간 도약을 재평가.
+- `path`는 출발곡·도착곡 포함 **최대 30곡**(계약 상한). **서버는 줄이지 않는다** — 넘으면 산출이 자기 상한을 어긴 것이라 오류로 처리한다. 실제 상한은 **20곡**(중간 정거장 18)이라 계약 상한에 닿지 않는다.
+- `musicCnt` 는 **2 ~ 20** 사이에서 변한다(`start == end` 는 1). 무작위 쌍 기준 **중앙값 6곡**이고, **중간 곡 없이 출발·도착 2곡만 나가는 응답이 정상**이다. 곡 수를 하드코딩하지 말 것.
 - `totalDuration`은 경로 내 모든 곡 `duration` 합(초).
-- 중간 지점: 출발→도착 벡터를 등분한 각 지점에서 최근접 곡 선택. 거리 척도는 baseline(`v2.1-pca16`).
+- 중간 지점: 출발→도착 축을 따라 층을 나누고 층마다 후보를 뽑아 **DP 로 한 줄을 고른다**(`axis` 모드). 층 수는 **끝점 거리에 비례**한다 — 이웃한 두 정거장의 축 방향 간격이 코퍼스 최근접 반경(약 2.5) 이상이 되도록 나눈다. 지점마다 독립으로 최근접 1곡을 고르는 방식(`linear`)은 진행도가 역행해 폴백으로만 쓴다. 거리 척도는 baseline(`v2.1-pca16`).
 - 경계: `start == end` → path에 해당 곡 1개(`step:0`), `musicCnt:1`, 200 / 재생 불가 곡도 포함, 연결 경로 없으면 `PATH_NOT_FOUND`.
 - 에러: `MUSIC_NOT_FOUND`(없는 곡), `PATH_NOT_FOUND`(경로 연결 불가).
 
@@ -373,7 +388,7 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 | 요청 | `level` + 중심좌표 `pc1`~`pc16` | `level` + **누적 축 범위**(1레이어는 파라미터 없음) |
 | 조회 구역 | 서버가 레벨별 **반경**으로 정하는 **원형** | **격자**. 구역 선택·이동은 **클라이언트 뷰포트** |
 | 선정 | 서버가 `youtubeCnt` **내림차순 상위 k** | 서버는 **공간 균등 상주 집합**, 인기순은 **클라이언트** |
-| 응답 | `MusicDetail` (12필드, `location` 객체) | **`MapPoint`** (8필드, `pc` 배열) |
+| 응답 | `MusicDetail` (13필드, `location` 객체) | **`MapPoint`** (9필드, `pc` 배열) |
 | 1레이어 | 다른 레벨과 동일 처리 | **정적 사전 계산** |
 
 **왜**: FE 가 이 모델로 이미 구현했고(`map-engine.ts`), data 가 거기 맞춰 인프라를 만들었으며(스펙 16 `map_sample`·GiST),
@@ -381,6 +396,54 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 
 **원안 전문과 롤백 조건**: `specs/001-pc-major-tracks/spec.md` 의 "대체된 요구사항 — 롤백 기록" 절.
 인기 지표가 확보되거나 고정 격자의 시각적 문제가 드러나면 재검토 대상이다.
+
+
+### 3.5 주변 탐색
+
+`GET /api/music/nearby` · 인증 필요. param: `id`(int, required, 기준 곡 ID).
+
+기준 곡에서 임베딩 공간상 가까운 곡을 **선정 규칙을 통과한 최대 10곡**까지 반환한다. 이웃 곡을 다시 기준점으로 요청해 탐색을 이어갈 수 있다(MAP-10).
+
+```json
+{ "success": true, "data": {
+  "center": {
+    "id": 10234, "title": "Love wins all", "artist": "IU",
+    "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }
+  },
+  "neighbors": [ {
+    "id": 10877, "title": "Through the Night", "artist": "IU", "album": "Palette", "genres": ["K-Pop"],
+    "youtubeUrl": "https://www.youtube.com/watch?v=BzYnNdJhZQw",
+    "location": { "pc1": -0.3980, "pc2": 1.1204, "...": "...", "pc16": -0.098 }, "distance": 2.4643
+  } ],
+  "lowSimilarity": false
+}, "error": null }
+```
+
+- `neighbors` 원소는 §3.2 의 것과 **같은 타입**이다(`MusicSummary` + `distance`).
+- `distance` 오름차순, 동률 시 `id` 오름차순. 같은 요청은 **항상 같은 목록·같은 순서**를 준다.
+- `lowSimilarity` 는 마지막 이웃 거리가 원거리 임계값을 넘었다는 표시다. **오류가 아니다** — 결과는 그대로 준다. 이웃이 0곡이어도 `true`.
+- 규칙을 통과한 곡이 없으면 **빈 배열 + 200**.
+- 서버는 탐색 상태를 보관하지 않는다. 요청 하나로 완결된다.
+- 에러: `MUSIC_NOT_FOUND`(없는 곡), `INVALID_INPUT`(`id` 누락·0 이하·비정수).
+
+**선정 규칙** — 이웃은 최근접 순서 그대로가 아니다. 아래를 통과한 곡만 담긴다.
+
+| # | 규칙 |
+|---|---|
+| 1 | 기준 곡 자신 제외 |
+| 2 | 기준 곡과 같은 녹음(거리가 중복 임계값 미만) 제외 |
+| 3 | 기준 곡과 제목·아티스트가 같은 곡 제외 |
+| 4 | 이미 담은 이웃과 제목·아티스트가 같은 곡 제외 |
+| 5 | 한 아티스트는 상한(현재 3)까지. **아티스트가 비어 있는 곡은 세지 않는다** |
+| 6 | 재생 길이가 범위(30~1200초) 밖인 곡 제외 |
+
+재생 수단이 없는 곡은 그 이유만으로 빼지 않는다.
+
+임계값은 **좌표계 버전(`v2.1-pca16`)에 귀속**된다. 버전이 바뀌면 결과도 바뀌므로 클라이언트가 값을 캐시해 재현하려 하면 안 된다.
+
+**성능**: p95 1초 이내 (요구사항 §6 "유사곡 검색 1초").
+
+**미정**: 경로 이름(`nearby` vs 노션 정본의 `/music/neighbors`)은 BE3·팀 협의 중 — `/music/neighbors` 는 **BE3 전용 내부 API 로 용도·응답·중복 처리가 반대**라 별개다. 기준점을 좌표(`pc1`~`pc16`)로도 받을지는 FE 확인 대기. `BACKEND-NOTES` A-6 의 `/api/map/nearby/{musicId}` 는 폐기 대상.
 
 ---
 
@@ -486,3 +549,52 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 ### 4.7 플레이리스트 삭제
 `DELETE /playlist/delete/{playlistId}` · 인증 필요. pathVariable: `playlistId`(int, required). res: `{ "success": true, "data": null, "error": null }`.
 - 플레이리스트와 곡 매핑 함께 삭제(곡 자체는 미삭제). 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`.
+
+---
+
+## 5. 탐색 설문 (S15P21A405-289)
+
+> 주변 탐색(§3.5)·경로 탐색(§3.3)에서 **곡 하나가 끝날 때마다** FE 가 1건 보낸다. 20초 이상 들은 곡은 설문이 강제로 뜨고 응답해야 다음 동작이 가능하다(질문 1개 👍/👎, 👎 면 이유 칩 하나 필수). 20초 전에 끝났거나 스킵한 곡은 설문 없이 `verdict=null` 로 보낸다.
+> 설문 방식·분석 쿼리는 `docs/notion/product/01_EXPLORE_SURVEY.md`. 테이블 DDL 은 `backend/src/main/resources/db/explore_feedback.sql`.
+> 거리·bpm 은 보내지 않는다 — 분석 시 `music.location`·`music.bpm` 을 조인해 계산한다(여정 응답은 거리를 노출하지 않음).
+
+### 5.1 설문 응답 저장
+`POST /api/feedback` · **인증 선택** (토큰 있으면 `user_email` 기록, 없으면 NULL).
+
+req:
+```json
+{
+  "sessionId": "6f1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b",
+  "mode": "nearby",
+  "rank": 3,
+  "anchorMusicId": 10234,
+  "targetMusicId": null,
+  "prevMusicId": null,
+  "musicId": 10877,
+  "verdict": false,
+  "reason": "mood",
+  "listenedSec": 42,
+  "skipped": true
+}
+```
+
+| 필드 | 타입 | 필수 | 뜻 |
+|---|---|---|---|
+| `sessionId` | uuid | O | 탐색 1회. 결과 목록(§3.5 / §3.3 응답)을 받을 때 FE 가 `crypto.randomUUID()` 로 만들고, 그 목록의 곡 전부에 같은 값 |
+| `anonymousId` | uuid | — | 사람 구분. `localStorage["ody_anon_id"]` 에 보관한 `crypto.randomUUID()`. 비로그인 배포에서 정밀도 분모(응답자 수). 로그인 사용자도 보낸다 |
+| `mode` | `nearby` \| `journey` | O | 주변 탐색 / 경로 탐색 |
+| `rank` | int 1~50 | O | nearby: `neighbors` 순위(1부터) / journey: `path[].step`. 0(기준곡·출발곡)은 보내지 않는다 |
+| `anchorMusicId` | int | O | nearby: `center.id` / journey: 출발곡 id |
+| `targetMusicId` | int | journey O | 도착곡 id. nearby 는 null |
+| `prevMusicId` | int | — | journey: 앞 역 id (1역은 출발곡). nearby 는 null |
+| `musicId` | int | O | 평가 대상 곡 |
+| `verdict` | bool | — | nearby: "기준곡과 비슷했나요?" / journey: "앞 곡에서 자연스럽게 이어졌나요?" `true`/`false`. 20초 전 종료·스킵은 설문 없이 `null` 로 **그래도 보낸다** |
+| `reason` | `dup` \| `mood` \| `tempo` \| `spoken` | verdict=false 면 O | 단일 선택. 같은 곡 / 분위기 다름 / 템포 다름 / 음악 아님. `verdict` 가 `true`/`null` 이면 보내지 않는다 |
+| `listenedSec` | int | — | 실제 들은 초 |
+| `skipped` | bool | — | 스킵으로 끝났는가. 기본 false |
+
+res: `{ "success": true, "data": { "feedbackId": 7 }, "error": null }`
+
+- 같은 `(sessionId, rank)` 재요청은 `verdict`·`reason`·`listenedSec`·`skipped` 만 갱신하고 같은 `feedbackId` 를 돌려준다(답 바꾸기).
+- 서버가 `bundle`(`ody.serving.bundle`)과 임계값 스냅샷(`rules`)을 행에 찍는다. 규칙을 바꾼 뒤 전후 비교용.
+- 에러 `INVALID_INPUT`(400): mode·reason 값 범위 밖, rank 0 또는 50 초과, uuid 형식 오류, journey 에 `targetMusicId` 없음, nearby 에 `targetMusicId`/`prevMusicId` 있음, `verdict=false` 인데 `reason` 없음, `verdict≠false` 인데 `reason` 있음.

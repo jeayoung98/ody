@@ -75,7 +75,7 @@ public class PlayDeclarationService {
 		// 4) 곡 변경 원자 갱신(presence-play.lua). old 는 snapshot 에서, 반환은 만남 후보(④).
 		List<String> meeting = presenceRedisRepository.applyPlay(
 				email,
-				before.musicId(), before.cellX(), before.cellY(),
+				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 		if (meeting == null) {
 			// old 불일치/미연결 — 다른 세션이 먼저 이동시킴(재접속 epoch 경쟁 등).

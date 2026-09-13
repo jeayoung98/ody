@@ -7,9 +7,8 @@ import org.springframework.boot.context.properties.ConfigurationProperties;
 /**
  * 실시간 설정 상수 타입 홀더 (application-realtime.yml 구조 대응).
  *
- * 골격 단계: 클래스만 정의하고 빈으로 등록하지 않는다. 서비스는 당장 @Value(":기본값") 로 읽어
- * realtime 프로파일·yml 없이도 컨텍스트가 뜨게 한다. 내부작업 때
- * @EnableConfigurationProperties(RealtimeProperties.class) 등록 + 주입으로 전환한다.
+ * RealtimeConfig 가 @EnableConfigurationProperties 로 등록(realtime 프로파일에서만). CoordinateMapper 가
+ * axisRange·viewport 를 주입받아 좌표 계산에 쓴다.
  *
  * 계약: specs/004-realtime-presence-nearby/plan.md §설정, data-model.md §1.
  */
@@ -18,7 +17,6 @@ public record RealtimeProperties(
 		Presence presence,
 		Nearby nearby,
 		Viewport viewport,
-		List<LayerAxis> layers,
 		List<AxisRange> axisRange) {
 
 	public record Presence(long heartbeatIntervalMs, long ttlMs, long sweepIntervalMs, long recountIntervalMs) {
@@ -32,11 +30,7 @@ public record RealtimeProperties(
 			long debounceMs, long cellCountsIntervalMs) {
 	}
 
-	/** 레이어 l → 표시 축 PC(2l-1), PC(2l). */
-	public record LayerAxis(int layer, int axisX, int axisY) {
-	}
-
-	/** 축별 전역 min/max — ★ 실측 전 임의값(B-4). */
+	/** 축별 전역 정규화 min/max — 실측값(music.location p01/p99, application-realtime.yml). */
 	public record AxisRange(int axis, double min, double max) {
 	}
 }

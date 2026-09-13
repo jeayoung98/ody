@@ -7,10 +7,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.data.redis.core.Cursor;
-import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import lombok.RequiredArgsConstructor;
@@ -23,6 +22,7 @@ import lombok.RequiredArgsConstructor;
  * 직렬화는 StringRedisTemplate(auth 와 동일) — 모든 값이 UTF-8 문자열로 저장되어 Lua 문자열 비교와 정합.
  */
 @Repository
+@Profile("realtime")
 @RequiredArgsConstructor
 public class PresenceRedisRepository {
 
@@ -30,14 +30,17 @@ public class PresenceRedisRepository {
 	private static final String PRESENCE_USER_PREFIX = "presence:user:";
 	private static final String EXPIRY_KEY = "presence:expiry";
 	private static final String LISTENERS_PREFIX = "listeners:";
+	private static final String LAYER_LISTENERS_PREFIX = "layer-listeners:";
 	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:";
+	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:";
 	private static final String USERCOUNT_PREFIX = "cell:usercount:";
 
 	/** 하트비트 = ZADD XX(존재할 때만 갱신). ZAddArgs 자바 API 대신 이식성 높은 인라인 Lua. */
 	private static final DefaultRedisScript<Long> TOUCH_SCRIPT = new DefaultRedisScript<>(
-			"return redis.call('ZADD', KEYS[1], 'XX', ARGV[1], ARGV[2])", Long.class);
+			"return redis.call('ZADD', KEYS[1], 'XX', 'CH', ARGV[1], ARGV[2])", Long.class);
 
 	private final StringRedisTemplate redis;
+	private final DefaultRedisScript<List> presenceJoinScript;
 	private final DefaultRedisScript<List> presencePlayScript;
 	private final DefaultRedisScript<List> presenceLeaveScript;
 	private final DefaultRedisScript<Long> usercountRecountScript;
@@ -48,10 +51,14 @@ public class PresenceRedisRepository {
 
 	// ---- 비스크립트 연산 ----
 
-	/** 하트비트 — presence:expiry 만료 시각 갱신(존재할 때만). */
-	public void touch(String email, long ttlMs) {
+	/**
+	 * 하트비트 — presence:expiry 만료 시각 갱신(존재할 때만, ZADD XX CH).
+	 * @return true=갱신됨(살아있음), false=만료큐에 없음(이미 sweep 됨 → STALE, 클라 resync 필요).
+	 */
+	public boolean touch(String email, long ttlMs) {
 		long score = System.currentTimeMillis() + ttlMs;
-		redis.execute(TOUCH_SCRIPT, List.of(EXPIRY_KEY), Long.toString(score), email);
+		Long n = redis.execute(TOUCH_SCRIPT, List.of(EXPIRY_KEY), Long.toString(score), email);
+		return n != null && n > 0;
 	}
 
 	/** Sweep 대상 — 만료 시각 경과 email 목록. */
@@ -75,7 +82,7 @@ public class PresenceRedisRepository {
 		return v == null ? null : Long.valueOf(v.toString());
 	}
 
-	/** CONNECT — presence 생성, 사용자가 마지막으로 들은곡 위에 있음 (단순 좌표값 받기용, 다른사람에게 보이지 않음.) */
+	/** CONNECT — presence 생성(정지: epoch·connectedAt 만, 곡·좌표 없음 → 남에게 안 보임). 곡 배치는 join 이 한다. */
 	public void connect(String email, long epoch, long ttlMs) {
 		long now = System.currentTimeMillis();
 		Map<String, String> fields = new HashMap<>();
@@ -85,41 +92,58 @@ public class PresenceRedisRepository {
 		redis.opsForZSet().add(EXPIRY_KEY, email, (double) (now + ttlMs));
 	}
 
-	/** join(복원) — 사용자의 현재 레이어만 기록(활성 청취 구조는 건드리지 않는다, (가)). */
-	public void setLayer(String email, int layer) {
-		redis.opsForHash().put(PRESENCE_USER_PREFIX + email, "layer", Integer.toString(layer));
+	/**
+	 * join = (presence-join.lua). 그 레이어·그 곡에 활성 배치한다(노출). play 와 달리 만남·재생기록(play_history) 없음.
+	 * old 값(musicId·layer·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다(정지였으면 old* = null).
+	 * 곡·좌표·셀은 Java(CoordinateMapper)에서 계산. 같은 레이어·같은 곡이면 좌표만 갱신(idempotent).
+	 *
+	 * @return true = 배치 성공, false = presence 없음/old 불일치(STALE, Sweep·재접속 경쟁).
+	 */
+	@SuppressWarnings("unchecked")
+	public boolean join(String email,
+			Long oldMusicId, Integer oldLayer, Integer oldCellX, Integer oldCellY,
+			long newMusicId, int newLayer, double x, double y, int newCellX, int newCellY) {
+
+		boolean hasOld = oldMusicId != null;
+		String oldM = hasOld ? oldMusicId.toString() : "";
+		String oldL = (hasOld && oldLayer != null) ? oldLayer.toString() : "";
+		String oldCellField = (hasOld && oldCellX != null && oldCellY != null) ? (oldCellX + ":" + oldCellY) : "";
+		String newCellField = newCellX + ":" + newCellY;
+
+		List<String> result = redis.execute(presenceJoinScript, List.of(PRESENCE_USER_PREFIX + email),
+				email, oldM, oldL, oldCellField,
+				Long.toString(newMusicId), Integer.toString(newLayer), newCellField,
+				Double.toString(x), Double.toString(y), Integer.toString(newCellX), Integer.toString(newCellY),
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+
+		return result != null && !result.isEmpty() && "OK".equals(result.get(0));
 	}
 
 	// ---- 스크립트 연산 ----
 
 	/**
-	 * 곡 변경 원자 갱신(presence-play.lua).
-	 * old값(musicId·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다. 비노출이면 old* = null.
+	 * 곡 변경 원자 갱신(presence-play.lua) = 이동. 활성 배치 코어는 join 과 동일 + 만남 목록 반환.
+	 * old값(musicId·layer·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다(정지/첫재생이면 old* = null).
+	 * old 제거는 반드시 oldLayer 기준(P1-a). 곡 유지 시 전역 listeners 보존.
 	 *
-	 * @return 진입 직전 신곡 청취자 email 목록(만남 판정용, 빈 목록 가능). old 불일치/미연결(STALE)이면 null.
+	 * @return 진입 직전 새 (레이어,곡) 청취자 email 목록(만남 후보, 나 제외·빈 목록 가능). old 불일치/미연결(STALE)이면 null.
 	 */
 	@SuppressWarnings("unchecked")
 	public List<String> applyPlay(String email,
-			Long oldMusicId, Integer oldCellX, Integer oldCellY,
-			long newMusicId, int layer, double x, double y, int newCellX, int newCellY) {
+			Long oldMusicId, Integer oldLayer, Integer oldCellX, Integer oldCellY,
+			long newMusicId, int newLayer, double x, double y, int newCellX, int newCellY) {
 
 		boolean hasOld = oldMusicId != null;
 		String oldM = hasOld ? oldMusicId.toString() : "";
-		int ocx = hasOld && oldCellX != null ? oldCellX : 0;
-		int ocy = hasOld && oldCellY != null ? oldCellY : 0;
+		String oldL = (hasOld && oldLayer != null) ? oldLayer.toString() : "";
+		String oldCellField = (hasOld && oldCellX != null && oldCellY != null) ? (oldCellX + ":" + oldCellY) : "";
+		String newCellField = newCellX + ":" + newCellY;
 
-		List<String> keys = List.of(
-				LISTENERS_PREFIX + (hasOld ? oldMusicId : 0L),                 // KEYS[1] 비노출이면 미사용 placeholder
-				LISTENERS_PREFIX + newMusicId,                                 // KEYS[2]
-				ACTIVE_CELL_PREFIX + layer + ":" + ocx + ":" + ocy,            // KEYS[3]
-				ACTIVE_CELL_PREFIX + layer + ":" + newCellX + ":" + newCellY,  // KEYS[4]
-				USERCOUNT_PREFIX + layer,                                      // KEYS[5]
-				PRESENCE_USER_PREFIX + email);                                 // KEYS[6]
-
-		List<String> result = redis.execute(presencePlayScript, keys,
-				email, oldM, Long.toString(newMusicId), Integer.toString(layer),
+		List<String> result = redis.execute(presencePlayScript, List.of(PRESENCE_USER_PREFIX + email),
+				email, oldM, oldL, oldCellField,
+				Long.toString(newMusicId), Integer.toString(newLayer), newCellField,
 				Double.toString(x), Double.toString(y), Integer.toString(newCellX), Integer.toString(newCellY),
-				ocx + ":" + ocy, newCellX + ":" + newCellY);
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
 
 		if (result == null || result.isEmpty() || "STALE".equals(result.get(0))) {
 			return null; // 미연결/old 불일치
@@ -128,40 +152,54 @@ public class PresenceRedisRepository {
 	}
 
 	/**
-	 * 이탈 정리 원자(presence-leave.lua). 곡·셀은 스크립트 안에서 읽어 정리.
+	 * 이탈 정리 원자(presence-leave.lua). 곡·셀은 스크립트 안에서 읽어 정리. 셀 제거는 그 레이어 청취자 기준(유령곡 방지).
+	 * explicit/disconnect 경로 — epoch 가드로 정리(새 세션이 덮어썼으면 no-op).
 	 *
 	 * @return 제거된 [musicId, layer, cellX, cellY] 또는 빈 목록(no-op·비노출).
 	 */
-	@SuppressWarnings("unchecked")
 	public List<String> applyLeave(String email, long epoch) {
+		return doLeave(email, Long.toString(epoch), "");
+	}
+
+	/**
+	 * Sweep(만료 백스톱) 경로 — sweepTime 기준으로 현재 expiry 를 재확인해 여전히 만료일 때만 삭제(P2-c).
+	 * 감지·삭제 사이 재접속(connect 가 score 를 미래로 ZADD)이면 no-op → 새 세션 보존. epoch 미사용.
+	 *
+	 * @param sweepTimeMs 만료 감지 시각(ms). expiry score <= 이 값일 때만 정리.
+	 * @return 제거된 [musicId, layer, cellX, cellY] 또는 빈 목록(no-op·재접속됨).
+	 */
+	public List<String> applyLeaveExpired(String email, long sweepTimeMs) {
+		return doLeave(email, "", Long.toString(sweepTimeMs));
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<String> doLeave(String email, String epoch, String sweepTime) {
 		List<String> keys = List.of(PRESENCE_USER_PREFIX + email, EXPIRY_KEY);
 		List<String> result = redis.execute(presenceLeaveScript, keys,
-				email, Long.toString(epoch), LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, USERCOUNT_PREFIX);
+				email, epoch, sweepTime,
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
 		return result != null ? result : List.of();
 	}
 
 	/**
-	 * 셀 인원수 재검증(usercount-recount.lua). 검증할 셀 목록(active-song 셀 ∪ usercount 필드)은
-	 * 여기서 SCAN·HKEYS 로 모아 스크립트에 넘긴다.
+	 * 셀 인원수 재검증(usercount-recount.lua). 검증 대상 셀 = active-song:cells:{L}(점유 셀) ∪ usercount 필드(유령 카운트).
+	 * SCAN 없이 SET·HKEYS 로만 모은다. 실제값은 layer-listeners 합(usercount 증분과 같은 출처).
 	 *
 	 * @return 불일치(수정)한 셀 수.
 	 */
 	public long recount(long layer) {
 		Set<String> fields = new LinkedHashSet<>();
 
-		// (1) 기존 usercount 필드 — 곡 사라졌지만 남은 유령 카운트도 대상
+		// (1) 점유 셀 — active-song:cells:{layer} (play/join/leave 가 유지, SCAN 대체)
+		Set<String> cells = redis.opsForSet().members(ACTIVE_CELLS_PREFIX + layer);
+		if (cells != null) {
+			fields.addAll(cells);
+		}
+		// (2) 기존 usercount 필드 — 곡 사라졌지만 남은 유령 카운트도 대상
 		Set<Object> uc = redis.opsForHash().keys(USERCOUNT_PREFIX + layer);
 		if (uc != null) {
 			for (Object f : uc) {
 				fields.add(f.toString());
-			}
-		}
-		// (2) active-song:cell:{layer}:* 스캔 → "x:y" 필드 추출
-		String prefix = ACTIVE_CELL_PREFIX + layer + ":";
-		ScanOptions opts = ScanOptions.scanOptions().match(prefix + "*").count(256).build();
-		try (Cursor<String> cursor = redis.scan(opts)) {
-			while (cursor.hasNext()) {
-				fields.add(cursor.next().substring(prefix.length()));
 			}
 		}
 		if (fields.isEmpty()) {
@@ -171,7 +209,7 @@ public class PresenceRedisRepository {
 		List<String> args = new ArrayList<>(fields.size() + 3);
 		args.add(Long.toString(layer));
 		args.add(ACTIVE_CELL_PREFIX);
-		args.add(LISTENERS_PREFIX);
+		args.add(LAYER_LISTENERS_PREFIX);
 		args.addAll(fields);
 
 		Long n = redis.execute(usercountRecountScript, List.of(USERCOUNT_PREFIX + layer), args.toArray());

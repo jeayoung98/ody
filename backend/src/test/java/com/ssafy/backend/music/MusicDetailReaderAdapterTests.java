@@ -3,27 +3,28 @@ package com.ssafy.backend.music;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
 import com.ssafy.backend.music.detail.MusicDetailReaderAdapter;
+import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSummary;
-import com.ssafy.backend.music.dto.NeighborTrack;
 
 /**
  * 상세·주변곡 어댑터 단위 테스트 (매퍼 mock). SQL 자체는 실 DB(T205) 대상이고,
@@ -107,5 +108,51 @@ class MusicDetailReaderAdapterTests {
 
 		verify(mapper, never()).findByMbids(anyList());
 		verify(mapper, never()).findGenresByMusicIds(anyList());
+	}
+
+	@Test
+	void findLocationsByIds_readsInOneRoundTrip_andSkipsMissingIds() { // Q18, Q19
+		MusicDetailRow found = row(1L);
+		found.setPc1(0.5);
+		found.setPc16(-0.25);
+		when(mapper.findLocationsByIds(List.of(1L, 2L, 3L))).thenReturn(List.of(found));
+
+		Map<Long, Location> locations = adapter.findLocationsByIds(List.of(1L, 2L, 3L));
+
+		verify(mapper, times(1)).findLocationsByIds(anyList());
+		// 없는 곡(과 좌표 NULL 인 곡)은 키가 빠진다 — 0 으로 채우면 그 곡이 원점에 찍혀 모양이 달라진다.
+		assertEquals(Set.of(1L), locations.keySet());
+		assertEquals(0.5, locations.get(1L).pc1());
+		assertEquals(-0.25, locations.get(1L).pc16());
+		verify(mapper, never()).findGenresByMusicIds(anyList()); // 배치에 장르는 필요 없다
+	}
+
+	@Test
+	void findLocationsByIds_doesNotQuery_whenNothingRequested() { // Q18 (IN () 는 문법 오류)
+		assertTrue(adapter.findLocationsByIds(List.of()).isEmpty());
+
+		verify(mapper, never()).findLocationsByIds(anyList());
+	}
+
+	@Test
+	void findDetailsByIds_readsInOneRoundTrip_andAttachesGenres() { // US2 (FR-011)
+		when(mapper.findByIds(List.of(1L, 2L))).thenReturn(List.of(row(2L), row(1L))); // IN 은 순서를 보존하지 않는다
+		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of(genreRow(1L, "rock")));
+
+		List<MusicDetail> details = adapter.findDetailsByIds(List.of(1L, 2L));
+
+		verify(mapper, times(1)).findByIds(anyList());
+		verify(mapper, never()).findById(anyLong()); // 곡당 왕복으로 돌아가지 않았는지
+		assertEquals(2, details.size());
+		// 순서는 보장하지 않는다 — 호출자(PlaylistService)가 재조립한다
+		assertEquals(List.of("rock"),
+				details.stream().filter(d -> d.id() == 1L).findFirst().orElseThrow().genres());
+	}
+
+	@Test
+	void findDetailsByIds_doesNotQuery_whenNothingRequested() {
+		assertTrue(adapter.findDetailsByIds(List.of()).isEmpty());
+
+		verify(mapper, never()).findByIds(anyList());
 	}
 }

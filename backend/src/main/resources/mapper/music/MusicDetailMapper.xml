@@ -54,6 +54,41 @@
 		</foreach>
 	</select>
 
+	<!--
+		별자리 배치용 좌표 일괄 조회 (A-9). 좌표 말고는 읽지 않는다 — 배치는 좌표만 있으면 된다.
+
+		⚠️ location IS NOT NULL 을 뺄 수 없다.
+		   MusicDetailRow 의 pc1~pc16 은 primitive double 이라 NULL 이 0.0 으로 들어온다.
+		   그러면 좌표 없는 곡이 조용히 원점에 찍혀 모양이 달라진다. 아예 빠뜨려서
+		   호출자가 "없는 곡" 과 똑같이 404 를 내게 한다(FR-014).
+		   적재 결과상 전 행이 채워져 있지만 계약이 데이터 상태에 기대지 않게 둔다.
+	-->
+	<select id="findLocationsByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		SELECT m.id,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.location IS NOT NULL
+		AND m.id IN
+		<foreach item="id" collection="idList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</select>
+
+	<!--
+		플레이리스트 상세 조립용. 곡당 왕복을 없애려고 한 번에 읽는다.
+		컬럼 집합은 findByMbids 와 같다 — 같은 MusicDetail 을 만든다.
+	-->
+	<select id="findByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
+		       m.play_cnt, m.youtube_cnt,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.id IN
+		<foreach item="id" collection="idList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</select>
+
 	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">
 		SELECT mg.music_id, g.name
 		FROM music_genre mg

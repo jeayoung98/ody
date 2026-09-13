@@ -125,7 +125,8 @@ echo "== 7. HNSW 다시 만들기 — 병렬을 끄지 않으면 /dev/shm 64MB �
 HNSW_SQL="/tmp/hnsw_$(date +%s).sql"   # 지난 실행 파일이 다른 유저 소유로 남아 Permission denied 가 났다(2026-09-13). 매번 새 이름.
 docker exec -i "$CONTAINER" bash -lc "cat > $HNSW_SQL" <<'SQL'
 \timing on
-SET maintenance_work_mem = '2GB';
+-- 6GB: 2GB 로는 275만 튜플에서 그래프가 메모리를 넘쳐 디스크 경로로 떨어진다(2026-09-10). 컨테이너 8GB 전제. 65분 실측(2026-09-11)은 6GB 값이다.
+SET maintenance_work_mem = '6GB';
 SET max_parallel_maintenance_workers = 0;
 CREATE INDEX music_location_hnsw_idx ON music USING hnsw (location vector_l2_ops);
 SQL

@@ -19,6 +19,11 @@ export interface EngineSnapshot {
    * 다음 겹 상주 집합을 요청하는 조건이라 이게 바뀌면 곡을 새로 받는다.
    */
   boxes: readonly LayerBox[];
+  /**
+   * 압력이 차는 동안 엔진이 미리 정한 다음 겹 요청 범위. 화면은 이 키로 곡을 **미리 받아** 둔다 —
+   * 파고든 뒤에 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
+   */
+  prefetchBoxes: readonly LayerBox[] | null;
   camera: MapCamera;
   /** 이 레이어에 상주하는 곡 수 */
   residentCount: number;
@@ -113,6 +118,7 @@ export const useMapStore = create<MapState>()(
     (set) => ({
       layer: 0,
       boxes: EMPTY_BOXES,
+      prefetchBoxes: null,
       camera: { cx: 0, cy: 0, s: 100 },
       residentCount: 0,
       viewportCount: 0,

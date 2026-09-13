@@ -62,7 +62,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);
-  useMapSongsQuery(prefetchBoxes ?? boxes);
+  const { data: prefetchedSongs } = useMapSongsQuery(prefetchBoxes ?? boxes);
+  // 받은 집합을 엔진에 넘긴다 — 엔진은 이게 있어야 파고들기를 출발한다 (없으면 잠깐 기다린다)
+  useEffect(() => {
+    if (prefetchBoxes && prefetchedSongs) engine.setPrefetched(prefetchBoxes, prefetchedSongs);
+  }, [engine, prefetchBoxes, prefetchedSongs]);
   const layer = useMapStore((s) => s.layer);
   const { data: friends } = useNearbyUsersQuery(layer);
   const { data: representatives } = useRepresentativesQuery(layer);

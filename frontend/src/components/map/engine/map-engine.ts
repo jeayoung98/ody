@@ -7,6 +7,8 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
+const sameBoxes = (a: readonly LayerBox[], b: readonly LayerBox[]) =>
+  a.length === b.length && a.every((x, i) => x.layer === b[i].layer && x.xMin === b[i].xMin && x.xMax === b[i].xMax && x.yMin === b[i].yMin && x.yMax === b[i].yMax);
 /** 화면 좌표 단위벡터. 길이가 0이면 방향이 없다는 뜻이라 null */
 const unit = (x: number, y: number) => {
   const d = Math.hypot(x, y);
@@ -166,6 +168,13 @@ export class MapEngine {
    * 압력이 빠지거나 카메라가 움직이면 버린다 — 상자는 그 순간 화면에서 나오기 때문이다
    */
   prefetch: readonly LayerBox[] | null = null;
+  /** 화면이 `prefetch` 키로 미리 받아 넘겨준 다음 겹 집합. 키가 같을 때만 쓴다 */
+  private prefetched: { boxes: readonly LayerBox[]; songs: MapPoint[] } | null = null;
+  /**
+   * 파고들기 대기. **실제 집합이 온 뒤에 출발한다** — 임시 집합으로 먼저 출발하고 도중에 갈아 끼우면
+   * 들어오는 별의 자리가 통째로 바뀌어 뚝 튄다 (S15P21A405-284). 너무 오래 걸리면 임시 집합으로 간다
+   */
+  private pending: { box: LayerBox; inView: number; since: number; s0: number } | null = null;
 
   pressure = 0;
   pressureDir: 1 | -1 | 0 = 0;
@@ -349,11 +358,7 @@ export class MapEngine {
     }
     // 지나간 겹의 응답 (전환 중이면 도착할 겹이 기준)
     if (layer !== (this.anim?.layer ?? this.layer)) return;
-    const add = songs.filter((s) => !this.index.has(s.musicId));
-    if (add.length) this.allocate([...this.songs, ...add], this.N);
-    const ns = new Uint8Array(this.N);
-    for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
-    this.keepPinned(ns, layer);
+    const ns = this.maskFor(layer, songs);
     // 이미 그 집합이면 다시 연출하지 않는다 (떠오르기는 쌓아둔 집합으로 이미 돌아가 있다)
     if (sameMask(this.anim?.subset ?? this.subset, ns)) return;
     // 전환 중이면 목적지만 바꿔 끼운다 — 다시 시작하면 전환이 두 번 보인다 (S15P21A405-284)
@@ -1219,24 +1224,59 @@ export class MapEngine {
    * 응답이 오기 전까지는 지금 겹 곡을 그대로 새 두 축에 뿌려 둔다 (BACKEND-NOTES A-1).
    */
   descend() {
-    if (this.anim || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
+    if (this.anim || this.pending || this.layer >= LAYER_COUNT - 1 || this.follow || !this.zoomedEnough()) return;
     // 미리 받게 알린 상자가 있으면 **그 상자 그대로** 쓴다 — 조금이라도 다르면 캐시 키가 갈려 미리 받은 게 헛일이다
     const box = this.prefetch?.[this.layer] ?? this.drillBox();
-    const inView = this.countInBox(box);
-    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
-    this.boxes = [...this.boxes, box];
+    if (!this.prefetch) this.prefetch = [...this.boxes, box];
+    this.pending = { box, inView: this.countInBox(box), since: performance.now(), s0: this.cam.s };
+    // 기다리는 동안 게이지는 꽉 찬 채로 둔다 — 빠지면 "안 먹었다" 로 읽힌다
+    this.pressure = 1;
+    this.tryStartPending(performance.now());
+  }
+
+  /** 화면이 미리 받은 다음 겹 집합을 넘겨준다. 기다리던 파고들기가 있으면 바로 출발한다 */
+  setPrefetched(boxes: readonly LayerBox[], songs: MapPoint[]) {
+    this.prefetched = { boxes, songs };
+    if (this.pending) this.tryStartPending(performance.now());
+  }
+
+  /**
+   * 대기 중인 파고들기를 출발시킨다. 실제 집합이 있으면 그걸로, `DRILL.waitForLayerMs` 를 넘기면 임시 집합으로.
+   * 실제 집합으로 출발하면 도중에 갈아 끼울 일이 없어 들어오는 별이 제자리에서 그대로 자란다
+   */
+  private tryStartPending(now: number) {
+    const p = this.pending;
+    if (!p) return;
     const nl = this.layer + 1;
-    // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
-    const ns = this.residentMask(nl);
-    for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
+    const want = [...this.boxes, p.box];
+    const ready = this.prefetched && sameBoxes(this.prefetched.boxes, want) ? this.prefetched.songs : null;
+    if (!ready && now - p.since < DRILL.waitForLayerMs) return;
+    this.pending = null;
+    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
+    this.boxes = want;
+    let ns: Uint8Array<ArrayBufferLike>;
+    let big: string;
+    if (ready) {
+      ns = this.maskFor(nl, ready);
+      big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 상주 ${ready.length.toLocaleString()}곡`;
+    } else {
+      // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
+      ns = this.residentMask(nl);
+      for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
+      big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${p.inView.toLocaleString()}곡 기준`;
+    }
     const ax = LAYER_AXES[nl];
-    this.morph(
-      nl,
-      this.fitCam(nl, ns, this.fitAnchor(ns, nl)),
-      ns,
-      `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${inView.toLocaleString()}곡 기준`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
-    );
+    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+  }
+
+  /** 응답으로 받은 곡들을 상주 마스크로. 처음 보는 곡은 편입하고, 고정 곡은 남긴다 */
+  private maskFor(layer: number, songs: MapPoint[]) {
+    const add = songs.filter((s) => !this.index.has(s.musicId));
+    if (add.length) this.allocate([...this.songs, ...add], this.N);
+    const ns = new Uint8Array(this.N);
+    for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
+    this.keepPinned(ns, layer);
+    return ns;
   }
 
   /** 그 범위 안에 있는 상주 곡 수 */
@@ -1294,7 +1334,7 @@ export class MapEngine {
 
   /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */
   ascend() {
-    if (this.anim || !this.stack.length || this.follow) return;
+    if (this.anim || this.pending || !this.stack.length || this.follow) return;
     const p = this.stack.pop()!;
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
@@ -1317,7 +1357,7 @@ export class MapEngine {
   // ------------------------------------------------------------------ input
   /** 휠. 게이트가 열리면 배율은 멈추고 압력만 찬다 */
   wheel(deltaY: number, mx: number, my: number): "zoom" | "pressure" | "blocked" {
-    if (this.anim || this.follow) return "blocked";
+    if (this.anim || this.pending || this.follow) return "blocked";
     // 확대·축소도 "내가 화면을 움직인" 것이다 — 가운데 고정을 푼다
     this.centerLock = false;
     const zoomIn = deltaY < 0;
@@ -1353,7 +1393,7 @@ export class MapEngine {
   }
 
   dragBy(dx: number, dy: number) {
-    if (this.anim || this.follow) return;
+    if (this.anim || this.pending || this.follow) return;
     this.camTarget = null;
     this.prefetch = null;
     this.touched = true;
@@ -1905,7 +1945,14 @@ export class MapEngine {
         }
       }
     } else {
-      if (this.pressure > 0) {
+      if (this.pending) {
+        // 기다리는 동안 멈추지 않는다 — 지금 겹을 천천히 계속 확대해 "줌인이 이어지는 중" 으로 읽히게 하고,
+        // 집합이 오면 그 자리에서 다이빙이 이어진다 (출발 자리 = 지금 자리). 멈춰 있으면 끊긴 것처럼 보인다
+        const k = 1 + DRILL.waitZoom * (1 - Math.exp(-(now - this.pending.since) / DRILL.waitZoomTauMs));
+        this.cam.s = this.pending.s0 * k;
+        this.project();
+        this.tryStartPending(now);
+      } else if (this.pressure > 0) {
         this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
         if (this.pressure === 0) this.prefetch = null;
       }
@@ -2137,14 +2184,18 @@ export class MapEngine {
       residentCount: this.residentCount(),
       viewportCount: this.viewportCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
-      gateOpen: !this.anim && this.gateOpen(),
+      gateOpen: !this.anim && !this.pending && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,
       canRise: this.stack.length > 0,
       pressure: Math.round(this.pressure * 100) / 100,
       pressureDir: this.pressure > 0.01 ? this.pressureDir : 0,
       // 압력 시작·해제 때만 새 배열이 되므로 참조 비교로 변화가 잡힌다
       prefetchBoxes: this.prefetch,
-      morph: this.anim ? { big: this.anim.big, sub: this.anim.sub } : null,
+      morph: this.anim
+        ? { big: this.anim.big, sub: this.anim.sub }
+        : this.pending
+          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중`, sub: `화면 안 ${this.pending.inView.toLocaleString()}곡 기준` }
+          : null,
       myMusicId: this.myId,
       // travelTo 때만 새 객체가 되므로 참조 비교로 변화가 잡힌다
       home: this.home,

@@ -11,6 +11,7 @@ import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
 
 import lombok.RequiredArgsConstructor;
@@ -23,6 +24,7 @@ import lombok.RequiredArgsConstructor;
  * 직렬화는 StringRedisTemplate(auth 와 동일) — 모든 값이 UTF-8 문자열로 저장되어 Lua 문자열 비교와 정합.
  */
 @Repository
+@Profile("realtime")
 @RequiredArgsConstructor
 public class PresenceRedisRepository {
 
@@ -30,7 +32,9 @@ public class PresenceRedisRepository {
 	private static final String PRESENCE_USER_PREFIX = "presence:user:";
 	private static final String EXPIRY_KEY = "presence:expiry";
 	private static final String LISTENERS_PREFIX = "listeners:";
+	private static final String LAYER_LISTENERS_PREFIX = "layer-listeners:";
 	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:";
+	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:";
 	private static final String USERCOUNT_PREFIX = "cell:usercount:";
 
 	/** 하트비트 = ZADD XX(존재할 때만 갱신). ZAddArgs 자바 API 대신 이식성 높은 인라인 Lua. */
@@ -38,6 +42,7 @@ public class PresenceRedisRepository {
 			"return redis.call('ZADD', KEYS[1], 'XX', ARGV[1], ARGV[2])", Long.class);
 
 	private final StringRedisTemplate redis;
+	private final DefaultRedisScript<List> presenceJoinScript;
 	private final DefaultRedisScript<List> presencePlayScript;
 	private final DefaultRedisScript<List> presenceLeaveScript;
 	private final DefaultRedisScript<Long> usercountRecountScript;
@@ -85,9 +90,31 @@ public class PresenceRedisRepository {
 		redis.opsForZSet().add(EXPIRY_KEY, email, (double) (now + ttlMs));
 	}
 
-	/** join(복원) — 사용자의 현재 레이어만 기록(활성 청취 구조는 건드리지 않는다, (가)). */
-	public void setLayer(String email, int layer) {
-		redis.opsForHash().put(PRESENCE_USER_PREFIX + email, "layer", Integer.toString(layer));
+	/**
+	 * join = 배치·이사(presence-join.lua). 그 레이어·그 곡에 활성 배치한다(노출만, 만남·이동 없음).
+	 * old 값(musicId·layer·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다(정지였으면 old* = null).
+	 * 곡·좌표·셀은 Java(CoordinateMapper)에서 계산. 같은 레이어·같은 곡이면 좌표만 갱신(idempotent).
+	 *
+	 * @return true = 배치 성공, false = presence 없음/old 불일치(STALE, Sweep·재접속 경쟁).
+	 */
+	@SuppressWarnings("unchecked")
+	public boolean join(String email,
+			Long oldMusicId, Integer oldLayer, Integer oldCellX, Integer oldCellY,
+			long newMusicId, int newLayer, double x, double y, int newCellX, int newCellY) {
+
+		boolean hasOld = oldMusicId != null;
+		String oldM = hasOld ? oldMusicId.toString() : "";
+		String oldL = (hasOld && oldLayer != null) ? oldLayer.toString() : "";
+		String oldCellField = (hasOld && oldCellX != null && oldCellY != null) ? (oldCellX + ":" + oldCellY) : "";
+		String newCellField = newCellX + ":" + newCellY;
+
+		List<String> result = redis.execute(presenceJoinScript, List.of(PRESENCE_USER_PREFIX + email),
+				email, oldM, oldL, oldCellField,
+				Long.toString(newMusicId), Integer.toString(newLayer), newCellField,
+				Double.toString(x), Double.toString(y), Integer.toString(newCellX), Integer.toString(newCellY),
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+
+		return result != null && !result.isEmpty() && "OK".equals(result.get(0));
 	}
 
 	// ---- 스크립트 연산 ----

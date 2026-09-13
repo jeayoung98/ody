@@ -5,6 +5,7 @@ import java.security.Principal;
 import org.springframework.messaging.handler.annotation.Header;
 import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
+import org.springframework.context.annotation.Profile;
 
 import com.ssafy.backend.realtime.common.RealtimeErrorSender;
 import com.ssafy.backend.realtime.presence.dto.JoinRequest;
@@ -19,6 +20,7 @@ import lombok.RequiredArgsConstructor;
  * 검증 실패는 /user/queue/errors 로 회신(FR-042) — 검증 배선은 후속.
  */
 @Controller
+@Profile("realtime")
 @RequiredArgsConstructor
 public class PresenceStompController {
 

@@ -1,5 +1,6 @@
 package com.ssafy.backend.realtime.presence.service;
 
+import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.realtime.common.RealtimeEventBus;
@@ -18,6 +19,7 @@ import lombok.extern.slf4j.Slf4j;
  */
 @Slf4j
 @Service
+@Profile("realtime")
 @RequiredArgsConstructor
 public class PlayDeclarationService {
 

@@ -17,6 +17,12 @@ import org.springframework.scripting.support.ResourceScriptSource;
 @Configuration
 public class RedisScriptConfig {
 
+	/** 배치·이사 원자 — join(활성 배치). 반환: {'OK'}/{'STALE'}. 만남 없음. */
+	@Bean
+	public DefaultRedisScript<List> presenceJoinScript() {
+		return listScript("redis/presence-join.lua");
+	}
+
 	/** 곡 변경 원자 갱신 — 반환: 진입 직전 신곡 청취자 목록(만남 판정용). */
 	@Bean
 	public DefaultRedisScript<List> presencePlayScript() {

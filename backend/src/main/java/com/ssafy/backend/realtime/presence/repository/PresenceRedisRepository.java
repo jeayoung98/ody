@@ -80,7 +80,7 @@ public class PresenceRedisRepository {
 		return v == null ? null : Long.valueOf(v.toString());
 	}
 
-	/** CONNECT — presence 생성, 사용자가 마지막으로 들은곡 위에 있음 (단순 좌표값 받기용, 다른사람에게 보이지 않음.) */
+	/** CONNECT — presence 생성(정지: epoch·connectedAt 만, 곡·좌표 없음 → 남에게 안 보임). 곡 배치는 join 이 한다. */
 	public void connect(String email, long epoch, long ttlMs) {
 		long now = System.currentTimeMillis();
 		Map<String, String> fields = new HashMap<>();
@@ -91,7 +91,7 @@ public class PresenceRedisRepository {
 	}
 
 	/**
-	 * join = 배치·이사(presence-join.lua). 그 레이어·그 곡에 활성 배치한다(노출만, 만남·이동 없음).
+	 * join = (presence-join.lua). 그 레이어·그 곡에 활성 배치한다(노출). play 와 달리 만남·재생기록(play_history) 없음.
 	 * old 값(musicId·layer·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다(정지였으면 old* = null).
 	 * 곡·좌표·셀은 Java(CoordinateMapper)에서 계산. 같은 레이어·같은 곡이면 좌표만 갱신(idempotent).
 	 *
@@ -120,33 +120,28 @@ public class PresenceRedisRepository {
 	// ---- 스크립트 연산 ----
 
 	/**
-	 * 곡 변경 원자 갱신(presence-play.lua).
-	 * old값(musicId·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다. 비노출이면 old* = null.
+	 * 곡 변경 원자 갱신(presence-play.lua) = 이동. 활성 배치 코어는 join 과 동일 + 만남 목록 반환.
+	 * old값(musicId·layer·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다(정지/첫재생이면 old* = null).
+	 * old 제거는 반드시 oldLayer 기준(P1-a). 곡 유지 시 전역 listeners 보존.
 	 *
-	 * @return 진입 직전 신곡 청취자 email 목록(만남 판정용, 빈 목록 가능). old 불일치/미연결(STALE)이면 null.
+	 * @return 진입 직전 새 (레이어,곡) 청취자 email 목록(만남 후보, 나 제외·빈 목록 가능). old 불일치/미연결(STALE)이면 null.
 	 */
 	@SuppressWarnings("unchecked")
 	public List<String> applyPlay(String email,
-			Long oldMusicId, Integer oldCellX, Integer oldCellY,
-			long newMusicId, int layer, double x, double y, int newCellX, int newCellY) {
+			Long oldMusicId, Integer oldLayer, Integer oldCellX, Integer oldCellY,
+			long newMusicId, int newLayer, double x, double y, int newCellX, int newCellY) {
 
 		boolean hasOld = oldMusicId != null;
 		String oldM = hasOld ? oldMusicId.toString() : "";
-		int ocx = hasOld && oldCellX != null ? oldCellX : 0;
-		int ocy = hasOld && oldCellY != null ? oldCellY : 0;
+		String oldL = (hasOld && oldLayer != null) ? oldLayer.toString() : "";
+		String oldCellField = (hasOld && oldCellX != null && oldCellY != null) ? (oldCellX + ":" + oldCellY) : "";
+		String newCellField = newCellX + ":" + newCellY;
 
-		List<String> keys = List.of(
-				LISTENERS_PREFIX + (hasOld ? oldMusicId : 0L),                 // KEYS[1] 비노출이면 미사용 placeholder
-				LISTENERS_PREFIX + newMusicId,                                 // KEYS[2]
-				ACTIVE_CELL_PREFIX + layer + ":" + ocx + ":" + ocy,            // KEYS[3]
-				ACTIVE_CELL_PREFIX + layer + ":" + newCellX + ":" + newCellY,  // KEYS[4]
-				USERCOUNT_PREFIX + layer,                                      // KEYS[5]
-				PRESENCE_USER_PREFIX + email);                                 // KEYS[6]
-
-		List<String> result = redis.execute(presencePlayScript, keys,
-				email, oldM, Long.toString(newMusicId), Integer.toString(layer),
+		List<String> result = redis.execute(presencePlayScript, List.of(PRESENCE_USER_PREFIX + email),
+				email, oldM, oldL, oldCellField,
+				Long.toString(newMusicId), Integer.toString(newLayer), newCellField,
 				Double.toString(x), Double.toString(y), Integer.toString(newCellX), Integer.toString(newCellY),
-				ocx + ":" + ocy, newCellX + ":" + newCellY);
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
 
 		if (result == null || result.isEmpty() || "STALE".equals(result.get(0))) {
 			return null; // 미연결/old 불일치

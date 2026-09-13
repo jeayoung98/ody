@@ -7,8 +7,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import org.springframework.data.redis.core.Cursor;
-import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.context.annotation.Profile;
@@ -180,27 +178,24 @@ public class PresenceRedisRepository {
 	}
 
 	/**
-	 * 셀 인원수 재검증(usercount-recount.lua). 검증할 셀 목록(active-song 셀 ∪ usercount 필드)은
-	 * 여기서 SCAN·HKEYS 로 모아 스크립트에 넘긴다.
+	 * 셀 인원수 재검증(usercount-recount.lua). 검증 대상 셀 = active-song:cells:{L}(점유 셀) ∪ usercount 필드(유령 카운트).
+	 * SCAN 없이 SET·HKEYS 로만 모은다. 실제값은 layer-listeners 합(usercount 증분과 같은 출처).
 	 *
 	 * @return 불일치(수정)한 셀 수.
 	 */
 	public long recount(long layer) {
 		Set<String> fields = new LinkedHashSet<>();
 
-		// (1) 기존 usercount 필드 — 곡 사라졌지만 남은 유령 카운트도 대상
+		// (1) 점유 셀 — active-song:cells:{layer} (play/join/leave 가 유지, SCAN 대체)
+		Set<String> cells = redis.opsForSet().members(ACTIVE_CELLS_PREFIX + layer);
+		if (cells != null) {
+			fields.addAll(cells);
+		}
+		// (2) 기존 usercount 필드 — 곡 사라졌지만 남은 유령 카운트도 대상
 		Set<Object> uc = redis.opsForHash().keys(USERCOUNT_PREFIX + layer);
 		if (uc != null) {
 			for (Object f : uc) {
 				fields.add(f.toString());
-			}
-		}
-		// (2) active-song:cell:{layer}:* 스캔 → "x:y" 필드 추출
-		String prefix = ACTIVE_CELL_PREFIX + layer + ":";
-		ScanOptions opts = ScanOptions.scanOptions().match(prefix + "*").count(256).build();
-		try (Cursor<String> cursor = redis.scan(opts)) {
-			while (cursor.hasNext()) {
-				fields.add(cursor.next().substring(prefix.length()));
 			}
 		}
 		if (fields.isEmpty()) {
@@ -210,7 +205,7 @@ public class PresenceRedisRepository {
 		List<String> args = new ArrayList<>(fields.size() + 3);
 		args.add(Long.toString(layer));
 		args.add(ACTIVE_CELL_PREFIX);
-		args.add(LISTENERS_PREFIX);
+		args.add(LAYER_LISTENERS_PREFIX);
 		args.addAll(fields);
 
 		Long n = redis.execute(usercountRecountScript, List.of(USERCOUNT_PREFIX + layer), args.toArray());

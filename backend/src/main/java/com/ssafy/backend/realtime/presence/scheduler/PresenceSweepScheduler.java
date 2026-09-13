@@ -6,6 +6,7 @@ import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.context.annotation.Profile;
 
+import com.ssafy.backend.realtime.geometry.CoordinateMapper;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.service.PresenceLifecycleService;
 
@@ -24,9 +25,7 @@ import lombok.extern.slf4j.Slf4j;
 @RequiredArgsConstructor
 public class PresenceSweepScheduler {
 
-	/** 유효 레이어 상한(PC16 → 8). RealtimeProperties 와 동일해야 함(데이터 버전 종속). */
-	private static final int MAX_LAYER = 8;
-
+	private final CoordinateMapper coordinateMapper;
 	private final PresenceLifecycleService lifecycleService;
 	private final PresenceRedisRepository presenceRedisRepository;
 
@@ -53,7 +52,8 @@ public class PresenceSweepScheduler {
 	/** 셀 인원수 증분 카운터를 원천과 대조·복구. 불일치는 WARN(지표는 후속). */
 	@Scheduled(fixedDelayString = "${realtime.presence.recount-interval-ms:60000}")
 	public void recount() {
-		for (int layer = 1; layer <= MAX_LAYER; layer++) {
+		int maxLayer = coordinateMapper.maxLayer(); // 축 설정(axis-range) 단일 출처
+		for (int layer = 1; layer <= maxLayer; layer++) {
 			try {
 				long mismatches = presenceRedisRepository.recount(layer);
 				if (mismatches > 0) {

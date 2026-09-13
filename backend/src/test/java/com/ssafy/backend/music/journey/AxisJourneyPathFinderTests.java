@@ -65,7 +65,7 @@ class AxisJourneyPathFinderTests {
 	}
 
 	private static AxisJourneyPathFinder finderOf(List<TrackCandidate> pool) {
-		return new AxisJourneyPathFinder(Optional.of(readerOf(pool)), RULES, new SimpleMeterRegistry());
+		return new AxisJourneyPathFinder(Optional.of(readerOf(pool)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
 	}
 
 	/** A=(0,0) → B=(60,0). L=60 이라 먼 여정이고 역이 20개다. */
@@ -164,7 +164,7 @@ class AxisJourneyPathFinderTests {
 	@Test
 	void find_throwsWhenReaderAbsent() {
 		AxisJourneyPathFinder finder =
-				new AxisJourneyPathFinder(Optional.empty(), RULES, new SimpleMeterRegistry());
+				new AxisJourneyPathFinder(Optional.empty(), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
 
 		assertThatThrownBy(() -> finder.find(start(), end()))
 				.isInstanceOf(CustomException.class)

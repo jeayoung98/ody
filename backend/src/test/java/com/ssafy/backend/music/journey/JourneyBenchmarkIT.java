@@ -144,7 +144,7 @@ class JourneyBenchmarkIT {
 
 				NearestTrackReader reader = adapterOn(session);
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry());
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
 
 				long t0 = System.nanoTime();
 				EnginePath path = finder.find(a, b);
@@ -250,7 +250,7 @@ class JourneyBenchmarkIT {
 	private JourneyService serviceOn(SqlSession session) {
 		MusicDetailMapper detailMapper = session.getMapper(MusicDetailMapper.class);
 		AxisJourneyPathFinder finder = new AxisJourneyPathFinder(
-				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry());
+				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
 		return new JourneyService(
 				Optional.of(new MusicDetailReaderAdapter(detailMapper)),
 				Optional.of(finder),
@@ -289,7 +289,7 @@ class JourneyBenchmarkIT {
 					return rows.subList(0, Math.min(rows.size(), LayerCandidates.MIN_LAYER - 1));
 				};
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry());
+						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
 
 				long t0 = System.nanoTime();
 				finder.find(a, b);
@@ -334,7 +334,7 @@ class JourneyBenchmarkIT {
 
 				NearestTrackReader reader = adapterOn(session);
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry());
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT);
 
 				EnginePath axis = finder.find(a, b);
 				if (!axis.reachable() || axis.stationMbids().isEmpty()) {

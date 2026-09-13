@@ -8,6 +8,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import com.ssafy.backend.music.retrieval.SameRecording;
@@ -63,11 +64,19 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 	private final ServingRules rules;
 	private final MeterRegistry meterRegistry;
 
+	/**
+	 * 층당 후보 수. 기본값은 {@link LayerCandidates#LAYER_LIMIT} 이고
+	 * {@code ody.journey.layer-limit} 으로 덮어쓴다 — 스윕 측정을 재빌드 없이 돌리기 위한 것이다(S15P21A405-281).
+	 */
+	private final int layerLimit;
+
 	public AxisJourneyPathFinder(Optional<NearestTrackReader> reader, ServingRules rules,
-			MeterRegistry meterRegistry) {
+			MeterRegistry meterRegistry,
+			@Value("${ody.journey.layer-limit:" + LayerCandidates.LAYER_LIMIT + "}") int layerLimit) {
 		this.reader = reader;
 		this.rules = rules;
 		this.meterRegistry = meterRegistry;
+		this.layerLimit = layerLimit;
 	}
 
 	@Override
@@ -95,7 +104,7 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 		Timer.Sample querySample = Timer.start(meterRegistry);
 		List<List<TrackCandidate>> layers;
 		try {
-			layers = LayerCandidates.collect(r, frame, rules, guard, n);
+			layers = LayerCandidates.collect(r, frame, rules, guard, n, layerLimit, meterRegistry);
 		} finally {
 			querySample.stop(meterRegistry.timer(CANDIDATE_TIMER));
 		}

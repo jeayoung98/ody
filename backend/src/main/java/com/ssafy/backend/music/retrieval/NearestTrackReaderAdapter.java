@@ -39,9 +39,14 @@ import com.ssafy.backend.music.mapper.NearestTrackMapper;
 public class NearestTrackReaderAdapter implements NearestTrackReader {
 
 	/**
-	 * 층당 후보 상한과 같은 값으로 올린다({@code LayerCandidates.LAYER_LIMIT}).
-	 * 더 올리면 정확도가 조금 오르지만 지연도 같이 오른다 — 재질의가 limit 을 키울 때를 대비해
+	 * 이 앱이 한 질의에서 요구하는 최대 행 수에 맞춘다 — 주변 탐색의
+	 * {@code NearbyService.CANDIDATE_COUNT}(200) 가 그 최대다. 여정의 층 후보는 60 이라 더 작다.
+	 *
+	 * <p>더 올리면 정확도가 조금 오르지만 지연도 같이 오른다 — 재질의가 limit 을 키울 때를 대비해
 	 * 여유를 두지 않는다. 재질의는 {@code ef_search} 로 풀리는 문제가 아니라서다.
+	 *
+	 * <p><b>이 값이 곧 인덱스를 훑는 비용이다.</b> limit 을 내려도 훑는 일은 그대로라 절감폭이
+	 * 제한된다(S15P21A405-281 실측: 층 limit 200→60 에 질의당 101.3→88.0ms).
 	 */
 	private static final int EF_SEARCH = 200;
 

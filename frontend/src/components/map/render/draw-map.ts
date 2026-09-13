@@ -192,8 +192,10 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     let px = P[i * 2];
     let py = P[i * 2 + 1];
     const s = e.songs[i];
-    if (px < -20 || px > W + 20 || py < -20 || py > H + 20) {
-      if (!out) touch(s.musicId, t);
+    // 긍정형으로 검사한다 — NaN 좌표는 `<`/`>` 비교가 전부 false 라 부정형이면 통과해 버리고,
+    // createLinearGradient 가 non-finite 로 던진다 (S15P21A405-284)
+    if (!(px >= -20 && px <= W + 20 && py >= -20 && py <= H + 20)) {
+      if (!out && Number.isFinite(px)) touch(s.musicId, t);
       continue;
     }
     if (pset?.has(s.musicId) || cset?.has(s.musicId)) continue; // 프로브·별자리 곡은 따로 그린다

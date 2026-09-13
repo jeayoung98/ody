@@ -540,3 +540,51 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 ### 4.7 플레이리스트 삭제
 `DELETE /playlist/delete/{playlistId}` · 인증 필요. pathVariable: `playlistId`(int, required). res: `{ "success": true, "data": null, "error": null }`.
 - 플레이리스트와 곡 매핑 함께 삭제(곡 자체는 미삭제). 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`.
+
+---
+
+## 5. 탐색 설문 (S15P21A405-289)
+
+> 주변 탐색(§3.5)·경로 탐색(§3.3)에서 **곡 하나가 끝나거나 스킵될 때** FE 가 1건 보낸다. 사용자에게는 질문 1개(👍/👎), 👎 일 때만 이유 칩 1개.
+> 설문 방식·분석 쿼리는 `docs/notion/product/01_EXPLORE_SURVEY.md`. 테이블 DDL 은 `backend/src/main/resources/db/explore_feedback.sql`.
+> 거리·bpm 은 보내지 않는다 — 분석 시 `music.location`·`music.bpm` 을 조인해 계산한다(여정 응답은 거리를 노출하지 않음).
+
+### 5.1 설문 응답 저장
+`POST /api/feedback` · **인증 선택** (토큰 있으면 `user_email` 기록, 없으면 NULL).
+
+req:
+```json
+{
+  "sessionId": "6f1a2b3c-4d5e-4f60-8a9b-0c1d2e3f4a5b",
+  "mode": "nearby",
+  "rank": 3,
+  "anchorMusicId": 10234,
+  "targetMusicId": null,
+  "prevMusicId": null,
+  "musicId": 10877,
+  "verdict": false,
+  "reason": "mood",
+  "listenedSec": 42,
+  "skipped": true
+}
+```
+
+| 필드 | 타입 | 필수 | 뜻 |
+|---|---|---|---|
+| `sessionId` | uuid | O | 탐색 1회. 결과 목록(§3.5 / §3.3 응답)을 받을 때 FE 가 `crypto.randomUUID()` 로 만들고, 그 목록의 곡 전부에 같은 값 |
+| `mode` | `nearby` \| `journey` | O | 주변 탐색 / 경로 탐색 |
+| `rank` | int 1~50 | O | nearby: `neighbors` 순위(1부터) / journey: `path[].step`. 0(기준곡·출발곡)은 보내지 않는다 |
+| `anchorMusicId` | int | O | nearby: `center.id` / journey: 출발곡 id |
+| `targetMusicId` | int | journey O | 도착곡 id. nearby 는 null |
+| `prevMusicId` | int | — | journey: 앞 역 id (1역은 출발곡). nearby 는 null |
+| `musicId` | int | O | 평가 대상 곡 |
+| `verdict` | bool | — | nearby: "기준곡과 비슷했나요?" / journey: "앞 곡에서 자연스럽게 이어졌나요?" `true`/`false`. 무응답(자동 닫힘)은 `null` 로 **그래도 보낸다** |
+| `reason` | `dup` \| `mood` \| `tempo` \| `spoken` | — | `verdict=false` 일 때만. 같은 곡 / 분위기 다름 / 템포 다름 / 음악 아님 |
+| `listenedSec` | int | — | 실제 들은 초 |
+| `skipped` | bool | — | 스킵으로 끝났는가. 기본 false |
+
+res: `{ "success": true, "data": { "feedbackId": 7 }, "error": null }`
+
+- 같은 `(sessionId, rank)` 재요청은 `verdict`·`reason`·`listenedSec`·`skipped` 만 갱신하고 같은 `feedbackId` 를 돌려준다(답 바꾸기).
+- 서버가 `bundle`(`ody.serving.bundle`)과 임계값 스냅샷(`rules`)을 행에 찍는다. 규칙을 바꾼 뒤 전후 비교용.
+- 에러 `INVALID_INPUT`(400): mode·reason 값 범위 밖, rank 0 또는 50 초과, uuid 형식 오류, journey 에 `targetMusicId` 없음, nearby 에 `targetMusicId`/`prevMusicId` 있음, `verdict≠false` 인데 `reason` 있음.

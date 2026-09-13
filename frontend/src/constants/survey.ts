@@ -29,11 +29,21 @@ export const SURVEY_ANON_KEY = "ody_anon_id";
  * - `mood` 소리 자체가 다름 → `tau_far` 하향·hub 벌점. 가까운 거리에서도 많으면 좌표 문제
  * - `tempo` 분위기는 비슷한데 빠르기 차이 → bpm 차이 벌점
  * - `spoken` 말·낭독·효과음 → 정제 규칙에서 제외
+ *
+ * **문구는 모드마다 다르다.** 주변 탐색은 두 곡을 나란히 놓고 비교하니 `다름` 이고,
+ * 여정은 흐름이 끊긴 것을 묻는 것이라 `튐` 이다. 저장되는 코드는 같아서 분석은 한 표에서 본다.
  */
-const REASONS = [
-  { value: "dup", label: "같은 곡이잖아" },
+const NEARBY_REASONS = [
   { value: "mood", label: "분위기 다름" },
   { value: "tempo", label: "템포 다름" },
+  { value: "dup", label: "같은 곡 반복" },
+  { value: "spoken", label: "음악 아님" },
+] as const;
+
+const JOURNEY_REASONS = [
+  { value: "mood", label: "분위기 튐" },
+  { value: "tempo", label: "템포 튐" },
+  { value: "dup", label: "같은 곡 반복" },
   { value: "spoken", label: "음악 아님" },
 ] as const;
 
@@ -48,7 +58,7 @@ const NEARBY: SurveyDefinition = {
   question: "기준곡과 비슷했나요?",
   yes: "네, 비슷해요",
   reasonQuestion: "어떤 점이 아쉬웠나요?",
-  reasons: REASONS,
+  reasons: NEARBY_REASONS,
 };
 
 /** 경로 탐색 — "앞 곡에서 자연스럽게 이어졌는가"를 묻는다 */
@@ -57,7 +67,7 @@ const JOURNEY: SurveyDefinition = {
   question: "앞 곡에서 자연스럽게 이어졌나요?",
   yes: "네, 자연스러워요",
   reasonQuestion: "어떤 점이 아쉬웠나요?",
-  reasons: REASONS,
+  reasons: JOURNEY_REASONS,
 };
 
 export const SURVEYS = { nearby: NEARBY, journey: JOURNEY } as const;

@@ -32,12 +32,12 @@ class MusicSearchServiceTests {
 
 	private final MusicSearchReader reader = mock(MusicSearchReader.class);
 	private final MusicDetailReader detail = mock(MusicDetailReader.class);
-	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty());
+	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty(), org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class));
 
 	@Test
 	void search_trimsQuery_passesSize10_assemblesPage() {
 		when(reader.search("IU", 0, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(1L, "A", "IU", "al", List.of("K-Pop"), "https://y/1", LOC)),
+				List.of(new MusicSummary(1L, "A", "IU", "al", List.of("K-Pop"), "https://y/1", null, LOC)),
 				true));
 
 		PageResponse<MusicSummary> r = service.search("  IU  ", 0);
@@ -52,8 +52,8 @@ class MusicSearchServiceTests {
 	void search_preservesReaderOrder() {
 		when(reader.search("q", 0, 10)).thenReturn(new PageResult(
 				List.of(
-						new MusicSummary(1L, "high", "x", "al", List.of(), "https://y/1", LOC),
-						new MusicSummary(2L, "low", "y", "al", List.of(), "https://y/2", LOC)),
+						new MusicSummary(1L, "high", "x", "al", List.of(), "https://y/1", null, LOC),
+						new MusicSummary(2L, "low", "y", "al", List.of(), "https://y/2", null, LOC)),
 				false));
 
 		PageResponse<MusicSummary> r = service.search("q", 0);
@@ -64,7 +64,7 @@ class MusicSearchServiceTests {
 	@Test
 	void search_keepsNullYoutubeUrl() {
 		when(reader.search("q", 0, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(9L, "no link", "z", "al", List.of(), null, LOC)),
+				List.of(new MusicSummary(9L, "no link", "z", "al", List.of(), null, null, LOC)),
 				false));
 
 		PageResponse<MusicSummary> r = service.search("q", 0);
@@ -86,7 +86,7 @@ class MusicSearchServiceTests {
 	void search_passesReaderHasNextThrough() {
 		// 페이지 계산을 서비스가 하지 않는다. 어댑터가 한 건 더 떠보고 판단한 값을 그대로 전달한다.
 		when(reader.search("q", 13, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(1L, "t", "a", "al", List.of(), "https://y/1", LOC)), false));
+				List.of(new MusicSummary(1L, "t", "a", "al", List.of(), "https://y/1", null, LOC)), false));
 
 		PageResponse<MusicSummary> r = service.search("q", 13);
 
@@ -95,7 +95,7 @@ class MusicSearchServiceTests {
 
 	@Test
 	void search_noAdapter_throws() {
-		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty());
+		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty(), org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class));
 
 		assertThrows(UnsupportedOperationException.class, () -> noReader.search("q", 0));
 	}

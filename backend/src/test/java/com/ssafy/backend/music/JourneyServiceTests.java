@@ -72,7 +72,7 @@ class JourneyServiceTests {
 
 	private static MusicDetail song(long id, String mbid, Integer duration) {
 		return new MusicDetail(id, mbid, "title-" + id, "artist-" + id, 128.4, duration, "album",
-				List.of("K-Pop"), "https://youtu.be/" + id, loc(id * 0.001), 1428, 3);
+				List.of("K-Pop"), "https://youtu.be/" + id, null, loc(id * 0.001), 1428, 3);
 	}
 
 	/** 중간 정거장 n개를 mbid "s0".."s(n-1)" 로 만든다. duration 은 전부 100초. */
@@ -187,7 +187,7 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0")));
 		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al",
-				List.of("K-Pop"), null, loc(0.5), 1, 0);
+				List.of("K-Pop"), null, null, loc(0.5), 1, 0);
 		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(notPlayable));
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
@@ -264,6 +264,10 @@ class JourneyServiceTests {
 		verifyNoInteractions(pathFinder, trackReader);
 	}
 
+	/**
+	 * 정거장이 하나도 없는 경우. 원래는 "중복 제거로 전부 사라진" 예외 상황이었는데,
+	 * 007(S15P21A405-286)부터 <b>끝점이 최근접 반경보다 가까우면 정상적으로 여기 온다</b>.
+	 */
 	@Test
 	void journey_noIntermediateStations_returnsTwoSongPath() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
@@ -279,14 +283,14 @@ class JourneyServiceTests {
 	}
 
 	@Test
-	void journey_engineUpperBound_twentyStations_isAccepted() {
-		givenJourney(20, 275, 205);
+	void journey_engineUpperBound_eighteenStations_isAccepted() {
+		givenJourney(18, 275, 205);
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
 
-		// B8: 정거장 20개 → 22곡. 축소 없음
-		assertThat(res.musicCnt()).isEqualTo(22);
-		assertThat(res.path()).hasSize(22);
+		// B8: 정거장 18개 → 20곡. 축소 없음 (007 로 상한이 20→18 로 내려갔다)
+		assertThat(res.musicCnt()).isEqualTo(20);
+		assertThat(res.path()).hasSize(20);
 	}
 
 	@Test

@@ -16,7 +16,7 @@ import com.ssafy.backend.music.dto.MusicDetail;
  * <ul>
  *   <li>모드·정거장 수·detour 를 인자로 받지 않는다. 구현이 {@code axis} 로 고정하고 역 수는
  *       끝점 거리 {@code L} 로 정한다 — {@code L ≤ 10.7} 이면 10, 초과하면
- *       {@code clamp(round(10 + (L − 10.7)), 10, 20)} (D3, FR-011, FR-023).
+ *       {@code clamp(floor(L / s) - 1, 0, 18)}, {@code s} 는 최근접 반경 (007, FR-011, FR-023).
  *       <b>먼 곡을 거절하지 않고 역만 늘린다.</b></li>
  *   <li><b>경로 없음은 예외가 아니라</b> {@code EnginePath.reachable() == false} 다.
  *       422(PATH_NOT_FOUND)와 500(내부 실패)을 구분해야 하기 때문이다(2026-09-10 clarify).

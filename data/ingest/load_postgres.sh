@@ -51,7 +51,8 @@ docker exec -i "$CONTAINER" bash -lc "cat > /tmp/copy.sql" <<'SQL'
 \timing on
 COPY genre (id, name) FROM '/tmp/genre.csv' WITH (FORMAT csv, HEADER true);
 -- title 이 빈 문자열인 곡이 3,977개 있다. FORCE_NOT_NULL 이 없으면 NULL 로 들어가 NOT NULL 위반이다.
-COPY music (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt)
+-- album_mbid 는 BE 가 2026-09-13 에 추가한 컬럼(D17). 없으면 먼저: ALTER TABLE music ADD COLUMN album_mbid VARCHAR(36);
+COPY music (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid)
   FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true, FORCE_NOT_NULL (title));
 COPY music_genre (id, music_id, genre_id) FROM '/tmp/music_genre.csv' WITH (FORMAT csv, HEADER true);
 SQL
@@ -65,8 +66,14 @@ run_sql "DO \\\$\\\$ DECLARE m bigint; g bigint; l bigint; BEGIN
   IF l <> $EXPECT_LINKS THEN RAISE EXCEPTION 'music_genre % != %', l, $EXPECT_LINKS; END IF;
 END \\\$\\\$;"
 
-echo "== 5. 비어 있어야 하는 세 컬럼 (스펙 18 AC4)"
-run_sql "SELECT count(*) AS must_be_zero FROM music WHERE release_year IS NOT NULL OR album IS NOT NULL OR youtube_url IS NOT NULL;"
+echo "== 5. 채워진 컬럼 (스펙 18 AC4, D17) — 기대 album ≈ 6,580,000 · release_year ≈ 6,384,000 · album_mbid ≈ 4,568,000 · bpm NULL 0 · youtube_url 0"
+run_sql "SELECT count(*) FILTER (WHERE album IS NOT NULL AND album <> '') AS album_filled,
+                count(*) FILTER (WHERE release_year IS NOT NULL) AS release_year_filled,
+                count(*) FILTER (WHERE album_mbid IS NOT NULL) AS album_mbid_filled,
+                count(*) FILTER (WHERE bpm IS NULL) AS bpm_null,
+                count(*) FILTER (WHERE youtube_url IS NOT NULL) AS youtube_url_must_be_zero
+         FROM music;"
+run_sql "SELECT album, release_year, album_mbid FROM music WHERE mbid = '0e11c0fd-a1da-4b88-a438-7ef55c5809ec';"   # Pink Floyd - Time: The Dark Side of the Moon | 1973
 
 echo "== 6. 좌표 차원과 표본"
 run_sql "SELECT vector_dims(location) AS dims, count(*) FROM music WHERE location IS NOT NULL GROUP BY 1;"

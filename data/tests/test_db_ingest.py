@@ -28,7 +28,8 @@ def test_music_columns_match_real_schema():
     """BE 가 만든 실제 컬럼 순서·개수와 같아야 COPY 가 통한다."""
     assert S18.MUSIC_COLUMNS == ["id", "mbid", "title", "artist", "release_year", "bpm",
                                  "duration", "album", "youtube_url", "location",
-                                 "play_cnt", "youtube_cnt"]
+                                 "play_cnt", "youtube_cnt", "album_mbid"], \
+        "album_mbid 는 BE 가 2026-09-13 추가(D17). COPY 컬럼 목록(load_postgres.sh)과 같아야 한다"
     assert S18.GENRE_COLUMNS == ["id", "name"]
     assert S18.MUSIC_GENRE_COLUMNS == ["id", "music_id", "genre_id"], "mbid 가 아니라 music_id 다"
 
@@ -73,14 +74,47 @@ def test_genres_split_on_pipe_and_sorted():
     assert S18.split_genres("") == []
 
 
-def test_three_columns_are_left_null():
-    """release_year·album·youtube_url 은 출처가 없어 비운다(D11)."""
-    row, _t, _a = S18.music_row(1, "m", "t", "a", 120.0, 200.0, np.zeros(16, np.float32))
+def test_meta_fills_album_year_and_mbid():
+    """재패스 메타가 있으면 album·release_year·album_mbid 가 채워진다(D17). youtube_url 만 빈다."""
+    meta = ("The Dark Side of the Moon", 1973, "d6e9d69f-b689-3af8-9fd4-eef9b645f62d")
+    row, _t, _a, album_cut = S18.music_row(1, "m", "t", "a", 120.0, 200.0,
+                                           np.zeros(16, np.float32), meta)
     fields = dict(zip(S18.MUSIC_COLUMNS, row))
-    assert fields["release_year"] == ""
-    assert fields["album"] == ""
-    assert fields["youtube_url"] == ""
+    assert fields["album"] == "The Dark Side of the Moon" and album_cut is False
+    assert fields["release_year"] == "1973"
+    assert fields["album_mbid"] == "d6e9d69f-b689-3af8-9fd4-eef9b645f62d"
+    assert fields["youtube_url"] == "", "전곡 video_id 는 채우지 않는다(D11·D15)"
     assert fields["play_cnt"] == 0 and fields["youtube_cnt"] == 0
+
+
+def test_meta_missing_leaves_columns_null():
+    """메타가 없는 곡은 예전과 같이 빈 값. 범위 밖 연도·UUID 아닌 albumid 도 빈 값."""
+    row, _t, _a, _c = S18.music_row(1, "m", "t", "a", 120.0, 200.0, np.zeros(16, np.float32))
+    fields = dict(zip(S18.MUSIC_COLUMNS, row))
+    assert fields["album"] == "" and fields["release_year"] == "" and fields["album_mbid"] == ""
+    assert S18.format_year(1899) == "" and S18.format_year(2027) == ""
+    assert S18.format_year(float("nan")) == "" and S18.format_year("1973") == "1973"
+    assert S18.format_album_mbid("not-a-uuid") == ""
+    assert S18.format_album_mbid("D6E9D69F-B689-3AF8-9FD4-EEF9B645F62D") == \
+        "d6e9d69f-b689-3af8-9fd4-eef9b645f62d", "소문자로 정규화"
+    long_album, cut = S18.clip_text("앨" * 300, S18.ALBUM_MAX)
+    assert len(long_album) == 200 and cut is True
+
+
+def test_meta_merge_picks_representative_then_mode():
+    """meta_merge: 대표 제출본 값이 있으면 그것, 없으면 최빈값. min 은 오태그를 집는다."""
+    import pandas as pd
+    sys.path.insert(0, os.path.join(ROOT, "ingest"))
+    import meta_merge as MM
+    assert MM.year_of("1973-03-24") == 1973 and MM.year_of("1994") == 1994
+    assert np.isnan(MM.year_of("0000")) and np.isnan(MM.year_of("")) and np.isnan(MM.year_of(None))
+    # Pink Floyd 'Time' 축소판: 1973 x3, 1966 x1(오태그), 1994 x1(리마스터). 대표 제출본 없음 → 최빈값 1973
+    rows = pd.DataFrame({"mbid": ["a"] * 5 + ["b"] * 2,
+                         "is_rep": [False] * 5 + [False, True],
+                         "year_any": [1973.0, 1966.0, 1973.0, 1994.0, 1973.0, 2001.0, 1999.0]})
+    picked = MM.pick_value(rows, "year_any")
+    assert picked["a"] == 1973, "min 이었으면 1966"
+    assert picked["b"] == 1999, "대표 제출본이 있으면 최빈값(2001 과 동률)보다 우선"
 
 
 # --- 실제 데이터 -----------------------------------------------------------
@@ -114,7 +148,7 @@ def test_build_assigns_ids_by_mbid_order(sample_bundle, tmp_path, root):
     assert report["music_rows"] == SAMPLE_ROWS
     assert report["id_range"] == [1, SAMPLE_ROWS]
     assert report["next_music_id_for_backend"] == SAMPLE_ROWS + 1
-    assert report["null_columns"] == ["release_year", "album", "youtube_url"]
+    assert report["null_columns"] == ["youtube_url"]
 
     import csv
     with io.open(os.path.join(out, "music.csv"), encoding="utf-8", newline="") as fh:
@@ -125,8 +159,14 @@ def test_build_assigns_ids_by_mbid_order(sample_bundle, tmp_path, root):
     assert mbids == sorted(mbids), "mbid 오름차순이어야 id 가 결정적이다"
     assert len(set(mbids)) == SAMPLE_ROWS
     assert all(S18.UUID_RE.match(m) for m in mbids)
-    assert all(r["release_year"] == "" and r["album"] == "" and r["youtube_url"] == ""
-               for r in rows)
+    assert all(r["youtube_url"] == "" for r in rows)
+    assert all(r["release_year"] == "" or 1900 <= int(r["release_year"]) <= 2026 for r in rows)
+    assert all(r["album_mbid"] == "" or S18.UUID_RE.match(r["album_mbid"]) for r in rows)
+    if report["inputs"]["album_meta"]:
+        # 재패스 메타가 있으면 표본 1,000곡에서도 대부분 채워져야 한다(전수 99.3% / 96.4% / 69.0%)
+        assert report["album_filled"] >= SAMPLE_ROWS * 0.95
+        assert report["release_year_filled"] >= SAMPLE_ROWS * 0.90
+        assert report["album_mbid_filled"] >= SAMPLE_ROWS * 0.55
     assert all(len(r["title"]) <= S18.TITLE_MAX and len(r["artist"]) <= S18.ARTIST_MAX
                for r in rows)
 
@@ -190,3 +230,18 @@ def test_full_run_evidence(root):
     # 안 읽어서였다. 두 디렉터리를 읽으면 결측이 없다.
     assert report["missing_bpm"] == 0
     assert report["missing_catalog"] == 0
+
+
+def test_full_run_evidence_2026_09_13(root):
+    """재패스 반영 전수 CSV 기록(D17). album·release_year·album_mbid 가 채워졌고 bpm 결측이 없다."""
+    import json
+    path = os.path.join(root, "output", "db_ingest_csv_2026-09-13.json")
+    if not os.path.exists(path):
+        pytest.skip("재패스 반영 전수 CSV 기록 없음")
+    report = json.load(io.open(path, encoding="utf-8"))
+    assert report["music_rows"] == TARGET_ROWS
+    assert report["missing_bpm"] == 0, "v2_feats + v2_feats_pilot 둘 다 읽는다(D16)"
+    assert report["album_filled"] >= 6_580_000          # 99.3%
+    assert report["release_year_filled"] >= 6_380_000   # 96.3%
+    assert report["album_mbid_filled"] >= 4_560_000     # 68.9%
+    assert report["null_columns"] == ["youtube_url"]

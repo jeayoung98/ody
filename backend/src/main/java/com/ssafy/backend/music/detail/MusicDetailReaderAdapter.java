@@ -1,10 +1,11 @@
 package com.ssafy.backend.music.detail;
 
+import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
 
-import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -12,11 +13,11 @@ import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.music.YoutubeSearchUrl;
+import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSummary;
-import com.ssafy.backend.music.dto.NeighborTrack;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
 
 /**
@@ -41,7 +42,37 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 			return Optional.empty(); // 서비스가 MUSIC_NOT_FOUND(404) 로 바꾼다
 		}
 		List<String> genres = findGenres(List.of(id)).getOrDefault(id, List.of());
-		return Optional.of(new MusicDetail(
+		return Optional.of(toDetail(row, genres));
+	}
+
+	@Override
+	public Map<Long, Location> findLocationsByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
+			return Map.of();
+		}
+		Map<Long, Location> locations = new LinkedHashMap<>();
+		for (MusicDetailRow row : mapper.findLocationsByIds(ids)) {
+			locations.put(row.getId(), row.toLocation());
+		}
+		// 없는 곡·좌표 없는 곡은 키가 없다. 0 으로 채우지 않는다 — 호출자가 404 를 낸다.
+		return locations;
+	}
+
+	@Override
+	public List<MusicDetail> findDetailsByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
+			return List.of();
+		}
+		List<MusicDetailRow> rows = mapper.findByIds(ids);
+		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
+		// 순서는 보장하지 않는다 — 호출자가 id 키로 재조립한다.
+		return rows.stream()
+				.map(row -> toDetail(row, genres.getOrDefault(row.getId(), List.of())))
+				.toList();
+	}
+
+	private static MusicDetail toDetail(MusicDetailRow row, List<String> genres) {
+		return new MusicDetail(
 				row.getId(),
 				row.getMbid(),
 				row.getTitle(),
@@ -51,35 +82,29 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				row.getAlbum(),
 				genres,
 				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+				VIDEO_ID_NOT_LOADED,
 				row.toLocation(),
 				row.getPlayCnt(),
-				row.getYoutubeCnt()));
+				row.getYoutubeCnt());
 	}
 
 	@Override
-	public List<NeighborTrack> findNeighbors(long id, int k) {
-		// 함정 회피: 좌표를 먼저 읽어 바인드 파라미터로 넘긴다. 서브쿼리로 넘기면 recall 0.0000.
-		String qvec = mapper.findLocationText(id);
-		if (qvec == null) {
-			return List.of(); // 없는 곡이거나 좌표가 없는 곡
+	public List<MusicSummary> findSummariesByMbids(List<String> mbids) {
+		if (mbids.isEmpty()) {
+			return List.of();               // IN () 는 문법 오류
 		}
-
-		List<MusicDetailRow> rows = mapper.findNearest(id, qvec, k);
+		List<MusicDetailRow> rows = mapper.findByMbids(mbids);
 		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
 		return rows.stream()
-				// SQL 은 거리 하나로만 정렬한다(HNSW 인덱스 순서 유지). 동률 id 오름차순은 여기서 준다.
-				.sorted(Comparator.comparingDouble(MusicDetailRow::getDistance)
-						.thenComparingLong(MusicDetailRow::getId))
-				.map(row -> new NeighborTrack(
-						new MusicSummary(
-								row.getId(),
-								row.getTitle(),
-								row.getArtist(),
-								row.getAlbum(),
-								genres.getOrDefault(row.getId(), List.of()),
-								YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-								row.toLocation()),
-						row.getDistance()))
+				.map(row -> new MusicSummary(
+						row.getId(),
+						row.getTitle(),
+						row.getArtist(),
+						row.getAlbum(),
+						genres.getOrDefault(row.getId(), List.of()),
+						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+						VIDEO_ID_NOT_LOADED,
+						row.toLocation()))
 				.toList();
 	}
 

@@ -10,6 +10,10 @@
 
 ## Clarifications
 
+### Session 2026-09-13
+
+- Q: `neighbors` 를 주변 탐색(005)과 같은 선정 규칙으로 통일하나? → A: **통일한다.** 최근접을 그대로 10곡 자르지 않고, 후보를 넉넉히 뽑아 선정 규칙(같은 녹음 접기·아티스트 편중 제한·길이 범위)을 통과한 상위 10곡을 반환한다. 규칙은 **한 곳에만 구현하고 005 와 공유**한다 — 같은 곡에 대해 곡 상세와 주변 탐색 뷰가 다른 목록을 주면 사용자에게 버그로 읽힌다. **이미 배포된 응답이 달라진다**(FR-014). 프론트 통보 완료. *(D-003 결정, 명세 소유는 005)*
+
 ### Session 2026-09-09
 
 - Q: neighbors 정렬의 동률(distance 같음) tie-break를 무엇으로 할까? → A: `distance` 오름차순, 동률 시 `id` 오름차순. 같은 곡·같은 baseline에서 재요청 시 순서가 안정적이어야 한다(결정성). *(clarify 확정)*
@@ -75,7 +79,8 @@
 | 존재하지 않는 `id` | 404 `MUSIC_NOT_FOUND` |
 | 상세 대상 곡 `youtubeUrl` null | 200 정상 (재생 불가 표시용, 오류 아님) |
 | 주변곡 후보에 자기 자신 포함 | 자기 자신 제외 후 10곡 |
-| 최근접 후보 < 10곡 | 있는 만큼만 반환 (오류 아님) |
+| 선정 규칙 통과 곡 < 10곡 | 있는 만큼만 반환 (오류 아님) |
+| 규칙에 걸려 이웃이 0곡 | 빈 배열 + 200 (오류 아님) |
 | 주변곡 `distance` 동률 | `id` 오름차순 tie-break로 순서 안정 |
 | 주변곡 전부 재생 불가 | 그대로 `youtubeUrl:null`로 포함 |
 | 같은 곡 상세 반복 조회 | `playCnt`·`lastMusic` 불변 (순수 조회, 쓰기 0건) |
@@ -89,13 +94,14 @@
 - **FR-003 — 없는 곡**: 존재하지 않는 `id`는 404 `MUSIC_NOT_FOUND`로 응답해야 한다(MUST). **근거**: api-spec §0.5·§3.2.
 - **FR-004 — 상세 필드**: 응답은 MusicDetail 필드(id, mbid, title, artist, bpm, duration, album, genres, youtubeUrl, location, playCnt, youtubeCnt)를 모두 포함해야 한다(MUST). 기존 타입·null 허용 범위를 임의로 좁히지 않는다. **근거**: api-spec §0.6·§3.2.
 - **FR-005 — 고정 좌표**: 곡 좌표는 서빙 baseline `v2.1-pca16` 기준으로 진입 경로와 무관하게 동일해야 한다(MUST). 상세 조회가 좌표·모델을 변경해서는 안 된다(MUST NOT). **근거**: 헌법 V(좌표 안정성); 요구사항 §6.
-- **FR-006 — 주변곡 선정**: `neighbors`는 임베딩 공간 최근접 **10곡**을 `distance` 오름차순으로 담아야 하며, 상세 대상 곡 자신은 제외해야 한다(MUST). 최근접 후보가 10곡보다 적으면 있는 만큼만 반환한다(MUST). **근거**: api-spec §3.2.
+- **FR-006 — 주변곡 선정**: `neighbors`는 임베딩 공간 최근접 후보에 **공용 선정 규칙**을 적용해 남는 **최대 10곡**을 `distance` 오름차순으로 담아야 한다(MUST). 상세 대상 곡 자신은 제외한다(MUST). 선정 규칙은 005 가 소유하며 같은 녹음 접기·아티스트 편중 제한·길이 범위 제외를 포함한다 — **이 명세가 규칙을 따로 정의하지 않는다**(FR-014). 규칙을 통과한 곡이 10곡보다 적으면 있는 만큼만 반환한다(MUST). **근거**: api-spec §3.2; 2026-09-13 D-003 결정.
 - **FR-007 — 주변곡 재생 불가 포함**: `youtubeUrl`이 null인 곡도 `neighbors`에서 제외하지 않고 `youtubeUrl:null`로 포함해야 한다(MUST). **근거**: api-spec §3.2; 요구사항 SONG-04.
 - **FR-008 — 주변곡 필드**: `neighbors`의 각 항목은 MusicSummary 필드(id, title, artist, album, genres, youtubeUrl, location) + `distance`(float)를 포함해야 한다(MUST). **근거**: api-spec §0.6·§3.2.
-- **FR-009 — 결정성/정렬**: `neighbors`는 `distance` 오름차순, 동률 시 `id` 오름차순으로 정렬해야 한다(MUST). 같은 곡·같은 baseline 재요청 시 동일한 10곡·순서를 반환해야 한다(MUST). **근거**: 2026-09-09 clarify; 헌법 V·VI.
+- **FR-009 — 결정성/정렬**: `neighbors`는 `distance` 오름차순, 동률 시 `id` 오름차순으로 정렬해야 한다(MUST). 같은 곡·같은 baseline·같은 규칙 버전이면 재요청 시 **동일한 목록과 순서**를 반환해야 한다(MUST). 후보 확보에 근사 최근접을 쓰더라도 이 보장이 유지되어야 한다(MUST). **근거**: 2026-09-09 clarify; 헌법 V·VI.
 - **FR-010 — 거리 척도**: 최근접 거리 척도는 서빙 baseline `v2.1-pca16`에 귀속되며(MUST), 서빙·요청 경로에서 모델을 재학습해서는 안 된다(MUST NOT). KNN 실행은 BE4 조회 port로 위임한다(헌법 X). 계산식은 BE4 확정(B-D). **근거**: 헌법 V·VII·X.
 - **FR-011 — 오류 구조**: 검증 실패는 400 `INVALID_INPUT`, 없는 곡은 404 `MUSIC_NOT_FOUND`, 내부 실패는 500 `INTERNAL_SERVER_ERROR`, 인증 실패는 401(코드는 B-A 확정)로 응답하고, 실패 본문은 `success:false`, `data:null`, `error:{code,message}`(master `ErrorResponse`)를 제공해야 한다(MUST). **근거**: master `common.GlobalErrorCode`/`GlobalExceptionHandler`; api-spec §0.2·§0.4·§0.5. **[정정]**: `MUSIC_NOT_FOUND`는 master `GlobalErrorCode`에 미등록 → BE2 도메인 `MusicErrorCode`로 정의(정본 §0.5와 정합, 타 팀 블로커 아님).
 - **FR-012 — 재생 불가 상세 곡**: 상세 대상 곡 자체의 `youtubeUrl`이 null이어도 200으로 정상 반환해야 한다(MUST). 재생 가능 여부는 클라이언트 표시용이다. **근거**: api-spec §0.6·§3.2.
+- **FR-014 — 선정 규칙 공유**: `neighbors` 선정 규칙은 주변 탐색(005)과 **같은 구현을 써야 한다**(MUST). 이 명세가 규칙을 복제하거나 독자적으로 완화·강화해서는 안 된다(MUST NOT). 규칙 변경은 005 에서 하고 이 API 가 따라간다. **근거**: 2026-09-13 D-003 결정; 헌법 VI(탐색 일관성). **[영향]** 이미 배포된 응답이 달라진다 — 같은 곡의 이웃 목록이 바뀌고, 10곡보다 적을 수 있으며, "유사도 낮음" 표시가 새로 붙는다.
 - **FR-013 — 순수 조회(부수효과 없음)**: 상세 조회는 어떤 도메인 상태도 변경해서는 안 된다(MUST NOT). `playCnt` 증가·`user.lastMusic`/`lastActiveAt` 갱신 등 재생 기록은 별도 재생/기록 경로(BE3 Realtime 또는 Core) 책임이며, `/music/detail`은 좌표·모델뿐 아니라 어떤 저장소에도 쓰기를 하지 않는다. **근거**: 2026-09-09 clarify; 헌법 X(경계).
 
 ### Key Entities *(include if feature involves data)*
@@ -110,7 +116,8 @@
 
 - **SC-001**: US1(상세 필드·좌표·재생불가 상세곡), US2(주변곡 10곡·자기제외·재생불가포함·결정성·부족 시 축소), US3(없는 곡·검증·인증·내부 실패) 시나리오를 모두 통과한다. 단 실좌표·KNN(B-D)·Core 인증(B-A) 확정 전에는 port mock 기준으로 검증한다.
 - **SC-002**: 같은 좌표계 버전에서 동일 곡의 반환 PC1~PC16 차이는 0이며, 상세 조회에 의한 좌표·모델 변경은 0건이다. **근거**: FR-005; 헌법 V.
-- **SC-003**: 같은 곡·같은 baseline에서 주변곡을 반복 조회하면 동일한 10곡과 동일한 순서(distance ASC, id ASC)를 반환한다. **근거**: FR-009.
+- **SC-003**: 같은 곡·같은 baseline·같은 규칙 버전에서 주변곡을 반복 조회하면 동일한 목록과 동일한 순서(distance ASC, id ASC)를 반환한다. **근거**: FR-009.
+- **SC-006**: 같은 곡을 기준으로 `/api/music/detail` 의 `neighbors` 와 주변 탐색 API 의 이웃 목록을 각각 조회하면 **곡 집합과 순서가 100% 일치**한다. **근거**: FR-014.
 - **SC-004**: 실패 요청(400/401/404/500)을 로그로 추적할 수 있으며, 로그·지표에 비밀정보·불필요한 개인정보 노출은 0건이다. **근거**: 헌법 VIII; 요구사항 §6.
 - **SC-005**: 상세 조회 N회 반복 후 대상 곡 `playCnt`와 소유자 `lastMusic`/`lastActiveAt`의 변화는 0이다(순수 조회). **근거**: FR-013.
 

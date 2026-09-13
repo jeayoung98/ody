@@ -17,7 +17,6 @@ import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
-import com.ssafy.backend.music.dto.NeighborTrack;
 
 @Service
 public class MusicService {
@@ -32,14 +31,16 @@ public class MusicService {
 
 	private final Optional<MusicSearchReader> searchReader;
 	private final Optional<MusicDetailReader> detailReader;
+	private final NearbyService nearbyService;
 	private final Optional<MajorTrackReader> majorReader;
 
 	// ponytail: 어댑터가 아직 없는 port 는 Optional 주입. 빈이 올라오면 자동 연결된다.
 	public MusicService(Optional<MusicSearchReader> searchReader, Optional<MusicDetailReader> detailReader,
-			Optional<MajorTrackReader> majorReader) {
+			Optional<MajorTrackReader> majorReader, NearbyService nearbyService) {
 		this.searchReader = searchReader;
 		this.detailReader = detailReader;
 		this.majorReader = majorReader;
+		this.nearbyService = nearbyService;
 	}
 
 	/**
@@ -79,7 +80,9 @@ public class MusicService {
 				() -> new UnsupportedOperationException("music/detail: BE4 조회 어댑터 대기 중 (B-D)"));
 		MusicDetail detail = reader.findDetail(id)
 				.orElseThrow(() -> new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
-		List<NeighborTrack> neighbors = reader.findNeighbors(id, NEIGHBOR_COUNT);
-		return new MusicDetailResponse(detail, neighbors);
+		// 이웃 선정은 주변 탐색(005)과 같은 코드 경로를 지나간다 — 규칙이 두 벌이 되면
+		// 같은 곡에 곡 상세와 주변 탐색 뷰가 다른 목록을 준다(005 FR-023, SC-006).
+		NearbyService.NeighborResult result = nearbyService.neighborsOf(detail);
+		return new MusicDetailResponse(detail, result.neighbors(), result.lowSimilarity());
 	}
 }

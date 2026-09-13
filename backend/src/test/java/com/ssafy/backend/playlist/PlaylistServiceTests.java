@@ -3,6 +3,7 @@ package com.ssafy.backend.playlist;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,6 +12,7 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -74,9 +76,10 @@ class PlaylistServiceTests {
 	}
 
 	private static MusicDetail music(long id, int duration) {
-		Location loc = new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
+		// 곡마다 다른 좌표. 상세 응답이 좌표를 그대로 실어 보내는지 확인하려면 값이 구별돼야 한다.
+		Location loc = new Location(id * 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id * -0.25);
 		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", List.of("K-Pop"),
-				"https://youtu.be/x", loc, 10, 1);
+				"https://youtu.be/x", null, loc, 10, 1);
 	}
 
 	// ---- search (§4.1) ----
@@ -174,14 +177,75 @@ class PlaylistServiceTests {
 	void getDetail_withTracks_returnsMusicsAndTotalDuration() {
 		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
 		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of(1L, 2L));
-		when(musicDetailReader.findDetail(1L)).thenReturn(Optional.of(music(1L, 200)));
-		when(musicDetailReader.findDetail(2L)).thenReturn(Optional.of(music(2L, 100)));
+		when(musicDetailReader.findDetailsByIds(List.of(1L, 2L)))
+				.thenReturn(List.of(music(1L, 200), music(2L, 100)));
 
 		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "owner@gmail.com");
 
 		assertThat(response.musicCnt()).isEqualTo(2);
 		assertThat(response.totalDuration()).isEqualTo(300);
 		assertThat(response.musics()).extracting(MusicDetail::id).containsExactly(1L, 2L);
+	}
+
+	@Test
+	void getDetail_carriesTrackCoordinates_forTheConstellationOverlay() { // FR-010 (S15P21A405-265)
+		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of(1L, 2L));
+		when(musicDetailReader.findDetailsByIds(List.of(1L, 2L)))
+				.thenReturn(List.of(music(1L, 200), music(2L, 100)));
+
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "owner@gmail.com");
+
+		// 플리 별자리는 이 좌표로 그린다. 응답에서 location 이 빠지면 오버레이가 통째로 죽는다.
+		assertThat(response.musics()).allSatisfy(music -> assertThat(music.location()).isNotNull());
+		assertThat(response.musics().get(0).location().pc1()).isEqualTo(0.5);
+		assertThat(response.musics().get(0).location().pc16()).isEqualTo(-0.25);
+		assertThat(response.musics().get(1).location().pc1()).isEqualTo(1.0);
+	}
+
+	@Test
+	void getDetail_readsTracksInOneRoundTrip_regardlessOfTrackCount() { // S15P21A405-265 (SC-004)
+		List<Long> musicIds = new ArrayList<>();
+		List<MusicDetail> musics = new ArrayList<>();
+		for (long musicId = 1; musicId <= 30; musicId++) {
+			musicIds.add(musicId);
+			musics.add(music(musicId, 10));
+		}
+		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(musicIds);
+		when(musicDetailReader.findDetailsByIds(musicIds)).thenReturn(musics);
+
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "owner@gmail.com");
+
+		assertThat(response.musicCnt()).isEqualTo(30);
+		verify(musicDetailReader, times(1)).findDetailsByIds(anyList());
+		verify(musicDetailReader, never()).findDetail(anyLong()); // 곡당 왕복으로 돌아가지 않았는지
+	}
+
+	@Test
+	void getDetail_keepsStoredTrackOrder_evenWhenBatchReadReturnsShuffled() { // S15P21A405-265 (FR-012)
+		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of(3L, 1L, 2L));
+		// IN 은 입력 순서를 보존하지 않는다. 저장된 position 순서는 서비스가 되세운다.
+		when(musicDetailReader.findDetailsByIds(List.of(3L, 1L, 2L)))
+				.thenReturn(List.of(music(2L, 10), music(3L, 10), music(1L, 10)));
+
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "owner@gmail.com");
+
+		assertThat(response.musics()).extracting(MusicDetail::id).containsExactly(3L, 1L, 2L);
+	}
+
+	@Test
+	void getDetail_skipsTracksTheBatchReadCouldNotFind() { // S15P21A405-265 (기존 동작 유지)
+		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of(1L, 999L, 2L));
+		when(musicDetailReader.findDetailsByIds(List.of(1L, 999L, 2L)))
+				.thenReturn(List.of(music(1L, 200), music(2L, 100)));
+
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "owner@gmail.com");
+
+		assertThat(response.musics()).extracting(MusicDetail::id).containsExactly(1L, 2L);
+		assertThat(response.musicCnt()).isEqualTo(2);
 	}
 
 	// ---- create (§4.3) ----

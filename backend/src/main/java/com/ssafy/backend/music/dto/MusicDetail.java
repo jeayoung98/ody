@@ -16,6 +16,8 @@ public record MusicDetail(
 		String album,
 		List<String> genres,
 		String youtubeUrl,
+		/** 유튜브 영상 식별자 11자. 확인된 영상이며 없으면 null (spec 006 FR-001). */
+		String videoId,
 		Location location,
 		Integer playCnt,
 		Integer youtubeCnt) {

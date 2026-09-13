@@ -1,5 +1,6 @@
 package com.ssafy.backend.music.journey;
 
+import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -40,7 +41,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 
 	/**
 	 * 질의 2회로 끝낸다 — 곡 일괄 조회 1회 + 장르 일괄 조회 1회. 곡당 왕복을 돌면
-	 * 정거장 20개에 40왕복이라 종단 예산을 넘긴다(SC-002).
+	 * 정거장 18개에 36왕복이라 종단 예산을 넘긴다(SC-002).
 	 */
 	@Override
 	@Transactional(readOnly = true)
@@ -69,6 +70,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
+						VIDEO_ID_NOT_LOADED,
 						row.toLocation(),
 						row.getPlayCnt(),
 						row.getYoutubeCnt()))

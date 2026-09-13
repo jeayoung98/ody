@@ -26,6 +26,7 @@ import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
+import com.ssafy.backend.music.retrieval.SameRecording;
 import com.ssafy.backend.music.detail.MusicDetailReaderAdapter;
 import com.ssafy.backend.music.dto.JourneyResponse;
 import com.ssafy.backend.music.dto.JourneyStop;
@@ -143,7 +144,7 @@ class JourneyBenchmarkIT {
 
 				NearestTrackReader reader = adapterOn(session);
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry());
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				long t0 = System.nanoTime();
 				EnginePath path = finder.find(a, b);
@@ -249,7 +250,7 @@ class JourneyBenchmarkIT {
 	private JourneyService serviceOn(SqlSession session) {
 		MusicDetailMapper detailMapper = session.getMapper(MusicDetailMapper.class);
 		AxisJourneyPathFinder finder = new AxisJourneyPathFinder(
-				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry());
+				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 		return new JourneyService(
 				Optional.of(new MusicDetailReaderAdapter(detailMapper)),
 				Optional.of(finder),
@@ -288,7 +289,7 @@ class JourneyBenchmarkIT {
 					return rows.subList(0, Math.min(rows.size(), LayerCandidates.MIN_LAYER - 1));
 				};
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry());
+						new AxisJourneyPathFinder(Optional.of(starved), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				long t0 = System.nanoTime();
 				finder.find(a, b);
@@ -333,7 +334,7 @@ class JourneyBenchmarkIT {
 
 				NearestTrackReader reader = adapterOn(session);
 				AxisJourneyPathFinder finder =
-						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry());
+						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				EnginePath axis = finder.find(a, b);
 				if (!axis.reachable() || axis.stationMbids().isEmpty()) {
@@ -382,7 +383,7 @@ class JourneyBenchmarkIT {
 				SameRecording.key(a.title(), a.artist()), SameRecording.key(b.title(), b.artist()),
 				av, bv, new HashSet<>());
 		return finder.linear(reader, frame, guard,
-				frame.stationCount(RULES.farEndpointDist()));
+				frame.stationCount(2.5, AxisJourneyPathFinder.MAX_STATIONS));
 	}
 
 	// ------------------------------------------------------------------ 보조
@@ -396,7 +397,7 @@ class JourneyBenchmarkIT {
 		Location l = new Location(v[0], v[1], v[2], v[3], v[4], v[5], v[6], v[7],
 				v[8], v[9], v[10], v[11], v[12], v[13], v[14], v[15]);
 		return new MusicDetail(row.getMusicId(), row.getMbid(), row.getTitle(), row.getArtist(),
-				null, row.getDuration(), null, List.of(), null, l, 0, 0);
+				null, row.getDuration(), null, List.of(), null, null, l, 0, 0);
 	}
 
 	private NearestTrackReader adapterOn(SqlSession session) {

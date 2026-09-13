@@ -8,8 +8,10 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
+import com.ssafy.backend.music.retrieval.SameRecording;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.music.dto.MusicDetail;
@@ -45,6 +47,19 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 	 */
 	static final double ARTIST_PENALTY = 1e4;
 
+	/**
+	 * 역 수 상한 (007, S15P21A405-286). 출발·도착을 포함한 목록 길이 상한이 <b>20곡</b>이 된다.
+	 *
+	 * <p>측정으로 정한 값이 아니라 <b>계약에서 내려온 값</b>이다 — 기획이 정한 플레이리스트 길이 30곡
+	 * 안에 넉넉히 들고, 프론트가 {@code BACKEND-NOTES} A-5 에 적어둔 "정거장 약 20곡" 과 맞는다.
+	 * 별자리 배치 API 의 30(A-9)은 플레이리스트 입력 상한이라 여정과 무관하다.
+	 *
+	 * <p><b>상한 자체는 반드시 필요하다.</b> 없으면 코퍼스 최대 거리 58.58 짜리 쌍에서 목록이 25곡을
+	 * 넘어 {@code JourneyService.MAX_PATH_SIZE}(30) 가드에 걸린다. 다만 실제로 물리는 것은
+	 * 무작위 쌍의 <b>0.4%</b> 뿐이고, 길이를 정하는 값은 상한이 아니라 간격이다.
+	 */
+	static final int MAX_STATIONS = 18;
+
 	/** {@code linear} 폴백은 지점마다 1곡만 고르므로 후보가 적어도 된다 (핸드오프 §4.6). */
 	private static final int LINEAR_LIMIT = 20;
 
@@ -62,11 +77,33 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 	private final ServingRules rules;
 	private final MeterRegistry meterRegistry;
 
+	/**
+	 * 층당 후보 수. 기본값은 {@link LayerCandidates#LAYER_LIMIT} 이고
+	 * {@code ody.journey.layer-limit} 으로 덮어쓴다 — 스윕 측정을 재빌드 없이 돌리기 위한 것이다(S15P21A405-281).
+	 */
+	private final int layerLimit;
+
+	/**
+	 * 이웃 역 사이 축 방향 간격의 하한 = 코퍼스 최근접 반경. 기본 {@value #DEFAULT_STATION_SPACING}.
+	 *
+	 * <p>{@code ody.journey.station-spacing} 으로 덮어쓴다 — {@code layer-limit} 과 같은 이유로,
+	 * 스윕을 재빌드 없이 돌리기 위해서다(007). <b>{@code ServingRules} 에 두지 않는다</b> —
+	 * 그쪽 값의 유일한 출처는 데이터 파트 {@code postprocess_rules.json} 인데 이 값은 거기 없다.
+	 */
+	private final double stationSpacing;
+
+	/** 최근접 반경 실측 기본값. 축 위 임의 지점 60곳에서 p50 2.272 · p90 2.684 (007 research R1). */
+	static final String DEFAULT_STATION_SPACING = "2.5";
+
 	public AxisJourneyPathFinder(Optional<NearestTrackReader> reader, ServingRules rules,
-			MeterRegistry meterRegistry) {
+			MeterRegistry meterRegistry,
+			@Value("${ody.journey.layer-limit:" + LayerCandidates.LAYER_LIMIT + "}") int layerLimit,
+			@Value("${ody.journey.station-spacing:" + DEFAULT_STATION_SPACING + "}") double stationSpacing) {
 		this.reader = reader;
 		this.rules = rules;
 		this.meterRegistry = meterRegistry;
+		this.layerLimit = layerLimit;
+		this.stationSpacing = stationSpacing;
 	}
 
 	@Override
@@ -85,7 +122,7 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 			return new EnginePath(true, List.of(), List.of(), 0.0, false, "axis", rules.bundle());
 		}
 
-		int n = frame.stationCount(rules.farEndpointDist());
+		int n = frame.stationCount(stationSpacing, MAX_STATIONS);
 		EndpointGuard guard = new EndpointGuard(start.id(), end.id(),
 				SameRecording.key(start.title(), start.artist()),
 				SameRecording.key(end.title(), end.artist()),
@@ -94,7 +131,7 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 		Timer.Sample querySample = Timer.start(meterRegistry);
 		List<List<TrackCandidate>> layers;
 		try {
-			layers = LayerCandidates.collect(r, frame, rules, guard, n);
+			layers = LayerCandidates.collect(r, frame, rules, guard, n, layerLimit, meterRegistry);
 		} finally {
 			querySample.stop(meterRegistry.timer(CANDIDATE_TIMER));
 		}

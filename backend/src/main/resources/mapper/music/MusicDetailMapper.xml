@@ -40,21 +40,6 @@
 	</select>
 
 	<!--
-		ORDER BY 에 거리 하나만 둔다. id tie-break 를 SQL 에 넣으면 정렬 키가 둘이 되어
-		HNSW 인덱스 순서를 쓰지 못하고 전체 정렬로 떨어진다. 동률 tie-break 는 어댑터가 한다.
-	-->
-	<select id="findNearest" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		<!-- NeighborTrack 은 MusicSummary + distance 뿐이다. mbid·bpm·duration·play_cnt·youtube_cnt 는 읽지 않는다. -->
-		SELECT m.id, m.title, m.artist, m.album,
-		       m.location &lt;-&gt; #{qvec}::vector AS distance,
-		<include refid="locationColumns"/>
-		FROM music m
-		WHERE m.id &lt;&gt; #{id}
-		ORDER BY m.location &lt;-&gt; #{qvec}::vector
-		LIMIT #{k}
-	</select>
-
-	<!--
 		여정 정거장 조립용. mbid 는 UNIQUE 라 인덱스를 탄다.
 		곡당 왕복은 3초 예산을 넘기므로(SC-002) 반드시 한 번에 읽는다. 최대 20건이다.
 	-->
@@ -66,6 +51,41 @@
 		WHERE m.mbid IN
 		<foreach item="mbid" collection="mbidList" open="(" separator="," close=")">
 			#{mbid}
+		</foreach>
+	</select>
+
+	<!--
+		별자리 배치용 좌표 일괄 조회 (A-9). 좌표 말고는 읽지 않는다 — 배치는 좌표만 있으면 된다.
+
+		⚠️ location IS NOT NULL 을 뺄 수 없다.
+		   MusicDetailRow 의 pc1~pc16 은 primitive double 이라 NULL 이 0.0 으로 들어온다.
+		   그러면 좌표 없는 곡이 조용히 원점에 찍혀 모양이 달라진다. 아예 빠뜨려서
+		   호출자가 "없는 곡" 과 똑같이 404 를 내게 한다(FR-014).
+		   적재 결과상 전 행이 채워져 있지만 계약이 데이터 상태에 기대지 않게 둔다.
+	-->
+	<select id="findLocationsByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		SELECT m.id,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.location IS NOT NULL
+		AND m.id IN
+		<foreach item="id" collection="idList" open="(" separator="," close=")">
+			#{id}
+		</foreach>
+	</select>
+
+	<!--
+		플레이리스트 상세 조립용. 곡당 왕복을 없애려고 한 번에 읽는다.
+		컬럼 집합은 findByMbids 와 같다 — 같은 MusicDetail 을 만든다.
+	-->
+	<select id="findByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
+		       m.play_cnt, m.youtube_cnt,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.id IN
+		<foreach item="id" collection="idList" open="(" separator="," close=")">
+			#{id}
 		</foreach>
 	</select>
 

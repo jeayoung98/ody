@@ -53,7 +53,7 @@ spec에 남은 미결정과 plan 단계로 넘긴 항목을 실제 저장소 상
 
 **Alternatives considered**:
 - `findMbidById` 전용 메서드 — 조회 1회 추가. start/end 상세를 어차피 또 읽어야 한다.
-- 정거장을 하나씩 조회 — 최대 22회 왕복. 예산 위험.
+- 정거장을 하나씩 조회 — 최대 20회 왕복(007 이전 22). 예산 위험.
 - 매핑을 Redis에 캐시 — `spring-boot-starter-data-redis`가 있긴 하지만, 측정된 병목이 아니다. 필요해지면 그때.
 
 ---

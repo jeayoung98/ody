@@ -1,8 +1,10 @@
 package com.ssafy.backend.playlist.service;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
@@ -195,12 +197,25 @@ public class PlaylistService {
 		}
 	}
 
+	/**
+	 * 곡 상세를 <b>한 번에</b> 읽어 저장된 순서({@code position})로 재조립한다 (S15P21A405-265).
+	 *
+	 * <p>이전에는 곡당 {@code findDetail} 1회라 30곡이면 DB 30왕복이었다. 일괄 조회는 순서를
+	 * 보장하지 않으므로 여기서 id 키로 되세운다. 없는 곡은 그대로 빠진다(기존 동작 유지).
+	 */
 	private List<MusicDetail> loadMusicDetails(List<Long> musicIds) {
 		MusicDetailReader reader = musicDetailReader.orElseThrow(
 				() -> new UnsupportedOperationException("playlist/detail: BE4 조회 어댑터 대기 중 (B-D)"));
+		Map<Long, MusicDetail> byId = new HashMap<>();
+		for (MusicDetail music : reader.findDetailsByIds(musicIds)) {
+			byId.put(music.id(), music);
+		}
 		List<MusicDetail> musics = new ArrayList<>(musicIds.size());
 		for (Long musicId : musicIds) {
-			reader.findDetail(musicId).ifPresent(musics::add);
+			MusicDetail music = byId.get(musicId);
+			if (music != null) {
+				musics.add(music);
+			}
 		}
 		return musics;
 	}

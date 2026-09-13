@@ -20,7 +20,13 @@ import java.util.List;
  * @param youtubeUrl 유튜브 검색 URL. {@code music.youtube_url} 이 전 행 NULL 이라 저장값을 읽지 않고
  *                   {@code title}·{@code artist} 로 만든다(D12) — 둘 다 {@code map_sample} 에 있어 조인이 필요 없다.
  *                   검색어를 만들 수 없으면 {@code null}
- * @param playable   재생 링크 유무 = {@code youtubeUrl != null}. 제목·아티스트가 모두 빈 곡이 3,977개라 상수가 아니다
+ * @param videoId    유튜브 영상 식별자 11자. 확인된 영상이며 없으면 {@code null} (S15P21A405-57, spec 006 FR-001).
+ *                   {@code youtubeUrl}(검색 URL)과 달리 그 곡이라는 것이 검증돼 있다 — 길이 ±3초(공식 채널 ±30초)
+ *                   일치와 임베드 가능 여부를 확인한 것만 저장한다(FR-006). 적재 전까지 전 곡 {@code null} 이다.
+ *                   값은 {@code music.video_id} 에 있고 {@code map_sample} 에 PK 조인해 가져온다 — 2026-09-13 실측
+ *                   웜 4.97 ms(1,094행), 엔드포인트 240 ms 대비 2% 라 비정규화하지 않는다(SC-004)
+ * @param playable   재생 링크 유무 = {@code youtubeUrl != null}. 제목·아티스트가 모두 빈 곡이 3,977개라 상수가 아니다.
+ *                   {@code videoId} 유무와는 다른 것을 뜻한다 — 이쪽은 <b>재생 가능 여부</b>, 저쪽은 <b>재생 방식</b>이다(FR-002)
  */
 public record MapPoint(
 		long musicId,
@@ -30,6 +36,7 @@ public record MapPoint(
 		String title,
 		String artist,
 		String youtubeUrl,
+		String videoId,
 		boolean playable) {
 
 	/** 좌표 차원. data D7 로 PCA-16 확정, {@code manifest.k} 와 같아야 한다. */

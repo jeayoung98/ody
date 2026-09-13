@@ -62,8 +62,8 @@ sudo nginx -t
 
 ## Frontend job
 
-Script Path는 `frontend/Jenkinsfile`, SCM branch는 `master`다. Backend job의 Script Path는
-`backend/Jenkinsfile`이다. Frontend는 Backend job과 다른 webhook exact path를
+Script Path는 `frontend/Jenkinsfile`, SCM branch는 `frontend/jenkins`다. Backend job의 Script Path는
+`backend/Jenkinsfile`, SCM branch는 `backend/jenkins`다. Frontend는 Backend job과 다른 webhook exact path를
 사용한다. Node host 설치에 의존하지 않고 `node:24.20.0-bookworm-slim`에서 lockfile 기반 `npm ci`를
 실행한다. artifact는 Jenkins fingerprint를 남기고 app-node의 `/tmp`로 전송한 뒤
 `frontend/deploy.sh`가 `/var/www/ody/releases`에 배치한다.

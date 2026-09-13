@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.realtime.mapper.MeetingMapper">
+
+	<!--
+		실제 테이블: public.meeting(user1, user2, cnt), PK(user1,user2). user1·user2 는 "user".email FK.
+		user1 < user2 (사전순)로 정렬해 넣으면 (A,B)/(B,A) 중복 없이 한 행으로 누적된다.
+	-->
+	<insert id="upsertIncrement">
+		INSERT INTO meeting (user1, user2, cnt)
+		VALUES (#{user1}, #{user2}, 1)
+		ON CONFLICT (user1, user2) DO UPDATE SET cnt = meeting.cnt + 1
+	</insert>
+
+</mapper>

@@ -3,7 +3,7 @@
 ## 배포는 어떻게 되나요?
 
 ```text
-Git master push
+backend/jenkins 에 merge (backend/dev → backend/jenkins)
 -> Jenkins 자동 시작
 -> 테스트
 -> Docker image 생성
@@ -13,6 +13,8 @@ Git master push
 -> Nginx 전환
 -> 기존 container 종료
 ```
+
+`backend/dev` 에 merge 된 것만으로는 배포되지 않습니다. `backend/dev` → `backend/jenkins` merge 가 배포 트리거입니다. Frontend 는 `frontend/jenkins` 입니다. `master` 는 배포와 무관합니다.
 
 ## Blue와 Green
 

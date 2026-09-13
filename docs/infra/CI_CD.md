@@ -11,7 +11,7 @@ CI/CD 플랫폼은 Jenkins로 확정됐고 실제 Pipeline과 GitLab webhook이 
 | Jenkins runtime | Java 21 |
 | Backend build | Java 17 `/usr/lib/jvm/java-17-openjdk-amd64` |
 | SCM | GitLab HTTPS + Access Token credential |
-| Branch | `master` |
+| Branch | Backend `backend/jenkins` · Frontend `frontend/jenkins` (`master` 는 배포를 트리거하지 않는다) |
 | Webhook | `https://j15a405a.p.ssafy.io/project/backend-pipeline` |
 | Deployment SSH | Jenkins 전용 key path `/var/lib/jenkins/.ssh/app_deploy` |
 
@@ -77,8 +77,9 @@ Webhook URL, credential ID 또는 secret을 Jenkinsfile에 새로 hard-code하�
 ## Frontend Pipeline
 
 Frontend는 기존 Backend job에 stage를 추가하지 않고 별도 `frontend/Jenkinsfile`과 Jenkins job을 사용한다.
-Frontend 실패나 npm 변경이 Backend Blue-Green 배포를 막지 않게 하기 위한 경계다. 현재 Repository의 유일한
-branch convention은 `master`이므로 Frontend job도 `master`만 checkout한다.
+Frontend 실패나 npm 변경이 Backend Blue-Green 배포를 막지 않게 하기 위한 경계다.
+Backend job은 `backend/jenkins`, Frontend job은 `frontend/jenkins`만 checkout한다. 배포 경로는 파트 작업 브랜치 → `<part>/dev` → `<part>/jenkins` 이고,
+`<part>/dev` 까지 merge 된 것만으로는 배포되지 않는다. `master` 는 문서·통합 기준 브랜치라 Jenkins 가 보지 않는다.
 
 ```text
 Checkout

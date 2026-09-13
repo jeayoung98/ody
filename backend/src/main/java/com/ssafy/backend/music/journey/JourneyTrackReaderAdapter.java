@@ -40,7 +40,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 
 	/**
 	 * 질의 2회로 끝낸다 — 곡 일괄 조회 1회 + 장르 일괄 조회 1회. 곡당 왕복을 돌면
-	 * 정거장 20개에 40왕복이라 종단 예산을 넘긴다(SC-002).
+	 * 정거장 18개에 36왕복이라 종단 예산을 넘긴다(SC-002).
 	 */
 	@Override
 	@Transactional(readOnly = true)

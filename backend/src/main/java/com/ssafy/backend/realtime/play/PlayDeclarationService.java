@@ -12,6 +12,8 @@ import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
 import com.ssafy.backend.realtime.common.RealtimeEventBus;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper.Placement;
+import com.ssafy.backend.realtime.mapper.PlayHistoryMapper;
+import com.ssafy.backend.realtime.play.dto.PlayHistoryRow;
 import com.ssafy.backend.realtime.play.dto.PlayResponse;
 import com.ssafy.backend.realtime.port.MusicLocationPort;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
@@ -39,6 +41,7 @@ public class PlayDeclarationService {
 	private final MusicLocationPort musicLocationPort;
 	private final CoordinateMapper coordinateMapper;
 	private final RealtimeEventBus eventBus;
+	private final PlayHistoryMapper playHistoryMapper;
 
 	/**
 	 * 재생 선언. 현재 레이어에서 musicId 의 서버 좌표를 계산해 위치를 이동시킨다.
@@ -50,7 +53,8 @@ public class PlayDeclarationService {
 	 * @throws CustomException PRESENCE_ERROR — 미연결/앵커없음/좌표없음/STALE(로그에 WsCode 사유)
 	 */
 	public PlayResponse play(String email, long musicId, String source) {
-		// 1) 앵커 확인 — 재생은 '현재 레이어'에서 일어난다(연결+join 이후).
+		// 1) 이 사람이 지금 접속해서 어느 레이어를 보고 있는지 가져온다(재생은 지금 보는 레이어에서 일어남).
+		//    접속 안 했으면 NOT_CONNECTED, 레이어가 없으면(아직 자리 안 잡음) NO_ANCHOR 로 거부.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null || before.epoch() == null) {
 			log.warn("play 거부 reason={} musicId={}", WsCode.PRESENCE_NOT_CONNECTED, musicId);
@@ -62,29 +66,30 @@ public class PlayDeclarationService {
 		}
 		int layer = before.layer();
 
-		// 2) 서버가 좌표 받음— 클라 좌표 불신, musicId 로 music.location 조회.
+		// 2) 곡 좌표는 서버가 musicId 로 직접 찾는다(클라가 보낸 좌표는 안 믿음). 없으면 거부.
 		double[] pc = musicLocationPort.findLocation(musicId)
 				.orElseThrow(() -> {
 					log.warn("play 거부 reason={} musicId={}", WsCode.PRESENCE_LOCATION_NULL, musicId);
 					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 				});
 
-		// 3) 현재 레이어의 격자 셀로 배치.
+		// 3) 그 곡 좌표를 지금 레이어의 격자 칸(셀)으로 바꾼다.
 		Placement p = coordinateMapper.place(pc, layer);
 
-		// 4) 곡 변경 원자 갱신(presence-play.lua). old 는 snapshot 에서, 반환은 만남 후보(④).
+		// 4) 레디스에 "이제 이 곡을 튼다"를 반영한다 — 이전 곡에서 빼고 새 곡에 넣기.
+		//    여러 명령이 중간에 안 끼어들게 한 번에 처리한다. 돌아오는 값은 '같은 레이어에서 같은 곡을 듣던 사람들'(마주침 후보).
 		List<String> meeting = presenceRedisRepository.applyPlay(
 				email,
 				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 		if (meeting == null) {
-			// old 불일치/미연결 — 다른 세션이 먼저 이동시킴(재접속 epoch 경쟁 등).
+			// 그 사이 이 사람 상태가 딴 데서 바뀜(예: 재접속) → 이번 재생은 무시(STALE).
 			log.warn("play STALE reason={} musicId={}", WsCode.PRESENCE_STALE, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 5) 위치변경 이벤트 — 뷰포트(RT-22)·근처(RT-11) 델타의 공통 입력(인프로세스).
-		//    진입(old 없음)이면 oldMusicId/oldCell = null → PositionChanged 가 ENTER 로 해석.
+		// 5) "위치 바뀜" 알림을 하나 쏜다 — 이걸 받아서 화면 속 사람들·주변 사람 표시를 갱신한다.
+		//    처음 트는 거면(이전 곡 없음) '새로 들어옴'으로 해석된다.
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
 		eventBus.publish(new PositionChanged(
 				email, before.epoch(), layer,
@@ -92,14 +97,25 @@ public class PlayDeclarationService {
 				oldCell, p.cellKey(),
 				p.xNorm(), p.yNorm()));
 
-		// TODO(③): play_history INSERT(source 포함) → 실제 playHistoryId 채움.
-		// TODO(④): meeting(진입 직전 청취자) 로 만남 비동기 판정.
-		long playHistoryId = 0L; // ③ 이전 placeholder
-		return new PlayResponse(playHistoryId, musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
+		// 6) 재생 기록(play_history)을 한 줄 남긴다. id 는 자동으로 채워진다.
+		//    재생 시간(played_ms)은 지금은 시작이라 0, 곡이 끝날 때(playEnd) 실제 시간으로 바꾼다.
+		PlayHistoryRow history = new PlayHistoryRow();
+		history.setMusicId(musicId);
+		history.setEmail(email);
+		history.setSource(source);
+		history.setPlayedMs(0L);
+		playHistoryMapper.insert(history);
+
+		// TODO(④): 위에서 받은 마주침 후보들로 '마주친 횟수'를 기록한다(3분 안에 또 만나면 안 세는 쿨다운).
+		return new PlayResponse(history.getId(), musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 	}
 
-	/** 재생 종료 — played_ms 갱신(멱등, 소유자 검증). 위치 불변. */
+	/** 재생 종료 — played_ms 갱신(멱등, 소유자 검증). 위치 불변. 대상 없음/비소유면 PRESENCE_ERROR. */
 	public void playEnd(String email, long playHistoryId, long playedMs) {
-		throw new UnsupportedOperationException("TODO(③)");
+		int updated = playHistoryMapper.updatePlayedMs(playHistoryId, email, playedMs);
+		if (updated == 0) {
+			log.warn("playEnd 대상 없음/비소유 playHistoryId={}", playHistoryId);
+			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+		}
 	}
 }

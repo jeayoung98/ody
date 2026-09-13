@@ -92,6 +92,7 @@
 | `EMAIL_ALREADY_EXISTS` | 409 | 이미 가입된 이메일입니다. (§1.4) |
 | `NICKNAME_ALREADY_EXISTS` | 409 | 이미 사용 중인 닉네임입니다. (§1.4) |
 | `FORBIDDEN` | 403 | 접근 권한이 없습니다. |
+| `NOT_FOUND` | 404 | 요청한 경로가 없습니다. (존재하지 않는 URL. 도메인 리소스 없음은 `*_NOT_FOUND`) |
 | `USER_NOT_FOUND` | 404 | 존재하지 않는 사용자입니다. |
 | `USER_PRIVATE` | 403 | 비공개 사용자입니다. |
 | `MUSIC_NOT_FOUND` | 404 | 존재하지 않는 곡입니다. |

@@ -46,6 +46,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const [hoverSong, setHoverSong] = useState<MapPoint | null>(null);
   /** 카드가 켜져 있나. 꺼져도 사라지는 동안에는 `hoverSong` 이 남아 있는다 */
   const [cardOn, setCardOn] = useState(false);
+  /**
+   * `hoverSong` 의 거울. 클릭 핸들러가 **지금** 카드에 걸린 곡을 읽으려고 든다 — state 로 읽으면
+   * 클로저가 갱신될 때까지 한 박자 늦고, 그 사이 클릭이 빈손으로 끝난다 (S15P21A405-280)
+   */
+  const heldSong = useRef<MapPoint | null>(null);
   /** 호버 카드의 DOM. 마우스가 그 위인지 매번 다시 재려고 들고 있는다 */
   const cardRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | null>(null);
@@ -222,6 +227,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (cardOn || hoverSong == null) return;
     const t = setTimeout(() => {
       engine.setHover(null);
+      heldSong.current = null;
       setHoverSong(null);
     }, HOVER_CARD.fadeMs);
     return () => clearTimeout(t);
@@ -280,6 +286,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       if (song) {
         cancelHide();
         engine.setHover(song.musicId);
+        heldSong.current = song;
         setHoverSong(song);
         setCardOn(true);
       } else scheduleHide();
@@ -309,8 +316,10 @@ export default function MapView({ occludedRight }: MapViewProps) {
         return;
       }
       const hit = engine.hitTest(mx, my);
-      if (!hit) return;
-      const id = engine.songs[hit.i].musicId;
+      // 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
+      // 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다
+      const id = hit ? engine.songs[hit.i].musicId : heldSong.current?.musicId;
+      if (id == null) return;
       // 오버레이가 **떠 있는 동안에만** 그 안의 곡으로 가둔다 (PATH-01-1).
       // 닫힌 뒤에도 가두면 지도의 별이 영영 안 눌린다 — 실제로 그랬다 (S15P21A405-270)
       const overlayIds = engine.clickableOverlayIds();
@@ -353,8 +362,23 @@ export default function MapView({ occludedRight }: MapViewProps) {
     [openSong, playSingle, recordPlay, selectMusic],
   );
 
+  /** 카드 본문 클릭 — 지도에서 별을 누른 것과 같다 (보기만, 내 위치는 제자리) */
+  const handleCardOpen = useCallback(
+    (s: MapPoint) => {
+      if (engine.follow) return;
+      const overlayIds = engine.clickableOverlayIds();
+      if (overlayIds && !overlayIds.has(s.musicId)) return;
+      selectMusic(s.musicId);
+      openSong(s.musicId);
+      engine.viewSong(s.musicId);
+      useTutorialStore.getState().complete("select");
+    },
+    [engine, openSong, selectMusic],
+  );
+
   const following = leaderEmail != null;
-  const cursor = following ? "cursor-not-allowed" : pickTarget ? "cursor-crosshair" : hover ? "cursor-pointer" : "cursor-grab active:cursor-grabbing";
+  // 카드가 떠 있는 동안은 별 밖이라도 클릭이 그 곡을 연다 — 커서도 그렇게 말해야 한다
+  const cursor = following ? "cursor-not-allowed" : pickTarget ? "cursor-crosshair" : hover || hoverSong != null ? "cursor-pointer" : "cursor-grab active:cursor-grabbing";
 
   return (
     <div
@@ -371,7 +395,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       <FloatingReactions />
-      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onPlay={handleCardPlay} />
+      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onOpen={handleCardOpen} onPlay={handleCardPlay} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

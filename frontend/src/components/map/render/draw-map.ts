@@ -741,11 +741,10 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
     drawMeAway(g, e, off);
     return;
   }
-  const { px, py } = e.worldToScreen(e.me.x, e.me.y);
+  // 주변 탐색 중 고리 안 곡에 앉아 있으면 연출 자리에 그린다 (S15P21A405-288)
+  const { px, py, from, onRing } = e.meScreen();
   // 날아오는 중이면 지나온 자리에 꼬리를 남긴다 (친구 우주선처럼)
-  const fl = e.meFlight;
-  if (fl) {
-    const from = e.worldToScreen(fl.ax, fl.ay);
+  if (from) {
     const tx = px - from.px;
     const ty = py - from.py;
     const td = Math.hypot(tx, ty) || 1;
@@ -768,7 +767,8 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textBaseline = "middle";
   g.fillStyle = "rgba(79,227,206,.95)";
   g.font = `600 10px ${FONTS.mono}`;
-  g.fillText("나", px, py + 24);
+  // 고리 위에서는 별 아래에 제목·순위 라벨이 붙어 있으니 '나' 는 위로 올린다
+  g.fillText("나", px, onRing ? py - 22 : py + 24);
 }
 
 /**
@@ -920,9 +920,13 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawFriends(g, e);
   drawSelected(g, e);
   drawGhost(g, e);
-  drawMe(g, e);
+  // 주변 탐색 중에는 내 표식이 고리 위에 앉으므로 고리 **위**에 그린다 — 정찰(S15P21A405-288)로
+  // 이웃 별을 옮겨 다니는 우주선이 어둡게 덮인 채로는 보이지 않는다
+  const meOnRing = !!e.probe && !e.probe.exitingAt;
+  if (!meOnRing) drawMe(g, e);
 
   drawConstellation(g, e, currentMusicId);
   drawProbe(g, e);
+  if (meOnRing) drawMe(g, e);
   drawPressure(g, e);
 }

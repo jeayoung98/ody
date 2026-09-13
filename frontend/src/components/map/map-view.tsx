@@ -304,6 +304,46 @@ export default function MapView({ occludedRight }: MapViewProps) {
     },
     [engine, cancelHide, scheduleHide],
   );
+  /**
+   * 곡을 **재생**한다 — 상세를 열면서 동시에. 호버 카드의 재생 버튼과 선택된 별 재클릭이 여기로 온다.
+   * 내 위치는 `currentMusicId` 가 바뀌는 것을 보고 위쪽 이펙트가 옮긴다 (재생 = 이동, 한 자리에서만).
+   * 주변 탐색 중이면 엔진이 우주선만 고리 안 그 별로 옮기고 고리·카메라는 그대로 둔다 — 정찰 (S15P21A405-288)
+   */
+  const playSong = useCallback(
+    (s: MapPoint) => {
+      selectMusic(s.musicId);
+      openSong(s.musicId);
+      openYoutube(s.youtubeUrl);
+      playSingle(s.musicId);
+      recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 });
+      useTutorialStore.getState().complete("select");
+    },
+    [openSong, playSingle, recordPlay, selectMusic],
+  );
+
+  /**
+   * 별을 **누른다** — 첫 클릭은 선택(상세만), **이미 선택된 별을 다시 누르면 재생** (S15P21A405-288).
+   * 기본 뷰와 주변 탐색 뷰의 문법이 같다. 예전에는 주변 뷰에서 이웃을 누르는 순간 건너갔는데(S15P21A405-285),
+   * 그러면 한 곡에 서서 이웃들을 차례로 들어볼 수가 없었다. 건너가기(항해)는 하단 주변 탐색 버튼이 맡는다.
+   * 주변 뷰에서는 카메라를 옮기지 않는다 — 고리가 뷰다 (이웃의 실제 자리는 고리 밖 엉뚱한 곳일 수 있다)
+   */
+  const pressSong = useCallback(
+    (s: MapPoint) => {
+      const map = useMapStore.getState();
+      if (map.selectedMusicId === s.musicId) {
+        playSong(s);
+        return;
+      }
+      // 클릭 = **보기만** (S15P21A405-277). 상세를 열고 뷰만 그리로 옮긴다 —
+      // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
+      selectMusic(s.musicId);
+      openSong(s.musicId);
+      if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
+      useTutorialStore.getState().complete("select");
+    },
+    [engine, openSong, playSong, selectMusic],
+  );
+
   const onMouseUp = useCallback(
     (e: MouseEvent<HTMLDivElement>) => {
       const d = drag.current;
@@ -328,21 +368,13 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const hit = engine.hitTest(mx, my);
       // 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
       // 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다
-      const id = hit ? engine.songs[hit.i].musicId : heldSong.current?.musicId;
-      if (id == null) return;
+      const song = hit ? engine.songs[hit.i] : heldSong.current;
+      if (!song) return;
+      const id = song.musicId;
       // 오버레이가 **떠 있는 동안에만** 그 안의 곡으로 가둔다 (PATH-01-1).
       // 닫힌 뒤에도 가두면 지도의 별이 영영 안 눌린다 — 실제로 그랬다 (S15P21A405-270)
       const overlayIds = engine.clickableOverlayIds();
       if (overlayIds && !overlayIds.has(id)) return;
-      // 주변 탐색 중 이웃을 누르면 그 곡으로 **건너간다** — 새 중심이 되어 가운데로 오고 그 이웃이 더해진다 (S15P21A405-285).
-      // 카메라는 옮기지 않는다 (뷰가 오버레이를 밀어 맞춘다)
-      const map = useMapStore.getState();
-      if (map.viewMode === "nearby") {
-        selectMusic(id);
-        openSong(id);
-        if (id !== map.nearbyCenterMusicId) map.enterNearby(id);
-        return;
-      }
       // 여정 지정 모드면 클릭이 출발·도착 칸을 번갈아 채운다 (JOURNEY-01)
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {
@@ -350,14 +382,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
         selectMusic(id);
         return;
       }
-      // 클릭 = **보기만** (S15P21A405-277). 상세를 열고 뷰만 그리로 옮긴다 —
-      // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
-      selectMusic(id);
-      openSong(id);
-      engine.viewSong(id);
-      useTutorialStore.getState().complete("select");
+      pressSong(song);
     },
-    [engine, openFeed, openSong, selectMusic],
+    [engine, openFeed, openSong, pressSong, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
     drag.current = null;
@@ -365,34 +392,15 @@ export default function MapView({ occludedRight }: MapViewProps) {
     setHover(false);
   }, [scheduleHide]);
 
-  /**
-   * 호버 카드의 재생 — 상세를 열면서 동시에 재생한다.
-   * 내 위치는 `currentMusicId` 가 바뀌는 것을 보고 위쪽 이펙트가 옮긴다 (재생 = 이동, 한 자리에서만).
-   */
-  const handleCardPlay = useCallback(
-    (s: MapPoint) => {
-      selectMusic(s.musicId);
-      openSong(s.musicId);
-      openYoutube(s.youtubeUrl);
-      playSingle(s.musicId);
-      recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 });
-      useTutorialStore.getState().complete("select");
-    },
-    [openSong, playSingle, recordPlay, selectMusic],
-  );
-
-  /** 카드 본문 클릭 — 지도에서 별을 누른 것과 같다 (보기만, 내 위치는 제자리) */
+  /** 카드 본문 클릭 — 지도에서 별을 누른 것과 같다 */
   const handleCardOpen = useCallback(
     (s: MapPoint) => {
       if (engine.follow) return;
       const overlayIds = engine.clickableOverlayIds();
       if (overlayIds && !overlayIds.has(s.musicId)) return;
-      selectMusic(s.musicId);
-      openSong(s.musicId);
-      engine.viewSong(s.musicId);
-      useTutorialStore.getState().complete("select");
+      pressSong(s);
     },
-    [engine, openSong, selectMusic],
+    [engine, pressSong],
   );
 
   const following = leaderEmail != null;
@@ -414,7 +422,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       <FloatingReactions />
-      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onOpen={handleCardOpen} onPlay={handleCardPlay} />
+      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onOpen={handleCardOpen} onPlay={playSong} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

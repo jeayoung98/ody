@@ -210,6 +210,12 @@ export class MapEngine {
    * a = 출발, b = 도착, c = 곡선 제어점, t0 = 시작 시각
    */
   meFlight: { ax: number; ay: number; bx: number; by: number; cx: number; cy: number; t0: number } | null = null;
+  /**
+   * 주변 탐색 고리 **안에서의** 이동 — 정찰 (S15P21A405-288). 고리 곡은 실제 좌표가 아니라 연출 자리에
+   * 그려지므로 월드 비행(meFlight)으로는 못 간다. 출발한 **화면 자리**만 적어 두고 도착 자리는 매 프레임
+   * probePos 로 다시 잰다 (고리가 밀리거나 드래그돼도 우주선이 별에서 떨어지지 않게)
+   */
+  meHop: { x: number; y: number; t0: number } | null = null;
   /** 지금 재생 중인 곡. 이 겹에 없어도 기억해 둔다 (표식에 상태를 싣기 위해, MAP-08) */
   playingId: number | null = null;
   /**
@@ -1138,6 +1144,34 @@ export class MapEngine {
 
   // ------------------------------------------------------------------ 화면 밖 '나' (MAP-08)
   /**
+   * 내 표식의 **화면 자리**와 꼬리 출발점 (S15P21A405-288).
+   * 주변 탐색 중 고리 안 곡에 앉아 있으면 그 곡의 연출 자리(probePos)다 — 실제 좌표로 그리면 고리에서 떨어진
+   * 엉뚱한 곳에 뜬다. 고리 안 이동(meHop) 중이면 출발한 화면 자리에서 지금 자리로 곡선 없이 미끄러진다.
+   * 그 밖에는 월드 좌표(me)를 그대로 화면으로 옮긴다
+   */
+  meScreen(now = performance.now()): { px: number; py: number; from: { px: number; py: number } | null; onRing: boolean } {
+    if (this.myId != null && this.probe && !this.probe.exitingAt) {
+      const at = this.probePos(this.myId);
+      if (at && this.overlaySlot(this.myId)) {
+        const hop = this.meHop;
+        if (hop) {
+          const t = Math.min(1, (now - hop.t0) / ME_FLIGHT.hopMs);
+          if (t >= 1) this.meHop = null;
+          else {
+            const e = easeInOut(t);
+            return { px: lerp(hop.x, at.x, e), py: lerp(hop.y, at.y, e), from: { px: hop.x, py: hop.y }, onRing: true };
+          }
+        }
+        return { px: at.x, py: at.y, from: null, onRing: true };
+      }
+    }
+    this.meHop = null;
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    const fl = this.meFlight;
+    return { px, py, from: fl ? this.worldToScreen(fl.ax, fl.ay) : null, onRing: false };
+  }
+
+  /**
    * 화면 밖으로 나간 '나' 표식의 자리와 방향. **null 이면 화면 안**이라 제자리에 그리면 된다.
    *
    * 내 위치는 곧 지금 재생 중인 곡이다 (MAP-08). 그래서 두 갈래로 갈린다.
@@ -1149,6 +1183,8 @@ export class MapEngine {
   meArrow(): { x: number; y: number; dir: { x: number; y: number }; elsewhere: boolean } | null {
     if (this.anim || this.follow || this.myId == null || this.constellationActive()) return null;
     const id = this.playingId ?? this.myId;
+    // 고리 안 곡에 앉아 있으면 화면 안이다 — 상주하지 않는 이웃이라도 "다른 데 있다" 화살표로 갈리지 않는다
+    if (this.probe && !this.probe.exitingAt && this.overlaySlot(id)) return null;
     const elsewhere = !this.isAlive(id);
     let dir: { x: number; y: number } | null;
     if (elsewhere) {
@@ -1719,6 +1755,23 @@ export class MapEngine {
     this.home = { musicId: id, boxes: [...this.boxes] };
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
+    /**
+     * 주변 탐색 중 **고리 안 곡**을 재생하면 정찰이다 (S15P21A405-288) — 우주선만 그 별의 고리 자리로
+     * 건너뛰고 고리·카메라는 그대로다. 이웃은 대개 이 겹에 상주하지 않아(isAlive 가 아니라) 아래
+     * 월드 비행으로는 어차피 못 가고, 상주하더라도 고리 자리와 실제 자리가 달라 엉뚱한 곳에 앉는다.
+     * 월드 좌표(me)는 상주 곡이면 맞춰 둔다 — 고리를 닫았을 때 그 자리에 있어야 한다
+     */
+    if (this.probe && !this.probe.exitingAt && this.overlaySlot(id)) {
+      const from = this.meScreen();
+      this.meHop = { x: from.px, y: from.py, t0: performance.now() };
+      this.meFlight = null;
+      this.travelToId = null;
+      this.myId = id;
+      const w = this.worldOf(id);
+      if (w && this.isAlive(id)) this.me = { ...w };
+      return;
+    }
+    this.meHop = null;
     if (!this.isAlive(id)) {
       this.travelToId = null;
       return;

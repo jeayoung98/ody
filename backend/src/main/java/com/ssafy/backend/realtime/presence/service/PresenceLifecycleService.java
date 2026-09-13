@@ -85,9 +85,14 @@ public class PresenceLifecycleService {
 		}
 	}
 
-	/** 이탈/만료 정리 — presence·청취자·셀·인원수·만료큐 제거(FR-020·021). */
+	/** 명시적 이탈/DISCONNECT 정리 — 그 세션 epoch 가드로 presence·청취자·셀·인원수·만료큐 제거(FR-020·021). */
 	public void leave(String email, long epoch) {
 		presenceRedisRepository.applyLeave(email, epoch);
 		// 제거 정보(LEAVE 델타)는 RT-22 구독자에게 방송 — 이번 범위 밖.
+	}
+
+	/** 만료 정리(Sweep 백스톱) — 만료 감지 시각 기준으로 여전히 만료일 때만 정리(P2-c). 재접속이면 no-op. */
+	public void leaveExpired(String email, long sweepTimeMs) {
+		presenceRedisRepository.applyLeaveExpired(email, sweepTimeMs);
 	}
 }

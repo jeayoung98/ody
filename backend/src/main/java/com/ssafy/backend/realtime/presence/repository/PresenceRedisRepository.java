@@ -150,15 +150,32 @@ public class PresenceRedisRepository {
 	}
 
 	/**
-	 * 이탈 정리 원자(presence-leave.lua). 곡·셀은 스크립트 안에서 읽어 정리.
+	 * 이탈 정리 원자(presence-leave.lua). 곡·셀은 스크립트 안에서 읽어 정리. 셀 제거는 그 레이어 청취자 기준(유령곡 방지).
+	 * explicit/disconnect 경로 — epoch 가드로 정리(새 세션이 덮어썼으면 no-op).
 	 *
 	 * @return 제거된 [musicId, layer, cellX, cellY] 또는 빈 목록(no-op·비노출).
 	 */
-	@SuppressWarnings("unchecked")
 	public List<String> applyLeave(String email, long epoch) {
+		return doLeave(email, Long.toString(epoch), "");
+	}
+
+	/**
+	 * Sweep(만료 백스톱) 경로 — sweepTime 기준으로 현재 expiry 를 재확인해 여전히 만료일 때만 삭제(P2-c).
+	 * 감지·삭제 사이 재접속(connect 가 score 를 미래로 ZADD)이면 no-op → 새 세션 보존. epoch 미사용.
+	 *
+	 * @param sweepTimeMs 만료 감지 시각(ms). expiry score <= 이 값일 때만 정리.
+	 * @return 제거된 [musicId, layer, cellX, cellY] 또는 빈 목록(no-op·재접속됨).
+	 */
+	public List<String> applyLeaveExpired(String email, long sweepTimeMs) {
+		return doLeave(email, "", Long.toString(sweepTimeMs));
+	}
+
+	@SuppressWarnings("unchecked")
+	private List<String> doLeave(String email, String epoch, String sweepTime) {
 		List<String> keys = List.of(PRESENCE_USER_PREFIX + email, EXPIRY_KEY);
 		List<String> result = redis.execute(presenceLeaveScript, keys,
-				email, Long.toString(epoch), LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, USERCOUNT_PREFIX);
+				email, epoch, sweepTime,
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
 		return result != null ? result : List.of();
 	}
 

@@ -34,12 +34,13 @@ public class PresenceSweepScheduler {
 	@Scheduled(fixedDelayString = "${realtime.presence.sweep-interval-ms:5000}")
 	public void sweep() {
 		try {
-			Set<String> expired = presenceRedisRepository.expired(System.currentTimeMillis());
+			// 만료 감지 시각을 기준으로 삼는다 — leave.lua 가 이 시각으로 expiry 를 재확인해
+			// 감지·삭제 사이 재접속한 세션은 지우지 않는다(P2-c). epoch 재조회 없음.
+			long sweepTime = System.currentTimeMillis();
+			Set<String> expired = presenceRedisRepository.expired(sweepTime);
 			for (String email : expired) {
 				try {
-					PresenceRedisRepository.PresenceSnapshot snap = presenceRedisRepository.snapshot(email);
-					long epoch = (snap != null && snap.epoch() != null) ? snap.epoch() : 0L;
-					lifecycleService.leave(email, epoch);
+					lifecycleService.leaveExpired(email, sweepTime);
 				} catch (Exception e) {
 					log.warn("sweep: 만료 사용자 정리 실패 — 스킵", e); // email 은 로그에 남기지 않는다
 				}

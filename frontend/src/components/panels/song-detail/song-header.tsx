@@ -1,3 +1,4 @@
+import AlbumCover from "@/components/common/album-cover";
 import Tag from "@/components/common/tag";
 import { genreColor } from "@/constants/design-tokens";
 import { formatCount, formatDuration } from "@/lib/format";
@@ -9,17 +10,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-center gap-2.5">
-        <span
-          className="grid h-14 w-14 shrink-0 place-items-center overflow-hidden rounded-[9px] text-xl text-ink/70 shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]"
-          style={{ background: music.albumCoverUrl ? undefined : `linear-gradient(140deg,${color},#13102a)` }}
-        >
-          {music.albumCoverUrl ? (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={music.albumCoverUrl} alt={music.album ?? ""} className="h-full w-full object-cover" />
-          ) : (
-            "♪"
-          )}
-        </span>
+        <AlbumCover coverUrl={music.albumCoverUrl} genreId={music.genres[0]?.id ?? 0} alt={music.album ?? ""} size={56} />
         <div className="min-w-0 flex-1">
           <h3 className="truncate font-display text-xl leading-[1.25] font-semibold">{music.title}</h3>
           <p className="mt-0.5 truncate text-sm text-ink-2">{music.artist ?? "Unknown"}</p>

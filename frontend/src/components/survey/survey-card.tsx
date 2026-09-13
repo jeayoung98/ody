@@ -1,12 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import AlbumCover from "@/components/common/album-cover";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
 import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
 import { useSurveyStore } from "@/stores/use-survey-store";
-import type { SurveyReason } from "@/types/survey";
+import type { SurveyReason, SurveySong } from "@/types/survey";
 
 /** 고른 것이 눌린 티가 나게 — 테두리 발광만으로는 어두운 배경에서 안 보인다 */
 const SELECTED_CLASS = "bg-violet/25! border-violet! text-white! shadow-glow-violet";
@@ -17,6 +18,38 @@ function CheckIcon() {
     <svg viewBox="0 0 16 16" aria-hidden className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth="2.5">
       <path d="M3 8.5 6.5 12 13 4.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
+  );
+}
+
+/**
+ * 카드에 곡 한 줄 — 커버 · 라벨 · 제목 · 가수.
+ *
+ * 라벨을 제목 위에 올린 이유는 폭이다. 왼쪽에 세우면 긴 제목·긴 가수명이 좁은 칸에서
+ * 여러 줄로 접힌다. 위에 두면 커버 옆 폭을 다 쓴다.
+ *
+ * 제목은 **자르지 않는다.** 말줄임으로 끊으면 어느 곡인지 못 알아보는 경우가 생긴다.
+ * 가수는 한 줄만 — 곡을 가리는 값이 아니라 거드는 값이다.
+ */
+function SurveySongRow({ label, song, highlight = false }: { label: string; song: SurveySong; highlight?: boolean }) {
+  return (
+    <div className="flex flex-col gap-1">
+      <span className={`lbl ${highlight ? "text-violet!" : ""}`}>{label}</span>
+      <div className="flex items-center gap-2.5">
+        <AlbumCover coverUrl={song.coverUrl} genreId={song.genreId} alt="" size={highlight ? 40 : 34} />
+        <div className="min-w-0 flex-1">
+          <p
+            className={
+              highlight
+                ? "font-display text-[15px] leading-snug font-semibold break-keep text-ink"
+                : "text-sm leading-snug break-keep text-ink-2"
+            }
+          >
+            {song.title}
+          </p>
+          <p className={`truncate text-[11px] ${highlight ? "text-ink-2" : "text-ink-3"}`}>{song.artist ?? "Unknown"}</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -74,15 +107,12 @@ export default function SurveyCard() {
             카드가 화면을 덮어서 지도로 확인할 수도 없다.
 
             문장에 끼워 넣지 않는 이유는 조사다 — 제목 받침에 따라 와/과 가 갈린다.
-            라벨을 왼쪽에 세로로 맞춘 것은 곡 상세 패널(발매 국가 · 작곡가 …)과 같은 꼴이고,
-            아래가 평가 대상이라는 것은 보라색 라벨과 굵기로 가른다(색만으로 가르지 않는다).
+            아래가 평가 대상이라는 것은 보라색 라벨·굵기·크기로 가른다(색만으로 가르지 않는다).
           */}
-          <div className="grid grid-cols-[auto_1fr] items-baseline gap-x-3 rounded-box-xs border border-line bg-void-3/50 px-3 py-2.5">
-            <span className="lbl">{definition.compareLabel}</span>
-            <p className="text-sm leading-snug break-keep text-ink-2">{prompt.compareTitle}</p>
-            <div className="col-span-2 my-2 h-px bg-line" />
-            <span className="lbl text-violet!">{SURVEY_TARGET_LABEL}</span>
-            <p className="font-display text-[15px] leading-snug font-semibold break-keep text-ink">{prompt.targetTitle}</p>
+          <div className="flex flex-col gap-2 rounded-box-xs border border-line bg-void-3/50 px-3 py-2.5">
+            <SurveySongRow label={definition.compareLabel} song={prompt.compare} />
+            <div className="h-px bg-line" />
+            <SurveySongRow label={SURVEY_TARGET_LABEL} song={prompt.subject} highlight />
           </div>
 
           <div className="flex flex-col gap-2">

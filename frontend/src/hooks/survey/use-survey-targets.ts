@@ -1,12 +1,16 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { SurveyPrompt, SurveyTarget } from "@/types/survey";
+import type { SurveyPrompt, SurveySong, SurveyTarget } from "@/types/survey";
 
-/** 탐색 결과의 곡 하나 — 표를 만드는 데 필요한 것만 */
-interface Track {
+/** 탐색 결과의 곡 하나 — 표를 만드는 데 필요한 것만. 전부 탐색 응답 안에 있는 값이다 */
+interface Track extends SurveySong {
   musicId: number;
-  title: string;
+}
+
+/** 화면용 값만 떼어낸다. `musicId` 는 전송 타입이 따로 들고 있어서 여기선 뺀다 */
+function show(t: Track): SurveySong {
+  return { title: t.title, artist: t.artist, genreId: t.genreId, coverUrl: t.coverUrl };
 }
 
 /**
@@ -33,7 +37,7 @@ function useSessionId(signature: string | null): string | null {
  * 주변 탐색 — 기준곡과 이웃 목록을 곡 ID 로 찾을 수 있는 표로 만든다.
  *
  * `rank` 는 이웃 순서 1부터다. 기준곡은 평가 대상이 아니라 표에 넣지 않는다.
- * 비교 상대는 늘 기준곡이라 제목도 하나로 같다.
+ * 비교 상대는 늘 기준곡이라 보여줄 것도 하나로 같다.
  */
 export function useNearbyTargets(center: Track | null | undefined, neighbors: readonly Track[] | undefined) {
   const signature = center && neighbors?.length ? `nearby:${center.musicId}:${neighbors.map((n) => n.musicId).join(",")}` : null;
@@ -45,7 +49,7 @@ export function useNearbyTargets(center: Track | null | undefined, neighbors: re
 
     neighbors.forEach((n, i) => {
       const target: SurveyTarget = { sessionId, mode: "nearby", rank: i + 1, anchorMusicId: center.musicId, musicId: n.musicId };
-      table.set(n.musicId, { target, compareTitle: center.title, targetTitle: n.title });
+      table.set(n.musicId, { target, compare: show(center), subject: show(n) });
     });
     return table;
   }, [sessionId, center, neighbors]);
@@ -79,7 +83,7 @@ export function useJourneyTargets(stops: readonly Track[] | undefined) {
         prevMusicId: stops[i].musicId,
         musicId: stop.musicId,
       };
-      table.set(stop.musicId, { target, compareTitle: stops[i].title, targetTitle: stop.title });
+      table.set(stop.musicId, { target, compare: show(stops[i]), subject: show(stop) });
     });
     return table;
   }, [sessionId, stops]);

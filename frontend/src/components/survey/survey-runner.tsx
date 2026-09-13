@@ -11,6 +11,19 @@ import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import SurveyCard from "./survey-card";
+import { GENRE_NAMES } from "@/constants/map";
+import type { MapPoint } from "@/types/map";
+
+/** 이웃 한 곡에서 카드가 쓸 것만 뽑는다. 커버는 아직 응답에 없어서 비어 있다 */
+function toTrack(p: MapPoint) {
+  return { musicId: p.musicId, title: p.title, artist: p.artist, genreId: p.genreId };
+}
+
+/** 장르 이름 → ID. 이름표에 없으면 색을 고르지 않는다(중립색) */
+function indexOfGenre(name: string): number | null {
+  const i = GENRE_NAMES.indexOf(name as (typeof GENRE_NAMES)[number]);
+  return i < 0 ? null : i;
+}
 
 /**
  * 설문 본체 (S15P21A405-294).
@@ -44,9 +57,23 @@ export default function SurveyRunner() {
     inJourney,
   );
 
-  const nearbyTargets = useNearbyTargets(nearby.data?.center, nearby.data?.neighbors);
+  /** 이웃 응답(`MapPoint`)은 장르 ID 를 그대로 준다 */
+  const nearbyTargets = useNearbyTargets(
+    useMemo(() => (nearby.data ? toTrack(nearby.data.center) : undefined), [nearby.data]),
+    useMemo(() => nearby.data?.neighbors.map(toTrack), [nearby.data]),
+  );
+  /** 정거장은 장르를 이름으로 준다 — 색을 고르려면 ID 가 필요해서 이름표에서 되찾는다 */
   const journeyTargets = useJourneyTargets(
-    useMemo(() => journey.data?.stops.map((s) => ({ musicId: s.id, title: s.title })), [journey.data]),
+    useMemo(
+      () =>
+        journey.data?.stops.map((s) => ({
+          musicId: s.id,
+          title: s.title,
+          artist: s.artist,
+          genreId: s.genreName == null ? null : indexOfGenre(s.genreName),
+        })),
+      [journey.data],
+    ),
   );
 
   /** 지금 듣는 곡이 평가 대상인가. 경로 재생 중이면 경로 표, 주변 탐색 중이면 주변 표에서 찾는다 */

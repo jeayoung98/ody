@@ -67,10 +67,27 @@ export interface SurveyTarget {
  */
 export interface SurveyPrompt {
   target: SurveyTarget;
-  /** 비교 상대 곡 제목. nearby 는 기준곡, journey 는 앞 역 */
-  compareTitle: string;
-  /** 평가 대상 곡 제목 — 방금 들은 곡. 상대만 보여주면 둘 중 뭘 묻는지 알 수 없다 */
-  targetTitle: string;
+  /** 비교 상대. nearby 는 기준곡, journey 는 앞 역 */
+  compare: SurveySong;
+  /** 평가 대상 — 방금 들은 곡. 상대만 보여주면 둘 중 뭘 묻는지 알 수 없다 */
+  subject: SurveySong;
+}
+
+/**
+ * 카드에 곡 하나를 보여주는 데 필요한 것. **전부 화면용이고 서버로 안 간다.**
+ *
+ * 값은 이미 받아 둔 탐색 응답 안에 있다 — 카드를 띄우려고 새로 부르지 않는다.
+ */
+export interface SurveySong {
+  title: string;
+  artist: string | null;
+  /** 커버가 없을 때 깔 색. 탐색 응답이 주는 것만 쓴다 */
+  genreId: number | null;
+  /**
+   * 실제 앨범 커버. **아직 어느 응답에도 안 들어와서 늘 비어 있다** — ERD 에 없는 필드다.
+   * 백엔드가 주변·경로 응답에 담아주면 `use-survey-targets` 에서 넘기기만 하면 된다.
+   */
+  coverUrl?: string | null;
 }
 
 /**

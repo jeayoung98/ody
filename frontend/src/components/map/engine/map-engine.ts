@@ -845,13 +845,19 @@ export class MapEngine {
     return { x: lerp(real.x, target.x, k), y: lerp(real.y, target.y, k) };
   }
 
-  /** 프로브에 걸린 곡 전부. `clickable` 이면 밀려나는 고리는 뺀다 */
+  /**
+   * 프로브에 걸린 곡 전부. `clickable` 이면 밀려나는 고리는 빼고, **물러난 고리는 중심만** 남긴다
+   * (S15P21A405-288) — 옅게 남은 이전 고리는 어디서 왔는지 보여 주는 기록이라 선으로만 읽히고,
+   * 돌아갈 수 있는 곳은 그 중심 하나다
+   */
   probeIdSet(clickable = false): Set<number> | null {
     if (!this.probe) return null;
+    const cur = this.currentRing();
     const out = new Set<number>();
     for (const r of this.probe.rings) {
       if (clickable && r.leavingAt) continue;
       out.add(r.centerId);
+      if (clickable && r !== cur) continue;
       for (const id of r.ids) out.add(id);
     }
     return out;

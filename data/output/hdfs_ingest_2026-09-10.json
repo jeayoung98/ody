@@ -1,0 +1,77 @@
+{
+  "issue": "S15P21A405-113",
+  "spec": "20_spark_pipeline T1, T2",
+  "date": "2026-09-10",
+  "cluster": {
+    "master_node": "j15a405a.p.ssafy.io",
+    "app_node": "j15a405.p.ssafy.io",
+    "note": "호스트 이름과 역할이 뒤바뀌어 있다. j15a405 가 app-node, j15a405a 가 master-node.",
+    "hdfs_capacity_bytes": 663425597440,
+    "hdfs_remaining_bytes": 637588328448,
+    "live_datanodes": 2,
+    "replication": 2,
+    "spark_submit": "/opt/spark/bin/spark-submit",
+    "java": "openjdk 21.0.12",
+    "spark_submit_on_path": false
+  },
+  "transfer": {
+    "source": "data/work/v2_feats (junction -> dmadkr/work/v2_feats)",
+    "staging": "ubuntu@j15a405a.p.ssafy.io:/home/ubuntu/stage/v2_feats",
+    "method": "파일 단위 scp 루프. 원격 크기가 같으면 건너뛴다(재개 가능). 로컬에 rsync 없음.",
+    "files": 28,
+    "bytes": 9361101797,
+    "sent": 28,
+    "skipped": 0,
+    "failed": 0,
+    "started": "2026-09-10T08:32:41+09:00",
+    "finished": "2026-09-10T08:34:52+09:00",
+    "throughput_mb_s": 70
+  },
+  "hdfs": {
+    "path": "hdfs:///ody/data/raw_features_extracted",
+    "commands": [
+      "hdfs dfs -mkdir -p /ody/data/raw_features_extracted",
+      "hdfs dfs -put -f /home/ubuntu/stage/v2_feats/*.parquet /ody/data/raw_features_extracted/",
+      "hdfs dfs -count /ody/data/raw_features_extracted",
+      "hdfs dfs -du -s /ody/data/raw_features_extracted"
+    ],
+    "count_output": "1 28 9361101797",
+    "du_bytes": 9361101797,
+    "du_with_replication_bytes": 18722203594,
+    "du_human": "8.7 G (복제 포함 17.4 G)",
+    "files": 28,
+    "finished": "2026-09-10T08:37:07+09:00"
+  },
+  "rows": {
+    "measured": 6617603,
+    "measured_on": "로컬 parquet 메타데이터 합계. 원격 파일 크기가 로컬과 바이트 단위로 같음을 확인했다. master-node 에 pyarrow 가 없어 클러스터에서 직접 세지 못했다.",
+    "expected_in_spec": 7404506,
+    "match": false
+  },
+  "discrepancy": {
+    "summary": "v2_feats 는 30개 파트 중 28개만 추출된 부분 데이터다. part10 과 part24 가 없다.",
+    "missing_parts": ["part10", "part24"],
+    "missing_rows": 786903,
+    "sets": {
+      "manifest_mbid": 7404506,
+      "coords_mbid": 6624399,
+      "feats_mbid": 6617603,
+      "coords_and_feats_overlap": 5891253,
+      "coords_not_in_feats": 733146,
+      "feats_not_in_coords": 726350,
+      "note": "coords 와 feats 는 둘 다 manifest 의 부분집합이다(양쪽 다 manifest 밖 mbid 는 0). feats_not_in_coords 726,350 은 카탈로그에서 제외된 곡이다."
+    },
+    "consistency_check": "28파트 6,617,603 = coords 교집합 5,891,253 + 제외곡 726,350. 빠진 2파트 786,903 = coords 733,146 + 제외곡 53,757. 합계가 manifest 7,404,506 과 제외 780,107 에 정확히 맞는다.",
+    "impact": "이 입력으로는 스펙 20 의 전곡 좌표 패리티를 검증할 수 없다. coords 의 11.1%(733,146곡)에 해당하는 특징이 없다. 교집합 5,891,253곡(coords 의 88.9%)에 대해서는 검증 가능하다.",
+    "source_available": "C:/abz_data/lowlevel/acousticbrainz-lowlevel-json-20220623-{10,24}.tar.zst 두 파일 모두 로컬에 있다. 추출기는 dmadkr/scripts/extract_v2_features.py 다. 스펙 20 plan 기준 파트당 약 5분(4-way).",
+    "decision_needed": "두 파트를 재추출해 전곡 패리티를 가능하게 할지, 교집합 88.9% 로 진행할지."
+  },
+  "acceptance": {
+    "AC_files": {"expected": 28, "actual": 28, "pass": true},
+    "AC_size": {"expected_human": "8.8GB 규모", "actual_human": "8.7 G", "pass": true},
+    "AC_rows": {"expected": 7404506, "actual": 6617603, "pass": false, "reason": "빠진 2파트. 위 discrepancy 참조."},
+    "AC_evidence_file": {"pass": true},
+    "AC_readme_hosts": {"pass": true}
+  },
+  "source": "Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17"
+}

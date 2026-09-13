@@ -1,0 +1,39 @@
+{
+  "version": "postprocess_rules_v1",
+  "derived_from": "output/serving_diagnostics.json (20,000 쿼리, top-50, 전 지도)",
+  "tau_dup": {
+    "value": 1.6624,
+    "rule": "거리 < tau_dup 이웃은 같은 녹음으로 접는다 (쿼리 또는 앞선 이웃과)",
+    "basis": "같은 canonical/같은 키 이웃 거리 p95 = 3.2804, 다른 곡 최근접 p1 = 1.6624 중 작은 값; 이 값에서 잃는 다른 곡 비율 1.00%; τ 에서 잡히는 같은 녹음 이웃 61.2%"
+  },
+  "artist_cap": {
+    "value": 3,
+    "rule": "top-N 안 같은 아티스트 최대 3곡",
+    "basis": "top-10 최다 아티스트 수 p50 2 / p90 3; ≥3 비율 15.6%; cap 초과 쿼리 비율 ≤10% 되는 최소값"
+  },
+  "tau_far": {
+    "value": 4.912,
+    "rule": "10위 이웃 거리 > tau_far 면 '유사도 낮음' 표시",
+    "basis": "무작위 쿼리 nn10 p90; 정답쌍 median 10.7 대비 0.46×"
+  },
+  "length_range_s": {
+    "min": 30,
+    "max": 1200,
+    "rule": "길이 30s 미만·20분 초과 곡은 이웃에서 제외",
+    "basis": "지도의 1.755% 해당; top-10 등장률 short 0.657% / long 0.148% (기저 1.350% / 0.405%)"
+  },
+  "hub_penalty": {
+    "enabled": false,
+    "rule": "미적용",
+    "basis": "상위 1% 곡 슬롯 점유 2.80% (기준 5%), 상위 100곡 0.05%, 최다 7회 (균등 0.14), Gini 0.092. 원 규칙(max>50×기대)은 7 vs 7.0 칼끝 발동으로 폐기"
+  },
+  "display_filter": {
+    "enabled": true,
+    "rule": "복수 키 충돌·키 없는 곡은 표시에서 후순위",
+    "basis": "top-10 복수키 14.70% + 키없음 2.82%"
+  },
+  "m1c_reopen": {
+    "flag": true,
+    "basis": "lossy 한정: 비트레이트 구간 동종 lift 1.10, <96k 쿼리 93개 동종률 0.103 (우연 0.010); 코덱 lift 1.07"
+  }
+}

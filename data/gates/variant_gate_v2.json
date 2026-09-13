@@ -1,0 +1,66 @@
+{
+  "gate_id": "variant_gate_v2",
+  "supersedes": "variant_gate_v1",
+  "purpose": "beta2 하위 변종(버전 지문)을 하나의 코호트로 합쳐 v2 지도를 fit해도 되는지 판정한다.",
+  "registered_at": "2026-09-03",
+  "registered_by": "user (임계 0.5% 지정)",
+  "why_v2": "v1 은 주 통계량을 both-lossless 쌍의 median 으로, 임계를 A(바닥) 대비 비율과 C(천장) 대비 비율로 정했다. 실측에서 두 전제가 모두 깨졌다 — (a) 쌍 거리 분포가 0 부근 큰 덩어리 + 두꺼운 꼬리의 이봉분포라 median 이 '추출기 이동'이 아니라 '같은 오디오 파일일 확률'을 쟀고, (b) 천장 C 가 가정한 3.951 이 아니라 0.0793 로 나와 임계가 0 부근으로 붕괴했다. v2 는 두 결함을 모두 없앤다.",
+  "fixes": [
+    "주 통계량을 md5_encoded 동일(= 문자 그대로 같은 오디오 파일) 쌍으로 한정해 '서로 다른 리핑' 교란을 제거한다.",
+    "임계를 다른 셀 대비 비율이 아니라 지도 축 스케일 대비 절대량으로 정의한다.",
+    "임계값은 관찰된 데이터가 아니라 '지도가 견딜 수 있는 흔들림'에서 사람이 정했다."
+  ],
+  "measurement_space": {
+    "space": "v1-pca16 (serving/v1-pca16, frozen)",
+    "pipeline": "extract_270 -> skew_transform -> M1 delta(lossy only) -> impute_median -> RobustScaler -> clip +-20 IQR -> PCA-16",
+    "refit": "none",
+    "distance": "euclidean over pc1..pc16",
+    "rationale": "v1 공간은 beta1로 fit됐지만 절대 좌표가 아니라 쌍 간 상대 거리만 사용하므로 변종 간 비교의 공정한 자 역할을 한다. 기존 참조값과 같은 눈금."
+  },
+  "primary_statistic": {
+    "subset": "md5_same — 쌍의 두 제출본이 같은 md5_encoded 를 가진 경우만",
+    "why": "md5_encoded 는 인코딩된 오디오 스트림의 MD5 로 분석 결과가 아니라 파일의 성질이다. 추출기 버전에 불변임이 실측으로 확인됐다(beta1<->beta2 셀에서도 일치 쌍이 나옴). 같은 md5 면 좌표 차이는 100% 추출기 탓이다.",
+    "min_pairs_for_a_cell_to_be_judged": 100,
+    "reference_scale": "v1 서빙 좌표의 축별 std (pc1 6.73 ~ pc16 1.70), 랜덤쌍 median 약 15.7, 정답쌍 median 약 10.7"
+  },
+  "cells": {
+    "A": "같은 MBID + 같은 버전 지문 + 다른 offset (재제출/인코딩 노이즈 바닥)",
+    "B": "같은 MBID + 서로 다른 beta2 지문 (측정 대상)",
+    "C": "같은 MBID + beta1 fp43 <-> beta2 fp74 (알려진 큰 이동, 천장)"
+  },
+  "excluded_from_experiment_and_cohort": {
+    "what": "extractor == 'music 2.0' 계열 (essentia 2.1-beta4 / beta5-dev / beta6-dev)",
+    "why": "규모 미미(약 7만 제출본) + extractor 세대가 달라 270 특징 스키마 비교 대상이 아님"
+  },
+  "decision_rules_in_order": [
+    {
+      "id": "R0_schema",
+      "name": "특징 스키마 하드 제외",
+      "criterion": "270 특징 present rate < 0.99 인 지문은 코호트에서 제외",
+      "threshold": {
+        "min_feature_present_rate": 0.99
+      }
+    },
+    {
+      "id": "R1_merge_ok",
+      "name": "병합 OK",
+      "criterion": "md5 통제 하 모든 B셀에서 (a) 계통편향의 최대 축 성분 < 0.5% x 해당 축의 지도 std, AND (b) d > 1.0 인 쌍의 비율 < 0.5%",
+      "thresholds": {
+        "max_axis_bias_frac_of_map_std": 0.005,
+        "max_frac_pairs_gt_1": 0.005
+      },
+      "action": "검정된 지문을 통합 코호트로 v2 fit"
+    },
+    {
+      "id": "R2_partial_exclude",
+      "name": "부분 제외 후보",
+      "criterion": "R1 의 두 조건 중 하나라도 위반한 조합",
+      "action": "해당 조합의 소수측 지문(고유 MBID 가 적은 쪽)을 제외 후보로 올리고 제외 시 잃는 고유 곡 수를 함께 보고한 뒤 사람의 결정을 요청한다."
+    }
+  ],
+  "threshold_rationale": "0.5% x 축 std 는 pc1 기준 0.034, pc16 기준 0.0085 이다. 지도의 리프 하나가 수천 곡을 담고 랜덤쌍 거리가 15.7 인 스케일에서, 추출기 변종 때문에 곡이 이만큼도 움직이지 않아야 한다는 뜻이다. 관찰값을 보고 맞춘 수치가 아니다.",
+  "untested_fingerprint_policy": {
+    "rule": "쌍 수 부족으로 검정할 수 없는 소규모 지문은 코호트에서 제외하고 잃는 곡 수를 명시한다.",
+    "decided": "제외 (전용곡 22,797 = beta2 전체의 0.31%)"
+  }
+}

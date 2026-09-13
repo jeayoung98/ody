@@ -1,0 +1,163 @@
+{
+  "version": "exclusion_rules_v3",
+  "status": "v3 — 사용자 결정(2026-09-06 #2): R2 에서 'spoken word','field recording' 제거→flag_spoken/flag_fieldrec. 조건부 사전 승인으로 dry-run 조건 통과 시 적용.",
+  "principles": [
+    "삭제 아님, 표시(excluded, excluded_reason[])",
+    "곡 개별 제외 금지 — 규칙으로만",
+    "모든 규칙에 basis(감사 항목+수치)",
+    "커버곡 유지, live/acoustic/remix/instrumental/unplugged/demo/karaoke/cover 는 별도 묶음"
+  ],
+  "stop_if_total_excluded_share": 0.15,
+  "rules": [
+    {
+      "id": "R1_length",
+      "enabled": true,
+      "params": {
+        "min_s": 30,
+        "max_s": 1200,
+        "max_s_untagged": 1800,
+        "long_exempt_tags": [
+          "classical",
+          "opera",
+          "ambient"
+        ]
+      },
+      "basis": "A1: <30s 99,950 (1.35%). >20min 29,966 중 태그 있는 13,143곡의 35.7%가 클래식/오페라/앰비언트 → 예외 유지. 미태그 >20min 표본에 롱폼 앰비언트/일렉트로닉 정상 음악 다수 → 미태그 곡은 상한 30min(1800s) 적용(사용자 결정). 태그 있는 비예외 곡은 20min 상한."
+    },
+    {
+      "id": "R2_nonmusic",
+      "enabled": true,
+      "params": {
+        "keywords": [
+          "speech",
+          "audiobook",
+          "podcast",
+          "interview",
+          "sound effect",
+          "lecture",
+          "asmr",
+          "sermon",
+          "white noise"
+        ],
+        "flag_columns": {
+          "flag_comedy": [
+            "comedy"
+          ],
+          "flag_spoken": [
+            "spoken word"
+          ],
+          "flag_fieldrec": [
+            "field recording"
+          ]
+        }
+      },
+      "basis": "A5: 12개 키워드 적중 합집합 35,901. comedy(20,876)·spoken word(단독 5,376)·field recording(단독 1,083)은 dry-run 표본에서 음악 오적중(Hobart Smith, Biosphere, The Streets 등 — 두 태그는 음악 장르 표기로도 쓰임) → 제외에서 빼고 flag 컬럼(사용자 결정). 나머지 9개 유지."
+    },
+    {
+      "id": "R3_no_key",
+      "enabled": true,
+      "params": {},
+      "basis": "D7(서빙 진단): 키 없는 곡 3.2%. 여기서는 title·artist 원문 모두 결측인 곡만."
+    },
+    {
+      "id": "R4_cohort",
+      "enabled": true,
+      "params": {
+        "fingerprints": [
+          71,
+          72,
+          73,
+          74,
+          76,
+          87,
+          99,
+          101,
+          103
+        ]
+      },
+      "basis": "work/v2_cohort.json (CONFIRMED_BY_GATE_V2). 매니페스트가 이미 코호트만 담아 적중 0 예상 — 명시용."
+    },
+    {
+      "id": "R5_dup_canonical",
+      "enabled": true,
+      "params": {
+        "representative_order": [
+          "lossless",
+          "part",
+          "offset"
+        ],
+        "protect_dist": 4.0
+      },
+      "basis": "canonical redirect 후 같은 canonical 복수 mbid → 대표 1행. dry-run v1: 멤버 763,015 (10.3%), 멤버-대표 좌표 거리 median 6.31 — MB 병합 ≠ 같은 소리. R6 와 동일한 거리 보호 4.0 추가 (A7 같은 녹음 87%가 4 이내). 보호 시 접힘 ≈241,660 (3.3%)."
+    },
+    {
+      "id": "R6_dup_version",
+      "enabled": true,
+      "params": {
+        "protect_dist": 4.0,
+        "keep_live_as_distinct": true,
+        "drop_modifiers": [
+          "remaster(ed)",
+          "mono",
+          "stereo",
+          "single version",
+          "album version",
+          "radio edit",
+          "edit",
+          "deluxe",
+          "anniversary",
+          "bonus track",
+          "expanded",
+          "reissue",
+          "연도"
+        ],
+        "distinct_modifiers": [
+          "live",
+          "acoustic",
+          "remix",
+          "instrumental",
+          "unplugged",
+          "demo",
+          "karaoke",
+          "cover"
+        ],
+        "representative_order": [
+          "title_without_modifier",
+          "lossless",
+          "n_submissions_desc",
+          "part",
+          "offset"
+        ],
+        "year_source": "없음 (A8) — 연도 우선 단계 생략"
+      },
+      "basis": "A6: 2곡+ 묶음 706,401 / 접힘 후보 1,520,985 (20.5%) / 거리>4 보호 918,463 (60.4%) / 접힘 예상 602,522 (8.1%). 임계 4.0 근거 = A7 같은 MBID 제출본 거리 median 0.58·p90 5.18 (진짜 같은 녹음의 87%는 4 이내) vs A6 묶음 멤버 거리 median 5.34 (제목 같아도 대부분 다른 연주). 미분류 괄호 719,842곡은 키에 남겨 접지 않음(보수)."
+    },
+    {
+      "id": "R7_samplerate",
+      "enabled": false,
+      "params": {
+        "min_sr": 44100
+      },
+      "basis": "A2: <44100 18,047곡 (0.24%), 좌표 편향 최대 |0.46| std (pc3) < 0.5 → 제외 대신 flag_low_sr 컬럼."
+    },
+    {
+      "id": "R8_silence",
+      "enabled": true,
+      "params": {
+        "loudness_bottom_pct": 0.1,
+        "dyn_lt": 0.1,
+        "silence60_gt": 0.9
+      },
+      "basis": "A3: average_loudness 하위 0.1% 7,405곡 중 silence_rate_60dB>0.9 116곡 (dynamic_complexity<0.1 은 0곡). 표본: Headspace 명상, John Cage, 무음 히든트랙."
+    },
+    {
+      "id": "R9_corrupt",
+      "enabled": false,
+      "params": {
+        "min_clipped_features": 5,
+        "flag_column": "flag_clipped"
+      },
+      "basis": "A4: ≥5 특징 적중 4,762곡 표본이 실험·노이즈 음악(손상 아님) → 제외하지 않고 flag_clipped 컬럼만(사용자 결정)."
+    }
+  ]
+}

@@ -55,3 +55,16 @@ secrets/
 credentials/
 __pycache__/
 *.pyc
+
+### Data track large artifacts (data/, see data/AGENTS.md) ###
+data/.venv/
+data/work/
+data/data/
+data/serving/*/*.parquet
+data/serving/*/*.npz
+data/serving/*/map_tree/*.parquet
+data/serving/*/map_tree/*.npz
+data/output/*
+!data/output/*.json
+!data/output/*.md
+*.npy

@@ -1,5 +1,5 @@
-import { failLive, okLive } from "@/lib/api-response";
-import { backendPost, BackendError } from "@/lib/backend";
+import { failLive, ok, okLive } from "@/lib/api-response";
+import { backendPost, BackendError, isBackendEnabled } from "@/lib/backend";
 
 /**
  * POST /bff/feedback — 탐색 설문 응답 저장 (S15P21A405-294).
@@ -22,6 +22,18 @@ export async function POST(req: Request) {
     body = await req.json();
   } catch {
     return failLive("INVALID_INPUT", "요청 본문이 JSON 이 아닙니다.", 400, upstream);
+  }
+
+  /**
+   * 목 모드에서는 **보내지 않는다.**
+   *
+   * 설문은 조회가 아니라 **쓰기**다. 목을 켜 두고 개발하면서 설문을 누를 때마다 실제
+   * `explore_feedback` 에 행이 쌓이면, 유저 테스트 집계에 개발 중 찍은 값이 섞인다.
+   * 지우려면 누가 언제 넣었는지 가려내야 하는데 비로그인이라 가려낼 수가 없다.
+   */
+  if (!isBackendEnabled()) {
+    console.log("[survey:mock]", JSON.stringify(body));
+    return ok({ feedbackId: 0 });
   }
 
   try {

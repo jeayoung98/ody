@@ -40,21 +40,6 @@
 	</select>
 
 	<!--
-		ORDER BY 에 거리 하나만 둔다. id tie-break 를 SQL 에 넣으면 정렬 키가 둘이 되어
-		HNSW 인덱스 순서를 쓰지 못하고 전체 정렬로 떨어진다. 동률 tie-break 는 어댑터가 한다.
-	-->
-	<select id="findNearest" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		<!-- NeighborTrack 은 MusicSummary + distance 뿐이다. mbid·bpm·duration·play_cnt·youtube_cnt 는 읽지 않는다. -->
-		SELECT m.id, m.title, m.artist, m.album,
-		       m.location &lt;-&gt; #{qvec}::vector AS distance,
-		<include refid="locationColumns"/>
-		FROM music m
-		WHERE m.id &lt;&gt; #{id}
-		ORDER BY m.location &lt;-&gt; #{qvec}::vector
-		LIMIT #{k}
-	</select>
-
-	<!--
 		여정 정거장 조립용. mbid 는 UNIQUE 라 인덱스를 탄다.
 		곡당 왕복은 3초 예산을 넘기므로(SC-002) 반드시 한 번에 읽는다. 최대 20건이다.
 	-->

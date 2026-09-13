@@ -3,10 +3,8 @@ package com.ssafy.backend.music;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
@@ -26,7 +24,7 @@ import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
-import com.ssafy.backend.music.dto.NeighborTrack;
+import com.ssafy.backend.music.dto.MusicSummary;
 
 /**
  * 상세·주변곡 어댑터 단위 테스트 (매퍼 mock). SQL 자체는 실 DB(T205) 대상이고,
@@ -86,72 +84,30 @@ class MusicDetailReaderAdapterTests {
 		assertNull(detail.album()); // 적재 결과상 전 행 NULL
 	}
 
+	/**
+	 * 이웃 선정은 2026-09-13(D-003)에 {@code NeighborSelection} 으로 옮겼다 — 주변 탐색과 곡 상세가 같은
+	 * 규칙을 써야 해서다(005 FR-023). 여기 있던 정렬·자기 제외·빈 결과 테스트는 그쪽으로 갔고,
+	 * 어댑터에는 <b>확정된 곡의 상세를 채우는 책임</b>만 남았다.
+	 */
 	@Test
-	void findNeighbors_readsCoordinateFirst_andPassesItAsBindParameter() {
-		// 함정 회귀: 질의 벡터를 서브쿼리로 넘기면 recall 0.0000 이라 반드시 값으로 넘겨야 한다.
-		when(mapper.findLocationText(7L)).thenReturn("[0.1,-0.3]");
-		when(mapper.findNearest(anyLong(), anyString(), anyInt())).thenReturn(List.of());
+	void findSummariesByMbids_groupsGenresPerTrack() {
+		when(mapper.findByMbids(List.of("m1", "m2"))).thenReturn(List.of(row(1L), row(2L)));
+		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
+				genreRow(1L, "K-Pop"), genreRow(1L, "Ballad"), genreRow(2L, "Rock")));
 
-		adapter.findNeighbors(7L, 10);
+		List<MusicSummary> out = adapter.findSummariesByMbids(List.of("m1", "m2"));
 
-		verify(mapper).findLocationText(7L);
-		verify(mapper).findNearest(7L, "[0.1,-0.3]", 10);
+		assertEquals(2, out.size());
+		assertEquals(List.of("K-Pop", "Ballad"), out.get(0).genres());
+		assertEquals(List.of("Rock"), out.get(1).genres());
 	}
 
 	@Test
-	void findNeighbors_returnsEmpty_whenTrackHasNoCoordinate() {
-		when(mapper.findLocationText(anyLong())).thenReturn(null);
+	void findSummariesByMbids_skipsQueries_whenInputIsEmpty() {
+		assertTrue(adapter.findSummariesByMbids(List.of()).isEmpty());
 
-		assertTrue(adapter.findNeighbors(404L, 10).isEmpty());
-		verify(mapper, never()).findNearest(anyLong(), anyString(), anyInt());
-	}
-
-	@Test
-	void findNeighbors_skipsGenreQuery_whenNoNeighborFound() {
-		// 빈 목록으로 장르를 조회하면 IN () 가 되어 SQL 문법 오류다.
-		when(mapper.findLocationText(7L)).thenReturn("[0.1]");
-		when(mapper.findNearest(anyLong(), anyString(), anyInt())).thenReturn(List.of());
-
-		assertTrue(adapter.findNeighbors(7L, 10).isEmpty());
+		verify(mapper, never()).findByMbids(anyList());
 		verify(mapper, never()).findGenresByMusicIds(anyList());
-	}
-
-	@Test
-	void findNeighbors_breaksDistanceTiesByIdAscending() {
-		// SQL 은 거리 하나로만 정렬한다(HNSW 순서 유지). 동률 정렬은 어댑터 책임.
-		MusicDetailRow far = row(1L);
-		far.setDistance(0.9);
-		MusicDetailRow tiedHighId = row(30L);
-		tiedHighId.setDistance(0.1);
-		MusicDetailRow tiedLowId = row(20L);
-		tiedLowId.setDistance(0.1);
-		when(mapper.findLocationText(7L)).thenReturn("[0.1]");
-		when(mapper.findNearest(anyLong(), anyString(), anyInt()))
-				.thenReturn(List.of(far, tiedHighId, tiedLowId));
-		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
-
-		List<NeighborTrack> neighbors = adapter.findNeighbors(7L, 10);
-
-		assertEquals(List.of(20L, 30L, 1L), neighbors.stream().map(n -> n.music().id()).toList());
-		assertEquals(0.1, neighbors.get(0).distance());
-	}
-
-	@Test
-	void findNeighbors_groupsGenresPerTrack() {
-		MusicDetailRow first = row(1L);
-		first.setDistance(0.1);
-		MusicDetailRow second = row(2L);
-		second.setDistance(0.2);
-		when(mapper.findLocationText(7L)).thenReturn("[0.1]");
-		when(mapper.findNearest(anyLong(), anyString(), anyInt())).thenReturn(List.of(first, second));
-		when(mapper.findGenresByMusicIds(List.of(1L, 2L)))
-				.thenReturn(List.of(genreRow(1L, "electronic"), genreRow(1L, "rock")));
-
-		List<NeighborTrack> neighbors = adapter.findNeighbors(7L, 10);
-
-		assertEquals(2, neighbors.size());
-		assertEquals(List.of("electronic", "rock"), neighbors.get(0).music().genres());
-		assertEquals(List.of(), neighbors.get(1).music().genres());
 	}
 
 	@Test

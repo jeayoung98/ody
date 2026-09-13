@@ -28,10 +28,14 @@
 
 	<!--
 		SET LOCAL 은 유틸리티 구문이라 바인드 파라미터를 못 받는다 (2026-09-12: ERROR syntax error at
-		or near "$1"). 같은 일을 하는 함수 set_config 로 넘긴다 — 세 번째 인자 true 가 SET LOCAL 이다.
+		or near "$1"). 같은 일을 하는 함수 set_config 로 넘긴다.
+
+		세 번째 인자는 false(세션 범위)다. true(SET LOCAL)로 두면 다음 질의까지 살아남지 않아
+		탐색폭이 기본값 40 으로 돌아간다 — 2026-09-13 실측, S15P21A405-279. 조회 코드가 매번
+		직전에 다시 걸기 때문에 세션에 남아도 결과는 달라지지 않는다.
 	-->
 	<select id="raiseEfSearch" resultType="string">
-		SELECT set_config('hnsw.ef_search', CAST(#{efSearch} AS text), true)
+		SELECT set_config('hnsw.ef_search', CAST(#{efSearch} AS text), false)
 	</select>
 
 	<select id="findNearest" resultType="com.ssafy.backend.music.dto.TrackCandidateRow">

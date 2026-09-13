@@ -51,9 +51,14 @@
 
 응답:
 ```json
-{ "success": true, "data": { "content": [], "page": 0, "size": 20, "totalElements": 137, "totalPages": 7, "hasNext": true }, "error": null }
+{ "success": true, "data": { "content": [], "page": 0, "size": 10, "hasNext": true }, "error": null }
 ```
 - 페이지 크기는 서버에서 **10 고정**. 응답 `size`는 클라이언트 하드코딩 방지용 참고값.
+- `totalElements`·`totalPages`는 **없다** (S15P21A405-255). 프론트가 쓰지 않는다고 확인했고, 총 개수를 세려면
+  매 요청마다 대상 테이블을 끝까지 세어야 한다 — 검색에서는 그것만으로 응답의 약 7초를 차지했다.
+  다음 페이지 유무는 `hasNext`로 판단한다(구현은 `size+1`건을 떠서 초과분 유무로 본다).
+- 되살려야 할 화면이 생기면 세는 비용을 먼저 재고 **그 API에만** 담는다. 공통 규약으로 되돌리지 않는다.
+- ⚠ 아래 §5 유저 검색·팔로우 목록 예시에는 두 필드가 아직 남아 있다. BE1 확인 후 정리한다.
 
 ### 0.4 HTTP 상태 코드 매핑
 
@@ -290,10 +295,11 @@ body: `idToken`(String, required).
   "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
   "genres": ["K-Pop"], "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
   "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }
-} ], "page": 0, "size": 20, "totalElements": 137, "totalPages": 7, "hasNext": true }, "error": null }
+} ], "page": 0, "size": 10, "hasNext": true }, "error": null }
 ```
 - 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
 - **정렬은 관련성 순**: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 → 나머지 부분일치. 같은 순위 안에서는 `id` 오름차순. 대소문자 구분 없음 (2026-09-12 변경, S15P21A405-234 — 이전은 `youtubeCnt` 내림차순이었으나 값이 전 행 0 이라 무작위였다).
+- **총 개수(`totalElements`·`totalPages`)는 내려주지 않는다** (2026-09-13, S15P21A405-255). §0.3 참고. 페이지 이동은 `hasNext`로 판단한다.
 
 ### 3.2 노래 상세 조회
 `GET /api/music/detail` · 인증 필요. param: `id`(int, required).
@@ -311,7 +317,13 @@ body: `idToken`(String, required).
   } ]
 }, "error": null }
 ```
-- `neighbors`는 임베딩 공간 최근접 10곡, `distance` 오름차순. 자기 자신 제외. 재생 불가(`youtubeUrl == null`) 곡도 포함. 거리 척도는 서빙 baseline(`v2.1-pca16`) 기준. 에러: `MUSIC_NOT_FOUND`.
+- `neighbors`는 **선정 규칙을 통과한 최대 10곡**, `distance` 오름차순(동률 시 `id` 오름차순). 자기 자신 제외. 재생 불가 곡도 포함. 거리 척도는 서빙 baseline(`v2.1-pca16`) 기준. 에러: `MUSIC_NOT_FOUND`.
+- **선정 규칙은 §3.5 주변 탐색과 동일하다** — 같은 곡을 기준으로 하면 두 API 의 목록이 같다. 규칙 정의는 §3.5 참조.
+- 응답에 **`lowSimilarity`**(boolean)가 함께 온다. 마지막 이웃 거리가 원거리 임계값을 넘었다는 뜻이고 오류가 아니다. 운영 실측 발동률 약 **9%**.
+
+> ⚠️ **2026-09-13 개정 (D-003, 이슈 S15P21A405-59).** 이전에는 최근접 10곡을 그대로 잘라 줬다.
+> 지금은 규칙을 통과한 곡만 담기므로 **10곡보다 적을 수 있고**, `lowSimilarity` 필드가 추가됐다.
+> 곡 상세와 주변 탐색이 같은 곡에 다른 목록을 주던 문제를 없애기 위한 변경이다.
 
 ### 3.3 경로 탐색
 `GET /api/music/journey` · 인증 필요. param: `start`(int, required, 시작곡 ID), `end`(int, required, 끝곡 ID).
@@ -375,6 +387,54 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 
 **원안 전문과 롤백 조건**: `specs/001-pc-major-tracks/spec.md` 의 "대체된 요구사항 — 롤백 기록" 절.
 인기 지표가 확보되거나 고정 격자의 시각적 문제가 드러나면 재검토 대상이다.
+
+
+### 3.5 주변 탐색
+
+`GET /api/music/nearby` · 인증 필요. param: `id`(int, required, 기준 곡 ID).
+
+기준 곡에서 임베딩 공간상 가까운 곡을 **선정 규칙을 통과한 최대 10곡**까지 반환한다. 이웃 곡을 다시 기준점으로 요청해 탐색을 이어갈 수 있다(MAP-10).
+
+```json
+{ "success": true, "data": {
+  "center": {
+    "id": 10234, "title": "Love wins all", "artist": "IU",
+    "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }
+  },
+  "neighbors": [ {
+    "id": 10877, "title": "Through the Night", "artist": "IU", "album": "Palette", "genres": ["K-Pop"],
+    "youtubeUrl": "https://www.youtube.com/watch?v=BzYnNdJhZQw",
+    "location": { "pc1": -0.3980, "pc2": 1.1204, "...": "...", "pc16": -0.098 }, "distance": 2.4643
+  } ],
+  "lowSimilarity": false
+}, "error": null }
+```
+
+- `neighbors` 원소는 §3.2 의 것과 **같은 타입**이다(`MusicSummary` + `distance`).
+- `distance` 오름차순, 동률 시 `id` 오름차순. 같은 요청은 **항상 같은 목록·같은 순서**를 준다.
+- `lowSimilarity` 는 마지막 이웃 거리가 원거리 임계값을 넘었다는 표시다. **오류가 아니다** — 결과는 그대로 준다. 이웃이 0곡이어도 `true`.
+- 규칙을 통과한 곡이 없으면 **빈 배열 + 200**.
+- 서버는 탐색 상태를 보관하지 않는다. 요청 하나로 완결된다.
+- 에러: `MUSIC_NOT_FOUND`(없는 곡), `INVALID_INPUT`(`id` 누락·0 이하·비정수).
+
+**선정 규칙** — 이웃은 최근접 순서 그대로가 아니다. 아래를 통과한 곡만 담긴다.
+
+| # | 규칙 |
+|---|---|
+| 1 | 기준 곡 자신 제외 |
+| 2 | 기준 곡과 같은 녹음(거리가 중복 임계값 미만) 제외 |
+| 3 | 기준 곡과 제목·아티스트가 같은 곡 제외 |
+| 4 | 이미 담은 이웃과 제목·아티스트가 같은 곡 제외 |
+| 5 | 한 아티스트는 상한(현재 3)까지. **아티스트가 비어 있는 곡은 세지 않는다** |
+| 6 | 재생 길이가 범위(30~1200초) 밖인 곡 제외 |
+
+재생 수단이 없는 곡은 그 이유만으로 빼지 않는다.
+
+임계값은 **좌표계 버전(`v2.1-pca16`)에 귀속**된다. 버전이 바뀌면 결과도 바뀌므로 클라이언트가 값을 캐시해 재현하려 하면 안 된다.
+
+**성능**: p95 1초 이내 (요구사항 §6 "유사곡 검색 1초").
+
+**미정**: 경로 이름(`nearby` vs 노션 정본의 `/music/neighbors`)은 BE3·팀 협의 중 — `/music/neighbors` 는 **BE3 전용 내부 API 로 용도·응답·중복 처리가 반대**라 별개다. 기준점을 좌표(`pc1`~`pc16`)로도 받을지는 FE 확인 대기. `BACKEND-NOTES` A-6 의 `/api/map/nearby/{musicId}` 는 폐기 대상.
 
 ---
 

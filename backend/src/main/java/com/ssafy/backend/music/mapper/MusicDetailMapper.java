@@ -10,19 +10,11 @@ import com.ssafy.backend.music.dto.MusicGenreRow;
 /** 노래 상세·주변곡 MyBatis 매퍼 ({@code MusicDetailReader} 어댑터가 쓰는 실행 계층). */
 public interface MusicDetailMapper {
 
-	/** 상세 1건. 없으면 null. */
+	/** id 로 상세 1건. 없으면 {@code null}. */
 	MusicDetailRow findById(@Param("id") long id);
 
-	/**
-	 * 질의 벡터로 쓸 좌표를 pgvector 자신의 텍스트 표기로 읽는다. 없으면 null.
-	 * 텍스트를 그대로 되돌려 보내므로 파싱·재포맷이 없고 질의점이 저장값과 정확히 같다.
-	 */
+	/** 곡의 좌표를 pgvector 리터럴 문자열로. 없으면 {@code null}. */
 	String findLocationText(@Param("id") long id);
-
-	/** 16차원 최근접 k곡. 자기 자신 제외, 거리 오름차순. qvec 은 findLocationText 가 준 값. */
-	List<MusicDetailRow> findNearest(@Param("id") long id,
-			@Param("qvec") String qvec,
-			@Param("k") int k);
 
 	/**
 	 * mbid 목록으로 상세를 일괄 조회한다 (여정 정거장 조립용).

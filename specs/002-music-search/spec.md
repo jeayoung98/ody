@@ -35,7 +35,7 @@
 
 **Acceptance Scenarios**:
 
-1. **Given** 인증된 요청과 매칭 곡이 있고, **When** `query`와 `page`로 검색하면, **Then** 200과 `success:true`, `data.content`(MusicSummary 배열), 페이지 정보(page/size/totalElements/totalPages/hasNext), `error:null`을 반환한다. (FR-001, FR-004)
+1. **Given** 인증된 요청과 매칭 곡이 있고, **When** `query`와 `page`로 검색하면, **Then** 200과 `success:true`, `data.content`(MusicSummary 배열), 페이지 정보(page/size/hasNext), `error:null`을 반환한다. (FR-001, FR-004)
 2. **Given** 매칭 곡이 있고, **When** 응답을 구성하면, **Then** 각 항목은 MusicSummary 필드(id, title, artist, album, genres, youtubeUrl, location pc1~pc16)를 포함하고 `location`은 해당 곡의 baseline 좌표와 일치한다. (FR-005, FR-006)
 3. **Given** 매칭 곡 중 `youtubeUrl`이 null인 곡이 있고, **When** 목록을 반환하면, **Then** 링크 부재만으로 제거하지 않고 `youtubeUrl:null`을 유지한다. (FR-007)
 4. **Given** 매칭 곡이 페이지 크기보다 많고, **When** `page`를 지정하면, **Then** 서버 고정 크기(10) 단위로 해당 페이지를 반환하고 `hasNext`로 다음 페이지 존재를 알린다. (FR-004)
@@ -70,7 +70,7 @@
 - **FR-001 — 검색 조회**: 시스템은 `GET /music/search`에서 `query`와 `page`로 매칭되는 곡 목록을 반환해야 한다(MUST). **근거**: [api-spec §3.1](../../docs/api-spec.md); 요구사항 SEARCH-01.
 - **FR-002 — 빈 결과**: 매칭 곡이 없으면 빈 `content` + 200으로 반환해야 하며, 오류로 처리해서는 안 된다(MUST). **근거**: api-spec §3.1.
 - **FR-003 — 인증**: `Authorization: Bearer {accessToken}` 인증을 요구해야 한다(MUST). **근거**: api-spec §0.1·§0.7·§3.1.
-- **FR-004 — 페이지네이션**: 응답은 `content`와 페이지 정보(page, size, totalElements, totalPages, hasNext)를 포함해야 하며, 페이지 크기는 서버에서 10으로 고정한다(MUST). 클라이언트는 `size`를 하드코딩하지 않는다. api-spec 예시의 `size:20`은 본문 "10 고정"과의 알려진 불일치(헌법 충돌표 기록)로, 본문 기준 10을 채택한다. **근거**: api-spec §0.3; 헌법 "발견된 충돌·불일치" 페이지 크기 항목.
+- **FR-004 — 페이지네이션**: 응답은 `content`와 페이지 정보(page, size, hasNext)를 포함해야 하며, 페이지 크기는 서버에서 10으로 고정한다(MUST). 총 개수(`totalElements`·`totalPages`)는 담지 않는다(MUST NOT) — 세려면 매 요청마다 660만 행을 끝까지 세어야 해서 응답의 ~7초를 차지했고, 프론트가 쓰지 않는다고 확인했다(2026-09-13, S15P21A405-255). 다음 페이지 유무는 `hasNext`로 알린다. 클라이언트는 `size`를 하드코딩하지 않는다. api-spec 예시의 `size:20`은 본문 "10 고정"과의 알려진 불일치(헌법 충돌표 기록)로, 본문 기준 10을 채택한다. **근거**: api-spec §0.3; 헌법 "발견된 충돌·불일치" 페이지 크기 항목.
 - **FR-005 — 곡 정보**: 각 항목은 MusicSummary 필드(id, title, artist, album, genres, youtubeUrl, location)를 유지해야 한다(MUST). 기존 타입·null 허용 범위를 임의로 좁히지 않는다. **근거**: api-spec §0.6.
 - **FR-006 — 고정 좌표**: 곡 좌표는 서빙 baseline `v2.1-pca16` 기준으로 진입 경로와 무관하게 동일해야 한다(MUST). 검색이 좌표·모델을 변경해서는 안 된다(MUST NOT). **근거**: 요구사항 §6 데이터-일관성.
 - **FR-007 — 재생 불가 곡 표시**: `youtubeUrl`이 null인 곡도 결과에서 제외하지 않고 `youtubeUrl:null`을 유지해야 한다(MUST). **근거**: 요구사항 SONG-04; api-spec §0.6.

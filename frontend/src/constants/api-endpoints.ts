@@ -111,7 +111,12 @@ export const API_ENDPOINTS = {
   },
 
   constellation: {
-    layout: "/bff/constellations/layout",
+    /**
+     * **백엔드 실경로다** (`/bff/` 가 아니다). 좌표 원천을 서버 한 곳(서빙 baseline)으로 고정해야
+     * 같은 플리를 여러 사용자가 같은 모양으로 본다 — 그래서 프론트가 계산하던 목을 걷어냈다.
+     * `live-api-paths.ts` 에 등록해 rewrite 로 그대로 흘려보낸다 (S15P21A405-278).
+     */
+    layout: "/api/constellations/layout",
   },
 
   journey: {

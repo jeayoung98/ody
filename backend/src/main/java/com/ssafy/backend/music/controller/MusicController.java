@@ -18,10 +18,12 @@ import com.ssafy.backend.music.dto.MajorResponse;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.service.NearbyService;
 
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
+import com.ssafy.backend.music.dto.NearbyResponse;
 
 import io.swagger.v3.oas.annotations.tags.Tag;
 
@@ -32,9 +34,11 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 public class MusicController {
 
 	private final MusicService musicService;
+	private final NearbyService nearbyService;
 
-	public MusicController(MusicService musicService) {
+	public MusicController(MusicService musicService, NearbyService nearbyService) {
 		this.musicService = musicService;
+		this.nearbyService = nearbyService;
 	}
 
 	/**
@@ -109,5 +113,20 @@ public class MusicController {
 	@GetMapping("/detail")
 	public ApiResponse<MusicDetailResponse> detail(@RequestParam @Min(1) long id) {
 		return ApiResponse.success(musicService.getDetail(id));
+	}
+
+	/**
+	 * 주변 탐색 (정본 §3.5). 기준 곡에서 가까운 곡을 선정 규칙을 통과한 최대 10곡까지 반환한다.
+	 *
+	 * <p>이웃 곡을 다시 기준점으로 요청해 탐색을 이어갈 수 있다(MAP-10). 서버는 탐색 상태를 보관하지 않는다.
+	 *
+	 * <p><b>인증 대상이다</b>(정본 §0.1·§0.7). 다만 현재 {@code SecurityConfig} 가 {@code permitAll} 이라
+	 * 실제로는 열려 있다 — 그것은 S15P21A405-33 의 <b>의도된 임시 상태</b>이고 BE1 소유라 여기서 되돌리지 않는다.
+	 *
+	 * <p>기준점을 좌표로도 받을지는 FE 확인 대기다(005 D-CENTER-B). 지금은 곡 id 만 받는다.
+	 */
+	@GetMapping("/nearby")
+	public ApiResponse<NearbyResponse> nearby(@RequestParam @Min(1) long id) {
+		return ApiResponse.success(nearbyService.findNearby(id));
 	}
 }

@@ -28,6 +28,7 @@ import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.service.NearbyService;
 
 /**
  * 검색 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler 동작 검증.
@@ -46,6 +47,9 @@ class MusicSearchControllerTests {
 
 	@MockitoBean
 	private MusicService musicService;
+
+	@MockitoBean
+	private NearbyService nearbyService;
 
 
 

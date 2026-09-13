@@ -1,7 +1,13 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { SurveyTarget } from "@/types/survey";
+import type { SurveyPrompt, SurveyTarget } from "@/types/survey";
+
+/** 탐색 결과의 곡 하나 — 표를 만드는 데 필요한 것만 */
+interface Track {
+  musicId: number;
+  title: string;
+}
 
 /**
  * `sessionId` 를 목록 단위로 붙들어 둔다 (S15P21A405-294).
@@ -27,20 +33,22 @@ function useSessionId(signature: string | null): string | null {
  * 주변 탐색 — 기준곡과 이웃 목록을 곡 ID 로 찾을 수 있는 표로 만든다.
  *
  * `rank` 는 이웃 순서 1부터다. 기준곡은 평가 대상이 아니라 표에 넣지 않는다.
+ * 비교 상대는 늘 기준곡이라 제목도 하나로 같다.
  */
-export function useNearbyTargets(centerMusicId: number | null, neighborIds: readonly number[] | undefined) {
-  const signature = centerMusicId != null && neighborIds?.length ? `nearby:${centerMusicId}:${neighborIds.join(",")}` : null;
+export function useNearbyTargets(center: Track | null | undefined, neighbors: readonly Track[] | undefined) {
+  const signature = center && neighbors?.length ? `nearby:${center.musicId}:${neighbors.map((n) => n.musicId).join(",")}` : null;
   const sessionId = useSessionId(signature);
 
   return useMemo(() => {
-    const table = new Map<number, SurveyTarget>();
-    if (sessionId == null || centerMusicId == null || !neighborIds) return table;
+    const table = new Map<number, SurveyPrompt>();
+    if (sessionId == null || !center || !neighbors) return table;
 
-    neighborIds.forEach((musicId, i) => {
-      table.set(musicId, { sessionId, mode: "nearby", rank: i + 1, anchorMusicId: centerMusicId, musicId });
+    neighbors.forEach((n, i) => {
+      const target: SurveyTarget = { sessionId, mode: "nearby", rank: i + 1, anchorMusicId: center.musicId, musicId: n.musicId };
+      table.set(n.musicId, { target, compareTitle: center.title });
     });
     return table;
-  }, [sessionId, centerMusicId, neighborIds]);
+  }, [sessionId, center, neighbors]);
 }
 
 /**
@@ -48,29 +56,31 @@ export function useNearbyTargets(centerMusicId: number | null, neighborIds: read
  *
  * `rank` 는 정거장 step 이고 **출발곡(step 0)은 평가 대상이 아니다.** 앞 곡에서
  * 이어졌는지를 묻는 설문이라 비교할 앞 곡이 없기 때문이다.
+ * 비교 상대는 정거장마다 다르다 — 바로 앞 역이다.
  */
-export function useJourneyTargets(stopIds: readonly number[] | undefined) {
-  const signature = stopIds?.length ? `journey:${stopIds.join(",")}` : null;
+export function useJourneyTargets(stops: readonly Track[] | undefined) {
+  const signature = stops?.length ? `journey:${stops.map((s) => s.musicId).join(",")}` : null;
   const sessionId = useSessionId(signature);
 
   return useMemo(() => {
-    const table = new Map<number, SurveyTarget>();
-    if (sessionId == null || !stopIds || stopIds.length < 2) return table;
+    const table = new Map<number, SurveyPrompt>();
+    if (sessionId == null || !stops || stops.length < 2) return table;
 
-    const anchorMusicId = stopIds[0];
-    const targetMusicId = stopIds[stopIds.length - 1];
-    stopIds.slice(1).forEach((musicId, i) => {
-      // slice(1) 이라 i=0 이 step 1 이다. 앞 역은 그 직전 정거장(stopIds[i])
-      table.set(musicId, {
+    const anchorMusicId = stops[0].musicId;
+    const targetMusicId = stops[stops.length - 1].musicId;
+    stops.slice(1).forEach((stop, i) => {
+      // slice(1) 이라 i=0 이 step 1 이다. 앞 역은 그 직전 정거장(stops[i])
+      const target: SurveyTarget = {
         sessionId,
         mode: "journey",
         rank: i + 1,
         anchorMusicId,
         targetMusicId,
-        prevMusicId: stopIds[i],
-        musicId,
-      });
+        prevMusicId: stops[i].musicId,
+        musicId: stop.musicId,
+      };
+      table.set(stop.musicId, { target, compareTitle: stops[i].title });
     });
     return table;
-  }, [sessionId, stopIds]);
+  }, [sessionId, stops]);
 }

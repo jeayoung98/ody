@@ -28,6 +28,8 @@ export interface SurveyReasonOption {
  */
 export interface SurveyDefinition {
   mode: SurveyMode;
+  /** 비교 상대를 가리키는 말. 제목 위에 붙는다 ("기준곡" / "앞 곡") */
+  compareLabel: string;
   question: string;
   /** 긍정 답의 문구. 질문마다 자연스러운 말이 달라서 따로 둔다 */
   yes: string;
@@ -55,6 +57,18 @@ export interface SurveyTarget {
   prevMusicId?: Id;
   /** 평가 대상 곡 */
   musicId: Id;
+}
+
+/**
+ * 설문 하나를 띄우는 데 필요한 것.
+ *
+ * **제목은 화면에만 쓰고 서버로 보내지 않는다.** 그래서 전송 타입(`SurveySubmission`)이
+ * 상속하는 `SurveyTarget` 밖에 둔다 — 안에 넣으면 표시용 값이 그대로 요청에 실린다.
+ */
+export interface SurveyPrompt {
+  target: SurveyTarget;
+  /** 비교 상대 곡 제목. nearby 는 기준곡, journey 는 앞 역 */
+  compareTitle: string;
 }
 
 /**

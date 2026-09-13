@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useMemo } from "react";
 import { SURVEY_MIN_LISTEN_MS } from "@/constants/survey";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
@@ -44,15 +44,14 @@ export default function SurveyRunner() {
     inJourney,
   );
 
-  const nearbyTargets = useNearbyTargets(
-    nearby.data?.center.musicId ?? null,
-    nearby.data?.neighbors.map((n) => n.musicId),
+  const nearbyTargets = useNearbyTargets(nearby.data?.center, nearby.data?.neighbors);
+  const journeyTargets = useJourneyTargets(
+    useMemo(() => journey.data?.stops.map((s) => ({ musicId: s.id, title: s.title })), [journey.data]),
   );
-  const journeyTargets = useJourneyTargets(journey.data?.stops.map((s) => s.id));
 
   /** 지금 듣는 곡이 평가 대상인가. 경로 재생 중이면 경로 표, 주변 탐색 중이면 주변 표에서 찾는다 */
   const table = inJourney ? journeyTargets : viewMode === "nearby" ? nearbyTargets : null;
-  const target = currentMusicId != null && table ? (table.get(currentMusicId) ?? null) : null;
+  const prompt = currentMusicId != null && table ? (table.get(currentMusicId) ?? null) : null;
 
   /**
    * 곡별 청취 시간을 장부에 쌓고, **20초를 못 채우고 떠난 곡은 무응답 행으로 보낸다.**
@@ -66,7 +65,7 @@ export default function SurveyRunner() {
   useEffect(() => {
     if (currentMusicId == null) return;
     const from = Date.now();
-    const left = target;
+    const left = prompt?.target ?? null;
 
     const settle = (skipped: boolean) => {
       const listenedMs = Date.now() - from;
@@ -87,9 +86,9 @@ export default function SurveyRunner() {
       settle(true); // 곡이 바뀐 것은 사용자가 넘긴 것으로 본다
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMusicId, target?.sessionId, target?.rank]);
+  }, [currentMusicId, prompt?.target.sessionId, prompt?.target.rank]);
 
-  useSurveyTrigger(target);
+  useSurveyTrigger(prompt);
 
   return <SurveyCard />;
 }

@@ -34,7 +34,7 @@ function CheckIcon() {
  * **최종 배포 때 걷어낼 기능이다.**
  */
 export default function SurveyCard() {
-  const target = useSurveyStore((s) => s.target);
+  const prompt = useSurveyStore((s) => s.prompt);
   const listenedMs = useSurveyStore((s) => s.listenedMs);
   const close = useSurveyStore((s) => s.close);
   const markSent = useSurveyStore((s) => s.markSent);
@@ -48,10 +48,11 @@ export default function SurveyCard() {
   });
 
   // 대상이 바뀌면 답을 새로 시작한다 (effect 안 setState 대신 "adjusting state during render")
-  const key = target ? `${target.sessionId}:${target.rank}` : "";
+  const key = prompt ? `${prompt.target.sessionId}:${prompt.target.rank}` : "";
   if (state.key !== key) setState({ key, verdict: null, reason: null });
 
-  if (!target) return null;
+  if (!prompt) return null;
+  const target = prompt.target;
   const definition = SURVEYS[target.mode];
 
   const send = (verdict: boolean, reason: SurveyReason | null) => {
@@ -67,6 +68,16 @@ export default function SurveyCard() {
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-overlay backdrop-blur-sm">
       <div className="w-full max-w-sm animate-tin" role="dialog" aria-modal="true" aria-label="설문">
         <Box title="잠깐만요">
+          {/*
+            비교 상대를 **제목으로 따로 보여준다.** 이웃을 두어 번 건너가면 기준곡이 뭐였는지
+            기억하지 못하는데, 카드가 화면을 덮어서 지도로 확인할 수도 없다.
+            문장에 끼워 넣지 않는 이유는 조사다 — 제목 받침에 따라 와/과 가 갈린다.
+          */}
+          <div className="flex flex-col gap-1">
+            <span className="lbl">{definition.compareLabel}</span>
+            <p className="font-display text-base leading-snug font-semibold break-keep text-ink">{prompt.compareTitle}</p>
+          </div>
+
           <div className="flex flex-col gap-2">
             <p className="text-sm leading-relaxed text-ink">{definition.question}</p>
             <div className="flex flex-wrap gap-2">

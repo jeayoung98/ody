@@ -8,11 +8,11 @@
  * 폴더째 삭제할 수 있다. 평가 대상은 띄우는 쪽이 인자로 넘긴다.
  */
 import { create } from "zustand";
-import type { SurveyTarget } from "@/types/survey";
+import type { SurveyPrompt, SurveyTarget } from "@/types/survey";
 
 interface SurveyState {
-  /** 지금 묻고 있는 대상. null 이면 설문이 떠 있지 않다 */
-  target: SurveyTarget | null;
+  /** 지금 묻고 있는 것. null 이면 설문이 떠 있지 않다 */
+  prompt: SurveyPrompt | null;
   /**
    * 곡별 누적 청취 시간(ms).
    *
@@ -26,7 +26,7 @@ interface SurveyState {
    */
   sent: Set<string>;
 
-  open: (target: SurveyTarget) => void;
+  open: (prompt: SurveyPrompt) => void;
   close: () => void;
   noteListened: (musicId: number, ms: number) => void;
   markSent: (target: SurveyTarget) => void;
@@ -37,19 +37,19 @@ interface SurveyState {
 const keyOf = (t: SurveyTarget) => `${t.sessionId}:${t.rank}`;
 
 export const useSurveyStore = create<SurveyState>()((set, get) => ({
-  target: null,
+  prompt: null,
   listenedMs: {},
   sent: new Set(),
 
-  open: (target) => {
+  open: (prompt) => {
     // 답하는 중이면 새 질문으로 갈아치우지 않는다. 자동재생(S15P21A405-258)이 붙으면
     // 설문이 떠 있는 동안에도 곡이 뒤에서 넘어갈 수 있고, 그때 답하던 것이 날아간다
-    if (get().target) return;
-    if (get().sent.has(keyOf(target))) return;
-    set({ target });
+    if (get().prompt) return;
+    if (get().sent.has(keyOf(prompt.target))) return;
+    set({ prompt });
   },
 
-  close: () => set({ target: null }),
+  close: () => set({ prompt: null }),
 
   noteListened: (musicId, ms) =>
     set((s) => ({ listenedMs: { ...s.listenedMs, [musicId]: (s.listenedMs[musicId] ?? 0) + ms } })),

@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { SURVEY_FORCE_KEY, SURVEY_FORCE_PARAM, SURVEY_MIN_LISTEN_MS } from "@/constants/survey";
 import { useSurveyStore } from "@/stores/use-survey-store";
-import type { SurveyTarget } from "@/types/survey";
+import type { SurveyPrompt } from "@/types/survey";
 
 /**
  * `?survey=force` 를 **모듈이 처음 불릴 때 한 번만** 읽는다.
@@ -48,23 +48,23 @@ export const SURVEY_FORCED = readForced();
  *
  * **최종 배포 때 걷어낼 기능이다.**
  */
-export function useSurveyTrigger(target: SurveyTarget | null) {
+export function useSurveyTrigger(prompt: SurveyPrompt | null) {
   const open = useSurveyStore((s) => s.open);
   const hasSent = useSurveyStore((s) => s.hasSent);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (timer.current) clearTimeout(timer.current);
-    if (!target) return;
-    if (hasSent(target)) return;
+    if (!prompt) return;
+    if (hasSent(prompt.target)) return;
 
     // TODO(자동재생): 실제 재생이 붙으면 이 지연을 "실제 청취 시간 >= SURVEY_MIN_LISTEN_MS" 로 바꾼다
-    timer.current = setTimeout(() => open(target), SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS);
+    timer.current = setTimeout(() => open(prompt), SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS);
 
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
     // target 은 객체라 매 렌더 새 참조일 수 있다 — 값으로 비교해 타이머가 리셋되지 않게 한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [target?.sessionId, target?.rank, target?.musicId, open, hasSent]);
+  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, open, hasSent]);
 }

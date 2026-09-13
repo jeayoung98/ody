@@ -55,7 +55,9 @@ const JOURNEY_REASONS = [
  */
 const NEARBY: SurveyDefinition = {
   mode: "nearby",
-  question: "기준곡과 비슷했나요?",
+  compareLabel: "기준곡",
+  // 비교 상대를 제목으로 바로 위에 보여주므로 질문에서 다시 가리키지 않는다
+  question: "비슷했나요?",
   yes: "네, 비슷해요",
   reasonQuestion: "어떤 점이 아쉬웠나요?",
   reasons: NEARBY_REASONS,
@@ -64,7 +66,8 @@ const NEARBY: SurveyDefinition = {
 /** 경로 탐색 — "앞 곡에서 자연스럽게 이어졌는가"를 묻는다 */
 const JOURNEY: SurveyDefinition = {
   mode: "journey",
-  question: "앞 곡에서 자연스럽게 이어졌나요?",
+  compareLabel: "앞 곡",
+  question: "자연스럽게 이어졌나요?",
   yes: "네, 자연스러워요",
   reasonQuestion: "어떤 점이 아쉬웠나요?",
   reasons: JOURNEY_REASONS,

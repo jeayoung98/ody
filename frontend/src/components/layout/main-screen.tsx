@@ -18,7 +18,7 @@ import GhostBanner from "@/components/map/ghost-banner";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
-import SurveyGate from "@/components/survey/survey-gate";
+import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
 /** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
 const RAIL_OCCLUSION = 76;
@@ -58,8 +58,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {overlay}
       <Toast />
       <ConfirmDialog />
-      {/* 설문 (S15P21A405-250) — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어낼 때 이 한 줄만 지우면 된다 */}
-      <SurveyGate />
+      {/* 설문 — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
+      <SurveyGate />{/* REMOVE-WITH-SURVEY */}
     </div>
   );
 }

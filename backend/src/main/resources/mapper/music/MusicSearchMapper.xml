@@ -57,7 +57,31 @@
 	<sql id="artistLower">coalesce(lower(m.artist), '')</sql>
 	<sql id="artistPrefixed">coalesce(lower(m.artist), '') LIKE #{prefix} ESCAPE '\'</sql>
 
-	<select id="findPage" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
+	<!--
+		두 질의에 timeout="2" 가 붙어 있다 (S15P21A405-297). 초 단위이고 JDBC
+		Statement.setQueryTimeout 으로 내려가, 2초를 넘기면 질의를 취소하고 커넥션을 풀에 돌려준다.
+
+		검색을 빠르게 만드는 장치가 아니다 — 느린 질의를 포기시켜 피해 범위를 가두는 장치다.
+		application-db.yml 의 풀이 5개이고 다른 API 의 커넥션 획득 한도가 5초다. 검색 한 건이
+		27초씩 커넥션을 잡으면(2026-09-13 배포 실측: ove 27.0s, 사랑 23s, 0건 9.5s) 풀이 차는 순간
+		지도·곡상세·플레이리스트까지 전부 5초 뒤 실패한다. 검색이 느린 문제가 아니라
+		검색이 다른 기능을 죽이는 문제였다.
+
+		왜 2초인가 — 색인이 붙으면 모든 질의가 수십 ms 아니면 풀스캔(초 단위)으로 갈리고
+		그 사이에 실측된 정상 질의가 없다. 그래서 살리는 집합을 바꾸지 않으면서 방어 여유만
+		키우는 쪽을 골랐다. 2초면 검색 5건이 동시에 몰려도 다른 API 가 3초 여유를 갖는다.
+		1초까지 줄이면 DB 부하 스파이크에서 정상 질의를 죽일 수 있어 거기까진 안 간다.
+
+		타임아웃이 걸리면 500 INTERNAL_SERVER_ERROR 로 나간다. 전용 코드를 만들지 않은 것은
+		MusicErrorCode 가 이미 "엔진 부재·타임아웃은 INTERNAL_SERVER_ERROR 다" 로 정해 뒀기 때문이다.
+
+		⚠ 색인이 붙어도 지우지 않는다. 색인은 성능을 코드로 강제하지 못한다 — 아래 표현식과
+		  색인 표현식이 한 글자라도 어긋나거나(coalesce·lower 누락), CONCURRENTLY 빌드가 실패해
+		  INVALID 색인이 남거나, 재구축에서 색인이 빠지면 **에러 없이** 풀스캔으로 돌아간다.
+		  테스트도 안 깨진다. 그 조용한 회귀를 "검색만 실패" 로 가두는 것이 이 값의 역할이다.
+	-->
+
+	<select id="findPage" timeout="2" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
 		SELECT m.id, m.title, m.artist, m.album,
 		<include refid="locationColumns"/>
 		FROM (
@@ -101,7 +125,7 @@
 		이 질의를 없애면 안 된다. 0건일 때 findPage 의 5단계가 각각 조기 종료에 실패해
 		풀스캔을 다섯 번 하게 되고 지금보다 느려진다.
 	-->
-	<select id="existsMatch" resultType="boolean">
+	<select id="existsMatch" timeout="2" resultType="boolean">
 		SELECT EXISTS (
 			SELECT 1
 			FROM music m

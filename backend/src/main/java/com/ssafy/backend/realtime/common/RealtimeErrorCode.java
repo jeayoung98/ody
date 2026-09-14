@@ -14,7 +14,10 @@ import lombok.Getter;
 @Getter
 public enum RealtimeErrorCode implements ErrorCode {
 
-	PRESENCE_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "PRESENCE_ERROR", "실시간 처리 중 오류가 발생했습니다.");
+	PRESENCE_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "PRESENCE_ERROR", "실시간 처리 중 오류가 발생했습니다."),
+	// 근처 사람 목록에서 이웃곡 찾기(BE2)가 준비 안됐거나 실패했을 때. 빈 목록으로 숨기지 않고 이걸로 알린다.
+	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
+			"일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요.");
 
 	private final HttpStatus httpStatus;
 	private final String code;
@@ -26,7 +29,7 @@ public enum RealtimeErrorCode implements ErrorCode {
 		this.message = message;
 	}
 
-	/** WS PRESENCE_ERROR 세부 코드(/user/queue/errors payload.code). */
+	/** WS PRESENCE_ERROR 세부 코드(/user/queue/errors payload.code). 재생 선언 전에 부르면 PRESENCE_NO_ANCHOR. */
 	public enum WsCode {
 		PRESENCE_NO_ANCHOR,
 		PRESENCE_LOCATION_NULL,

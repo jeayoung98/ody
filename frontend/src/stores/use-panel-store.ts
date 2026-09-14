@@ -29,6 +29,14 @@ interface PanelState {
   profileEmail: string | null;
   /** 뒤로가기로 돌아갈 자리. null이면 뒤로가기를 그리지 않는다 */
   back: PanelReturn | null;
+  /**
+   * 패널이 접혀 있는가 (S15P21A405-318).
+   *
+   * **닫기와 다르다.** 닫으면 패널도 별자리도 사라지지만, 접으면 둘 다 살아 있고 패널만
+   * 화면 밖으로 미끄러진다 — 별자리를 넓게 보려고 잠깐 치우는 동작이다.
+   * 지도 가림 폭도 이 값을 따라간다 (`main-screen.tsx`).
+   */
+  collapsed: boolean;
 
   openSong: (musicId: number) => void;
   /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
@@ -43,6 +51,8 @@ interface PanelState {
   /** 네비바 토글: 같은 패널이면 닫고, 다르면 연다 */
   toggle: (panel: PanelType) => void;
   close: () => void;
+  /** 패널을 접었다 폈다 (S15P21A405-318). 별자리·패널 종류는 건드리지 않는다 */
+  toggleCollapsed: () => void;
 }
 
 export const usePanelStore = create<PanelState>()(
@@ -53,28 +63,29 @@ export const usePanelStore = create<PanelState>()(
       playlistId: null,
       profileEmail: null,
       back: null,
+      collapsed: false,
 
-      openSong: (musicId) => set({ activePanel: "song", musicId, back: null }, false, "openSong"),
+      openSong: (musicId) => set({ activePanel: "song", musicId, back: null, collapsed: false }, false, "openSong"),
 
       openSongFromList: (musicId) => {
         const { activePanel, playlistId } = get();
         const back: PanelReturn | null =
           activePanel === "journey" ? { panel: "journey" } : activePanel === "playlist" && playlistId != null ? { panel: "playlist", playlistId } : null;
-        set({ activePanel: "song", musicId, back }, false, "openSongFromList");
+        set({ activePanel: "song", musicId, back, collapsed: false }, false, "openSongFromList");
       },
 
       goBack: () => {
         const back = get().back;
         if (!back) return;
-        if (back.panel === "journey") set({ activePanel: "journey", back: null }, false, "goBack/journey");
-        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null }, false, "goBack/playlist");
+        if (back.panel === "journey") set({ activePanel: "journey", back: null, collapsed: false }, false, "goBack/journey");
+        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, collapsed: false }, false, "goBack/playlist");
       },
 
-      openPlaylist: (playlistId) => set({ activePanel: "playlist", playlistId, back: null }, false, "openPlaylist"),
-      openFeed: (email = null) => set({ activePanel: "feed", profileEmail: email, back: null }, false, "openFeed"),
-      openJourney: () => set({ activePanel: "journey", back: null }, false, "openJourney"),
-      openFriends: () => set({ activePanel: "friends", back: null }, false, "openFriends"),
-      openChart: () => set({ activePanel: "chart", back: null }, false, "openChart"),
+      openPlaylist: (playlistId) => set({ activePanel: "playlist", playlistId, back: null, collapsed: false }, false, "openPlaylist"),
+      openFeed: (email = null) => set({ activePanel: "feed", profileEmail: email, back: null, collapsed: false }, false, "openFeed"),
+      openJourney: () => set({ activePanel: "journey", back: null, collapsed: false }, false, "openJourney"),
+      openFriends: () => set({ activePanel: "friends", back: null, collapsed: false }, false, "openFriends"),
+      openChart: () => set({ activePanel: "chart", back: null, collapsed: false }, false, "openChart"),
 
       toggle: (panel) => {
         if (get().activePanel === panel) {
@@ -82,14 +93,17 @@ export const usePanelStore = create<PanelState>()(
           set({ activePanel: null, back: null }, false, "toggle/close");
           return;
         }
-        if (panel === "feed") set({ activePanel: "feed", profileEmail: null, back: null }, false, "toggle/feed");
-        else set({ activePanel: panel, back: null }, false, `toggle/${panel}`);
+        if (panel === "feed") set({ activePanel: "feed", profileEmail: null, back: null, collapsed: false }, false, "toggle/feed");
+        else set({ activePanel: panel, back: null, collapsed: false }, false, `toggle/${panel}`);
       },
 
       close: () => {
         hideConstellation();
-        set({ activePanel: null, back: null }, false, "close");
+        set({ activePanel: null, back: null, collapsed: false }, false, "close");
       },
+
+      /** 접기는 닫기가 아니다 — 별자리도 열린 패널도 그대로 두고 자리만 비켜 준다 */
+      toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed }), false, "toggleCollapsed"),
     }),
     { name: "panel-store" },
   ),

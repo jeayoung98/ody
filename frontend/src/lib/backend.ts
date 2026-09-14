@@ -48,11 +48,15 @@ interface Envelope<T> {
   error: { code: string; message: string } | null;
 }
 
-/** 배포 백엔드 GET 호출. 봉투를 벗겨 data 만 돌려준다 */
-export async function backendGet<T>(path: string): Promise<T> {
+/** 배포 백엔드 호출. 봉투를 벗겨 data 만 돌려준다 */
+async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
   // 토큰은 **있으면 붙인다.** A-17 해제 중에는 없어도 조회가 되고, 원복되면 이게 있어야 한다
   const res = await fetch(`${BACKEND_ORIGIN}${path}`, {
-    headers: BACKEND_ACCESS_TOKEN ? { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` } : {},
+    ...init,
+    headers: {
+      ...(BACKEND_ACCESS_TOKEN ? { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` } : {}),
+      ...init?.headers,
+    },
     cache: "no-store",
   });
 
@@ -83,6 +87,27 @@ export async function backendGet<T>(path: string): Promise<T> {
   }
 
   return body.data;
+}
+
+/** 배포 백엔드 GET 호출 */
+export function backendGet<T>(path: string): Promise<T> {
+  return backendFetch<T>(path);
+}
+
+/**
+ * 배포 백엔드 POST 호출.
+ *
+ * **브라우저가 직접 부르거나 rewrite 로 흘려보내면 안 된다.** 그러면 브라우저의 `Origin` 이
+ * 그대로 실려 가고, 백엔드가 허용 목록에 없는 오리진을 `403 Invalid CORS request` 로 막는다.
+ * 로컬 `http://localhost:3000` 이 정확히 그 경우다 (S15P21A405-303).
+ * 여기서 부르면 Next 서버가 새로 띄우는 요청이라 `Origin` 이 없어 통과한다.
+ */
+export function backendPost<T>(path: string, body: unknown): Promise<T> {
+  return backendFetch<T>(path, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
 }
 
 // ---------------------------------------------------------------------------

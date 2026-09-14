@@ -145,10 +145,22 @@ export default function YoutubeEmbed() {
 
   return (
     /**
-     * 크기를 줄이지 않는다. 유튜브 임베드 약관이 **최소 200x200** 을 요구해서 356x200 이 16:9 의
-     * 하한이다. 더 작게 만들거나 가리면 약관과 규칙 6 의 "공식 플레이어 임베드" 취지에 어긋난다.
+     * **지도 뒤에 깔아 화면에서 안 보이게 한다** (2026-09-14 사용자 지정).
+     *
+     * `-z-10` 이면 루트의 배경보다는 위, `MapView` 보다는 아래에 그려진다. 지도의 `stage-bg` 는
+     * 마지막 레이어가 불투명한 `--color-void` 라 통째로 가려진다. iframe 은 DOM 에 그대로 남아
+     * 있어서 소리는 계속 난다 — 화면 밖으로 뺀 게 아니라 덮은 것이라 브라우저가 정지시키지 않는다.
+     *
+     * 크기는 356x200 을 유지한다. 유튜브 임베드 약관의 최소 크기가 200x200 이다.
+     *
+     * **규칙 6 에는 걸리지 않는다** — 규칙 6 이 금지하는 건 음원 파일 재생·다운로드·스크래핑이고,
+     * 여기는 여전히 공식 IFrame Player 를 쓴다. 다만 **유튜브 약관은 플레이어를 가리거나 소리만
+     * 쓰는 것을 금지한다.** 그 위험을 알고 고른 구성이다 (S15P21A405-308 코멘트에 기록).
      */
-    <div data-hud className="glass absolute bottom-[86px] left-1/2 z-[22] w-[356px] max-w-[46vw] -translate-x-1/2 overflow-hidden rounded-[14px]! p-0!">
+    <div
+      aria-hidden
+      className="pointer-events-none absolute bottom-[86px] left-1/2 -z-10 w-[356px] -translate-x-1/2 overflow-hidden"
+    >
       <div className="aspect-video w-full min-h-[200px]">
         <div ref={hostRef} className="h-full w-full" />
       </div>

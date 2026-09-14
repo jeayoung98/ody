@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.music.mapper.VideoIdMapper">
+
+	<!--
+		외부 videoid API(EC2:8001) 로 확보한 videoId 저장 (S15P21A405-312, 프로토타입).
+		spec 006 FR-006 검증(길이·embeddable)을 거치지 않은 값이라 공식 적재 경로가 정해지면 교체된다.
+	-->
+	<update id="updateVideoId">
+		UPDATE music SET video_id = #{videoId} WHERE id = #{musicId}
+	</update>
+</mapper>

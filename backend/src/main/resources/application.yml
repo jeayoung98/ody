@@ -22,6 +22,9 @@ management:
 # 번들을 바꾸면 이 블록도 같이 바꾼다. 코드에 상수로 박지 않는다.
 # 여정(004)과 주변 탐색(005)이 같은 블록을 읽는다.
 ody:
+  videoid:
+    # 개인 EC2 배포 videoid_api.py (S15P21A405-312, 프로토타입). 실제 주소로 덮어써야 한다.
+    base-url: ${VIDEOID_API_BASE_URL}
   serving:
     bundle: v2.1-pca16
     tau-dup: 1.6624            # 미만은 같은 녹음으로 접는다

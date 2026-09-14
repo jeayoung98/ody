@@ -9,21 +9,6 @@ import { allSongs, embDist, GENRE_NAMES, MOODS, nearestSongs, songById } from ".
 
 export { GENRE_NAMES, MOODS };
 
-/**
- * 목 전용 임베드 영상 (S15P21A405-308).
- *
- * **배포 데이터의 `video_id` 가 전 곡 null 이라** 임베드 재생 경로를 실데이터로는 눌러볼 수가 없다
- * (수집 스크립트가 아직 안 돌았다 — `data/specs/18_db_ingest/spec.md`). 그래서 `USE_MOCK_API=1`
- * 로 띄웠을 때만이라도 공식 플레이어가 실제로 도는 걸 확인할 수 있게 한 곡을 박아 둔다.
- *
- * 아무 문자열이나 넣으면 플레이어가 "영상 없음" 을 띄워 붙은 것처럼 보인다. 그래서 **임베드가
- * 되는 것을 확인한 영상**을 쓴다 (2026-09-14 확인).
- *
- * 목 곡 전부가 같은 영상이라 곡을 넘겨도 같은 소리가 난다. 목이라서 그런 것이고 실데이터에는
- * 곡마다 다른 `video_id` 가 온다.
- */
-const MOCK_VIDEO_ID = "MF7lASJkAPM";
-
 export function mockMusic(id: number): Music {
   const s = songById(id);
   const rand = seeded(id);
@@ -37,7 +22,12 @@ export function mockMusic(id: number): Music {
     duration: 96 + Math.floor(rand() * 268),
     album: `Album ${(id % 25) + 1}`,
     youtubeUrl: s && !s.playable ? null : `https://www.youtube.com/watch?v=mock${id}`,
-    videoId: s && !s.playable ? null : MOCK_VIDEO_ID,
+    /**
+     * **지어내지 않는다** (S15P21A405-324). 백엔드가 `video_id` 를 채웠으니 임베드는 실데이터로
+     * 확인한다. 예전에는 실데이터가 전 곡 null 이라 목에 영상 하나를 박아 뒀는데, 그러면 목으로
+     * 돌려볼 때 **모든 곡이 같은 노래로** 나온다. 아무 문자열이나 넣어도 "영상 없음" 이 뜬다.
+     */
+    videoId: null,
     location: s ? (s.pc as Music["location"]) : null,
     playCnt: s?.weight ?? Math.floor(rand() * 50_000),
     youtubeCnt: s && !s.playable ? 0 : 1 + Math.floor(rand() * 3),

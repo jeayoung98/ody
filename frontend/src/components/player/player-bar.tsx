@@ -48,15 +48,27 @@ export default function PlayerBar() {
   // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
   useDeferredNext();
 
+  /**
+   * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
+   * 여정·플리면 **별자리도 같이 되살린다** (S15P21A405-316) — 패널을 닫으면 별자리도 같이
+   * 꺼지므로, 다시 부르는 길이 여기여야 한다.
+   */
   const openContext = () => {
     if (currentMusicId == null) return;
-    if (context.kind === "playlist") openPlaylist(context.playlistId);
-    else if (context.kind === "journey") {
+    const map = useMapStore.getState();
+    const reopenConstellation = () => {
+      if (map.constellationMusicIds.length >= 2 && map.viewMode !== "constellation") map.toggleConstellationView();
+    };
+    if (context.kind === "playlist") {
+      openPlaylist(context.playlistId);
+      reopenConstellation();
+    } else if (context.kind === "journey") {
       const j = useJourneyStore.getState();
       j.setStart(context.startMusicId);
       j.setEnd(context.endMusicId);
       j.requestRoute();
       openJourney();
+      reopenConstellation();
     } else openSong(currentMusicId);
   };
 

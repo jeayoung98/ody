@@ -92,6 +92,11 @@ interface MapState extends EngineSnapshot {
   setConstellationList: (musicIds: number[], points: MapPoint[] | undefined, source: PlayContext) => void;
   /** 좌상단 택 — 별자리 뷰를 껐다 켰다 */
   toggleConstellationView: () => void;
+  /**
+   * 별자리 뷰만 끈다 (목록·좌표는 남긴다). 패널을 닫을 때 쓴다 (S15P21A405-316) —
+   * 별자리는 패널에 딸린 화면이라 패널이 사라지면 같이 사라져야 한다.
+   */
+  hideConstellationView: () => void;
   /** 목록까지 비운다 (경로 지우기) */
   clearConstellation: () => void;
   /**
@@ -176,6 +181,7 @@ export const useMapStore = create<MapState>()(
           false,
           "toggleConstellationView",
         ),
+      hideConstellationView: () => set((s) => (s.viewMode === "constellation" ? { viewMode: "default" } : {}), false, "hideConstellationView"),
       clearConstellation: () =>
         set(
           (s) => ({

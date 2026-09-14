@@ -8,10 +8,15 @@ import { usePlayerStore } from "@/stores/use-player-store";
  * 사이트 안 재생 — YouTube **공식 플레이어 임베드** (규칙 6 D15 개정, SONG-03).
  *
  * 음원 파일을 건드리지 않는다. 유튜브가 주는 IFrame Player 를 그대로 띄우고 재생만 시킨다.
- * **플레이어를 숨기지 않는다** — 화면 밖에 두고 소리만 빼는 건 임베드 약관 위반이다.
  *
- * `videoId` 가 없는 곡에는 아무것도 그리지 않는다. 그 곡은 플레이어바가 검색 링크를
- * 새 탭으로 여는 예전 경로로 간다 (`lib/youtube.ts`).
+ * **플레이어를 미리 만들어 둔다** (S15P21A405-325). 예전에는 첫 재생 때 그 자리에서 만들었는데,
+ * 그러면 클릭 → 상세 조회 → 스크립트 로드 → 플레이어 생성 → onReady → `playVideo()` 가 전부
+ * 비동기라 **재생 명령이 클릭 제스처에서 멀어졌다.** 브라우저 자동재생 정책이 그걸 막으면
+ * 플레이어가 일시정지를 보고하고, 아래 `onStateChange` 가 그 보고를 받아 `isPlaying` 을 false 로
+ * 되돌린다 — 눌렀는데 멈춰 있고 한 번 더 눌러야 시작되는 것이 이것 때문이었다.
+ *
+ * 이제 앱이 뜨면 빈 플레이어를 먼저 올려둔다. 곡이 정해지면 `loadVideoById` 로 갈아끼우기만
+ * 하므로, 누르는 시점에 플레이어는 이미 준비돼 있고 재생 명령이 제스처 안에서 걸린다.
  *
  * 의존성을 더하지 않았다. IFrame Player API 는 스크립트 한 줄 + 콜백 하나라 `react-youtube`
  * 같은 래퍼가 없어도 된다.
@@ -26,6 +31,8 @@ interface YtPlayer {
   loadVideoById: (id: string) => void;
   playVideo: () => void;
   pauseVideo: () => void;
+  stopVideo: () => void;
+  getPlayerState: () => number;
   destroy: () => void;
 }
 
@@ -33,7 +40,7 @@ interface YtNamespace {
   Player: new (
     el: HTMLElement,
     opts: {
-      videoId: string;
+      videoId?: string;
       playerVars?: Record<string, number | string>;
       events?: {
         onReady?: () => void;
@@ -96,52 +103,59 @@ export default function YoutubeEmbed() {
     else if (e.data === PLAYING && !p.isPlaying) p.toggle();
   }, []);
 
-  // 플레이어는 한 번만 만든다. 곡이 바뀌면 같은 플레이어에 영상만 갈아끼운다
+  /**
+   * 빈 플레이어를 **한 번만** 올린다. 곡은 나중에 갈아끼운다 — 누르는 순간 이미 준비돼 있어야
+   * 재생 명령이 제스처 안에서 걸린다 (S15P21A405-325).
+   */
   useEffect(() => {
-    if (!videoId || playerRef.current || !hostRef.current) return;
     let cancelled = false;
     const host = hostRef.current;
+    if (!host) return;
     loadIframeApi().then(() => {
       if (cancelled || !window.YT || playerRef.current) return;
-      loadedIdRef.current = videoId;
       playerRef.current = new window.YT.Player(host, {
-        videoId,
         // playsinline: iOS 가 전체화면으로 튀지 않게. origin: 임베드 호스트 확인용
         playerVars: { playsinline: 1, rel: 0, modestbranding: 1, origin: window.location.origin },
         events: { onReady: () => setReady(true), onStateChange },
       });
+      // 개발 편의: 콘솔에서 플레이어 상태를 들여다볼 수 있게 (지도 엔진의 `__odyEngine` 과 같은 용도)
+      if (process.env.NODE_ENV !== "production") (window as unknown as { __odyPlayer?: YtPlayer }).__odyPlayer = playerRef.current;
     });
     return () => {
       cancelled = true;
-    };
-  }, [videoId, onStateChange]);
-
-  // 만들어 둔 플레이어는 페이지를 떠날 때만 버린다
-  useEffect(
-    () => () => {
       playerRef.current?.destroy();
       playerRef.current = null;
       loadedIdRef.current = null;
-    },
-    [],
-  );
+    };
+  }, [onStateChange]);
 
-  // 곡 교체
+  /**
+   * 곡 교체. `loadVideoById` 는 스스로 재생을 시작하지만 **그것만 믿지 않는다** — 자동재생이
+   * 막히면 조용히 멈춰 있다. 아래 재생·정지 효과가 `videoId` 도 보고 있어서 한 번 더 단언한다.
+   *
+   * `videoId` 가 없는 곡(검색 링크로 가는 곡)으로 넘어가면 소리를 끊는다. 예전에는 컴포넌트가
+   * 통째로 사라지며 플레이어가 버려졌지만, 이제는 계속 살아 있으므로 여기서 멈춰 줘야 한다.
+   */
   useEffect(() => {
-    if (!ready || !videoId || !playerRef.current) return;
+    if (!ready || !playerRef.current) return;
+    if (!videoId) {
+      if (loadedIdRef.current) {
+        playerRef.current.stopVideo();
+        loadedIdRef.current = null;
+      }
+      return;
+    }
     if (loadedIdRef.current === videoId) return;
     loadedIdRef.current = videoId;
     playerRef.current.loadVideoById(videoId);
   }, [ready, videoId]);
 
-  // 재생·정지를 스토어에 맞춘다
+  // 재생·정지를 스토어에 맞춘다. `videoId` 도 본다 — 곡을 갈아끼운 직후 한 번 더 단언하려고
   useEffect(() => {
-    if (!ready || !playerRef.current) return;
+    if (!ready || !videoId || !playerRef.current) return;
     if (isPlaying) playerRef.current.playVideo();
     else playerRef.current.pauseVideo();
-  }, [ready, isPlaying]);
-
-  if (!videoId) return null;
+  }, [ready, isPlaying, videoId]);
 
   return (
     /**

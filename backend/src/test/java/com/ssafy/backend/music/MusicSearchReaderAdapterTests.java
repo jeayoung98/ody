@@ -2,6 +2,7 @@ package com.ssafy.backend.music;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -23,19 +24,16 @@ import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.mapper.MusicSearchMapper;
 import com.ssafy.backend.music.search.MusicSearchReader.PageResult;
 import com.ssafy.backend.music.search.MusicSearchReaderAdapter;
-import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * 검색 어댑터 단위 테스트 (매퍼 mock). SQL 자체는 실 DB(T204) 대상이고,
  * 여기서는 어댑터가 지는 책임 — 패턴 조립·offset 계산·좌표 보존·장르 묶기 — 만 본다.
- * videoId 실시간 조회 자체(S15P21A405-312)는 VideoIdEnricherTests 에서 다룬다 — 여기서는
- * 어댑터가 VideoIdEnricher 에 올바른 인자로 위임하는지만 본다.
+ * videoId 는 DB 값을 그대로 통과시킬 뿐 외부 조회를 하지 않는다(S15P21A405-321).
  */
 class MusicSearchReaderAdapterTests {
 
 	private final MusicSearchMapper mapper = mock(MusicSearchMapper.class);
-	private final VideoIdEnricher videoIdEnricher = mock(VideoIdEnricher.class);
-	private final MusicSearchReaderAdapter adapter = new MusicSearchReaderAdapter(mapper, videoIdEnricher);
+	private final MusicSearchReaderAdapter adapter = new MusicSearchReaderAdapter(mapper);
 
 	private static MusicSearchRow row(long id) {
 		MusicSearchRow r = new MusicSearchRow();
@@ -160,16 +158,17 @@ class MusicSearchReaderAdapterTests {
 	}
 
 	@Test
-	void search_delegatesVideoIdResolution_toEnricher() {
-		MusicSearchRow r = row(1L);
-		r.setVideoId("existing1234");
-		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(r));
+	void search_passesThroughStoredVideoId_withoutExternalLookup() {
+		MusicSearchRow withId = row(1L);
+		withId.setVideoId("existing1234");
+		MusicSearchRow withoutId = row(2L);
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong()))
+				.thenReturn(List.of(withId, withoutId));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
-		when(videoIdEnricher.resolve(1L, "a1", "t1", "existing1234")).thenReturn("existing1234");
 
-		MusicSummary summary = adapter.search("q", 0, 10).content().get(0);
+		List<MusicSummary> content = adapter.search("q", 0, 10).content();
 
-		assertEquals("existing1234", summary.videoId());
-		verify(videoIdEnricher).resolve(1L, "a1", "t1", "existing1234");
+		assertEquals("existing1234", content.get(0).videoId());
+		assertNull(content.get(1).videoId()); // 없으면 null 그대로 — 외부 API 를 부르지 않는다(S15P21A405-321)
 	}
 }

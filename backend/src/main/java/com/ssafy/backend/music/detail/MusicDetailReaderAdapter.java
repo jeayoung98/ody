@@ -1,6 +1,5 @@
 package com.ssafy.backend.music.detail;
 
-import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -19,20 +18,26 @@ import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * {@link MusicDetailReader} 의 MyBatis 어댑터 (정본 §3.2, 헌법 X: BE2 계약 / 실행 분리).
  *
  * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-006).
  * 거리 척도는 서빙 baseline(v2.1-pca16) 위의 L2({@code <->}, music_location_hnsw_idx 와 같은 연산자).
+ *
+ * videoId 가 DB 에 없는 결과는 {@link VideoIdEnricher} 가 외부 videoid API 로 실시간 조회해
+ * 채운다(S15P21A405-312, 프로토타입) — 곡상세·주변탐색·플레이리스트가 이 어댑터를 공유한다.
  */
 @Repository
 public class MusicDetailReaderAdapter implements MusicDetailReader {
 
 	private final MusicDetailMapper mapper;
+	private final VideoIdEnricher videoIdEnricher;
 
-	public MusicDetailReaderAdapter(MusicDetailMapper mapper) {
+	public MusicDetailReaderAdapter(MusicDetailMapper mapper, VideoIdEnricher videoIdEnricher) {
 		this.mapper = mapper;
+		this.videoIdEnricher = videoIdEnricher;
 	}
 
 	@Override
@@ -71,7 +76,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				.toList();
 	}
 
-	private static MusicDetail toDetail(MusicDetailRow row, List<String> genres) {
+	private MusicDetail toDetail(MusicDetailRow row, List<String> genres) {
 		return new MusicDetail(
 				row.getId(),
 				row.getMbid(),
@@ -82,7 +87,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				row.getAlbum(),
 				genres,
 				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-				VIDEO_ID_NOT_LOADED,
+				videoIdEnricher.resolve(row.getId(), row.getArtist(), row.getTitle(), row.getVideoId()),
 				row.toLocation(),
 				row.getPlayCnt(),
 				row.getYoutubeCnt());
@@ -103,7 +108,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						VIDEO_ID_NOT_LOADED,
+						videoIdEnricher.resolve(row.getId(), row.getArtist(), row.getTitle(), row.getVideoId()),
 						row.toLocation()))
 				.toList();
 	}

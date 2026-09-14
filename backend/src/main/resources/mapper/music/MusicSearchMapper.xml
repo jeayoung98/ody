@@ -84,7 +84,7 @@
 	-->
 
 	<select id="findPage" timeout="2" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
-		SELECT m.id, m.title, m.artist, m.album,
+		SELECT m.id, m.title, m.artist, m.album, m.video_id,
 		<include refid="locationColumns"/>
 		FROM (
 			(SELECT m.id, 0 AS tier FROM music m

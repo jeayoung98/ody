@@ -15,7 +15,6 @@ import com.ssafy.backend.music.dto.MusicSearchRow;
 import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.mapper.MusicSearchMapper;
-import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * {@link MusicSearchReader} 의 MyBatis 어댑터 (정본 §3.1, 헌법 X: BE2 계약 / 실행 분리).
@@ -23,18 +22,17 @@ import com.ssafy.backend.music.videoid.VideoIdEnricher;
  * 매칭·정렬·페이징은 SQL 이 하고, 여기서는 앞일치 패턴 조립과 장르 합치기만 한다.
  * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-006).
  *
- * videoId 가 DB 에 없는 결과는 {@link VideoIdEnricher} 가 외부 videoid API 로 실시간 조회해
- * 채운다(S15P21A405-312, 프로토타입).
+ * videoId 는 DB 에 있는 값만 그대로 내려준다. 외부 videoid API 실시간 조회(S15P21A405-312) 는
+ * 검색 결과 최대 10건마다 순차 호출돼 응답이 느려져 걷어냈다(S15P21A405-321) — 곡 상세
+ * ({@code MusicDetailReaderAdapter}) 는 1건만 조회하므로 그대로 유지한다.
  */
 @Repository
 public class MusicSearchReaderAdapter implements MusicSearchReader {
 
 	private final MusicSearchMapper mapper;
-	private final VideoIdEnricher videoIdEnricher;
 
-	public MusicSearchReaderAdapter(MusicSearchMapper mapper, VideoIdEnricher videoIdEnricher) {
+	public MusicSearchReaderAdapter(MusicSearchMapper mapper) {
 		this.mapper = mapper;
-		this.videoIdEnricher = videoIdEnricher;
 	}
 
 	@Override
@@ -73,7 +71,7 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						videoIdEnricher.resolve(row.getId(), row.getArtist(), row.getTitle(), row.getVideoId()),
+						row.getVideoId(),
 						row.toLocation()))
 				.toList(), hasNext);
 	}

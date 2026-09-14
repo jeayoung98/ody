@@ -606,13 +606,24 @@ export class MapEngine {
     this.clampOverlay();
   }
 
-  /** 별자리가 화면 밖으로 완전히 나가지 않게 — 배치 중심이 영역 반쪽 안에 남는다 */
+  /**
+   * 별자리가 화면 밖으로 완전히 나가지 않게 — 배치 중심이 영역 반쪽 안에 남는다.
+   *
+   * **한계는 확대 배율을 따라 커진다** (S15P21A405-306). 배치는 영역에 꽉 차게 맞춰 두므로
+   * `zoom` 배로 키우면 영역 밖으로 `(zoom - 1)` 배만큼 삐져나간다. 그만큼 더 밀 수 있어야
+   * 바깥쪽 곡에 손이 닿는다. 예전에는 `slack` 만 썼는데, 우측 패널이 열려 영역이 좁을 때
+   * (가로 317px → 한계 71px) 4배로 확대해도 사실상 제자리였다.
+   *
+   * 배율 1 이면 `zoom - 1 = 0` 이라 예전과 똑같이 `slack` 만 남는다.
+   */
   private clampOverlay() {
     const f = this.constellationRect();
-    const lx = ((f.x1 - f.x0) / 2) * PAN_LIMIT.slack;
-    const ly = ((f.y1 - f.y0) / 2) * PAN_LIMIT.slack;
-    this.overlay.dx = Math.min(Math.max(this.overlay.dx, -lx), lx);
-    this.overlay.dy = Math.min(Math.max(this.overlay.dy, -ly), ly);
+    const o = this.overlay;
+    const reach = Math.max(0, o.zoom - 1) + PAN_LIMIT.slack;
+    const lx = ((f.x1 - f.x0) / 2) * reach;
+    const ly = ((f.y1 - f.y0) / 2) * reach;
+    o.dx = Math.min(Math.max(o.dx, -lx), lx);
+    o.dy = Math.min(Math.max(o.dy, -ly), ly);
   }
 
   /**

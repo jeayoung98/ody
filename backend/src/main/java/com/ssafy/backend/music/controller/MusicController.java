@@ -6,6 +6,8 @@ import java.util.Map;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,9 +19,12 @@ import com.ssafy.backend.music.retrieval.LayerBox;
 import com.ssafy.backend.music.dto.MajorResponse;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
+import com.ssafy.backend.music.dto.VideoIdBatchRequest;
+import com.ssafy.backend.music.dto.VideoIdBatchResponse;
 import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
@@ -128,5 +133,16 @@ public class MusicController {
 	@GetMapping("/nearby")
 	public ApiResponse<NearbyResponse> nearby(@RequestParam @Min(1) long id) {
 		return ApiResponse.success(nearbyService.findNearby(id));
+	}
+
+	/**
+	 * musicId 목록 → videoId 일괄 조회 (S15P21A405-322, 프로토타입). 최대 {@value VideoIdBatchRequest#MAX_IDS}개.
+	 *
+	 * <p>DB 에 이미 있으면 그대로 내려주고, 없으면 외부 videoid API(EC2:8001) 를 호출해 채운 뒤 저장한다.
+	 * spec 006 FR-006(길이·embeddable 검증)은 적용하지 않는다 — 팀 상의 전 임시 경로다.
+	 */
+	@PostMapping("/videoid")
+	public ApiResponse<VideoIdBatchResponse> videoIds(@RequestBody @Valid VideoIdBatchRequest request) {
+		return ApiResponse.success(musicService.getVideoIds(request.musicIds()));
 	}
 }

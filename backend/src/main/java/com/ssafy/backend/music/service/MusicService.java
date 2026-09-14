@@ -17,6 +17,10 @@ import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
+import com.ssafy.backend.music.dto.NeighborTrack;
+import com.ssafy.backend.music.dto.VideoIdBatchResponse;
+import com.ssafy.backend.music.dto.VideoIdItem;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 import lombok.extern.slf4j.Slf4j;
 
@@ -36,14 +40,16 @@ public class MusicService {
 	private final Optional<MusicDetailReader> detailReader;
 	private final NearbyService nearbyService;
 	private final Optional<MajorTrackReader> majorReader;
+	private final VideoIdEnricher videoIdEnricher;
 
 	// ponytail: 어댑터가 아직 없는 port 는 Optional 주입. 빈이 올라오면 자동 연결된다.
 	public MusicService(Optional<MusicSearchReader> searchReader, Optional<MusicDetailReader> detailReader,
-			Optional<MajorTrackReader> majorReader, NearbyService nearbyService) {
+			Optional<MajorTrackReader> majorReader, NearbyService nearbyService, VideoIdEnricher videoIdEnricher) {
 		this.searchReader = searchReader;
 		this.detailReader = detailReader;
 		this.majorReader = majorReader;
 		this.nearbyService = nearbyService;
+		this.videoIdEnricher = videoIdEnricher;
 	}
 
 	/**
@@ -81,6 +87,10 @@ public class MusicService {
 	/**
 	 * 노래 상세 + 주변곡 조회 (정본 §3.2).
 	 * 없는 곡 → MUSIC_NOT_FOUND(404). 최근접 선정·정렬·자기 제외는 조회 port(어댑터) 책임.
+	 *
+	 * <p>videoId 가 DB 에 없으면 외부 videoid API 로 실시간 조회해 채운다(S15P21A405-312, 프로토타입).
+	 * 곡 상세만 이 조회를 한다 — 검색·주변탐색·경로탐색은 여러 건을 한 번에 돌려주는 경로라
+	 * 순차 호출 시 응답이 느려져 걷어냈다(S15P21A405-321, S15P21A405-322).
 	 */
 	public MusicDetailResponse getDetail(long id) {
 		MusicDetailReader reader = detailReader.orElseThrow(
@@ -90,7 +100,48 @@ public class MusicService {
 		// 이웃 선정은 주변 탐색(005)과 같은 코드 경로를 지나간다 — 규칙이 두 벌이 되면
 		// 같은 곡에 곡 상세와 주변 탐색 뷰가 다른 목록을 준다(005 FR-023, SC-006).
 		NearbyService.NeighborResult result = nearbyService.neighborsOf(detail);
-		log.info("[Music] 상세 조회 완료 id={} neighbors={}", id, result.neighbors().size());
-		return new MusicDetailResponse(detail, result.neighbors(), result.lowSimilarity());
+
+		MusicDetail enrichedDetail = withVideoId(detail,
+				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId()));
+		List<NeighborTrack> enrichedNeighbors = result.neighbors().stream().map(this::enrichNeighbor).toList();
+
+		log.info("[Music] 상세 조회 완료 id={} neighbors={}", id, enrichedNeighbors.size());
+		return new MusicDetailResponse(enrichedDetail, enrichedNeighbors, result.lowSimilarity());
+	}
+
+	private NeighborTrack enrichNeighbor(NeighborTrack neighbor) {
+		MusicSummary summary = neighbor.music();
+		String videoId = videoIdEnricher.resolve(summary.id(), summary.artist(), summary.title(), summary.videoId());
+		return new NeighborTrack(withVideoId(summary, videoId), neighbor.distance());
+	}
+
+	private static MusicDetail withVideoId(MusicDetail detail, String videoId) {
+		return new MusicDetail(detail.id(), detail.mbid(), detail.title(), detail.artist(), detail.bpm(),
+				detail.duration(), detail.album(), detail.genres(), detail.youtubeUrl(), videoId,
+				detail.location(), detail.playCnt(), detail.youtubeCnt());
+	}
+
+	private static MusicSummary withVideoId(MusicSummary summary, String videoId) {
+		return new MusicSummary(summary.id(), summary.title(), summary.artist(), summary.album(),
+				summary.genres(), summary.youtubeUrl(), videoId, summary.location());
+	}
+
+	/**
+	 * musicId 목록으로 videoId 를 일괄 조회한다 (S15P21A405-322, 프로토타입).
+	 * DB 에 이미 있으면 그대로, 없으면 외부 videoid API 를 호출해 채우고 저장한다.
+	 * 요청한 musicId 중 없는 곡은 결과에서 빠진다(예외 아님) — 다른 일괄 조회들과 같은 관례.
+	 */
+	public VideoIdBatchResponse getVideoIds(List<Long> musicIds) {
+		MusicDetailReader reader = detailReader.orElseThrow(
+				() -> new UnsupportedOperationException("music/videoid: BE4 조회 어댑터 대기 중 (B-D)"));
+		List<MusicSummary> summaries = reader.findSummariesByIds(musicIds);
+
+		List<VideoIdItem> items = summaries.stream()
+				.map(summary -> new VideoIdItem(summary.id(),
+						videoIdEnricher.resolve(summary.id(), summary.artist(), summary.title(), summary.videoId())))
+				.toList();
+
+		log.info("[VideoId] 일괄 조회 완료 요청={} 응답={}", musicIds.size(), items.size());
+		return new VideoIdBatchResponse(items);
 	}
 }

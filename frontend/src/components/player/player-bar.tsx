@@ -3,6 +3,7 @@
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -44,6 +45,8 @@ export default function PlayerBar() {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
+  // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
+  useDeferredNext();
 
   /**
    * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
@@ -117,7 +120,7 @@ export default function PlayerBar() {
         <p className="truncate text-[10px] text-ink-3">
           {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
         </p>
-        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} />
+        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} durationSec={data?.duration} />
       </button>
       {queue.length > 0 && (
         <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">

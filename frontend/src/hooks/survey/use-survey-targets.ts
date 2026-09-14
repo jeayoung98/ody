@@ -1,17 +1,10 @@
 "use client";
 
 import { useMemo, useState } from "react";
-import type { SurveyCompare, SurveyPrompt, SurveySong, SurveyTarget } from "@/types/survey";
+import type { SurveyPrompt, SurveySong, SurveyTarget } from "@/types/survey";
 
-/** 탐색 결과의 곡 하나 — 표를 만드는 데 필요한 것만. 전부 탐색 응답 안에 있는 값이다 */
-interface Track extends SurveySong {
-  musicId: number;
-}
-
-/** 화면용 값만 떼어낸다. `musicId` 는 전송 타입이 따로 들고 있어서 여기선 뺀다 */
-function show(t: Track): SurveySong {
-  return { title: t.title, artist: t.artist, genreId: t.genreId, coverUrl: t.coverUrl, durationSec: t.durationSec };
-}
+/** 탐색 결과의 곡 하나. 전부 이미 받아 둔 탐색 응답 안에 있어서 새 요청이 없다 */
+type Track = SurveySong;
 
 /**
  * `sessionId` 를 목록 단위로 붙들어 둔다 (S15P21A405-294).
@@ -50,7 +43,7 @@ export function useNearbyTargets(center: Track | null | undefined, neighbors: re
     neighbors.forEach((n, i) => {
       const target: SurveyTarget = { sessionId, mode: "nearby", rank: i + 1, anchorMusicId: center.musicId, musicId: n.musicId };
       // 중심은 이웃을 몇 곡 듣든 안 바뀐다 — 후보가 늘 하나다
-      table.set(n.musicId, { target, subject: show(n), candidates: [{ musicId: center.musicId, song: show(center) }] });
+      table.set(n.musicId, { target, subject: n, candidates: [center] });
     });
     return table;
   }, [sessionId, center, neighbors]);
@@ -84,9 +77,9 @@ export function useJourneyTargets(stops: readonly Track[] | undefined) {
         prevMusicId: stops[i].musicId,
         musicId: stop.musicId,
       };
-      // 앞 역부터 거슬러 올라가며 후보로 쌓는다 — 5초만 듣고 넘긴 역은 트리거가 건너뛴다
-      const candidates: SurveyCompare[] = stops.slice(0, i + 1).reverse().map((s) => ({ musicId: s.musicId, song: show(s) }));
-      table.set(stop.musicId, { target, subject: show(stop), candidates });
+      // 비교 상대는 **바로 앞 역 하나뿐**이다. 그 역을 못 들었으면 묻지 않는다 —
+      // 더 앞까지 거슬러 올라가면 경로에 없는 전환(1→3)을 평가하게 된다
+      table.set(stop.musicId, { target, subject: stop, candidates: [stops[i]] });
     });
     return table;
   }, [sessionId, stops]);

@@ -46,18 +46,22 @@ const RESOLVE_MIN_MS = SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS;
  * 못 채우고 떠난 곡은 묻지 않고 무응답 행만 보낸다 (`survey-runner` 가 처리한다) —
  * 스킵한 곡이 통계에서 통째로 빠지면 정밀도가 실제보다 좋게 나오기 때문이다.
  *
- * ⚠️ **청취 시간은 아직 근사값이다.** 앱 안에서 실제 음원을 재생하지 않아(규칙 6)
- * "얼마나 들었는지"를 알 수 없어서, **그 곡이 현재 곡으로 머문 시간**으로 대신 잰다.
- * 자동재생(S15P21A405-258)이 붙으면 실제 재생 시간으로 바꾼다.
+ * **20초는 실제로 재생된 시간이다.** 규칙 6 이 개정돼 공식 플레이어 임베드가 허용되고
+ * (S15P21A405-290) `videoId` 가 채워지면서, 유튜브에서 멈추면 `isPlaying` 이 따라 내려온다.
+ * 그래서 멈춰 있는 동안은 타이머를 안 걸고, 다시 틀면 **남은 만큼만** 건다.
+ *
+ * `videoId` 가 없는 곡은 임베드가 안 붙어 `isPlaying` 이 안 바뀐다 — 그때는 예전처럼
+ * "현재 곡으로 머문 시간" 으로 수렴한다.
  *
  * 개발 중에는 `?survey=force` 로 즉시 띄운다 (`?survey=off` 로 해제).
  *
  * **최종 배포 때 걷어낼 기능이다.**
  */
-export function useSurveyTrigger(prompt: SurveyPrompt | null) {
+export function useSurveyTrigger(prompt: SurveyPrompt | null, playing: boolean) {
   const open = useSurveyStore((s) => s.open);
   const hasSent = useSurveyStore((s) => s.hasSent);
   const resolve = useSurveyStore((s) => s.resolve);
+  const stintMs = useSurveyStore((s) => s.stintMs);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -72,13 +76,25 @@ export function useSurveyTrigger(prompt: SurveyPrompt | null) {
     const resolved = resolve(prompt, RESOLVE_MIN_MS);
     if (!resolved) return;
 
-    // TODO(자동재생): 실제 재생이 붙으면 이 지연을 "실제 청취 시간 >= SURVEY_MIN_LISTEN_MS" 로 바꾼다
-    timer.current = setTimeout(() => open(resolved), SURVEY_FORCED ? 0 : SURVEY_MIN_LISTEN_MS);
+    if (SURVEY_FORCED) {
+      timer.current = setTimeout(() => open(resolved), 0);
+      return () => {
+        if (timer.current) clearTimeout(timer.current);
+      };
+    }
+
+    /**
+     * **재생된 시간으로 20초를 센다.** 멈춰 있으면 타이머를 아예 안 건다 — 그동안은 시계가
+     * 안 돌기 때문이다. 다시 틀면 이 effect 가 다시 돌면서 **남은 만큼만** 건다.
+     */
+    if (!playing) return;
+    const remaining = Math.max(0, SURVEY_MIN_LISTEN_MS - stintMs(prompt.target.musicId));
+    timer.current = setTimeout(() => open(resolved), remaining);
 
     return () => {
       if (timer.current) clearTimeout(timer.current);
     };
     // target 은 객체라 매 렌더 새 참조일 수 있다 — 값으로 비교해 타이머가 리셋되지 않게 한다
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, open, hasSent, resolve]);
+  }, [prompt?.target.sessionId, prompt?.target.rank, prompt?.target.musicId, playing, open, hasSent, resolve, stintMs]);
 }

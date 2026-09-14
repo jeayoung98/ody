@@ -593,26 +593,51 @@ export class MapEngine {
     this.clampOverlay();
   }
 
-  /** 커서 아래 지점을 붙잡은 채 확대 */
-  overlayWheel(deltaY: number, mx: number, my: number) {
+  /**
+   * 영역 한복판을 붙잡은 채 확대 (S15P21A405-306).
+   *
+   * 예전에는 **커서 아래 지점**을 붙잡았다. 지도 본체에서는 그게 맞지만 별자리 영역은 우측
+   * 패널을 뺀 좁은 띠라, 커서가 위아래 끝에 있으면 4배로 키우는 순간 별자리가 통째로 띠 밖으로
+   * 밀려났다 — 확대했더니 아무것도 안 보이고, 다시 찾으려면 두 축을 다 더듬어야 했다.
+   *
+   * 한복판을 붙잡으면 확대해도 보고 있던 자리가 그대로 있고, 거기서 끌어 끝 별로 가면 된다.
+   */
+  overlayWheel(deltaY: number) {
     const o = this.overlay;
-    const f = this.constellationRect();
     const next = Math.min(OVERLAY_ZOOM.max, Math.max(OVERLAY_ZOOM.min, o.zoom * Math.exp(-deltaY * WHEEL_ZOOM)));
-    const ux = (mx - f.cx - o.dx) / o.zoom;
-    const uy = (my - f.cy - o.dy) / o.zoom;
+    // 한복판 고정 = 지금 한복판에 있는 배치 지점이 그대로 한복판에 남는다
+    const k = next / o.zoom;
     o.zoom = next;
-    o.dx = mx - f.cx - ux * next;
-    o.dy = my - f.cy - uy * next;
+    o.dx *= k;
+    o.dy *= k;
     this.clampOverlay();
   }
 
-  /** 별자리가 화면 밖으로 완전히 나가지 않게 — 배치 중심이 영역 반쪽 안에 남는다 */
+  /**
+   * 밀 수 있는 한계 (S15P21A405-306).
+   *
+   * 기준은 **"가장 바깥 곡을 영역 한복판까지 끌어올 수 있어야 한다"** 다. 그래서 한계를
+   * 화면 크기가 아니라 **배치가 실제로 뻗은 거리**에서 뽑는다 — 그 거리는 확대하면 같이 커지므로
+   * 배율이 몇이든 끝 별에 손이 닿는다. 거기에 기존 여유(`slack`)를 더해 조금 더 밀리게 둔다.
+   *
+   * 예전에는 영역 반쪽의 고정 비율만 썼다. 우측 패널이 열려 영역이 가로 300px 로 좁아지면
+   * 한계가 67px 이라, 4배로 확대해 폭 1100px 이 된 배치의 끝 별에는 닿을 수가 없었다.
+   *
+   * 한계 끝까지 밀어도 바깥 곡은 중심에서 `slack` 만큼만 벗어나므로 **별자리가 화면 밖으로
+   * 통째로 나가지는 않는다** — 원래 지키려던 성질은 그대로다.
+   */
   private clampOverlay() {
     const f = this.constellationRect();
-    const lx = ((f.x1 - f.x0) / 2) * PAN_LIMIT.slack;
-    const ly = ((f.y1 - f.y0) / 2) * PAN_LIMIT.slack;
-    this.overlay.dx = Math.min(Math.max(this.overlay.dx, -lx), lx);
-    this.overlay.dy = Math.min(Math.max(this.overlay.dy, -ly), ly);
+    const b = this.constellation?.box;
+    const fit = this.constellationFit();
+    const o = this.overlay;
+    // 배치 중심에서 가장 먼 곡까지의 거리 (화면 px)
+    const ex = b ? ((b.x1 - b.x0) / 2) * fit.s * o.zoom : 0;
+    const ey = b ? ((b.y1 - b.y0) / 2) * fit.s * o.zoom : 0;
+    const lx = ex + ((f.x1 - f.x0) / 2) * PAN_LIMIT.slack;
+    const ly = ey + ((f.y1 - f.y0) / 2) * PAN_LIMIT.slack;
+    o.dx = Math.min(Math.max(o.dx, -lx), lx);
+    o.dy = Math.min(Math.max(o.dy, -ly), ly);
   }
 
   /**

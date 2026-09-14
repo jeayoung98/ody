@@ -103,7 +103,7 @@ class MusicDetailServiceTests {
 		serviceWith(reader, nearby).getDetail(10234L);
 
 		verify(nearby).neighborsOf(center);
-		verify(reader, Mockito.never()).findSummariesByMbids(Mockito.anyList());
+		verify(reader, Mockito.never()).findSummariesByIds(Mockito.anyList());
 	}
 
 	@Test

@@ -89,11 +89,11 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 	}
 
 	@Override
-	public List<MusicSummary> findSummariesByMbids(List<String> mbids) {
-		if (mbids.isEmpty()) {
+	public List<MusicSummary> findSummariesByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
 			return List.of();               // IN () 는 문법 오류
 		}
-		List<MusicDetailRow> rows = mapper.findByMbids(mbids);
+		List<MusicDetailRow> rows = mapper.findByIds(ids);
 		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
 		return rows.stream()
 				.map(row -> new MusicSummary(

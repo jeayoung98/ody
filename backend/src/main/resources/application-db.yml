@@ -7,6 +7,11 @@ spring:
       maximum-pool-size: 5
       minimum-idle: 1
       connection-timeout: 5000
+      # prepareThreshold=0: 서버사이드 prepared statement(제네릭 플랜)로 전환하지 않는다.
+      # SPRING_DATASOURCE_URL 은 배포 호스트 .env 의 시크릿이라 URL 파라미터로 넣을 수 없어
+      # 커넥션 속성으로 강제한다(S15P21A405-304, application.yml 쪽 주석 참고).
+      data-source-properties:
+        prepareThreshold: 0
   neo4j:
     uri: ${NEO4J_URI}
     authentication:

@@ -21,14 +21,17 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   const setEnd = useJourneyStore((s) => s.setEnd);
   const openComposer = useOpenJourneyComposer();
 
-  const canPlay = music.youtubeUrl != null;
+  /** 사이트 안에서 들을 수 있는 곡인가 — 공식 플레이어 임베드가 붙는다 (규칙 6 D15) */
+  const canEmbed = music.videoId != null;
+  const canPlay = canEmbed || music.youtubeUrl != null;
 
   /**
-   * 앱 안에서는 소리를 내지 않는다 (규칙 6). 유튜브 검색 결과를 새 탭으로 넘기고,
-   * 앱에는 "이 곡을 듣는 중" 이라는 상태만 남긴다 — 내 표식이 그 곡으로 이동한다 (MAP-08).
+   * `videoId` 가 있으면 **사이트 안에서** 듣는다 — 하단의 공식 플레이어가 스토어를 보고 재생한다.
+   * 없으면 예전대로 유튜브 검색 결과를 새 탭으로 넘긴다 (규칙 6).
+   * 어느 쪽이든 앱에는 "이 곡을 듣는 중" 상태가 남아 내 표식이 그 곡으로 이동한다 (MAP-08).
    */
   const handlePlay = () => {
-    openYoutube(music.youtubeUrl);
+    if (!canEmbed) openYoutube(music.youtubeUrl);
     playSingle(music.id);
     recordPlay.mutate({ musicId: music.id, source: "MAP", playedMs: 0 });
   };
@@ -37,7 +40,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
     <div className="relative flex flex-col gap-2">
       <div className="flex gap-2">
         <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay} disabled={!canPlay}>
-          <PlayIcon size={13} /> {canPlay ? "유튜브에서 듣기" : "재생 불가"}
+          <PlayIcon size={13} /> {canEmbed ? "재생" : canPlay ? "유튜브에서 듣기" : "재생 불가"}
         </Button>
         <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
           ＋ 플리

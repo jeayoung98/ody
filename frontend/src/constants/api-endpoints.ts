@@ -112,11 +112,14 @@ export const API_ENDPOINTS = {
 
   constellation: {
     /**
-     * **백엔드 실경로다** (`/bff/` 가 아니다). 좌표 원천을 서버 한 곳(서빙 baseline)으로 고정해야
-     * 같은 플리를 여러 사용자가 같은 모양으로 본다 — 그래서 프론트가 계산하던 목을 걷어냈다.
-     * `live-api-paths.ts` 에 등록해 rewrite 로 그대로 흘려보낸다 (S15P21A405-278).
+     * 좌표 원천은 여전히 **백엔드 한 곳**이다 (서빙 baseline) — 라우트 핸들러가 계산하지 않고
+     * `/api/constellations/layout` 을 대신 부르기만 한다 (S15P21A405-278).
+     *
+     * rewrite 로 흘려보내다가 `/bff/` 로 되돌렸다 (S15P21A405-303). rewrite 는 브라우저의
+     * `Origin` 을 그대로 백엔드에 넘기는데, 허용 목록에 없는 오리진은 403 으로 막힌다 —
+     * 로컬에서 별자리가 아예 안 그려졌다.
      */
-    layout: "/api/constellations/layout",
+    layout: "/bff/constellations/layout",
   },
 
   journey: {

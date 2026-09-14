@@ -143,6 +143,16 @@ export const usePlayerStore = create<PlayerState>()(
       prev: () => {
         const { queue, queueIndex } = get();
         if (queueIndex - 1 < 0) return;
+        /**
+         * 막는 창이 떠 있으면 **그냥 무시한다** (S15P21A405-258).
+         *
+         * next 처럼 예약하지 않는다 — 이건 사람이 버튼을 누를 때만 불리므로, 놓쳐도 답한 뒤
+         * 다시 누르면 된다. 예약해 두면 제출하는 순간 갑자기 뒤로 가버려서 더 이상하다.
+         *
+         * 지금은 카드가 화면을 덮어 버튼을 누를 수 없지만, 그 불변식이 CSS 에만 걸려 있다.
+         * 카드 모양을 바꾸는 순간 뚫리므로 여기서 코드로 막는다.
+         */
+        if (useBlockingStore.getState().blockers.size > 0) return;
         set({ queueIndex: queueIndex - 1, currentMusicId: queue[queueIndex - 1] }, false, "prev");
       },
 

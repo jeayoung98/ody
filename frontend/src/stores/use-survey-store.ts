@@ -14,16 +14,20 @@ interface SurveyState {
   /** 지금 묻고 있는 것. null 이면 설문이 떠 있지 않다 */
   prompt: ResolvedPrompt | null;
   /**
-   * 곡별 누적 청취 시간(ms).
+   * 곡별 **마지막 체류 시간**(ms). 누적이 아니다.
    *
-   * **지나간 곡을 얼마나 들었는지는 여기서만 알 수 있다.** 지금 듣는 곡은 타이머로 재면
+   * 15초 듣고 나갔다가 나중에 10초 더 들었으면 **10초**다. 25초로 치지 않는다 —
+   * 15초는 이미 `skipped` 행으로 따로 기록됐고, 그걸 다시 "들은 시간" 으로 세면
+   * 한 값이 두 뜻을 갖는다.
+   *
+   * 지나간 곡을 얼마나 들었는지는 여기서만 알 수 있다 — 지금 듣는 곡은 타이머로 재면
    * 되지만, 이미 떠나보낸 곡은 잴 방법이 없다.
    */
-  listenedMs: Record<number, number>;
+  lastStintMs: Record<number, number>;
   /**
    * **지금 듣고 있는 곡과 그 곡이 현재 곡이 된 시각.**
    *
-   * 장부(`listenedMs`)는 곡을 떠날 때 마감된다. 그래서 **아직 듣고 있는 곡은 장부에 없다** —
+   * 장부(`lastStintMs`)는 곡을 떠날 때 마감된다. 그래서 **아직 듣고 있는 곡은 장부에 없다** —
    * 설문 카드는 그 곡이 재생 중일 때 뜨므로, 장부만 읽으면 늘 0 이 나간다.
    * 실제로 그랬다: 답한 행의 `listened_sec` 이 전부 0 이었다.
    */
@@ -35,21 +39,23 @@ interface SurveyState {
   sent: Set<string>;
 
   /**
-   * 비교 상대를 확정한다 — **20초 이상 들은 가장 가까운 후보**.
+   * 물어도 되는 질문인지 판정한다 — **비교 상대를 그 턴에 20초 이상 들었나**.
    *
-   * 주변 탐색은 후보가 기준곡 하나라 "기준곡을 20초 들었나" 를 묻는 것과 같다.
-   * 경로 탐색은 앞 역부터 거슬러 올라간다 — 5초만 듣고 넘긴 역은 그 전환을 겪지 못한
-   * 것이라 건너뛰고, 실제로 들은 역과 비교한다. `prevMusicId` 도 그 역으로 바꿔 보낸다.
+   * 주변 탐색은 기준곡, 경로 탐색은 **바로 앞 역**이다. 앞 역을 5초만 듣고 넘겼으면
+   * 그 전환은 겪지 못한 것이라 **묻지 않는다.**
    *
-   * 하나도 못 채웠으면 `null` — 물을 수 없는 질문이다.
+   * 더 앞의 역까지 거슬러 올라가 묻지 않는 이유는, 그렇게 하면 경로에 없는 전환
+   * (1→3)을 평가하게 되기 때문이다. 알고리즘이 고른 간선은 1→2·2→3 뿐이라
+   * 하지도 않은 일에 점수를 매기는 꼴이 된다. 건너뛴 역은 스킵 행으로 따로 남고,
+   * 그 다음 역부터 평가가 정상 복구된다 — 손실은 전환 하나뿐이다.
    */
   resolve: (prompt: SurveyPrompt, minListenMs: number) => ResolvedPrompt | null;
   open: (prompt: ResolvedPrompt) => void;
   close: () => void;
   beginListening: (musicId: number, at: number) => void;
   noteListened: (musicId: number, ms: number) => void;
-  /** 그 곡을 지금까지 들은 시간(ms) — 마감된 장부 + 아직 안 끝난 이번 체류 */
-  elapsedMs: (musicId: number) => number;
+  /** 그 곡의 **이번 체류** 시간(ms). 지금 곡이면 재는 중, 지나간 곡이면 마지막 체류 */
+  stintMs: (musicId: number) => number;
   markSent: (target: SurveyTarget) => void;
   hasSent: (target: SurveyTarget) => boolean;
 }
@@ -59,16 +65,15 @@ const keyOf = (t: SurveyTarget) => `${t.sessionId}:${t.rank}`;
 
 export const useSurveyStore = create<SurveyState>()((set, get) => ({
   prompt: null,
-  listenedMs: {},
+  lastStintMs: {},
   since: null,
   sent: new Set(),
 
   resolve: (prompt, minListenMs) => {
-    const heard = prompt.candidates.find((c) => get().elapsedMs(c.musicId) >= minListenMs);
-    if (!heard) return null;
-    // 경로 탐색은 건너뛴 역을 지나 실제로 들은 역을 가리키게 된다 — 서버에도 그 역을 보낸다
-    const target = prompt.target.mode === "journey" ? { ...prompt.target, prevMusicId: heard.musicId } : prompt.target;
-    return { target, subject: prompt.subject, compare: heard.song };
+    // 후보는 늘 하나다 — 주변 탐색은 기준곡, 경로 탐색은 바로 앞 역. 못 채웠으면 안 묻는다
+    const compare = prompt.candidates[0];
+    if (!compare || get().stintMs(compare.musicId) < minListenMs) return null;
+    return { target: prompt.target, subject: prompt.subject, compare: compare.song };
   },
 
   open: (prompt) => {
@@ -85,16 +90,16 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
 
   noteListened: (musicId, ms) =>
     set((s) => ({
-      listenedMs: { ...s.listenedMs, [musicId]: (s.listenedMs[musicId] ?? 0) + ms },
-      // 마감했으니 이번 체류는 끝났다. 안 지우면 뒤에 한 번 더 더해진다
+      // **덮어쓴다.** 더하면 15초 스킵 + 10초 재청취가 25초가 되어 어느 쪽도 아닌 값이 된다
+      lastStintMs: { ...s.lastStintMs, [musicId]: ms },
+      // 마감했으니 이번 체류는 끝났다
       since: s.since?.musicId === musicId ? null : s.since,
     })),
 
-  elapsedMs: (musicId) => {
+  stintMs: (musicId) => {
     const s = get();
-    const closed = s.listenedMs[musicId] ?? 0;
-    const open = s.since?.musicId === musicId ? Date.now() - s.since.at : 0;
-    return closed + open;
+    if (s.since?.musicId === musicId) return Date.now() - s.since.at; // 지금 듣는 중
+    return s.lastStintMs[musicId] ?? 0; // 지나간 곡 — 마지막으로 머문 시간
   },
 
   markSent: (target) => set((s) => ({ sent: new Set(s.sent).add(keyOf(target)) })),

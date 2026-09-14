@@ -70,7 +70,7 @@ function SurveySongRow({ label, song, highlight = false }: { label: string; song
  */
 export default function SurveyCard() {
   const prompt = useSurveyStore((s) => s.prompt);
-  const elapsedMs = useSurveyStore((s) => s.elapsedMs);
+  const stintMs = useSurveyStore((s) => s.stintMs);
   const close = useSurveyStore((s) => s.close);
   const markSent = useSurveyStore((s) => s.markSent);
   const submit = useSurveySubmit();
@@ -105,7 +105,7 @@ export default function SurveyCard() {
   const definition = SURVEYS[target.mode];
 
   const send = (verdict: boolean, reason: SurveyReason | null) => {
-    submit.mutate({ target, verdict, reason, listenedMs: elapsedMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
+    submit.mutate({ target, verdict, reason, listenedMs: stintMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
     markSent(target);
     close();
   };

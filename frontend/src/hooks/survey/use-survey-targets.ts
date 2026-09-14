@@ -84,8 +84,9 @@ export function useJourneyTargets(stops: readonly Track[] | undefined) {
         prevMusicId: stops[i].musicId,
         musicId: stop.musicId,
       };
-      // 앞 역부터 거슬러 올라가며 후보로 쌓는다 — 5초만 듣고 넘긴 역은 트리거가 건너뛴다
-      const candidates: SurveyCompare[] = stops.slice(0, i + 1).reverse().map((s) => ({ musicId: s.musicId, song: show(s) }));
+      // 비교 상대는 **바로 앞 역 하나뿐**이다. 그 역을 못 들었으면 묻지 않는다 —
+      // 더 앞까지 거슬러 올라가면 경로에 없는 전환(1→3)을 평가하게 된다
+      const candidates: SurveyCompare[] = [{ musicId: stops[i].musicId, song: show(stops[i]) }];
       table.set(stop.musicId, { target, subject: show(stop), candidates });
     });
     return table;

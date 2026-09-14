@@ -149,13 +149,13 @@ public class AxisJourneyPathFinder implements JourneyPathFinder {
 					frame.far(rules.farEndpointDist()), mode, rules.bundle());
 		}
 
-		List<String> mbids = new ArrayList<>(path.size());
+		List<Long> ids = new ArrayList<>(path.size());
 		List<Double> progresses = new ArrayList<>(path.size());
 		for (TrackCandidate c : path) {
-			mbids.add(c.mbid());
+			ids.add(c.id());
 			progresses.add(frame.progress(c.vec()));
 		}
-		return new EnginePath(true, mbids, progresses, frame.length(),
+		return new EnginePath(true, ids, progresses, frame.length(),
 				frame.far(rules.farEndpointDist()), mode, rules.bundle());
 	}
 

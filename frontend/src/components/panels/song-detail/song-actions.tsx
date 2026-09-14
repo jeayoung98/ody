@@ -8,7 +8,6 @@ import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutatio
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { usePlayerStore } from "@/stores/use-player-store";
-import { openYoutube } from "@/lib/youtube";
 import type { MusicDetail } from "@/types";
 import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
 
@@ -24,17 +23,20 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   const setEnd = useJourneyStore((s) => s.setEnd);
   const openComposer = useOpenJourneyComposer();
 
-  /** 사이트 안에서 들을 수 있는 곡인가 — 공식 플레이어 임베드가 붙는다 (규칙 6 D15) */
-  const canEmbed = music.videoId != null;
-  const canPlay = canEmbed || music.youtubeUrl != null;
+  /**
+   * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
+   *
+   * 예전에는 `videoId` 가 없으면 유튜브 검색 링크를 새 탭으로 열었다. 탭이 열리면 탐색 흐름이
+   * 끊겨서 그 길을 걷어냈다. 이제 사이트 안에서 못 트는 곡은 `재생 불가` 다 (SONG-04).
+   */
+  const canPlay = music.videoId != null;
 
   /** 지금 이 곡이 울리고 있나 — 버튼이 상태를 보여줘야 또 누르지 않는다 (S15P21A405-325) */
-  const isThisPlaying = canEmbed && currentMusicId === music.id && isPlaying;
+  const isThisPlaying = canPlay && currentMusicId === music.id && isPlaying;
 
   /**
-   * `videoId` 가 있으면 **사이트 안에서** 듣는다 — 하단의 공식 플레이어가 스토어를 보고 재생한다.
-   * 없으면 예전대로 유튜브 검색 결과를 새 탭으로 넘긴다 (규칙 6).
-   * 어느 쪽이든 앱에는 "이 곡을 듣는 중" 상태가 남아 내 표식이 그 곡으로 이동한다 (MAP-08).
+   * **사이트 안에서** 듣는다 — 하단의 공식 플레이어가 스토어를 보고 재생한다.
+   * 앱에는 "이 곡을 듣는 중" 상태가 남아 내 표식이 그 곡으로 이동한다 (MAP-08).
    *
    * 울리는 중에 다시 누르면 멈춘다 — 라벨이 `정지` 인데 눌러도 안 멈추면 고장으로 읽힌다.
    */
@@ -43,7 +45,6 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       pause();
       return;
     }
-    if (!canEmbed) openYoutube(music.youtubeUrl);
     playSingle(music.id);
     recordPlay.mutate({ musicId: music.id, source: "MAP", playedMs: 0 });
   };
@@ -52,7 +53,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
     <div className="relative flex flex-col gap-2">
       <div className="flex gap-2">
         <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay} disabled={!canPlay}>
-          {isThisPlaying ? <PauseIcon size={13} /> : <PlayIcon size={13} />} {isThisPlaying ? "정지" : canEmbed ? "재생" : canPlay ? "유튜브에서 듣기" : "재생 불가"}
+          {isThisPlaying ? <PauseIcon size={13} /> : <PlayIcon size={13} />} {isThisPlaying ? "정지" : canPlay ? "재생" : "재생 불가"}
         </Button>
         <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
           ＋ 플리
@@ -84,11 +85,6 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       {!canPlay && (
         <Note>
           이 곡은 음원 연결이 없습니다. 지도에는 계속 표시되지만 재생은 되지 않아요. <span className="text-ink-4">SONG-04</span>
-        </Note>
-      )}
-      {canPlay && (
-        <Note>
-          음원은 앱 밖에서 듣습니다 — 누르면 <b>유튜브 검색 결과가 새 탭</b>으로 열려요. <span className="text-ink-4">SONG-03</span>
         </Note>
       )}
       {menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}

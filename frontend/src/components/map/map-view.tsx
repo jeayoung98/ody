@@ -11,7 +11,6 @@ import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { readStorage, writeStorage } from "@/lib/storage";
-import { openYoutube } from "@/lib/youtube";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -354,7 +353,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
     (s: MapPoint) => {
       selectMusic(s.musicId);
       openSong(s.musicId);
-      openYoutube(s.youtubeUrl);
       playSingle(s.musicId);
       recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 });
       useTutorialStore.getState().complete("select");

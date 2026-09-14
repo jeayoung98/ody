@@ -10,7 +10,7 @@ import { useTutorialStore } from "@/stores/use-tutorial-store";
 import TutorialStepCard from "./tutorial-step-card";
 
 /**
- * 단계별 태스크(확대·클릭·재생·주변탐색·시작점 확정)를 주고 완료되면 다음으로.
+ * 단계별 태스크(확대·클릭=이동·재생·주변탐색·시작점 확정)를 주고 완료되면 다음으로.
  * 마지막 단계에서 지금 내 곡(재생/선택한 곡)을 시작점으로 저장하고 메인으로 이동.
  */
 export default function TutorialOverlay() {

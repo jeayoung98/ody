@@ -7,6 +7,7 @@ import Loading from "@/components/common/loading";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import SongActions from "./song-actions";
 import SongElsewhereNote from "./song-elsewhere-note";
@@ -24,7 +25,7 @@ export default function SongDetailPanel() {
   const elsewhere = useMapStore((s) => s.selectedMusicId === musicId && s.ghostMusicId === musicId);
 
   return (
-    <Box title="곡 상세" code="SONG-02" actions={<PanelCloseButton />}>
+    <Box title="곡 상세" code="SONG-02" lead={<PanelBackButton />} actions={<PanelCloseButton />}>
       {isPending && <Loading />}
       {isError && <ErrorMessage />}
       {data && (

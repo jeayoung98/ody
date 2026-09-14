@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import Box from "@/components/common/box";
 import Loading from "@/components/common/loading";
+import { NO_GENRE_ID } from "@/constants";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -25,9 +26,21 @@ export default function JourneyPanel() {
   const showConstellation = useMapStore((s) => s.showConstellation);
 
   const stops = route.data?.stops;
+  const routeStart = route.data?.startMusicId;
+  const routeEnd = route.data?.endMusicId;
   useEffect(() => {
-    if (stops && stops.length >= 2) showConstellation(stops.map((s) => s.id));
-  }, [stops, showConstellation]);
+    if (!stops || stops.length < 2 || routeStart == null || routeEnd == null) return;
+    /**
+     * 좌표를 함께 넘긴다. 경로 곡은 지도 상주 집합 밖일 수 있어 엔진이 좌표를 모르는데,
+     * 그러면 별자리에 그려지지도 배치가 만들어지지도 않는다 (PATH-01).
+     */
+    showConstellation(
+      stops.map((s) => s.id),
+      stops.map((s) => ({ musicId: s.id, pc: s.pc, genreId: NO_GENRE_ID, weight: 1, title: s.title, artist: s.artist, youtubeUrl: null, playable: true })),
+      // 목록이 어디서 왔는지 함께 남긴다 — 이 안의 곡을 누르면 단일 재생이 아니라 이 여정으로 이어진다
+      { kind: "journey", startMusicId: routeStart, endMusicId: routeEnd },
+    );
+  }, [stops, routeStart, routeEnd, showConstellation]);
 
   const hasRoute = isRouteRequested && !!route.data;
 

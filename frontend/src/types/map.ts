@@ -17,7 +17,13 @@ export interface MapPoint {
   weight: number;
   title: string;
   artist: string | null;
-  /** 미리듣기 링크 유무 (없으면 흐리게) */
+  /**
+   * 유튜브 **검색** URL (SONG-03). 백엔드가 조회 시 제목·아티스트로 만들어 담는다 —
+   * 규칙 6 이 음원 재생·임베드를 금지해서 watch·임베드 링크는 오지 않는다.
+   * 제목과 아티스트가 **둘 다 빈 곡**(실측 3,977개)은 검색어를 만들 수 없어 null 이다.
+   */
+  youtubeUrl: string | null;
+  /** 미리듣기 링크 유무 (없으면 흐리게). 백엔드 기준으로 `youtubeUrl != null` 과 같다 */
   playable: boolean;
   /**
    * 목 확인용 — 어느 겹에도 상주하지 않는 곡. 검색해서 고르면 늘 고스트별로 뜬다 (MAP-12 UI 확인).
@@ -37,4 +43,18 @@ export interface MapCamera {
   cx: number;
   cy: number;
   s: number;
+}
+
+/**
+ * 한 겹에서 뷰포트가 좁힌 사각 범위 (백엔드 `LayerBox` 와 1:1).
+ * 레이어 l 의 평면은 pc[2l]·pc[2l+1] 이고, 서버 쪽 level 은 1-based 라 level = l + 1 이다.
+ * 이 범위를 겹마다 쌓아 다음 겹 상주 집합을 요청한다 — 누적이 candidate(N+1) ⊆ candidate(N) 을 만든다.
+ */
+export interface LayerBox {
+  /** 0-based 레이어 번호 */
+  layer: number;
+  xMin: number;
+  xMax: number;
+  yMin: number;
+  yMax: number;
 }

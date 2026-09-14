@@ -1,4 +1,6 @@
+import { NO_GENRE_ID } from "@/constants";
 import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
+import { starColorIdx } from "./star-look";
 import type { MapPoint, NearbyUser } from "@/types";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
@@ -54,10 +56,31 @@ export function skyStars(): SkyStar[] {
     u: rnd(),
     v: rnd(),
     m: Math.pow(rnd(), 1.9),
-    spr: Math.floor(rnd() * GENRE_COLORS.length),
+    spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
     lum: Math.pow(rnd(), 0.7),
   }));
   return sky;
+}
+
+/**
+ * 파고든 겹에서 상주 별 사이사이에 까는 **가까운 별먼지**. skyStars 보다 성글지만 하나하나가 크다 —
+ * 비대표 상주 별과 같은 급으로 읽혀야 "별밭 속에 클릭 가능한 별이 섞여 있다"가 된다.
+ * 화면 비율 좌표지만 그리는 쪽에서 카메라만큼 밀어 쓴다(월드에 붙은 것처럼 보이게).
+ */
+let dust: SkyStar[] | null = null;
+export function dustStars(): SkyStar[] {
+  if (dust) return dust;
+  const rnd = mulberry32(20260912);
+  dust = Array.from({ length: 2200 }, (_, i) => ({
+    i,
+    u: rnd(),
+    v: rnd(),
+    // skyStars(1.9)보다 완만해 큰 별의 비율이 높다 — 상주 별과 같은 크기대로 올라온다
+    m: Math.pow(rnd(), 1.15),
+    spr: Math.floor(rnd() * NO_GENRE_ID), // 장식이라 색 있는 장르만 (무장르 회색 제외)
+    lum: Math.pow(rnd(), 0.6),
+  }));
+  return dust;
 }
 
 /* ---------- 성운 퍼프: 부드러운 방울 여러 겹, 색만 갈아 끼움 ---------- */
@@ -102,8 +125,9 @@ function puffBases(): HTMLCanvasElement[] {
   return puffBase;
 }
 
-export function puffFor(k: number, genreId: number): HTMLCanvasElement {
-  const key = `${k}:${genreId % GENRE_COLORS.length}`;
+/** 성운 조각. `colorIdx` 는 GENRE_COLORS 인덱스 — 별과 같은 색이어야 하므로 star-look 이 정한 값을 받는다 */
+export function puffFor(k: number, colorIdx: number): HTMLCanvasElement {
+  const key = `${k}:${colorIdx}`;
   let c = puffTint.get(key);
   if (c) return c;
   c = document.createElement("canvas");
@@ -111,7 +135,7 @@ export function puffFor(k: number, genreId: number): HTMLCanvasElement {
   const g = c.getContext("2d")!;
   g.drawImage(puffBases()[k], 0, 0);
   g.globalCompositeOperation = "source-in";
-  g.fillStyle = rgba(genreRgb(genreId), 1);
+  g.fillStyle = rgba(GENRE_COLORS[colorIdx], 1);
   g.fillRect(0, 0, PUFF_N, PUFF_N);
   puffTint.set(key, c);
   return c;
@@ -179,8 +203,10 @@ export function coverFor(s: MapPoint): HTMLCanvasElement {
   c.width = c.height = N;
   const g = c.getContext("2d")!;
   const r = mulberry32(((s.musicId + 1) * 2246822519) >>> 0);
-  const A = genreRgb(s.genreId);
-  const B = genreRgb(s.genreId + (r() < 0.5 ? 2 : 6));
+  // 커버 색은 별 색에서 나온다 — 지도의 별과 호버 카드 커버가 어긋나면 다른 곡처럼 보인다
+  const ci = starColorIdx(s);
+  const A = GENRE_COLORS[ci];
+  const B = GENRE_COLORS[(ci + (r() < 0.5 ? 2 : 6)) % GENRE_COLORS.length];
   const gr = g.createLinearGradient(0, 0, N * (0.3 + r()), N);
   gr.addColorStop(0, rgba(A, 1));
   gr.addColorStop(1, rgba(B, 1));

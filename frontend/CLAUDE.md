@@ -12,6 +12,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 | [docs/rules/FEATURES.md](../docs/rules/FEATURES.md) | 기능·화면 코드를 짜기 전 **항상** |
 | [docs/rules/BACKEND-NOTES.md](../docs/rules/BACKEND-NOTES.md) | ERD·API·백엔드 전제가 걸리는 작업을 할 때. 새 항목이 생기면 **여기에 추가하고 사용자에게 보고** |
 | [docs/rules/CONVENTIONS.md](../docs/rules/CONVENTIONS.md) | git 작업(브랜치·커밋·MR) 전 **항상** |
+| [docs/performance/](docs/performance/) · [docs/troubleshooting/](docs/troubleshooting/) | 성능을 재거나 고쳤을 때, 원인 찾느라 헤맸을 때 — **작업이 끝날 때마다** |
 
 ## 기능 명세 준수 (Claude용 — 코드 작성 요청마다 확인)
 
@@ -29,7 +30,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 ### 반드시 알려야 하는 경우
 1. **ERD 변경이 필요할 때** — 새 컬럼·테이블·제약이 필요하거나, 타입·NULL 허용·기본값이 지금 ERD와 맞지 않을 때. (예: `user.tutorial_completed` 추가)
 2. **ERD에 없는 필드를 화면이 요구할 때** — 타입에 optional 로 넣어두고 "백엔드 확인 필요"로 보고한다. 있는 척 구현하지 않는다. (예: 앨범 커버, 작곡가, 무드)
-3. **새 API가 필요하거나 기존 API 응답·파라미터가 바뀔 때** — 경로·요청·응답 형태를 적어 보고한다. 목 라우트(`src/app/api/`)를 만들었더라도 그것은 임시일 뿐이므로 반드시 보고한다.
+3. **새 API가 필요하거나 기존 API 응답·파라미터가 바뀔 때** — 경로·요청·응답 형태를 적어 보고한다. 목 라우트(`src/app/bff/`)를 만들었더라도 그것은 임시일 뿐이므로 반드시 보고한다.
 4. **백엔드 계산·전송 방식에 전제를 두는 기능일 때** — 데이터 양, 전송 단위, 정렬·선별 기준, 실시간성 등. (예: 상주 집합 통째 전송, 레이어별 대표곡 선별, 16차원 거리 기반 경로 생성)
 5. **소켓·실시간 이벤트가 필요할 때** — 따라가기 동기화, 접속 상태, 반응 전송 등.
 
@@ -62,6 +63,7 @@ Next.js 16 (App Router) · React 19 · Tailwind 4 · Zustand · TanStack Query �
 - Subject: 50자 이내, 마침표/특수기호 없음, 개조식. 영문이면 동사 원형 + 첫 글자 대문자 (`Add`, `Fix`, 과거형 금지)
 - Body: 빈 줄 뒤에 **무엇을/왜** 바꿨는지 상세히
 - Footer(선택): `Resolves: #n` / `Fixes: #n` / `Ref: #n` / `Related to: #n, #m`
+- **도구 기여 표기 금지.** 커밋과 MR 설명 어디에도 `Co-Authored-By: <도구>` · `Generated with <도구>` 같은 줄을 넣지 않는다 ([CONVENTIONS.md §1](../docs/rules/CONVENTIONS.md)). 커밋 내역은 사람 기준으로 읽힌다
 - 예:
   ```
   feat: 음악 지도 화면 구현
@@ -83,7 +85,9 @@ src/
   app/                    # App Router. 페이지(page.tsx)·레이아웃·API 라우트만. 컴포넌트를 두지 않는다
     page.tsx
     <route>/page.tsx
-    api/                  # 목 API 라우트 (백엔드 연동 전)
+    bff/                  # **우리 Next 서버**의 API 라우트. 목이거나, 백엔드를 서버에서 대신 부른다
+                          # `/api/` 가 아니라 `/bff/` 다 — 배포에서 nginx 가 `/api/` 를 백엔드로 보내기 때문에
+                          # 여기에 두지 않으면 프로덕션에서 아예 닿지 않는다 (S15P21A405-273)
   components/             # 모든 컴포넌트. 용도별 폴더로 분리
     common/               # 2개 이상 곳에서 쓰는 공통 UI (Box, Button, TrackRow, icons ...)
     layout/               # 화면 조립(main-screen) + 떠 있는 HUD (브랜드·레이어 스테퍼·검색·도움말·레일)
@@ -127,6 +131,34 @@ docs/                     # 팀 컨벤션·기능 명세 문서
 - 훅 파일 하나에 훅 하나. 관련 응답 타입은 `src/types` 도메인 타입을 쓰고, 훅 전용 타입만 훅 파일에 둔다.
 - 뮤테이션 성공 시 무효화할 키는 `QUERY_KEYS`에서 가져온다.
 
+### 실데이터 연결 — 실호출은 **반드시** 콘솔에 남긴다
+
+라우트 핸들러(`src/app/bff/`)가 배포 백엔드를 **서버에서 대신** 부르기 때문에, 브라우저는 결과물만 보고
+그게 실데이터인지 목인지 알 수 없다. 표시를 빼먹으면 목을 실데이터로 알고 테스트하게 된다.
+
+**새 라우트를 실데이터에 붙이거나 기존 라우트의 백엔드 호출을 고칠 때마다** 아래를 지킨다.
+
+- 백엔드를 부른 경로를 `upstream` 변수로 빼고 **`try` 바깥**에 둔다. `catch` 에서도 써야 한다.
+- 성공은 `ok()` 가 아니라 **`okLive(data, upstream)`**, 실패는 `fail()` 이 아니라 **`failLive(code, message, status, upstream)`** 로 답한다 (`src/lib/api-response.ts`).
+- **실패에도 반드시 붙인다.** 실패를 감추면 실데이터인 줄 알고 빈 화면을 보게 된다.
+- **목으로 답하는 분기에는 붙이지 않는다.** 목이 콘솔에 섞이면 이 규칙의 목적과 정반대가 된다.
+- 백엔드 실패를 목으로 조용히 대체하지 않는다. 오류를 그대로 올린다.
+
+```ts
+const upstream = `/api/music/detail?id=${musicId}`;   // try 밖
+try {
+  const res = await backendGet<BackendMusicDetailResponse>(upstream);
+  return okLive(toMusicDetail(res), upstream);
+} catch (e) {
+  const err = e as BackendError;
+  return failLive("MUSIC_NOT_FOUND", err.message, err.status || 502, upstream);
+}
+```
+
+찍는 쪽은 건드릴 일이 없다 — `src/lib/api.ts` 통로가 표시를 보고 `src/lib/live-log.ts` 로 넘긴다.
+콘솔에는 프론트 경로 · 백엔드 경로 · 상태 · 소요시간 · 데이터(배열이면 건수)가 남고, 실패면 오류 코드와 메시지가 남는다.
+개발 빌드에서만 찍는다.
+
 ### 상수
 - 반복되거나 의미 있는 값은 전부 `src/constants/`에 상수로 뺀다. 매직 스트링/넘버를 코드에 직접 쓰지 않는다.
 - 필수 상수 파일
@@ -147,6 +179,34 @@ docs/                     # 팀 컨벤션·기능 명세 문서
 - API 응답 타입은 `src/types`의 도메인 타입을 재사용한다. 필드명은 camelCase.
 - 서버 상태는 TanStack Query, 클라이언트 전역 상태는 Zustand. 둘을 섞지 않는다.
 - 백엔드 주소는 `NEXT_PUBLIC_API_URL` 환경변수로 주입한다 (`.env.example` 참고).
+
+## 성능·트러블슈팅 기록 (Claude용 — 작업이 끝날 때마다 확인)
+
+작업이 끝나면 맥락이 흩어진다. **무엇을 왜 고쳤는지는 커밋 메시지에 안 들어간다.**
+아래에 해당하면 문서를 **하나 만들고**, 답변에서 "기록 추가: 경로" 한 줄로 알린다.
+
+| 상황 | 어디에 | 파일 |
+| --- | --- | --- |
+| 느리던 것을 빠르게 / 무겁던 것을 가볍게 만들었다 | [`docs/performance/`](docs/performance/) | `NNN-슬러그.md` |
+| 원인을 바로 못 짚고 헤맸다. 증상과 원인이 달랐다 | [`docs/troubleshooting/`](docs/troubleshooting/) | `NNN-슬러그.md` |
+| 커밋별 원시 수치(FPS·그리기·번들)를 쟀다 | [`PERF-LOG.md`](PERF-LOG.md) | 표에 행 추가 |
+
+각 폴더 `README.md` 에 **템플릿과 서식**이 있다. 그대로 따른다. 새 파일을 만들면 README 의 목록 표에도 줄을 추가한다.
+
+### 지켜야 할 것
+
+- **성능 기록은 `개선 전 수치 → 조치 → 개선 후 수치` 가 전부 있어야 한다.** 하나라도 비면 기록이 아니라 감상문이다.
+- **개선 전·후를 같은 방법으로 잰다.** 방법이 다르면 비교가 아니다. 잰 방법(코드·명령)을 문서에 적는다.
+- **추정값을 수치 칸에 적지 않는다.** 못 쟀으면 `미측정`, 근사치면 근사치라고 밝히고 무엇의 하한/상한인지 쓴다.
+- **바꿨는데 안 좋아졌으면 그대로 쓴다.** 그 사실이 더 쓸모 있다.
+- **트러블슈팅은 증거를 붙인다.** 콘솔 출력·실제 값·읽은 수치 그대로. "그래 보였다"로 끝내지 않는다.
+- **처음에 원인을 잘못 짚었으면 그것도 쓴다.** 왜 그렇게 보였는지가 제일 쓸모 있다.
+
+### 안 써도 되는 것
+
+오타 수정, 문구 변경, 단순 스타일 조정, 원인이 뻔했고 한 번에 고친 것. **전부 적으면 아무도 안 읽는다.**
+
+---
 
 ## 명령어
 ```

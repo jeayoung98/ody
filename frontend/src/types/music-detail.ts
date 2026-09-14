@@ -32,3 +32,14 @@ export interface MusicSearchResult {
   title: string;
   artist: string | null;
 }
+
+/**
+ * 검색 결과 한 페이지 (SEARCH-01).
+ * 전체 건수는 받지 않는다 — 백엔드도 `hasNext` 만 주고, 무한 스크롤에 필요한 것도 그것뿐이다.
+ */
+export interface MusicSearchPage {
+  items: MusicSearchResult[];
+  /** 0-based */
+  page: number;
+  hasNext: boolean;
+}

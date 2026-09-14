@@ -1,6 +1,6 @@
 /**
  * 목 곡 상세/검색/여정. 좌표 데이터셋은 songs.ts 와 공유한다.
- * NEXT_PUBLIC_API_URL 이 실제 백엔드를 가리키면 이 파일과 src/app/api/* 는 쓰이지 않는다.
+ * NEXT_PUBLIC_API_URL 이 실제 백엔드를 가리키면 이 파일과 src/app/bff/* 는 쓰이지 않는다.
  */
 import { NEARBY_COUNT } from "@/constants";
 import type { JourneyRoute, Music, MusicDetail, MusicSearchResult, NearbyResponse } from "@/types";
@@ -22,6 +22,12 @@ export function mockMusic(id: number): Music {
     duration: 96 + Math.floor(rand() * 268),
     album: `Album ${(id % 25) + 1}`,
     youtubeUrl: s && !s.playable ? null : `https://www.youtube.com/watch?v=mock${id}`,
+    /**
+     * **지어내지 않는다** (S15P21A405-324). 백엔드가 `video_id` 를 채웠으니 임베드는 실데이터로
+     * 확인한다. 예전에는 실데이터가 전 곡 null 이라 목에 영상 하나를 박아 뒀는데, 그러면 목으로
+     * 돌려볼 때 **모든 곡이 같은 노래로** 나온다. 아무 문자열이나 넣어도 "영상 없음" 이 뜬다.
+     */
+    videoId: null,
     location: s ? (s.pc as Music["location"]) : null,
     playCnt: s?.weight ?? Math.floor(rand() * 50_000),
     youtubeCnt: s && !s.playable ? 0 : 1 + Math.floor(rand() * 3),
@@ -61,7 +67,7 @@ export function mockSearch(keyword: string): MusicSearchResult[] {
   if (!q) return [];
   return allSongs()
     .filter((p) => p.title.toLowerCase().includes(q) || (p.artist ?? "").toLowerCase().includes(q))
-    .slice(0, 9)
+    .slice(0, 48)
     .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));
 }
 
@@ -101,7 +107,7 @@ export function mockJourney(startId: number, endId: number): JourneyRoute {
   path.push(b);
   const stops = path.map((s, i) => {
     const m = mockMusic(s.musicId);
-    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId] };
+    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId], pc: [...s.pc] };
   });
   return { startMusicId: a.musicId, endMusicId: b.musicId, stops, totalDuration: stops.reduce((sum, s) => sum + (s.duration ?? 0), 0) };
 }

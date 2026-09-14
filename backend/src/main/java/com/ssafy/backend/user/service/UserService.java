@@ -8,6 +8,8 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.user.NicknamePolicy;
+import com.ssafy.backend.user.dto.PublicVisibilityUpdateRequest;
+import com.ssafy.backend.user.dto.PublicVisibilityUpdateResponse;
 import com.ssafy.backend.user.dto.UserDetailResponse;
 import com.ssafy.backend.user.dto.UserProfileRow;
 import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
@@ -94,5 +96,18 @@ public class UserService {
 
 		UserProfileRow updated = userMapper.findProfileByEmail(email);
 		return new UserProfileUpdateResponse(updated.getNickname(), updated.getImageUrl());
+	}
+
+	/**
+	 * 공개 설정(is_public) 변경 (S15P21A405-300). 토큰 주체 본인만 대상, email 파라미터 없음.
+	 */
+	public PublicVisibilityUpdateResponse updatePublicVisibility(String email, PublicVisibilityUpdateRequest request) {
+		Boolean isPublic = request.isPublic();
+		if (isPublic == null) {
+			throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+		}
+
+		userMapper.updateIsPublic(email, isPublic);
+		return new PublicVisibilityUpdateResponse(isPublic);
 	}
 }

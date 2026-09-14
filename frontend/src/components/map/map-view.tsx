@@ -52,7 +52,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
    */
   const heldSong = useRef<MapPoint | null>(null);
   /** 호버 카드의 DOM. 마우스가 그 위인지 매번 다시 재려고 들고 있는다 */
-  const cardRef = useRef<HTMLDivElement>(null);
   const hideTimer = useRef<number | null>(null);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
 
@@ -322,13 +321,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
         else engine.dragBy(dx, dy);
         return;
       }
-      // 카드 위로 넘어간 마우스는 "별에서 벗어난 것" 이 아니다 — 카드를 유지한다.
-      // 들어왔다/나갔다를 플래그로 기억하면 카드가 포인터 밑에서 사라질 때 굳는다 (지워진 요소는
-      // mouseleave 를 쏘지 않는다). 그래서 매번 지금 자리로 다시 잰다
-      if (cardRef.current?.contains(e.target as Node)) {
-        cancelHide();
-        return;
-      }
+      // 호버 카드는 이벤트를 받지 않는다 (S15P21A405-323). 카드 위인지 재던 판정이 여기 있었는데,
+      // 이제 마우스는 언제나 지도에 닿으므로 카드 뒤의 별도 그냥 집힌다 — 툴팁이 그 곡으로 바뀐다
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
       const hitF = engine.hitFriend(mx, my);
@@ -452,17 +446,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
     setHover(false);
   }, [scheduleHide, cancelHold]);
 
-  /** 카드 본문 클릭 — 지도에서 별을 누른 것과 같다 */
-  const handleCardOpen = useCallback(
-    (s: MapPoint) => {
-      if (engine.follow) return;
-      const overlayIds = engine.clickableOverlayIds();
-      if (overlayIds && !overlayIds.has(s.musicId)) return;
-      pressSong(s);
-    },
-    [engine, pressSong],
-  );
-
   const following = leaderEmail != null;
   // 카드가 떠 있는 동안은 별 밖이라도 클릭이 그 곡을 연다 — 커서도 그렇게 말해야 한다
   const cursor = following ? "cursor-not-allowed" : pickTarget ? "cursor-crosshair" : hover || hoverSong != null ? "cursor-pointer" : "cursor-grab active:cursor-grabbing";
@@ -482,7 +465,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       <FloatingReactions />
-      <HoverCard engine={engine} song={hoverSong} cardRef={cardRef} on={cardOn} onOpen={handleCardOpen} onPlay={playSong} />
+      <HoverCard engine={engine} song={hoverSong} on={cardOn} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

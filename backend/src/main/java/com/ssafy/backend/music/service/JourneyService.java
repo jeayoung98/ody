@@ -32,8 +32,8 @@ import lombok.extern.slf4j.Slf4j;
  * <p><b>경로 산출은 여기서 하지 않는다.</b> {@code JourneyPathFinder} 경계 뒤에서 이뤄지고(rev.3 인프로세스,
  * FR-017) 이 서비스는 식별자 해석 · 산출 호출 · 상세 조립 · 정본 계약 준수 · 오류 매핑을 담당한다.
  *
- * <p>흐름은 <b>DB 조회 2회 + 산출 1회</b>다(research R3). 출발·도착 상세를 먼저 읽어 좌표·mbid 를 얻고
- * (없는 곡 404 도 여기서 걸린다), 산출이 준 중간 정거장 mbid 를 한 번에 조회해 양 끝을 붙인다.
+ * <p>흐름은 <b>DB 조회 2회 + 산출 1회</b>다(research R3). 출발·도착 상세를 먼저 읽어 좌표·id 를 얻고
+ * (없는 곡 404 도 여기서 걸린다), 산출이 준 중간 정거장 id 를 한 번에 조회해 양 끝을 붙인다.
  *
  * <p>MusicService 와 합치지 않고 따로 둔다 — MusicService 는 이미 검색·상세·대표곡을 갖고 있고
  * 여정은 의존하는 port 가 다르다.
@@ -102,7 +102,7 @@ public class JourneyService {
 		}
 		recordQuality(enginePath);
 
-		List<MusicDetail> stations = hydrate(enginePath.stationMbids());
+		List<MusicDetail> stations = hydrate(enginePath.stationIds());
 
 		List<MusicDetail> songs = new ArrayList<>(stations.size() + 2);
 		songs.add(startSong);
@@ -151,36 +151,36 @@ public class JourneyService {
 		}
 		log.info("journey mode={} bundle={} far={} endpointDist={} stations={} monotonic={}",
 				path.mode(), path.bundle(), path.far(), path.endpointDist(),
-				path.stationMbids().size(), monotonic);
+				path.stationIds().size(), monotonic);
 	}
 
 	/**
-	 * 정거장 mbid 를 상세로 채운다. <b>순서는 엔진이 준 mbid 순서를 따른다</b> —
+	 * 정거장 id(PK) 를 상세로 채운다. <b>순서는 엔진이 준 id 순서를 따른다</b> —
 	 * port 는 순서를 보장하지 않는다(research R4, FR-005).
 	 */
-	private List<MusicDetail> hydrate(List<String> mbids) {
-		if (mbids.isEmpty()) {
+	private List<MusicDetail> hydrate(List<Long> ids) {
+		if (ids.isEmpty()) {
 			// 중복 제거로 중간 정거장이 모두 사라진 경우. 출발·도착 2곡 경로가 정상이다 (FR-009, FR-012)
 			return List.of();
 		}
-		if (new HashSet<>(mbids).size() != mbids.size()) {
-			log.error("journey engine returned duplicate stations: {}", mbids.size());
+		if (new HashSet<>(ids).size() != ids.size()) {
+			log.error("journey engine returned duplicate stations: {}", ids.size());
 			throw new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
 		}
 
 		JourneyTrackReader tracks = trackReader.orElseThrow(
 				() -> unavailable("music/journey: 정거장 조회 어댑터 대기 중 (B-D)"));
 
-		Map<String, MusicDetail> byMbid = tracks.findDetailsByMbids(mbids).stream()
-				.collect(Collectors.toMap(MusicDetail::mbid, Function.identity(), (first, dup) -> first));
+		Map<Long, MusicDetail> byId = tracks.findDetailsByIds(ids).stream()
+				.collect(Collectors.toMap(MusicDetail::id, Function.identity(), (first, dup) -> first));
 
-		List<MusicDetail> ordered = new ArrayList<>(mbids.size());
-		for (String mbid : mbids) {
-			MusicDetail song = byMbid.get(mbid);
+		List<MusicDetail> ordered = new ArrayList<>(ids.size());
+		for (Long id : ids) {
+			MusicDetail song = byId.get(id);
 			if (song == null) {
 				// 부분 경로를 성공으로 내지 않는다 (FR-014)
-				log.error("journey station detail missing for {} of {} mbids", mbids.size() - byMbid.size(),
-						mbids.size());
+				log.error("journey station detail missing for {} of {} ids", ids.size() - byId.size(),
+						ids.size());
 				throw new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
 			}
 			ordered.add(song);
@@ -198,7 +198,7 @@ public class JourneyService {
 			log.error("journey path exceeds contract limit: {} > {}", songs.size(), MAX_PATH_SIZE);
 			throw new CustomException(GlobalErrorCode.INTERNAL_SERVER_ERROR);
 		}
-		// 같은 곡 중복(I6)은 hydrate 의 mbid 검사가 잡는다. start == end 는 위에서 끊었고,
+		// 같은 곡 중복(I6)은 hydrate 의 id 검사가 잡는다. start == end 는 위에서 끊었고,
 		// 엔진은 출발·도착과 같은 canonical 을 후보에서 제외하므로 여기서 다시 볼 것이 없다.
 		List<JourneyStop> path = IntStream.range(0, songs.size())
 				.mapToObj(i -> new JourneyStop(i, songs.get(i)))

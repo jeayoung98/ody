@@ -151,14 +151,15 @@ rev.2 의 요청 6건 중 **1·2·3·6번은 무효**다(원격 엔진·머지 �
 `Optional<MusicDetail>`. `start`·`end` 각 1회. `id ↔ mbid` 해석의 원천이며 `path` 양 끝 원소가 된다.
 `Optional.empty` → 404. `findNeighbors`는 이 기능에서 호출하지 않는다.
 
-### `JourneyTrackReader.findDetailsByMbids(List<String> mbids)` — 신규
+### `JourneyTrackReader.findDetailsByIds(List<Long> ids)` — rev.4 (S15P21A405-313, 기존 mbid 조회)
 
 `List<MusicDetail>`.
 
 | 항목 | 계약 |
 | --- | --- |
-| 순서 | **보장하지 않는다.** 호출자가 mbid 키로 재조립한다 |
-| 누락 | 없는 mbid는 결과에서 빠진다(예외 아님). 호출자가 500으로 처리 |
+| 순서 | **보장하지 않는다.** 호출자가 id 키로 재조립한다 |
+| 누락 | 없는 id는 결과에서 빠진다(예외 아님). 호출자가 500으로 처리 |
+| 조회 키 | **PK id.** `music.mbid`는 무인덱스라 mbid 조회는 전수 스캔(운영 1093ms) — 산출 후보가 id를 이미 가져 PK로 읽는다(S15P21A405-313) |
 | 건수 | 최대 20건. 한 번의 조회로 |
 | 필드 | `MusicDetail` 전체. `location`은 `pc1`~`pc16` 원본값 |
 | 부수효과 | 없음. 조회 전용(FR-018) |

@@ -129,8 +129,8 @@ class AxisJourneyPathFinderTests {
 
 		assertThat(path.reachable()).isTrue();
 		List<String> keys = new ArrayList<>();
-		for (String mbid : path.stationMbids()) {
-			TrackCandidate c = byMbid(pool, mbid);
+		for (Long id : path.stationIds()) {
+			TrackCandidate c = byId(pool, id);
 			String k = SameRecording.key(c.title(), c.artist());
 			if (k != null) {
 				keys.add(k);
@@ -181,7 +181,7 @@ class AxisJourneyPathFinderTests {
 		EnginePath path = finderOf(spread(30, "a")).find(song(1, "s", "sa", 5, 5), song(2, "e", "eb", 5, 5));
 
 		assertThat(path.reachable()).isTrue();
-		assertThat(path.stationMbids()).isEmpty();
+		assertThat(path.stationIds()).isEmpty();
 		assertThat(path.endpointDist()).isZero();
 	}
 
@@ -191,7 +191,7 @@ class AxisJourneyPathFinderTests {
 		EnginePath path = finderOf(spread(80, "a")).find(start(), end());
 
 		assertThat(path.far()).isTrue();
-		assertThat(path.stationMbids()).hasSizeLessThanOrEqualTo(20);
+		assertThat(path.stationIds()).hasSizeLessThanOrEqualTo(20);
 		assertThat(path.bundle()).isEqualTo("v2.1-pca16");
 	}
 
@@ -238,20 +238,20 @@ class AxisJourneyPathFinderTests {
 		EnginePath path = finderOf(pool).find(start(), end());
 
 		assertThat(path.reachable()).isTrue();
-		assertThat(path.stationMbids()).isEmpty();
+		assertThat(path.stationIds()).isEmpty();
 	}
 
 	// ------------------------------------------------------------------ 보조
 
-	private static TrackCandidate byMbid(List<TrackCandidate> pool, String mbid) {
-		return pool.stream().filter(c -> c.mbid().equals(mbid)).findFirst().orElseThrow();
+	private static TrackCandidate byId(List<TrackCandidate> pool, long id) {
+		return pool.stream().filter(c -> c.id() == id).findFirst().orElseThrow();
 	}
 
 	private static Map<String, Integer> countArtists(List<TrackCandidate> pool, EnginePath path) {
 		Map<String, Integer> count = new HashMap<>();
-		Set<String> seen = new HashSet<>(path.stationMbids());
+		Set<Long> seen = new HashSet<>(path.stationIds());
 		for (TrackCandidate c : pool) {
-			if (seen.contains(c.mbid())) {
+			if (seen.contains(c.id())) {
 				count.merge(c.artist(), 1, Integer::sum);
 			}
 		}
@@ -270,7 +270,7 @@ class AxisJourneyPathFinderTests {
 		EnginePath path = finder.find(song(1, "start", "sa", 0, 0), song(2, "end", "eb", 2, 0));
 
 		assertThat(path.reachable()).isTrue();          // 422 가 아니다
-		assertThat(path.stationMbids()).isEmpty();      // 출발·도착만 남는다
+		assertThat(path.stationIds()).isEmpty();      // 출발·도착만 남는다
 		assertThat(path.progresses()).isEmpty();
 		assertThat(path.mode()).isEqualTo("axis");      // linear 폴백으로 새지 않는다
 	}

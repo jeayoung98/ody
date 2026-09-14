@@ -43,25 +43,23 @@ class MusicSearchReaderAdapterTests {
 	}
 
 	@Test
-	void search_buildsSubstringPattern_andOffsetFromPageTimesSize() {
-		when(mapper.existsMatch(anyString())).thenReturn(true);
-		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(row(1L)));
+	void search_buildsPrefixPattern_andOffsetFromPageTimesSize() {
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(row(1L)));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
 		PageResult result = adapter.search("IU", 3, 10);
 
-		// q 는 소문자 원문(완전일치용), prefix 는 앞일치용, pattern 은 부분일치용.
+		// q 는 소문자 원문(완전일치용), prefix 는 앞일치용. 부분일치 패턴은 만들지 않는다(S15P21A405-298).
 		// size+1 을 요청한다 — 초과분이 오면 다음 페이지가 있다는 뜻이다(S15P21A405-255).
 		// cap 은 offset + size + 1 — 단계별로 그만큼만 잘라도 그 판단까지 할 수 있다.
-		verify(mapper).findPage("iu", "iu%", "%IU%", 41L, 11, 30L);
+		verify(mapper).findPage("iu", "iu%", 41L, 11, 30L);
 		assertEquals(1, result.content().size());
 	}
 
 	@Test
 	void hasNext_isTrue_whenOneMoreRowThanPageSizeCameBack() {
 		// 11건을 떠서 11건이 왔다 = 다음 페이지가 있다. 초과분은 응답에서 잘라낸다.
-		when(mapper.existsMatch(anyString())).thenReturn(true);
-		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong()))
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong()))
 				.thenReturn(java.util.stream.LongStream.rangeClosed(1L, 11L).mapToObj(MusicSearchReaderAdapterTests::row).toList());
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
@@ -74,8 +72,7 @@ class MusicSearchReaderAdapterTests {
 
 	@Test
 	void hasNext_isFalse_whenPageIsNotFull() {
-		when(mapper.existsMatch(anyString())).thenReturn(true);
-		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong()))
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong()))
 				.thenReturn(List.of(row(1L), row(2L)));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
@@ -87,31 +84,33 @@ class MusicSearchReaderAdapterTests {
 
 	@Test
 	void search_escapesLikeWildcards_soPercentIsALiteral() {
-		when(mapper.existsMatch(anyString())).thenReturn(false);
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of());
 
 		adapter.search("50% _off_", 0, 10);
 
-		ArgumentCaptor<String> pattern = ArgumentCaptor.forClass(String.class);
-		verify(mapper).existsMatch(pattern.capture());
-		assertEquals("%50\\% \\_off\\_%", pattern.getValue());
+		// 이스케이프하지 않으면 "%" 한 글자가 전곡과 매칭된다. XML 쪽 ESCAPE 와 짝이다.
+		ArgumentCaptor<String> prefix = ArgumentCaptor.forClass(String.class);
+		verify(mapper).findPage(anyString(), prefix.capture(), anyLong(), anyInt(), anyLong());
+		assertEquals("50\\% \\_off\\_%", prefix.getValue());
 	}
 
 	@Test
-	void search_returnsEmptyWithoutPageQuery_whenNothingMatches() {
-		// 방패다. 0건일 때 5단계 질의를 돌리면 각 단계가 조기 종료에 실패해 풀스캔을 다섯 번 한다.
-		when(mapper.existsMatch(anyString())).thenReturn(false);
+	void search_doesNotBuildSubstringPattern() {
+		// 앞일치 계약을 고정한다 (S15P21A405-298). prefix 앞에 "%" 가 붙으면 앞뒤 와일드카드가 되고,
+		// 그 순간 어떤 B-tree 도 못 타서 검색어와 무관하게 660만 행을 훑는다 — 되돌아가면 여기서 깨진다.
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of());
 
-		PageResult result = adapter.search("없는곡", 0, 10);
+		adapter.search("love", 0, 10);
 
-		assertTrue(result.content().isEmpty());
-		assertFalse(result.hasNext());
-		verify(mapper, never()).findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong());
+		ArgumentCaptor<String> prefix = ArgumentCaptor.forClass(String.class);
+		verify(mapper).findPage(anyString(), prefix.capture(), anyLong(), anyInt(), anyLong());
+		assertFalse(prefix.getValue().startsWith("%"));
+		assertTrue(prefix.getValue().endsWith("%"));
 	}
 
 	@Test
 	void search_returnsEmptyPage_whenPageIsBeyondLastPage() {
-		when(mapper.existsMatch(anyString())).thenReturn(true);
-		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of());
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of());
 
 		PageResult result = adapter.search("q", 9, 10);
 
@@ -125,8 +124,7 @@ class MusicSearchReaderAdapterTests {
 		MusicSearchRow r = row(7L);
 		r.setPc1(0.125);
 		r.setPc16(-3.5);
-		when(mapper.existsMatch(anyString())).thenReturn(true);
-		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(r));
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(r));
 		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
 
 		MusicSummary summary = adapter.search("q", 0, 10).content().get(0);
@@ -139,8 +137,7 @@ class MusicSearchReaderAdapterTests {
 	void search_groupsGenresPerTrack() {
 		MusicSearchRow first = row(1L);
 		MusicSearchRow second = row(2L);
-		when(mapper.existsMatch(anyString())).thenReturn(true);
-		when(mapper.findPage(anyString(), anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(first, second));
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong())).thenReturn(List.of(first, second));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
 				genreRow(1L, "electronic"),
 				genreRow(1L, "rock")));

@@ -11,7 +11,8 @@
 		좌표는 location 을 real[] 로 캐스팅해 16축을 그대로 펼친다. 반올림·재계산 없음(FR-006).
 		data 팀 실측 질의와 같은 형태다: data/ingest/map_layer_queries.sql (origin/data/dev).
 
-		pattern 은 어댑터가 만든 ILIKE 패턴이다(사용자 입력의 %, _, \ 는 어댑터에서 이스케이프).
+		prefix 는 어댑터가 만든 앞일치 패턴이다(사용자 입력의 %, _, \ 는 어댑터에서 이스케이프).
+		부분일치(%q%)는 쓰지 않는다 — 앞뒤 와일드카드가 색인을 못 타서 걷어냈다(S15P21A405-298).
 	-->
 
 	<sql id="locationColumns">
@@ -25,10 +26,6 @@
 		(m.location::real[])[15] AS pc15, (m.location::real[])[16] AS pc16
 	</sql>
 
-	<sql id="matchCondition">
-		m.title ILIKE #{pattern} ESCAPE '\' OR m.artist ILIKE #{pattern} ESCAPE '\'
-	</sql>
-
 	<!--
 		관련성 순 정렬 (S15P21A405-234). 점수를 매겨 정렬하지 않고 **단계별 조회**를 붙인다.
 
@@ -38,16 +35,21 @@
 		  단계마다 ORDER BY id LIMIT 을 두면 각각 PK 목차를 따라가다 채워지면 멈춘다(love 기준 3.9ms).
 
 		단계는 서로 겹치지 않게 자른다. 아래 단계는 위 단계의 조건을 제외한다.
-		  0 제목 완전일치 / 1 아티스트 완전일치 / 2 제목 앞일치 / 3 아티스트 앞일치 / 4 나머지 부분일치
+		  0 제목 완전일치 / 1 아티스트 완전일치 / 2 제목 앞일치 / 3 아티스트 앞일치
 		  완전일치를 필드보다 앞에 둔다 — 정확도가 제목·가수 구분보다 강한 신호다. 'radiohead' 를 치면
 		  그 이름의 가수를 원하지, 제목이 'Radiohead ...' 로 시작하는 곡을 원하는 게 아니다.
 
 		내부 단계는 id 만 고르고 바깥에서 music 을 PK 로 다시 읽는다. 좁은 행만 넘기면 되므로
-		좁히기 단계가 가벼워지고, 좌표 16칸을 5번 반복하지 않아도 된다.
+		좁히기 단계가 가벼워지고, 좌표 16칸을 네 번 반복하지 않아도 된다.
 
-		⚠ 색인 없이 동작한다. 다만 매칭이 드물면 단계마다 조기 종료에 실패해 느려진다.
-		  lower(title)·lower(artist) 에 text_pattern_ops B-tree 가 붙으면 0건이어도 즉시 끝난다(S15P21A405-255).
-		  그전까지는 서비스가 existsMatch 로 0건을 먼저 걸러 이 질의를 아예 돌리지 않는 것으로 버틴다.
+		5단계(나머지 부분일치)와 existsMatch 방패는 없앴다 (S15P21A405-298). 앞뒤 와일드카드 %q% 는
+		어떤 B-tree 도 타지 못해 검색어와 무관하게 660만 행을 훑었다 — 0건 검색어가 9.5초였던 정체다.
+		남은 네 단계는 전부 = 또는 LIKE 'q%' 라 아래 두 색인으로 0건이어도 즉시 끝난다(BE4, 2026-09-14).
+		  CREATE INDEX music_title_lower  ON music (lower(title) text_pattern_ops);
+		  CREATE INDEX music_artist_lower ON music (coalesce(lower(artist), '') text_pattern_ops);
+
+		⚠ 색인 표현식은 아래 WHERE 와 **글자 단위로** 같아야 한다. artist 쪽 coalesce 를 빼면
+		  1·3단계가 조용히 색인을 놓치고 27초로 돌아간다. 조건을 고칠 때 색인도 같이 고친다.
 	-->
 	<!--
 		artist 는 NULL 이 될 수 있다. coalesce 없이 NOT (널 LIKE ...) 을 쓰면 결과가 NULL 이라
@@ -58,7 +60,7 @@
 	<sql id="artistPrefixed">coalesce(lower(m.artist), '') LIKE #{prefix} ESCAPE '\'</sql>
 
 	<!--
-		두 질의에 timeout="2" 가 붙어 있다 (S15P21A405-297). 초 단위이고 JDBC
+		findPage 에 timeout="2" 가 붙어 있다 (S15P21A405-297). 초 단위이고 JDBC
 		Statement.setQueryTimeout 으로 내려가, 2초를 넘기면 질의를 취소하고 커넥션을 풀에 돌려준다.
 
 		검색을 빠르게 만드는 장치가 아니다 — 느린 질의를 포기시켜 피해 범위를 가두는 장치다.
@@ -75,7 +77,7 @@
 		타임아웃이 걸리면 500 INTERNAL_SERVER_ERROR 로 나간다. 전용 코드를 만들지 않은 것은
 		MusicErrorCode 가 이미 "엔진 부재·타임아웃은 INTERNAL_SERVER_ERROR 다" 로 정해 뒀기 때문이다.
 
-		⚠ 색인이 붙어도 지우지 않는다. 색인은 성능을 코드로 강제하지 못한다 — 아래 표현식과
+		⚠ 색인이 붙어도 지우지 않는다. 색인은 성능을 코드로 강제하지 못한다 — 위 표현식과
 		  색인 표현식이 한 글자라도 어긋나거나(coalesce·lower 누락), CONCURRENTLY 빌드가 실패해
 		  INVALID 색인이 남거나, 재구축에서 색인이 빠지면 **에러 없이** 풀스캔으로 돌아간다.
 		  테스트도 안 깨진다. 그 조용한 회귀를 "검색만 실패" 로 가두는 것이 이 값의 역할이다.
@@ -102,36 +104,10 @@
 			 WHERE <include refid="artistPrefixed"/> AND <include refid="artistLower"/> &lt;&gt; #{q}
 			   AND NOT (<include refid="titlePrefixed"/>)
 			 ORDER BY m.id LIMIT #{cap})
-			UNION ALL
-			(SELECT m.id, 4 AS tier FROM music m
-			 WHERE (<include refid="matchCondition"/>)
-			   AND NOT (<include refid="titlePrefixed"/>)
-			   AND NOT (<include refid="artistPrefixed"/>)
-			 ORDER BY m.id LIMIT #{cap})
 		) t
 		JOIN music m ON m.id = t.id
 		ORDER BY t.tier ASC, t.id ASC
 		LIMIT #{size} OFFSET #{offset}
-	</select>
-
-	<!--
-		매칭이 하나라도 있는지만 본다 (S15P21A405-255). COUNT(*) 를 대체한 것이다.
-
-		COUNT 는 몇 건이든 660만 행을 끝까지 세어 검색어와 무관하게 ~7초가 걸렸다(배포 실측).
-		LIMIT 1 은 첫 매칭에서 멈추므로 결과가 있는 검색어에서는 즉시 끝난다.
-		매칭이 없으면 "없다"를 확인하려 결국 전체를 훑어 ~7초 그대로다 — 부분일치(%...%)라
-		B-tree 색인으로도 줄지 않는다. 그 경우는 pg_trgm 이나 최소 글자 수 제한이 필요하다.
-
-		이 질의를 없애면 안 된다. 0건일 때 findPage 의 5단계가 각각 조기 종료에 실패해
-		풀스캔을 다섯 번 하게 되고 지금보다 느려진다.
-	-->
-	<select id="existsMatch" timeout="2" resultType="boolean">
-		SELECT EXISTS (
-			SELECT 1
-			FROM music m
-			WHERE <include refid="matchCondition"/>
-			LIMIT 1
-		)
 	</select>
 
 	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">

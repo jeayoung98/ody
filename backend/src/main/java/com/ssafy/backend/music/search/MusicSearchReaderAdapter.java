@@ -20,7 +20,7 @@ import com.ssafy.backend.music.mapper.MusicSearchMapper;
 /**
  * {@link MusicSearchReader} 의 MyBatis 어댑터 (정본 §3.1, 헌법 X: BE2 계약 / 실행 분리).
  *
- * 매칭·정렬·페이징은 SQL 이 하고, 여기서는 ILIKE 패턴 조립과 장르 합치기만 한다.
+ * 매칭·정렬·페이징은 SQL 이 하고, 여기서는 앞일치 패턴 조립과 장르 합치기만 한다.
  * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-006).
  */
 @Repository
@@ -34,20 +34,17 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 
 	@Override
 	public PageResult search(String query, int page, int size) {
-		String pattern = "%" + escapeLike(query) + "%";
 		String lowered = query.toLowerCase(Locale.ROOT);
 		String prefix = escapeLike(lowered) + "%";
 		long offset = (long) page * size;
 
-		// 매칭이 하나도 없으면 findPage 를 아예 돌리지 않는다. 단순한 최적화가 아니라
-		// 관련성 질의가 5단계라, 매칭 0건일 때 각 단계가 조기 종료에 실패해 5배로 느려지는 것을 막는다.
-		// ponytail: lower(title)·lower(artist) 색인이 붙으면 이 방패는 필요 없다 (S15P21A405-255).
-		//
 		// size+1 건을 떠서 초과분이 있었는지로 hasNext 를 판단한다. 총 건수를 세지 않는 이유는
 		// PageResult 주석 참고 — 세는 질의 하나가 응답 시간의 ~7초였다.
-		List<MusicSearchRow> rows = mapper.existsMatch(pattern)
-				? mapper.findPage(lowered, prefix, pattern, offset + size + 1, size + 1, offset)
-				: List.of();
+		//
+		// 0건을 먼저 걸러 주던 existsMatch 방패는 없앴다 (S15P21A405-298). 그건 부분일치 단계가
+		// 0건일 때 풀스캔을 다섯 번 하는 것을 막으려던 것인데, 그 단계 자체가 사라졌다.
+		// 남은 네 단계는 전부 색인 구간 조회라 매칭이 없어도 즉시 빈 결과로 끝난다.
+		List<MusicSearchRow> rows = mapper.findPage(lowered, prefix, offset + size + 1, size + 1, offset);
 		boolean hasNext = rows.size() > size;
 		if (hasNext) {
 			rows = rows.subList(0, size);

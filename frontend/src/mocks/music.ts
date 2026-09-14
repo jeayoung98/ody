@@ -22,6 +22,9 @@ export function mockMusic(id: number): Music {
     duration: 96 + Math.floor(rand() * 268),
     album: `Album ${(id % 25) + 1}`,
     youtubeUrl: s && !s.playable ? null : `https://www.youtube.com/watch?v=mock${id}`,
+    // 목은 **없는 것을 지어내지 않는다.** 실데이터도 전 곡 null 이고, 가짜 ID 를 넣으면
+    // 임베드가 "영상 없음" 을 띄워 붙은 것처럼 보인다 (규칙 6 / S15P21A405-308)
+    videoId: null,
     location: s ? (s.pc as Music["location"]) : null,
     playCnt: s?.weight ?? Math.floor(rand() * 50_000),
     youtubeCnt: s && !s.playable ? 0 : 1 + Math.floor(rand() * 3),

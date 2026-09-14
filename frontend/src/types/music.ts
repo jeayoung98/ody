@@ -42,8 +42,19 @@ export interface Music {
   duration: number | null;
   /** 앨범명 */
   album: string | null;
-  /** YouTube 재생 URL, NULL이면 재생 불가 */
+  /**
+   * YouTube **검색** URL. NULL이면 재생 불가.
+   * 재생 URL 이 아니다 — 규칙 6 상 `videoId` 없는 곡은 검색 URL 만 허용된다.
+   */
   youtubeUrl: string | null;
+  /**
+   * 공식 플레이어 임베드용 YouTube 영상 ID (규칙 6 D15 개정). 있으면 **사이트 안에서** 재생한다.
+   *
+   * 백엔드가 `map_sample` 과 검색 상위에 한해 확보한다 (`data/specs/18_db_ingest/spec.md`).
+   * **2026-09-14 실호출 기준 전 곡이 null 이다** — 수집 스크립트가 아직 안 돌았다.
+   * 그동안은 `youtubeUrl` 검색 링크로 떨어진다.
+   */
+  videoId: string | null;
   /** PCA 임베딩 좌표 pc1~pc16 */
   location: Location16 | null;
   /** 누적 재생 수, 배치 갱신 */

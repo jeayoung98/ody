@@ -21,6 +21,7 @@ import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.search.MusicSearchReader;
 import com.ssafy.backend.music.search.MusicSearchReader.PageResult;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * 검색 서비스 조립 단위 테스트 (port mock). 순서 보존·hasNext 전달·youtubeUrl null 유지·size 10 전달.
@@ -32,7 +33,8 @@ class MusicSearchServiceTests {
 
 	private final MusicSearchReader reader = mock(MusicSearchReader.class);
 	private final MusicDetailReader detail = mock(MusicDetailReader.class);
-	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty(), org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class));
+	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty(),
+			org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class));
 
 	@Test
 	void search_trimsQuery_passesSize10_assemblesPage() {
@@ -95,7 +97,8 @@ class MusicSearchServiceTests {
 
 	@Test
 	void search_noAdapter_throws() {
-		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty(), org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class));
+		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty(),
+				org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class));
 
 		assertThrows(UnsupportedOperationException.class, () -> noReader.search("q", 0));
 	}

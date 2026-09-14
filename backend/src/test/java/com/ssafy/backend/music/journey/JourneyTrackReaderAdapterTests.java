@@ -1,9 +1,7 @@
 package com.ssafy.backend.music.journey;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.BDDMockito.given;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -21,7 +19,6 @@ import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
-import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 @ExtendWith(MockitoExtension.class)
 @DisplayName("JourneyTrackReaderAdapter — 정거장 상세 일괄 조회 (PK id)")
@@ -29,11 +26,6 @@ class JourneyTrackReaderAdapterTests {
 
 	@Mock
 	MusicDetailMapper mapper;
-
-	// S15P21A405-312 이후 어댑터가 videoId 실시간 조회를 곁들인다(S15P21A405-315).
-	// 이 목만 없으면 @InjectMocks 가 null 을 주입해 findDetailsByIds 에서 NPE 가 난다.
-	@Mock
-	VideoIdEnricher videoIdEnricher;
 
 	@InjectMocks
 	JourneyTrackReaderAdapter adapter;
@@ -67,7 +59,6 @@ class JourneyTrackReaderAdapterTests {
 		}
 		given(mapper.findByIds(ids)).willReturn(rows);
 		given(mapper.findGenresByMusicIds(anyList())).willReturn(List.of());
-		given(videoIdEnricher.resolve(anyLong(), any(), any(), any())).willReturn(null);
 
 		assertThat(adapter.findDetailsByIds(ids)).hasSize(20);
 		verify(mapper).findByIds(ids);
@@ -80,7 +71,6 @@ class JourneyTrackReaderAdapterTests {
 		given(mapper.findByIds(anyList()))
 				.willReturn(List.of(row(1, "있음", "제목", "가수")));
 		given(mapper.findGenresByMusicIds(anyList())).willReturn(List.of());
-		given(videoIdEnricher.resolve(anyLong(), any(), any(), any())).willReturn(null);
 
 		List<MusicDetail> found = adapter.findDetailsByIds(List.of(1L, 2L));
 
@@ -100,7 +90,6 @@ class JourneyTrackReaderAdapterTests {
 		g2.setMusicId(1L);
 		g2.setName("pop");
 		given(mapper.findGenresByMusicIds(anyList())).willReturn(List.of(g1, g2));
-		given(videoIdEnricher.resolve(anyLong(), any(), any(), any())).willReturn(null);
 
 		List<MusicDetail> found = adapter.findDetailsByIds(List.of(1L, 2L));
 

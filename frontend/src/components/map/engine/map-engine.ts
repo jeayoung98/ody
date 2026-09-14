@@ -730,7 +730,25 @@ export class MapEngine {
     const add = points.filter((p) => !this.index.has(p.musicId));
     if (!add.length) return;
     // keep 은 **기존 곡 수**다. 지금 있는 버퍼를 그만큼 그대로 옮기고 뒤만 새로 채운다
-    this.allocate([...this.songs, ...add], this.N);
+    const keep = this.N;
+    this.allocate([...this.songs, ...add], keep);
+    /**
+     * **레이어 0 에서는 편입된 곡도 상주다** (S15P21A405-320).
+     *
+     * `allocate` 는 상주 마스크를 0 으로 늘리기만 한다. 그대로 두면 `isAlive` 가 false 라
+     * `playingElsewhere()` 가 참이 되고, 최상단인데도 내 표식에 "다른 갈래에서 재생 중" 이
+     * 붙었다 — 지도 샘플(1,071곡) 밖의 여정·플리 곡이 전부 그랬다.
+     *
+     * 레이어 0 의 `residentMask` 는 `ghostOnly` 와 무관하게 전부 1 이다. 그래서 여기서만 켠다.
+     * 파고든 겹에서는 **진짜로 이 겹 밖의 곡**이라 0 으로 둔다.
+     */
+    if (this.layer === 0) {
+      for (let i = keep; i < this.N; i++) {
+        this.subset[i] = 1;
+        this.alpha[i] = 1;
+      }
+      this.rebuildAliveIdx();
+    }
     this.project();
   }
 

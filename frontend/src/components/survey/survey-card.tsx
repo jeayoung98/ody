@@ -1,9 +1,10 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import AlbumCover from "@/components/common/album-cover";
+import { useEffect, useMemo, useState } from "react";
+import { coverFor } from "@/components/map/render/sprites";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
+import { NO_GENRE_ID } from "@/constants/map";
 import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
 import { useBlockingStore } from "@/stores/use-blocking-store";
@@ -32,12 +33,39 @@ function CheckIcon() {
  * 가수는 한 줄만 — 곡을 가리는 값이 아니라 거드는 값이다.
  */
 function SurveySongRow({ label, song, highlight = false }: { label: string; song: SurveySong; highlight?: boolean }) {
+  /**
+   * 커버는 **지도가 쓰는 절차적 그림을 그대로 가져온다** (`coverFor`).
+   *
+   * 앱 어디에도 실제 앨범 아트가 없어서 지도·호버 카드·곡 상세가 전부 이걸 쓴다. 여기서만
+   * 따로 그리면 같은 곡이 설문과 상세에서 다른 그림으로 보인다 — 커버 색이 별 색에서 나오기
+   * 때문이다. 실커버가 생기면 `coverFor` 쪽을 고치면 여기도 같이 따라온다.
+   */
+  const cover = useMemo(
+    () =>
+      coverFor({
+        musicId: song.musicId,
+        genreId: song.genreId ?? NO_GENRE_ID,
+        pc: [],
+        weight: 1,
+        title: "",
+        artist: null,
+        youtubeUrl: null,
+        playable: true,
+      }).toDataURL(),
+    [song.musicId, song.genreId],
+  );
+  const size = highlight ? 46 : 38;
+
   return (
     <div className="flex flex-col gap-1.5">
       {/* `lbl` 유틸(9.5px 모노 대문자 + 자간)은 여기서 안 쓴다 — 한글이 읽히지 않는다 */}
       <span className={`text-[12.5px] leading-none font-semibold ${highlight ? "text-violet" : "text-ink-3"}`}>{label}</span>
       <div className="flex items-center gap-3">
-        <AlbumCover coverUrl={song.coverUrl} genreId={song.genreId} alt="" size={highlight ? 46 : 38} />
+        <span
+          aria-hidden
+          className="shrink-0 rounded-box-xs border border-line bg-cover"
+          style={{ width: size, height: size, backgroundImage: `url(${cover})` }}
+        />
         <div className="min-w-0 flex-1">
           <p
             className={

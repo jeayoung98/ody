@@ -73,7 +73,7 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
     // 후보는 늘 하나다 — 주변 탐색은 기준곡, 경로 탐색은 바로 앞 역. 못 채웠으면 안 묻는다
     const compare = prompt.candidates[0];
     if (!compare || get().stintMs(compare.musicId) < minListenMs) return null;
-    return { target: prompt.target, subject: prompt.subject, compare: compare.song };
+    return { target: prompt.target, subject: prompt.subject, compare };
   },
 
   open: (prompt) => {

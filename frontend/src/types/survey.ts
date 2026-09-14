@@ -71,22 +71,14 @@ export interface SurveyPrompt {
   /** 평가 대상 — 방금 들은 곡. 상대만 보여주면 둘 중 뭘 묻는지 알 수 없다 */
   subject: SurveySong;
   /**
-   * 비교 상대 후보. **가까운 것부터** 늘어놓는다.
+   * 비교 상대 후보. **늘 하나다** — 주변 탐색은 기준곡, 경로 탐색은 바로 앞 역.
    *
-   * 주변 탐색은 늘 하나다 — 기준곡. 이웃을 몇 곡 듣든 중심은 안 바뀐다.
-   *
-   * 경로 탐색은 앞 역부터 거슬러 올라간다. 앞 역을 5초만 듣고 넘겼으면 그 전환은 사용자가
-   * 겪지 못한 것이라, **실제로 들은 가장 가까운 역**이 비교 상대가 된다.
-   * 안 그러면 한 곡 건너뛴 대가로 그 다음 평가까지 통째로 날아간다.
+   * 그 곡을 20초 못 들었으면 **묻지 않는다.** 더 앞까지 거슬러 올라가지 않는다 —
+   * 경로에 없는 전환(1→3)을 평가하게 되기 때문이다 (S15P21A405-294 코멘트).
    */
-  candidates: readonly SurveyCompare[];
+  candidates: readonly SurveySong[];
 }
 
-/** 비교 상대 후보 하나 */
-export interface SurveyCompare {
-  musicId: Id;
-  song: SurveySong;
-}
 
 /**
  * 비교 상대가 정해진 상태. **스토어는 이것만 들고 있다** — 카드가 보여주는 것도,
@@ -104,6 +96,8 @@ export interface ResolvedPrompt {
  * 값은 이미 받아 둔 탐색 응답 안에 있다 — 카드를 띄우려고 새로 부르지 않는다.
  */
 export interface SurveySong {
+  /** 절차적 커버를 그리는 씨앗. 지도·곡 상세와 같은 그림이 나오려면 곡 ID 가 필요하다 */
+  musicId: Id;
   title: string;
   artist: string | null;
   /**
@@ -114,13 +108,13 @@ export interface SurveySong {
    * (BACKEND-NOTES A-22) — 그때는 자를 수 없어 서버 상한(32767)만 적용된다.
    */
   durationSec?: number | null;
-  /** 커버가 없을 때 깔 색. 탐색 응답이 주는 것만 쓴다 */
-  genreId: number | null;
   /**
-   * 실제 앨범 커버. **아직 어느 응답에도 안 들어와서 늘 비어 있다** — ERD 에 없는 필드다.
-   * 백엔드가 주변·경로 응답에 담아주면 `use-survey-targets` 에서 넘기기만 하면 된다.
+   * 별 색. 커버는 `coverFor` 가 이 값과 `musicId` 로 그린다.
+   *
+   * 지금은 `STAR_LOOK.randomColor` 가 켜져 있어 `musicId` 해시로만 색이 정해지고 이 값은
+   * 안 쓰인다 (실데이터에 장르가 거의 없어서다). 그 스위치가 내려가면 다시 쓰인다.
    */
-  coverUrl?: string | null;
+  genreId: number | null;
 }
 
 /**

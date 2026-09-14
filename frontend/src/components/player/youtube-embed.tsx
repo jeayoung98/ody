@@ -23,9 +23,21 @@ import { usePlayerStore } from "@/stores/use-player-store";
  */
 
 /** 플레이어 상태 코드 (IFrame API) */
+const UNSTARTED = -1;
 const ENDED = 0;
 const PLAYING = 1;
 const PAUSED = 2;
+const CUED = 5;
+
+/**
+ * 곡을 갈아끼운 뒤 재생을 다시 걸어 보는 횟수 (S15P21A405-325).
+ *
+ * `loadVideoById` 직후에는 플레이어가 새 영상을 세우느라 `playVideo()` 를 삼킨다. 그래서 상태가
+ * 미시작·대기로 내려앉는데, 그걸 "사용자가 멈췄다" 로 읽으면 **재생 중에 다른 곡을 누를 때마다
+ * 한 번 더 눌러야 했다.** 상태 보고가 올 때마다 다시 걸되, 자동재생이 진짜로 막힌 경우
+ * 무한히 매달리지 않게 횟수를 둔다.
+ */
+const REPLAY_TRIES = 3;
 
 interface YtPlayer {
   loadVideoById: (id: string) => void;
@@ -93,14 +105,40 @@ export default function YoutubeEmbed() {
   const [ready, setReady] = useState(false);
 
   /**
+   * 곡을 갈아끼운 뒤 "아직 재생을 걸어야 한다" 는 표시. 남은 재시도 횟수를 담는다.
+   * 0 이면 더 매달리지 않고 플레이어가 보고하는 대로 받아들인다.
+   */
+  const wantPlayRef = useRef(0);
+
+  /**
    * 플레이어가 스스로 바뀐 상태를 스토어에 되돌린다 — 유튜브 화면에서 직접 누를 수도 있어서
    * 한쪽만 믿으면 버튼 모양과 실제 소리가 어긋난다.
+   *
+   * 다만 **곡을 갈아끼우는 동안의 미시작·대기·일시정지는 "사용자가 멈춘 것" 이 아니다**
+   * (S15P21A405-325). `loadVideoById` 직후 플레이어는 새 영상을 세우느라 `playVideo()` 를
+   * 삼키고 상태를 내려놓는데, 그걸 멈춤으로 읽으면 `isPlaying` 이 false 가 되어 버튼이 되돌아가고
+   * 한 번 더 눌러야 했다. 그동안은 재생을 다시 건다.
    */
   const onStateChange = useCallback((e: { data: number }) => {
     const p = usePlayerStore.getState();
-    if (e.data === ENDED) p.next();
-    else if (e.data === PAUSED && p.isPlaying) p.pause();
-    else if (e.data === PLAYING && !p.isPlaying) p.toggle();
+    if (e.data === PLAYING) {
+      wantPlayRef.current = 0;
+      if (!p.isPlaying) p.toggle();
+      return;
+    }
+    if (e.data === ENDED) {
+      wantPlayRef.current = 0;
+      p.next();
+      return;
+    }
+    if (e.data === UNSTARTED || e.data === CUED || e.data === PAUSED) {
+      if (wantPlayRef.current > 0) {
+        wantPlayRef.current -= 1;
+        playerRef.current?.playVideo();
+        return;
+      }
+      if (e.data === PAUSED && p.isPlaying) p.pause();
+    }
   }, []);
 
   /**
@@ -147,6 +185,8 @@ export default function YoutubeEmbed() {
     }
     if (loadedIdRef.current === videoId) return;
     loadedIdRef.current = videoId;
+    // 틀던 중에 갈아끼우는 것이면 **계속 틀겠다는 뜻**이다. 전환 중 상태 보고에 흔들리지 않게 남긴다
+    if (usePlayerStore.getState().isPlaying) wantPlayRef.current = REPLAY_TRIES;
     playerRef.current.loadVideoById(videoId);
   }, [ready, videoId]);
 
@@ -154,7 +194,11 @@ export default function YoutubeEmbed() {
   useEffect(() => {
     if (!ready || !videoId || !playerRef.current) return;
     if (isPlaying) playerRef.current.playVideo();
-    else playerRef.current.pauseVideo();
+    else {
+      // 사용자가 직접 멈춘 것이니 전환 중 재시도도 접는다
+      wantPlayRef.current = 0;
+      playerRef.current.pauseVideo();
+    }
   }, [ready, isPlaying, videoId]);
 
   return (

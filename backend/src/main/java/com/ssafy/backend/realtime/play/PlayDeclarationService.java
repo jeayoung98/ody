@@ -111,6 +111,7 @@ public class PlayDeclarationService {
 		// 7) 마주침 기록 — 위 후보들과의 만남을 뒤에서(비동기) 세어 준다(3분 쿨다운, 응답 안 막음).
 		meetingService.recordMeetings(email, meeting);
 
+		log.info("[Play] 재생 선언 완료 musicId={} layer={} playHistoryId={}", musicId, layer, history.getId());
 		return new PlayResponse(history.getId(), musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 	}
 
@@ -121,5 +122,6 @@ public class PlayDeclarationService {
 			log.warn("playEnd 대상 없음/비소유 playHistoryId={}", playHistoryId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
+		log.info("[Play] 재생 종료 완료 playHistoryId={} playedMs={}", playHistoryId, playedMs);
 	}
 }

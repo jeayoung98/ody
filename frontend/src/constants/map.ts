@@ -214,8 +214,16 @@ export const STAR_VIEW = {
  */
 export const PAN_LIMIT = { slack: 0.45 } as const;
 
-/** 별자리 뷰 안에서의 확대 범위 (지도 배율과 별개) */
-export const OVERLAY_ZOOM = { min: 0.6, max: 4 } as const;
+/**
+ * 별자리 뷰 안에서의 확대 범위 (지도 배율과 별개).
+ *
+ * `max` 를 4 에서 16 으로 올렸다 (S15P21A405-319). 곡이 모여 있는 구간은 4배로는 별이 붙어 있어
+ * **제목이 서로 겹쳐 읽을 수가 없었다.** 20곡짜리 여정이면 라벨을 떼어놓는 데 그보다 더 든다.
+ *
+ * 올려도 끝 곡에 손이 닿는다 — 이동 한계를 배율이 아니라 **배치가 실제로 뻗은 거리**에서 뽑기
+ * 때문에 배율과 같이 늘어난다 (S15P21A405-306, `clampOverlay`).
+ */
+export const OVERLAY_ZOOM = { min: 0.6, max: 16 } as const;
 
 /** 휠 확대 계수 (배율 = exp(-deltaY × 이 값)) */
 export const WHEEL_ZOOM = 0.0015;

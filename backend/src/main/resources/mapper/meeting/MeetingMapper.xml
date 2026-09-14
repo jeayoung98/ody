@@ -12,4 +12,13 @@
 		ON CONFLICT (user1, user2) DO UPDATE SET cnt = meeting.cnt + 1
 	</insert>
 
+	<!-- 두 사람 누적 마주침 횟수. 페어는 user1 < user2 사전순으로 넘겨야 PK 단건이 잡힌다.
+	     한 번도 안 만났으면 행이 없어 결과 없음 → 매퍼는 null 반환(서비스에서 0 처리). -->
+	<select id="findCount" resultType="int">
+		SELECT cnt
+		  FROM meeting
+		 WHERE user1 = #{user1}
+		   AND user2 = #{user2}
+	</select>
+
 </mapper>

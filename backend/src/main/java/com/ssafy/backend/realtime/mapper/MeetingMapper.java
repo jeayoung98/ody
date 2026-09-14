@@ -10,4 +10,7 @@ public interface MeetingMapper {
 
 	/** (user1,user2) 쌍의 cnt +1. 행 없으면 cnt=1 로 생성(ON CONFLICT UPSERT). */
 	int upsertIncrement(@Param("user1") String user1, @Param("user2") String user2);
+
+	// 두 사람 누적 마주침 횟수. 한 번도 안 만났으면 행이 없어 null → 서비스에서 0 처리
+	Integer findCount(@Param("user1") String user1, @Param("user2") String user2);
 }

@@ -67,4 +67,16 @@ public class MeetingService {
 			}
 		}
 	}
+
+	/**
+	 * 나와 특정 상대가 지금까지 몇 번 마주쳤는지. 페어는 저장 규칙과 동일하게 사전순 정렬해서 조회.
+	 * 한 번도 안 만났으면 0.
+	 */
+	public int countWith(String me, String other) {
+		String u1 = me.compareTo(other) < 0 ? me : other;
+		String u2 = me.compareTo(other) < 0 ? other : me;
+		Integer cnt = meetingMapper.findCount(u1, u2);
+		return cnt == null ? 0 : cnt;
+	}
+
 }

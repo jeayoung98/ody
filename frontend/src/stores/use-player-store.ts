@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { STORAGE_KEYS } from "@/constants";
 import { removeStorage, writeStorage } from "@/lib/storage";
+import { useBlockingStore } from "./use-blocking-store";
 import { useMapStore } from "./use-map-store";
 
 /** 재생 컨텍스트. 플리와 여정은 동시에 있을 수 없다 — 하나 켜지면 하나 꺼진다 */
@@ -17,6 +18,11 @@ interface PlayerState {
   /** 순차재생 큐 (플리/여정). single이면 빈 배열 */
   queue: number[];
   queueIndex: number;
+  /**
+   * 막는 창 때문에 미뤄 둔 "다음 곡" 예약 (S15P21A405-258).
+   * 창이 닫히면 `useDeferredNext` 가 이걸 보고 넘긴다.
+   */
+  pendingNext: boolean;
 
   /**
    * 새로고침 복원 (S15P21A405-275). **소리는 다시 틀지 않는다** — 음원은 앱 밖에서 듣기 때문에
@@ -43,6 +49,7 @@ export const usePlayerStore = create<PlayerState>()(
       context: { kind: "single" },
       queue: [],
       queueIndex: 0,
+      pendingNext: false,
 
       restoreLast: (musicId) => {
         if (get().currentMusicId != null) return;
@@ -117,7 +124,20 @@ export const usePlayerStore = create<PlayerState>()(
       next: () => {
         const { queue, queueIndex } = get();
         if (queueIndex + 1 >= queue.length) return;
-        set({ queueIndex: queueIndex + 1, currentMusicId: queue[queueIndex + 1] }, false, "next");
+        /**
+         * 답을 강제하는 창(설문 등)이 떠 있으면 **미뤄 둔다** (S15P21A405-258).
+         *
+         * 곡이 끝나는 순간은 한 번뿐이라 그냥 무시하면 그 곡에서 영영 멈춘다. 그래서
+         * 예약만 걸고, 창이 닫히면 `useDeferredNext` 가 대신 넘긴다.
+         *
+         * 여기에 둔 이유는 넘기는 길이 여럿이기 때문이다 — 임베드 플레이어의 `ended`
+         * (S15P21A405-308), ⏭ 버튼, 앞으로 생길 것까지 전부 이 함수를 지난다.
+         */
+        if (useBlockingStore.getState().blockers.size > 0) {
+          set({ pendingNext: true }, false, "next/deferred");
+          return;
+        }
+        set({ queueIndex: queueIndex + 1, currentMusicId: queue[queueIndex + 1], pendingNext: false }, false, "next");
       },
 
       prev: () => {
@@ -127,7 +147,7 @@ export const usePlayerStore = create<PlayerState>()(
       },
 
       stop: () =>
-        set({ currentMusicId: null, isPlaying: false, context: { kind: "single" }, queue: [], queueIndex: 0 }, false, "stop"),
+        set({ currentMusicId: null, isPlaying: false, context: { kind: "single" }, queue: [], queueIndex: 0, pendingNext: false }, false, "stop"),
     }),
     { name: "player-store" },
   ),

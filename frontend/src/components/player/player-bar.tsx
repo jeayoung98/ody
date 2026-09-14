@@ -3,7 +3,7 @@
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
-import { useQueueAutoAdvance } from "@/hooks/use-queue-auto-advance";
+import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -45,8 +45,8 @@ export default function PlayerBar() {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
-  // 큐 재생 중 곡이 끝나면 다음 곡으로 (S15P21A405-258). 같은 쿼리를 보므로 요청이 안 늘어난다
-  useQueueAutoAdvance();
+  // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
+  useDeferredNext();
 
   const openContext = () => {
     if (currentMusicId == null) return;

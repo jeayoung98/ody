@@ -23,6 +23,8 @@ import com.ssafy.backend.music.retrieval.NeighborSelection;
 import com.ssafy.backend.music.retrieval.ServingRules;
 import com.ssafy.backend.music.retrieval.TrackCandidate;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 주변 탐색 (정본 §3.5, 기능 MAP-10).
  *
@@ -32,6 +34,7 @@ import com.ssafy.backend.music.retrieval.TrackCandidate;
  * <p><b>조회 전용이고 무상태다.</b> 서버에 탐색 세션을 두지 않으므로 이웃을 다시 기준점으로 삼는
  * 연속 탐색이 요청 하나로 완결된다(FR-010).
  */
+@Slf4j
 @Service
 public class NearbyService {
 
@@ -110,6 +113,8 @@ public class NearbyService {
 				.orElseThrow(() -> new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
 
 		NeighborResult result = neighborsOf(center);
+		log.info("[Nearby] 주변 탐색 완료 id={} neighbors={} lowSimilarity={}",
+				id, result.neighbors().size(), result.lowSimilarity());
 
 		return new NearbyResponse(
 				NearbyCenter.ofTrack(center.id(), center.title(), center.artist(), center.location()),

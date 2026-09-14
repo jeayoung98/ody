@@ -8,6 +8,8 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.user.NicknamePolicy;
+import com.ssafy.backend.user.dto.PublicVisibilityUpdateRequest;
+import com.ssafy.backend.user.dto.PublicVisibilityUpdateResponse;
 import com.ssafy.backend.user.dto.UserDetailResponse;
 import com.ssafy.backend.user.dto.UserProfileRow;
 import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
@@ -15,7 +17,9 @@ import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
 import com.ssafy.backend.user.mapper.UserMapper;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class UserService {
@@ -41,6 +45,7 @@ public class UserService {
 			throw new CustomException(UserErrorCode.USER_PRIVATE);
 		}
 
+		log.info("[User] 상세 조회 완료 targetEmail={} isMe={}", targetEmail, isMe);
 		return new UserDetailResponse(
 				row.getEmail(),
 				row.getName(),
@@ -61,6 +66,7 @@ public class UserService {
 	 */
 	public void completeTutorial(String email) {
 		userMapper.updateTutorialCompleted(email);
+		log.info("[User] 온보딩 완료 처리 email={}", email);
 	}
 
 	/**
@@ -93,6 +99,21 @@ public class UserService {
 		userMapper.updateProfile(email, nickname, imageUrl);
 
 		UserProfileRow updated = userMapper.findProfileByEmail(email);
+		log.info("[User] 프로필 수정 완료 email={}", email);
 		return new UserProfileUpdateResponse(updated.getNickname(), updated.getImageUrl());
+	}
+
+	/**
+	 * 공개 설정(is_public) 변경 (S15P21A405-300). 토큰 주체 본인만 대상, email 파라미터 없음.
+	 */
+	public PublicVisibilityUpdateResponse updatePublicVisibility(String email, PublicVisibilityUpdateRequest request) {
+		Boolean isPublic = request.isPublic();
+		if (isPublic == null) {
+			throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+		}
+
+		userMapper.updateIsPublic(email, isPublic);
+		log.info("[User] 공개 설정 변경 완료 email={} isPublic={}", email, isPublic);
+		return new PublicVisibilityUpdateResponse(isPublic);
 	}
 }

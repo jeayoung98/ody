@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.realtime.mapper.PlayHistoryMapper">
+
+	<!--
+		실제 테이블: public.play_history(id bigint PK, music_id, email NULL, source, played_ms int, played_at)
+		play_history.id 는 DEFAULT/시퀀스가 없어 앱이 시퀀스로 채운다(playlist 와 동일). played_at 은 DEFAULT now().
+		FK 없음 → 실 유저 없어도 INSERT 가능(meeting 과 대비).
+	-->
+	<insert id="insert">
+		<selectKey keyProperty="id" order="BEFORE" resultType="long">
+			SELECT nextval('play_history_id_seq')
+		</selectKey>
+		INSERT INTO play_history (id, music_id, email, source, played_ms)
+		VALUES (#{id}, #{musicId}, #{email}, #{source}, #{playedMs})
+	</insert>
+
+	<update id="updatePlayedMs">
+		UPDATE play_history
+		SET played_ms = #{playedMs}
+		WHERE id = #{id} AND email = #{email}
+	</update>
+
+</mapper>

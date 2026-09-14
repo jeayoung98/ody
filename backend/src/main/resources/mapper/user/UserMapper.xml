@@ -38,4 +38,11 @@
 		WHERE email = #{email}
 	</update>
 
+	<update id="updateIsPublic">
+		UPDATE "user"
+		SET is_public = #{isPublic},
+		    updated_at = now()
+		WHERE email = #{email}
+	</update>
+
 </mapper>

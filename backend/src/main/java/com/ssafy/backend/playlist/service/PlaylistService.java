@@ -31,6 +31,9 @@ import com.ssafy.backend.playlist.mapper.PlaylistMapper;
 import com.ssafy.backend.user.dto.UserProfileRow;
 import com.ssafy.backend.user.mapper.UserMapper;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class PlaylistService {
 
@@ -59,9 +62,11 @@ public class PlaylistService {
 			throw new CustomException(UserErrorCode.USER_PRIVATE);
 		}
 
-		return playlistMapper.findSummariesByOwnerEmail(targetEmail).stream()
+		List<PlaylistSummary> summaries = playlistMapper.findSummariesByOwnerEmail(targetEmail).stream()
 				.map(row -> new PlaylistSummary(row.getId(), row.getName(), row.getMusicCnt(), row.getCreatedAt()))
 				.toList();
+		log.info("[Playlist] 목록 조회 완료 targetEmail={} count={}", targetEmail, summaries.size());
+		return summaries;
 	}
 
 	/**
@@ -75,6 +80,7 @@ public class PlaylistService {
 		List<MusicDetail> musics = musicIds.isEmpty() ? List.of() : loadMusicDetails(musicIds);
 		int totalDuration = musics.stream().mapToInt(m -> m.duration() == null ? 0 : m.duration()).sum();
 
+		log.info("[Playlist] 상세 조회 완료 playlistId={} musicCnt={}", playlistId, musics.size());
 		return new PlaylistDetailResponse(playlist.getId(), playlist.getName(), musics.size(), totalDuration, musics);
 	}
 
@@ -98,6 +104,8 @@ public class PlaylistService {
 			playlistMapper.insertPlaylistMusicBatch(playlist.getId(), toInsertItems(musicIdList, 0));
 		}
 
+		log.info("[Playlist] 생성 완료 playlistId={} ownerEmail={} musicCnt={}",
+				playlist.getId(), ownerEmail, musicIdList.size());
 		return new PlaylistCreateResponse(playlist.getId(), playlistName, musicIdList.size());
 	}
 
@@ -118,6 +126,8 @@ public class PlaylistService {
 		}
 
 		int musicCnt = playlistMapper.countMusic(playlistId);
+		log.info("[Playlist] 곡 추가 완료 playlistId={} added={} alreadyIn={}",
+				playlistId, toInsert.size(), alreadyInSet.size());
 		return new PlaylistMusicInsertResponse(playlistId, toInsert.size(), alreadyInSet.size(), alreadyIn, musicCnt);
 	}
 
@@ -130,6 +140,7 @@ public class PlaylistService {
 		int deletedCnt = playlistMapper.deletePlaylistMusic(playlistId, musicIdList);
 		int musicCnt = playlistMapper.countMusic(playlistId);
 
+		log.info("[Playlist] 곡 삭제 완료 playlistId={} deleted={}", playlistId, deletedCnt);
 		return new PlaylistMusicDeleteResponse(playlistId, deletedCnt, musicCnt);
 	}
 
@@ -149,6 +160,7 @@ public class PlaylistService {
 		playlistMapper.deleteAllPlaylistMusic(playlistId);
 		playlistMapper.insertPlaylistMusicBatch(playlistId, toInsertItems(musicIdList, 0));
 
+		log.info("[Playlist] 순서 변경 완료 playlistId={} musicCnt={}", playlistId, musicIdList.size());
 		return new PlaylistMusicReorderResponse(playlistId, musicIdList.size());
 	}
 
@@ -166,6 +178,7 @@ public class PlaylistService {
 		playlistMapper.updateName(playlistId, newName);
 		int musicCnt = playlistMapper.countMusic(playlistId);
 
+		log.info("[Playlist] 이름 변경 완료 playlistId={}", playlistId);
 		return new PlaylistUpdateResponse(playlistId, newName, musicCnt);
 	}
 
@@ -175,6 +188,7 @@ public class PlaylistService {
 	public void delete(long playlistId, String requesterEmail) {
 		requireOwnedPlaylist(playlistId, requesterEmail);
 		playlistMapper.deleteById(playlistId);
+		log.info("[Playlist] 삭제 완료 playlistId={}", playlistId);
 	}
 
 	private PlaylistRow requireOwnedPlaylist(long playlistId, String requesterEmail) {

@@ -18,7 +18,8 @@ import lombok.RequiredArgsConstructor;
 /**
  * 프로필 필드(닉네임, 프로필 이미지) 부분 수정 (S15P21A405-216). 구글 신규가입 시 nickname이 비어(NULL)
  * 들어가는 것을 채우기 위한 API. 인증 필요, 토큰 주체 본인 대상이라 email을 받지 않는다.
- * tutorial-completed(UserOnboardingController), is_public(별도 이슈)은 이 엔드포인트에서 다루지 않는다.
+ * tutorial-completed(UserOnboardingController), is_public(UserVisibilityController, S15P21A405-300)은
+ * 이 엔드포인트에서 다루지 않는다.
  */
 @RestController
 @RequestMapping("/api/user")

@@ -12,4 +12,6 @@ public interface UserMapper {
 
 	void updateProfile(@Param("email") String email, @Param("nickname") String nickname,
 			@Param("imageUrl") String imageUrl);
+
+	void updateIsPublic(@Param("email") String email, @Param("isPublic") boolean isPublic);
 }

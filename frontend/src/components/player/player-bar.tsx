@@ -9,7 +9,6 @@ import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
-import { openYoutube } from "@/lib/youtube";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
 
@@ -72,21 +71,14 @@ export default function PlayerBar() {
     } else openSong(currentMusicId);
   };
 
-  /** 사이트 안에서 들을 수 있는 곡인가 — 공식 플레이어 임베드가 붙는다 (규칙 6 D15) */
-  const canEmbed = data?.videoId != null;
-  const canPlay = data ? canEmbed || data.youtubeUrl != null : currentMusicId != null;
-
   /**
-   * `videoId` 가 있으면 **사이트 안에서** 재생한다 — `youtube-embed.tsx` 가 스토어를 보고 움직이므로
-   * 여기서는 토글만 하면 된다.
-   *
-   * 없으면 예전 경로다: 백엔드가 준 검색 URL 을 새 탭으로 연다 (규칙 6 — `lib/youtube.ts`).
-   * **멈춤 → 재생** 으로 넘어갈 때만 연다. 멈출 때도 열면 탭이 계속 쌓인다.
+   * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
+   * 곡 정보가 아직 안 왔으면 막지 않는다. 도착하면 그때 판정이 잡힌다.
    */
-  const handleToggle = () => {
-    if (!canEmbed && !isPlaying) openYoutube(data?.youtubeUrl);
-    toggle();
-  };
+  const canPlay = data ? data.videoId != null : currentMusicId != null;
+
+  /** 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다 */
+  const handleToggle = () => toggle();
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : null;
 
@@ -130,7 +122,7 @@ export default function PlayerBar() {
       <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : canEmbed ? "재생" : "유튜브에서 듣기"} primary onClick={handleToggle} disabled={!canPlay}>
+      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} disabled={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
       <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>

@@ -28,7 +28,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         {music.releaseYear && <Tag>{music.releaseYear}</Tag>}
         <Tag>{formatDuration(music.duration)}</Tag>
         <Tag tone="violet">▶ {formatCount(music.playCnt)}</Tag>
-        {music.youtubeUrl == null && <Tag tone="warn">재생 불가</Tag>}
+        {music.videoId == null && <Tag tone="warn">재생 불가</Tag>}
       </div>
     </div>
   );

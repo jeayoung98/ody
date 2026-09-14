@@ -35,11 +35,14 @@ interface MainScreenProps {
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
+  const panelCollapsed = usePanelStore((s) => s.collapsed);
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
+  // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
+  const occludedRight = activePanel && !panelCollapsed ? PANEL_OCCLUSION : RAIL_OCCLUSION;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-void text-ink">
-      <MapView occludedRight={activePanel ? PANEL_OCCLUSION : RAIL_OCCLUSION} />
+      <MapView occludedRight={occludedRight} />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}

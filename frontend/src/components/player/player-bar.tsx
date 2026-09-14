@@ -35,14 +35,20 @@ export default function PlayerBar() {
    * 안 나는 게 제일 나쁘다.
    */
   const overlayOpen = viewMode !== "default";
+  const openSong = usePanelStore((s) => s.openSong);
+  const openPlaylist = usePanelStore((s) => s.openPlaylist);
+  const openJourney = usePanelStore((s) => s.openJourney);
+  /**
+   * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
+   * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
+   * 거부된 경우(오버레이·따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
+   */
   const handleGoHome = () => {
     const r = goHome();
     if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
     else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+    else if (r !== "none" && currentMusicId != null) openSong(currentMusicId);
   };
-  const openSong = usePanelStore((s) => s.openSong);
-  const openPlaylist = usePanelStore((s) => s.openPlaylist);
-  const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
   // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
   useDeferredNext();

@@ -24,7 +24,7 @@ import com.ssafy.backend.music.mapper.MusicDetailMapper;
  * {@code JourneyService.hydrate()} 가 port 를 {@code orElseThrow} 로 꺼내기 때문이다.
  * 산출 쪽(축·DP·층 조회)이 다 붙어도 응답 조립이 여기서 끊긴다.
  *
- * <p>port 계약대로 <b>순서를 보장하지 않고</b>, 없는 mbid 는 결과에서 뺀다. 순서 복원과 누락 판정은
+ * <p>port 계약대로 <b>순서를 보장하지 않고</b>, 없는 id 는 결과에서 뺀다. 순서 복원과 누락 판정은
  * 호출자 몫이다(FR-005, FR-014).
  *
  * <p>좌표는 저장된 값을 그대로 옮긴다 — 재계산·재투영 없음(FR-016).
@@ -45,12 +45,12 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public List<MusicDetail> findDetailsByMbids(List<String> mbids) {
-		if (mbids.isEmpty()) {
+	public List<MusicDetail> findDetailsByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
 			return List.of();                   // IN () 는 문법 오류다
 		}
 
-		List<MusicDetailRow> rows = mapper.findByMbids(mbids);
+		List<MusicDetailRow> rows = mapper.findByIds(ids);
 		if (rows.isEmpty()) {
 			return List.of();
 		}

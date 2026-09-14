@@ -168,7 +168,7 @@ public class NearbyService {
 			return List.of();
 		}
 		Map<Long, MusicSummary> byId = new LinkedHashMap<>();
-		for (MusicSummary s : detailReader.findSummariesByMbids(picked.stream().map(TrackCandidate::mbid).toList())) {
+		for (MusicSummary s : detailReader.findSummariesByIds(picked.stream().map(TrackCandidate::id).toList())) {
 			byId.put(s.id(), s);
 		}
 		return picked.stream()

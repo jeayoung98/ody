@@ -90,12 +90,12 @@ class MusicDetailReaderAdapterTests {
 	 * 어댑터에는 <b>확정된 곡의 상세를 채우는 책임</b>만 남았다.
 	 */
 	@Test
-	void findSummariesByMbids_groupsGenresPerTrack() {
-		when(mapper.findByMbids(List.of("m1", "m2"))).thenReturn(List.of(row(1L), row(2L)));
+	void findSummariesByIds_groupsGenresPerTrack() {
+		when(mapper.findByIds(List.of(1L, 2L))).thenReturn(List.of(row(1L), row(2L)));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
 				genreRow(1L, "K-Pop"), genreRow(1L, "Ballad"), genreRow(2L, "Rock")));
 
-		List<MusicSummary> out = adapter.findSummariesByMbids(List.of("m1", "m2"));
+		List<MusicSummary> out = adapter.findSummariesByIds(List.of(1L, 2L));
 
 		assertEquals(2, out.size());
 		assertEquals(List.of("K-Pop", "Ballad"), out.get(0).genres());
@@ -103,10 +103,10 @@ class MusicDetailReaderAdapterTests {
 	}
 
 	@Test
-	void findSummariesByMbids_skipsQueries_whenInputIsEmpty() {
-		assertTrue(adapter.findSummariesByMbids(List.of()).isEmpty());
+	void findSummariesByIds_skipsQueries_whenInputIsEmpty() {
+		assertTrue(adapter.findSummariesByIds(List.of()).isEmpty());
 
-		verify(mapper, never()).findByMbids(anyList());
+		verify(mapper, never()).findByIds(anyList());
 		verify(mapper, never()).findGenresByMusicIds(anyList());
 	}
 

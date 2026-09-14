@@ -64,7 +64,7 @@
 | 필드 | 타입 | 게이트웨이에서의 쓰임 |
 | --- | --- | --- |
 | `reachable` | `boolean` | `false` → 422 `PATH_NOT_FOUND` (FR-002) |
-| `stationMbids` | `List<String>` | **중간 정거장만.** 출발·도착 제외 (FR-021). 순서가 경로 순서 |
+| `stationIds` | `List<Long>` | **중간 정거장만.** 출발·도착 제외 (FR-021). 순서가 경로 순서. rev.4: 기존 mbid → PK id (S15P21A405-313) |
 | `progresses` | `List<Double>` | 단조 증가 검사용. 위반 시 카운터·로그만 (FR-020, R10) |
 | `endpointDist` | `double` | 로그만 (FR-023) |
 | `far` | `boolean` | 로그만 (FR-023) |
@@ -78,9 +78,9 @@
 
 | 엔진 | 응답 | 변환 |
 | --- | --- | --- |
-| `stations[i].mbid` | `path[i+1]` | `JourneyTrackReader`로 상세 조회 후 조립 |
+| `stations[i].id` | `path[i+1]` | `JourneyTrackReader`로 PK id 상세 조회 후 조립 |
 | (엔진에 없음) | `path[0]`, `path[last]` | `MusicDetailReader.findDetail(start/end)` 결과 |
-| `n_stations` | `musicCnt` | `stationMbids.size() + 2`. 엔진 메타의 `n_stations` 값을 따로 들고 있지 않는다 — 조립은 실제 mbid 목록 기준이라 자기정합적이다 (FR-021 — 두 수를 혼용하지 않는다) |
+| `n_stations` | `musicCnt` | `stationIds.size() + 2`. 엔진 메타의 `n_stations` 값을 따로 들고 있지 않는다 — 조립은 실제 id 목록 기준이라 자기정합적이다 (FR-021 — 두 수를 혼용하지 않는다) |
 | (엔진에 없음) | `totalDuration` | 게이트웨이가 `duration` 합산 |
 | `stations[i].rank` | `step` | **쓰지 않는다.** `step`은 최종 목록 기준 0부터 재부여 (FR-005) |
 | `far`, `endpoint_dist`, `mode`, `bundle` | — | 응답 제외, 로그만 |
@@ -104,7 +104,7 @@ EnginePath find(String startMbid, String endMbid)
 ### `JourneyTrackReader` (신규, BE2 소유 계약 / BE4 저장소 구현)
 
 ```
-List<MusicDetail> findDetailsByMbids(List<String> mbids)
+List<MusicDetail> findDetailsByIds(List<Long> ids)
 ```
 
 - **순서를 보장하지 않는다.** 게이트웨이가 `Map<String, MusicDetail>`로 재조립한다(R4).
@@ -149,6 +149,6 @@ BE 소유 곡 테이블에 다음이 필요하다(clarify 결정 — **현재 �
 | I4 | `totalDuration == Σ path[].duration` | FR-006 |
 | I5 | `path.size() <= 30` | FR-008 |
 | I6 | `path`에 같은 곡이 두 번 나오지 않는다 | FR-009. 엔진이 보장하고, 게이트웨이는 **엔진이 같은 mbid를 두 번 준 경우**를 거부해 이를 감시한다 |
-| I7 | 정거장 순서 = 엔진 `stationMbids` 순서 (조회 결과 순서가 아니다) | R4, FR-005 |
+| I7 | 정거장 순서 = 엔진 `stationIds` 순서 (조회 결과 순서가 아니다) | R4, FR-005 |
 | I8 | 도메인 저장소 쓰기 0건 | FR-018 |
 | I9 | 응답 JSON에 `far`·`endpoint_dist`·`mode`·`n_stations`·`bundle` 키가 없다 | FR-023 |

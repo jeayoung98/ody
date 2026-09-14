@@ -39,6 +39,7 @@ import com.ssafy.backend.music.retrieval.NearestTrackReader;
 import com.ssafy.backend.music.retrieval.ServingRules;
 import com.ssafy.backend.music.service.JourneyService;
 import com.ssafy.backend.music.retrieval.TrackCandidate;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
@@ -246,15 +247,22 @@ class JourneyBenchmarkIT {
 		assertThat(checked).as("최소 한 쌍은 검사했다").isPositive();
 	}
 
+	/**
+	 * videoId 실시간 조회를 하지 않는 어댑터(S15P21A405-312). 이 벤치마크는 산출 지연을 재는 것이
+	 * 목적이라 외부 EC2 API 호출을 끌어들이지 않는다 — DB 에 이미 있는 값만 그대로 통과시킨다.
+	 */
+	private static final VideoIdEnricher NOOP_VIDEO_ID_ENRICHER =
+			new VideoIdEnricher((artist, title) -> Optional.empty(), (musicId, videoId) -> { });
+
 	/** 운영과 같은 어댑터·서비스를 실 DB 세션 위에 조립한다. Spring 없이 생성자로만 엮는다. */
 	private JourneyService serviceOn(SqlSession session) {
 		MusicDetailMapper detailMapper = session.getMapper(MusicDetailMapper.class);
 		AxisJourneyPathFinder finder = new AxisJourneyPathFinder(
 				Optional.of(adapterOn(session)), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 		return new JourneyService(
-				Optional.of(new MusicDetailReaderAdapter(detailMapper)),
+				Optional.of(new MusicDetailReaderAdapter(detailMapper, NOOP_VIDEO_ID_ENRICHER)),
 				Optional.of(finder),
-				Optional.of(new JourneyTrackReaderAdapter(detailMapper)),
+				Optional.of(new JourneyTrackReaderAdapter(detailMapper, NOOP_VIDEO_ID_ENRICHER)),
 				new SimpleMeterRegistry());
 	}
 

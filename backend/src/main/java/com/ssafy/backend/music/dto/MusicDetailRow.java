@@ -23,6 +23,7 @@ public class MusicDetailRow {
 	private String album;
 	private Integer playCnt;
 	private Integer youtubeCnt;
+	private String videoId;
 
 	/** 주변곡 질의에서만 채워진다(상세 1건 조회에서는 null). */
 	private Double distance;

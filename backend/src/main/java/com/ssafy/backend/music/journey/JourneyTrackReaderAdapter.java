@@ -1,6 +1,5 @@
 package com.ssafy.backend.music.journey;
 
-import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -16,6 +15,7 @@ import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * {@link JourneyTrackReader} 의 MyBatis 어댑터 (T045, 헌법 X: BE2 계약 / 실행 분리).
@@ -28,15 +28,19 @@ import com.ssafy.backend.music.mapper.MusicDetailMapper;
  * 호출자 몫이다(FR-005, FR-014).
  *
  * <p>좌표는 저장된 값을 그대로 옮긴다 — 재계산·재투영 없음(FR-016).
- * 조회 전용이라 쓰기가 없다(FR-018).
+ *
+ * <p>videoId 가 DB 에 없는 정거장은 {@link VideoIdEnricher} 가 외부 videoid API 로 실시간
+ * 조회해 채운다(S15P21A405-312, 프로토타입) — 이 어댑터 자체의 조회 전용 성격(FR-018)과 별개다.
  */
 @Repository
 public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 
 	private final MusicDetailMapper mapper;
+	private final VideoIdEnricher videoIdEnricher;
 
-	public JourneyTrackReaderAdapter(MusicDetailMapper mapper) {
+	public JourneyTrackReaderAdapter(MusicDetailMapper mapper, VideoIdEnricher videoIdEnricher) {
 		this.mapper = mapper;
+		this.videoIdEnricher = videoIdEnricher;
 	}
 
 	/**
@@ -70,7 +74,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						VIDEO_ID_NOT_LOADED,
+						videoIdEnricher.resolve(row.getId(), row.getArtist(), row.getTitle(), row.getVideoId()),
 						row.toLocation(),
 						row.getPlayCnt(),
 						row.getYoutubeCnt()))

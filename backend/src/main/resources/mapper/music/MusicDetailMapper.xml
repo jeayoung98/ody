@@ -29,7 +29,7 @@
 
 	<select id="findById" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
 		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt,
+		       m.play_cnt, m.youtube_cnt, m.video_id,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.id = #{id}
@@ -37,6 +37,21 @@
 
 	<select id="findLocationText" resultType="string">
 		SELECT location::text FROM music WHERE id = #{id}
+	</select>
+
+	<!--
+		여정 정거장 조립용. mbid 는 UNIQUE 라 인덱스를 탄다.
+		곡당 왕복은 3초 예산을 넘기므로(SC-002) 반드시 한 번에 읽는다. 최대 20건이다.
+	-->
+	<select id="findByMbids" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
+		       m.play_cnt, m.youtube_cnt, m.video_id,
+		<include refid="locationColumns"/>
+		FROM music m
+		WHERE m.mbid IN
+		<foreach item="mbid" collection="mbidList" open="(" separator="," close=")">
+			#{mbid}
+		</foreach>
 	</select>
 
 	<!--
@@ -65,7 +80,7 @@
 	-->
 	<select id="findByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
 		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt,
+		       m.play_cnt, m.youtube_cnt, m.video_id,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.id IN

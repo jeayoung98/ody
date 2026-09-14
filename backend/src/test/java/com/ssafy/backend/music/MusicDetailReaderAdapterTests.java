@@ -25,15 +25,18 @@ import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSummary;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * 상세·주변곡 어댑터 단위 테스트 (매퍼 mock). SQL 자체는 실 DB(T205) 대상이고,
  * 여기서는 어댑터가 지는 책임 — 질의 벡터 전달 방식·자기 제외·동률 tie-break·조립 — 만 본다.
+ * videoId 실시간 조회(S15P21A405-312)는 VideoIdEnricherTests 에서 따로 다룬다.
  */
 class MusicDetailReaderAdapterTests {
 
 	private final MusicDetailMapper mapper = mock(MusicDetailMapper.class);
-	private final MusicDetailReaderAdapter adapter = new MusicDetailReaderAdapter(mapper);
+	private final VideoIdEnricher videoIdEnricher = mock(VideoIdEnricher.class);
+	private final MusicDetailReaderAdapter adapter = new MusicDetailReaderAdapter(mapper, videoIdEnricher);
 
 	private static MusicDetailRow row(long id) {
 		MusicDetailRow r = new MusicDetailRow();

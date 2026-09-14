@@ -248,7 +248,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const mode = useMapStore.getState().viewMode;
       // 오버레이가 떠 있으면 뒷화면 지도는 건드리지 않는다 — 휠은 오버레이 안에서만 작동
       if (mode === "constellation") {
-        engine.overlayWheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
+        engine.overlayWheel(e.deltaY);
         return;
       }
       // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)

@@ -10,10 +10,13 @@ import com.ssafy.backend.feedback.dto.FeedbackRow;
 import com.ssafy.backend.feedback.mapper.FeedbackMapper;
 import com.ssafy.backend.music.retrieval.ServingRules;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 탐색 설문 저장 (S15P21A405-289). 형식 검증은 DTO 애노테이션, 필드 간 규칙은 여기서.
  * 응답 시점의 번들·임계값을 행에 찍어 두어 규칙을 바꾼 뒤 전후 비교가 되게 한다.
  */
+@Slf4j
 @Service
 public class FeedbackService {
 
@@ -44,7 +47,10 @@ public class FeedbackService {
 		row.setUserEmail(userEmail);
 		row.setBundle(servingRules.bundle());
 		row.setRules(rulesSnapshot(servingRules));
-		return new FeedbackResponse(feedbackMapper.upsert(row));
+		FeedbackResponse response = new FeedbackResponse(feedbackMapper.upsert(row));
+		log.info("[Feedback] 응답 저장 완료 mode={} skipped={} verdict={}",
+				request.mode(), request.skipped(), request.verdict());
+		return response;
 	}
 
 	static void validate(FeedbackRequest r) {

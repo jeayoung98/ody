@@ -18,6 +18,9 @@ import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class MusicService {
 	/** 페이지 크기 서버 고정 (정본 §0.3). */
@@ -57,7 +60,10 @@ public class MusicService {
 	public MajorResponse getMajor(int level, List<LayerBox> accumulated) {
 		MajorTrackReader reader = majorReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/major: 상주 집합 어댑터 대기 중"));
-		return new MajorResponse(reader.findResidentSet(new MajorQuery(level, accumulated, RESIDENT_SET_SIZE)));
+		MajorResponse response = new MajorResponse(
+				reader.findResidentSet(new MajorQuery(level, accumulated, RESIDENT_SET_SIZE)));
+		log.info("[Music] 대표곡 조회 완료 level={} count={}", level, response.content().size());
+		return response;
 	}
 
 	/**
@@ -68,6 +74,7 @@ public class MusicService {
 		MusicSearchReader reader = searchReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/search: BE4 검색 어댑터 대기 중 (B-D)"));
 		MusicSearchReader.PageResult result = reader.search(query.trim(), page, PAGE_SIZE);
+		log.info("[Music] 검색 완료 query={} page={} count={}", query, page, result.content().size());
 		return new PageResponse<>(result.content(), page, PAGE_SIZE, result.hasNext());
 	}
 
@@ -83,6 +90,7 @@ public class MusicService {
 		// 이웃 선정은 주변 탐색(005)과 같은 코드 경로를 지나간다 — 규칙이 두 벌이 되면
 		// 같은 곡에 곡 상세와 주변 탐색 뷰가 다른 목록을 준다(005 FR-023, SC-006).
 		NearbyService.NeighborResult result = nearbyService.neighborsOf(detail);
+		log.info("[Music] 상세 조회 완료 id={} neighbors={}", id, result.neighbors().size());
 		return new MusicDetailResponse(detail, result.neighbors(), result.lowSimilarity());
 	}
 }

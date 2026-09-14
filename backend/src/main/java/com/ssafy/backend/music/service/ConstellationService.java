@@ -18,12 +18,15 @@ import com.ssafy.backend.music.dto.ConstellationLayoutResponse;
 import com.ssafy.backend.music.dto.ConstellationPoint;
 import com.ssafy.backend.music.dto.Location;
 
+import lombok.extern.slf4j.Slf4j;
+
 /**
  * 별자리 배치 (PATH-01, BACKEND-NOTES A-9).
  *
  * <p>곡 좌표를 한 번에 읽어 {@link PlanarProjection} 으로 2D 로 누르고, 요청 순서대로 되돌린다.
  * 조회 전용이며 어떤 도메인에도 쓰지 않는다.
  */
+@Slf4j
 @Service
 public class ConstellationService {
 
@@ -54,12 +57,14 @@ public class ConstellationService {
 		locations.forEach((musicId, location) -> coords.put(musicId, toCoordinates(location)));
 		Map<Long, PlanarProjection.Point> projected = PlanarProjection.project(coords);
 
-		return new ConstellationLayoutResponse(musicIds.stream()
+		ConstellationLayoutResponse response = new ConstellationLayoutResponse(musicIds.stream()
 				.map(musicId -> {
 					PlanarProjection.Point point = projected.get(musicId);
 					return new ConstellationPoint(musicId, point.x(), point.y());
 				})
 				.toList());
+		log.info("[Constellation] 별자리 배치 완료 count={}", musicIds.size());
+		return response;
 	}
 
 	private MusicDetailReader reader() {

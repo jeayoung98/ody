@@ -10,28 +10,34 @@
 import { create } from "zustand";
 import type { ResolvedPrompt, SurveyPrompt, SurveyTarget } from "@/types/survey";
 
+/** 한 곡을 듣는 한 번의 방문 */
+interface Visit {
+  musicId: number;
+  /** 지금까지 **재생된** 시간(ms). 멈춰 있는 동안은 안 늘어난다 */
+  accruedMs: number;
+  /** 지금 돌고 있는 재생 구간의 시작 시각. 멈춰 있으면 null */
+  playingSince: number | null;
+}
+
 interface SurveyState {
   /** 지금 묻고 있는 것. null 이면 설문이 떠 있지 않다 */
   prompt: ResolvedPrompt | null;
   /**
-   * 곡별 **마지막 체류 시간**(ms). 누적이 아니다.
+   * 곡별 **마지막 체류의 재생 시간**(ms). 누적이 아니다.
    *
    * 15초 듣고 나갔다가 나중에 10초 더 들었으면 **10초**다. 25초로 치지 않는다 —
    * 15초는 이미 `skipped` 행으로 따로 기록됐고, 그걸 다시 "들은 시간" 으로 세면
    * 한 값이 두 뜻을 갖는다.
-   *
-   * 지나간 곡을 얼마나 들었는지는 여기서만 알 수 있다 — 지금 듣는 곡은 타이머로 재면
-   * 되지만, 이미 떠나보낸 곡은 잴 방법이 없다.
    */
   lastStintMs: Record<number, number>;
   /**
-   * **지금 듣고 있는 곡과 그 곡이 현재 곡이 된 시각.**
+   * 지금 듣고 있는 곡의 방문.
    *
    * 장부(`lastStintMs`)는 곡을 떠날 때 마감된다. 그래서 **아직 듣고 있는 곡은 장부에 없다** —
    * 설문 카드는 그 곡이 재생 중일 때 뜨므로, 장부만 읽으면 늘 0 이 나간다.
    * 실제로 그랬다: 답한 행의 `listened_sec` 이 전부 0 이었다.
    */
-  since: { musicId: number; at: number } | null;
+  visit: Visit | null;
   /**
    * 이미 전송한 행. `${sessionId}:${rank}` 를 키로 쓴다 — 서버의 `UNIQUE(session_id, rank)` 와
    * 같은 기준이다. 무응답 행을 보낸 뒤 같은 곡을 또 묻거나 보내는 낭비를 막는다.
@@ -52,10 +58,16 @@ interface SurveyState {
   resolve: (prompt: SurveyPrompt, minListenMs: number) => ResolvedPrompt | null;
   open: (prompt: ResolvedPrompt) => void;
   close: () => void;
-  beginListening: (musicId: number, at: number) => void;
-  noteListened: (musicId: number, ms: number) => void;
-  /** 그 곡의 **이번 체류** 시간(ms). 지금 곡이면 재는 중, 지나간 곡이면 마지막 체류 */
+
+  /** 곡이 바뀌었다 — 새 방문을 연다 */
+  beginVisit: (musicId: number) => void;
+  /** 재생이 시작·정지됐다. 멈춘 동안은 시계가 안 돈다 */
+  setPlaying: (playing: boolean, at: number) => void;
+  /** 곡을 떠난다 — 이번 방문의 재생 시간을 장부에 마감한다 */
+  endVisit: () => void;
+  /** 그 곡의 **이번 체류 재생 시간**(ms). 지금 곡이면 재는 중, 지나간 곡이면 마지막 체류 */
   stintMs: (musicId: number) => number;
+
   markSent: (target: SurveyTarget) => void;
   hasSent: (target: SurveyTarget) => boolean;
 }
@@ -63,10 +75,13 @@ interface SurveyState {
 /** 행의 식별자. 서버의 `UNIQUE(session_id, rank)` 와 같은 기준이다 */
 const keyOf = (t: SurveyTarget) => `${t.sessionId}:${t.rank}`;
 
+/** 방문이 지금까지 쌓은 재생 시간 */
+const played = (v: Visit, now: number) => v.accruedMs + (v.playingSince == null ? 0 : now - v.playingSince);
+
 export const useSurveyStore = create<SurveyState>()((set, get) => ({
   prompt: null,
   lastStintMs: {},
-  since: null,
+  visit: null,
   sent: new Set(),
 
   resolve: (prompt, minListenMs) => {
@@ -77,7 +92,7 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
   },
 
   open: (prompt) => {
-    // 답하는 중이면 새 질문으로 갈아치우지 않는다. 자동재생(S15P21A405-258)이 붙으면
+    // 답하는 중이면 새 질문으로 갈아치우지 않는다. 자동 넘김(S15P21A405-258)이 붙어 있어서
     // 설문이 떠 있는 동안에도 곡이 뒤에서 넘어갈 수 있고, 그때 답하던 것이 날아간다
     if (get().prompt) return;
     if (get().sent.has(keyOf(prompt.target))) return;
@@ -86,20 +101,29 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
 
   close: () => set({ prompt: null }),
 
-  beginListening: (musicId, at) => set({ since: { musicId, at } }),
+  beginVisit: (musicId) => set({ visit: { musicId, accruedMs: 0, playingSince: null } }),
 
-  noteListened: (musicId, ms) =>
-    set((s) => ({
+  setPlaying: (playing, at) =>
+    set((s) => {
+      const v = s.visit;
+      if (!v) return s;
+      if (playing) return v.playingSince == null ? { visit: { ...v, playingSince: at } } : s;
+      if (v.playingSince == null) return s;
+      return { visit: { ...v, accruedMs: v.accruedMs + (at - v.playingSince), playingSince: null } };
+    }),
+
+  endVisit: () =>
+    set((s) => {
+      const v = s.visit;
+      if (!v) return s;
       // **덮어쓴다.** 더하면 15초 스킵 + 10초 재청취가 25초가 되어 어느 쪽도 아닌 값이 된다
-      lastStintMs: { ...s.lastStintMs, [musicId]: ms },
-      // 마감했으니 이번 체류는 끝났다
-      since: s.since?.musicId === musicId ? null : s.since,
-    })),
+      return { lastStintMs: { ...s.lastStintMs, [v.musicId]: played(v, Date.now()) }, visit: null };
+    }),
 
   stintMs: (musicId) => {
     const s = get();
-    if (s.since?.musicId === musicId) return Date.now() - s.since.at; // 지금 듣는 중
-    return s.lastStintMs[musicId] ?? 0; // 지나간 곡 — 마지막으로 머문 시간
+    if (s.visit?.musicId === musicId) return played(s.visit, Date.now());
+    return s.lastStintMs[musicId] ?? 0;
   },
 
   markSent: (target) => set((s) => ({ sent: new Set(s.sent).add(keyOf(target)) })),

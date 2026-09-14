@@ -37,12 +37,14 @@ function indexOfGenre(name: string): number | null {
  */
 export default function SurveyRunner() {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const context = usePlayerStore((s) => s.context);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
 
-  const beginListening = useSurveyStore((s) => s.beginListening);
-  const noteListened = useSurveyStore((s) => s.noteListened);
+  const beginVisit = useSurveyStore((s) => s.beginVisit);
+  const endVisit = useSurveyStore((s) => s.endVisit);
+  const setPlaying = useSurveyStore((s) => s.setPlaying);
   const stintMs = useSurveyStore((s) => s.stintMs);
   const markSent = useSurveyStore((s) => s.markSent);
   const hasSent = useSurveyStore((s) => s.hasSent);
@@ -79,8 +81,17 @@ export default function SurveyRunner() {
     ),
   );
 
-  /** 지금 듣는 곡이 평가 대상인가. 경로 재생 중이면 경로 표, 주변 탐색 중이면 주변 표에서 찾는다 */
-  const table = inJourney ? journeyTargets : viewMode === "nearby" ? nearbyTargets : null;
+  /**
+   * 지금 듣는 곡이 평가 대상인가. 경로 재생 중이면 경로 표, 주변 탐색 중이면 주변 표에서 찾는다.
+   *
+   * 주변 표는 **단일 재생일 때만** 본다. `viewMode` 는 지도 오버레이 상태라 플리를 틀어도 안 꺼지고
+   * (`playQueue` 는 `viewMode` 를 건드리지 않는다), 뷰를 켜 둔 채 플리를 돌리면 그 곡이 마침 이웃
+   * 목록에 있을 때 주탐 행으로 들어간다. **플리는 사용자가 임의로 담은 목록이라 우리 추천 결과가
+   * 아니다** — 재려는 건 주변 탐색·경로 탐색이 고른 연결이 사람 귀에도 맞느냐지 남이 만든 목록의
+   * 흐름이 아니다. 경로 재생은 바로 위에서 갈라지므로 여기 걸리는 건 플리뿐이다.
+   */
+  const inNearby = viewMode === "nearby" && context.kind === "single";
+  const table = inJourney ? journeyTargets : inNearby ? nearbyTargets : null;
   const prompt = currentMusicId != null && table ? (table.get(currentMusicId) ?? null) : null;
 
   /**
@@ -107,9 +118,8 @@ export default function SurveyRunner() {
    */
   useEffect(() => {
     if (currentMusicId == null) return;
-    const from = Date.now();
-    // 카드가 재생 도중에 뜬다 — 그때 "지금까지 몇 초"를 알려면 시작 시각이 스토어에 있어야 한다
-    beginListening(currentMusicId, from);
+    // 카드가 재생 도중에 뜬다 — 그때 "지금까지 몇 초"를 알려면 방문이 스토어에 열려 있어야 한다
+    beginVisit(currentMusicId);
 
     // 탭 숨김(pagehide)과 곡 바뀜(cleanup)이 잇따라 오면 장부에 같은 시간이 두 번 들어간다
     let settled = false;
@@ -117,7 +127,7 @@ export default function SurveyRunner() {
       if (settled) return;
       settled = true;
       const listenedMs = stintMs(currentMusicId); // 마감 전에 읽는다 — 이번 체류가 포함돼야 한다
-      noteListened(currentMusicId, Date.now() - from);
+      endVisit();
 
       const leaving = promptRef.current;
       if (!leaving || hasSent(leaving.target)) return;
@@ -139,7 +149,22 @@ export default function SurveyRunner() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentMusicId]);
 
-  useSurveyTrigger(prompt);
+  /**
+   * **재생 중일 때만 시계가 돈다** (S15P21A405-308 임베드 이후).
+   *
+   * `videoId` 가 채워지면서 임베드 플레이어가 실제로 소리를 낸다. 유튜브 쪽에서 멈추면
+   * `isPlaying` 이 따라 내려오므로, 청취 시간이 "현재 곡으로 머문 시간" 이 아니라
+   * **실제로 재생된 시간**이 된다. 카드를 띄워둔 채 멈춰두면 더 안 쌓인다.
+   *
+   * 곡 바꾸기 effect **아래에 둔다.** 곡이 바뀌면 위에서 새 방문을 연 뒤 여기서 시계를
+   * 켜야 한다 — 순서가 바뀌면 이전 곡의 방문에 시계를 켠다.
+   */
+  useEffect(() => {
+    if (currentMusicId == null) return;
+    setPlaying(isPlaying, Date.now());
+  }, [currentMusicId, isPlaying, setPlaying]);
+
+  useSurveyTrigger(prompt, isPlaying);
 
   return <SurveyCard />;
 }

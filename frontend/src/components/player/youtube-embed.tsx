@@ -144,8 +144,12 @@ export default function YoutubeEmbed() {
   if (!videoId) return null;
 
   return (
-    <div data-hud className="glass absolute bottom-[86px] left-1/2 z-[22] w-[min(320px,40vw)] -translate-x-1/2 overflow-hidden rounded-[14px]! p-0!">
-      <div className="aspect-video w-full">
+    /**
+     * 크기를 줄이지 않는다. 유튜브 임베드 약관이 **최소 200x200** 을 요구해서 356x200 이 16:9 의
+     * 하한이다. 더 작게 만들거나 가리면 약관과 규칙 6 의 "공식 플레이어 임베드" 취지에 어긋난다.
+     */
+    <div data-hud className="glass absolute bottom-[86px] left-1/2 z-[22] w-[356px] max-w-[46vw] -translate-x-1/2 overflow-hidden rounded-[14px]! p-0!">
+      <div className="aspect-video w-full min-h-[200px]">
         <div ref={hostRef} className="h-full w-full" />
       </div>
     </div>

@@ -1,22 +1,19 @@
-import AlbumCover from "@/components/common/album-cover";
 import Tag from "@/components/common/tag";
 import { genreColor } from "@/constants/design-tokens";
 import { formatCount, formatDuration } from "@/lib/format";
 import type { MusicDetail } from "@/types";
+import SongHero from "./song-hero";
 
-/** 제목/가수 · 앨범 커버 · 칩(장르 색 · 무드 · 연도 · 길이 · 재생수 · 재생불가) */
+/**
+ * 곡 상세 상단 — 앨범 히어로 + 칩(장르 색 · 무드 · 연도 · 길이 · 재생수 · 재생불가).
+ *
+ * 제목·아티스트·앨범은 히어로 안으로 들어갔다 (S15P21A405-314). 여기 남은 건 칩 줄이다.
+ */
 export default function SongHeader({ music }: { music: MusicDetail }) {
   const color = genreColor(music.genres[0]?.id ?? 0);
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex items-center gap-2.5">
-        <AlbumCover coverUrl={music.albumCoverUrl} genreId={music.genres[0]?.id ?? 0} alt={music.album ?? ""} size={56} />
-        <div className="min-w-0 flex-1">
-          <h3 className="truncate font-display text-xl leading-[1.25] font-semibold">{music.title}</h3>
-          <p className="mt-0.5 truncate text-sm text-ink-2">{music.artist ?? "Unknown"}</p>
-          <p className="truncate text-xs text-ink-3">{music.album ?? "-"}</p>
-        </div>
-      </div>
+      <SongHero music={music} />
       <div className="flex flex-wrap gap-[5px]">
         {music.genres.map((g) => (
           <Tag key={g.id} color={color}>

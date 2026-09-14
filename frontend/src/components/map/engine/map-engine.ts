@@ -1628,16 +1628,31 @@ export class MapEngine {
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
-    const mi = this.myId != null ? this.index.get(this.myId) : undefined;
+    /**
+     * **배율은 그 겹에 처음 들어왔던 것으로 되돌린다** (S15P21A405-327).
+     *
+     * `p.cam.s` 는 게이트를 밀며 한 겹 최대(`zoomRange.max`)까지 확대된 뒤 대기 중 `waitZoom`
+     * 까지 더해진 값이라 진입 배율의 7배를 넘는다. 그대로 복원하면 **축소하려고 휠을 돌렸는데
+     * 최대 확대 상태의 좁은 구역에 착지하고**, 그 구역이 비어 있으면 화면에 별이 하나도 없다.
+     * 진입 배율은 그 겹이 화면에 맞춰지던 배율이므로 여기로 오면 별이 화면을 채운다.
+     */
+    const s = p.entryS;
+    /**
+     * 내 곡을 가운데 두는 건 **그 곡이 이 겹에 상주할 때만** 이다.
+     * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.
+     */
+    const mi0 = this.myId != null ? this.index.get(this.myId) : undefined;
+    const mi = mi0 != null && p.subset[mi0] ? mi0 : undefined;
     const f = this.freeRect();
     // 내 자리가 있으면 그 곡을 가운데 두고 떠오른다. 없으면 두고 온 카메라 그대로
     const c: MapCamera =
       mi == null
-        ? { ...p.cam }
+        ? { ...p.cam, s }
         : {
             ...p.cam,
-            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / p.cam.s,
-            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / p.cam.s,
+            s,
+            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
+            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
     const ax = LAYER_AXES[p.layer];
     this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1, p.entryS);

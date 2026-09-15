@@ -11,6 +11,7 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.service.NearbyPeopleService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
@@ -30,6 +31,7 @@ public class NearbyController {
 	private final NearbyPeopleService nearbyPeopleService;
 
 	/** 주변사람 목록 조회. 내가 지금 듣는 곡 기준으로 비슷한 곡 듣는 사람들을 가까운 순으로 준다. */
+	@Operation(summary = "주변사람 목록 조회", description = "내가 지금 듣는 곡과 비슷한 곡을 듣는 사람을 가까운 순으로 조회한다.")
 	@PostMapping("/nearby")
 	public ApiResponse<NearbySnapshot> nearby(Principal principal) {
 		return ApiResponse.success(nearbyPeopleService.open(principal.getName()));

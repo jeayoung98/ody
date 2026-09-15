@@ -15,6 +15,7 @@ import com.ssafy.backend.realtime.play.dto.PlayEndRequest;
 import com.ssafy.backend.realtime.play.dto.PlayRequest;
 import com.ssafy.backend.realtime.play.dto.PlayResponse;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -36,6 +37,7 @@ public class MusicPlayController {
 	private final PlayDeclarationService playDeclarationService;
 
 	/** 재생 선언 = 위치 이동의 유일한 원본. musicId 로 서버가 좌표를 계산한다. */
+	@Operation(summary = "재생 선언", description = "재생할 musicId를 선언해 위치를 이동시킨다. 위치 이동의 유일한 원본이다.")
 	@PostMapping("/play")
 	public ApiResponse<PlayResponse> play(@Valid @RequestBody PlayRequest request, Principal principal) {
 		PlayResponse res = playDeclarationService.play(
@@ -44,6 +46,7 @@ public class MusicPlayController {
 	}
 
 	/** 재생 종료 — 실제 재생 시간(played_ms) 기록. 위치는 변하지 않는다. */
+	@Operation(summary = "재생 종료", description = "실제 재생 시간(played_ms)을 기록한다. 위치는 변경되지 않는다.")
 	@PatchMapping("/play/end")
 	public ApiResponse<Void> playEnd(@Valid @RequestBody PlayEndRequest request, Principal principal) {
 		playDeclarationService.playEnd(principal.getName(), request.playHistoryId(), request.playedMs());

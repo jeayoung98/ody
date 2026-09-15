@@ -24,6 +24,7 @@ import com.ssafy.backend.auth.service.AuthService;
 
 import io.jsonwebtoken.Claims;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.servlet.http.HttpServletRequest;
@@ -46,6 +47,7 @@ public class AuthController {
 	private final JwtTokenProvider jwtTokenProvider;
 
 	// 이메일/비밀번호 회원가입 (S15P21A405-121). 응답 모양은 exchange/reissue와 동일.
+	@Operation(summary = "이메일/비밀번호 회원가입", description = "이메일/비밀번호/닉네임으로 회원가입한다. 성공 시 access token을 응답 본문으로, refresh token을 쿠키로 발급한다.")
 	@PostMapping("/signup")
 	public ApiResponse<TokenResponseDto> signup(
 			@RequestBody @Valid SignupRequestDto request, HttpServletResponse response) {
@@ -58,6 +60,7 @@ public class AuthController {
 	}
 
 	// 이메일/비밀번호 로그인 (S15P21A405-121).
+	@Operation(summary = "이메일/비밀번호 로그인", description = "이메일/비밀번호로 로그인한다. 성공 시 access token을 응답 본문으로, refresh token을 쿠키로 발급한다.")
 	@PostMapping("/login")
 	public ApiResponse<TokenResponseDto> login(
 			@RequestBody @Valid LoginRequestDto request, HttpServletResponse response) {
@@ -70,6 +73,7 @@ public class AuthController {
 	}
 
 	// 구글 idToken 로그인 (S15P21A405-122, AUTH-01 본안). Google Identity Services가 발급한 idToken을 검증.
+	@Operation(summary = "구글 idToken 로그인", description = "Google Identity Services가 발급한 idToken을 검증해 로그인/가입 처리한다.")
 	@PostMapping("/login/google")
 	public ApiResponse<GoogleLoginResponseDto> loginWithGoogle(
 			@RequestBody @Valid GoogleLoginRequestDto request, HttpServletResponse response) {
@@ -83,6 +87,7 @@ public class AuthController {
 	}
 
 	// 프론트가 OAuth 리다이렉트에서 받은 1회용 code를 실제 access token으로 교환한다.
+	@Operation(summary = "OAuth code 교환", description = "프론트가 OAuth 리다이렉트에서 받은 1회용 code를 실제 access token으로 교환한다.")
 	@PostMapping("/exchange")
 	public ApiResponse<TokenResponseDto> exchange(@RequestBody ExchangeRequestDto request) {
 		String accessToken = authService.exchangeCode(request.code());
@@ -90,6 +95,7 @@ public class AuthController {
 	}
 
 	// access token 만료 시 refresh token 쿠키로 새 access token을 재발급한다.
+	@Operation(summary = "access token 재발급", description = "access token 만료 시 refresh token 쿠키로 새 access token을 재발급한다.")
 	@PostMapping("/reissue")
 	public ApiResponse<TokenResponseDto> reissue(
 			@CookieValue(name = REFRESH_TOKEN_COOKIE_NAME, required = false) String refreshToken,
@@ -106,6 +112,7 @@ public class AuthController {
 		return ApiResponse.success(new TokenResponseDto(tokenPair.accessToken()));
 	}
 
+	@Operation(summary = "로그아웃", description = "현재 access token을 무효화하고 refresh token 쿠키를 제거한다.")
 	@PostMapping("/logout")
 	public ApiResponse<Void> logout(HttpServletRequest request, HttpServletResponse response) {
 		Claims claims = resolveClaims(request);
@@ -117,6 +124,7 @@ public class AuthController {
 		return ApiResponse.success(null);
 	}
 
+	@Operation(summary = "회원 탈퇴", description = "현재 access token을 무효화하고 회원 탈퇴를 처리한 뒤 refresh token 쿠키를 제거한다.")
 	@PostMapping("/withdraw")
 	public ApiResponse<Void> withdraw(HttpServletRequest request, HttpServletResponse response) {
 		Claims claims = resolveClaims(request);

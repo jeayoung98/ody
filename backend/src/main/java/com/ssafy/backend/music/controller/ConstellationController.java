@@ -11,6 +11,7 @@ import com.ssafy.backend.music.dto.ConstellationLayoutRequest;
 import com.ssafy.backend.music.dto.ConstellationLayoutResponse;
 import com.ssafy.backend.music.service.ConstellationService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.validation.Valid;
@@ -37,6 +38,7 @@ public class ConstellationController {
 	}
 
 	/** 곡 id 목록(2~30개)을 받아 곡별 -1~1 배치 좌표를 돌려준다. 같은 집합이면 항상 같은 좌표다. */
+	@Operation(summary = "별자리 배치 조회", description = "곡 id 목록(2~30개)을 받아 곡별 -1~1 배치 좌표를 반환한다. 같은 집합이면 항상 같은 좌표를 반환한다.")
 	@PostMapping("/layout")
 	public ApiResponse<ConstellationLayoutResponse> layout(@RequestBody @Valid ConstellationLayoutRequest request) {
 		return ApiResponse.success(constellationService.layout(request.musicIds()));

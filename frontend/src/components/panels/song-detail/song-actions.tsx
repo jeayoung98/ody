@@ -6,6 +6,7 @@ import { PauseIcon, PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
 import { FEATURES, UNPLAYABLE_NOTICE } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
+import { usePlaySong } from "@/hooks/use-play-song";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { usePlayerStore } from "@/stores/use-player-store";
@@ -16,7 +17,7 @@ import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
 /** 재생 · 플리에 추가 · 여정 출발/도착으로 지정 */
 export default function SongActions({ music }: { music: MusicDetail }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const playSingle = usePlayerStore((s) => s.playSingle);
+  const playWithConfirm = usePlaySong();
   const pause = usePlayerStore((s) => s.pause);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
@@ -56,8 +57,8 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       pause();
       return;
     }
-    playSingle(music.id);
-    recordPlay.mutate({ musicId: music.id, source: "MAP", playedMs: 0 });
+    // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
+    playWithConfirm(music.id, () => recordPlay.mutate({ musicId: music.id, source: "MAP", playedMs: 0 }));
   };
 
   return (

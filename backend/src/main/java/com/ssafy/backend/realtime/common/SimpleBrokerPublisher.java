@@ -11,7 +11,7 @@ import lombok.RequiredArgsConstructor;
  * MVP 구현용 발신 창구— SimpleBroker(messagingTemplate) 위임. seq 는 세션 레지스트리에서 발급한다.
  * WS 서버 다중화 시 RedisBridgePublisher 로 교체(R-09, 지금은 미작성).
  *
- * 골격 단계: 발행 본문은 TODO. seq 발급 지점만 명시한다.
+ * 개인 큐로 보내는 모든 메시지에 사용자 연결 단위 seq와 공통 봉투를 붙인다.
  */
 @Component
 @RequiredArgsConstructor
@@ -22,8 +22,7 @@ public class SimpleBrokerPublisher implements RealtimePublisher {
 
 	@Override
 	public void publishToUser(String userId, String destination, RealtimeEventType type, Object payload) {
-		// TODO(내부작업): long seq = sessionRegistry.nextSeq(userId);
-		//                messagingTemplate.convertAndSendToUser(userId, destination, RealtimeEnvelope.of(type, seq, payload));
-		throw new UnsupportedOperationException("TODO(내부작업)");
+		long seq = sessionRegistry.nextSeq(userId);
+		messagingTemplate.convertAndSendToUser(userId, destination, RealtimeEnvelope.of(type, seq, payload));
 	}
 }

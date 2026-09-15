@@ -126,6 +126,7 @@ export default function JourneyComposer() {
           type="button"
           onClick={handleCreate}
           disabled={!ready}
+          data-tutorial="journey-create"
           className="grad-bg rounded-pill px-3.5 py-1.5 text-[12.5px] font-medium text-void transition-opacity duration-fast disabled:pointer-events-none disabled:opacity-30"
         >
           경로 만들기

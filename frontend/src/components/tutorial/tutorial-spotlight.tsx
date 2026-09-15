@@ -100,11 +100,11 @@ export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
       {/* 고리. 클릭을 가로채면 안 되므로 이벤트를 통과시킨다 */}
       {rect.ring && (
         <div
-          className="pointer-events-none fixed border border-teal/60 shadow-glow-teal"
+          className="pointer-events-none fixed border-2 border-teal shadow-[0_0_28px_6px_rgba(79,227,206,.45)]"
           // 알약 버튼부터 세로로 긴 패널까지 대상이 제각각이라 짧은 변에 맞춰 둥글린다
           style={{ left: rect.x0, top: rect.y0, width: w, height: h, borderRadius: Math.min(26, w / 2, h / 2) }}
         >
-          <i className="animate-tbeat absolute -inset-0.5 block rounded-[inherit] border-2 border-teal" />
+          <i className="animate-tbeat absolute -inset-1 block rounded-[inherit] border-[3px] border-teal" />
         </div>
       )}
     </>

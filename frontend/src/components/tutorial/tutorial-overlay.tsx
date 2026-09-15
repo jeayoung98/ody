@@ -1,7 +1,7 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ROUTES, STORAGE_KEYS, TUTORIAL_STEPS } from "@/constants";
 import { useCompleteTutorialMutation } from "@/hooks/mutations/use-complete-tutorial-mutation";
@@ -12,6 +12,7 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { StarHint, WheelHint } from "./tutorial-hint";
 import TutorialSpotlight from "./tutorial-spotlight";
+import TutorialOutro from "./tutorial-outro";
 import TutorialStepCard from "./tutorial-step-card";
 
 /** 안내 카드가 차지하는 세로 끝(px). 짚어 줄 별을 이보다 아래에서 고른다 */
@@ -40,15 +41,23 @@ export default function TutorialOverlay() {
     reset();
   }, [reset]);
 
-  useEffect(() => {
-    if (!isDone) return;
+  /**
+   * 튜토리얼을 닫고 메인으로. 끝까지 한 경우에는 **마무리 화면을 한 번 거친 뒤** 여기로 온다
+   * (S15P21A405-353) — 건너뛴 사람은 나가고 싶은 것이므로 바로 온다.
+   */
+  const finish = useCallback(() => {
     const { myMusicId, selectedMusicId } = useMapStore.getState();
     const start = myMusicId ?? selectedMusicId;
     if (start != null) writeStorage(STORAGE_KEYS.myMusicId, start);
     writeStorage(STORAGE_KEYS.tutorialDone, true);
     completeMutation.mutate(undefined, { onSettled: () => router.replace(ROUTES.home) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isDone]);
+  }, [router]);
+
+  const skipTutorial = () => {
+    skip();
+    finish();
+  };
 
   /**
    * 출발곡·도착곡이 채워졌는지 본다. 채우는 길이 셋이라(상자에서 검색 · 지도 클릭 · 곡 상세의
@@ -150,7 +159,9 @@ export default function TutorialOverlay() {
     complete("select");
   };
 
-  if (isDone || !step) return null;
+  // 끝까지 했으면 마무리 화면을 한 장 띄운다. 거기서 눌러야 탐험이 시작된다
+  if (isDone) return <TutorialOutro onStart={finish} />;
+  if (!step) return null;
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[60]">
@@ -175,7 +186,7 @@ export default function TutorialOverlay() {
           step.card === "bottom" ? "bottom-[92px]" : "top-[120px]"
         }`}
       >
-        <TutorialStepCard index={stepIndex} total={TUTORIAL_STEPS.length} title={step.title} description={step.description} onSkip={skip} />
+        <TutorialStepCard index={stepIndex} total={TUTORIAL_STEPS.length} title={step.title} description={step.description} onSkip={skipTutorial} />
       </div>
     </div>
   );

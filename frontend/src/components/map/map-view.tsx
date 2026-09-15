@@ -377,7 +377,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
       // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
       selectMusic(s.musicId);
       openSong(s.musicId);
-      if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
+      // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
+      if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
+      else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
     [engine, openSong, playSong, selectMusic],

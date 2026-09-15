@@ -270,6 +270,9 @@ export class MapEngine {
   route: number[] = [];
   /** 별자리 뷰 안에서의 이동·확대. 지도 카메라와 별개다 (오버레이는 화면 좌표 배치) */
   overlay = { zoom: 1, dx: 0, dy: 0 };
+  /** 다가가는 중인 별자리 곡. 좌표가 아니라 ID 다 — {@link overlayFocus} 참고 */
+  private overlayFocusId: number | null = null;
+  private overlayFocusZoom = 1;
   /** 상주 별들이 차지하는 월드 범위. 카메라를 이 근처에 붙잡아 둔다 */
   private bbox = { x0: -1, x1: 1, y0: -1, y1: 1 };
   /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
@@ -585,12 +588,42 @@ export class MapEngine {
   /** 별자리 뷰에 들어갈 때 초기화 */
   overlayReset() {
     this.overlay = { zoom: 1, dx: 0, dy: 0 };
+    this.overlayFocusId = null;
   }
 
   overlayPan(dx: number, dy: number) {
+    this.overlayFocusId = null;
     this.overlay.dx += dx;
     this.overlay.dy += dy;
     this.clampOverlay();
+  }
+
+  /**
+   * 별자리 뷰에서 **그 곡으로 다가간다** (S15P21A405-330) — 배치 영역 한복판에 놓고 확대한다.
+   *
+   * 배치 안의 곡을 눌렀는데 화면이 안 움직이면 "눌렸나?" 가 된다. 지도 본체에서는 `viewSong`
+   * 이 맡는 일인데, 별자리는 카메라가 아니라 오버레이 변환으로 그려지므로 여기가 그 자리다.
+   *
+   * **목표를 좌표가 아니라 곡 ID 로 들고 있는다.** 클릭과 동시에 우측 패널이 열려 배치 영역이
+   * 좁아지고 `constellationFit` 이 다시 잡히는데, 그 변화는 다음 프레임에야 반영된다 —
+   * 좌표로 굳혀 두면 좁아진 화면에서 엉뚱한 자리로 간다. 매 프레임 다시 계산하면 영역이
+   * 어떻게 변하든 그 곡이 한복판으로 온다.
+   */
+  overlayFocus(id: number) {
+    const c = this.constellation;
+    if (!c || c.exitingAt || !c.layout.some((q) => q.musicId === id)) return;
+    this.overlayFocusId = id;
+    // 이미 더 확대해 둔 상태면 끌어내리지 않는다 — 들여다보던 배율을 빼앗는 꼴이다
+    this.overlayFocusZoom = Math.min(OVERLAY_ZOOM.max, Math.max(this.overlay.zoom, CONSTELLATION.focusZoom));
+  }
+
+  /** 그 곡을 한복판에 놓으려면 오버레이가 어디에 있어야 하나 (지금 영역·목표 배율 기준) */
+  private overlayDest(id: number, zoom: number) {
+    const p = this.constellation?.layout.find((q) => q.musicId === id);
+    if (!p) return null;
+    const fit = this.constellationFit();
+    // `constellationPos` 의 역산이다: tx = cx + (p.x-bx)·s·zoom + dx 를 cx 에 놓는 dx
+    return { dx: -(p.x - fit.bx) * fit.s * zoom, dy: (p.y - fit.by) * fit.s * zoom };
   }
 
   /**
@@ -603,6 +636,7 @@ export class MapEngine {
    * 한복판을 붙잡으면 확대해도 보고 있던 자리가 그대로 있고, 거기서 끌어 끝 별로 가면 된다.
    */
   overlayWheel(deltaY: number) {
+    this.overlayFocusId = null;
     const o = this.overlay;
     const next = Math.min(OVERLAY_ZOOM.max, Math.max(OVERLAY_ZOOM.min, o.zoom * Math.exp(-deltaY * WHEEL_ZOOM)));
     // 한복판 고정 = 지금 한복판에 있는 배치 지점이 그대로 한복판에 남는다
@@ -2314,6 +2348,26 @@ export class MapEngine {
       } else if (this.pressure > 0) {
         this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
         if (this.pressure === 0) this.prefetch = null;
+      }
+      // 별자리 안에서 그 곡으로 다가가기 (S15P21A405-330). 목표 자리는 영역이 바뀔 수 있어 매 프레임 다시 잰다
+      if (this.overlayFocusId != null) {
+        const t = this.overlayDest(this.overlayFocusId, this.overlayFocusZoom);
+        if (!t || !this.constellationActive()) this.overlayFocusId = null;
+        else {
+          const o = this.overlay;
+          const k = 1 - Math.pow(0.001, 16 / 1000) * 0.85;
+          o.zoom = lerp(o.zoom, this.overlayFocusZoom, k);
+          o.dx = lerp(o.dx, t.dx, k);
+          o.dy = lerp(o.dy, t.dy, k);
+          // 마지막 반 픽셀은 붙여 버린다 — 보간만으로는 영영 안 닿고 매 프레임 계산이 남는다
+          if (Math.abs(o.dx - t.dx) < 0.5 && Math.abs(o.dy - t.dy) < 0.5 && Math.abs(o.zoom / this.overlayFocusZoom - 1) < 0.002) {
+            o.zoom = this.overlayFocusZoom;
+            o.dx = t.dx;
+            o.dy = t.dy;
+            this.overlayFocusId = null;
+          }
+          this.clampOverlay();
+        }
       }
       // 카메라 목표 추적
       if (this.camTarget) {

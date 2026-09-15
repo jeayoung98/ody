@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -147,4 +148,18 @@ class NearbyPeopleServiceTests {
         order.verify(nearbyRepo).listeners(List.of(200L, 300L));
         verify(nearbyRepo).subscribedMusicIds(ME);
     }
+
+	@Test
+	@DisplayName("닫기는 저장된 곡으로만 구독을 해제하고 meta를 지운다")
+	void closeUsesSavedMusicIds() {
+		when(nearbyRepo.subscribedMusicIds(ME)).thenReturn(List.of(100L, 200L));
+
+		service.close(ME);
+
+		InOrder order = inOrder(nearbyRepo);
+		order.verify(nearbyRepo).subscribedMusicIds(ME);
+		order.verify(nearbyRepo).unsubscribe(ME, List.of(100L, 200L));
+		order.verify(nearbyRepo).deleteMeta(ME);
+		verifyNoInteractions(presenceRepo, neighborPort, userDisplayResolver, meetingService, riderCountPort);
+	}
 }

@@ -1,11 +1,15 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
@@ -26,6 +30,7 @@ import com.ssafy.backend.realtime.nearby.port.NeighborPort;
 import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
+import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 /** Redis·소켓 없이 주변사람 델타 분류만 검증한다. */
@@ -39,6 +44,7 @@ class NearbyDeltaServiceTests {
 	@Mock NeighborPort neighborPort;
 	@Mock MeetingService meetingService;
 	@Mock RiderCountPort riderCountPort;
+	@Mock PresenceRedisRepository presenceRepo;
 	@InjectMocks NearbyDeltaService service;
 
 	private static final String ACTOR = "actor@x.com";
@@ -102,6 +108,27 @@ class NearbyDeltaServiceTests {
 		service.subscribeToChanges();
 
 		verify(eventBus).subscribe(any());
+	}
+
+	@Test
+	@DisplayName("패널을 닫으면 저장된 곡의 델타가 더 이상 오지 않는다")
+	void closeStopsLaterDeltas() {
+		String viewer = "viewer@x.com";
+		Set<String> activeSubscribers = new HashSet<>(Set.of(viewer));
+		when(nearbyRepo.subscribedMusicIds(viewer)).thenReturn(List.of(20L));
+		doAnswer(invocation -> {
+			activeSubscribers.remove(invocation.getArgument(0, String.class));
+			return null;
+		}).when(nearbyRepo).unsubscribe(eq(viewer), eq(List.of(20L)));
+		when(nearbyRepo.subscribers(20L)).thenAnswer(invocation -> Set.copyOf(activeSubscribers));
+		NearbyPeopleService closeService = new NearbyPeopleService(
+				presenceRepo, neighborPort, nearbyRepo, userDisplayResolver, meetingService, riderCountPort);
+
+		closeService.close(viewer);
+		service.onPositionChanged(change(null, 20L));
+
+		verify(nearbyRepo).deleteMeta(viewer);
+		verifyNoInteractions(publisher);
 	}
 
 	private PositionChanged change(Long oldMusicId, Long newMusicId) {

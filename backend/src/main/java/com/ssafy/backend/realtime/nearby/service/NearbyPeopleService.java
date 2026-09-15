@@ -111,4 +111,17 @@ public class NearbyPeopleService {
 		log.info("[Nearby] 주변사람 목록 완료 myMusicId={} 사람수={}", myMusicId, people.size());
 		return new NearbySnapshot(myMusicId, people);
 	}
+
+	/**
+	 * 저장된 곡 목록으로 주변사람 구독을 닫는다.
+	 * @param email 패널을 닫은 사용자 이메일
+	 */
+	public void close(String email) {
+		List<Long> musicIds = nearbyRepo.subscribedMusicIds(email); //구독중 곡 목록 조회
+		if (!musicIds.isEmpty()) {
+			nearbyRepo.unsubscribe(email, musicIds); // 각 곡들 구독 해제
+		}
+		nearbyRepo.deleteMeta(email);//meta 삭제
+		log.info("[Nearby] 주변사람 구독 종료 곡수={}", musicIds.size());
+	}
 }

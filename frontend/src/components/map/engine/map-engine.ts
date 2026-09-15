@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { axisLine, CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -418,13 +418,13 @@ export class MapEngine {
       return;
     }
     // 전환이 끝난 뒤 도착한 응답: 같은 자리에서 집합만 교차 페이드한다. 다이빙을 다시 하지 않는다
-    const ax = LAYER_AXES[layer];
+    const axes = axisLine(layer);
     this.morph(
       layer,
       { ...this.cam },
       ns,
       `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       1,
       this.entryS,
       "fade",
@@ -1588,8 +1588,8 @@ export class MapEngine {
       for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
       big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${p.inView.toLocaleString()}곡 기준`;
     }
-    const ax = LAYER_AXES[nl];
-    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    const axes = axisLine(nl);
+    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big, axes);
   }
 
   /** 응답으로 받은 곡들을 상주 마스크로. 처음 보는 곡은 편입하고, 고정 곡은 남긴다 */
@@ -1688,8 +1688,8 @@ export class MapEngine {
             cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
             cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
-    const ax = LAYER_AXES[p.layer];
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1, p.entryS);
+    const axes = axisLine(p.layer);
+    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, axes, -1, p.entryS);
   }
 
   // ------------------------------------------------------------------ input
@@ -1793,14 +1793,14 @@ export class MapEngine {
       cx: s.pc[targetLayer * 2] - (fr.cx - this.W / 2) / scale,
       cy: s.pc[targetLayer * 2 + 1] + (fr.cy - this.H / 2) / scale,
     };
-    const ax = LAYER_AXES[targetLayer];
+    const axes = axisLine(targetLayer);
     this.touched = true;
     this.morph(
       targetLayer,
       cam,
       this.subset,
       `${s.title} — ${LAYER_NAMES[targetLayer]}${ro(LAYER_NAMES[targetLayer])}`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       targetLayer > this.layer ? 1 : -1,
     );
   }
@@ -2082,14 +2082,14 @@ export class MapEngine {
     this.meFlight = null;
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
-    const ax = LAYER_AXES[target];
+    const axes = axisLine(target);
     this.touched = true;
     this.morph(
       target,
       { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
       ns,
       `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       target > this.layer ? 1 : -1,
     );
     return "moved";
@@ -2106,7 +2106,7 @@ export class MapEngine {
     this.stack = [];
     this.boxes = [];
     this.selectedId = id;
-    const ax = LAYER_AXES[0];
+    const axes = axisLine(0);
     const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
     const f = this.freeRect();
     const s = this.songs[this.index.get(id)!];
@@ -2116,7 +2116,7 @@ export class MapEngine {
       { s: scale, cx: s.pc[0] - (f.cx - this.W / 2) / scale, cy: s.pc[1] + (f.cy - this.H / 2) / scale },
       ns,
       `${s.title} — ${LAYER_NAMES[0]}${ro(LAYER_NAMES[0])} 떠오르는 중`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       -1,
     );
   }
@@ -2218,7 +2218,7 @@ export class MapEngine {
     const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
     const target = this.layer + dir;
     if (target < 0 || target >= LAYER_COUNT) return false;
-    const ax = LAYER_AXES[target];
+    const axes = axisLine(target);
     const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
@@ -2227,7 +2227,7 @@ export class MapEngine {
     this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
     // 우주선·내 위치는 새 레이어 좌표로 옮긴다
     this.friendPos.delete(f.leader.email);
-    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, axes);
     f.phase = "view";
     f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
     return true;

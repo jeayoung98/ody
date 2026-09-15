@@ -1,10 +1,12 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.error;
 
 import java.util.Map;
 
 import org.springframework.stereotype.Component;
 
-import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
+import com.ssafy.backend.realtime.messaging.RealtimeDestination;
+import com.ssafy.backend.realtime.messaging.RealtimeEventType;
+import com.ssafy.backend.realtime.messaging.RealtimePublisher;
 
 import lombok.RequiredArgsConstructor;
 
@@ -13,11 +15,11 @@ import lombok.RequiredArgsConstructor;
  */
 @Component
 @RequiredArgsConstructor
-public class RealtimeErrorSender {
+public class RealtimeWsErrorSender {
 
 	private final RealtimePublisher publisher;
 
-	public void send(String userId, WsCode code, String message) {
+	public void send(String userId, RealtimeWsErrorCode code, String message) {
 		publisher.publishToUser(userId, RealtimeDestination.QUEUE_ERRORS,
 				RealtimeEventType.PRESENCE_ERROR, Map.of("code", code.name(), "message", message));
 	}

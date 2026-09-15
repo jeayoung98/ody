@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.event;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

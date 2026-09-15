@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.event;
 
 /**
  * 위치 변경 이벤트 — 화면 사용자(RT-22)·근처 사람(RT-11) 델타의 공통 입력(plan §F5).

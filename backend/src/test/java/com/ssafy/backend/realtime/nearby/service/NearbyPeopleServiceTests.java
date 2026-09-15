@@ -19,8 +19,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode;
-import com.ssafy.backend.realtime.common.UserDisplayResolver;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.nearby.dto.NearbyPerson;
 import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort;
@@ -29,6 +28,7 @@ import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 /**
  * 주변사람 목록 만드는 로직만 따로 검증. DB·Redis 안 붙이고 가짜(mock)로 채운다. CI 안전.

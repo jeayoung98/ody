@@ -10,9 +10,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
-import com.ssafy.backend.realtime.common.UserDisplayResolver;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
 import com.ssafy.backend.realtime.nearby.dto.NearbyPerson;
 import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort;
@@ -21,6 +20,7 @@ import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -53,7 +53,7 @@ public class NearbyPeopleService {
 		//    아직 아무 곡도 안 틀었으면(기준 곡이 없으면) 목록을 만들 수 없어서 막는다.
 		PresenceSnapshot me = presenceRepo.snapshot(email);
 		if (me == null || me.musicId() == null) {
-			log.warn("주변사람 목록 거부 reason={}", WsCode.PRESENCE_NO_ANCHOR);
+			log.warn("주변사람 목록 거부 reason={}", RealtimeWsErrorCode.PRESENCE_NO_ANCHOR);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 		long myMusicId = me.musicId();

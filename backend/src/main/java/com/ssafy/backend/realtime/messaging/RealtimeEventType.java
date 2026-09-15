@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.messaging;
 
 /**
  * S→C 이벤트 타입. contracts/realtime-websocket.md §2 와 1:1 유지.

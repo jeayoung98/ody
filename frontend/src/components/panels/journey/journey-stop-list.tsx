@@ -1,5 +1,7 @@
 "use client";
 
+import IconButton from "@/components/common/icon-button";
+import { PlayIcon } from "@/components/common/icons";
 import SectionTitle from "@/components/common/section-title";
 import TrackRow from "@/components/common/track-row";
 import { JOURNEY_MAX_SONGS } from "@/constants";
@@ -19,18 +21,17 @@ export default function JourneyStopList({ route }: { route: JourneyRoute | null 
   const ids = route.stops.map((s) => s.id);
 
   /**
-   * 정거장을 고르면 **그 자리부터 여정을 듣는다.** 상세만 열고 소리는 그대로 두면
-   * 목록을 눌렀는데 아무 일도 안 일어난 것처럼 보인다.
+   * **고르는 것과 트는 것을 나눈다.** 줄을 누르면 곡 상세만 열고, 재생은 호버했을 때 우측에 나타나는
+   * 재생 버튼으로만 한다. 예전에는 줄을 누르는 순간 듣던 곡이 바뀌었다 — 목록을 훑어보려던
+   * 사용자는 곡 하나 확인하려다 듣던 자리를 잃는 것으로 겪는다.
    *
-   * 단일 재생이 아니라 여정 재생이다 — 큐가 그대로라 이전·다음으로 계속 이어갈 수 있다.
-   * 다른 활동(따라가기·플리)이 돌고 있으면 `startActivity` 가 먼저 확인을 받는다 (ACT-01).
+   * 버튼이 트는 것은 단일 재생이 아니라 **그 자리부터의 여정 재생**이다 — 큐가 그대로라 이전·다음으로
+   * 계속 이어갈 수 있다. 다른 활동(따라가기·플리)이 돌고 있으면 `startActivity` 가 먼저 확인을 받는다 (ACT-01).
    */
-  const handlePick = (musicId: number, index: number) => {
-    openSong(musicId);
+  const playFrom = (index: number) =>
     startActivity("journey", `${route.startMusicId}-${route.endMusicId}`, () =>
       playQueue({ kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId }, ids, index),
     );
-  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -45,7 +46,22 @@ export default function JourneyStopList({ route }: { route: JourneyRoute | null 
             meta={s.genreName}
             duration={s.duration}
             active={s.id === currentMusicId}
-            onClick={() => handlePick(s.id, s.order)}
+            onClick={() => openSong(s.id)}
+            actions={
+              // 호버·키보드 포커스에만 드러낸다. 호버가 없는 기기에서는 늘 보여야 누를 수 있다
+              <span className="flex opacity-0 transition-opacity duration-fast group-hover:opacity-100 focus-within:opacity-100 [@media(hover:none)]:opacity-100">
+                <IconButton
+                  label="이 곡부터 재생"
+                  size={26}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    playFrom(s.order);
+                  }}
+                >
+                  <PlayIcon size={13} />
+                </IconButton>
+              </span>
+            }
           />
         ))}
       </div>

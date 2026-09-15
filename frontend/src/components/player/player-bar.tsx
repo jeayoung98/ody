@@ -1,6 +1,6 @@
 "use client";
 
-import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
+import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { UNPLAYABLE_NOTICE } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -11,6 +11,7 @@ import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
+import LocateButton from "./locate-button";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
 
@@ -27,30 +28,10 @@ export default function PlayerBar() {
   const toggle = usePlayerStore((s) => s.toggle);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
-  const goHome = useMapStore((s) => s.goHome);
-  const canGoHome = useMapStore((s) => s.canGoHome);
-  const viewMode = useMapStore((s) => s.viewMode);
   const showToast = useToastStore((s) => s.show);
-  /**
-   * 임시 뷰(주변 탐색·별자리)가 떠 있으면 지도를 옮겨도 보이지 않는다.
-   * 그래서 **눌리기는 하되** 흐리게 두고, 왜 안 되는지 토스트로 알린다 — 눌렀는데 아무 일도
-   * 안 나는 게 제일 나쁘다.
-   */
-  const overlayOpen = viewMode !== "default";
   const openSong = usePanelStore((s) => s.openSong);
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
-  /**
-   * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
-   * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
-   * 거부된 경우(오버레이·따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
-   */
-  const handleGoHome = () => {
-    const r = goHome();
-    if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
-    else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
-    else if (r !== "none" && currentMusicId != null) openSong(currentMusicId);
-  };
   const { data } = useMusicDetailQuery(currentMusicId);
   // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
   useDeferredNext();
@@ -108,20 +89,8 @@ export default function PlayerBar() {
 
   return (
     <div className="glass flex min-w-0 flex-1 items-center gap-3 rounded-pill! py-2 pr-3.5 pl-2.5">
-      {/* 내 위치로 가기 — 재생으로 내 자리가 정해졌던 겹·화면으로 돌아간다 (MAP-08) */}
-      <button
-        type="button"
-        onClick={handleGoHome}
-        disabled={!canGoHome}
-        aria-disabled={overlayOpen}
-        aria-label="내 위치로 가기"
-        title={overlayOpen ? "뷰를 닫고 누르세요" : "내 위치로 가기"}
-        className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent ${
-          overlayOpen ? "text-ink-4 hover:bg-transparent" : "text-ink-2 hover:bg-white/10 hover:text-teal"
-        }`}
-      >
-        <LocateIcon />
-      </button>
+      {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
+      <LocateButton />
       <span
         className="relative h-9 w-9 shrink-0 overflow-hidden rounded-[9px]"
         style={{ background: rgb ? `linear-gradient(140deg,${rgba(rgb, 0.5)},#13102a)` : "linear-gradient(140deg,#12203c,#1b1330)" }}

@@ -1867,6 +1867,27 @@ export class MapEngine {
     return i == null ? null : { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
   }
 
+  /**
+   * 튜토리얼이 "이 별을 눌러 보세요" 라고 짚을 별 하나 (S15P21A405-349).
+   *
+   * 지도가 실제로 보이는 사각형 안에서, 안내 카드에 가리지 않을 만큼 아래에 있는 별 중
+   * 아무거나 고른다. 화면 밖이나 카드 뒤의 별을 짚으면 짚어 준 의미가 없다.
+   */
+  pickTutorialStar(cardBottom: number): number | null {
+    const f = this.freeRect();
+    const ok = this.visible.filter((v) => v.px > f.x0 + 40 && v.px < f.x1 - 40 && v.py > Math.max(f.y0 + 40, cardBottom) && v.py < f.y1 - 40);
+    if (!ok.length) return null;
+    return this.songs[ok[Math.floor(Math.random() * ok.length)].i].musicId;
+  }
+
+  /** 그 별이 지금 화면 어디에 있나. 안 보이면 null — 카메라가 움직이면 매 프레임 달라진다 */
+  starPos(musicId: number): { x: number; y: number; r: number } | null {
+    const i = this.index.get(musicId);
+    if (i == null) return null;
+    const v = this.visible.find((x) => x.i === i);
+    return v ? { x: v.px, y: v.py, r: v.r } : null;
+  }
+
   hitTest(mx: number, my: number): VisibleStar | null {
     let best: VisibleStar | null = null;
     let bd = 1e9;

@@ -20,6 +20,13 @@ export const SearchIcon = ({ size = 14, ...p }: P) => (
     <path d="M20 20l-4.2-4.2" />
   </svg>
 );
+/** 확대 — 튜토리얼이 "휠을 굴려 보세요" 하고 띄우는 그림 (S15P21A405-349) */
+export const ZoomInIcon = ({ size = 34, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={1.7}>
+    <circle cx="11" cy="11" r="7" />
+    <path d="M20 20l-4.2-4.2M11 8v6M8 11h6" />
+  </svg>
+);
 /** 내 위치로 가기 — 지도 앱의 "현재 위치" 조준선 */
 export const LocateIcon = ({ size = 16, ...p }: P) => (
   <svg {...base(size, p)}>

@@ -25,8 +25,13 @@ export const TUTORIAL_STEPS = [
     title: "확대해보세요",
     description: "휠을 굴려 별지도를 확대해보세요. 확대할수록 별이 더 드러나고, 화면 안 곡이 충분히 줄면 벽에 닿아요. 계속 밀면 다음 겹으로 파고들어요.",
     task: "zoom",
-    spotlight: ["map"],
-    ringOnly: [],
+    /**
+     * **덮지 않는다** (S15P21A405-350). 휠을 굴리라는 안내뿐이라 막을 것이 없고, 처음 보는
+     * 화면이 까맣게 덮여 있으면 별지도가 어떤 곳인지 자체가 안 보인다. `ringOnly` 에 두면
+     * 어둠막 없이 자리만 잡는다 — 지도는 화면만 해서 고리도 두르지 않는다.
+     */
+    spotlight: [],
+    ringOnly: ["map"],
     hint: "zoom",
     card: "top",
     lock: false,
@@ -40,7 +45,7 @@ export const TUTORIAL_STEPS = [
     // 짚어 준 별 하나만 열어 둔다. 어느 별이든 되는 단계가 아니라 지도 조작도 막는다
     spotlight: ["star"],
     ringOnly: [],
-    hint: "none",
+    hint: "star",
     card: "top",
     lock: true,
     free: false,

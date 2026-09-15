@@ -11,6 +11,7 @@ import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
 import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import lombok.RequiredArgsConstructor;
@@ -29,6 +30,7 @@ public class UserProfileController {
 
 	private final UserService userService;
 
+	@Operation(summary = "프로필 부분 수정", description = "로그인한 사용자 본인의 닉네임/프로필 이미지를 부분 수정한다.")
 	@PatchMapping("/profile")
 	public ApiResponse<UserProfileUpdateResponse> updateProfile(
 			@RequestBody UserProfileUpdateRequest request,

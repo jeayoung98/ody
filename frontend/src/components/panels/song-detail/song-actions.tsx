@@ -4,11 +4,12 @@ import { useState } from "react";
 import Button from "@/components/common/button";
 import { PauseIcon, PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
-import { FEATURES } from "@/constants";
+import { FEATURES, UNPLAYABLE_NOTICE } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import type { MusicDetail } from "@/types";
 import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
 
@@ -23,6 +24,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   const setStart = useJourneyStore((s) => s.setStart);
   const setEnd = useJourneyStore((s) => s.setEnd);
   const openComposer = useOpenJourneyComposer();
+  const showToast = useToastStore((s) => s.show);
 
   /**
    * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
@@ -42,6 +44,14 @@ export default function SongActions({ music }: { music: MusicDetail }) {
    * 울리는 중에 다시 누르면 멈춘다 — 라벨이 `정지` 인데 눌러도 안 멈추면 고장으로 읽힌다.
    */
   const handlePlay = () => {
+    /**
+     * 음원이 없는 곡이면 **왜 안 되는지 알려 준다** (S15P21A405-336). 예전에는 버튼이 꺼져 있어
+     * 눌러도 아무 일도 안 났다 — 아래 안내문을 못 본 사람에게는 고장으로 보인다.
+     */
+    if (!canPlay) {
+      showToast(UNPLAYABLE_NOTICE);
+      return;
+    }
     if (isThisPlaying) {
       pause();
       return;
@@ -53,7 +63,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   return (
     <div className="relative flex flex-col gap-2">
       <div className="flex gap-2">
-        <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay} disabled={!canPlay}>
+        <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay}>
           {isThisPlaying ? <PauseIcon size={13} /> : <PlayIcon size={13} />} {isThisPlaying ? "정지" : canPlay ? "재생" : "재생 불가"}
         </Button>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) */}

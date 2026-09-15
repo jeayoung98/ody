@@ -1,6 +1,7 @@
 "use client";
 
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
+import { UNPLAYABLE_NOTICE } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useDeferredNext } from "@/hooks/use-deferred-next";
@@ -83,8 +84,19 @@ export default function PlayerBar() {
    */
   const canPlay = data ? data.videoId != null : currentMusicId != null;
 
-  /** 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다 */
-  const handleToggle = () => toggle();
+  /**
+   * 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다.
+   *
+   * 음원이 없는 곡이면 **왜 안 되는지 알려 준다** (S15P21A405-336). 예전에는 버튼이 꺼져 있어
+   * 눌러도 아무 일도 안 났는데, 그러면 고장으로 읽힌다.
+   */
+  const handleToggle = () => {
+    if (!canPlay) {
+      showToast(UNPLAYABLE_NOTICE);
+      return;
+    }
+    toggle();
+  };
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : null;
 
@@ -128,7 +140,7 @@ export default function PlayerBar() {
       <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} disabled={!canPlay}>
+      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} dimmed={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
       <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>

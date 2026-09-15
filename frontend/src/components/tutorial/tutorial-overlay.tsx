@@ -20,8 +20,6 @@ const CARD_BOTTOM = 330;
 const ZOOM_STEP_RATIO = 3;
 /** 첫 휠부터 이 시간이 지나야 넘어간다. 배율을 일찍 채워도 그 동안은 지도를 그냥 둘러보게 둔다 */
 const ZOOM_EXPLORE_MS = 5000;
-/** 별을 누른 뒤 곡 상세를 보여 주는 시간(ms). 이 동안은 덮지 않는다 */
-const DETAIL_PEEK_MS = 2000;
 
 /**
  * 단계별 태스크(확대 · 짚어 준 별 누르기 · 주변 탐색 · 여정 세 단계)를 주고 완료되면 다음으로.
@@ -37,8 +35,6 @@ export default function TutorialOverlay() {
   const completeMutation = useCompleteTutorialMutation();
   /** 이 단계가 짚어 준 별. 단계가 바뀔 때마다 새로 고른다 */
   const [starId, setStarId] = useState<number | null>(null);
-  /** 짚은 별을 눌렀나. 누른 뒤에는 곡 상세를 볼 수 있게 덮지 않는다 */
-  const [picked, setPicked] = useState(false);
 
   useEffect(() => {
     reset();
@@ -98,8 +94,13 @@ export default function TutorialOverlay() {
       const e = getMapEngine();
       if (!e) return;
       if (!k0) return void (k0 = e.zoomK());
+      /**
+       * **다음 겹으로 넘어가려 들면 기다리지 않는다.** 벽에 닿아 압력을 밀고 있다는 것은
+       * 확대를 끝까지 해 본 것이고, 거기서 더 붙잡아 두면 안내가 방해가 된다.
+       */
+      if ((e.pressure > 0 && e.pressureDir === 1) || useMapStore.getState().layer !== layer0) return void complete("zoom");
       if (!firstWheelAt || Date.now() - firstWheelAt < ZOOM_EXPLORE_MS) return;
-      if (e.zoomK() >= k0 * ZOOM_STEP_RATIO || useMapStore.getState().layer !== layer0) complete("zoom");
+      if (e.zoomK() >= k0 * ZOOM_STEP_RATIO) complete("zoom");
     }, 120);
     return () => {
       window.clearInterval(id);
@@ -138,16 +139,15 @@ export default function TutorialOverlay() {
   }, [locked]);
 
   /**
-   * 짚은 별을 눌렀다. 지도에서 별을 누른 것과 같게 처리하고(보기만 — 재생은 안 한다),
-   * **곡 상세를 볼 틈을 준 뒤** 주변 탐색 단계로 넘긴다. 그 동안은 덮지 않는다.
+   * 짚은 별을 눌렀다. 지도에서 별을 누른 것과 같게 처리하고(보기만 — 재생은 안 한다)
+   * **바로** 주변 탐색 단계로 넘긴다. 곡 상세는 그 뒤로도 계속 떠 있다.
    */
   const pickStar = () => {
-    if (starId == null || picked) return;
-    setPicked(true);
+    if (starId == null) return;
     useMapStore.getState().selectMusic(starId);
     usePanelStore.getState().openSong(starId);
     getMapEngine()?.viewSong(starId);
-    window.setTimeout(() => complete("select"), DETAIL_PEEK_MS);
+    complete("select");
   };
 
   if (isDone || !step) return null;
@@ -164,11 +164,11 @@ export default function TutorialOverlay() {
         />
       ) : (
         /* 어둠막 먼저 — 안내 카드가 그 위에 와야 건너뛰기가 눌린다.
-           휠을 굴리기 전 확대 단계와, 별을 눌러 상세를 보는 동안에는 덮지 않는다 */
-        !(zooming || picked) && <TutorialSpotlight spotlight={step.spotlight} ringOnly={step.ringOnly} />
+           확대 단계는 손짓이 직접 옅은 덤을 깔므로 여기서는 덮지 않는다 */
+        !zooming && <TutorialSpotlight spotlight={step.spotlight} ringOnly={step.ringOnly} />
       )}
       {step.hint === "wheel" && !wheeled && <WheelHint />}
-      {step.hint === "star" && starId != null && !picked && <StarHint musicId={starId} onPick={pickStar} />}
+      {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       <div
         className={`pointer-events-auto absolute left-1/2 w-[min(340px,84vw)] -translate-x-1/2 ${
           // 여정은 우측 패널을 보며 하는 단계다 — 카드가 위에 있으면 그 패널을 가린다

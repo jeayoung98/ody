@@ -78,8 +78,12 @@ export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
   }, [spotlight, ringOnly]);
 
   const dim = "pointer-events-auto fixed bg-void/80 backdrop-blur-[2px]";
-  // 밝힐 자리를 못 찾으면 통째로 덮는다
-  if (!rect) return <div className={`${dim} inset-0`} />;
+  /**
+   * 뚫을 자리가 없는 단계는 **연하게** 덮는다 (S15P21A405-351). 지금 이런 단계는 짚은 별을
+   * 오버레이에 직접 그리는 곳뿐인데, 진하게 덮으면 그 별이 별들 사이에서 고른 하나가 아니라
+   * 허공에 뜬 점으로 보인다. 둘레 별이 비쳐야 "이 중 하나" 로 읽힌다. 막는 것은 그대로다.
+   */
+  if (!rect) return <div className="pointer-events-auto fixed inset-0 bg-void/40" />;
 
   const w = rect.x1 - rect.x0;
   const h = rect.y1 - rect.y0;

@@ -4,12 +4,18 @@ import type { PanelType } from "@/constants";
 import { useMapStore } from "./use-map-store";
 
 /**
- * 패널이 닫히면 별자리 뷰도 같이 닫는다 (S15P21A405-316).
- * 별자리는 패널에 딸린 화면이다 — 패널 없이 지도만 가린 채 남으면 나가는 길이 안 보인다.
+ * 패널이 닫히면 **그 패널에 딸린 지도 뷰도 같이 닫는다** (S15P21A405-316 · 336).
+ *
+ * 별자리는 여정·플리에, 주변 탐색 고리는 그 곡 상세에 딸린 화면이다. 패널 없이 지도만 가린 채
+ * 남으면 나가는 길이 안 보인다 — 여정·주변 탐색·플리 세 흐름의 UX 를 같게 맞춘다.
+ * 예전에는 별자리만 내려서, 주변 탐색 중에 패널을 닫으면 고리가 그대로 남았다.
+ *
  * **목록은 지우지 않는다.** 플레이어바나 칩으로 언제든 다시 켤 수 있어야 한다.
  */
-function hideConstellation() {
-  useMapStore.getState().hideConstellationView();
+function hideMapView() {
+  const map = useMapStore.getState();
+  map.hideConstellationView();
+  if (map.viewMode === "nearby") map.exitNearby();
 }
 
 /**
@@ -89,7 +95,7 @@ export const usePanelStore = create<PanelState>()(
 
       toggle: (panel) => {
         if (get().activePanel === panel) {
-          hideConstellation();
+          hideMapView();
           set({ activePanel: null, back: null }, false, "toggle/close");
           return;
         }
@@ -98,7 +104,7 @@ export const usePanelStore = create<PanelState>()(
       },
 
       close: () => {
-        hideConstellation();
+        hideMapView();
         set({ activePanel: null, back: null, collapsed: false }, false, "close");
       },
 

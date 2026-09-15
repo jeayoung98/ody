@@ -4,6 +4,7 @@ import { useState } from "react";
 import Button from "@/components/common/button";
 import { PauseIcon, PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
+import { FEATURES } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
@@ -55,9 +56,12 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay} disabled={!canPlay}>
           {isThisPlaying ? <PauseIcon size={13} /> : <PlayIcon size={13} />} {isThisPlaying ? "정지" : canPlay ? "재생" : "재생 불가"}
         </Button>
-        <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
-          ＋ 플리
-        </Button>
+        {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) */}
+        {FEATURES.playlist && (
+          <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
+            ＋ 플리
+          </Button>
+        )}
       </div>
       {/* 지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 (JOURNEY-01) */}
       <div className="flex gap-2">
@@ -87,7 +91,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
           이 곡은 음원 연결이 없습니다. 지도에는 계속 표시되지만 재생은 되지 않아요. <span className="text-ink-4">SONG-04</span>
         </Note>
       )}
-      {menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
+      {FEATURES.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

@@ -343,6 +343,7 @@ export class MapEngine {
    */
   private allocate(songs: MapPoint[], keep: number) {
     this.songs = songs;
+    this.pcStatsCache = null;
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
@@ -1900,6 +1901,33 @@ export class MapEngine {
     // 남은 것 중에서는 밝은 쪽 절반. 재생수가 적은 별은 점이 희미해 짚어 줘도 눈에 안 들어온다
     const bright = [...ok].sort((a, b) => this.songs[b.i].weight - this.songs[a.i].weight).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
     return this.songs[bright[Math.floor(Math.random() * bright.length)].i].musicId;
+  }
+
+  private pcStatsCache: { mean: number[]; sd: number[] } | null = null;
+
+  /**
+   * 이 겹 상주 집합의 **축별 평균·표준편차** (S15P21A405-355).
+   *
+   * 곡 상세가 "이 곡이 어느 축으로 치우쳤나" 를 재는 잣대다. 주성분 원값은 축마다 흩어진
+   * 폭이 달라서(PC1 은 ±20 대, PC8 은 ±1 대) 원값 크기끼리 견주면 큰 축이 늘 이긴다.
+   * 축마다 제 폭으로 나눠야 "이 곡이 유별난 축" 이 제대로 뽑힌다.
+   *
+   * 곡 배열이 갈릴 때마다 버린다 (`allocate`).
+   */
+  pcStats() {
+    if (this.pcStatsCache) return this.pcStatsCache;
+    const n = this.songs.length;
+    const dims = this.songs[0]?.pc.length ?? 0;
+    if (!n || !dims) return null;
+    const mean = new Array<number>(dims).fill(0);
+    for (const s of this.songs) for (let d = 0; d < dims; d++) mean[d] += s.pc[d];
+    for (let d = 0; d < dims; d++) mean[d] /= n;
+    const sd = new Array<number>(dims).fill(0);
+    for (const s of this.songs) for (let d = 0; d < dims; d++) sd[d] += (s.pc[d] - mean[d]) ** 2;
+    // 0 이면 나눗셈이 깨진다 — 그 축은 모두가 같은 값이라 치우침 자체가 없다
+    for (let d = 0; d < dims; d++) sd[d] = Math.sqrt(sd[d] / n) || 1;
+    this.pcStatsCache = { mean, sd };
+    return this.pcStatsCache;
   }
 
   /** 그 별이 지금 화면 어디에 있나. 안 보이면 null — 카메라가 움직이면 매 프레임 달라진다 */

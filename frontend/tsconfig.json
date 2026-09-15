@@ -6,6 +6,7 @@
     "skipLibCheck": true,
     "strict": true,
     "noEmit": true,
+    "allowImportingTsExtensions": true,  // 설문 자체 검사(edge-rules.check.ts)가 node 로 직접 돌게 — REMOVE-WITH-SURVEY
     "esModuleInterop": true,
     "module": "esnext",
     "moduleResolution": "bundler",

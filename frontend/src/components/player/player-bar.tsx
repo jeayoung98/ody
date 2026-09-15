@@ -5,7 +5,6 @@ import { UNPLAYABLE_NOTICE } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
-import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -52,8 +51,6 @@ export default function PlayerBar() {
     else if (r !== "none" && currentMusicId != null) openSong(currentMusicId);
   };
   const { data } = useMusicDetailQuery(currentMusicId);
-  // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
-  useDeferredNext();
 
   /**
    * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).

@@ -1,8 +1,10 @@
 "use client";
 
-import { useMutation } from "@tanstack/react-query";
+import { useEffect } from "react";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { getAnonymousId } from "@/lib/anonymous-id";
-import type { SurveyReason, SurveySubmission, SurveyTarget } from "@/types/survey";
+import { useSurveyStore } from "@/stores/use-survey-store";
+import { questionKey, type AnsweredRow, type SurveyReason, type SurveySubmission, type SurveyTarget } from "@/types/survey";
 
 /**
  * 우리 Next 서버의 통로. 그 안에서 백엔드 `POST /api/feedback` 을 대신 부른다.
@@ -12,6 +14,7 @@ import type { SurveyReason, SurveySubmission, SurveyTarget } from "@/types/surve
  * 붙으므로 rewrite 로 흘려보내도 막힌다. 서버가 대신 부르면 그 헤더가 없다.
  */
 const FEEDBACK_PATH = "/bff/feedback";
+const ANSWERED_PATH = "/bff/feedback/answered";
 
 interface SubmitInput {
   target: SurveyTarget;
@@ -33,8 +36,6 @@ const LISTENED_SEC_MAX = 32767;
  * 실제로 들었을 수 있는 최대치로 자른다.
  *
  * 시계는 **재생된 시간**을 재므로(S15P21A405-308 임베드 이후) 곡이 끝나면 그 자리에서 멈춘다.
- * 다만 `videoId` 가 없는 곡은 임베드가 안 붙어 `isPlaying` 이 낙관값이라 안 멈춘다 — 카드를
- * 띄워두거나 탭을 놔두면 3분짜리 곡을 2시간 들었다는 값이 나온다. 그건 청취 시간이 아니다.
  * 곡 길이를 아는 경우(경로 탐색) 거기서 자르고, 모르면 서버 상한에만 맞춘다.
  */
 function clampListened(ms: number, durationSec?: number | null): number {
@@ -82,13 +83,44 @@ export function useSurveySubmit() {
 }
 
 /**
- * 묻지 않고 행만 남긴다 — 20초를 못 채우고 떠난 곡 (`verdict = null`).
+ * 이미 답한 문항을 받아 스토어에 싣는다 (S15P21A405-346).
+ *
+ * **왜 필요한가**: 서버가 같은 사람 × 같은 문항을 한 번만 저장한다. 프론트가 그걸 모르면
+ * 방금 답한 것을 또 묻고 서버는 저장하지 않고 조용히 버린다 — 사용자에게는 같은 질문이
+ * 두 번 뜨는 고장으로 보인다.
+ *
+ * **실패를 삼킨다.** S15P21A405-346 이 아직 머지 전이라 이 경로가 404 일 수 있다. 그때는
+ * 이번 탭에서 답한 것만 기억하는 상태로 떨어질 뿐, 설문 자체는 그대로 돈다.
+ */
+export function useLoadAnswered() {
+  const loadAnswered = useSurveyStore((s) => s.loadAnswered);
+  const { data } = useQuery({
+    queryKey: ["survey", "answered"],
+    queryFn: async (): Promise<string[]> => {
+      const res = await fetch(`${ANSWERED_PATH}?anonymousId=${encodeURIComponent(getAnonymousId())}`);
+      if (!res.ok) return [];
+      const body = (await res.json()) as { data?: AnsweredRow[] };
+      return (body.data ?? []).map(questionKey);
+    },
+    retry: false,
+    staleTime: Infinity,
+  });
+
+  useEffect(() => {
+    if (data?.length) loadAnswered(data);
+  }, [data, loadAnswered]);
+}
+
+/**
+ * 묻지 않고 행만 남긴다 — 답 없이 페이지를 떠난 곡 (`verdict = null`).
+ *
+ * 청취 시간 조건이 사라진 뒤로 이 길은 **탭을 닫거나 새로고침할 때 하나뿐이다**
+ * (S15P21A405-335 결정 5). 카드가 떠 있든 아직 안 떴든, 밟은 간선이 남아 있으면 보낸다 —
+ * 안 보내면 "밟았는데 답을 못 받은 간선" 이 통계에서 통째로 사라져 정밀도가 실제보다 좋아진다.
  *
  * **`sendBeacon` 을 쓰는 이유**: 탭을 닫거나 새로고침하는 순간 일반 `fetch` 는 취소된다.
  * 떠나는 시점이야말로 이 행을 보내야 할 때라 그러면 늘 유실된다. `sendBeacon` 은
  * 브라우저가 페이지를 정리한 뒤에도 전송을 마쳐 준다.
- *
- * 응답을 받을 수 없고 되돌릴 수도 없다. 정본도 fire-and-forget 을 전제한다.
  */
 export function sendUnanswered(input: Omit<SubmitInput, "verdict" | "reason">): void {
   if (typeof navigator === "undefined") return;

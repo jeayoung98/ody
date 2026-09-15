@@ -1,0 +1,57 @@
+"use client";
+
+import { LocateIcon } from "@/components/common/icons";
+import { useMapStore } from "@/stores/use-map-store";
+import { usePanelStore } from "@/stores/use-panel-store";
+import { usePlayerStore } from "@/stores/use-player-store";
+import { useToastStore } from "@/stores/use-toast-store";
+
+/**
+ * 내 위치로 가기 — 재생으로 내 자리가 정해졌던 겹·화면으로 돌아간다 (MAP-08).
+ *
+ * **플레이어바에서 떼어 둔 이유는 다시 그리는 횟수다.** 이 버튼이 실제로 보는 것은 `canGoHome` 과
+ * `viewMode` 둘뿐인데, 플레이어바 안에 있으면 곡·큐·재생 상태가 바뀔 때마다 같이 다시 그려졌다.
+ * 누를 때 필요한 값(지금 듣는 곡 등)은 `getState()` 로 그때 읽는다 — 구독해 두면 그것까지 다시 그린다.
+ */
+export default function LocateButton() {
+  const canGoHome = useMapStore((s) => s.canGoHome);
+  const viewMode = useMapStore((s) => s.viewMode);
+  /**
+   * 임시 뷰(주변 탐색·별자리)가 떠 있으면 지도를 옮겨도 보이지 않는다.
+   * 그래서 **눌리기는 하되** 흐리게 두고, 왜 안 되는지 토스트로 알린다 — 눌렀는데 아무 일도
+   * 안 나는 게 제일 나쁘다.
+   */
+  const overlayOpen = viewMode !== "default";
+
+  /**
+   * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
+   * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
+   * 거부된 경우(오버레이·따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
+   */
+  const handleClick = () => {
+    const showToast = useToastStore.getState().show;
+    const r = useMapStore.getState().goHome();
+    if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
+    else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+    else if (r !== "none") {
+      const musicId = usePlayerStore.getState().currentMusicId;
+      if (musicId != null) usePanelStore.getState().openSong(musicId);
+    }
+  };
+
+  return (
+    <button
+      type="button"
+      onClick={handleClick}
+      disabled={!canGoHome}
+      aria-disabled={overlayOpen}
+      aria-label="내 위치로 가기"
+      title={overlayOpen ? "뷰를 닫고 누르세요" : "내 위치로 가기"}
+      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent ${
+        overlayOpen ? "text-ink-4 hover:bg-transparent" : "text-ink-2 hover:bg-white/10 hover:text-teal"
+      }`}
+    >
+      <LocateIcon />
+    </button>
+  );
+}

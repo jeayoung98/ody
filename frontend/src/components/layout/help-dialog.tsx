@@ -1,9 +1,11 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Box from "@/components/common/box";
+import Button from "@/components/common/button";
 import { CloseIcon } from "@/components/common/icons";
 import IconButton from "@/components/common/icon-button";
-import { FEATURES, LAYER_COUNT, NEARBY_COUNT } from "@/constants";
+import { FEATURES, LAYER_COUNT, NEARBY_COUNT, ROUTES } from "@/constants";
 
 /**
  * 감춘 기능은 설명에서도 뺀다 (S15P21A405-333) — 안내를 읽고 찾아 나섰는데 없으면 그게 버그로 읽힌다.
@@ -31,6 +33,7 @@ const HELP_ITEMS: { icon: string; title: string; body: string; when?: boolean }[
 ].filter((item) => item.when !== false);
 
 export default function HelpDialog({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-tin">
@@ -41,6 +44,12 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
             <IconButton label="닫기" onClick={onClose}>
               <CloseIcon />
             </IconButton>
+          }
+          footer={
+            /* 튜토리얼은 첫 진입에 한 번만 뜬다 (TutorialGate). 잊었을 때 돌아올 입구가 여기뿐이다 */
+            <Button className="w-full" onClick={() => router.push(ROUTES.tutorial)}>
+              튜토리얼 다시보기
+            </Button>
           }
         >
           <ul className="flex flex-col gap-3">

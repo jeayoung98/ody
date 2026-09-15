@@ -132,7 +132,20 @@ export default function YoutubeEmbed() {
     }
     if (e.data === ENDED) {
       wantPlayRef.current = 0;
+      const before = p.currentMusicId;
       p.next();
+      /**
+       * **넘어갈 곡이 없으면 거기서 재생이 끝난 것이다** (S15P21A405-361). `next()` 는 그 경우
+       * 아무것도 하지 않고 빠져나오므로 `isPlaying` 이 true 로 남아, 소리는 멎었는데 버튼만 ⏸ 인
+       * 채 0:00 에 서 있었다 — 다시 들으려면 두 번 눌러야 했다. 멈춤으로 내려놓으면 ▶ 로 돌아오고,
+       * 한 번 누르면 플레이어가 끝난 영상을 처음부터 다시 튼다. 단독 재생만이 아니라 여정·플리의
+       * 마지막 곡도 같은 자리다.
+       *
+       * **미뤄 둔 넘김은 끝난 게 아니다** (S15P21A405-258) — 막는 창이 닫히면 이어서 넘어가므로
+       * 그때는 재생 상태를 건드리지 않는다. 여기서 멈춰 두면 다음 곡이 소리 없이 걸린다.
+       */
+      const after = usePlayerStore.getState();
+      if (!after.pendingNext && after.currentMusicId === before) after.pause();
       return;
     }
     if (e.data === UNSTARTED || e.data === CUED || e.data === PAUSED) {
@@ -202,8 +215,16 @@ export default function YoutubeEmbed() {
   // 재생·정지를 스토어에 맞춘다. `videoId` 도 본다 — 곡을 갈아끼운 직후 한 번 더 단언하려고
   useEffect(() => {
     if (!ready || !videoId || !playerRef.current) return;
-    if (isPlaying) playerRef.current.playVideo();
-    else {
+    if (isPlaying) {
+      /**
+       * **끝난 곡을 다시 트는 것은 새로 거는 것과 같다** (S15P21A405-361). 플레이어가 처음으로
+       * 되감고 영상을 다시 세우는 동안 미시작·대기를 보고하는데, 그걸 그대로 받으면 아래
+       * `onStateChange` 가 "사용자가 멈췄다" 로 읽어 `isPlaying` 을 되돌린다 — 눌렀더니 0:00 에서
+       * 다시 멈추고 한 번 더 눌러야 했다. 곡을 갈아끼울 때와 같은 자리라 같은 재시도를 건다.
+       */
+      if (playerRef.current.getPlayerState() === ENDED) wantPlayRef.current = REPLAY_TRIES;
+      playerRef.current.playVideo();
+    } else {
       // 사용자가 직접 멈춘 것이니 전환 중 재시도도 접는다
       wantPlayRef.current = 0;
       playerRef.current.pauseVideo();

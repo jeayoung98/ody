@@ -23,6 +23,14 @@ interface PlayerState {
    * 창이 닫히면 `useDeferredNext` 가 이걸 보고 넘긴다.
    */
   pendingNext: boolean;
+  /**
+   * 재생을 **새로 시작할 때마다 올라가는 번호** (S15P21A405-338).
+   *
+   * 같은 곡으로 시작하는 다른 여정을 틀면 `currentMusicId` 도 `isPlaying` 도 그대로라
+   * 임베드가 변화를 못 보고 이전 재생 위치에 머물렀다. 이 번호가 바뀌면 같은 영상이어도
+   * 처음부터 다시 건다.
+   */
+  playSeq: number;
 
   /**
    * 새로고침 복원 (S15P21A405-275). **소리는 다시 틀지 않는다** — 음원은 앱 밖에서 듣기 때문에
@@ -39,6 +47,8 @@ interface PlayerState {
   next: () => void;
   prev: () => void;
   stop: () => void;
+  /** 목록에서 떨어져 나와 지금 곡만 남긴다. 소리는 끊지 않는다 (S15P21A405-338) */
+  detachContext: () => void;
 }
 
 export const usePlayerStore = create<PlayerState>()(
@@ -50,6 +60,7 @@ export const usePlayerStore = create<PlayerState>()(
       queue: [],
       queueIndex: 0,
       pendingNext: false,
+      playSeq: 0,
 
       restoreLast: (musicId) => {
         if (get().currentMusicId != null) return;
@@ -112,11 +123,21 @@ export const usePlayerStore = create<PlayerState>()(
             queueIndex: startIndex,
             currentMusicId: musicIds[startIndex],
             isPlaying: true,
+            playSeq: get().playSeq + 1,
           },
           false,
           "playQueue",
         );
       },
+
+      /**
+       * 목록에서 떨어져 나와 **지금 곡만** 남긴다 (S15P21A405-338).
+       *
+       * 경로 지우기처럼 목록이 사라지는 자리에서 쓴다. `stop()` 과 달리 **소리를 끊지 않는다** —
+       * 듣던 곡은 계속 들리고 맥락만 단독으로 내려온다. 이걸 안 하면 `context` 가 여정으로 남아
+       * 플레이어바를 누르는 순간 지운 경로가 되살아난다.
+       */
+      detachContext: () => set({ context: { kind: "single" }, queue: [], queueIndex: 0 }, false, "detachContext"),
 
       toggle: () => set((s) => ({ isPlaying: s.currentMusicId ? !s.isPlaying : false }), false, "toggle"),
       pause: () => set({ isPlaying: false }, false, "pause"),

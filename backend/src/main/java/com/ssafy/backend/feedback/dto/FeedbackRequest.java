@@ -8,7 +8,7 @@ import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 /**
- * POST /feedback 요청 (정본 §5.1). 곡 하나가 끝나거나 스킵될 때 1건.
+ * POST /feedback 요청 (정본 §5.1). 곡 하나를 떠날 때(끝남·스킵·이동) 1건.
  *
  * <p>거리·bpm 은 받지 않는다 — 분석 시 {@code music.location}·{@code music.bpm} 을 조인해 계산한다.
  * 여정 응답이 거리를 노출하지 않으므로(FR-023) FE 가 보낼 수도 없다.
@@ -21,7 +21,7 @@ import jakarta.validation.constraints.Pattern;
  * @param targetMusicId journey 필수: 도착곡. nearby 는 null
  * @param prevMusicId   journey: 앞 역(1역은 출발곡). nearby 는 null
  * @param musicId       평가 대상 곡
- * @param verdict       true 비슷·자연스러움 / false 아님 / null 20초 전 종료·스킵(설문 안 뜸)
+ * @param verdict       true 비슷·자연스러움 / false 아님 / null 답하지 않고 떠남(설문 미응답)
  * @param reason        verdict=false 면 필수, 아니면 null: {@code dup} 같은 곡 · {@code mood} 분위기 · {@code tempo} 템포 · {@code spoken} 음악 아님
  * @param listenedSec   실제 들은 초
  * @param skipped       사용자가 스킵했는가

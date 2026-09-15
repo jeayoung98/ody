@@ -1522,14 +1522,48 @@ export class MapEngine {
     a.subset = subset;
   }
 
-  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
+  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율 */
   zoomK() {
     return this.cam.s / this.entryS;
   }
 
-  /** 레이어 안에서 충분히(gateZoomMul 배) 확대했는가 — 그 전에는 파고들 수 없다 */
+  /**
+   * 파고들 만큼 좁혔는가 (S15P21A405-342).
+   *
+   * **화면 안 곡 수**로 잰다 — 배율 배수로 재면 진입 배율이 겹마다 달라서 같은 배수가 어떤 겹에선
+   * 207곡, 어떤 겹에선 1곡을 뜻했다. 곡 수는 확대할수록 단조 감소라 반드시 언젠가 열린다.
+   *
+   * **비어 있어도 막지 않는다.** 빈 화면은 "더 확대해라" 가 아니라 "이미 다 좁혔다" 다 —
+   * 성긴 곳에서 파고들어도 {@link drillBox} 가 가장 가까운 곡을 가운데 두고 상자를 넓혀
+   * `minInView` 만큼 모아 보낸다.
+   */
   private zoomedEnough() {
-    return this.zoomK() >= DRILL.gateZoomMul;
+    return this.zoomK() >= DRILL.gateMinZoom && this.countInView() <= this.gateMaxInView();
+  }
+
+  /**
+   * 게이트가 열리는 화면 안 곡 수 — **밀도 × 지금 보이는 넓이**다.
+   *
+   * 수로 고정하면 큰 모니터에서는 같은 배율에 더 많이 보여 훨씬 많이 확대해야 한다.
+   * 우측 패널이 열려 영역이 좁아져도 같은 이유로 함께 줄어든다.
+   * 바닥은 `minInView` 다 — 그보다 적게 잡으면 파고들기가 쓸 곡보다 적어진다.
+   */
+  private gateMaxInView() {
+    const f = this.freeRect();
+    const areaMpx = ((f.x1 - f.x0) * (f.y1 - f.y0)) / 1e6;
+    return Math.max(DRILL.minInView, DRILL.gateMaxDensity * areaMpx);
+  }
+
+  /**
+   * 게이트까지 얼마나 왔나 (0~1). 안내 막대가 이걸로 찬다 — 게이트 조건과 같은 값을 봐야
+   * 막대가 꽉 찼는데 안 열리거나, 덜 찼는데 열리는 일이 없다.
+   */
+  gateProgress() {
+    const byZoom = Math.min(1, this.zoomK() / DRILL.gateMinZoom);
+    const n = this.countInView();
+    const max = this.gateMaxInView();
+    const byCount = n <= max ? 1 : max / n;
+    return Math.min(byZoom, byCount);
   }
 
   /**
@@ -2596,6 +2630,8 @@ export class MapEngine {
       residentCount: this.residentCount(),
       viewportCount: this.viewportCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
+      gateProgress: this.gateProgress(),
+      gateAtCount: Math.round(this.gateMaxInView()),
       gateOpen: !this.anim && !this.pending && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,
       canRise: this.stack.length > 0,

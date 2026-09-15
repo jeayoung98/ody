@@ -17,7 +17,9 @@ import TutorialStepCard from "./tutorial-step-card";
 /** 안내 카드가 차지하는 세로 끝(px). 짚어 줄 별을 이보다 아래에서 고른다 */
 const CARD_BOTTOM = 330;
 /** 확대 단계를 통과할 배율. 들어올 때의 몇 배까지 확대해야 넘어가나 */
-const ZOOM_STEP_RATIO = 1.8;
+const ZOOM_STEP_RATIO = 3;
+/** 첫 휠부터 이 시간이 지나야 넘어간다. 배율을 일찍 채워도 그 동안은 지도를 그냥 둘러보게 둔다 */
+const ZOOM_EXPLORE_MS = 5000;
 /** 별을 누른 뒤 곡 상세를 보여 주는 시간(ms). 이 동안은 덮지 않는다 */
 const DETAIL_PEEK_MS = 2000;
 
@@ -75,6 +77,9 @@ export default function TutorialOverlay() {
    *
    * 겹을 파고들면 카메라가 새 겹 기준으로 다시 잡혀 배율이 되돌아간다 — 그건 확대를 끝까지
    * 밀어붙인 것이니 그것대로 통과다.
+   *
+   * 배율만 보면 몇 초 만에 끝난다. 첫 휠부터 얼마간은 배율이 차 있어도 넘기지 않고 **그냥
+   * 둔다** — 확대·이동으로 지도가 어떤 곳인지 훑어볼 시간이 이 단계의 목적이다.
    */
   const zooming = step?.task === "zoom";
   const [wheeled, setWheeled] = useState(false);
@@ -83,12 +88,17 @@ export default function TutorialOverlay() {
     const layer0 = useMapStore.getState().layer;
     // 기준 배율은 **첫 틱에** 잡는다. 붙자마자 재면 엔진이 아직 첫 카메라를 맞추는 중이라 틀린다
     let k0 = 0;
-    const onWheel = () => setWheeled(true);
+    let firstWheelAt = 0;
+    const onWheel = () => {
+      if (!firstWheelAt) firstWheelAt = Date.now();
+      setWheeled(true);
+    };
     window.addEventListener("wheel", onWheel, { passive: true });
     const id = window.setInterval(() => {
       const e = getMapEngine();
       if (!e) return;
       if (!k0) return void (k0 = e.zoomK());
+      if (!firstWheelAt || Date.now() - firstWheelAt < ZOOM_EXPLORE_MS) return;
       if (e.zoomK() >= k0 * ZOOM_STEP_RATIO || useMapStore.getState().layer !== layer0) complete("zoom");
     }, 120);
     return () => {

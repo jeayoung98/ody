@@ -42,25 +42,28 @@
 		FROM map_sample s
 		JOIN music m ON m.id = s.music_id
 		WHERE s.layer = 1
+		AND m.video_id IS DISTINCT FROM 'none'
 	</select>
 
 	<select id="findInAccumulatedBoxes" resultType="com.ssafy.backend.music.dto.MapPointRow">
 		SELECT m.id AS music_id, m.title, m.artist, m.youtube_url,
 		<include refid="locationColumns"/>
 		FROM music m
-		WHERE
-		<foreach item="box" index="i" collection="boxes" separator=" AND ">
-			<choose>
-				<when test="i == 0">
-					point((m.location::real[])[${box.axisX}], (m.location::real[])[${box.axisY}])
-					&lt;@ box(point(#{box.xMin}, #{box.yMin}), point(#{box.xMax}, #{box.yMax}))
-				</when>
-				<otherwise>
-					(m.location::real[])[${box.axisX}] BETWEEN #{box.xMin} AND #{box.xMax}
-					AND (m.location::real[])[${box.axisY}] BETWEEN #{box.yMin} AND #{box.yMax}
-				</otherwise>
-			</choose>
-		</foreach>
+		<where>
+			<foreach item="box" index="i" collection="boxes" separator=" AND ">
+				<choose>
+					<when test="i == 0">
+						point((m.location::real[])[${box.axisX}], (m.location::real[])[${box.axisY}])
+						&lt;@ box(point(#{box.xMin}, #{box.yMin}), point(#{box.xMax}, #{box.yMax}))
+					</when>
+					<otherwise>
+						(m.location::real[])[${box.axisX}] BETWEEN #{box.xMin} AND #{box.xMax}
+						AND (m.location::real[])[${box.axisY}] BETWEEN #{box.yMin} AND #{box.yMax}
+					</otherwise>
+				</choose>
+			</foreach>
+			AND m.video_id IS DISTINCT FROM 'none'
+		</where>
 		LIMIT #{limit}
 	</select>
 </mapper>

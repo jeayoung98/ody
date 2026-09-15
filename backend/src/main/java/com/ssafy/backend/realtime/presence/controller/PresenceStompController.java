@@ -7,8 +7,8 @@ import org.springframework.messaging.handler.annotation.MessageMapping;
 import org.springframework.stereotype.Controller;
 import org.springframework.context.annotation.Profile;
 
-import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
-import com.ssafy.backend.realtime.common.RealtimeErrorSender;
+import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeWsErrorSender;
 import com.ssafy.backend.realtime.presence.dto.JoinRequest;
 import com.ssafy.backend.realtime.presence.dto.ViewportRequest;
 import com.ssafy.backend.realtime.presence.service.PresenceLifecycleService;
@@ -27,7 +27,7 @@ public class PresenceStompController {
 
 	private final PresenceLifecycleService lifecycleService;
 	private final WebSocketSessionRegistry sessionRegistry;
-	private final RealtimeErrorSender errorSender;
+	private final RealtimeWsErrorSender errorSender;
 
 	/** 입장(배치·복원). 활성 진입 아님 — 만남·이동은 /music/play 에서. */
 	@MessageMapping("/presence/join")
@@ -41,7 +41,8 @@ public class PresenceStompController {
 		boolean alive = lifecycleService.heartbeat(principal.getName());
 		if (!alive) {
 			// 이미 sweep 돼 만료큐에서 빠짐 → 클라는 살아있다 오해. STALE 회신해 resync 유도(P3-f).
-			errorSender.send(principal.getName(), WsCode.PRESENCE_STALE, "presence expired, resync required");
+			errorSender.send(principal.getName(), RealtimeWsErrorCode.PRESENCE_STALE,
+					"presence expired, resync required");
 		}
 	}
 

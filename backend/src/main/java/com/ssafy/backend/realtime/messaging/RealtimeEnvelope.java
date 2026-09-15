@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.messaging;
 
 /**
  * 모든 S→C 프레임의 봉투 {type, seq, ts, payload} (FR-041). REST ApiResponse 규격은 WS 에 적용하지 않는다.

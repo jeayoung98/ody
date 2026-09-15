@@ -5,8 +5,8 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper.Placement;
 import com.ssafy.backend.realtime.port.MusicLocationPort;
@@ -55,7 +55,7 @@ public class PresenceLifecycleService {
 	 * join = 배치·이사. musicId 의 서버 좌표를 현재 레이어에 계산해 활성 배치한다(노출).
 	 * 같은 곡으로 다른 레이어에 join 하면 옛→새 레이어로 이사. 만남·play_history 없음.
 	 *
-	 * @throws CustomException PRESENCE_ERROR — 좌표 없음/미연결/STALE(로그에 WsCode 사유)
+	 * @throws CustomException PRESENCE_ERROR — 좌표 없음/미연결/STALE(로그에 RealtimeWsErrorCode 사유)
 	 */
 	public void join(String email, JoinRequest request) {
 		long musicId = request.musicId();
@@ -64,7 +64,7 @@ public class PresenceLifecycleService {
 		// 1) 서버 권위 좌표 — 클라 좌표 불신, musicId 로 조회 후 현재 레이어에 배치.
 		double[] pc = musicLocationPort.findLocation(musicId)
 				.orElseThrow(() -> {
-					log.warn("join 거부 reason={} musicId={}", WsCode.PRESENCE_LOCATION_NULL, musicId);
+					log.warn("join 거부 reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_LOCATION_NULL, musicId);
 					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 				});
 		Placement p = coordinateMapper.place(pc, layer);
@@ -72,7 +72,7 @@ public class PresenceLifecycleService {
 		// 2) old 상태(정지면 null) — 이사 시 옛 레이어에서 빼기 위함.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null) {
-			log.warn("join 거부 reason={} musicId={}", WsCode.PRESENCE_NOT_CONNECTED, musicId);
+			log.warn("join 거부 reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_NOT_CONNECTED, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
@@ -81,7 +81,7 @@ public class PresenceLifecycleService {
 				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 		if (!ok) {
-			log.warn("join STALE reason={} musicId={}", WsCode.PRESENCE_STALE, musicId);
+			log.warn("join STALE reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_STALE, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 		log.info("[Presence] join 완료 musicId={} layer={}", musicId, layer);

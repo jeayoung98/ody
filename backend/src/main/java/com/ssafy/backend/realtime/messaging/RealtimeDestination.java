@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.messaging;
 
 /**
  * destination 문자열 상수. 문자열이 흩어지면 오타 하나가 조용한 버그가 된다.

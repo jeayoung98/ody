@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.error;
 
 import org.springframework.http.HttpStatus;
 
@@ -9,7 +9,7 @@ import lombok.Getter;
 /**
  * 실시간 도메인 에러 (BE3 소유). 기존 MusicErrorCode 패턴으로 공통 ErrorCode 계약 확장.
  * 정본 §0.5 에러표에 PRESENCE_ERROR 추가 요청(BE1) — contracts/music-play.md §3.
- * WS 세부 사유는 WsCode 를 payload code / message 에 싣는다.
+ * WebSocket 오류 코드는 {@link RealtimeWsErrorCode}로 따로 관리한다.
  */
 @Getter
 public enum RealtimeErrorCode implements ErrorCode {
@@ -27,15 +27,5 @@ public enum RealtimeErrorCode implements ErrorCode {
 		this.httpStatus = httpStatus;
 		this.code = code;
 		this.message = message;
-	}
-
-	/** WS PRESENCE_ERROR 세부 코드(/user/queue/errors payload.code). 재생 선언 전에 부르면 PRESENCE_NO_ANCHOR. */
-	public enum WsCode {
-		PRESENCE_NO_ANCHOR,
-		PRESENCE_LOCATION_NULL,
-		PRESENCE_LAYER_INVALID,
-		PRESENCE_VIEWPORT_INVALID,
-		PRESENCE_STALE,
-		PRESENCE_NOT_CONNECTED
 	}
 }

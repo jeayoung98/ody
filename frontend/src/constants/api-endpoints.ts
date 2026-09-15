@@ -89,6 +89,8 @@ export const API_ENDPOINTS = {
     detail: (id: number) => `/bff/music/${id}`,
     search: "/bff/music/search",
     play: (id: number) => `/bff/music/${id}/play`,
+    /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
+    videoId: (id: number) => `/bff/music/${id}/video-id`,
   },
 
   /**

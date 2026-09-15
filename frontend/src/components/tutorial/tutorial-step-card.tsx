@@ -5,13 +5,15 @@ interface TutorialStepCardProps {
   total: number;
   title: string;
   description: string;
-  /** 확인 버튼이 필요한 단계(마지막)만 전달 */
+  /** 누를 곳이 따로 없어 카드의 버튼으로 넘기는 단계만 전달 */
   onConfirm?: () => void;
+  /** 그 버튼 글 */
+  cta?: string;
   onSkip: () => void;
 }
 
 /** #tip — 스포트라이트 투어 카드. 점 진행 표시 + 모노 카운터 + 태스크 안내 */
-export default function TutorialStepCard({ index, total, title, description, onConfirm, onSkip }: TutorialStepCardProps) {
+export default function TutorialStepCard({ index, total, title, description, onConfirm, cta, onSkip }: TutorialStepCardProps) {
   return (
     <div className="glass animate-tin flex flex-col gap-[9px] rounded-[16px]! bg-toast! px-[17px] pt-4 pb-3.5">
       <div className="flex items-center gap-[9px]">
@@ -37,7 +39,7 @@ export default function TutorialStepCard({ index, total, title, description, onC
         <span className="flex-1" />
         {onConfirm ? (
           <Button size="sm" variant="primary" onClick={onConfirm}>
-            여기서 시작하기
+            {cta}
           </Button>
         ) : (
           <span className="lbl text-teal">화면에서 직접 해보세요</span>

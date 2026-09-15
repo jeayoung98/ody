@@ -1,6 +1,6 @@
 "use client";
 
-import { DRILL, LAYER_COUNT, LAYER_NAMES, LAYER_NAMES_EN } from "@/constants";
+import { LAYER_COUNT, LAYER_NAMES, LAYER_NAMES_EN } from "@/constants";
 import { useMapStore } from "@/stores/use-map-store";
 import DrillHint from "./drill-hint";
 
@@ -24,7 +24,8 @@ export default function LayerName() {
       </div>
       <div className="num mt-[3px] flex flex-wrap gap-x-3 text-[9.5px] tracking-[0.04em] text-ink-3">
         <span>이 겹 {residentCount.toLocaleString()}곡</span>
-        <span className={zoomK >= DRILL.gateZoomMul ? "text-teal" : ""}>배율 ×{zoomK.toFixed(1)}</span>
+        {/* 게이트를 여는 건 배율이 아니라 화면 안 곡 수다 (S15P21A405-342) — 색은 옆 칸에만 준다 */}
+        <span>배율 ×{zoomK.toFixed(1)}</span>
         <span className={gateOpen ? "text-teal" : ""}>화면 안 {viewportCount.toLocaleString()}곡</span>
       </div>
       <DrillHint />

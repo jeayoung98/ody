@@ -217,7 +217,7 @@ export class MapEngine {
    */
   meHop: { x: number; y: number; t0: number } | null = null;
   /**
-   * 주변 탐색 중 선택한 이웃 라벨 밑의 "둘러보기 ›" 링크 히트 영역 (S15P21A405-288).
+   * 주변 탐색 중 선택한 이웃 라벨 밑의 "주변 보기 ›" 링크 히트 영역 (S15P21A405-288).
    * 그리는 쪽(drawProbe)이 매 프레임 채우고, 없으면 null — 글씨가 있는 곳이 곧 누를 수 있는 곳이어야 한다
    */
   hopLink: { id: number; x: number; y: number; w: number; h: number } | null = null;
@@ -1522,14 +1522,48 @@ export class MapEngine {
     a.subset = subset;
   }
 
-  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
+  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율 */
   zoomK() {
     return this.cam.s / this.entryS;
   }
 
-  /** 레이어 안에서 충분히(gateZoomMul 배) 확대했는가 — 그 전에는 파고들 수 없다 */
+  /**
+   * 파고들 만큼 좁혔는가 (S15P21A405-342).
+   *
+   * **화면 안 곡 수**로 잰다 — 배율 배수로 재면 진입 배율이 겹마다 달라서 같은 배수가 어떤 겹에선
+   * 207곡, 어떤 겹에선 1곡을 뜻했다. 곡 수는 확대할수록 단조 감소라 반드시 언젠가 열린다.
+   *
+   * **비어 있어도 막지 않는다.** 빈 화면은 "더 확대해라" 가 아니라 "이미 다 좁혔다" 다 —
+   * 성긴 곳에서 파고들어도 {@link drillBox} 가 가장 가까운 곡을 가운데 두고 상자를 넓혀
+   * `minInView` 만큼 모아 보낸다.
+   */
   private zoomedEnough() {
-    return this.zoomK() >= DRILL.gateZoomMul;
+    return this.zoomK() >= DRILL.gateMinZoom && this.countInView() <= this.gateMaxInView();
+  }
+
+  /**
+   * 게이트가 열리는 화면 안 곡 수 — **밀도 × 지금 보이는 넓이**다.
+   *
+   * 수로 고정하면 큰 모니터에서는 같은 배율에 더 많이 보여 훨씬 많이 확대해야 한다.
+   * 우측 패널이 열려 영역이 좁아져도 같은 이유로 함께 줄어든다.
+   * 바닥은 `minInView` 다 — 그보다 적게 잡으면 파고들기가 쓸 곡보다 적어진다.
+   */
+  private gateMaxInView() {
+    const f = this.freeRect();
+    const areaMpx = ((f.x1 - f.x0) * (f.y1 - f.y0)) / 1e6;
+    return Math.max(DRILL.minInView, DRILL.gateMaxDensity * areaMpx);
+  }
+
+  /**
+   * 게이트까지 얼마나 왔나 (0~1). 안내 막대가 이걸로 찬다 — 게이트 조건과 같은 값을 봐야
+   * 막대가 꽉 찼는데 안 열리거나, 덜 찼는데 열리는 일이 없다.
+   */
+  gateProgress() {
+    const byZoom = Math.min(1, this.zoomK() / DRILL.gateMinZoom);
+    const n = this.countInView();
+    const max = this.gateMaxInView();
+    const byCount = n <= max ? 1 : max / n;
+    return Math.min(byZoom, byCount);
   }
 
   /**
@@ -1831,6 +1865,49 @@ export class MapEngine {
     if (ov) return ov;
     const i = this.index.get(id);
     return i == null ? null : { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
+  }
+
+  /**
+   * 튜토리얼이 "이 별을 눌러 보세요" 라고 짚을 별 하나 (S15P21A405-349).
+   *
+   * 지도가 실제로 보이는 사각형 안에서, 안내 카드에 가리지 않을 만큼 아래에 있는 별 중
+   * 아무거나 고른다. 화면 밖이나 카드 뒤의 별을 짚으면 짚어 준 의미가 없다.
+   *
+   * **`freeRect` 만으로는 모자란다** (S15P21A405-350). 그건 우측 패널 폭만 빼 줄 뿐
+   * 계기판·레일·플레이어바 같은 HUD 상자는 그 안에 그대로 들어 있다. 그 뒤에 깔린 별이
+   * 뽑히면 구멍을 뚫어도 HUD 상자만 보인다 — `blocked` 로 상자를 한 번 더 걸러야 한다.
+   *
+   * 남은 것 중에서는 **밝은 쪽 절반**에서 뽑는다. 재생수가 적은 별은 점이 희미해서,
+   * 짚어 줘도 눈에 안 들어온다.
+   */
+  pickTutorialStar(cardBottom: number): number | null {
+    const f = this.freeRect();
+    const inView = (v: VisibleStar) => v.px > f.x0 + 40 && v.px < f.x1 - 40 && v.py > f.y0 + 40 && v.py < f.y1 - 40;
+    /**
+     * **빈손으로 끝나면 안 된다** (S15P21A405-351). 화면에 보이는 별이 열 개 남짓일 때가 있어서,
+     * 세 조건을 다 걸면 하나도 안 남고 그 단계에서 튜토리얼이 멈춰 버린다. 좋은 자리부터 보되
+     * 없으면 한 겹씩 양보하고, 마지막에는 보이는 별 아무거나라도 짚는다.
+     */
+    const clear = (v: VisibleStar) => !this.blocked(v.px, v.py);
+    const tries = [
+      (v: VisibleStar) => inView(v) && v.py > cardBottom && clear(v), // 카드 아래 · HUD 밖
+      (v: VisibleStar) => inView(v) && clear(v), //                      HUD 밖
+      inView, //                                                         화면 안
+      () => true, //                                                     보이기만 하면
+    ];
+    const ok = tries.map((t) => this.visible.filter(t)).find((list) => list.length > 0);
+    if (!ok) return null;
+    // 남은 것 중에서는 밝은 쪽 절반. 재생수가 적은 별은 점이 희미해 짚어 줘도 눈에 안 들어온다
+    const bright = [...ok].sort((a, b) => this.songs[b.i].weight - this.songs[a.i].weight).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
+    return this.songs[bright[Math.floor(Math.random() * bright.length)].i].musicId;
+  }
+
+  /** 그 별이 지금 화면 어디에 있나. 안 보이면 null — 카메라가 움직이면 매 프레임 달라진다 */
+  starPos(musicId: number): { x: number; y: number; r: number } | null {
+    const i = this.index.get(musicId);
+    if (i == null) return null;
+    const v = this.visible.find((x) => x.i === i);
+    return v ? { x: v.px, y: v.py, r: v.r } : null;
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {
@@ -2596,6 +2673,8 @@ export class MapEngine {
       residentCount: this.residentCount(),
       viewportCount: this.viewportCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
+      gateProgress: this.gateProgress(),
+      gateAtCount: Math.round(this.gateMaxInView()),
       gateOpen: !this.anim && !this.pending && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,
       canRise: this.stack.length > 0,

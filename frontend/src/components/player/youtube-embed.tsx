@@ -1,8 +1,9 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { registerPlayer, type PlayerHandle } from "./player-registry";
 
 /**
  * 사이트 안 재생 — YouTube **공식 플레이어 임베드** (규칙 6 D15 개정, SONG-03).
@@ -39,7 +40,7 @@ const CUED = 5;
  */
 const REPLAY_TRIES = 3;
 
-interface YtPlayer {
+interface YtPlayer extends PlayerHandle {
   loadVideoById: (id: string) => void;
   playVideo: () => void;
   pauseVideo: () => void;
@@ -96,8 +97,9 @@ function loadIframeApi(): Promise<void> {
 export default function YoutubeEmbed() {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const { data } = useMusicDetailQuery(currentMusicId);
-  const videoId = data?.videoId ?? null;
+  // videoId 는 **전용 엔드포인트**가 출처다 — 상세 응답에 딸려 오던 것을 더 쓰지 않는다 (S15P21A405-340)
+  const videoId = useVideoIdQuery(currentMusicId).data?.videoId ?? null;
+  const playSeq = usePlayerStore((s) => s.playSeq);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YtPlayer | null>(null);
@@ -109,6 +111,8 @@ export default function YoutubeEmbed() {
    * 0 이면 더 매달리지 않고 플레이어가 보고하는 대로 받아들인다.
    */
   const wantPlayRef = useRef(0);
+  /** 마지막으로 건 재생 번호. 같은 곡이어도 번호가 다르면 다시 건다 (S15P21A405-338) */
+  const loadedSeqRef = useRef(-1);
 
   /**
    * 플레이어가 스스로 바뀐 상태를 스토어에 되돌린다 — 유튜브 화면에서 직접 누를 수도 있어서
@@ -156,11 +160,14 @@ export default function YoutubeEmbed() {
         playerVars: { playsinline: 1, rel: 0, modestbranding: 1, origin: window.location.origin },
         events: { onReady: () => setReady(true), onStateChange },
       });
+      // 진행 바가 재생 시계를 읽고 위치를 옮길 수 있게 내놓는다 (S15P21A405-334)
+      registerPlayer(playerRef.current);
       // 개발 편의: 콘솔에서 플레이어 상태를 들여다볼 수 있게 (지도 엔진의 `__odyEngine` 과 같은 용도)
       if (process.env.NODE_ENV !== "production") (window as unknown as { __odyPlayer?: YtPlayer }).__odyPlayer = playerRef.current;
     });
     return () => {
       cancelled = true;
+      registerPlayer(null);
       playerRef.current?.destroy();
       playerRef.current = null;
       loadedIdRef.current = null;
@@ -183,12 +190,14 @@ export default function YoutubeEmbed() {
       }
       return;
     }
-    if (loadedIdRef.current === videoId) return;
+    // 번호가 올라갔으면 **같은 영상이어도 다시 건다** — 처음부터 틀라는 뜻이다 (S15P21A405-338)
+    if (loadedIdRef.current === videoId && loadedSeqRef.current === playSeq) return;
+    loadedSeqRef.current = playSeq;
     loadedIdRef.current = videoId;
     // 틀던 중에 갈아끼우는 것이면 **계속 틀겠다는 뜻**이다. 전환 중 상태 보고에 흔들리지 않게 남긴다
     if (usePlayerStore.getState().isPlaying) wantPlayRef.current = REPLAY_TRIES;
     playerRef.current.loadVideoById(videoId);
-  }, [ready, videoId]);
+  }, [ready, videoId, playSeq]);
 
   // 재생·정지를 스토어에 맞춘다. `videoId` 도 본다 — 곡을 갈아끼운 직후 한 번 더 단언하려고
   useEffect(() => {

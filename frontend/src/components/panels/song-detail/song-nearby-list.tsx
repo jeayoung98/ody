@@ -6,9 +6,9 @@ import SectionTitle from "@/components/common/section-title";
 import TrackRow from "@/components/common/track-row";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
+import { usePlaySong } from "@/hooks/use-play-song";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
-import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import type { MusicDetail } from "@/types";
 
@@ -25,9 +25,8 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
-  const exitNearby = useMapStore((s) => s.exitNearby);
   const selectMusic = useMapStore((s) => s.selectMusic);
-  const playSingle = usePlayerStore((s) => s.playSingle);
+  const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const openSong = usePanelStore((s) => s.openSong);
   const inNearby = viewMode === "nearby";
@@ -50,28 +49,26 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const handlePick = (id: number) => {
     selectMusic(id);
     openSong(id);
-    playSingle(id);
-    recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
+    // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
+    playWithConfirm(id, () => recordPlay({ musicId: id, source: "MAP", playedMs: 0 }));
   };
 
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle aside={inNearby ? <span className="text-teal">주변 탐색 중</span> : undefined}>주변 음악 {NEARBY_COUNT}곡</SectionTitle>
       <Note>
-        <b>유사도</b>는 임베딩 거리 기준. 곡을 누르면 들어볼 수 있어요. 그 곡 주변으로 옮겨가려면 아래 버튼을 누르세요. 줌아웃하면 주변 탐색이 해제돼요.
+        <b>유사도</b>는 임베딩 거리 기준. 곡을 누르면 들어볼 수 있어요. 그 곡 주변으로 옮겨가려면 아래 버튼을 누르세요. 줌아웃하거나 패널을 닫으면 주변 탐색이 해제돼요.
       </Note>
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {items.map((m, i) => (
           <TrackRow key={m.id} index={i + 1} title={m.title} artist={m.artist} right={`#${i + 1}`} onClick={() => handlePick(m.id)} />
         ))}
       </div>
-      {canHop ? (
-        <Button onClick={handleEnter}>이 곡 주변으로 건너가기</Button>
-      ) : inNearby ? (
-        <Button onClick={exitNearby}>주변 탐색 종료 · 전체 맵으로</Button>
-      ) : (
-        <Button onClick={handleEnter}>주변 탐색 켜기</Button>
-      )}
+      {/*
+        **여는 버튼만 둔다** (S15P21A405-339). 끄는 길은 이미 둘이다 — 좌상단 칩의 ✕ 와
+        우측 패널 닫기(S15P21A405-336). 여기 세 번째를 두면 같은 일을 세 군데서 하게 된다
+      */}
+      <Button onClick={handleEnter}>{canHop ? "이 곡 주변으로 건너가기" : "주변 탐색 켜기"}</Button>
     </div>
   );
 }

@@ -1,8 +1,10 @@
 "use client";
 
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
+import { UNPLAYABLE_NOTICE } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -81,10 +83,22 @@ export default function PlayerBar() {
    * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
    * 곡 정보가 아직 안 왔으면 막지 않는다. 도착하면 그때 판정이 잡힌다.
    */
-  const canPlay = data ? data.videoId != null : currentMusicId != null;
+  const video = useVideoIdQuery(currentMusicId);
+  const canPlay = video.data ? video.data.videoId != null : currentMusicId != null;
 
-  /** 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다 */
-  const handleToggle = () => toggle();
+  /**
+   * 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다.
+   *
+   * 음원이 없는 곡이면 **왜 안 되는지 알려 준다** (S15P21A405-336). 예전에는 버튼이 꺼져 있어
+   * 눌러도 아무 일도 안 났는데, 그러면 고장으로 읽힌다.
+   */
+  const handleToggle = () => {
+    if (!canPlay) {
+      showToast(UNPLAYABLE_NOTICE);
+      return;
+    }
+    toggle();
+  };
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : null;
 
@@ -110,16 +124,22 @@ export default function PlayerBar() {
       >
         <i className="grad-bg absolute inset-0 opacity-55 [mask:radial-gradient(circle_at_50%_50%,#000_30%,transparent_72%)]" />
       </span>
-      <button type="button" onClick={openContext} className="min-w-0 flex-1 text-left" disabled={currentMusicId == null}>
-        <p className="truncate text-sm">
-          {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
-          {currentMusicId != null && !canPlay && <span className="ml-2 text-[10px] text-warn">재생 불가</span>}
-        </p>
-        <p className="truncate text-[10px] text-ink-3">
-          {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
-        </p>
-        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} durationSec={data?.duration} />
-      </button>
+      {/*
+        진행 바는 **버튼 밖**이다 (S15P21A405-334). 안에 두면 바를 끌 때마다 패널이 같이 열리고,
+        버튼 안의 슬라이더라 키보드 조작도 서로 먹는다. 곡 정보만 버튼으로 남긴다
+      */}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <button type="button" onClick={openContext} className="min-w-0 text-left" disabled={currentMusicId == null}>
+          <p className="truncate text-sm">
+            {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
+            {currentMusicId != null && !canPlay && <span className="ml-2 text-[10px] text-warn">재생 불가</span>}
+          </p>
+          <p className="truncate text-[10px] text-ink-3">
+            {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
+          </p>
+        </button>
+        <PlayerProgress musicId={currentMusicId} durationSec={data?.duration} canPlay={canPlay} />
+      </span>
       {queue.length > 0 && (
         <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">
           {queueIndex + 1}/{queue.length}
@@ -128,7 +148,7 @@ export default function PlayerBar() {
       <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} disabled={!canPlay}>
+      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} dimmed={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
       <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>

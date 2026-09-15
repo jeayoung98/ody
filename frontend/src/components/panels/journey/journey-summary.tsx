@@ -17,6 +17,7 @@ import type { JourneyRoute } from "@/types";
 export default function JourneySummary({ route }: { route: JourneyRoute | null }) {
   const reset = useJourneyStore((s) => s.reset);
   const playQueue = usePlayerStore((s) => s.playQueue);
+  const detachContext = usePlayerStore((s) => s.detachContext);
   const clearConstellation = useMapStore((s) => s.clearConstellation);
   const recordPlay = useRecordPlayMutation();
   const startActivity = useStartActivity();
@@ -32,9 +33,18 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
     });
   };
 
+  /**
+   * 경로를 지운다. **플레이어의 맥락도 같이 내린다** (S15P21A405-338).
+   *
+   * 예전에는 여정 스토어와 별자리만 지워서 `context` 가 여정으로 남았다. 그러면 플레이어바를
+   * 누르는 순간 `openContext` 가 그 맥락을 보고 지운 경로를 다시 만들어 되살렸다.
+   *
+   * **소리는 끊지 않는다** — 듣던 곡은 계속 들리고, 이제 그 곡 하나로만 남는다.
+   */
   const handleClear = () => {
     reset();
     clearConstellation();
+    detachContext();
   };
 
   return (

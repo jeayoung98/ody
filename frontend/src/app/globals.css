@@ -130,6 +130,47 @@ input {
 .animate-tring {
   animation: tring 1.7s ease-out infinite;
 }
+/* 튜토리얼이 "여기를 눌러라" 하고 짚는 자리 — 별 클릭 링처럼 커졌다 작아졌다 (S15P21A405-349) */
+/* 폭은 부르는 쪽이 정한다 — 큰 상자에 같은 배율을 쓰면 수십 px 이 출렁여 과하다 (S15P21A405-354) */
+@keyframes tbeat {
+  0%, 100% { transform: scale(var(--tbeat-lo, 0.82)); opacity: 0.45; }
+  50% { transform: scale(var(--tbeat-hi, 1.3)); opacity: 1; }
+}
+.animate-tbeat {
+  animation: tbeat 1.3s ease-in-out infinite;
+}
+/* 짚어 준 별 — 반짝이면서 커졌다 작아졌다 (S15P21A405-351) */
+@keyframes tstar {
+  0%, 100% { transform: scale(0.75); opacity: 0.65; }
+  50% { transform: scale(1.25); opacity: 1; }
+}
+.animate-tstar {
+  animation: tstar 1.1s ease-in-out infinite;
+}
+/* 휠을 굴리라는 손짓 — 마우스 안 점이 아래위로 구른다 */
+@keyframes twheel {
+  0%, 100% { transform: translateY(0); opacity: 1; }
+  50% { transform: translateY(4px); opacity: 0.35; }
+}
+.animate-twheel {
+  animation: twheel 1.1s ease-in-out infinite;
+}
+/* 튜토리얼 마무리 — 화면이 서서히 덮이고 글이 작았다 커지며 튀어 오른다 (S15P21A405-354) */
+@keyframes tfade {
+  from { opacity: 0; }
+}
+.animate-tfade {
+  animation: tfade 0.55s ease-out;
+}
+@keyframes tpop {
+  0% { opacity: 0; transform: scale(0.78); }
+  62% { opacity: 1; transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+.animate-tpop {
+  animation: tpop 0.62s var(--ease-spring) both;
+  animation-delay: 0.16s;
+}
 
 @media (prefers-reduced-motion: reduce) {
   * {

@@ -27,7 +27,6 @@ export function mockMusic(id: number): Music {
      * 확인한다. 예전에는 실데이터가 전 곡 null 이라 목에 영상 하나를 박아 뒀는데, 그러면 목으로
      * 돌려볼 때 **모든 곡이 같은 노래로** 나온다. 아무 문자열이나 넣어도 "영상 없음" 이 뜬다.
      */
-    videoId: null,
     location: s ? (s.pc as Music["location"]) : null,
     playCnt: s?.weight ?? Math.floor(rand() * 50_000),
     youtubeCnt: s && !s.playable ? 0 : 1 + Math.floor(rand() * 3),

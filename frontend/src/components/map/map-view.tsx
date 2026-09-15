@@ -10,6 +10,7 @@ import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
+import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
@@ -81,11 +82,26 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
-  const playSingle = usePlayerStore((s) => s.playSingle);
+  const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
+  /**
+   * 주변 탐색을 켜면 **그 곡 상세도 같이 연다** (S15P21A405-348).
+   *
+   * 주변 탐색 고리는 그 곡 상세에 딸린 화면인데, 켜는 길이 넷(하단 버튼·상세 목록·길게 누르기·
+   * 건너가기 링크)이라 어디서 켜느냐에 따라 엉뚱한 패널이 열린 채로 남았다 — 여정 패널을
+   * 띄워 둔 채 하단 버튼을 누르면 여정 화면 위에 고리가 겹쳤다. 패널 쪽 짝은
+   * `use-panel-store` 의 `syncMapView` 다.
+   */
+  useEffect(() => {
+    if (nearbyCenterMusicId == null) return;
+    const p = usePanelStore.getState();
+    // 이미 그 곡 상세가 떠 있으면 건드리지 않는다 — 다시 열면 돌아갈 자리(`back`)가 날아간다
+    if (p.activePanel === "song" && p.musicId === nearbyCenterMusicId) return;
+    p.openSong(nearbyCenterMusicId);
+  }, [nearbyCenterMusicId]);
   // 목: 지도 위 사용자들이 스스로 반응을 쏜다 (실서비스에서는 소켓 수신)
   useMockFriendReactions(friends);
 
@@ -254,8 +270,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
         if (e.deltaY > 0) useMapStore.getState().exitNearby();
         return;
       }
-      const res = engine.wheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
-      if (res === "zoom") useTutorialStore.getState().complete("zoom");
+      // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.
+      // 배율이 얼마나 올랐는지는 튜토리얼이 직접 본다 (`tutorial-overlay.tsx`)
+      engine.wheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
     },
     [engine],
   );
@@ -328,7 +345,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const hit = hitF ? null : engine.hitTest(mx, my);
       const song = hit ? engine.songs[hit.i] : null;
       // 주변 탐색 중에는 호버 카드를 띄우지 않는다 (S15P21A405-288) — 고리 별에는 제목·순위 라벨이 이미 붙어 있고,
-      // 카드가 뜨면 이웃 라벨과 "둘러보기 ›" 링크를 가린다. 별 위 강조 링과 커서만 남긴다
+      // 카드가 뜨면 이웃 라벨과 "주변 보기 ›" 링크를 가린다. 별 위 강조 링과 커서만 남긴다
       const inNearby = useMapStore.getState().viewMode === "nearby";
       if (song && !inNearby) {
         cancelHide();
@@ -353,11 +370,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     (s: MapPoint) => {
       selectMusic(s.musicId);
       openSong(s.musicId);
-      playSingle(s.musicId);
-      recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 });
+      // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
+      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 }));
       useTutorialStore.getState().complete("select");
     },
-    [openSong, playSingle, recordPlay, selectMusic],
+    [openSong, playWithConfirm, recordPlay, selectMusic],
   );
 
   /**
@@ -399,7 +416,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       const r = e.currentTarget.getBoundingClientRect();
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
-      // 선택한 이웃 라벨 밑 "둘러보기 ›" 링크 — 그 별 주변으로 건너간다 (S15P21A405-288)
+      // 선택한 이웃 라벨 밑 "주변 보기 ›" 링크 — 그 별 주변으로 건너간다 (S15P21A405-288)
       const link = engine.hitHopLink(mx, my);
       if (link) {
         useMapStore.getState().enterNearby(link.id);

@@ -610,7 +610,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   /**
-   * 별 밑 라벨 — 제목, (있으면) 부제, 선택한 곡이면 **"둘러보기 ›" 링크** (S15P21A405-288).
+   * 별 밑 라벨 — 제목, (있으면) 부제, 선택한 곡이면 **"주변 보기 ›" 링크** (S15P21A405-288).
    * 이웃을 누르는 것만으로는 건너가지 않으므로(선택·재생만), 건너가는 길이 시선이 있는 자리에 글씨로 보여야 한다.
    * 떠다니는 버튼을 얹는 대신 이미 있는 라벨 묶음 안에 넣는다. 히트 영역은 엔진에 적어 두고 클릭은 map-view 가 받는다
    */
@@ -635,7 +635,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
       g.globalAlpha = a * pulse;
       g.font = `600 10px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
-      const label = "둘러보기 ›";
+      const label = "주변 보기 ›";
       const lw = g.measureText(label).width;
       g.fillText(label, x, y + HOP_LINK.dy);
       e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: y + HOP_LINK.dy - HOP_LINK.h / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h };

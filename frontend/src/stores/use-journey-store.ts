@@ -9,7 +9,10 @@ interface JourneyState {
   isComposerOpen: boolean;
   startMusicId: number | null;
   endMusicId: number | null;
-  /** 다음 지도 클릭이 채울 칸 (출발 → 도착 → 다시 출발 순으로 번갈아) */
+  /**
+   * 다음 지도 클릭이 채울 칸. 처음엔 출발 → 도착 순으로 채워지고, **그 뒤로는 도착에 머문다**
+   * (S15P21A405-337). 출발을 바꾸려면 출발 칸을 눌러 포커스한다 — {@link pickForNext} 참고.
+   */
   pickTarget: JourneyPickTarget;
   /** "경로 만들기"를 눌러 확정된 상태. 이때만 경로를 조회하고 별자리를 바꾼다 */
   isRouteRequested: boolean;
@@ -38,13 +41,28 @@ export const useJourneyStore = create<JourneyState>()(
       openComposer: () => set({ isComposerOpen: true, pickTarget: get().startMusicId == null ? "start" : "end" }, false, "openComposer"),
       closeComposer: () => set({ isComposerOpen: false, pickTarget: null }, false, "closeComposer"),
 
-      // 지점을 바꾸면 이전 경로 확정은 풀린다. 다시 "경로 만들기"를 눌러야 적용된다
+      /**
+       * 지점을 바꾸면 이전 경로 확정은 풀린다. 다시 "경로 만들기"를 눌러야 적용된다.
+       *
+       * **채운 뒤 차례는 도착에 머문다** (S15P21A405-337). 예전에는 `setEnd` 가 차례를 출발로
+       * 되돌려서, 도착 칸을 눌러 둔 채 다른 곡을 고르면 엉뚱하게 출발이 바뀌었다.
+       * 출발을 고치는 길은 출발 칸을 눌러 포커스하는 것 하나로 둔다.
+       */
       setStart: (startMusicId) => set({ startMusicId, isRouteRequested: false, pickTarget: "end" }, false, "setStart"),
-      setEnd: (endMusicId) => set({ endMusicId, isRouteRequested: false, pickTarget: "start" }, false, "setEnd"),
+      setEnd: (endMusicId) => set({ endMusicId, isRouteRequested: false, pickTarget: "end" }, false, "setEnd"),
 
+      /**
+       * 지도 클릭이 채울 칸 (S15P21A405-337).
+       *
+       * 1. 사용자가 직접 눌러 **포커스한 칸이 있으면 그 칸** — 눈이 가 있는 곳이 바뀌어야 한다
+       * 2. 없고 출발이 비었으면 출발
+       * 3. 그 밖에는 **계속 도착** — 둘 다 채운 뒤에는 도착을 갈아 끼우며 경로를 고르는 동작이다
+       */
       pickForNext: (musicId) => {
-        const { pickTarget } = get();
-        if (pickTarget === "end") set({ endMusicId: musicId, isRouteRequested: false, pickTarget: "start" }, false, "pickForNext/end");
+        const { pickTarget, startMusicId } = get();
+        const target = pickTarget ?? (startMusicId == null ? "start" : "end");
+        if (target === "end") set({ endMusicId: musicId, isRouteRequested: false, pickTarget: "end" }, false, "pickForNext/end");
+        // 출발을 막 채웠으면 다음 차례는 도착이다 — 빈 상태에서 시작하면 출발 → 도착 순으로 채워진다
         else set({ startMusicId: musicId, isRouteRequested: false, pickTarget: "end" }, false, "pickForNext/start");
       },
 

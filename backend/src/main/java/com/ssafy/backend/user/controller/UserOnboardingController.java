@@ -9,6 +9,9 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.user.dto.TutorialCompletedResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -17,10 +20,12 @@ import lombok.RequiredArgsConstructor;
 @RestController
 @RequestMapping("/api/user")
 @RequiredArgsConstructor
+@Tag(name = "User", description = "온보딩 튜토리얼 완료 처리")
 public class UserOnboardingController {
 
 	private final UserService userService;
 
+	@Operation(summary = "온보딩 튜토리얼 완료 처리", description = "로그인한 사용자 본인의 지도 튜토리얼 완료 여부를 완료로 저장한다.")
 	@PatchMapping("/tutorial-completed")
 	public ApiResponse<TutorialCompletedResponse> completeTutorial(Authentication authentication) {
 		userService.completeTutorial(authentication.getName());

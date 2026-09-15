@@ -23,12 +23,8 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.music.controller.MusicController;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
@@ -36,11 +32,11 @@ import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.NeighborTrack;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.service.NearbyService;
 
 /**
  * 상세 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler·Jackson 직렬화 검증.
  * @JsonUnwrapped flat 직렬화(정본 §3.2)를 jsonPath로 실측한다.
- * ponytail: master @MapperScan이 testMapper를 슬라이스에 끌어와 실패 → 해당 매퍼만 @MockitoBean(002와 동일, T301 전까지).
  */
 // ponytail: master SecurityConfig가 슬라이스에 딸려와 security 빈 부재로 컨텍스트가 죽는다 →
 // JwtAuthenticationFilter는 Filter라 슬라이스에 스캔된다. 둘 다 제외하고 기본 시큐리티 필터도 끈다(BE-infra 소스 무수정).
@@ -57,16 +53,11 @@ class MusicDetailControllerTests {
 	private MusicService musicService;
 
 	@MockitoBean
-	private TestMapper testMapper;
+	private NearbyService nearbyService;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
+
 
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
@@ -74,12 +65,12 @@ class MusicDetailControllerTests {
 
 	private static MusicDetail detail(String youtubeUrl) {
 		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning",
-				List.of("K-Pop"), youtubeUrl, loc(), 1428, 3);
+				List.of("K-Pop"), youtubeUrl, null, loc(), 1428, 3);
 	}
 
 	private static NeighborTrack neighbor(long id, String youtubeUrl, double distance) {
 		return new NeighborTrack(
-				new MusicSummary(id, "Through the Night", "IU", "Palette", List.of("K-Pop"), youtubeUrl, loc()),
+				new MusicSummary(id, "Through the Night", "IU", "Palette", List.of("K-Pop"), youtubeUrl, null, loc()),
 				distance);
 	}
 
@@ -87,7 +78,7 @@ class MusicDetailControllerTests {
 	void detail_success_returnsFlatDetailWithNeighbors() throws Exception {
 		MusicDetailResponse body = new MusicDetailResponse(detail("https://youtu.be/x"),
 				List.of(neighbor(10877L, "https://youtu.be/y", 0.0412),
-						neighbor(10999L, "https://youtu.be/z", 0.0510)));
+						neighbor(10999L, "https://youtu.be/z", 0.0510)), false);
 		when(musicService.getDetail(eq(10234L))).thenReturn(body);
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
@@ -111,7 +102,7 @@ class MusicDetailControllerTests {
 	@Test
 	void detail_targetNotPlayable_returns200WithNullUrl() throws Exception {
 		when(musicService.getDetail(anyLong()))
-				.thenReturn(new MusicDetailResponse(detail(null), List.of()));
+				.thenReturn(new MusicDetailResponse(detail(null), List.of(), false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -124,7 +115,7 @@ class MusicDetailControllerTests {
 	void detail_neighborNotPlayable_keptInList() throws Exception {
 		when(musicService.getDetail(anyLong()))
 				.thenReturn(new MusicDetailResponse(detail("https://youtu.be/x"),
-						List.of(neighbor(10877L, null, 0.0412))));
+						List.of(neighbor(10877L, null, 0.0412)), false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())

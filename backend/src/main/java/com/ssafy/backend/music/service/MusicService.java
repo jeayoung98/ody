@@ -6,6 +6,9 @@ import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.music.dto.MajorResponse;
+import com.ssafy.backend.music.retrieval.LayerBox;
+import com.ssafy.backend.music.retrieval.MajorQuery;
+import com.ssafy.backend.music.retrieval.MajorTrackReader;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.search.MusicSearchReader;
@@ -14,8 +17,13 @@ import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
-import com.ssafy.backend.music.dto.NeighborTrack;
+import com.ssafy.backend.music.dto.VideoIdBatchResponse;
+import com.ssafy.backend.music.dto.VideoIdItem;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
+import lombok.extern.slf4j.Slf4j;
+
+@Slf4j
 @Service
 public class MusicService {
 	/** 페이지 크기 서버 고정 (정본 §0.3). */
@@ -24,49 +32,104 @@ public class MusicService {
 	/** 주변곡 개수 고정 (정본 §3.2). */
 	private static final int NEIGHBOR_COUNT = 10;
 
+	/** 상주 집합 크기. 1000 이 규모 기준이다(D18) — 정확한 수는 강제하지 않는다. */
+	private static final int RESIDENT_SET_SIZE = 1000;
+
 	private final Optional<MusicSearchReader> searchReader;
 	private final Optional<MusicDetailReader> detailReader;
+	private final NearbyService nearbyService;
+	private final Optional<MajorTrackReader> majorReader;
+	private final VideoIdEnricher videoIdEnricher;
 
-	// ponytail: 검색 어댑터(BE4, B-D)가 아직 없어 Optional 주입. 어댑터 빈이 올라오면 자동 연결된다.
-	public MusicService(Optional<MusicSearchReader> searchReader, Optional<MusicDetailReader> detailReader) {
+	// ponytail: 어댑터가 아직 없는 port 는 Optional 주입. 빈이 올라오면 자동 연결된다.
+	public MusicService(Optional<MusicSearchReader> searchReader, Optional<MusicDetailReader> detailReader,
+			Optional<MajorTrackReader> majorReader, NearbyService nearbyService, VideoIdEnricher videoIdEnricher) {
 		this.searchReader = searchReader;
 		this.detailReader = detailReader;
+		this.majorReader = majorReader;
+		this.nearbyService = nearbyService;
+		this.videoIdEnricher = videoIdEnricher;
 	}
 
 	/**
-	 * 대표곡 조회 (정본 §3.4). level에 따라 사용하는 PC 축 개수가 달라진다.
+	 * 레이어 상주 집합 조회 (D16·D18·D19). level n 의 평면은 PC(2n-1)·PC(2n) 이다.
 	 *
-	 * ponytail: 대표곡 KNN/거리 산정은 BE4 검색 인터페이스 대기 중. 인터페이스 확정 시 여기서 호출한다.
-	 * 거리 척도 baseline = v2.1-pca16.
+	 * 서버는 공간적으로 고른 상주 집합만 돌려준다 — 인기순 대표 선별은 클라이언트가 화면 픽셀
+	 * 격자에서 한다(D16). 격자는 줌에 따라 변해 서버가 적용할 수 없다.
+	 * 전역 상위 k 를 먼저 자른 뒤 범위로 거르지 않는다(FR-013 MUST NOT).
+	 *
+	 * ponytail: 후보 0곡일 때 200 + 빈 배열을 돌려주는 것은 <b>B4 미확정 상태의 잠정 동작</b>이다.
+	 * plan.md 는 'B4 확정 전 구현하지 않는다' 고 적었으나, 조회 자체를 막을 수는 없어 가장 조용한
+	 * 기본값을 택했다. B4 가 정해지면 여기서 상태·본문을 바꾼다(빈 배열 + 200 을 계약으로 확정할 수도 있다).
 	 */
-	public MajorResponse getMajor(int level, Double[] center) {
-		throw new UnsupportedOperationException("music/major: BE4 검색 인터페이스 대기 중");
+	public MajorResponse getMajor(int level, List<LayerBox> accumulated) {
+		MajorTrackReader reader = majorReader.orElseThrow(
+				() -> new UnsupportedOperationException("music/major: 상주 집합 어댑터 대기 중"));
+		MajorResponse response = new MajorResponse(
+				reader.findResidentSet(new MajorQuery(level, accumulated, RESIDENT_SET_SIZE)));
+		log.info("[Music] 대표곡 조회 완료 level={} count={}", level, response.content().size());
+		return response;
 	}
 
 	/**
-	 * 노래 검색 (정본 §3.1). query 부분일치(대소문자 무시), youtubeCnt DESC·id ASC, 페이지 크기 10 고정.
+	 * 노래 검색 (정본 §3.1). query 부분일치(대소문자 무시), 관련성 순, 페이지 크기 10 고정.
 	 * 매칭·정렬 실행은 BE4 조회 port에 위임하고, 여기서는 조건 전달과 응답 조립만 한다.
 	 */
 	public PageResponse<MusicSummary> search(String query, int page) {
 		MusicSearchReader reader = searchReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/search: BE4 검색 어댑터 대기 중 (B-D)"));
 		MusicSearchReader.PageResult result = reader.search(query.trim(), page, PAGE_SIZE);
-		long total = result.totalElements();
-		int totalPages = (int) ((total + PAGE_SIZE - 1) / PAGE_SIZE);
-		boolean hasNext = (long) (page + 1) * PAGE_SIZE < total;
-		return new PageResponse<>(result.content(), page, PAGE_SIZE, total, totalPages, hasNext);
+		log.info("[Music] 검색 완료 query={} page={} count={}", query, page, result.content().size());
+		return new PageResponse<>(result.content(), page, PAGE_SIZE, result.hasNext());
 	}
 
 	/**
 	 * 노래 상세 + 주변곡 조회 (정본 §3.2).
 	 * 없는 곡 → MUSIC_NOT_FOUND(404). 최근접 선정·정렬·자기 제외는 조회 port(어댑터) 책임.
+	 *
+	 * <p>videoId 가 DB 에 없으면 외부 videoid API 로 실시간 조회해 채운다(S15P21A405-312, 프로토타입).
+	 * <b>중심곡만</b> 이 조회를 한다 — 이웃곡까지 하면 최대 10건을 순차 호출해 느려지므로
+	 * 걷어냈다(S15P21A405-322). 검색·주변탐색·경로탐색도 같은 이유로 이미 걷어냈다
+	 * (S15P21A405-321, S15P21A405-322).
 	 */
 	public MusicDetailResponse getDetail(long id) {
 		MusicDetailReader reader = detailReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/detail: BE4 조회 어댑터 대기 중 (B-D)"));
 		MusicDetail detail = reader.findDetail(id)
 				.orElseThrow(() -> new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
-		List<NeighborTrack> neighbors = reader.findNeighbors(id, NEIGHBOR_COUNT);
-		return new MusicDetailResponse(detail, neighbors);
+		// 이웃 선정은 주변 탐색(005)과 같은 코드 경로를 지나간다 — 규칙이 두 벌이 되면
+		// 같은 곡에 곡 상세와 주변 탐색 뷰가 다른 목록을 준다(005 FR-023, SC-006).
+		NearbyService.NeighborResult result = nearbyService.neighborsOf(detail);
+
+		MusicDetail enrichedDetail = withVideoId(detail,
+				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId()));
+
+		log.info("[Music] 상세 조회 완료 id={} neighbors={}", id, result.neighbors().size());
+		return new MusicDetailResponse(enrichedDetail, result.neighbors(), result.lowSimilarity());
+	}
+
+	private static MusicDetail withVideoId(MusicDetail detail, String videoId) {
+		return new MusicDetail(detail.id(), detail.mbid(), detail.title(), detail.artist(), detail.bpm(),
+				detail.duration(), detail.album(), detail.genres(), detail.youtubeUrl(), videoId,
+				detail.location(), detail.playCnt(), detail.youtubeCnt());
+	}
+
+	/**
+	 * musicId 목록으로 videoId 를 일괄 조회한다 (S15P21A405-322, 프로토타입).
+	 * DB 에 이미 있으면 그대로, 없으면 외부 videoid API 를 호출해 채우고 저장한다.
+	 * 요청한 musicId 중 없는 곡은 결과에서 빠진다(예외 아님) — 다른 일괄 조회들과 같은 관례.
+	 */
+	public VideoIdBatchResponse getVideoIds(List<Long> musicIds) {
+		MusicDetailReader reader = detailReader.orElseThrow(
+				() -> new UnsupportedOperationException("music/videoid: BE4 조회 어댑터 대기 중 (B-D)"));
+		List<MusicSummary> summaries = reader.findSummariesByIds(musicIds);
+
+		List<VideoIdItem> items = summaries.stream()
+				.map(summary -> new VideoIdItem(summary.id(),
+						videoIdEnricher.resolve(summary.id(), summary.artist(), summary.title(), summary.videoId())))
+				.toList();
+
+		log.info("[VideoId] 일괄 조회 완료 요청={} 응답={}", musicIds.size(), items.size());
+		return new VideoIdBatchResponse(items);
 	}
 }

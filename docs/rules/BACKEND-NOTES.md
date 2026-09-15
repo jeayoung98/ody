@@ -181,6 +181,9 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-5 | `GET /api/music/journey?start=&end=` | 두 곡 ID | `{musicCnt, totalDuration, path:[{step, …MusicDetail}]}` | **16차원 임베딩 거리 기준** 경로 (PATH-01). 프론트가 기대하던 `/api/journeys/route` + `JourneyRoute` 와 경로·형태가 다르다. **`path[].location`(pc1~16) 이 반드시 채워져 있어야 한다** — 경로 곡은 지도 상주 집합 밖일 수 있어서 프론트가 좌표를 알 길이 이것뿐이고, 비면 별자리(PATH-01)가 그려지지 않는다 (S15P21A405-264) | ✅ 구현·도달 가능 · 프론트가 훅에서 변환해 반영 완료 (2026-09-12) |
 | A-6 | `GET /api/map/nearby/{musicId}` | musicId | `{ center, neighbors[10] }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10) | 협의 전 |
 | A-8 | ~~`GET /api/music/{id}/representative-layers`~~ | — | — | **철회 — 만들지 않아도 된다.** 검색 결과를 누르면 그 곡이 대표곡인 첫 레이어로 자동 전환하려던 것이었는데, **SEARCH-01 이 v1.4 에서 바뀌어** 그 전환을 없애고 고스트별(MAP-12)로 대체했다. 프론트에 남아 있던 훅·목 라우트는 아무데서도 안 쓰여 삭제했다 (S15P21A405-269) | ❌ 철회 (2026-09-12) |
+| A-5 | **`GET /api/music/journey?start=&end=`** | 두 곡 ID | `{ musicCnt, totalDuration, path[] }` — **`musicCnt` 2~20, 중앙값 6** | **16차원 임베딩 거리 기준**으로 경로를 뽑아야 한다. 2D 평면 직선으로 뽑으면 레이어 0에서 일직선이 되어 별자리 모양이 안 나온다 (PATH-01) | ✅ 구현됨 (S15P21A405-61) · **2026-09-13 곡 수 개정(007/286)** — 아래 참조 |
+| A-6 | ~~`GET /api/map/nearby/{musicId}`~~ → **`GET /api/music/nearby`** | `id` | `{ center, neighbors[], lowSimilarity }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10). **경로 폐기** — `map/nearby/{musicId}` 는 좌표 기준 탐색을 표현할 수 없다. 계약은 api-spec §3.5 | ✅ 구현됨 (S15P21A405-59) · 이름은 BE3·팀 협의 중(`/music/neighbors` 와 구분 필요) |
+| A-8 | `GET /api/music/{id}/representative-layers` | musicId | `{ musicId, layers: number[] }` (오름차순) | 검색 결과를 누르면 그 곡이 **대표곡으로 노출되는 첫 레이어**로 이동해야 한다. 한 곡이 여러 레이어에서 대표곡일 수 있다. 클라이언트가 8개 레이어 대표곡을 전부 들고 있을 수 없으므로 서버가 계산해야 한다 (SEARCH-01) | 협의 전 |
 | A-7 | `POST /api/music/{id}/play` | `{ source, playedMs }` | ok | 재생 로그 (`play_history`). `source` 값은 `MAP` / `JOURNEY` / `PLAYLIST` / `FOLLOW` | 협의 전 |
 | A-10 | `POST /api/auth/signup` | `{ email, password, nickname }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 가입 (AUTH-01) | ✅ 구현됨 (backend/dev, S15P21A405-121) · 프론트 반영 완료 |
 | A-11 | `POST /api/auth/login` | `{ email, password }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 로그인 (AUTH-02) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
@@ -197,6 +200,17 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-20 | **곡 장르가 비어 있다** | `GET /api/music/detail?id=` · `nearby` · `major` | `genres: []` | 배포 데이터 1,082곡이 **전부** 빈 배열이다 (2026-09-14 실측). 프론트는 장르로 별 색과 앨범 커버 대체색을 칠하는데(`genreColor`), 값이 없으면 전부 `무장르`(id 10) 한 색이 된다 — **지도가 단색이 되고 설문 카드의 두 곡이 같은 색 사각형으로 보인다.** 목 데이터에서는 색이 나뉘어서 이 문제가 안 보였다 | 협의 전 |
 | A-21 | **앨범 커버 주소** | — | `albumCoverUrl` 을 `detail`·`nearby`·`journey` 응답에 추가 | 프론트에 자리는 이미 있다(`components/common/album-cover.tsx`) — 값만 오면 곡 상세와 설문 카드가 함께 커버를 그린다. 지금 응답에는 `mbid` 와 `album` 이름이 있는데, `mbid` 를 Cover Art Archive 의 `release`·`release-group` 으로 조회하면 404 다(2026-09-14 실측) — **recording MBID 로 보이므로 recording → release 를 한 번 더 타야 커버에 닿는다.** 프론트에서 곡마다 외부 조회를 하면 요청이 곡 수만큼 늘어서 백엔드가 미리 담아주는 쪽이 맞다 | 협의 전 |
 | A-22 | **주변 탐색 이웃에 `duration` 이 없다** | `GET /api/music/nearby?id=` | `neighbors[].duration` 추가 | 설문의 `listened_sec` 은 이제 **실제 재생된 시간**이라(임베드의 재생·정지를 따라간다) `videoId` 가 있는 곡은 끝나면 시계도 멈춘다. 문제는 **`videoId` 가 없는 곡**이다 — 임베드가 안 붙어 재생 여부가 낙관값이라 안 멈추고, 카드를 띄워두거나 탭을 놔두면 곡 길이보다 큰 값이 나온다 (2026-09-14 실측: 이웃 10곡 중 1곡 `1623627` 이 `videoId` 없음). 곡 길이를 알면 거기서 자를 수 있는데 **이웃 응답에 `duration` 이 없다**(현재 키: id·title·artist·album·genres·youtubeUrl·videoId·location·distance). 경로 탐색(`stops[].duration`)에는 있어서 거기만 잘린다. 덤으로 `center` 는 키가 id·title·artist·location 4개뿐이라 장르·앨범도 안 온다 | 협의 전 |
+| A-15 | **본인 조회 API** | 없음 (Bearer 토큰) | `User` (email, nickname, isPublic, tutorialCompleted, imageUrl …) | 프론트는 `GET /api/auth/me` 를 쓰는데 **백엔드에 없다.** `GET /user/detail?email=` 은 이메일을 파라미터로 요구하지만, 로그인 직후 프론트는 JWT 안의 이메일을 모른다(디코딩하지 않는다). 토큰 주체 기준으로 본인을 돌려주는 엔드포인트가 필요하다 | 협의 전 (**필요**) |
+| A-16 | `/user/detail` 경로 접두 | — | — | 다른 API 는 모두 `/api/...` 인데 `UserController` 만 `/user/...` 다. 프론트 `API_ENDPOINTS` 는 `/api` 접두를 전제로 한다 — 어느 쪽으로 통일할지 확인 필요 | 협의 전 |
+| A-9 | `POST /api/constellations/layout` | `{ musicIds: number[] }` — **2개 이상 30개 이하, 중복 불가**. 요청 본문의 다른 필드(프론트가 지금 싣는 `points`)는 **무시한다** | `{ points: [{ musicId, x, y }] }` — 요청과 같은 개수·같은 나열 순서, `x`·`y` 는 `-1 ~ 1`. 오류: 개수·중복·값 위반 400 `INVALID_INPUT`, 요청한 곡 중 하나라도 없거나 좌표가 없으면 404 `MUSIC_NOT_FOUND`(부분 배치 없음) | **별자리 오버레이의 모양** (PATH-01). 좌표 원천은 서빙 baseline `v2.1-pca16` 의 `music.location` 하나다 — 요청자가 보낸 좌표는 쓰지 않는다. 그 곡 집합만의 분산이 가장 큰 두 방향으로 투영하므로 **레이어와 무관하고, 같은 곡 집합이면 항상 같은 좌표**다. 다만 곡 집합이 바뀌면 축도 바뀐다 — 부분집합이 전체집합 모양의 일부와 같지는 않다. 응답의 `x`·`y` 는 지도(PC 축) 좌표가 아니라 그 집합만의 표시용 투영이다. ⚠️ **프론트**: `playlist-panel.tsx` 가 플레이리스트 곡을 개수 제한 없이 보내고 있어 31곡 이상이면 400 이다 — 30곡으로 잘라 보내야 한다(2026-09-13 합의, 서버는 임의로 자르지 않는다) | ✅ 구현됨 (S15P21A405-265, `backend/feat/...-265-constellation-layout-api`) · 프론트 반영 대기 |
+
+> **A-5 곡 수 개정 (2026-09-13, BE2)** — 여정 응답의 `musicCnt` 범위가 **12~22 에서 2~20 으로** 바뀐다.
+> 무작위 쌍 기준 **중앙값이 12곡에서 6곡**이 되고, **중간 곡 없이 출발·도착 2곡만 나가는 응답이 정상**이다(오류 아님).
+>
+> 왜 짧아지나 — 좌표 공간에서 임의의 두 곡 사이에 "서로 구별되는" 곡이 평균 **6.8개**밖에 들어가지 않는다(임의 지점의 최근접 곡까지 거리 p50 2.272, 두 곡 사이 거리 중앙값 15.52). 이전에는 거리와 무관하게 중간역을 10개 이상 꽂아서, 가까운 두 곡 사이 경로가 **직선의 8.6배**를 돌며 엉뚱한 곡으로 채워졌다. 고친 뒤 우회 배수는 1.0~1.5 다.
+>
+> **프론트 확인 필요**: 곡 수를 하드코딩한 레이아웃이 있으면 어긋난다. 2곡·3곡 목록의 표시 방식도 정해야 한다.
+> 별자리 배치 API(A-9, 최대 30곡)에는 영향 없다 — 여정은 항상 20곡 이하다.
 
 ---
 

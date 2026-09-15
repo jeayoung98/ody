@@ -11,14 +11,18 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.user.dto.UserDetailResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.constraints.NotBlank;
 
 import lombok.RequiredArgsConstructor;
 
 @RestController
-@RequestMapping("/user")
+@RequestMapping("/api/user")
 @Validated
 @RequiredArgsConstructor
+@Tag(name = "User", description = "사용자 상세 조회")
 public class UserController {
 
 	private final UserService userService;
@@ -26,6 +30,7 @@ public class UserController {
 	/**
 	 * 사용자 상세 조회 (정본 §2.1). 인증 필요, 본인 조회도 이 API로 처리.
 	 */
+	@Operation(summary = "사용자 상세 조회", description = "email로 사용자 상세 정보를 조회한다. 본인 조회도 이 API로 처리한다.")
 	@GetMapping("/detail")
 	public ApiResponse<UserDetailResponse> detail(
 			@RequestParam @NotBlank String email,

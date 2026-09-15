@@ -17,15 +17,11 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
-import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.test.mapper.TestMapper;
 import com.ssafy.backend.user.controller.UserAvailabilityController;
-import com.ssafy.backend.playlist.mapper.PlaylistMapper;
-import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserAvailabilityService;
 
 /**
@@ -43,17 +39,9 @@ class UserAvailabilityControllerTests {
 	@MockitoBean
 	private UserAvailabilityService userAvailabilityService;
 
-	@MockitoBean
-	private TestMapper testMapper;
 
-	@MockitoBean
-	private AuthMapper authMapper;
 
-	@MockitoBean
-	private UserMapper userMapper;
 
-	@MockitoBean
-	private PlaylistMapper playlistMapper;
 
 	@Test
 	void nicknameAvailable_available_returnsTrue() throws Exception {

@@ -21,9 +21,10 @@ import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.search.MusicSearchReader;
 import com.ssafy.backend.music.search.MusicSearchReader.PageResult;
 import com.ssafy.backend.music.service.MusicService;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
- * 검색 서비스 조립 단위 테스트 (port mock). 순서 보존·페이지 계산·youtubeUrl null 유지·size 10 전달.
+ * 검색 서비스 조립 단위 테스트 (port mock). 순서 보존·hasNext 전달·youtubeUrl null 유지·size 10 전달.
  */
 class MusicSearchServiceTests {
 
@@ -32,31 +33,30 @@ class MusicSearchServiceTests {
 
 	private final MusicSearchReader reader = mock(MusicSearchReader.class);
 	private final MusicDetailReader detail = mock(MusicDetailReader.class);
-	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail));
+	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty(),
+			org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class));
 
 	@Test
 	void search_trimsQuery_passesSize10_assemblesPage() {
 		when(reader.search("IU", 0, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(1L, "A", "IU", "al", List.of("K-Pop"), "https://y/1", LOC)),
-				137));
+				List.of(new MusicSummary(1L, "A", "IU", "al", List.of("K-Pop"), "https://y/1", null, LOC)),
+				true));
 
 		PageResponse<MusicSummary> r = service.search("  IU  ", 0);
 
 		verify(reader).search("IU", 0, 10); // trim + 크기 10 고정
 		assertEquals(0, r.page());
 		assertEquals(10, r.size());
-		assertEquals(137, r.totalElements());
-		assertEquals(14, r.totalPages()); // ceil(137/10)
-		assertTrue(r.hasNext());
+		assertTrue(r.hasNext()); // 총 개수는 담지 않는다 (S15P21A405-255)
 	}
 
 	@Test
 	void search_preservesReaderOrder() {
 		when(reader.search("q", 0, 10)).thenReturn(new PageResult(
 				List.of(
-						new MusicSummary(1L, "high", "x", "al", List.of(), "https://y/1", LOC),
-						new MusicSummary(2L, "low", "y", "al", List.of(), "https://y/2", LOC)),
-				2));
+						new MusicSummary(1L, "high", "x", "al", List.of(), "https://y/1", null, LOC),
+						new MusicSummary(2L, "low", "y", "al", List.of(), "https://y/2", null, LOC)),
+				false));
 
 		PageResponse<MusicSummary> r = service.search("q", 0);
 
@@ -66,8 +66,8 @@ class MusicSearchServiceTests {
 	@Test
 	void search_keepsNullYoutubeUrl() {
 		when(reader.search("q", 0, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(9L, "no link", "z", "al", List.of(), null, LOC)),
-				1));
+				List.of(new MusicSummary(9L, "no link", "z", "al", List.of(), null, null, LOC)),
+				false));
 
 		PageResponse<MusicSummary> r = service.search("q", 0);
 
@@ -75,29 +75,30 @@ class MusicSearchServiceTests {
 	}
 
 	@Test
-	void search_emptyResult_zeroPagesNoNext() {
-		when(reader.search("q", 0, 10)).thenReturn(new PageResult(List.of(), 0));
+	void search_emptyResult_noNext() {
+		when(reader.search("q", 0, 10)).thenReturn(new PageResult(List.of(), false));
 
 		PageResponse<MusicSummary> r = service.search("q", 0);
 
 		assertTrue(r.content().isEmpty());
-		assertEquals(0, r.totalPages());
 		assertFalse(r.hasNext());
 	}
 
 	@Test
-	void search_lastPage_hasNextFalse() {
+	void search_passesReaderHasNextThrough() {
+		// 페이지 계산을 서비스가 하지 않는다. 어댑터가 한 건 더 떠보고 판단한 값을 그대로 전달한다.
 		when(reader.search("q", 13, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(1L, "t", "a", "al", List.of(), "https://y/1", LOC)), 137));
+				List.of(new MusicSummary(1L, "t", "a", "al", List.of(), "https://y/1", null, LOC)), false));
 
 		PageResponse<MusicSummary> r = service.search("q", 13);
 
-		assertFalse(r.hasNext()); // 14페이지(0~13) 중 마지막
+		assertFalse(r.hasNext());
 	}
 
 	@Test
 	void search_noAdapter_throws() {
-		MusicService noReader = new MusicService(Optional.empty(), Optional.empty());
+		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty(),
+				org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class));
 
 		assertThrows(UnsupportedOperationException.class, () -> noReader.search("q", 0));
 	}

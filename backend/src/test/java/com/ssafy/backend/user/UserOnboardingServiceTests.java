@@ -5,6 +5,7 @@ import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.Test;
 
+import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserService;
 
@@ -15,7 +16,8 @@ import com.ssafy.backend.user.service.UserService;
 class UserOnboardingServiceTests {
 
 	private final UserMapper userMapper = mock(UserMapper.class);
-	private final UserService userService = new UserService(userMapper);
+	private final AuthMapper authMapper = mock(AuthMapper.class);
+	private final UserService userService = new UserService(userMapper, authMapper);
 
 	@Test
 	void completeTutorial_delegatesToMapperWithTokenSubjectEmail() {

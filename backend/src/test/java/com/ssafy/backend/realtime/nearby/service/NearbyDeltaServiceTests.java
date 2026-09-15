@@ -4,6 +4,8 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -90,6 +92,8 @@ class NearbyDeltaServiceTests {
 				new NearbyDelta(ACTOR, null, null, null, null, null));
 		verifyNoMoreInteractions(publisher);
 		verifyNoInteractions(userDisplayResolver, meetingService, riderCountPort);
+		verify(nearbyRepo, never()).hasMeta(ACTOR);
+		verifyNoInteractions(nearbyPeopleService);
 	}
 
 	@Test
@@ -155,6 +159,30 @@ class NearbyDeltaServiceTests {
 				RealtimeEventType.NEARBY_SNAPSHOT, snapshot);
 		verifyNoMoreInteractions(publisher);
 		verifyNoInteractions(userDisplayResolver, meetingService, riderCountPort);
+	}
+
+	@Test
+	@DisplayName("패널이 닫혀 있으면 내 곡이 바뀌어도 목록을 다시 만들지 않는다")
+	void closedPanelDoesNotReissueSnapshot() {
+		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
+		when(nearbyRepo.subscribers(20L)).thenReturn(Set.of(ACTOR));
+
+		service.onPositionChanged(change(10L, 20L));
+
+		verify(nearbyRepo).hasMeta(ACTOR);
+		verifyNoInteractions(nearbyPeopleService, publisher);
+	}
+
+	@Test
+	@DisplayName("같은 곡을 다시 재생하면 목록을 다시 만들지 않는다")
+	void sameMusicDoesNotReissueSnapshot() {
+		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
+
+		service.onPositionChanged(change(10L, 10L));
+
+		verify(nearbyRepo, times(2)).subscribers(10L);
+		verify(nearbyRepo, never()).hasMeta(ACTOR);
+		verifyNoInteractions(nearbyPeopleService, publisher);
 	}
 
 	private PositionChanged change(Long oldMusicId, Long newMusicId) {

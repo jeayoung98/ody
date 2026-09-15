@@ -26,6 +26,8 @@ const CARD_AT = {
   top: "top-[120px] left-1/2 -translate-x-1/2",
   // 우측 패널을 보는 단계 — 가운데면 그 패널을 가린다
   left: "top-[120px] left-[24px]",
+  // 지도 한가운데를 봐야 하는 단계 — 우측 패널 위로 비켜 준다
+  right: "top-[76px] right-[90px]",
   bottom: "bottom-[92px] left-1/2 -translate-x-1/2",
 } as const;
 
@@ -174,8 +176,12 @@ export default function TutorialOverlay() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[60]">
-      {/* 덤 먼저 — 안내 카드와 손짓이 그 위에 와야 한다. 덤은 아무것도 막지 않는다 */}
-      <TutorialSpotlight spotlight={step.spotlight} />
+      {/*
+        덤 먼저 — 안내 카드와 손짓이 그 위에 와야 한다. 덤은 아무것도 막지 않는다.
+        확대 단계는 **휠을 유도하는 동안만** 덮는다 — 굴리기 시작하면 지도를 훑어보는
+        시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
+      */}
+      {step.veil && !(zooming && wheeled) && <TutorialSpotlight spotlight={step.spotlight} />}
       {step.hint === "wheel" && !wheeled && <WheelHint />}
       {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>

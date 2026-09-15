@@ -17,6 +17,7 @@
  * - `hint` — 덮은 위에 따로 그릴 손짓 (`wheel` 마우스 · `star` 짚은 별)
  * - `card` — 안내 카드 자리. 우측 패널을 보는 단계는 `left`·`bottom` 으로 비켜 준다
  * - `cta` — 누를 곳이 따로 없어 **카드의 버튼으로 넘기는** 단계의 버튼 글. 비면 버튼이 없다
+ * - `veil` — 연한 덤을 덮을지. 화면 자체를 보여 주는 단계는 덮지 않는다
  *
  * `"map"` 만 DOM 요소가 아니라 지도가 실제로 보이는 사각형이다 (`tutorial-spotlight.tsx`).
  */
@@ -31,6 +32,7 @@ export const TUTORIAL_STEPS = [
     hint: "wheel",
     card: "top",
     cta: "",
+    veil: true,
   },
   {
     key: "click",
@@ -46,6 +48,7 @@ export const TUTORIAL_STEPS = [
     hint: "star",
     card: "top",
     cta: "",
+    veil: true,
   },
   {
     key: "nearby",
@@ -57,6 +60,7 @@ export const TUTORIAL_STEPS = [
     // 우측 곡 상세가 처음 뜨는 자리다 — 카드가 가운데 있으면 그걸 가린다
     card: "left",
     cta: "",
+    veil: true,
   },
   {
     key: "look",
@@ -69,8 +73,10 @@ export const TUTORIAL_STEPS = [
     task: "look",
     spotlight: ["journey"],
     hint: "none",
-    card: "left",
+    // 지도 한가운데 펼쳐진 고리를 봐야 하는 단계다 — 카드는 우측 패널 위로 비켜 준다
+    card: "right",
     cta: "",
+    veil: true,
   },
   {
     key: "journey-start",
@@ -82,6 +88,7 @@ export const TUTORIAL_STEPS = [
     hint: "none",
     card: "bottom",
     cta: "",
+    veil: true,
   },
   {
     key: "journey-end",
@@ -92,6 +99,7 @@ export const TUTORIAL_STEPS = [
     hint: "none",
     card: "bottom",
     cta: "",
+    veil: true,
   },
   {
     key: "journey-create",
@@ -103,6 +111,7 @@ export const TUTORIAL_STEPS = [
     hint: "none",
     card: "bottom",
     cta: "",
+    veil: true,
   },
   {
     key: "journey-look",
@@ -118,6 +127,8 @@ export const TUTORIAL_STEPS = [
     hint: "none",
     card: "bottom",
     cta: "다 봤어요",
+    // 만든 여정을 보는 단계다. 덮으면 그걸 흐리게 만든다
+    veil: false,
   },
 ] as const;
 export type TutorialTask = (typeof TUTORIAL_STEPS)[number]["task"];

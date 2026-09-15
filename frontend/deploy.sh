@@ -11,10 +11,6 @@ readonly FRONTEND_SERVICE="ody-frontend.service"
 readonly LOCAL_BASE_URL="http://127.0.0.1:3000"
 readonly PUBLIC_BASE_URL="${ODY_FRONTEND_PUBLIC_BASE_URL:-https://j15a405.p.ssafy.io}"
 
-readonly NGINX_CONFIG="/etc/nginx/sites-available/backend"
-readonly NGINX_NEXT_CONFIG="/etc/nginx/sites-available/backend.next"
-readonly NGINX_LEGACY_BACKUP="/etc/nginx/sites-available/backend.before-next"
-
 readonly LOCK_FILE="/run/lock/ody-frontend-deploy.lock"
 readonly RETAIN_RELEASES=5
 
@@ -165,42 +161,6 @@ restart_frontend() {
     fi
 
     return 0
-}
-
-reload_nginx() {
-    if [[ ! -f ${NGINX_NEXT_CONFIG} ]]; then
-        log "Next.js Nginx configuration is unavailable: ${NGINX_NEXT_CONFIG}"
-        return 1
-    fi
-
-    log "Activating Next.js Nginx configuration."
-
-    cp "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}"
-
-    if ! nginx_check; then
-        log "Next.js Nginx configuration is invalid."
-        return 1
-    fi
-
-    systemctl reload nginx
-}
-
-restore_legacy_nginx() {
-    if [[ ! -f ${NGINX_LEGACY_BACKUP} ]]; then
-        log "Legacy Nginx backup is unavailable: ${NGINX_LEGACY_BACKUP}"
-        return 1
-    fi
-
-    log "Restoring legacy Nginx configuration."
-
-    cp "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}"
-
-    if ! nginx_check; then
-        log "Restored legacy Nginx configuration is invalid."
-        return 1
-    fi
-
-    systemctl reload nginx
 }
 
 
@@ -439,9 +399,9 @@ deploy_release() {
     atomic_link "${release_dir}" "${CURRENT_LINK}"
 
     # 새 current를 기준으로 Next.js 재시작
+    # Nginx 설정은 Backend 블루그린이 관리하므로 여기서 건드리지 않는다 (S15P21A405-357)
     if ! restart_frontend ||
         ! wait_local_health "${release_id}" ||
-        ! reload_nginx ||
         ! public_health "${release_id}"; then
 
         log "Health verification failed; restoring previous symlinks."
@@ -457,20 +417,10 @@ deploy_release() {
             systemctl restart "${FRONTEND_SERVICE}" || true
             wait_local_health "$(basename "${old_current}")" || true
 
-            # Next.js Nginx 설정 유지
-            nginx_check || true
-            systemctl reload nginx || true
-
         else
-            # 첫 Next.js 전환 실패:
-            # 기존 Vite release + 기존 정적 Nginx 설정으로 복구
-            log "Restoring legacy static frontend."
+            log "No previous Next.js release to restore; stopping ${FRONTEND_SERVICE}."
 
             systemctl stop "${FRONTEND_SERVICE}" || true
-
-            if ! restore_legacy_nginx; then
-                log "WARNING: Failed to restore legacy Nginx configuration."
-            fi
         fi
 
         fail "Deployment rolled back."
@@ -578,7 +528,6 @@ main() {
         tar \
         nginx \
         curl \
-        cp \
         flock \
         find \
         sort \

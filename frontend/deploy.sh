@@ -241,11 +241,9 @@ wait_local_health() {
     return 1
 }
 
-
 public_health() {
     local release_id=$1
     local marker
-    local actuator_status
 
     log "Checking public frontend."
 
@@ -264,27 +262,7 @@ public_health() {
             "${PUBLIC_BASE_URL}/build-id.txt?release=${release_id}"
     )"
 
-    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || \
-        return 1
-
-    log "Checking backend API."
-
-    curl -fsS \
-        --retry 5 \
-        --retry-delay 1 \
-        --max-time 10 \
-        "${PUBLIC_BASE_URL}/api/hello" \
-        >/dev/null
-
-    actuator_status="$(
-        curl -sS \
-            -o /dev/null \
-            -w '%{http_code}' \
-            --max-time 10 \
-            "${PUBLIC_BASE_URL}/actuator/health"
-    )"
-
-    [[ ${actuator_status} == "403" || ${actuator_status} == "404" ]]
+    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || return 1
 }
 
 

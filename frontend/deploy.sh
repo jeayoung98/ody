@@ -7,6 +7,19 @@ readonly RELEASES_DIR="${DEPLOY_ROOT}/releases"
 readonly CURRENT_LINK="${DEPLOY_ROOT}/current"
 readonly PREVIOUS_LINK="${DEPLOY_ROOT}/previous"
 readonly PUBLIC_BASE_URL="${ODY_FRONTEND_PUBLIC_BASE_URL:-https://j15a405.p.ssafy.io}"
+
+
+readonly NGINX_CONFIG="/etc/nginx/sites-available/backend"
+readonly NGINX_NEXT_CONFIG="/etc/nginx/sites-available/backend.next"
+readonly NGINX_LEGACY_BACKUP="/etc/nginx/sites-available/backend.before-next"
+
+# NGINX_CONFIG는 backend blue-green upstream, TLS, Certbot 등과 프론트 location을
+# 한 파일에 같이 담고 있다. Frontend 배포는 이 마커 사이의 프론트 location 블록만
+# 이식하고, 그 바깥(특히 backend upstream 줄)은 절대 건드리지 않는다 — 그 줄의
+# 소유권은 backend/deploy.sh(blue-green)에만 있다.
+readonly NGINX_FRONTEND_BLOCK_BEGIN='# BEGIN ODY-FRONTEND-LOCATIONS (managed by frontend/deploy.sh; do not edit by hand)'
+readonly NGINX_FRONTEND_BLOCK_END='# END ODY-FRONTEND-LOCATIONS'
+
 readonly LOCK_FILE="/run/lock/ody-frontend-deploy.lock"
 readonly RETAIN_RELEASES=5
 
@@ -92,6 +105,196 @@ validate_release() {
 
 nginx_check() {
     nginx -t
+}
+
+extract_frontend_block() {
+    local file=$1
+
+    awk \
+        -v begin="${NGINX_FRONTEND_BLOCK_BEGIN}" \
+        -v end="${NGINX_FRONTEND_BLOCK_END}" \
+        '
+            $0 == begin { flag = 1 }
+            flag { print }
+            $0 == end { flag = 0 }
+        ' \
+        "${file}"
+}
+
+
+# template(NGINX_NEXT_CONFIG 또는 NGINX_LEGACY_BACKUP)의 마커 사이 블록을
+# target(NGINX_CONFIG)의 같은 마커 사이에만 이식한 결과를 out에 만든다.
+# 마커 바깥 내용(backend upstream, TLS, Certbot, /api/, /actuator/ 등)은
+# target 그대로 보존된다. 마커가 없거나 개수가 안 맞으면 손대지 않고 실패한다.
+splice_frontend_block() {
+    local template=$1
+    local target=$2
+    local out=$3
+
+    local block_file
+    block_file="$(mktemp)"
+
+    extract_frontend_block "${template}" > "${block_file}"
+
+    if [[ ! -s ${block_file} ]]; then
+        rm -f -- "${block_file}"
+        fail "Frontend location markers are missing in ${template}."
+    fi
+
+    if [[ $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${template}") -ne 1 ||
+          $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_END}" "${template}") -ne 1 ]]; then
+        rm -f -- "${block_file}"
+        fail "Frontend location markers must appear exactly once in ${template}."
+    fi
+
+    if [[ $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${target}") -ne 1 ||
+          $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_END}" "${target}") -ne 1 ]]; then
+        rm -f -- "${block_file}"
+        fail "Frontend location markers are missing or duplicated in ${target}. Backend upstream/TLS/Certbot blocks are intentionally left untouched; add the markers there manually before deploying."
+    fi
+
+    local begin_line end_line
+
+    begin_line="$(grep -n -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${target}" | cut -d: -f1)"
+    end_line="$(grep -n -F -x "${NGINX_FRONTEND_BLOCK_END}" "${target}" | cut -d: -f1)"
+
+    if [[ ${begin_line} -ge ${end_line} ]]; then
+        rm -f -- "${block_file}"
+        fail "Frontend location markers are out of order in ${target}."
+    fi
+
+    {
+        head -n "$((begin_line - 1))" "${target}"
+        cat "${block_file}"
+        tail -n "+$((end_line + 1))" "${target}"
+    } > "${out}"
+
+    rm -f -- "${block_file}"
+}
+
+
+frontend_service_exists() {
+    systemctl cat "${FRONTEND_SERVICE}" >/dev/null 2>&1
+}
+
+
+restart_frontend() {
+    if ! frontend_service_exists; then
+        log "Frontend systemd service does not exist: ${FRONTEND_SERVICE}"
+        return 1
+    fi
+
+    log "Restarting ${FRONTEND_SERVICE}"
+
+    if ! systemctl restart "${FRONTEND_SERVICE}"; then
+        systemctl status "${FRONTEND_SERVICE}" --no-pager || true
+        return 1
+    fi
+
+    if ! systemctl is-active --quiet "${FRONTEND_SERVICE}"; then
+        systemctl status "${FRONTEND_SERVICE}" --no-pager || true
+        return 1
+    fi
+
+    return 0
+}
+
+reload_nginx() {
+    if [[ ! -f ${NGINX_NEXT_CONFIG} ]]; then
+        log "Next.js Nginx configuration is unavailable: ${NGINX_NEXT_CONFIG}"
+        return 1
+    fi
+
+    log "Updating frontend location blocks in Nginx configuration."
+
+    local candidate backup
+    candidate="$(mktemp)"
+    backup="$(mktemp)"
+
+    splice_frontend_block "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}" "${candidate}"
+
+    cp "${NGINX_CONFIG}" "${backup}"
+    cp "${candidate}" "${NGINX_CONFIG}"
+    rm -f -- "${candidate}"
+
+    if ! nginx_check; then
+        log "Updated Nginx configuration is invalid; restoring previous configuration."
+        cp "${backup}" "${NGINX_CONFIG}"
+        rm -f -- "${backup}"
+        return 1
+    fi
+
+    rm -f -- "${backup}"
+
+    systemctl reload nginx
+}
+
+restore_legacy_nginx() {
+    if [[ ! -f ${NGINX_LEGACY_BACKUP} ]]; then
+        log "Legacy Nginx backup is unavailable: ${NGINX_LEGACY_BACKUP}"
+        return 1
+    fi
+
+    log "Restoring legacy frontend location blocks in Nginx configuration."
+
+    local candidate backup
+    candidate="$(mktemp)"
+    backup="$(mktemp)"
+
+    splice_frontend_block "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}" "${candidate}"
+
+    cp "${NGINX_CONFIG}" "${backup}"
+    cp "${candidate}" "${NGINX_CONFIG}"
+    rm -f -- "${candidate}"
+
+    if ! nginx_check; then
+        log "Restored legacy Nginx configuration is invalid; keeping previous configuration."
+        cp "${backup}" "${NGINX_CONFIG}"
+        rm -f -- "${backup}"
+        return 1
+    fi
+
+    rm -f -- "${backup}"
+
+    systemctl reload nginx
+}
+
+
+wait_local_health() {
+    local release_id=$1
+    local marker
+    local attempt
+
+    log "Waiting for Next.js server on ${LOCAL_BASE_URL}"
+
+    for attempt in $(seq 1 30); do
+        if curl -fsS \
+            --max-time 3 \
+            "${LOCAL_BASE_URL}/healthz.txt" \
+            >/dev/null 2>&1; then
+
+            marker="$(
+                curl -fsS \
+                    --max-time 3 \
+                    "${LOCAL_BASE_URL}/build-id.txt" \
+                    2>/dev/null || true
+            )"
+
+            if [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]]; then
+                log "Local Next.js health check passed: ${release_id}"
+                return 0
+            fi
+        fi
+
+        sleep 1
+    done
+
+    log "Local Next.js health check failed."
+
+    systemctl status "${FRONTEND_SERVICE}" --no-pager || true
+    journalctl -u "${FRONTEND_SERVICE}" -n 50 --no-pager || true
+
+    return 1
 }
 
 public_health() {
@@ -255,8 +458,30 @@ main() {
     assert_layout
     require_root "${action}" "$@"
 
-    for command_name in tar nginx curl flock find sort readlink install mv ln; do
-        command -v "${command_name}" >/dev/null || fail "Required command is missing: ${command_name}"
+    for command_name in \
+        tar \
+        nginx \
+        curl \
+        cp \
+        flock \
+        find \
+        sort \
+        readlink \
+        install \
+        mv \
+        ln \
+        systemctl \
+        journalctl \
+        seq \
+        mktemp \
+        awk \
+        grep \
+        head \
+        tail \
+        cut; do
+
+        command -v "${command_name}" >/dev/null || \
+            fail "Required command is missing: ${command_name}"
     done
 
     exec 9>"${LOCK_FILE}"

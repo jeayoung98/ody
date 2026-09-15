@@ -4,6 +4,7 @@ import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/component
 import { UNPLAYABLE_NOTICE } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -82,7 +83,8 @@ export default function PlayerBar() {
    * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
    * 곡 정보가 아직 안 왔으면 막지 않는다. 도착하면 그때 판정이 잡힌다.
    */
-  const canPlay = data ? data.videoId != null : currentMusicId != null;
+  const video = useVideoIdQuery(currentMusicId);
+  const canPlay = video.data ? video.data.videoId != null : currentMusicId != null;
 
   /**
    * 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다.

@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { registerPlayer, type PlayerHandle } from "./player-registry";
 
@@ -97,8 +97,8 @@ function loadIframeApi(): Promise<void> {
 export default function YoutubeEmbed() {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const { data } = useMusicDetailQuery(currentMusicId);
-  const videoId = data?.videoId ?? null;
+  // videoId 는 **전용 엔드포인트**가 출처다 — 상세 응답에 딸려 오던 것을 더 쓰지 않는다 (S15P21A405-340)
+  const videoId = useVideoIdQuery(currentMusicId).data?.videoId ?? null;
 
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YtPlayer | null>(null);

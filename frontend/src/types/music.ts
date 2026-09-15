@@ -48,13 +48,12 @@ export interface Music {
    */
   youtubeUrl: string | null;
   /**
-   * 공식 플레이어 임베드용 YouTube 영상 ID (규칙 6 D15 개정). 있으면 **사이트 안에서** 재생한다.
+   * **`videoId` 는 여기 없다** (S15P21A405-340). 공식 플레이어 임베드용 영상 ID 는 전용
+   * 엔드포인트가 출처다 — `useVideoIdQuery` / `GET /bff/music/{id}/video-id`.
    *
-   * 백엔드가 `map_sample` 과 검색 상위에 한해 확보한다 (`data/specs/18_db_ingest/spec.md`).
-   * **2026-09-14 실호출 기준 전 곡이 null 이다** — 수집 스크립트가 아직 안 돌았다.
-   * 그동안은 `youtubeUrl` 검색 링크로 떨어진다.
+   * 곡 상세 응답에도 딸려 오지만 그걸 쓰지 않는다. 그 응답은 주변 10곡 것까지 함께 싣고 있어서
+   * (실측 11개), 백엔드가 그 필드를 빼는 순간 프론트가 깨진다. 출처를 하나로 두어 안 흔들리게 한다.
    */
-  videoId: string | null;
   /** PCA 임베딩 좌표 pc1~pc16 */
   location: Location16 | null;
   /** 누적 재생 수, 배치 갱신 */

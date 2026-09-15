@@ -1838,12 +1838,27 @@ export class MapEngine {
    *
    * 지도가 실제로 보이는 사각형 안에서, 안내 카드에 가리지 않을 만큼 아래에 있는 별 중
    * 아무거나 고른다. 화면 밖이나 카드 뒤의 별을 짚으면 짚어 준 의미가 없다.
+   *
+   * **`freeRect` 만으로는 모자란다** (S15P21A405-350). 그건 우측 패널 폭만 빼 줄 뿐
+   * 계기판·레일·플레이어바 같은 HUD 상자는 그 안에 그대로 들어 있다. 그 뒤에 깔린 별이
+   * 뽑히면 구멍을 뚫어도 HUD 상자만 보인다 — `blocked` 로 상자를 한 번 더 걸러야 한다.
+   *
+   * 남은 것 중에서는 **밝은 쪽 절반**에서 뽑는다. 재생수가 적은 별은 점이 희미해서,
+   * 짚어 줘도 눈에 안 들어온다.
    */
   pickTutorialStar(cardBottom: number): number | null {
     const f = this.freeRect();
-    const ok = this.visible.filter((v) => v.px > f.x0 + 40 && v.px < f.x1 - 40 && v.py > Math.max(f.y0 + 40, cardBottom) && v.py < f.y1 - 40);
+    const ok = this.visible.filter(
+      (v) =>
+        v.px > f.x0 + 40 &&
+        v.px < f.x1 - 40 &&
+        v.py > Math.max(f.y0 + 40, cardBottom) &&
+        v.py < f.y1 - 40 &&
+        !this.blocked(v.px, v.py),
+    );
     if (!ok.length) return null;
-    return this.songs[ok[Math.floor(Math.random() * ok.length)].i].musicId;
+    const bright = [...ok].sort((a, b) => this.songs[b.i].weight - this.songs[a.i].weight).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
+    return this.songs[bright[Math.floor(Math.random() * bright.length)].i].musicId;
   }
 
   /** 그 별이 지금 화면 어디에 있나. 안 보이면 null — 카메라가 움직이면 매 프레임 달라진다 */

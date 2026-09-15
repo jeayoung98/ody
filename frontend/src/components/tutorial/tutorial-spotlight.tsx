@@ -127,6 +127,13 @@ export default function TutorialSpotlight({ spotlight, ringOnly, starId, hint }:
           <i className="animate-tbeat absolute -inset-0.5 block rounded-[inherit] border-2 border-teal" />
         </div>
       )}
+      {/* 짚은 자리에 깔아 두는 후광 (S15P21A405-350). 별 자체는 점이라 구멍만으로는 덜 읽힌다 */}
+      {hint === "star" && (
+        <div
+          className="pointer-events-none fixed rounded-pill bg-[radial-gradient(circle,rgba(79,227,206,.38)_0%,transparent_68%)]"
+          style={box}
+        />
+      )}
       {hint === "zoom" && (
         <div className="pointer-events-none fixed grid place-items-center" style={box}>
           <ZoomInIcon className="animate-tbeat text-teal drop-shadow-[0_0_14px_#4fe3ce]" />

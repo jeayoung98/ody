@@ -184,8 +184,10 @@ echo "Nginx switched to port $TARGET_PORT."
 
 sleep 2
 
-FINAL_RESPONSE=$(curl -s \
-    http://127.0.0.1/actuator/health || true)
+#FINAL_RESPONSE=$(curl -s \
+#    http://127.0.0.1/actuator/health || true)
+
+FINAL_RESPONSE=$(curl -s "http://127.0.0.1:${TARGET_PORT}/actuator/health" || true)
 
 if ! echo "$FINAL_RESPONSE" | grep -q '"status":"UP"'; then
 

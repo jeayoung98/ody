@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { registerPlayer, type PlayerHandle } from "./player-registry";
 
 /**
  * 사이트 안 재생 — YouTube **공식 플레이어 임베드** (규칙 6 D15 개정, SONG-03).
@@ -39,7 +40,7 @@ const CUED = 5;
  */
 const REPLAY_TRIES = 3;
 
-interface YtPlayer {
+interface YtPlayer extends PlayerHandle {
   loadVideoById: (id: string) => void;
   playVideo: () => void;
   pauseVideo: () => void;
@@ -156,11 +157,14 @@ export default function YoutubeEmbed() {
         playerVars: { playsinline: 1, rel: 0, modestbranding: 1, origin: window.location.origin },
         events: { onReady: () => setReady(true), onStateChange },
       });
+      // 진행 바가 재생 시계를 읽고 위치를 옮길 수 있게 내놓는다 (S15P21A405-334)
+      registerPlayer(playerRef.current);
       // 개발 편의: 콘솔에서 플레이어 상태를 들여다볼 수 있게 (지도 엔진의 `__odyEngine` 과 같은 용도)
       if (process.env.NODE_ENV !== "production") (window as unknown as { __odyPlayer?: YtPlayer }).__odyPlayer = playerRef.current;
     });
     return () => {
       cancelled = true;
+      registerPlayer(null);
       playerRef.current?.destroy();
       playerRef.current = null;
       loadedIdRef.current = null;

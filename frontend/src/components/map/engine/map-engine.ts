@@ -217,7 +217,7 @@ export class MapEngine {
    */
   meHop: { x: number; y: number; t0: number } | null = null;
   /**
-   * 주변 탐색 중 선택한 이웃 라벨 밑의 "둘러보기 ›" 링크 히트 영역 (S15P21A405-288).
+   * 주변 탐색 중 선택한 이웃 라벨 밑의 "주변 보기 ›" 링크 히트 영역 (S15P21A405-288).
    * 그리는 쪽(drawProbe)이 매 프레임 채우고, 없으면 null — 글씨가 있는 곳이 곧 누를 수 있는 곳이어야 한다
    */
   hopLink: { id: number; x: number; y: number; w: number; h: number } | null = null;

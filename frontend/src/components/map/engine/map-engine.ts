@@ -270,6 +270,9 @@ export class MapEngine {
   route: number[] = [];
   /** 별자리 뷰 안에서의 이동·확대. 지도 카메라와 별개다 (오버레이는 화면 좌표 배치) */
   overlay = { zoom: 1, dx: 0, dy: 0 };
+  /** 다가가는 중인 별자리 곡. 좌표가 아니라 ID 다 — {@link overlayFocus} 참고 */
+  private overlayFocusId: number | null = null;
+  private overlayFocusZoom = 1;
   /** 상주 별들이 차지하는 월드 범위. 카메라를 이 근처에 붙잡아 둔다 */
   private bbox = { x0: -1, x1: 1, y0: -1, y1: 1 };
   /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
@@ -585,34 +588,90 @@ export class MapEngine {
   /** 별자리 뷰에 들어갈 때 초기화 */
   overlayReset() {
     this.overlay = { zoom: 1, dx: 0, dy: 0 };
+    this.overlayFocusId = null;
   }
 
   overlayPan(dx: number, dy: number) {
+    this.overlayFocusId = null;
     this.overlay.dx += dx;
     this.overlay.dy += dy;
     this.clampOverlay();
   }
 
-  /** 커서 아래 지점을 붙잡은 채 확대 */
-  overlayWheel(deltaY: number, mx: number, my: number) {
+  /**
+   * 별자리 뷰에서 **그 곡으로 다가간다** (S15P21A405-330) — 배치 영역 한복판에 놓고 확대한다.
+   *
+   * 배치 안의 곡을 눌렀는데 화면이 안 움직이면 "눌렸나?" 가 된다. 지도 본체에서는 `viewSong`
+   * 이 맡는 일인데, 별자리는 카메라가 아니라 오버레이 변환으로 그려지므로 여기가 그 자리다.
+   *
+   * **목표를 좌표가 아니라 곡 ID 로 들고 있는다.** 클릭과 동시에 우측 패널이 열려 배치 영역이
+   * 좁아지고 `constellationFit` 이 다시 잡히는데, 그 변화는 다음 프레임에야 반영된다 —
+   * 좌표로 굳혀 두면 좁아진 화면에서 엉뚱한 자리로 간다. 매 프레임 다시 계산하면 영역이
+   * 어떻게 변하든 그 곡이 한복판으로 온다.
+   */
+  overlayFocus(id: number) {
+    const c = this.constellation;
+    if (!c || c.exitingAt || !c.layout.some((q) => q.musicId === id)) return;
+    this.overlayFocusId = id;
+    // 이미 더 확대해 둔 상태면 끌어내리지 않는다 — 들여다보던 배율을 빼앗는 꼴이다
+    this.overlayFocusZoom = Math.min(OVERLAY_ZOOM.max, Math.max(this.overlay.zoom, CONSTELLATION.focusZoom));
+  }
+
+  /** 그 곡을 한복판에 놓으려면 오버레이가 어디에 있어야 하나 (지금 영역·목표 배율 기준) */
+  private overlayDest(id: number, zoom: number) {
+    const p = this.constellation?.layout.find((q) => q.musicId === id);
+    if (!p) return null;
+    const fit = this.constellationFit();
+    // `constellationPos` 의 역산이다: tx = cx + (p.x-bx)·s·zoom + dx 를 cx 에 놓는 dx
+    return { dx: -(p.x - fit.bx) * fit.s * zoom, dy: (p.y - fit.by) * fit.s * zoom };
+  }
+
+  /**
+   * 영역 한복판을 붙잡은 채 확대 (S15P21A405-306).
+   *
+   * 예전에는 **커서 아래 지점**을 붙잡았다. 지도 본체에서는 그게 맞지만 별자리 영역은 우측
+   * 패널을 뺀 좁은 띠라, 커서가 위아래 끝에 있으면 4배로 키우는 순간 별자리가 통째로 띠 밖으로
+   * 밀려났다 — 확대했더니 아무것도 안 보이고, 다시 찾으려면 두 축을 다 더듬어야 했다.
+   *
+   * 한복판을 붙잡으면 확대해도 보고 있던 자리가 그대로 있고, 거기서 끌어 끝 별로 가면 된다.
+   */
+  overlayWheel(deltaY: number) {
+    this.overlayFocusId = null;
     const o = this.overlay;
-    const f = this.constellationRect();
     const next = Math.min(OVERLAY_ZOOM.max, Math.max(OVERLAY_ZOOM.min, o.zoom * Math.exp(-deltaY * WHEEL_ZOOM)));
-    const ux = (mx - f.cx - o.dx) / o.zoom;
-    const uy = (my - f.cy - o.dy) / o.zoom;
+    // 한복판 고정 = 지금 한복판에 있는 배치 지점이 그대로 한복판에 남는다
+    const k = next / o.zoom;
     o.zoom = next;
-    o.dx = mx - f.cx - ux * next;
-    o.dy = my - f.cy - uy * next;
+    o.dx *= k;
+    o.dy *= k;
     this.clampOverlay();
   }
 
-  /** 별자리가 화면 밖으로 완전히 나가지 않게 — 배치 중심이 영역 반쪽 안에 남는다 */
+  /**
+   * 밀 수 있는 한계 (S15P21A405-306).
+   *
+   * 기준은 **"가장 바깥 곡을 영역 한복판까지 끌어올 수 있어야 한다"** 다. 그래서 한계를
+   * 화면 크기가 아니라 **배치가 실제로 뻗은 거리**에서 뽑는다 — 그 거리는 확대하면 같이 커지므로
+   * 배율이 몇이든 끝 별에 손이 닿는다. 거기에 기존 여유(`slack`)를 더해 조금 더 밀리게 둔다.
+   *
+   * 예전에는 영역 반쪽의 고정 비율만 썼다. 우측 패널이 열려 영역이 가로 300px 로 좁아지면
+   * 한계가 67px 이라, 4배로 확대해 폭 1100px 이 된 배치의 끝 별에는 닿을 수가 없었다.
+   *
+   * 한계 끝까지 밀어도 바깥 곡은 중심에서 `slack` 만큼만 벗어나므로 **별자리가 화면 밖으로
+   * 통째로 나가지는 않는다** — 원래 지키려던 성질은 그대로다.
+   */
   private clampOverlay() {
     const f = this.constellationRect();
-    const lx = ((f.x1 - f.x0) / 2) * PAN_LIMIT.slack;
-    const ly = ((f.y1 - f.y0) / 2) * PAN_LIMIT.slack;
-    this.overlay.dx = Math.min(Math.max(this.overlay.dx, -lx), lx);
-    this.overlay.dy = Math.min(Math.max(this.overlay.dy, -ly), ly);
+    const b = this.constellation?.box;
+    const fit = this.constellationFit();
+    const o = this.overlay;
+    // 배치 중심에서 가장 먼 곡까지의 거리 (화면 px)
+    const ex = b ? ((b.x1 - b.x0) / 2) * fit.s * o.zoom : 0;
+    const ey = b ? ((b.y1 - b.y0) / 2) * fit.s * o.zoom : 0;
+    const lx = ex + ((f.x1 - f.x0) / 2) * PAN_LIMIT.slack;
+    const ly = ey + ((f.y1 - f.y0) / 2) * PAN_LIMIT.slack;
+    o.dx = Math.min(Math.max(o.dx, -lx), lx);
+    o.dy = Math.min(Math.max(o.dy, -ly), ly);
   }
 
   /**
@@ -705,7 +764,25 @@ export class MapEngine {
     const add = points.filter((p) => !this.index.has(p.musicId));
     if (!add.length) return;
     // keep 은 **기존 곡 수**다. 지금 있는 버퍼를 그만큼 그대로 옮기고 뒤만 새로 채운다
-    this.allocate([...this.songs, ...add], this.N);
+    const keep = this.N;
+    this.allocate([...this.songs, ...add], keep);
+    /**
+     * **레이어 0 에서는 편입된 곡도 상주다** (S15P21A405-320).
+     *
+     * `allocate` 는 상주 마스크를 0 으로 늘리기만 한다. 그대로 두면 `isAlive` 가 false 라
+     * `playingElsewhere()` 가 참이 되고, 최상단인데도 내 표식에 "다른 갈래에서 재생 중" 이
+     * 붙었다 — 지도 샘플(1,071곡) 밖의 여정·플리 곡이 전부 그랬다.
+     *
+     * 레이어 0 의 `residentMask` 는 `ghostOnly` 와 무관하게 전부 1 이다. 그래서 여기서만 켠다.
+     * 파고든 겹에서는 **진짜로 이 겹 밖의 곡**이라 0 으로 둔다.
+     */
+    if (this.layer === 0) {
+      for (let i = keep; i < this.N; i++) {
+        this.subset[i] = 1;
+        this.alpha[i] = 1;
+      }
+      this.rebuildAliveIdx();
+    }
     this.project();
   }
 
@@ -1585,16 +1662,31 @@ export class MapEngine {
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
-    const mi = this.myId != null ? this.index.get(this.myId) : undefined;
+    /**
+     * **배율은 그 겹에 처음 들어왔던 것으로 되돌린다** (S15P21A405-327).
+     *
+     * `p.cam.s` 는 게이트를 밀며 한 겹 최대(`zoomRange.max`)까지 확대된 뒤 대기 중 `waitZoom`
+     * 까지 더해진 값이라 진입 배율의 7배를 넘는다. 그대로 복원하면 **축소하려고 휠을 돌렸는데
+     * 최대 확대 상태의 좁은 구역에 착지하고**, 그 구역이 비어 있으면 화면에 별이 하나도 없다.
+     * 진입 배율은 그 겹이 화면에 맞춰지던 배율이므로 여기로 오면 별이 화면을 채운다.
+     */
+    const s = p.entryS;
+    /**
+     * 내 곡을 가운데 두는 건 **그 곡이 이 겹에 상주할 때만** 이다.
+     * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.
+     */
+    const mi0 = this.myId != null ? this.index.get(this.myId) : undefined;
+    const mi = mi0 != null && p.subset[mi0] ? mi0 : undefined;
     const f = this.freeRect();
     // 내 자리가 있으면 그 곡을 가운데 두고 떠오른다. 없으면 두고 온 카메라 그대로
     const c: MapCamera =
       mi == null
-        ? { ...p.cam }
+        ? { ...p.cam, s }
         : {
             ...p.cam,
-            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / p.cam.s,
-            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / p.cam.s,
+            s,
+            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
+            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
     const ax = LAYER_AXES[p.layer];
     this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1, p.entryS);
@@ -1790,16 +1882,22 @@ export class MapEngine {
    * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 가생이에 옅은 점으로 방향만 뜬다.
    */
   travelTo(id: number) {
-    if (!this.index.has(id)) return;
-    this.playingId = id;
     /**
      * 이 겹에 없는 곡(주변 탐색에서 고른 이웃 곡 등)이어도 **자리는 기억한다.**
      * 기억해 두지 않으면 "내 위치로 가기" 가 한참 전에 재생한 딴 곡으로 데려간다 —
      * 화살표는 지금 곡 쪽을 가리키는데 버튼은 딴 데로 가니 안 먹은 것처럼 보인다.
+     *
+     * **지도가 아직 모르는 곡이어도 마찬가지다** (S15P21A405-328). 예전에는 그때 맨 앞에서
+     * 빠져나가 `home` 이 이전 곡에 남았고, 버튼이 지금 듣는 곡이 아닌 데로 데려갔다.
+     * 지금은 기록을 먼저 갈아 끼운다 — 그 곡을 지도가 모르면 `canGoHome` 이 false 라
+     * 버튼이 꺼질 뿐이고, 곡이 도착하는 순간 제대로 살아난다.
      */
+    this.playingId = id;
     this.home = { musicId: id, boxes: [...this.boxes] };
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
+    // 여기부터는 좌표가 있어야 한다 — 지도에 없는 곡은 데려갈 자리가 없다
+    if (!this.index.has(id)) return;
     /**
      * 주변 탐색 중 **고리 안 곡**을 재생하면 정찰이다 (S15P21A405-288) — 우주선만 그 별의 고리 자리로
      * 건너뛰고 고리·카메라는 그대로다. 이웃은 대개 이 겹에 상주하지 않아(isAlive 가 아니라) 아래
@@ -2250,6 +2348,26 @@ export class MapEngine {
       } else if (this.pressure > 0) {
         this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
         if (this.pressure === 0) this.prefetch = null;
+      }
+      // 별자리 안에서 그 곡으로 다가가기 (S15P21A405-330). 목표 자리는 영역이 바뀔 수 있어 매 프레임 다시 잰다
+      if (this.overlayFocusId != null) {
+        const t = this.overlayDest(this.overlayFocusId, this.overlayFocusZoom);
+        if (!t || !this.constellationActive()) this.overlayFocusId = null;
+        else {
+          const o = this.overlay;
+          const k = 1 - Math.pow(0.001, 16 / 1000) * 0.85;
+          o.zoom = lerp(o.zoom, this.overlayFocusZoom, k);
+          o.dx = lerp(o.dx, t.dx, k);
+          o.dy = lerp(o.dy, t.dy, k);
+          // 마지막 반 픽셀은 붙여 버린다 — 보간만으로는 영영 안 닿고 매 프레임 계산이 남는다
+          if (Math.abs(o.dx - t.dx) < 0.5 && Math.abs(o.dy - t.dy) < 0.5 && Math.abs(o.zoom / this.overlayFocusZoom - 1) < 0.002) {
+            o.zoom = this.overlayFocusZoom;
+            o.dx = t.dx;
+            o.dy = t.dy;
+            this.overlayFocusId = null;
+          }
+          this.clampOverlay();
+        }
       }
       // 카메라 목표 추적
       if (this.camTarget) {

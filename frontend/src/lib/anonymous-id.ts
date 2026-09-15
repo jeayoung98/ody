@@ -1,37 +1,35 @@
 /**
- * 익명 사용자 ID (S15P21A405-250).
+ * 익명 사용자 식별자 (S15P21A405-294).
  *
- * 1차 배포는 로그인 없이 들어온다. 설문 응답을 "같은 사람의 것"으로 묶으려면 식별자가
- * 필요한데, **백엔드가 발급할 필요가 없다** — 브라우저가 만들어 보관하고 요청마다 보내면
- * 백엔드는 문자열로 저장만 하면 된다.
+ * 1차 배포는 로그인을 태우지 않는다. 그러면 설문 응답이 전부 `user_email = NULL` 로 쌓여서
+ * **응답 100건이 10명에게서 나온 것인지 1명에게서 나온 것인지 알 수 없다.** 정밀도의 분모가
+ * 사라지는 셈이라, 한 사람이 몰아서 찍은 편향을 걸러낼 수도 없다.
  *
- * 한계는 감안하고 쓴다: 저장소를 지우거나 시크릿 모드면 새 ID 가 된다. 기기가 바뀌어도
- * 다른 사람으로 잡힌다. 설문 집계용으로는 충분하다.
+ * 그래서 브라우저마다 UUID 를 하나 만들어 보관한다. 키 이름은 정본이 지정한 값이다
+ * (`docs/api-spec.md` 5.1 — `localStorage["ody_anon_id"]`).
  *
- * `refresh_token.deviceId` 와는 다른 것이다 — 그건 로그인한 사용자의 멀티 세션 구분용이다.
+ * 로그인 사용자도 함께 보낸다 — 로그인 전후 응답을 잇는 데 쓴다.
  *
- * **최종 배포 때 걷어낼 기능이다.** survey 관련 파일과 함께 삭제된다.
+ * **최종 배포 때 걷어낼 기능이다.**
  */
-import { readStorage, writeStorage } from "./storage";
-
-const KEY = "ody:anonymous-id";
-
-/** 구형 브라우저·비보안 컨텍스트에서 randomUUID 가 없을 때의 폴백 */
-function fallbackId(): string {
-  return `anon-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 10)}`;
-}
+import { SURVEY_ANON_KEY } from "@/constants/survey";
 
 /**
- * 익명 ID 를 돌려준다. 없으면 만들어 저장한다.
- * 서버에서 부르면 빈 문자열 — localStorage 가 없으므로 식별할 방법이 없다.
+ * 이 브라우저의 익명 ID. 없으면 만들어 저장한다.
+ *
+ * 저장소가 막힌 환경(시크릿 모드 등)에서는 매번 새 값이 나온다 — 사람 구분이 안 될 뿐
+ * 응답 수집 자체는 막지 않는다.
  */
 export function getAnonymousId(): string {
-  if (typeof window === "undefined") return "";
+  if (typeof window === "undefined") return crypto.randomUUID();
 
-  const saved = readStorage<string>(KEY);
-  if (saved) return saved;
-
-  const id = typeof crypto?.randomUUID === "function" ? crypto.randomUUID() : fallbackId();
-  writeStorage(KEY, id);
-  return id;
+  try {
+    const saved = localStorage.getItem(SURVEY_ANON_KEY);
+    if (saved) return saved;
+    const created = crypto.randomUUID();
+    localStorage.setItem(SURVEY_ANON_KEY, created);
+    return created;
+  } catch {
+    return crypto.randomUUID();
+  }
 }

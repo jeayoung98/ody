@@ -15,11 +15,10 @@ import SearchBar from "./search-bar";
 import SearchOpenButton from "./search-open-button";
 import FollowBanner from "@/components/map/follow-banner";
 import GhostBanner from "@/components/map/ghost-banner";
-import OverlayClose from "@/components/map/overlay-close";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
-import SurveyGate from "@/components/survey/survey-gate";
+import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
 /** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
 const RAIL_OCCLUSION = 76;
@@ -36,18 +35,20 @@ interface MainScreenProps {
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
+  const panelCollapsed = usePanelStore((s) => s.collapsed);
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
+  // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
+  const occludedRight = activePanel && !panelCollapsed ? PANEL_OCCLUSION : RAIL_OCCLUSION;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-void text-ink">
-      <MapView occludedRight={activePanel ? PANEL_OCCLUSION : RAIL_OCCLUSION} />
+      <MapView occludedRight={occludedRight} />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}
       {composerOpen ? <JourneyComposer /> : activePanel ? <SearchOpenButton /> : <SearchBar />}
       <HelpButton />
       <FollowBanner />
-      <OverlayClose />
       <GhostBanner />
       <Rail />
       {activePanel && <RightPanel />}
@@ -57,8 +58,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {overlay}
       <Toast />
       <ConfirmDialog />
-      {/* 설문 (S15P21A405-250) — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어낼 때 이 한 줄만 지우면 된다 */}
-      <SurveyGate />
+      {/* 설문 — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
+      <SurveyGate />{/* REMOVE-WITH-SURVEY */}
     </div>
   );
 }

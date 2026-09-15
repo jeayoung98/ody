@@ -3,12 +3,12 @@
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
-import { openYoutube } from "@/lib/youtube";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
 
@@ -35,38 +35,56 @@ export default function PlayerBar() {
    * 안 나는 게 제일 나쁘다.
    */
   const overlayOpen = viewMode !== "default";
+  const openSong = usePanelStore((s) => s.openSong);
+  const openPlaylist = usePanelStore((s) => s.openPlaylist);
+  const openJourney = usePanelStore((s) => s.openJourney);
+  /**
+   * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
+   * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
+   * 거부된 경우(오버레이·따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
+   */
   const handleGoHome = () => {
     const r = goHome();
     if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
     else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+    else if (r !== "none" && currentMusicId != null) openSong(currentMusicId);
   };
-  const openSong = usePanelStore((s) => s.openSong);
-  const openPlaylist = usePanelStore((s) => s.openPlaylist);
-  const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
+  // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
+  useDeferredNext();
 
+  /**
+   * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
+   * 여정·플리면 **별자리도 같이 되살린다** (S15P21A405-316) — 패널을 닫으면 별자리도 같이
+   * 꺼지므로, 다시 부르는 길이 여기여야 한다.
+   */
   const openContext = () => {
     if (currentMusicId == null) return;
-    if (context.kind === "playlist") openPlaylist(context.playlistId);
-    else if (context.kind === "journey") {
+    const map = useMapStore.getState();
+    const reopenConstellation = () => {
+      if (map.constellationMusicIds.length >= 2 && map.viewMode !== "constellation") map.toggleConstellationView();
+    };
+    if (context.kind === "playlist") {
+      openPlaylist(context.playlistId);
+      reopenConstellation();
+    } else if (context.kind === "journey") {
       const j = useJourneyStore.getState();
       j.setStart(context.startMusicId);
       j.setEnd(context.endMusicId);
       j.requestRoute();
       openJourney();
+      reopenConstellation();
     } else openSong(currentMusicId);
   };
 
-  const canPlay = data ? data.youtubeUrl != null : currentMusicId != null;
-
   /**
-   * 음원은 앱 밖에서 듣는다 (규칙 6 — 자세한 건 `lib/youtube.ts`).
-   * **멈춤 → 재생** 으로 넘어갈 때만 새 탭을 연다. 멈출 때도 열면 탭이 계속 쌓인다.
+   * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
+   * 곡 정보가 아직 안 왔으면 막지 않는다. 도착하면 그때 판정이 잡힌다.
    */
-  const handleToggle = () => {
-    if (!isPlaying) openYoutube(data?.youtubeUrl);
-    toggle();
-  };
+  const canPlay = data ? data.videoId != null : currentMusicId != null;
+
+  /** 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다 */
+  const handleToggle = () => toggle();
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : null;
 
@@ -100,7 +118,7 @@ export default function PlayerBar() {
         <p className="truncate text-[10px] text-ink-3">
           {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
         </p>
-        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} />
+        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} durationSec={data?.duration} />
       </button>
       {queue.length > 0 && (
         <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">
@@ -110,7 +128,7 @@ export default function PlayerBar() {
       <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : "유튜브에서 듣기"} primary onClick={handleToggle} disabled={!canPlay}>
+      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} disabled={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
       <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>

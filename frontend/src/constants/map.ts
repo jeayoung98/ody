@@ -214,8 +214,16 @@ export const STAR_VIEW = {
  */
 export const PAN_LIMIT = { slack: 0.45 } as const;
 
-/** 별자리 뷰 안에서의 확대 범위 (지도 배율과 별개) */
-export const OVERLAY_ZOOM = { min: 0.6, max: 4 } as const;
+/**
+ * 별자리 뷰 안에서의 확대 범위 (지도 배율과 별개).
+ *
+ * `max` 를 4 에서 16 으로 올렸다 (S15P21A405-319). 곡이 모여 있는 구간은 4배로는 별이 붙어 있어
+ * **제목이 서로 겹쳐 읽을 수가 없었다.** 20곡짜리 여정이면 라벨을 떼어놓는 데 그보다 더 든다.
+ *
+ * 올려도 끝 곡에 손이 닿는다 — 이동 한계를 배율이 아니라 **배치가 실제로 뻗은 거리**에서 뽑기
+ * 때문에 배율과 같이 늘어난다 (S15P21A405-306, `clampOverlay`).
+ */
+export const OVERLAY_ZOOM = { min: 0.6, max: 16 } as const;
 
 /** 휠 확대 계수 (배율 = exp(-deltaY × 이 값)) */
 export const WHEEL_ZOOM = 0.0015;
@@ -347,6 +355,18 @@ export const CONSTELLATION = {
   alpha: { current: 1, played: 0.5, unplayed: 0.24 },
   /** 제목 라벨은 이 아래로 옅어지지 않는다 — 안 들은 곡도 읽혀야 한다 */
   labelMinAlpha: 0.8,
+  /**
+   * 곡을 누르면 그 곡을 한복판에 놓으면서 **최소 이 배율까지** 확대한다 (S15P21A405-330).
+   *
+   * 우측 상세 패널이 열리면 배치 영역이 좁아지고 `constellationFit` 이 그만큼 작게 다시 잡혀
+   * 별 간격도 줄어든다. 그 상태로는 라벨이 서로 겹쳐 읽히지 않으므로, 누른 김에 읽을 만큼 당긴다.
+   *
+   * ponytail: 20곡 여정에서 별 간격이 라벨 폭(약 130px)을 넘기는 지점을 눈으로 잡은 값이다.
+   * 곡 수·배치 밀도에 따라 더 필요할 수 있다 — 곡 간 최근접 거리에서 역산하려면 여기를 함수로 바꾼다.
+   */
+  focusZoom: 3,
+  /** 라벨 겹침 회피 (S15P21A405-330). 상자끼리 이만큼은 떨어뜨린다(px) */
+  labelGapPx: 3,
   enterMs: 800,
   exitMs: 500,
 } as const;

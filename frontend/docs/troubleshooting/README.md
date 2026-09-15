@@ -21,6 +21,8 @@
 | [006](006-layer-entry-scale-lost-on-ascend.md) | 겹을 다녀오면 줌아웃이 안 되고 별 무리가 안 보임 | 떠오를 때 그 겹의 **진입** 배율 대신 **도착** 배율을 기준으로 삼음 | S15P21A405-271 |
 | [007](007-album-covers-flicker-on-zoom.md) | 줌하면 앨범 커버가 통째로 교체돼 반짝임 | 격자 칸이 배율에 반비례해 매 프레임 새로 뽑히는데 붙잡아 줄 정렬 키가 없음 | S15P21A405-276 |
 | [008](008-hover-flag-stuck-after-card-unmount.md) | 호버 카드를 한 번 쓰면 별 호버가 영영 안 잡힘 | 포인터 밑에서 사라진 카드가 `mouseleave` 를 못 쏴 "카드 위" 플래그가 굳음 | S15P21A405-277 |
+| [010](010-constellation-layout-403-on-localhost.md) | 로컬에서만 별자리가 안 그려짐 (배포는 멀쩡) | rewrite 가 브라우저 `Origin` 을 그대로 넘겨 백엔드가 403 — 배치가 영영 안 옴 | S15P21A405-303 |
+| [011](011-ascend-lands-at-max-zoom-empty-screen.md) | 겹을 떠오르면 화면에 별이 하나도 없음 | 게이트를 미느라 7.7배까지 확대된 배율을 그대로 복원 — [006](006-layer-entry-scale-lost-on-ascend.md) 이 반만 고친 자리 | S15P21A405-327 |
 
 ---
 

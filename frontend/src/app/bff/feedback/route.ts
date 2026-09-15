@@ -1,28 +1,48 @@
-import { ok } from "@/lib/api-response";
+import { failLive, ok, okLive } from "@/lib/api-response";
+import { backendPost, BackendError, isBackendEnabled } from "@/lib/backend";
 
 /**
- * POST /api/feedback — 설문 응답 수집 (S15P21A405-250).
+ * POST /bff/feedback — 탐색 설문 응답 저장 (S15P21A405-294).
  *
- * **목 라우트다.** 지금은 받은 걸 서버 콘솔에 찍고 성공만 돌려준다.
- * 백엔드 저장 API 가 준비되면 **이 파일 안만** 실제 호출로 바꾸면 된다 —
- * 화면 코드는 한 줄도 바뀌지 않는다 (`src/lib/backend.ts` 의 `backendGet` 참고).
+ * **브라우저가 백엔드를 직접 못 부른다.** 배포 백엔드가 `Origin` 이 붙은 요청을 전부
+ * `403 Invalid CORS request` 로 막아서(BACKEND-NOTES B-17), rewrite 로 흘려보내도 403 이 된다.
+ * 그래서 여기서 서버가 대신 부른다 — 서버 요청에는 `Origin` 이 없다.
  *
- * 받는 값은 `SurveySubmission` 이다. 검증을 느슨하게 두는 이유: 문항과 단계가
- * 바뀔 수 있어서 이유·응답값을 고정 목록으로 못박으면 문항을 고칠 때마다
- * 여기도 고쳐야 한다.
+ * 몸통은 그대로 넘긴다. `verdict`·`reason` 조합 검증은 백엔드가 한다
+ * (`CHECK ((verdict = false) = (reason IS NOT NULL))`) — 여기서 또 막으면 규칙이 두 곳이 된다.
+ *
+ * 인증을 요구하지 않는다. 1차 배포는 로그인 없이 받으므로 백엔드도 이 경로만 permitAll 이다.
  *
  * **최종 배포 때 걷어낼 기능이다.** survey 관련 파일과 함께 삭제된다.
  */
 export async function POST(req: Request) {
-  let body: unknown = null;
+  const upstream = "/api/feedback";
+  let body: unknown;
   try {
     body = await req.json();
   } catch {
-    /* 본문이 없거나 JSON 이 아니면 그대로 진행 — 목이라 막지 않는다 */
+    return failLive("INVALID_INPUT", "요청 본문이 JSON 이 아닙니다.", 400, upstream);
   }
 
-  // 개발 중 무엇이 실제로 전송되는지 확인하는 용도
-  console.log("[survey]", JSON.stringify(body));
+  /**
+   * 목 모드에서는 **보내지 않는다.**
+   *
+   * 설문은 조회가 아니라 **쓰기**다. 목을 켜 두고 개발하면서 설문을 누를 때마다 실제
+   * `explore_feedback` 에 행이 쌓이면, 유저 테스트 집계에 개발 중 찍은 값이 섞인다.
+   * 지우려면 누가 언제 넣었는지 가려내야 하는데 비로그인이라 가려낼 수가 없다.
+   */
+  if (!isBackendEnabled()) {
+    console.log("[survey:mock]", JSON.stringify(body));
+    return ok({ feedbackId: 0 });
+  }
 
-  return ok({ received: true });
+  try {
+    const data = await backendPost<{ feedbackId: number }>(upstream, body);
+    return okLive(data, upstream);
+  } catch (e) {
+    const err = e as BackendError;
+    // 백엔드 코드를 그대로 올리면 프론트 타입(ApiErrorCode)에 없는 값이 섞인다.
+    // 400 은 입력 문제, 그 밖은 서버 문제로 좁혀서 넘긴다 — 원문 메시지는 그대로 남는다
+    return failLive(err.status === 400 ? "INVALID_INPUT" : "INTERNAL_ERROR", err.message, err.status || 502, upstream);
+  }
 }

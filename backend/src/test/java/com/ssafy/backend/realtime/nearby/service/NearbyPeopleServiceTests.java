@@ -2,6 +2,8 @@ package com.ssafy.backend.realtime.nearby.service;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -12,6 +14,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -91,5 +94,44 @@ class NearbyPeopleServiceTests {
         assertThatThrownBy(() -> service.open(ME))
                 .isInstanceOfSatisfying(CustomException.class,
                         e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.SERVICE_UNAVAILABLE));
+    }
+
+    @Test
+    @DisplayName("구독 등록과 meta 저장을 듣는 사람 조회보다 먼저 한다")
+    void subscriptionIsSavedBeforeListenersAreRead() {
+        when(presenceRepo.snapshot(ME)).thenReturn(new PresenceSnapshot(100L, 1, 0, 0, 1L));
+        when(neighborPort.anchorAndNeighbors(100L)).thenReturn(List.of(
+                new NeighborSong(100L, "내 곡", "가수A", new double[16], 0.0),
+                new NeighborSong(200L, "비슷한 곡", "가수B", new double[16], 0.5)));
+        when(nearbyRepo.subscribedMusicIds(ME)).thenReturn(List.of());
+        when(nearbyRepo.listeners(List.of(100L, 200L))).thenReturn(Map.of());
+
+        service.open(ME);
+
+        InOrder order = inOrder(nearbyRepo);
+        order.verify(nearbyRepo).subscribedMusicIds(ME);
+        order.verify(nearbyRepo).subscribe(ME, List.of(100L, 200L));
+        order.verify(nearbyRepo).saveMeta(ME, List.of(100L, 200L));
+        order.verify(nearbyRepo).listeners(List.of(100L, 200L));
+    }
+
+    @Test
+    @DisplayName("다시 열면 새 곡을 먼저 구독하고 더 이상 보지 않는 옛 곡을 해제한다")
+    void reopenReplacesOldSubscriptions() {
+        when(presenceRepo.snapshot(ME)).thenReturn(new PresenceSnapshot(200L, 1, 0, 0, 1L));
+        when(neighborPort.anchorAndNeighbors(200L)).thenReturn(List.of(
+                new NeighborSong(200L, "새 내 곡", "가수B", new double[16], 0.0),
+                new NeighborSong(300L, "새 비슷한 곡", "가수C", new double[16], 0.4)));
+        when(nearbyRepo.subscribedMusicIds(ME)).thenReturn(List.of(100L, 200L));
+        when(nearbyRepo.listeners(List.of(200L, 300L))).thenReturn(Map.of());
+
+        service.open(ME);
+
+        InOrder order = inOrder(nearbyRepo);
+        order.verify(nearbyRepo).subscribe(ME, List.of(200L, 300L));
+        order.verify(nearbyRepo).unsubscribe(ME, Set.of(100L));
+        order.verify(nearbyRepo).saveMeta(ME, List.of(200L, 300L));
+        order.verify(nearbyRepo).listeners(List.of(200L, 300L));
+        verify(nearbyRepo).subscribedMusicIds(ME);
     }
 }

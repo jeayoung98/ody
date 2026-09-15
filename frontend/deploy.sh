@@ -97,18 +97,16 @@ nginx_check() {
 public_health() {
     local release_id=$1
     local marker
-    local actuator_status
 
     curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/" >/dev/null
     marker="$(curl -fsS --retry 5 --retry-delay 1 --max-time 10 \
         "${PUBLIC_BASE_URL}/build-id.txt?release=${release_id}")"
     [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || return 1
-    curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/api/hello" >/dev/null
 
-    actuator_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
-        "${PUBLIC_BASE_URL}/actuator/health")"
-    [[ ${actuator_status} == "403" || ${actuator_status} == "404" ]]
+    # 백엔드 의존성 검사는 프론트엔드 배포 성공/실패 조건에서 제외
+    # curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/api/hello" >/dev/null
 }
+
 
 restore_links() {
     local old_current=$1

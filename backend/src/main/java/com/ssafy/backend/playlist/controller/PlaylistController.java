@@ -29,6 +29,7 @@ import com.ssafy.backend.playlist.dto.PlaylistUpdateRequest;
 import com.ssafy.backend.playlist.dto.PlaylistUpdateResponse;
 import com.ssafy.backend.playlist.service.PlaylistService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import jakarta.validation.Valid;
@@ -47,6 +48,7 @@ public class PlaylistController {
 	private final PlaylistService playlistService;
 
 	/** 플레이리스트 목록 조회 (정본 §4.1). 본인 목록도 이 API(email에 본인 email). */
+	@Operation(summary = "플레이리스트 목록 조회", description = "email로 플레이리스트 목록을 조회한다. 본인 목록 조회도 이 API를 사용한다.")
 	@GetMapping("/search")
 	public ApiResponse<PlaylistSearchResponse> search(
 			@RequestParam @NotBlank String email, Authentication authentication) {
@@ -55,6 +57,7 @@ public class PlaylistController {
 	}
 
 	/** 플레이리스트 상세 조회 (정본 §4.2). 소유자만 접근 가능. */
+	@Operation(summary = "플레이리스트 상세 조회", description = "playlistId로 플레이리스트 상세를 조회한다. 소유자만 접근할 수 있다.")
 	@GetMapping("/detail")
 	public ApiResponse<PlaylistDetailResponse> detail(
 			@RequestParam @Min(1) long playlistId, Authentication authentication) {
@@ -62,6 +65,7 @@ public class PlaylistController {
 	}
 
 	/** 플레이리스트 생성 (정본 §4.3). 소유자는 토큰 주체. */
+	@Operation(summary = "플레이리스트 생성", description = "로그인한 사용자 본인 소유로 새 플레이리스트를 생성한다.")
 	@PostMapping("/create")
 	public ResponseEntity<ApiResponse<PlaylistCreateResponse>> create(
 			@RequestBody @Valid PlaylistCreateRequest request, Authentication authentication) {
@@ -71,6 +75,7 @@ public class PlaylistController {
 	}
 
 	/** 기존 플레이리스트에 곡 추가 (정본 §4.4). */
+	@Operation(summary = "플레이리스트에 곡 추가", description = "기존 플레이리스트에 곡을 추가한다.")
 	@PostMapping("/music/insert")
 	public ApiResponse<PlaylistMusicInsertResponse> insertMusic(
 			@RequestBody @Valid PlaylistMusicInsertRequest request, Authentication authentication) {
@@ -79,6 +84,7 @@ public class PlaylistController {
 	}
 
 	/** 플레이리스트에서 곡 삭제 (정본 §4.5). */
+	@Operation(summary = "플레이리스트에서 곡 삭제", description = "플레이리스트에서 지정한 곡들을 삭제한다.")
 	@PostMapping("/music/delete")
 	public ApiResponse<PlaylistMusicDeleteResponse> deleteMusic(
 			@RequestBody @Valid PlaylistMusicDeleteRequest request, Authentication authentication) {
@@ -87,6 +93,7 @@ public class PlaylistController {
 	}
 
 	/** 플레이리스트 곡 순서 변경 (S15P21A405-66, 정본 §4에는 없는 신규 엔드포인트). */
+	@Operation(summary = "플레이리스트 곡 순서 변경", description = "플레이리스트에 담긴 곡들의 순서를 변경한다.")
 	@PostMapping("/music/reorder")
 	public ApiResponse<PlaylistMusicReorderResponse> reorderMusic(
 			@RequestBody @Valid PlaylistMusicReorderRequest request, Authentication authentication) {
@@ -95,6 +102,7 @@ public class PlaylistController {
 	}
 
 	/** 플레이리스트 이름 변경 (정본 §4.6). */
+	@Operation(summary = "플레이리스트 이름 변경", description = "플레이리스트 이름을 변경한다.")
 	@PatchMapping("/update")
 	public ApiResponse<PlaylistUpdateResponse> update(
 			@RequestBody @Valid PlaylistUpdateRequest request, Authentication authentication) {
@@ -103,6 +111,7 @@ public class PlaylistController {
 	}
 
 	/** 플레이리스트 삭제 (정본 §4.7). */
+	@Operation(summary = "플레이리스트 삭제", description = "플레이리스트를 삭제한다.")
 	@DeleteMapping("/delete/{playlistId}")
 	public ApiResponse<Void> delete(@PathVariable @Min(1) long playlistId, Authentication authentication) {
 		playlistService.delete(playlistId, authentication.getName());

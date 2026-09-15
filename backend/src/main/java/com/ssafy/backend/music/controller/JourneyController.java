@@ -10,6 +10,9 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.music.dto.JourneyResponse;
 import com.ssafy.backend.music.service.JourneyService;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 import jakarta.validation.constraints.Min;
 
 /**
@@ -22,6 +25,7 @@ import jakarta.validation.constraints.Min;
 @RestController
 @RequestMapping("/api/music")
 @Validated
+@Tag(name = "Journey", description = "두 곡을 잇는 경로 탐색")
 public class JourneyController {
 
 	private final JourneyService journeyService;
@@ -38,6 +42,7 @@ public class JourneyController {
 	 * <p>{@code mode}·{@code n}·detour 파라미터는 받지 않는다 — 정본 §3.3 에 없고, 산출 방식과
 	 * 정거장 수는 BE4 엔진이 정한다(FR-011, FR-023).
 	 */
+	@Operation(summary = "경로 탐색", description = "두 곡을 잇는 순서 있는 곡 목록을 조회한다. 없는 곡은 404 MUSIC_NOT_FOUND, 경로 없음은 422 PATH_NOT_FOUND를 반환한다.")
 	@GetMapping("/journey")
 	public ApiResponse<JourneyResponse> journey(
 			@RequestParam @Min(1) long start,

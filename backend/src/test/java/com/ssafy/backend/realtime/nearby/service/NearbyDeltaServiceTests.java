@@ -3,6 +3,7 @@ package com.ssafy.backend.realtime.nearby.service;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -16,6 +17,7 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
@@ -26,6 +28,7 @@ import com.ssafy.backend.realtime.messaging.RealtimeEventType;
 import com.ssafy.backend.realtime.messaging.RealtimePublisher;
 import com.ssafy.backend.realtime.meeting.MeetingService;
 import com.ssafy.backend.realtime.nearby.dto.NearbyDelta;
+import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort;
 import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
@@ -45,6 +48,7 @@ class NearbyDeltaServiceTests {
 	@Mock MeetingService meetingService;
 	@Mock RiderCountPort riderCountPort;
 	@Mock PresenceRedisRepository presenceRepo;
+	@Mock NearbyPeopleService nearbyPeopleService;
 	@InjectMocks NearbyDeltaService service;
 
 	private static final String ACTOR = "actor@x.com";
@@ -129,6 +133,28 @@ class NearbyDeltaServiceTests {
 
 		verify(nearbyRepo).deleteMeta(viewer);
 		verifyNoInteractions(publisher);
+	}
+
+	@Test
+	@DisplayName("내 곡이 바뀌고 패널이 열려 있으면 구독과 목록을 다시 만든다")
+	void ownAnchorChangeReopensAndPublishesSnapshot() {
+		NearbySnapshot snapshot = new NearbySnapshot(20L, List.of());
+		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
+		when(nearbyRepo.subscribers(20L)).thenReturn(Set.of(ACTOR));
+		when(nearbyRepo.hasMeta(ACTOR)).thenReturn(true);
+		when(nearbyPeopleService.open(ACTOR)).thenReturn(snapshot);
+
+		service.onPositionChanged(change(10L, 20L));
+
+		InOrder order = inOrder(nearbyRepo, nearbyPeopleService, publisher);
+		order.verify(nearbyRepo).subscribers(10L);
+		order.verify(nearbyRepo).subscribers(20L);
+		order.verify(nearbyRepo).hasMeta(ACTOR);
+		order.verify(nearbyPeopleService).open(ACTOR);
+		order.verify(publisher).publishToUser(ACTOR, RealtimeDestination.QUEUE_PRESENCE,
+				RealtimeEventType.NEARBY_SNAPSHOT, snapshot);
+		verifyNoMoreInteractions(publisher);
+		verifyNoInteractions(userDisplayResolver, meetingService, riderCountPort);
 	}
 
 	private PositionChanged change(Long oldMusicId, Long newMusicId) {

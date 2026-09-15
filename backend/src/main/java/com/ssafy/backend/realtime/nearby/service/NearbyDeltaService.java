@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import java.util.LinkedHashSet;
+import java.util.Objects;
 import java.util.Set;
 
 import org.springframework.context.annotation.Profile;
@@ -13,6 +14,7 @@ import com.ssafy.backend.realtime.messaging.RealtimeEventType;
 import com.ssafy.backend.realtime.messaging.RealtimePublisher;
 import com.ssafy.backend.realtime.meeting.MeetingService;
 import com.ssafy.backend.realtime.nearby.dto.NearbyDelta;
+import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
@@ -34,6 +36,7 @@ public class NearbyDeltaService {
 	private final RealtimeEventBus eventBus; //곡 변경 알림
 	private final MeetingService meetingService; // 두 사용자 만난 횟수
 	private final RiderCountPort riderCountPort; // 따라가기중인 인원 수
+	private final NearbyPeopleService nearbyPeopleService; // 본인 구독과 목록 다시 만들기
 
 	/**
 	 * 서비스가 시작되면 곡 변경 알림을 구독한다.
@@ -60,21 +63,39 @@ public class NearbyDeltaService {
 		leaveReceivers.remove(event.email());
 		enterReceivers.remove(event.email());
 		moveReceivers.remove(event.email());
-		if (leaveReceivers.isEmpty() && enterReceivers.isEmpty() && moveReceivers.isEmpty()) {
+
+		// 받을 사람이 있을 때만 델타를 보낸다.
+		if (!leaveReceivers.isEmpty() || !enterReceivers.isEmpty() || !moveReceivers.isEmpty()) {
+			// LEAVE는 목록에서 지울 이메일만 보낸다.
+			publishLeave(leaveReceivers, event.email());
+
+			// ENTER·MOVE는 목록에 보여줄 정보까지 보낸다.
+			if (!enterReceivers.isEmpty() || !moveReceivers.isEmpty()) {
+				UserView who = userDisplayResolver.resolve(event.email());
+				int riderCount = riderCountPort.count(event.email());
+				publishCurrent(enterReceivers, event.email(), who, riderCount,
+						RealtimeEventType.NEARBY_ENTER, event.newMusicId());
+				publishCurrent(moveReceivers, event.email(), who, riderCount,
+						RealtimeEventType.NEARBY_MOVE, event.newMusicId());
+			}
+		}
+
+		refreshOwnPanel(event);
+	}
+
+	/**
+	 * 패널이 열린 본인의 곡이 바뀌면 구독과 목록을 다시 만든다.
+	 * @param event 본인의 곡 변경 정보
+	 */
+	private void refreshOwnPanel(PositionChanged event) {
+		if (event.newMusicId() == null || Objects.equals(event.oldMusicId(), event.newMusicId())
+				|| !nearbyRepo.hasMeta(event.email())) { // 패널이 열렸는지 확인
 			return;
 		}
 
-		publishLeave(leaveReceivers, event.email());
-		if (enterReceivers.isEmpty() && moveReceivers.isEmpty()) {
-			return;
-		}
-
-		UserView who = userDisplayResolver.resolve(event.email());
-		int riderCount = riderCountPort.count(event.email());
-		publishCurrent(enterReceivers, event.email(), who, riderCount,
-				RealtimeEventType.NEARBY_ENTER, event.newMusicId());
-		publishCurrent(moveReceivers, event.email(), who, riderCount,
-				RealtimeEventType.NEARBY_MOVE, event.newMusicId());
+		NearbySnapshot snapshot = nearbyPeopleService.open(event.email()); //구독 재구성 및 목록 생성
+		publisher.publishToUser(event.email(), RealtimeDestination.QUEUE_PRESENCE,
+				RealtimeEventType.NEARBY_SNAPSHOT, snapshot);
 	}
 
 	/**

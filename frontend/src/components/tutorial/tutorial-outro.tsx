@@ -10,8 +10,8 @@ import Button from "@/components/common/button";
  */
 export default function TutorialOutro({ onStart }: { onStart: () => void }) {
   return (
-    <div className="pointer-events-auto fixed inset-0 z-[70] grid place-items-center bg-void/72 px-6 backdrop-blur-md">
-      <div className="flex max-w-[380px] flex-col items-center gap-3.5 text-center">
+    <div className="animate-tfade pointer-events-auto fixed inset-0 z-[70] grid place-items-center bg-void/72 px-6 backdrop-blur-md">
+      <div className="animate-tpop flex max-w-[380px] flex-col items-center gap-3.5 text-center">
         <span className="lbl text-teal">튜토리얼 끝</span>
         <h2 className="m-0 font-display text-[22px] leading-[1.3] font-bold text-balance">고생하셨어요. 이제 마음껏 돌아다녀보세요</h2>
         <p className="m-0 text-[13px] leading-[1.7] text-ink-2">

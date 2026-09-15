@@ -10,8 +10,6 @@ interface Rect {
   y1: number;
   /** 고리를 두를지. 지도처럼 화면만 한 자리는 두르면 화면 테두리가 돼서 안 두른다 */
   ring: boolean;
-  /** 이 자리 밖을 어둡게 덮고 막을지 */
-  dim: boolean;
 }
 
 /** 요소 둘레 여백. 고리가 버튼에 딱 붙으면 눌러야 할 것이 뭔지 덜 읽힌다 */
@@ -19,7 +17,6 @@ const PAD = 9;
 
 interface Targets {
   spotlight: readonly string[];
-  ringOnly: readonly string[];
 }
 
 /**
@@ -29,25 +26,32 @@ interface Targets {
  * `"map"` 만 DOM 요소가 아니다. 캔버스는 화면 전체를 덮으므로 그대로 쓰면 아무것도 안
  * 어두워진다 — 엔진이 이미 아는 "패널·HUD 를 뺀 지도가 실제로 보이는 사각형" 을 쓴다.
  */
-function find(targets: readonly string[], dim: boolean): Rect | null {
+function find(targets: readonly string[]): Rect | null {
   for (const t of targets) {
     if (t === "map") {
       const c = document.querySelector("canvas")?.getBoundingClientRect();
       const f = getMapEngine()?.freeRect();
       if (!c || !f) continue;
-      return { x0: c.left + f.x0, y0: c.top + f.y0, x1: c.left + f.x1, y1: c.top + f.y1, ring: false, dim };
+      return { x0: c.left + f.x0, y0: c.top + f.y0, x1: c.left + f.x1, y1: c.top + f.y1, ring: false };
     }
     const r = document.querySelector(`[data-tutorial="${t}"]`)?.getBoundingClientRect();
-    if (r?.width && r.height) return { x0: r.left - PAD, y0: r.top - PAD, x1: r.right + PAD, y1: r.bottom + PAD, ring: true, dim };
+    if (r?.width && r.height) return { x0: r.left - PAD, y0: r.top - PAD, x1: r.right + PAD, y1: r.bottom + PAD, ring: true };
   }
   return null;
 }
 
-/** 고리만 두르는 자리가 떠 있으면 그쪽이 이긴다 — 어둠막을 걷는 것이 요점이라 */
-const measure = ({ spotlight, ringOnly }: Targets) => find(ringOnly, false) ?? find(spotlight, true);
+/**
+ * 맥박 폭. 짧은 변 기준으로 **대략 이만큼(px) 만 들썩이게** 배율을 되돌려 잡는다.
+ * 알약 버튼과 여정 만들기 상자에 같은 배율을 쓰면 상자 쪽이 수십 px 씩 출렁여 과하다.
+ */
+const BEAT_PX = 9;
+const beat = (w: number, h: number) => {
+  const amp = Math.min(0.18, Math.max(0.045, BEAT_PX / Math.max(1, Math.min(w, h))));
+  return { "--tbeat-lo": 1 - amp, "--tbeat-hi": 1 + amp } as React.CSSProperties;
+};
 
 const same = (a: Rect | null, b: Rect | null) =>
-  a && b ? a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1 && a.dim === b.dim : a === b;
+  a && b ? a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1 : a === b;
 
 /**
  * 스포트라이트 (S15P21A405-347). 이 단계에서 조작할 자리만 남기고 화면을 덮는다.
@@ -59,13 +63,13 @@ const same = (a: Rect | null, b: Rect | null) =>
  * 다음 단계로 넘기는 것은 여기서 하지 않는다. 밝힌 자리를 진짜로 조작하면 그 컴포넌트가
  * 이미 `complete(task)` 를 부른다 (지도 휠·별 클릭·주변 탐색 버튼·출발곡·도착곡·경로 만들기).
  */
-export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
+export default function TutorialSpotlight({ spotlight }: Targets) {
   const [rect, setRect] = useState<Rect | null>(null);
 
   useEffect(() => {
     // ponytail: 250ms 폴링. 패널이 열고 닫히며 자리가 **움직이는데** ResizeObserver 는 크기만 본다
     const tick = () => {
-      const next = measure({ spotlight, ringOnly });
+      const next = find(spotlight);
       setRect((prev) => (same(prev, next) ? prev : next));
     };
     tick();
@@ -75,28 +79,30 @@ export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
       window.clearInterval(id);
       window.removeEventListener("resize", tick);
     };
-  }, [spotlight, ringOnly]);
+  }, [spotlight]);
 
-  const dim = "pointer-events-auto fixed bg-void/80 backdrop-blur-[2px]";
   /**
-   * 뚫을 자리가 없는 단계는 **연하게** 덮는다 (S15P21A405-351). 지금 이런 단계는 짚은 별을
-   * 오버레이에 직접 그리는 곳뿐인데, 진하게 덮으면 그 별이 별들 사이에서 고른 하나가 아니라
-   * 허공에 뜬 점으로 보인다. 둘레 별이 비쳐야 "이 중 하나" 로 읽힌다. 막는 것은 그대로다.
+   * 덤은 **한 겹, 한 값, 아무것도 안 막는다** (S15P21A405-354).
+   *
+   * 진하기를 단계마다 달리했더니 화면이 들쭉날쭉했고, 무엇보다 진한 단계에서는 짚어 준 곳
+   * 밖의 조작이 아예 막혔다. 안내를 따라가는 중에도 지도를 둘러보고 다른 것을 눌러 볼 수
+   * 있어야 한다 — 튜토리얼은 **가리켜 주기만** 하고 손을 묶지 않는다.
+   *
+   * `pointer-events-none` 이라 네 장이 덮고 있어도 휠·클릭·드래그가 그대로 아래로 간다.
+   * 구멍은 이제 막는 장치가 아니라 "여기" 라고 눈에 띄게 하는 장치다.
    */
-  if (!rect) return <div className="pointer-events-auto fixed inset-0 bg-void/40" />;
+  const dim = "pointer-events-none fixed bg-void/40";
+  // 짚을 자리가 없는 단계(확대·별)는 통째로 덮는다 — 손짓이 그 위에 따로 그려진다
+  if (!rect) return <div className={`${dim} inset-0`} />;
 
   const w = rect.x1 - rect.x0;
   const h = rect.y1 - rect.y0;
   return (
     <>
-      {rect.dim && (
-        <>
           <div className={dim} style={{ left: 0, right: 0, top: 0, height: rect.y0 }} />
           <div className={dim} style={{ left: 0, right: 0, top: rect.y1, bottom: 0 }} />
           <div className={dim} style={{ left: 0, top: rect.y0, width: rect.x0, height: h }} />
           <div className={dim} style={{ left: rect.x1, right: 0, top: rect.y0, height: h }} />
-        </>
-      )}
       {/* 고리. 클릭을 가로채면 안 되므로 이벤트를 통과시킨다 */}
       {rect.ring && (
         <div
@@ -104,7 +110,8 @@ export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
           // 알약 버튼부터 세로로 긴 패널까지 대상이 제각각이라 짧은 변에 맞춰 둥글린다
           style={{ left: rect.x0, top: rect.y0, width: w, height: h, borderRadius: Math.min(26, w / 2, h / 2) }}
         >
-          <i className="animate-tbeat absolute -inset-1 block rounded-[inherit] border-[3px] border-teal" />
+          {/* 맥박은 **픽셀로 일정하게** 뛰게 한다. 배율을 고정하면 큰 상자일수록 출렁임이 커진다 */}
+          <i className="animate-tbeat absolute -inset-1 block rounded-[inherit] border-[3px] border-teal" style={beat(w, h)} />
         </div>
       )}
     </>

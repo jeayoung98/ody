@@ -36,6 +36,7 @@ export default function NearbyExploreButton() {
       onClick={handleClick}
       disabled={!active && target == null}
       title="주변 탐색"
+      data-tutorial="nearby"
       className={`glass inline-flex h-[52px] shrink-0 items-center gap-2 rounded-pill! px-[15px] text-sm whitespace-nowrap transition-all duration-fast hover:bg-glass-2 hover:border-line-2 disabled:cursor-not-allowed disabled:opacity-40 ${
         active ? "border-violet/50! text-white shadow-glow-violet" : ""
       }`}

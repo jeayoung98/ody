@@ -76,6 +76,10 @@ export default function PlayerBar() {
       j.requestRoute();
       openJourney();
       reopenConstellation();
+    } else if (context.kind === "nearby") {
+      // 주변 탐색은 별자리가 아니라 고리다 — 중심곡으로 뷰를 되살리고 그 상세를 연다 (S15P21A405-359)
+      map.enterNearby(context.centerMusicId);
+      openSong(context.centerMusicId);
     } else openSong(currentMusicId);
   };
 
@@ -100,7 +104,7 @@ export default function PlayerBar() {
     toggle();
   };
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
-  const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : null;
+  const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : context.kind === "nearby" ? "주변 음악" : null;
 
   return (
     <div className="glass flex min-w-0 flex-1 items-center gap-3 rounded-pill! py-2 pr-3.5 pl-2.5">

@@ -4,6 +4,7 @@ import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
 import Loading from "@/components/common/loading";
+import { FEATURES } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -38,7 +39,8 @@ export default function SongDetailPanel() {
           <SongPcList items={data.principalComponents} />
           <Divider />
           <SongNearbyList items={data.nearby} centerMusicId={data.id} />
-          <SongRelatedPlaylists items={data.relatedPlaylists} />
+          {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다 */}
+          {FEATURES.playlist && <SongRelatedPlaylists items={data.relatedPlaylists} />}
         </>
       )}
     </Box>

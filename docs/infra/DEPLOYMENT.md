@@ -48,6 +48,27 @@ app-node Nginx의 기존 TLS server block에는
 reload한다. 이 routing은 2026-09-08 app-node에 적용해 root, SPA fallback, build marker, Backend API와
 Actuator 차단을 검증했다. Repository에서 live Nginx를 자동 덮어쓰지는 않는다.
 
+### Frontend location 마커 (S15P21A405-357)
+
+`frontend/deploy.sh`의 `reload_nginx()`/`restore_legacy_nginx()`는 라이브
+`/etc/nginx/sites-available/backend`를 통째로 교체하지 않는다. `docs/infra/examples/frontend-nginx.locations.conf`와
+같은 `# BEGIN ODY-FRONTEND-LOCATIONS` / `# END ODY-FRONTEND-LOCATIONS` 마커 사이 내용만
+`backend.next`(또는 rollback 시 `backend.before-next`)에서 읽어 라이브 파일의 같은 마커 사이에 이식한다
+(`splice_frontend_block()`). 마커 바깥의 backend upstream(`server 127.0.0.1:<port>;`), TLS, Certbot 블록은
+건드리지 않으므로 backend blue-green이 전환해 둔 활성 포트가 프론트 배포로 되돌아가지 않는다.
+
+이 방식이 동작하려면 app-node의 세 파일 모두 같은 마커로 프론트 location 블록을 감싸고 있어야 한다.
+
+```text
+/etc/nginx/sites-available/backend
+/etc/nginx/sites-available/backend.next
+/etc/nginx/sites-available/backend.before-next
+```
+
+마커가 없거나 개수가 안 맞으면 `splice_frontend_block()`은 라이브 설정을 임의로 바꾸는 대신 실패한다
+(fail-safe). 위 세 파일에 마커를 추가하는 것은 **운영 서버 설정 변경**이므로 Repository가 자동으로 하지
+않는다 — app-node에 수동으로 한 번 반영한 뒤 `sudo nginx -t`로 검증한다.
+
 수동 rollback:
 
 ```bash

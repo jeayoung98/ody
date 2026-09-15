@@ -29,18 +29,20 @@ export const LAYER_NAMES_EN = ["UNIVERSE", "GALAXY", "STAR CLUSTER", "SOLAR SYST
  * 이 겹이 **무엇을 기준으로 곡을 나눴는지** 한 줄 요약 (LAYER_AXES 네 단어를 사람 말로 압축).
  * 층마다 기준이 달라지는 걸 사용자가 알아채게 하는 장치 — 스테퍼 아래에 붙는다.
  *
- * 기준 문서는 [docs/rules/PC-AXES.md](../../../docs/rules/PC-AXES.md) §2 다. 괄호 안 숫자는 그 겹의
- * 설명분산 — 깊이 들어갈수록 축이 흐려진다는 것 자체가 사용자가 알아야 할 정보다.
+ * 기준 문서는 [docs/rules/PC-AXES.md](../../../docs/rules/PC-AXES.md) §2 다.
+ *
+ * 겹마다 설명분산을 괄호로 달아 뒀었는데 뺐다 (S15P21A405-356) — 테스터에게는 읽힐 리 없는
+ * 수치다. 축이 깊을수록 흐려진다는 것은 문구 자체가 이미 말하고 있다("경향만" · "잔여").
  */
 export const LAYER_SUMMARIES = [
-  "밝고 거친 정도와 저음의 두께 (32%)",
-  "얼마나 빽빽한지, 여백과 강약이 있는지 (11%)",
-  "화성이 맑은지, 음량이 고른지 — 경향만 (9%)",
-  "곡이 긴지, 화음이 자주 바뀌는지 (5%)",
-  "리듬이 촘촘한지, 규칙적인지 (4%)",
-  "음량이 고른 정도 — 2겹의 잔여 (3%)",
-  "리듬 밀도 — 5겹의 잔여 (3%)",
-  "곡 길이 — 4겹의 잔여 (3%)",
+  "밝고 거친 정도와 저음의 두께",
+  "얼마나 빽빽한지, 여백과 강약이 있는지",
+  "화성이 맑은지, 음량이 고른지 — 경향만",
+  "곡이 긴지, 화음이 자주 바뀌는지",
+  "리듬이 촘촘한지, 규칙적인지",
+  "음량이 고른 정도 — 2겹의 잔여",
+  "리듬 밀도 — 5겹의 잔여",
+  "곡 길이 — 4겹의 잔여",
 ] as const;
 
 /**
@@ -123,6 +125,22 @@ export const LAYER_AXES: ReadonlyArray<{ x: readonly [string, string]; y: readon
  * 겹 전환 자막의 축 줄. 일곱 군데서 같은 문자열을 조립하던 것을 모았다.
  * 라벨 없는 축(PC4 · PC12)은 없는 의미를 지어내는 대신 "미세한 차이" 로 적는다.
  */
+/**
+ * 그 주성분 값이 가리키는 **쪽 이름** (S15P21A405-355).
+ *
+ * `pcIndex` 는 0-based 다 — 짝수는 그 겹의 가로축, 홀수는 세로축이다 (겹당 두 축, 8겹 16축).
+ * 값이 음수면 축의 왼쪽 말, 양수면 오른쪽 말이 그 곡을 설명한다.
+ *
+ * **뜻이 없는 축(PC4 · PC12)은 `null` 이다.** 지도에서 "미세한 차이" 로 적는 것과 같은 이유로,
+ * 없는 의미를 지어 붙이면 사용자가 그 방향으로 곡을 찾다가 헛수고한다.
+ */
+export function pcAxisLabel(pcIndex: number, value: number): string | null {
+  const ax = LAYER_AXES[Math.floor(pcIndex / 2)];
+  if (!ax) return null;
+  const pair = pcIndex % 2 === 0 ? ax.x : ax.y;
+  return pair[0] ? (value >= 0 ? pair[1] : pair[0]) : null;
+}
+
 export function axisLine(layer: number) {
   const ax = LAYER_AXES[layer];
   const one = (p: readonly [string, string]) => (p[0] ? `${p[0]} ↔ ${p[1]}` : "미세한 차이");
@@ -177,8 +195,12 @@ export const DRILL = {
   /**
    * 한 겹 안에서 확대·축소할 수 있는 한계 (진입 배율 대비).
    * 화면 안 곡이 적어 게이트가 닫혀 있어도 무한히 확대되면 빈 우주만 남는다.
+   *
+   * `min` 은 0.4 였다 (S15P21A405-356). 겹 전체가 들어오고도 한참 더 빠져서 별이 점처럼
+   * 작아지고 가장자리가 빈 우주로 채워졌다. 파고든 겹은 진입 배율이 곧 축소 한계라
+   * (`deepZoomOutRatio`) 첫 겹만 헐거웠던 셈이다.
    */
-  zoomRange: { min: 0.4, max: 24 },
+  zoomRange: { min: 0.8, max: 24 },
   /**
    * 다음 겹으로 가져갈 **최소 곡 수**.
    * 화면 안이 이보다 적으면 **막지 않고**, 가장 가까운 곡을 가운데 둔 사각형을 이만큼 담길 때까지

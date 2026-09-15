@@ -18,8 +18,14 @@ export interface MusicDetail extends Music {
   /** 무드 태그 */
   moods?: string[];
   genres: Genre[];
-  /** 고정 주성분 값 (pc1~pc16 중 노출할 것) */
-  principalComponents: { label: string; value: number }[];
+  /**
+   * 고정 주성분 16개. `axis` 는 0-based 축 번호, `value` 는 **원값**이다.
+   *
+   * 이름도 정규화도 화면이 한다 (`pcAxisLabel` · `pcStats`). 축마다 흩어진 폭이 달라서
+   * 어느 축이 이 곡을 설명하는지는 상주 집합의 폭으로 재야 알 수 있고, 그 잣대를 가진
+   * 쪽은 지도 엔진이다 (S15P21A405-355).
+   */
+  principalComponents: { axis: number; value: number }[];
   /** 가까운 10곡 */
   nearby: Pick<Music, "id" | "title" | "artist">[];
   /** 관련 플레이리스트 */

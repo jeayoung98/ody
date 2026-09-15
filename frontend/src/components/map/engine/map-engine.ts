@@ -1,4 +1,4 @@
-import { axisLine, CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -50,7 +50,6 @@ interface Morph {
   cam: MapCamera;
   subset: Uint8Array<ArrayBufferLike>;
   big: string;
-  sub: string;
   /** 1 = 파고들기(확대해 들어간다), -1 = 떠오르기(물러난다) */
   dir: 1 | -1;
   /** 도착한 겹의 진입 배율. 없으면 도착 카메라 배율을 쓴다 (파고들 때는 그게 맞다) */
@@ -343,6 +342,7 @@ export class MapEngine {
    */
   private allocate(songs: MapPoint[], keep: number) {
     this.songs = songs;
+    this.pcStatsCache = null;
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
@@ -418,13 +418,11 @@ export class MapEngine {
       return;
     }
     // 전환이 끝난 뒤 도착한 응답: 같은 자리에서 집합만 교차 페이드한다. 다이빙을 다시 하지 않는다
-    const axes = axisLine(layer);
     this.morph(
       layer,
       { ...this.cam },
       ns,
       `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
-      axes,
       1,
       this.entryS,
       "fade",
@@ -1484,7 +1482,7 @@ export class MapEngine {
    * from 은 지금 화면에 보이던 자리, to 는 새 겹에서의 자리이고, 각자 자기 자리에서
    * 화면 중앙을 기준으로 커지거나 작아지기만 한다. 별이 새 자리로 미끄러지지 않는다.
    */
-  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, sub: string, dir: 1 | -1 = 1, entryS?: number, mode: "dive" | "fade" = "dive") {
+  private morph(newLayer: number, newCam: MapCamera, newSubset: Uint8Array<ArrayBufferLike>, big: string, dir: 1 | -1 = 1, entryS?: number, mode: "dive" | "fade" = "dive") {
     // 레이어를 옮기면 고스트별은 사라진다 (MAP-12)
     this.ghost = null;
     for (let i = 0; i < this.N; i++) {
@@ -1497,7 +1495,7 @@ export class MapEngine {
     this.prefetch = null;
     this.camTarget = null;
     this.morphT = 0;
-    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, sub, dir, entryS, mode };
+    this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, dir, entryS, mode };
   }
 
   /** 도착 자리·알파를 다시 계산한다. 진행 중인 전환의 목적지만 바꿀 때도 쓴다 */
@@ -1622,8 +1620,7 @@ export class MapEngine {
       for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
       big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${p.inView.toLocaleString()}곡 기준`;
     }
-    const axes = axisLine(nl);
-    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big, axes);
+    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big);
   }
 
   /** 응답으로 받은 곡들을 상주 마스크로. 처음 보는 곡은 편입하고, 고정 곡은 남긴다 */
@@ -1722,8 +1719,7 @@ export class MapEngine {
             cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
             cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
-    const axes = axisLine(p.layer);
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, axes, -1, p.entryS);
+    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, -1, p.entryS);
   }
 
   // ------------------------------------------------------------------ input
@@ -1827,14 +1823,12 @@ export class MapEngine {
       cx: s.pc[targetLayer * 2] - (fr.cx - this.W / 2) / scale,
       cy: s.pc[targetLayer * 2 + 1] + (fr.cy - this.H / 2) / scale,
     };
-    const axes = axisLine(targetLayer);
     this.touched = true;
     this.morph(
       targetLayer,
       cam,
       this.subset,
       `${s.title} — ${LAYER_NAMES[targetLayer]}${ro(LAYER_NAMES[targetLayer])}`,
-      axes,
       targetLayer > this.layer ? 1 : -1,
     );
   }
@@ -1900,6 +1894,33 @@ export class MapEngine {
     // 남은 것 중에서는 밝은 쪽 절반. 재생수가 적은 별은 점이 희미해 짚어 줘도 눈에 안 들어온다
     const bright = [...ok].sort((a, b) => this.songs[b.i].weight - this.songs[a.i].weight).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
     return this.songs[bright[Math.floor(Math.random() * bright.length)].i].musicId;
+  }
+
+  private pcStatsCache: { mean: number[]; sd: number[] } | null = null;
+
+  /**
+   * 이 겹 상주 집합의 **축별 평균·표준편차** (S15P21A405-355).
+   *
+   * 곡 상세가 "이 곡이 어느 축으로 치우쳤나" 를 재는 잣대다. 주성분 원값은 축마다 흩어진
+   * 폭이 달라서(PC1 은 ±20 대, PC8 은 ±1 대) 원값 크기끼리 견주면 큰 축이 늘 이긴다.
+   * 축마다 제 폭으로 나눠야 "이 곡이 유별난 축" 이 제대로 뽑힌다.
+   *
+   * 곡 배열이 갈릴 때마다 버린다 (`allocate`).
+   */
+  pcStats() {
+    if (this.pcStatsCache) return this.pcStatsCache;
+    const n = this.songs.length;
+    const dims = this.songs[0]?.pc.length ?? 0;
+    if (!n || !dims) return null;
+    const mean = new Array<number>(dims).fill(0);
+    for (const s of this.songs) for (let d = 0; d < dims; d++) mean[d] += s.pc[d];
+    for (let d = 0; d < dims; d++) mean[d] /= n;
+    const sd = new Array<number>(dims).fill(0);
+    for (const s of this.songs) for (let d = 0; d < dims; d++) sd[d] += (s.pc[d] - mean[d]) ** 2;
+    // 0 이면 나눗셈이 깨진다 — 그 축은 모두가 같은 값이라 치우침 자체가 없다
+    for (let d = 0; d < dims; d++) sd[d] = Math.sqrt(sd[d] / n) || 1;
+    this.pcStatsCache = { mean, sd };
+    return this.pcStatsCache;
   }
 
   /** 그 별이 지금 화면 어디에 있나. 안 보이면 null — 카메라가 움직이면 매 프레임 달라진다 */
@@ -2159,14 +2180,12 @@ export class MapEngine {
     this.meFlight = null;
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
-    const axes = axisLine(target);
     this.touched = true;
     this.morph(
       target,
       { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
       ns,
       `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
-      axes,
       target > this.layer ? 1 : -1,
     );
     return "moved";
@@ -2183,7 +2202,6 @@ export class MapEngine {
     this.stack = [];
     this.boxes = [];
     this.selectedId = id;
-    const axes = axisLine(0);
     const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
     const f = this.freeRect();
     const s = this.songs[this.index.get(id)!];
@@ -2193,7 +2211,6 @@ export class MapEngine {
       { s: scale, cx: s.pc[0] - (f.cx - this.W / 2) / scale, cy: s.pc[1] + (f.cy - this.H / 2) / scale },
       ns,
       `${s.title} — ${LAYER_NAMES[0]}${ro(LAYER_NAMES[0])} 떠오르는 중`,
-      axes,
       -1,
     );
   }
@@ -2295,7 +2312,6 @@ export class MapEngine {
     const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
     const target = this.layer + dir;
     if (target < 0 || target >= LAYER_COUNT) return false;
-    const axes = axisLine(target);
     const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
@@ -2304,7 +2320,7 @@ export class MapEngine {
     this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
     // 우주선·내 위치는 새 레이어 좌표로 옮긴다
     this.friendPos.delete(f.leader.email);
-    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, axes);
+    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
     f.phase = "view";
     f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
     return true;
@@ -2683,7 +2699,7 @@ export class MapEngine {
       // 압력 시작·해제 때만 새 배열이 되므로 참조 비교로 변화가 잡힌다
       prefetchBoxes: this.prefetch,
       morph: this.anim
-        ? { big: this.anim.big, sub: this.anim.sub }
+        ? { big: this.anim.big }
         : this.pending
           ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중`, sub: `화면 안 ${this.pending.inView.toLocaleString()}곡 기준` }
           : null,

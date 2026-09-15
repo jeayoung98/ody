@@ -112,8 +112,9 @@ export const TUTORIAL_STEPS = [
     title: "여정 만들기를 누르세요",
     description: "두 곡을 골랐다고 경로가 생기지는 않아요. 여정 만들기를 눌러야 두 곡 사이를 이어 주는 곡들이 지도에 그려집니다.",
     task: "journey",
-    spotlight: ["journey-composer", "panel-journey", "journey"],
-    ringOnly: ["journey-composer", "panel-journey"],
+    spotlight: ["journey-create", "journey-composer", "panel-journey", "journey"],
+    // 상자 전체를 두르면 정작 눌러야 할 버튼이 안 짚힌다 (S15P21A405-353)
+    ringOnly: ["journey-create", "journey-composer", "panel-journey"],
     hint: "none",
     card: "bottom",
     lock: false,

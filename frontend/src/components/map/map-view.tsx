@@ -10,6 +10,7 @@ import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
+import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
@@ -81,7 +82,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
-  const playSingle = usePlayerStore((s) => s.playSingle);
+  const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
@@ -353,11 +354,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     (s: MapPoint) => {
       selectMusic(s.musicId);
       openSong(s.musicId);
-      playSingle(s.musicId);
-      recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 });
+      // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
+      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 }));
       useTutorialStore.getState().complete("select");
     },
-    [openSong, playSingle, recordPlay, selectMusic],
+    [openSong, playWithConfirm, recordPlay, selectMusic],
   );
 
   /**

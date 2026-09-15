@@ -23,3 +23,21 @@ export const ACTIVITY_CONFIRM = {
   confirm: "멈추고 시작",
   cancel: "취소",
 } as const;
+
+/**
+ * 순차 재생 중에 **그 목록 밖의 곡**을 재생할 때 (S15P21A405-341).
+ *
+ * 단일 곡 재생은 배타 활동이 아니라서 `ACTIVITY_CONFIRM` 을 쓸 수 없다(위 정의). 그래도
+ * 듣던 목록이 통째로 닫히는 일이라 **물어보지 않고 넘어가면 안 된다** — 곡 하나 눌렀을 뿐인데
+ * 여정이 사라진 것으로 겪는다.
+ */
+export const LEAVE_LIST_CONFIRM = {
+  title: "이 곡만 재생할까요?",
+  message: (current: ActivityKind, currentDetail: string | null) => {
+    const cur = ACTIVITY_LABELS[current];
+    const detail = currentDetail ? ` (${currentDetail})` : "";
+    return `목록 밖의 곡이라 지금 진행 중인 ${cur}${detail}${iGa(currentDetail ?? cur)} 멈추고 목록이 닫힙니다. 이 곡만 재생할까요?`;
+  },
+  confirm: "멈추고 재생",
+  cancel: "취소",
+} as const;

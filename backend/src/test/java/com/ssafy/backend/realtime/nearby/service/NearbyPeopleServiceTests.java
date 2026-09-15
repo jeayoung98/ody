@@ -20,10 +20,12 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
+import com.ssafy.backend.realtime.meeting.MeetingService;
 import com.ssafy.backend.realtime.nearby.dto.NearbyPerson;
 import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort.NeighborSong;
+import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
@@ -40,6 +42,8 @@ class NearbyPeopleServiceTests {
     @Mock NeighborPort neighborPort;
     @Mock NearbyRedisRepository nearbyRepo;
     @Mock UserDisplayResolver userDisplayResolver;
+    @Mock MeetingService meetingService;
+    @Mock RiderCountPort riderCountPort;
     @InjectMocks NearbyPeopleService service;
 
     private static final String ME = "me@x.com";
@@ -66,12 +70,21 @@ class NearbyPeopleServiceTests {
                 200L, Set.of("u2@x.com")));
         when(userDisplayResolver.resolve("u1@x.com")).thenReturn(new UserView("nick1", "img1"));
         when(userDisplayResolver.resolve("u2@x.com")).thenReturn(new UserView("nick2", "img2"));
+        when(meetingService.countWith(ME, "u1@x.com")).thenReturn(4);
+        when(meetingService.countWith(ME, "u2@x.com")).thenReturn(1);
+        when(riderCountPort.count("u1@x.com")).thenReturn(2);
 
         NearbySnapshot res = service.open(ME);
 
         assertThat(res.anchorMusicId()).isEqualTo(100L);
         assertThat(res.people()).extracting(NearbyPerson::nickname)
                 .containsExactlyInAnyOrder("nick1", "nick2"); // 나(ME)는 없음
+        assertThat(res.people()).filteredOn(person -> person.email().equals("u1@x.com"))
+                .singleElement()
+                .satisfies(person -> {
+                    assertThat(person.meetingCount()).isEqualTo(4);
+                    assertThat(person.riderCount()).isEqualTo(2);
+                });
     }
 
     @Test

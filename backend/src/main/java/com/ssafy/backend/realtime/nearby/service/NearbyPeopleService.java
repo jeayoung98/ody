@@ -12,10 +12,12 @@ import org.springframework.stereotype.Service;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
+import com.ssafy.backend.realtime.meeting.MeetingService;
 import com.ssafy.backend.realtime.nearby.dto.NearbyPerson;
 import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort.NeighborSong;
+import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
@@ -41,6 +43,8 @@ public class NearbyPeopleService {
 	private final NeighborPort neighborPort;
 	private final NearbyRedisRepository nearbyRepo;
 	private final UserDisplayResolver userDisplayResolver;
+	private final MeetingService meetingService;
+	private final RiderCountPort riderCountPort;
 
 	/**
 	 * 지금 이 사람 기준으로 주변사람 목록을 만든다.
@@ -98,7 +102,8 @@ public class NearbyPeopleService {
 				}
 				UserView who = userDisplayResolver.resolve(listener);
 				people.add(new NearbyPerson(
-						who.nickname(), who.imageUrl(),
+						listener, who.nickname(), who.imageUrl(),
+						meetingService.countWith(email, listener), riderCountPort.count(listener),
 						song.musicId(), song.title(), song.artist(), song.distance()));
 			}
 		}

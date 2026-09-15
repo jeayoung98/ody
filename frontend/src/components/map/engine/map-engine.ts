@@ -1882,15 +1882,22 @@ export class MapEngine {
    */
   pickTutorialStar(cardBottom: number): number | null {
     const f = this.freeRect();
-    const ok = this.visible.filter(
-      (v) =>
-        v.px > f.x0 + 40 &&
-        v.px < f.x1 - 40 &&
-        v.py > Math.max(f.y0 + 40, cardBottom) &&
-        v.py < f.y1 - 40 &&
-        !this.blocked(v.px, v.py),
-    );
-    if (!ok.length) return null;
+    const inView = (v: VisibleStar) => v.px > f.x0 + 40 && v.px < f.x1 - 40 && v.py > f.y0 + 40 && v.py < f.y1 - 40;
+    /**
+     * **빈손으로 끝나면 안 된다** (S15P21A405-351). 화면에 보이는 별이 열 개 남짓일 때가 있어서,
+     * 세 조건을 다 걸면 하나도 안 남고 그 단계에서 튜토리얼이 멈춰 버린다. 좋은 자리부터 보되
+     * 없으면 한 겹씩 양보하고, 마지막에는 보이는 별 아무거나라도 짚는다.
+     */
+    const clear = (v: VisibleStar) => !this.blocked(v.px, v.py);
+    const tries = [
+      (v: VisibleStar) => inView(v) && v.py > cardBottom && clear(v), // 카드 아래 · HUD 밖
+      (v: VisibleStar) => inView(v) && clear(v), //                      HUD 밖
+      inView, //                                                         화면 안
+      () => true, //                                                     보이기만 하면
+    ];
+    const ok = tries.map((t) => this.visible.filter(t)).find((list) => list.length > 0);
+    if (!ok) return null;
+    // 남은 것 중에서는 밝은 쪽 절반. 재생수가 적은 별은 점이 희미해 짚어 줘도 눈에 안 들어온다
     const bright = [...ok].sort((a, b) => this.songs[b.i].weight - this.songs[a.i].weight).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
     return this.songs[bright[Math.floor(Math.random() * bright.length)].i].musicId;
   }

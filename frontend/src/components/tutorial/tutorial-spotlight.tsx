@@ -2,7 +2,6 @@
 
 import { useEffect, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { ZoomInIcon } from "@/components/common/icons";
 
 interface Rect {
   x0: number;
@@ -17,40 +16,26 @@ interface Rect {
 
 /** 요소 둘레 여백. 고리가 버튼에 딱 붙으면 눌러야 할 것이 뭔지 덜 읽힌다 */
 const PAD = 9;
-/** 짚어 준 별 둘레 여백. 별은 점이라 요소보다 훨씬 넉넉해야 누를 자리가 보인다 */
-const STAR_PAD = 26;
 
 interface Targets {
   spotlight: readonly string[];
   ringOnly: readonly string[];
-  /** `"star"` 가 가리킬 곡. 이 단계가 짚어 준 별 하나다 */
-  starId: number | null;
 }
 
 /**
  * 자리를 찾는다. 앞에서부터 **먼저 찾아지는 것**을 쓴다 — 여정처럼 한 단계 안에서 조작 자리가
  * 옮겨 다니는 경우(레일 버튼 → 패널 → 만들기 상자)를 한 목록으로 적기 위해서다.
  *
- * DOM 요소가 아닌 것이 둘 있다.
- * - `"map"` — 캔버스는 화면 전체를 덮으므로 그대로 쓰면 아무것도 안 어두워진다. 엔진이 이미
- *   아는 "패널·HUD 를 뺀 지도가 실제로 보이는 사각형" 을 쓴다.
- * - `"star"` — 짚어 준 별. 캔버스에 그려진 점이라 DOM 이 없다. 자리는 **매번 다시 묻는다** —
- *   카메라가 조금이라도 움직이면 어제 잰 자리는 틀린 자리다.
+ * `"map"` 만 DOM 요소가 아니다. 캔버스는 화면 전체를 덮으므로 그대로 쓰면 아무것도 안
+ * 어두워진다 — 엔진이 이미 아는 "패널·HUD 를 뺀 지도가 실제로 보이는 사각형" 을 쓴다.
  */
-function find(targets: readonly string[], dim: boolean, starId: number | null): Rect | null {
+function find(targets: readonly string[], dim: boolean): Rect | null {
   for (const t of targets) {
-    if (t === "map" || t === "star") {
+    if (t === "map") {
       const c = document.querySelector("canvas")?.getBoundingClientRect();
-      const e = getMapEngine();
-      if (!c || !e) continue;
-      if (t === "map") {
-        const f = e.freeRect();
-        return { x0: c.left + f.x0, y0: c.top + f.y0, x1: c.left + f.x1, y1: c.top + f.y1, ring: false, dim };
-      }
-      const s = starId == null ? null : e.starPos(starId);
-      if (!s) continue;
-      const r = s.r + STAR_PAD;
-      return { x0: c.left + s.x - r, y0: c.top + s.y - r, x1: c.left + s.x + r, y1: c.top + s.y + r, ring: true, dim };
+      const f = getMapEngine()?.freeRect();
+      if (!c || !f) continue;
+      return { x0: c.left + f.x0, y0: c.top + f.y0, x1: c.left + f.x1, y1: c.top + f.y1, ring: false, dim };
     }
     const r = document.querySelector(`[data-tutorial="${t}"]`)?.getBoundingClientRect();
     if (r?.width && r.height) return { x0: r.left - PAD, y0: r.top - PAD, x1: r.right + PAD, y1: r.bottom + PAD, ring: true, dim };
@@ -59,7 +44,7 @@ function find(targets: readonly string[], dim: boolean, starId: number | null): 
 }
 
 /** 고리만 두르는 자리가 떠 있으면 그쪽이 이긴다 — 어둠막을 걷는 것이 요점이라 */
-const measure = ({ spotlight, ringOnly, starId }: Targets) => find(ringOnly, false, starId) ?? find(spotlight, true, starId);
+const measure = ({ spotlight, ringOnly }: Targets) => find(ringOnly, false) ?? find(spotlight, true);
 
 const same = (a: Rect | null, b: Rect | null) =>
   a && b ? a.x0 === b.x0 && a.y0 === b.y0 && a.x1 === b.x1 && a.y1 === b.y1 && a.dim === b.dim : a === b;
@@ -74,39 +59,34 @@ const same = (a: Rect | null, b: Rect | null) =>
  * 다음 단계로 넘기는 것은 여기서 하지 않는다. 밝힌 자리를 진짜로 조작하면 그 컴포넌트가
  * 이미 `complete(task)` 를 부른다 (지도 휠·별 클릭·주변 탐색 버튼·출발곡·도착곡·경로 만들기).
  */
-export default function TutorialSpotlight({ spotlight, ringOnly, starId, hint }: Targets & { hint: string }) {
+export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
   const [rect, setRect] = useState<Rect | null>(null);
 
   useEffect(() => {
-    /**
-     * 짚어 준 별은 카메라를 타고 움직이므로 **매 프레임** 다시 잰다. 나머지(버튼·패널)는
-     * 패널이 열고 닫힐 때나 움직이니 폴링으로 충분하다 — ResizeObserver 는 크기만 보고
-     * 위치 변화를 못 본다.
-     */
-    const perFrame = spotlight.includes("star");
-    let raf = 0;
+    // ponytail: 250ms 폴링. 패널이 열고 닫히며 자리가 **움직이는데** ResizeObserver 는 크기만 본다
     const tick = () => {
-      const next = measure({ spotlight, ringOnly, starId });
+      const next = measure({ spotlight, ringOnly });
       setRect((prev) => (same(prev, next) ? prev : next));
-      if (perFrame) raf = requestAnimationFrame(tick);
     };
     tick();
-    const id = perFrame ? 0 : window.setInterval(tick, 250);
+    const id = window.setInterval(tick, 250);
     window.addEventListener("resize", tick);
     return () => {
-      if (raf) cancelAnimationFrame(raf);
-      if (id) window.clearInterval(id);
+      window.clearInterval(id);
       window.removeEventListener("resize", tick);
     };
-  }, [spotlight, ringOnly, starId]);
+  }, [spotlight, ringOnly]);
 
   const dim = "pointer-events-auto fixed bg-void/80 backdrop-blur-[2px]";
-  // 밝힐 자리를 못 찾으면 통째로 덮는다
-  if (!rect) return <div className={`${dim} inset-0`} />;
+  /**
+   * 뚫을 자리가 없는 단계는 **연하게** 덮는다 (S15P21A405-351). 지금 이런 단계는 짚은 별을
+   * 오버레이에 직접 그리는 곳뿐인데, 진하게 덮으면 그 별이 별들 사이에서 고른 하나가 아니라
+   * 허공에 뜬 점으로 보인다. 둘레 별이 비쳐야 "이 중 하나" 로 읽힌다. 막는 것은 그대로다.
+   */
+  if (!rect) return <div className="pointer-events-auto fixed inset-0 bg-void/40" />;
 
   const w = rect.x1 - rect.x0;
   const h = rect.y1 - rect.y0;
-  const box = { left: rect.x0, top: rect.y0, width: w, height: h };
   return (
     <>
       {rect.dim && (
@@ -122,21 +102,9 @@ export default function TutorialSpotlight({ spotlight, ringOnly, starId, hint }:
         <div
           className="pointer-events-none fixed border border-teal/60 shadow-glow-teal"
           // 알약 버튼부터 세로로 긴 패널까지 대상이 제각각이라 짧은 변에 맞춰 둥글린다
-          style={{ ...box, borderRadius: Math.min(26, w / 2, h / 2) }}
+          style={{ left: rect.x0, top: rect.y0, width: w, height: h, borderRadius: Math.min(26, w / 2, h / 2) }}
         >
           <i className="animate-tbeat absolute -inset-0.5 block rounded-[inherit] border-2 border-teal" />
-        </div>
-      )}
-      {/* 짚은 자리에 깔아 두는 후광 (S15P21A405-350). 별 자체는 점이라 구멍만으로는 덜 읽힌다 */}
-      {hint === "star" && (
-        <div
-          className="pointer-events-none fixed rounded-pill bg-[radial-gradient(circle,rgba(79,227,206,.38)_0%,transparent_68%)]"
-          style={box}
-        />
-      )}
-      {hint === "zoom" && (
-        <div className="pointer-events-none fixed grid place-items-center" style={box}>
-          <ZoomInIcon className="animate-tbeat text-teal drop-shadow-[0_0_14px_#4fe3ce]" />
         </div>
       )}
     </>

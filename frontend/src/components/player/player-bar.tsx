@@ -110,16 +110,22 @@ export default function PlayerBar() {
       >
         <i className="grad-bg absolute inset-0 opacity-55 [mask:radial-gradient(circle_at_50%_50%,#000_30%,transparent_72%)]" />
       </span>
-      <button type="button" onClick={openContext} className="min-w-0 flex-1 text-left" disabled={currentMusicId == null}>
-        <p className="truncate text-sm">
-          {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
-          {currentMusicId != null && !canPlay && <span className="ml-2 text-[10px] text-warn">재생 불가</span>}
-        </p>
-        <p className="truncate text-[10px] text-ink-3">
-          {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
-        </p>
-        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} durationSec={data?.duration} />
-      </button>
+      {/*
+        진행 바는 **버튼 밖**이다 (S15P21A405-334). 안에 두면 바를 끌 때마다 패널이 같이 열리고,
+        버튼 안의 슬라이더라 키보드 조작도 서로 먹는다. 곡 정보만 버튼으로 남긴다
+      */}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <button type="button" onClick={openContext} className="min-w-0 text-left" disabled={currentMusicId == null}>
+          <p className="truncate text-sm">
+            {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
+            {currentMusicId != null && !canPlay && <span className="ml-2 text-[10px] text-warn">재생 불가</span>}
+          </p>
+          <p className="truncate text-[10px] text-ink-3">
+            {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
+          </p>
+        </button>
+        <PlayerProgress musicId={currentMusicId} durationSec={data?.duration} canPlay={canPlay} />
+      </span>
       {queue.length > 0 && (
         <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">
           {queueIndex + 1}/{queue.length}

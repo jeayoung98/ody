@@ -10,7 +10,7 @@ import { useTutorialStore } from "@/stores/use-tutorial-store";
  * 기준 곡: 선택된 곡 > 재생 중인 곡. 둘 다 없으면 비활성.
  *
  * 켜기/닫기 **토글만** 한다. 주변 탐색 중 다른 이웃으로 건너가는 것(항해)은 선택한 별 곁에 붙는
- * "여기서 둘러보기" 칩({@link HopChip})이 맡는다 (S15P21A405-288) — 한 버튼이 두 뜻을 갖지 않게
+ * "주변 보기 ›" 링크가 맡는다 (S15P21A405-288) — 한 버튼이 두 뜻을 갖지 않게
  */
 export default function NearbyExploreButton() {
   const viewMode = useMapStore((s) => s.viewMode);

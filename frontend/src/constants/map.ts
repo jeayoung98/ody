@@ -123,6 +123,22 @@ export const LAYER_AXES: ReadonlyArray<{ x: readonly [string, string]; y: readon
  * 겹 전환 자막의 축 줄. 일곱 군데서 같은 문자열을 조립하던 것을 모았다.
  * 라벨 없는 축(PC4 · PC12)은 없는 의미를 지어내는 대신 "미세한 차이" 로 적는다.
  */
+/**
+ * 그 주성분 값이 가리키는 **쪽 이름** (S15P21A405-355).
+ *
+ * `pcIndex` 는 0-based 다 — 짝수는 그 겹의 가로축, 홀수는 세로축이다 (겹당 두 축, 8겹 16축).
+ * 값이 음수면 축의 왼쪽 말, 양수면 오른쪽 말이 그 곡을 설명한다.
+ *
+ * **뜻이 없는 축(PC4 · PC12)은 `null` 이다.** 지도에서 "미세한 차이" 로 적는 것과 같은 이유로,
+ * 없는 의미를 지어 붙이면 사용자가 그 방향으로 곡을 찾다가 헛수고한다.
+ */
+export function pcAxisLabel(pcIndex: number, value: number): string | null {
+  const ax = LAYER_AXES[Math.floor(pcIndex / 2)];
+  if (!ax) return null;
+  const pair = pcIndex % 2 === 0 ? ax.x : ax.y;
+  return pair[0] ? (value >= 0 ? pair[1] : pair[0]) : null;
+}
+
 export function axisLine(layer: number) {
   const ax = LAYER_AXES[layer];
   const one = (p: readonly [string, string]) => (p[0] ? `${p[0]} ↔ ${p[1]}` : "미세한 차이");

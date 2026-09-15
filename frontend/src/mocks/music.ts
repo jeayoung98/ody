@@ -48,7 +48,7 @@ export function mockMusicDetail(id: number): MusicDetail {
     lyricist: `Lyricist ${(id % 12) + 1}`,
     moods: [MOODS[id % MOODS.length], MOODS[(id + 2) % MOODS.length]],
     genres: [{ id: genreId, name: GENRE_NAMES[genreId] }],
-    principalComponents: pc.slice(0, 6).map((v, i) => ({ label: `PC${i + 1}`, value: Math.max(-1, Math.min(1, v / 2.5)) })),
+    principalComponents: pc.map((v, i) => ({ axis: i, value: v })),
     nearby: (s ? nearestSongs(s, NEARBY_COUNT) : []).map((p) => ({ id: p.musicId, title: p.title, artist: p.artist })),
     relatedPlaylists: [
       { id: 1, playlistName: "새벽 드라이브", email: "luna@ody.app" },

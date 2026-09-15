@@ -1,16 +1,17 @@
 import { eulReul, iGa } from "@/lib/josa";
 
 /**
- * 배타 활동 (ACT-01). 따라가기 · 여정 재생 · 플레이리스트 재생은 동시에 진행할 수 없다.
- * 단일 곡 재생은 활동이 아니다.
+ * 배타 활동 (ACT-01). 따라가기 · 여정 재생 · 플레이리스트 재생 · 주변 탐색 재생은 동시에
+ * 진행할 수 없다. 단일 곡 재생은 활동이 아니다.
  */
-export const ACTIVITY_KINDS = ["follow", "journey", "playlist"] as const;
+export const ACTIVITY_KINDS = ["follow", "journey", "playlist", "nearby"] as const;
 export type ActivityKind = (typeof ACTIVITY_KINDS)[number];
 
 export const ACTIVITY_LABELS: Record<ActivityKind, string> = {
   follow: "따라가기",
   journey: "여정 재생",
   playlist: "플레이리스트 재생",
+  nearby: "주변 음악 재생",
 };
 
 export const ACTIVITY_CONFIRM = {

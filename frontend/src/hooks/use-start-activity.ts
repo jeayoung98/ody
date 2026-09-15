@@ -22,6 +22,7 @@ function currentActivity(): CurrentActivity | null {
   const p = usePlayerStore.getState();
   if (p.context.kind === "playlist") return { kind: "playlist", targetKey: String(p.context.playlistId), detail: null };
   if (p.context.kind === "journey") return { kind: "journey", targetKey: `${p.context.startMusicId}-${p.context.endMusicId}`, detail: null };
+  if (p.context.kind === "nearby") return { kind: "nearby", targetKey: String(p.context.centerMusicId), detail: null };
   return null;
 }
 

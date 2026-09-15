@@ -84,13 +84,17 @@ export default function SurveyRunner() {
   /**
    * 지금 듣는 곡이 평가 대상인가. 경로 재생 중이면 경로 표, 주변 탐색 중이면 주변 표에서 찾는다.
    *
-   * 주변 표는 **단일 재생일 때만** 본다. `viewMode` 는 지도 오버레이 상태라 플리를 틀어도 안 꺼지고
-   * (`playQueue` 는 `viewMode` 를 건드리지 않는다), 뷰를 켜 둔 채 플리를 돌리면 그 곡이 마침 이웃
-   * 목록에 있을 때 주탐 행으로 들어간다. **플리는 사용자가 임의로 담은 목록이라 우리 추천 결과가
-   * 아니다** — 재려는 건 주변 탐색·경로 탐색이 고른 연결이 사람 귀에도 맞느냐지 남이 만든 목록의
-   * 흐름이 아니다. 경로 재생은 바로 위에서 갈라지므로 여기 걸리는 건 플리뿐이다.
+   * 주변 표는 **단일 재생이거나 주변 10곡 순차 재생일 때만** 본다. `viewMode` 는 지도 오버레이
+   * 상태라 플리를 틀어도 안 꺼지고 (`playQueue` 는 `viewMode` 를 건드리지 않는다), 뷰를 켜 둔 채
+   * 플리를 돌리면 그 곡이 마침 이웃 목록에 있을 때 주탐 행으로 들어간다. **플리는 사용자가 임의로
+   * 담은 목록이라 우리 추천 결과가 아니다** — 재려는 건 주변 탐색·경로 탐색이 고른 연결이 사람
+   * 귀에도 맞느냐지 남이 만든 목록의 흐름이 아니다. 경로 재생은 바로 위에서 갈라지므로 여기
+   * 걸리는 건 플리뿐이다.
+   *
+   * `nearby` 는 **우리가 고른 10곡을 그대로 순서대로 트는 것**이라 단일 재생과 같은 자격이다
+   * (S15P21A405-359). 이 줄에서 빠지면 순차 재생으로 들은 곡은 설문을 못 받는다.
    */
-  const inNearby = viewMode === "nearby" && context.kind === "single";
+  const inNearby = viewMode === "nearby" && (context.kind === "single" || context.kind === "nearby");
   const table = inJourney ? journeyTargets : inNearby ? nearbyTargets : null;
   const prompt = currentMusicId != null && table ? (table.get(currentMusicId) ?? null) : null;
 

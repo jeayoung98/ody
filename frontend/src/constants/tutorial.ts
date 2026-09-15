@@ -12,13 +12,12 @@
  * 지도를 둘러보거나 다른 것을 눌러 볼 수 있다.
  *
  * 각 칸이 하는 일:
- * - `spotlight` — 연한 덤을 덮고 **이 자리만 구멍을 내어** 고리를 두른다
- * - `ringOnly` — 덮지 않고 **고리만** 두른다. 이게 찾아지면 이쪽이 이긴다
+ * - `spotlight` — 연한 덤을 덮고 **이 자리만 구멍을 내어** 고리를 두른다. 앞에서부터
+ *   먼저 찾아지는 것을 쓰므로, 한 단계 안에서 자리가 옮겨 다니면 나중에 열리는 것을 앞에 적는다
  * - `hint` — 덮은 위에 따로 그릴 손짓 (`wheel` 마우스 · `star` 짚은 별)
  * - `card` — 안내 카드 자리. 우측 패널을 보는 단계는 `left`·`bottom` 으로 비켜 준다
  *
- * `spotlight`·`ringOnly` 는 앞에서부터 먼저 찾아지는 것을 쓴다. `"map"` 은 지도가 실제로
- * 보이는 사각형이다 (`tutorial-spotlight.tsx`).
+ * `"map"` 만 DOM 요소가 아니라 지도가 실제로 보이는 사각형이다 (`tutorial-spotlight.tsx`).
  */
 export const TUTORIAL_STEPS = [
   {
@@ -28,7 +27,6 @@ export const TUTORIAL_STEPS = [
     task: "zoom",
     // 짚을 자리가 없다 — 통째로 연하게 덮고 그 위에 휠 손짓만 올린다. 처음 굴리면 손짓은 사라진다
     spotlight: [],
-    ringOnly: [],
     hint: "wheel",
     card: "top",
   },
@@ -43,7 +41,6 @@ export const TUTORIAL_STEPS = [
      * (S15P21A405-354): 짚어 준 별 말고 다른 별을 눌러 봐도 되고, 확대·이동도 된다.
      */
     spotlight: [],
-    ringOnly: [],
     hint: "star",
     card: "top",
   },
@@ -53,7 +50,6 @@ export const TUTORIAL_STEPS = [
     description: "곡 상세에서 주변 탐색을 켜면 소리가 가장 닮은 10곡이 고리로 펼쳐져요. 실제로 닮게 들리는지가 이번 테스트의 질문입니다.",
     task: "nearby",
     spotlight: ["nearby"],
-    ringOnly: [],
     hint: "none",
     // 우측 곡 상세가 처음 뜨는 자리다 — 카드가 가운데 있으면 그걸 가린다
     card: "left",
@@ -68,7 +64,6 @@ export const TUTORIAL_STEPS = [
      */
     task: "look",
     spotlight: ["journey"],
-    ringOnly: [],
     hint: "none",
     card: "left",
   },
@@ -77,12 +72,8 @@ export const TUTORIAL_STEPS = [
     title: "여정, 출발곡부터",
     description: "오른쪽 여정 탭을 열고 여정 만들기를 누른 다음, 위 칸에 출발곡을 고르세요. 상자에서 검색하거나 지도에서 별을 눌러도 돼요.",
     task: "journey-start",
-    spotlight: ["journey"],
-    /**
-     * 여정 패널·만들기 상자가 열린 뒤로는 **어둠막을 걷는다.** 출발곡·도착곡을 지도에서 눌러
-     * 고르는 단계라 지도를 막아 버리면 이 단계를 끝낼 수가 없다. 고리만 그 자리로 옮긴다.
-     */
-    ringOnly: ["journey-composer", "panel-journey"],
+    // 만들기 상자가 열리면 고리가 그리로 옮겨 간다 — 먼저 찾아지는 것이 이긴다
+    spotlight: ["journey-composer", "panel-journey", "journey"],
     hint: "none",
     card: "bottom",
   },
@@ -92,7 +83,6 @@ export const TUTORIAL_STEPS = [
     description: "아래 칸에 도착곡을 고르세요. 여기서 저기까지 소리가 어떻게 이어지는지를 보는 겁니다.",
     task: "journey-end",
     spotlight: ["journey-composer", "panel-journey", "journey"],
-    ringOnly: ["journey-composer", "panel-journey"],
     hint: "none",
     card: "bottom",
   },
@@ -101,9 +91,8 @@ export const TUTORIAL_STEPS = [
     title: "여정 만들기를 누르세요",
     description: "두 곡을 골랐다고 경로가 생기지는 않아요. 여정 만들기를 눌러야 두 곡 사이를 이어 주는 곡들이 지도에 그려집니다.",
     task: "journey",
-    spotlight: ["journey-create", "journey-composer", "panel-journey", "journey"],
     // 상자 전체를 두르면 정작 눌러야 할 버튼이 안 짚힌다 (S15P21A405-353)
-    ringOnly: ["journey-create", "journey-composer", "panel-journey"],
+    spotlight: ["journey-create", "journey-composer", "panel-journey", "journey"],
     hint: "none",
     card: "bottom",
   },

@@ -1,11 +1,10 @@
 "use client";
 
-import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ROUTES, STORAGE_KEYS, TUTORIAL_STEPS } from "@/constants";
 import { useCompleteTutorialMutation } from "@/hooks/mutations/use-complete-tutorial-mutation";
-import { writeStorage } from "@/lib/storage";
+import { removeStorage, writeStorage } from "@/lib/storage";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -35,7 +34,6 @@ const CARD_AT = {
  * 마지막 단계가 끝나면 지금 내 곡(재생/선택한 곡)을 시작점으로 저장하고 메인으로 간다.
  */
 export default function TutorialOverlay() {
-  const router = useRouter();
   const stepIndex = useTutorialStore((s) => s.stepIndex);
   const isDone = useTutorialStore((s) => s.isDone);
   const complete = useTutorialStore((s) => s.complete);
@@ -52,15 +50,23 @@ export default function TutorialOverlay() {
   /**
    * 튜토리얼을 닫고 메인으로. 끝까지 한 경우에는 **마무리 화면을 한 번 거친 뒤** 여기로 온다
    * (S15P21A405-353) — 건너뛴 사람은 나가고 싶은 것이므로 바로 온다.
+   *
+   * **연습하며 만든 것은 전부 버린다** (S15P21A405-354). 듣던 곡도, 내 자리도, 만든 여정도
+   * 남기지 않고 생 초기 상태에서 시작한다 — 튜토리얼은 손에 익히는 자리지 무언가를 고르는
+   * 자리가 아니다. 남길 것은 "튜토리얼을 봤다" 는 사실 하나뿐이고, 그게 없으면 게이트가
+   * 여기로 다시 보낸다.
+   *
+   * 스토어를 하나씩 되돌리는 대신 **통째로 다시 띄운다.** 지도 카메라·재생기·여정·패널이
+   * 저마다 상태를 들고 있어서, 하나라도 빠뜨리면 "생 초기" 가 아니게 된다.
    */
   const finish = useCallback(() => {
-    const { myMusicId, selectedMusicId } = useMapStore.getState();
-    const start = myMusicId ?? selectedMusicId;
-    if (start != null) writeStorage(STORAGE_KEYS.myMusicId, start);
+    removeStorage(STORAGE_KEYS.myMusicId);
+    removeStorage(STORAGE_KEYS.myHome);
+    removeStorage(STORAGE_KEYS.playingMusicId);
     writeStorage(STORAGE_KEYS.tutorialDone, true);
-    completeMutation.mutate(undefined, { onSettled: () => router.replace(ROUTES.home) });
+    completeMutation.mutate(undefined, { onSettled: () => window.location.replace(ROUTES.home) });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [router]);
+  }, []);
 
   const skipTutorial = () => {
     skip();
@@ -169,7 +175,7 @@ export default function TutorialOverlay() {
   return (
     <div className="pointer-events-none absolute inset-0 z-[60]">
       {/* 덤 먼저 — 안내 카드와 손짓이 그 위에 와야 한다. 덤은 아무것도 막지 않는다 */}
-      <TutorialSpotlight spotlight={step.spotlight} ringOnly={step.ringOnly} />
+      <TutorialSpotlight spotlight={step.spotlight} />
       {step.hint === "wheel" && !wheeled && <WheelHint />}
       {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>

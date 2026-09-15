@@ -17,14 +17,6 @@ public interface MusicDetailMapper {
 	String findLocationText(@Param("id") long id);
 
 	/**
-	 * mbid 목록으로 상세를 일괄 조회한다 (여정 정거장 조립용).
-	 *
-	 * <p><b>순서를 보장하지 않는다</b> — {@code IN} 은 입력 순서를 보존하지 않는다.
-	 * 호출자가 mbid 키로 재조립한다. 없는 mbid 는 결과에서 빠진다(예외 아님).
-	 */
-	List<MusicDetailRow> findByMbids(@Param("mbidList") List<String> mbidList);
-
-	/**
 	 * id 목록으로 <b>좌표만</b> 일괄 조회한다 (별자리 배치용, BACKEND-NOTES A-9).
 	 *
 	 * <p>제목·아티스트·장르는 읽지 않는다 — 배치는 좌표만 있으면 된다.

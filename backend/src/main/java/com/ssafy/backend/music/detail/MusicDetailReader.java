@@ -47,13 +47,16 @@ public interface MusicDetailReader {
 	List<MusicDetail> findDetailsByIds(List<Long> ids);
 
 	/**
-	 * mbid 로 곡 요약을 일괄 조회한다 (005 FR-003).
+	 * id(PK) 로 곡 요약을 일괄 조회한다 (005 FR-003).
+	 *
+	 * <p><b>id(PK)로 조회한다.</b> 이웃 후보는 id 를 이미 들고 있고, {@code music.mbid} 에는 인덱스가 없어
+	 * mbid 로 조회하면 매 요청 전수 스캔이 된다 (운영 실측 1093ms vs PK 0.22ms, S15P21A405-307).
 	 *
 	 * <p>선정이 끝난 <b>최종 목록에만</b> 부르는 용도다 — 후보 전체에 장르를 조인하면 그 비용이 그대로
 	 * 지연이 된다. 그래서 이웃 후보 단계의 {@code TrackCandidate} 에는 앨범·장르가 없다.
 	 *
 	 * <p><b>순서를 보장하지 않는다</b>({@code IN} 이 입력 순서를 보존하지 않는다). 호출자가 재조립한다.
-	 * 요청한 mbid 중 없는 것은 결과에서 빠진다.
+	 * 요청한 id 중 없는 것은 결과에서 빠진다.
 	 */
-	List<MusicSummary> findSummariesByMbids(List<String> mbids);
+	List<MusicSummary> findSummariesByIds(List<Long> ids);
 }

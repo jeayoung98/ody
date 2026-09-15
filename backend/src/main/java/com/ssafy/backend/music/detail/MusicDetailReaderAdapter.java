@@ -1,6 +1,5 @@
 package com.ssafy.backend.music.detail;
 
-import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -25,6 +24,10 @@ import com.ssafy.backend.music.mapper.MusicDetailMapper;
  *
  * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-006).
  * 거리 척도는 서빙 baseline(v2.1-pca16) 위의 L2({@code <->}, music_location_hnsw_idx 와 같은 연산자).
+ *
+ * videoId 는 DB 에 있는 값만 그대로 내려준다. 외부 videoid API 실시간 조회(S15P21A405-312) 는
+ * 이 어댑터를 공유하는 상세·주변탐색·플레이리스트·여정 모두를 한꺼번에 느리게 만들어 걷어냈다
+ * (S15P21A405-322) — 곡 상세(/api/music/detail)만 {@code MusicService} 가 직접 호출해 유지한다.
  */
 @Repository
 public class MusicDetailReaderAdapter implements MusicDetailReader {
@@ -82,18 +85,18 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				row.getAlbum(),
 				genres,
 				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-				VIDEO_ID_NOT_LOADED,
+				row.getVideoId(),
 				row.toLocation(),
 				row.getPlayCnt(),
 				row.getYoutubeCnt());
 	}
 
 	@Override
-	public List<MusicSummary> findSummariesByMbids(List<String> mbids) {
-		if (mbids.isEmpty()) {
+	public List<MusicSummary> findSummariesByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
 			return List.of();               // IN () 는 문법 오류
 		}
-		List<MusicDetailRow> rows = mapper.findByMbids(mbids);
+		List<MusicDetailRow> rows = mapper.findByIds(ids);
 		Map<Long, List<String>> genres = findGenres(rows.stream().map(MusicDetailRow::getId).toList());
 		return rows.stream()
 				.map(row -> new MusicSummary(
@@ -103,7 +106,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						VIDEO_ID_NOT_LOADED,
+						row.getVideoId(),
 						row.toLocation()))
 				.toList();
 	}

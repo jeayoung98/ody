@@ -29,7 +29,7 @@
 
 	<select id="findById" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
 		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt,
+		       m.play_cnt, m.youtube_cnt, m.video_id,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.id = #{id}
@@ -45,7 +45,7 @@
 	-->
 	<select id="findByMbids" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
 		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt,
+		       m.play_cnt, m.youtube_cnt, m.video_id,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.mbid IN
@@ -75,12 +75,12 @@
 	</select>
 
 	<!--
-		플레이리스트 상세 조립용. 곡당 왕복을 없애려고 한 번에 읽는다.
-		컬럼 집합은 findByMbids 와 같다 — 같은 MusicDetail 을 만든다.
+		플레이리스트·여정 정거장 조립용. 곡당 왕복을 없애려고 한 번에 읽는다.
+		mbid 는 무인덱스라(S15P21A405-313) 정거장·플리 조립은 PK id 로 조회한다.
 	-->
 	<select id="findByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
 		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt,
+		       m.play_cnt, m.youtube_cnt, m.video_id,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.id IN

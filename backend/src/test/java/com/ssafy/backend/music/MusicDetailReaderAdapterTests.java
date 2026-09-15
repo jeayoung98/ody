@@ -29,6 +29,7 @@ import com.ssafy.backend.music.dto.MusicSummary;
 /**
  * 상세·주변곡 어댑터 단위 테스트 (매퍼 mock). SQL 자체는 실 DB(T205) 대상이고,
  * 여기서는 어댑터가 지는 책임 — 질의 벡터 전달 방식·자기 제외·동률 tie-break·조립 — 만 본다.
+ * videoId 는 DB 값을 그대로 통과시킬 뿐 외부 조회를 하지 않는다(S15P21A405-322).
  */
 class MusicDetailReaderAdapterTests {
 
@@ -90,12 +91,12 @@ class MusicDetailReaderAdapterTests {
 	 * 어댑터에는 <b>확정된 곡의 상세를 채우는 책임</b>만 남았다.
 	 */
 	@Test
-	void findSummariesByMbids_groupsGenresPerTrack() {
-		when(mapper.findByMbids(List.of("m1", "m2"))).thenReturn(List.of(row(1L), row(2L)));
+	void findSummariesByIds_groupsGenresPerTrack() {
+		when(mapper.findByIds(List.of(1L, 2L))).thenReturn(List.of(row(1L), row(2L)));
 		when(mapper.findGenresByMusicIds(List.of(1L, 2L))).thenReturn(List.of(
 				genreRow(1L, "K-Pop"), genreRow(1L, "Ballad"), genreRow(2L, "Rock")));
 
-		List<MusicSummary> out = adapter.findSummariesByMbids(List.of("m1", "m2"));
+		List<MusicSummary> out = adapter.findSummariesByIds(List.of(1L, 2L));
 
 		assertEquals(2, out.size());
 		assertEquals(List.of("K-Pop", "Ballad"), out.get(0).genres());
@@ -103,10 +104,10 @@ class MusicDetailReaderAdapterTests {
 	}
 
 	@Test
-	void findSummariesByMbids_skipsQueries_whenInputIsEmpty() {
-		assertTrue(adapter.findSummariesByMbids(List.of()).isEmpty());
+	void findSummariesByIds_skipsQueries_whenInputIsEmpty() {
+		assertTrue(adapter.findSummariesByIds(List.of()).isEmpty());
 
-		verify(mapper, never()).findByMbids(anyList());
+		verify(mapper, never()).findByIds(anyList());
 		verify(mapper, never()).findGenresByMusicIds(anyList());
 	}
 

@@ -21,6 +21,7 @@ import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.NeighborTrack;
 import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
+import com.ssafy.backend.music.videoid.VideoIdEnricher;
 
 /**
  * 상세 서비스 유닛 (mock port). 조립·pass-through·404·B-D 대기 동작 검증.
@@ -43,7 +44,11 @@ class MusicDetailServiceTests {
 	}
 
 	private static MusicService serviceWith(MusicDetailReader reader, NearbyService nearby) {
-		return new MusicService(Optional.empty(), Optional.ofNullable(reader), Optional.empty(), nearby);
+		return serviceWith(reader, nearby, Mockito.mock(VideoIdEnricher.class));
+	}
+
+	private static MusicService serviceWith(MusicDetailReader reader, NearbyService nearby, VideoIdEnricher enricher) {
+		return new MusicService(Optional.empty(), Optional.ofNullable(reader), Optional.empty(), nearby, enricher);
 	}
 
 	@Test
@@ -103,7 +108,7 @@ class MusicDetailServiceTests {
 		serviceWith(reader, nearby).getDetail(10234L);
 
 		verify(nearby).neighborsOf(center);
-		verify(reader, Mockito.never()).findSummariesByMbids(Mockito.anyList());
+		verify(reader, Mockito.never()).findSummariesByIds(Mockito.anyList());
 	}
 
 	@Test
@@ -121,5 +126,25 @@ class MusicDetailServiceTests {
 	void getDetail_noReader_throwsUnsupported() {
 		assertThatThrownBy(() -> serviceWith(null, Mockito.mock(NearbyService.class)).getDetail(10234L))
 				.isInstanceOf(UnsupportedOperationException.class);
+	}
+
+	/** S15P21A405-322 — 곡 상세는 중심곡 videoId 만 외부 API 로 채운다. */
+	@Test
+	void getDetail_enrichesVideoId_onlyForCenter() {
+		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
+		NearbyService nearby = Mockito.mock(NearbyService.class);
+		VideoIdEnricher enricher = Mockito.mock(VideoIdEnricher.class);
+		MusicDetail center = detail();
+		when(reader.findDetail(10234L)).thenReturn(Optional.of(center));
+		when(nearby.neighborsOf(center))
+				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
+		when(enricher.resolve(10234L, "IU", "Love wins all", null)).thenReturn("centerVideoId");
+
+		MusicDetailResponse res = serviceWith(reader, nearby, enricher).getDetail(10234L);
+
+		assertThat(res.detail().videoId()).isEqualTo("centerVideoId");
+		// 이웃곡은 최대 10건이라 순차 호출하면 느려져 걷어냈다 — DB 값(여기선 null) 그대로 나간다.
+		assertThat(res.neighbors().get(0).music().videoId()).isNull();
+		verify(enricher, Mockito.never()).resolve(Mockito.eq(1L), Mockito.any(), Mockito.any(), Mockito.any());
 	}
 }

@@ -1,6 +1,5 @@
 package com.ssafy.backend.music.journey;
 
-import static com.ssafy.backend.music.YoutubeSearchUrl.VIDEO_ID_NOT_LOADED;
 import static java.util.stream.Collectors.groupingBy;
 import static java.util.stream.Collectors.mapping;
 import static java.util.stream.Collectors.toList;
@@ -24,11 +23,13 @@ import com.ssafy.backend.music.mapper.MusicDetailMapper;
  * {@code JourneyService.hydrate()} 가 port 를 {@code orElseThrow} 로 꺼내기 때문이다.
  * 산출 쪽(축·DP·층 조회)이 다 붙어도 응답 조립이 여기서 끊긴다.
  *
- * <p>port 계약대로 <b>순서를 보장하지 않고</b>, 없는 mbid 는 결과에서 뺀다. 순서 복원과 누락 판정은
+ * <p>port 계약대로 <b>순서를 보장하지 않고</b>, 없는 id 는 결과에서 뺀다. 순서 복원과 누락 판정은
  * 호출자 몫이다(FR-005, FR-014).
  *
- * <p>좌표는 저장된 값을 그대로 옮긴다 — 재계산·재투영 없음(FR-016).
- * 조회 전용이라 쓰기가 없다(FR-018).
+ * <p>좌표는 저장된 값을 그대로 옮긴다 — 재계산·재투영 없음(FR-016). 조회 전용이라 쓰기가 없다(FR-018).
+ *
+ * <p>videoId 는 DB 에 있는 값만 그대로 내려준다. 여정 정거장은 최대 20곡을 순차 조회해 외부
+ * videoid API 실시간 조회(S15P21A405-312)를 걸면 응답이 느려져 걷어냈다(S15P21A405-322).
  */
 @Repository
 public class JourneyTrackReaderAdapter implements JourneyTrackReader {
@@ -45,12 +46,12 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 	 */
 	@Override
 	@Transactional(readOnly = true)
-	public List<MusicDetail> findDetailsByMbids(List<String> mbids) {
-		if (mbids.isEmpty()) {
+	public List<MusicDetail> findDetailsByIds(List<Long> ids) {
+		if (ids.isEmpty()) {
 			return List.of();                   // IN () 는 문법 오류다
 		}
 
-		List<MusicDetailRow> rows = mapper.findByMbids(mbids);
+		List<MusicDetailRow> rows = mapper.findByIds(ids);
 		if (rows.isEmpty()) {
 			return List.of();
 		}
@@ -70,7 +71,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 						row.getAlbum(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						VIDEO_ID_NOT_LOADED,
+						row.getVideoId(),
 						row.toLocation(),
 						row.getPlayCnt(),
 						row.getYoutubeCnt()))

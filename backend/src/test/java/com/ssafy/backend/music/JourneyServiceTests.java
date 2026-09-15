@@ -84,10 +84,14 @@ class JourneyServiceTests {
 		return songs.stream().map(MusicDetail::mbid).toList();
 	}
 
-	private static EnginePath enginePath(List<String> stationMbids) {
-		List<Double> progresses = IntStream.range(0, stationMbids.size())
-				.mapToObj(i -> (i + 1.0) / (stationMbids.size() + 1.0)).toList();
-		return new EnginePath(true, stationMbids, progresses, 8.4, false, "axis", "v2.1-pca16");
+	private static List<Long> idsOf(List<MusicDetail> songs) {
+		return songs.stream().map(MusicDetail::id).toList();
+	}
+
+	private static EnginePath enginePath(List<Long> stationIds) {
+		List<Double> progresses = IntStream.range(0, stationIds.size())
+				.mapToObj(i -> (i + 1.0) / (stationIds.size() + 1.0)).toList();
+		return new EnginePath(true, stationIds, progresses, 8.4, false, "axis", "v2.1-pca16");
 	}
 
 	/** 출발·도착 상세와 엔진 경로를 준비한다. reader 는 정거장을 <b>뒤섞어</b> 돌려준다(순서 미보장 계약). */
@@ -96,11 +100,11 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, endDuration)));
 
 		List<MusicDetail> ordered = stations(stationCount);
-		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(mbidsOf(ordered)));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(idsOf(ordered)));
 
 		List<MusicDetail> shuffled = new ArrayList<>(ordered);
 		Collections.reverse(shuffled);
-		when(trackReader.findDetailsByMbids(anyList())).thenReturn(shuffled);
+		when(trackReader.findDetailsByIds(anyList())).thenReturn(shuffled);
 		return ordered;
 	}
 
@@ -171,8 +175,8 @@ class JourneyServiceTests {
 	void journey_nullDurationCountsAsZero() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, null)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0")));
-		when(trackReader.findDetailsByMbids(anyList()))
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of(1000L)));
+		when(trackReader.findDetailsByIds(anyList()))
 				.thenReturn(List.of(song(1000L, "s0", null)));
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
@@ -185,10 +189,10 @@ class JourneyServiceTests {
 	void journey_notPlayableStationIsKept() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0")));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of(1000L)));
 		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al",
 				List.of("K-Pop"), null, null, loc(0.5), 1, 0);
-		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(notPlayable));
+		when(trackReader.findDetailsByIds(anyList())).thenReturn(List.of(notPlayable));
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
 
@@ -204,8 +208,8 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		// 진행도가 뒤로 감 — linear 모드가 40쌍 중 21쌍에서 내는 현상(D10 근거)
 		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(new EnginePath(true,
-				List.of("s0", "s1"), List.of(0.7, 0.3), 8.4, false, "axis", "v2.1-pca16"));
-		when(trackReader.findDetailsByMbids(anyList()))
+				List.of(1000L, 1001L), List.of(0.7, 0.3), 8.4, false, "axis", "v2.1-pca16"));
+		when(trackReader.findDetailsByIds(anyList()))
 				.thenReturn(List.of(song(1000L, "s0", 100), song(1001L, "s1", 100)));
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);
@@ -237,8 +241,8 @@ class JourneyServiceTests {
 	void journey_duplicateStationFromEngine_fails() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0", "s0")));
-		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(song(1000L, "s0", 100)));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of(1000L, 1000L)));
+		when(trackReader.findDetailsByIds(anyList())).thenReturn(List.of(song(1000L, "s0", 100)));
 
 		// I6: 같은 곡이 두 번 나오는 응답을 내지 않는다
 		assertThatThrownBy(() -> service.getJourney(START_ID, END_ID))
@@ -279,7 +283,7 @@ class JourneyServiceTests {
 		assertThat(res.musicCnt()).isEqualTo(2);
 		assertThat(res.totalDuration()).isEqualTo(480);
 		// 조회할 mbid 가 없으면 reader 를 부르지 않는다
-		verify(trackReader, never()).findDetailsByMbids(anyList());
+		verify(trackReader, never()).findDetailsByIds(anyList());
 	}
 
 	@Test
@@ -346,9 +350,9 @@ class JourneyServiceTests {
 	void journey_missingStationDetail_failsInsteadOfPartialPath() {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
-		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of("s0", "s1")));
+		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of(1000L, 1001L)));
 		// B10: 2건 요청했는데 1건만 온다
-		when(trackReader.findDetailsByMbids(anyList())).thenReturn(List.of(song(1000L, "s0", 100)));
+		when(trackReader.findDetailsByIds(anyList())).thenReturn(List.of(song(1000L, "s0", 100)));
 
 		assertThatThrownBy(() -> service.getJourney(START_ID, END_ID))
 				.isInstanceOf(CustomException.class)
@@ -410,7 +414,7 @@ class JourneyServiceTests {
 		verify(detailReader).findDetail(END_ID);
 		// 산출에 넘기는 것이 조회해 온 상세 그대로여야 한다 — 좌표·아티스트가 축 좌표계와 같은 녹음 판정에 쓰인다
 		verify(pathFinder).find(song(START_ID, START_MBID, 275), song(END_ID, END_MBID, 205));
-		verify(trackReader).findDetailsByMbids(anyList());
+		verify(trackReader).findDetailsByIds(anyList());
 		verifyNoMoreInteractions(detailReader, pathFinder, trackReader);
 	}
 }

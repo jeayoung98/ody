@@ -28,6 +28,7 @@ import com.ssafy.backend.music.search.MusicSearchReaderAdapter;
 /**
  * 검색 어댑터 단위 테스트 (매퍼 mock). SQL 자체는 실 DB(T204) 대상이고,
  * 여기서는 어댑터가 지는 책임 — 패턴 조립·offset 계산·좌표 보존·장르 묶기 — 만 본다.
+ * videoId 는 DB 값을 그대로 통과시킬 뿐 외부 조회를 하지 않는다(S15P21A405-321).
  */
 class MusicSearchReaderAdapterTests {
 
@@ -154,5 +155,20 @@ class MusicSearchReaderAdapterTests {
 		g.setMusicId(musicId);
 		g.setName(name);
 		return g;
+	}
+
+	@Test
+	void search_passesThroughStoredVideoId_withoutExternalLookup() {
+		MusicSearchRow withId = row(1L);
+		withId.setVideoId("existing1234");
+		MusicSearchRow withoutId = row(2L);
+		when(mapper.findPage(anyString(), anyString(), anyLong(), anyInt(), anyLong()))
+				.thenReturn(List.of(withId, withoutId));
+		when(mapper.findGenresByMusicIds(anyList())).thenReturn(List.of());
+
+		List<MusicSummary> content = adapter.search("q", 0, 10).content();
+
+		assertEquals("existing1234", content.get(0).videoId());
+		assertNull(content.get(1).videoId()); // 없으면 null 그대로 — 외부 API 를 부르지 않는다(S15P21A405-321)
 	}
 }

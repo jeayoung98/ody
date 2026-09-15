@@ -60,6 +60,14 @@
 	<sql id="artistPrefixed">coalesce(lower(m.artist), '') LIKE #{prefix} ESCAPE '\'</sql>
 
 	<!--
+		videoid_api.py 가 후보를 못 찾으면 video_id 에 "none" 을 저장한다(S15P21A405-332) — 수동 확인 전까지는
+		재생 불가능한 곡이라 검색 결과에서 뺀다. video_id 가 아직 적재되지 않은 곡(NULL)은 그대로 노출한다
+		(FR-007, videoId 는 응답에서 null 로 내려간다). IS DISTINCT FROM 은 NULL 도 참으로 통과시키는
+		null-safe 비교라 이 구분에 맞는다 — <> 였다면 NULL 이 조건에서 조용히 걸러진다.
+	-->
+	<sql id="videoIdNotNone">m.video_id IS DISTINCT FROM 'none'</sql>
+
+	<!--
 		findPage 에 timeout="2" 가 붙어 있다 (S15P21A405-297). 초 단위이고 JDBC
 		Statement.setQueryTimeout 으로 내려가, 2초를 넘기면 질의를 취소하고 커넥션을 풀에 돌려준다.
 
@@ -84,25 +92,28 @@
 	-->
 
 	<select id="findPage" timeout="2" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
-		SELECT m.id, m.title, m.artist, m.album,
+		SELECT m.id, m.title, m.artist, m.album, m.video_id,
 		<include refid="locationColumns"/>
 		FROM (
 			(SELECT m.id, 0 AS tier FROM music m
-			 WHERE lower(m.title) = #{q}
+			 WHERE lower(m.title) = #{q} AND <include refid="videoIdNotNone"/>
 			 ORDER BY m.id LIMIT #{cap})
 			UNION ALL
 			(SELECT m.id, 1 AS tier FROM music m
 			 WHERE <include refid="artistLower"/> = #{q} AND lower(m.title) &lt;&gt; #{q}
+			   AND <include refid="videoIdNotNone"/>
 			 ORDER BY m.id LIMIT #{cap})
 			UNION ALL
 			(SELECT m.id, 2 AS tier FROM music m
 			 WHERE <include refid="titlePrefixed"/> AND lower(m.title) &lt;&gt; #{q}
 			   AND <include refid="artistLower"/> &lt;&gt; #{q}
+			   AND <include refid="videoIdNotNone"/>
 			 ORDER BY m.id LIMIT #{cap})
 			UNION ALL
 			(SELECT m.id, 3 AS tier FROM music m
 			 WHERE <include refid="artistPrefixed"/> AND <include refid="artistLower"/> &lt;&gt; #{q}
 			   AND NOT (<include refid="titlePrefixed"/>)
+			   AND <include refid="videoIdNotNone"/>
 			 ORDER BY m.id LIMIT #{cap})
 		) t
 		JOIN music m ON m.id = t.id

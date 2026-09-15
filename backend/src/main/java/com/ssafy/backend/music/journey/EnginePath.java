@@ -10,9 +10,11 @@ import java.util.List;
  *
  * @param reachable    {@code false} 면 422 PATH_NOT_FOUND. 조회 어댑터 부재·재산출 상한 소진은
  *                     이 값이 아니라 예외로 온다(500 과 구분)
- * @param stationMbids <b>중간 정거장만.</b> 출발·도착은 들어 있지 않다(핸드오프 §4.7 —
+ * @param stationIds   <b>중간 정거장 id(PK) 만.</b> 출발·도착은 들어 있지 않다(핸드오프 §4.7 —
  *                     "{@code stations} 는 A·B 를 포함하지 않는다"). 순서가 곧 경로 순서다 —
- *                     상세 조회 결과 순서에 의존하면 안 된다(FR-005). {@code reachable} 이 false 면 빈 목록
+ *                     상세 조회 결과 순서에 의존하면 안 된다(FR-005). {@code reachable} 이 false 면 빈 목록.
+ *                     <b>rev.4</b>: 원격 엔진 잔재인 mbid 대신 id 로 낸다 — 조립이 무인덱스 mbid 풀스캔을
+ *                     피하고 PK 로 읽는다(S15P21A405-313). 응답(MusicDetail)은 그대로라 계약 불변
  * @param progresses   각 정거장의 진행도 {@code p}(A=0, B=1)
  * @param endpointDist 끝점 거리 {@code L = ‖B − A‖}
  * @param far          {@code endpointDist > farEndpointDist}(기본 10.7, D3). 역 수를 늘리는 기준
@@ -22,7 +24,7 @@ import java.util.List;
  */
 public record EnginePath(
 		boolean reachable,
-		List<String> stationMbids,
+		List<Long> stationIds,
 		List<Double> progresses,
 		double endpointDist,
 		boolean far,

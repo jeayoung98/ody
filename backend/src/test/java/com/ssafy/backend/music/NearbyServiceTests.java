@@ -70,11 +70,11 @@ class NearbyServiceTests {
 		when(detailReader.findDetail(centerId)).thenReturn(Optional.of(detail(centerId)));
 		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(200)))
 				.thenReturn(candidates);
-		when(detailReader.findSummariesByMbids(anyList()))
+		when(detailReader.findSummariesByIds(anyList()))
 				.thenAnswer(inv -> {
-					List<String> mbids = inv.getArgument(0);
-					return mbids.stream()
-							.map(m -> summary(Long.parseLong(m.substring("mbid-".length()))))
+					List<Long> ids = inv.getArgument(0);
+					return ids.stream()
+							.map(NearbyServiceTests::summary)
 							.toList();
 				});
 	}
@@ -155,7 +155,7 @@ class NearbyServiceTests {
 		service.findNearby(1);
 
 		verify(detailReader).findDetail(1L);
-		verify(detailReader).findSummariesByMbids(anyList());
+		verify(detailReader).findSummariesByIds(anyList());
 		verify(nearestReader).findNearest(org.mockito.ArgumentMatchers.any(), eq(200));
 		org.mockito.Mockito.verifyNoMoreInteractions(detailReader, nearestReader);
 	}
@@ -166,7 +166,7 @@ class NearbyServiceTests {
 		when(detailReader.findDetail(1)).thenReturn(Optional.of(detail(1)));
 		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(200)))
 				.thenReturn(List.of(cand(2, 3.0), cand(3, 3.5)));
-		when(detailReader.findSummariesByMbids(anyList())).thenReturn(List.of(summary(2)));
+		when(detailReader.findSummariesByIds(anyList())).thenReturn(List.of(summary(2)));
 
 		assertThatThrownBy(() -> service.findNearby(1))
 				.isInstanceOf(IllegalStateException.class);

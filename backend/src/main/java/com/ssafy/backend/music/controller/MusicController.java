@@ -6,6 +6,8 @@ import java.util.Map;
 
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -17,14 +19,18 @@ import com.ssafy.backend.music.retrieval.LayerBox;
 import com.ssafy.backend.music.dto.MajorResponse;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
+import com.ssafy.backend.music.dto.VideoIdBatchRequest;
+import com.ssafy.backend.music.dto.VideoIdBatchResponse;
 import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
 
+import jakarta.validation.Valid;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.NearbyResponse;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 @RestController
@@ -47,6 +53,7 @@ public class MusicController {
 	 *
 	 * 범위 파라미터 표기는 {@link #rangeParam} 한 곳에서만 만든다. FE1 통보가 오면 거기만 바꾼다.
 	 */
+	@Operation(summary = "레이어 상주 집합 조회", description = "level=1은 파라미터 없이, level>=2는 이전 겹들의 사각 범위를 모두 받아 대표곡 집합을 조회한다.")
 	@GetMapping("/major")
 	public ApiResponse<MajorResponse> major(
 			@RequestParam(defaultValue = "1") @Min(1) int level,
@@ -100,6 +107,7 @@ public class MusicController {
 	/**
 	 * 노래 검색 (정본 §3.1). query 부분일치, page 0-based. 결과 없음은 빈 content + 200.
 	 */
+	@Operation(summary = "노래 검색", description = "query 부분일치로 노래를 검색한다. page는 0-based이며, 결과가 없으면 빈 content와 200을 반환한다.")
 	@GetMapping("/search")
 	public ApiResponse<PageResponse<MusicSummary>> search(
 			@RequestParam @NotBlank String query,
@@ -110,6 +118,7 @@ public class MusicController {
 	/**
 	 * 노래 상세 조회 (정본 §3.2). id로 상세 + 최근접 10곡(neighbors). 없는 곡 → 404 MUSIC_NOT_FOUND.
 	 */
+	@Operation(summary = "노래 상세 조회", description = "id로 노래 상세와 최근접 10곡(neighbors)을 함께 조회한다. 없는 곡이면 404 MUSIC_NOT_FOUND.")
 	@GetMapping("/detail")
 	public ApiResponse<MusicDetailResponse> detail(@RequestParam @Min(1) long id) {
 		return ApiResponse.success(musicService.getDetail(id));
@@ -125,8 +134,21 @@ public class MusicController {
 	 *
 	 * <p>기준점을 좌표로도 받을지는 FE 확인 대기다(005 D-CENTER-B). 지금은 곡 id 만 받는다.
 	 */
+	@Operation(summary = "주변 탐색", description = "기준 곡에서 가까운 곡을 선정 규칙을 통과한 최대 10곡까지 반환한다. 이웃 곡을 다시 기준점으로 요청해 탐색을 이어갈 수 있다.")
 	@GetMapping("/nearby")
 	public ApiResponse<NearbyResponse> nearby(@RequestParam @Min(1) long id) {
 		return ApiResponse.success(nearbyService.findNearby(id));
+	}
+
+	/**
+	 * musicId 목록 → videoId 일괄 조회 (S15P21A405-322, 프로토타입). 최대 {@value VideoIdBatchRequest#MAX_IDS}개.
+	 *
+	 * <p>DB 에 이미 있으면 그대로 내려주고, 없으면 외부 videoid API(EC2:8001) 를 호출해 채운 뒤 저장한다.
+	 * spec 006 FR-006(길이·embeddable 검증)은 적용하지 않는다 — 팀 상의 전 임시 경로다.
+	 */
+	@Operation(summary = "videoId 일괄 조회", description = "musicId 목록으로 videoId를 일괄 조회한다. DB에 있으면 그대로 내려주고, 없으면 외부 videoId API를 호출해 채운 뒤 저장한다.")
+	@PostMapping("/videoid")
+	public ApiResponse<VideoIdBatchResponse> videoIds(@RequestBody @Valid VideoIdBatchRequest request) {
+		return ApiResponse.success(musicService.getVideoIds(request.musicIds()));
 	}
 }

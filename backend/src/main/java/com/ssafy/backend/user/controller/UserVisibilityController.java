@@ -11,6 +11,7 @@ import com.ssafy.backend.user.dto.PublicVisibilityUpdateRequest;
 import com.ssafy.backend.user.dto.PublicVisibilityUpdateResponse;
 import com.ssafy.backend.user.service.UserService;
 
+import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
 import lombok.RequiredArgsConstructor;
@@ -26,6 +27,7 @@ public class UserVisibilityController {
 
 	private final UserService userService;
 
+	@Operation(summary = "공개 설정 변경", description = "로그인한 사용자 본인의 공개 설정(is_public)을 변경한다.")
 	@PatchMapping("/public")
 	public ApiResponse<PublicVisibilityUpdateResponse> updatePublicVisibility(
 			@RequestBody PublicVisibilityUpdateRequest request,

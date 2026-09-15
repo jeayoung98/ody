@@ -160,7 +160,7 @@ class JourneyBenchmarkIT {
 				if (!path.progressMonotonic()) {
 					monotonicViolations++;
 				}
-				List<TrackCandidate> stops = resolve(bench, path.stationMbids());
+				List<TrackCandidate> stops = resolve(bench, path.stationIds());
 				if (violatesRules(stops, a, b)) {
 					ruleViolations++;
 				}
@@ -337,7 +337,7 @@ class JourneyBenchmarkIT {
 						new AxisJourneyPathFinder(Optional.of(reader), RULES, new SimpleMeterRegistry(), LayerCandidates.LAYER_LIMIT, 2.5);
 
 				EnginePath axis = finder.find(a, b);
-				if (!axis.reachable() || axis.stationMbids().isEmpty()) {
+				if (!axis.reachable() || axis.stationIds().isEmpty()) {
 					continue;
 				}
 				List<TrackCandidate> linear = linearStops(finder, reader, a, b);
@@ -345,7 +345,7 @@ class JourneyBenchmarkIT {
 					continue;
 				}
 
-				double am = medianStep(a, resolve(bench, axis.stationMbids()), b);
+				double am = medianStep(a, resolve(bench, axis.stationIds()), b);
 				double lm = medianStep(a, linear, b);
 				axisMedians.add(am);
 				linearMedians.add(lm);
@@ -419,16 +419,16 @@ class JourneyBenchmarkIT {
 		return sb.append(']').toString();
 	}
 
-	/** 한 번에 묶어 읽고 경로 순서로 되돌린다 — mbid 낱개 조회는 왕복이 역 수만큼 난다. */
-	private List<TrackCandidate> resolve(BenchMapper bench, List<String> mbids) {
-		Map<String, TrackCandidate> byMbid = new HashMap<>();
-		for (TrackCandidateRow r : bench.findByMbids(mbids)) {
-			byMbid.put(r.getMbid(), new TrackCandidate(r.getMusicId(), r.getMbid(), r.getTitle(),
+	/** 한 번에 묶어 읽고 경로 순서로 되돌린다 — id 낱개 조회는 왕복이 역 수만큼 난다. */
+	private List<TrackCandidate> resolve(BenchMapper bench, List<Long> ids) {
+		Map<Long, TrackCandidate> byId = new HashMap<>();
+		for (TrackCandidateRow r : bench.findByIds(ids)) {
+			byId.put(r.getMusicId(), new TrackCandidate(r.getMusicId(), r.getMbid(), r.getTitle(),
 					r.getArtist(), r.getDuration(), r.toVec(), 0));
 		}
-		List<TrackCandidate> out = new ArrayList<>(mbids.size());
-		for (String mbid : mbids) {
-			out.add(byMbid.get(mbid));
+		List<TrackCandidate> out = new ArrayList<>(ids.size());
+		for (Long id : ids) {
+			out.add(byId.get(id));
 		}
 		return out;
 	}
@@ -508,9 +508,9 @@ class JourneyBenchmarkIT {
 				  (location::real[])[11] AS pc11, (location::real[])[12] AS pc12,
 				  (location::real[])[13] AS pc13, (location::real[])[14] AS pc14,
 				  (location::real[])[15] AS pc15, (location::real[])[16] AS pc16
-				FROM music WHERE mbid IN
-				<foreach item="m" collection="mbids" open="(" separator="," close=")">#{m}</foreach>
+				FROM music WHERE id IN
+				<foreach item="m" collection="ids" open="(" separator="," close=")">#{m}</foreach>
 				</script>""")
-		List<TrackCandidateRow> findByMbids(@org.apache.ibatis.annotations.Param("mbids") List<String> mbids);
+		List<TrackCandidateRow> findByIds(@org.apache.ibatis.annotations.Param("ids") List<Long> ids);
 	}
 }

@@ -179,7 +179,16 @@ export default function TutorialOverlay() {
       {step.hint === "wheel" && !wheeled && <WheelHint />}
       {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
-        <TutorialStepCard index={stepIndex} total={TUTORIAL_STEPS.length} title={step.title} description={step.description} onSkip={skipTutorial} />
+        <TutorialStepCard
+          index={stepIndex}
+          total={TUTORIAL_STEPS.length}
+          title={step.title}
+          description={step.description}
+          // 누를 곳이 따로 없는 단계는 카드의 버튼으로 넘긴다 (여정 결과 보기)
+          cta={step.cta || undefined}
+          onConfirm={step.cta ? () => complete(step.task) : undefined}
+          onSkip={skipTutorial}
+        />
       </div>
     </div>
   );

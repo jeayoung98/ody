@@ -16,6 +16,7 @@
  *   먼저 찾아지는 것을 쓰므로, 한 단계 안에서 자리가 옮겨 다니면 나중에 열리는 것을 앞에 적는다
  * - `hint` — 덮은 위에 따로 그릴 손짓 (`wheel` 마우스 · `star` 짚은 별)
  * - `card` — 안내 카드 자리. 우측 패널을 보는 단계는 `left`·`bottom` 으로 비켜 준다
+ * - `cta` — 누를 곳이 따로 없어 **카드의 버튼으로 넘기는** 단계의 버튼 글. 비면 버튼이 없다
  *
  * `"map"` 만 DOM 요소가 아니라 지도가 실제로 보이는 사각형이다 (`tutorial-spotlight.tsx`).
  */
@@ -29,6 +30,7 @@ export const TUTORIAL_STEPS = [
     spotlight: [],
     hint: "wheel",
     card: "top",
+    cta: "",
   },
   {
     key: "click",
@@ -43,6 +45,7 @@ export const TUTORIAL_STEPS = [
     spotlight: [],
     hint: "star",
     card: "top",
+    cta: "",
   },
   {
     key: "nearby",
@@ -53,6 +56,7 @@ export const TUTORIAL_STEPS = [
     hint: "none",
     // 우측 곡 상세가 처음 뜨는 자리다 — 카드가 가운데 있으면 그걸 가린다
     card: "left",
+    cta: "",
   },
   {
     key: "look",
@@ -66,6 +70,7 @@ export const TUTORIAL_STEPS = [
     spotlight: ["journey"],
     hint: "none",
     card: "left",
+    cta: "",
   },
   {
     key: "journey-start",
@@ -76,6 +81,7 @@ export const TUTORIAL_STEPS = [
     spotlight: ["journey-composer", "panel-journey", "journey"],
     hint: "none",
     card: "bottom",
+    cta: "",
   },
   {
     key: "journey-end",
@@ -85,6 +91,7 @@ export const TUTORIAL_STEPS = [
     spotlight: ["journey-composer", "panel-journey", "journey"],
     hint: "none",
     card: "bottom",
+    cta: "",
   },
   {
     key: "journey-create",
@@ -95,6 +102,22 @@ export const TUTORIAL_STEPS = [
     spotlight: ["journey-create", "journey-composer", "panel-journey", "journey"],
     hint: "none",
     card: "bottom",
+    cta: "",
+  },
+  {
+    key: "journey-look",
+    title: "여정이 그려졌어요",
+    description: "두 곡을 잇는 별들이 순서대로 놓였어요. 눌러서 들어보면 소리가 조금씩 옮겨 갑니다 — 그 흐름이 자연스러운지가 설문에서 물어볼 내용이에요.",
+    /**
+     * 만들고 끝내지 않고 **결과를 보고** 끝낸다 (S15P21A405-354). 경로가 어떻게 생겼는지
+     * 한 번은 봐야 "자연스럽게 이어지나요" 설문에 답할 수 있다. 누를 곳이 따로 없는
+     * 단계라 안내 카드의 버튼으로 끝낸다.
+     */
+    task: "done",
+    spotlight: [],
+    hint: "none",
+    card: "bottom",
+    cta: "다 봤어요",
   },
 ] as const;
 export type TutorialTask = (typeof TUTORIAL_STEPS)[number]["task"];

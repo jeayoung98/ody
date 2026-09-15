@@ -1,14 +1,17 @@
 "use client";
 
 import Button from "@/components/common/button";
+import { PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import TrackRow from "@/components/common/track-row";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { usePlaySong } from "@/hooks/use-play-song";
+import { useStartActivity } from "@/hooks/use-start-activity";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import type { MusicDetail } from "@/types";
 
@@ -29,6 +32,8 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const openSong = usePanelStore((s) => s.openSong);
+  const playQueue = usePlayerStore((s) => s.playQueue);
+  const startActivity = useStartActivity();
   const inNearby = viewMode === "nearby";
   // 주변 탐색 중인데 이 상세가 중심이 아닌 곡이면(이웃을 선택해 보는 중) 버튼은 건너가기다
   const canHop = inNearby && centerMusicId !== nearbyCenterMusicId;
@@ -36,6 +41,23 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const handleEnter = () => {
     enterNearby(centerMusicId);
     useTutorialStore.getState().complete("nearby");
+  };
+
+  /**
+   * 10곡을 순서대로 듣는다 (S15P21A405-359). 열 번 눌러야 다 듣던 것을 한 번으로 줄인다 —
+   * 이번 테스트가 묻는 게 "이 10곡이 닮게 들리나" 라 끝까지 듣는 사람이 많을수록 좋다.
+   *
+   * **중심곡은 큐에 안 넣는다.** 방금 듣던 곡이고, 설문이 묻는 것도 이웃이 닮았나이다.
+   * 고리도 같이 켠다 — 소리는 이웃을 도는데 지도는 딴 데 있으면 무엇을 듣는지 안 보인다.
+   */
+  const handlePlayAll = () => {
+    const ids = items.map((m) => m.id);
+    if (!ids.length) return;
+    startActivity("nearby", String(centerMusicId), () => {
+      if (!inNearby) enterNearby(centerMusicId);
+      playQueue({ kind: "nearby", centerMusicId }, ids);
+      recordPlay({ musicId: ids[0], source: "MAP", playedMs: 0 });
+    });
   };
 
   /**
@@ -68,7 +90,14 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
         **여는 버튼만 둔다** (S15P21A405-339). 끄는 길은 이미 둘이다 — 좌상단 칩의 ✕ 와
         우측 패널 닫기(S15P21A405-336). 여기 세 번째를 두면 같은 일을 세 군데서 하게 된다
       */}
-      <Button onClick={handleEnter}>{canHop ? "이 곡 주변으로 건너가기" : "주변 탐색 켜기"}</Button>
+      <div className="flex gap-1.5">
+        <Button className="flex-1" onClick={handleEnter}>
+          {canHop ? "이 곡 주변으로 건너가기" : "주변 탐색 켜기"}
+        </Button>
+        <Button className="shrink-0" onClick={handlePlayAll} disabled={items.length === 0}>
+          <PlayIcon size={12} /> 순차 재생
+        </Button>
+      </div>
     </div>
   );
 }

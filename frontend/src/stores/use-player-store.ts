@@ -5,11 +5,19 @@ import { removeStorage, writeStorage } from "@/lib/storage";
 import { useBlockingStore } from "./use-blocking-store";
 import { useMapStore } from "./use-map-store";
 
-/** 재생 컨텍스트. 플리와 여정은 동시에 있을 수 없다 — 하나 켜지면 하나 꺼진다 */
+/**
+ * 재생 컨텍스트. 플리와 여정은 동시에 있을 수 없다 — 하나 켜지면 하나 꺼진다.
+ *
+ * **주변 탐색을 `playlist` 로 만들면 안 된다** (S15P21A405-359). 설문이 플리를 일부러
+ * 빼고 보기 때문에(`survey-runner` 의 `inNearby`), 플리인 척하면 주변 탐색 설문이 영영
+ * 안 뜬다 — 플리는 사용자가 임의로 담은 목록이라 우리 추천 결과가 아니라서 뺀 것이고,
+ * 주변 10곡은 정확히 그 반대다. 그래서 제 kind 를 따로 둔다.
+ */
 export type PlayContext =
   | { kind: "single" }
   | { kind: "playlist"; playlistId: number }
-  | { kind: "journey"; startMusicId: number; endMusicId: number };
+  | { kind: "journey"; startMusicId: number; endMusicId: number }
+  | { kind: "nearby"; centerMusicId: number };
 
 interface PlayerState {
   currentMusicId: number | null;

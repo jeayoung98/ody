@@ -15,13 +15,6 @@ readonly NGINX_CONFIG="/etc/nginx/sites-available/backend"
 readonly NGINX_NEXT_CONFIG="/etc/nginx/sites-available/backend.next"
 readonly NGINX_LEGACY_BACKUP="/etc/nginx/sites-available/backend.before-next"
 
-# NGINX_CONFIG는 backend blue-green upstream, TLS, Certbot 등과 프론트 location을
-# 한 파일에 같이 담고 있다. Frontend 배포는 이 마커 사이의 프론트 location 블록만
-# 이식하고, 그 바깥(특히 backend upstream 줄)은 절대 건드리지 않는다 — 그 줄의
-# 소유권은 backend/deploy.sh(blue-green)에만 있다.
-readonly NGINX_FRONTEND_BLOCK_BEGIN='# BEGIN ODY-FRONTEND-LOCATIONS (managed by frontend/deploy.sh; do not edit by hand)'
-readonly NGINX_FRONTEND_BLOCK_END='# END ODY-FRONTEND-LOCATIONS'
-
 readonly LOCK_FILE="/run/lock/ody-frontend-deploy.lock"
 readonly RETAIN_RELEASES=5
 
@@ -147,71 +140,6 @@ nginx_check() {
     nginx -t
 }
 
-extract_frontend_block() {
-    local file=$1
-
-    awk \
-        -v begin="${NGINX_FRONTEND_BLOCK_BEGIN}" \
-        -v end="${NGINX_FRONTEND_BLOCK_END}" \
-        '
-            $0 == begin { flag = 1 }
-            flag { print }
-            $0 == end { flag = 0 }
-        ' \
-        "${file}"
-}
-
-
-# template(NGINX_NEXT_CONFIG 또는 NGINX_LEGACY_BACKUP)의 마커 사이 블록을
-# target(NGINX_CONFIG)의 같은 마커 사이에만 이식한 결과를 out에 만든다.
-# 마커 바깥 내용(backend upstream, TLS, Certbot, /api/, /actuator/ 등)은
-# target 그대로 보존된다. 마커가 없거나 개수가 안 맞으면 손대지 않고 실패한다.
-splice_frontend_block() {
-    local template=$1
-    local target=$2
-    local out=$3
-
-    local block_file
-    block_file="$(mktemp)"
-
-    extract_frontend_block "${template}" > "${block_file}"
-
-    if [[ ! -s ${block_file} ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers are missing in ${template}."
-    fi
-
-    if [[ $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${template}") -ne 1 ||
-          $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_END}" "${template}") -ne 1 ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers must appear exactly once in ${template}."
-    fi
-
-    if [[ $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${target}") -ne 1 ||
-          $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_END}" "${target}") -ne 1 ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers are missing or duplicated in ${target}. Backend upstream/TLS/Certbot blocks are intentionally left untouched; add the markers there manually before deploying."
-    fi
-
-    local begin_line end_line
-
-    begin_line="$(grep -n -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${target}" | cut -d: -f1)"
-    end_line="$(grep -n -F -x "${NGINX_FRONTEND_BLOCK_END}" "${target}" | cut -d: -f1)"
-
-    if [[ ${begin_line} -ge ${end_line} ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers are out of order in ${target}."
-    fi
-
-    {
-        head -n "$((begin_line - 1))" "${target}"
-        cat "${block_file}"
-        tail -n "+$((end_line + 1))" "${target}"
-    } > "${out}"
-
-    rm -f -- "${block_file}"
-}
-
 frontend_service_exists() {
     systemctl cat "${FRONTEND_SERVICE}" >/dev/null 2>&1
 }
@@ -244,26 +172,14 @@ reload_nginx() {
         return 1
     fi
 
-    log "Updating frontend location blocks in Nginx configuration."
+    log "Activating Next.js Nginx configuration."
 
-    local candidate backup
-    candidate="$(mktemp)"
-    backup="$(mktemp)"
-
-    splice_frontend_block "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}" "${candidate}"
-
-    cp "${NGINX_CONFIG}" "${backup}"
-    cp "${candidate}" "${NGINX_CONFIG}"
-    rm -f -- "${candidate}"
+    cp "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}"
 
     if ! nginx_check; then
-        log "Updated Nginx configuration is invalid; restoring previous configuration."
-        cp "${backup}" "${NGINX_CONFIG}"
-        rm -f -- "${backup}"
+        log "Next.js Nginx configuration is invalid."
         return 1
     fi
-
-    rm -f -- "${backup}"
 
     systemctl reload nginx
 }
@@ -274,26 +190,14 @@ restore_legacy_nginx() {
         return 1
     fi
 
-    log "Restoring legacy frontend location blocks in Nginx configuration."
+    log "Restoring legacy Nginx configuration."
 
-    local candidate backup
-    candidate="$(mktemp)"
-    backup="$(mktemp)"
-
-    splice_frontend_block "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}" "${candidate}"
-
-    cp "${NGINX_CONFIG}" "${backup}"
-    cp "${candidate}" "${NGINX_CONFIG}"
-    rm -f -- "${candidate}"
+    cp "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}"
 
     if ! nginx_check; then
-        log "Restored legacy Nginx configuration is invalid; keeping previous configuration."
-        cp "${backup}" "${NGINX_CONFIG}"
-        rm -f -- "${backup}"
+        log "Restored legacy Nginx configuration is invalid."
         return 1
     fi
-
-    rm -f -- "${backup}"
 
     systemctl reload nginx
 }
@@ -336,9 +240,11 @@ wait_local_health() {
     return 1
 }
 
+
 public_health() {
     local release_id=$1
     local marker
+    local actuator_status
 
     log "Checking public frontend."
 
@@ -357,7 +263,27 @@ public_health() {
             "${PUBLIC_BASE_URL}/build-id.txt?release=${release_id}"
     )"
 
-    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || return 1
+    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || \
+        return 1
+
+    log "Checking backend API."
+
+    curl -fsS \
+        --retry 5 \
+        --retry-delay 1 \
+        --max-time 10 \
+        "${PUBLIC_BASE_URL}/api/hello" \
+        >/dev/null
+
+    actuator_status="$(
+        curl -sS \
+            -o /dev/null \
+            -w '%{http_code}' \
+            --max-time 10 \
+            "${PUBLIC_BASE_URL}/actuator/health"
+    )"
+
+    [[ ${actuator_status} == "403" || ${actuator_status} == "404" ]]
 }
 
 
@@ -661,13 +587,7 @@ main() {
         ln \
         systemctl \
         journalctl \
-        seq \
-        mktemp \
-        awk \
-        grep \
-        head \
-        tail \
-        cut; do
+        seq; do
 
         command -v "${command_name}" >/dev/null || \
             fail "Required command is missing: ${command_name}"

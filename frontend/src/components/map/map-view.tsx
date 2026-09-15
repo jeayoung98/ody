@@ -254,8 +254,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
         if (e.deltaY > 0) useMapStore.getState().exitNearby();
         return;
       }
-      const res = engine.wheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
-      if (res === "zoom") useTutorialStore.getState().complete("zoom");
+      // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.
+      // 배율이 얼마나 올랐는지는 튜토리얼이 직접 본다 (`tutorial-overlay.tsx`)
+      engine.wheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
     },
     [engine],
   );

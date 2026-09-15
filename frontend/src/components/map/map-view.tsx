@@ -86,6 +86,21 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
+  /**
+   * 주변 탐색을 켜면 **그 곡 상세도 같이 연다** (S15P21A405-348).
+   *
+   * 주변 탐색 고리는 그 곡 상세에 딸린 화면인데, 켜는 길이 넷(하단 버튼·상세 목록·길게 누르기·
+   * 건너가기 링크)이라 어디서 켜느냐에 따라 엉뚱한 패널이 열린 채로 남았다 — 여정 패널을
+   * 띄워 둔 채 하단 버튼을 누르면 여정 화면 위에 고리가 겹쳤다. 패널 쪽 짝은
+   * `use-panel-store` 의 `syncMapView` 다.
+   */
+  useEffect(() => {
+    if (nearbyCenterMusicId == null) return;
+    const p = usePanelStore.getState();
+    // 이미 그 곡 상세가 떠 있으면 건드리지 않는다 — 다시 열면 돌아갈 자리(`back`)가 날아간다
+    if (p.activePanel === "song" && p.musicId === nearbyCenterMusicId) return;
+    p.openSong(nearbyCenterMusicId);
+  }, [nearbyCenterMusicId]);
   // 목: 지도 위 사용자들이 스스로 반응을 쏜다 (실서비스에서는 소켓 수신)
   useMockFriendReactions(friends);
 

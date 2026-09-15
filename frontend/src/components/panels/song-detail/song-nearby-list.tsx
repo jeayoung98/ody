@@ -6,9 +6,9 @@ import SectionTitle from "@/components/common/section-title";
 import TrackRow from "@/components/common/track-row";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
+import { usePlaySong } from "@/hooks/use-play-song";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
-import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import type { MusicDetail } from "@/types";
 
@@ -26,7 +26,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
   const selectMusic = useMapStore((s) => s.selectMusic);
-  const playSingle = usePlayerStore((s) => s.playSingle);
+  const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const openSong = usePanelStore((s) => s.openSong);
   const inNearby = viewMode === "nearby";
@@ -49,8 +49,8 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const handlePick = (id: number) => {
     selectMusic(id);
     openSong(id);
-    playSingle(id);
-    recordPlay({ musicId: id, source: "MAP", playedMs: 0 });
+    // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
+    playWithConfirm(id, () => recordPlay({ musicId: id, source: "MAP", playedMs: 0 }));
   };
 
   return (

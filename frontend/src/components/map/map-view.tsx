@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
-import { HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
+import { FEATURES, HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -464,7 +464,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
-      <FloatingReactions />
+      {FEATURES.social && <FloatingReactions />}
       <HoverCard engine={engine} song={hoverSong} on={cardOn} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>

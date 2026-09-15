@@ -77,13 +77,19 @@ export default function TutorialSpotlight({ spotlight, ringOnly }: Targets) {
     };
   }, [spotlight, ringOnly]);
 
-  const dim = "pointer-events-auto fixed bg-void/80 backdrop-blur-[2px]";
   /**
-   * 뚫을 자리가 없는 단계는 **연하게** 덮는다 (S15P21A405-351). 지금 이런 단계는 짚은 별을
-   * 오버레이에 직접 그리는 곳뿐인데, 진하게 덮으면 그 별이 별들 사이에서 고른 하나가 아니라
-   * 허공에 뜬 점으로 보인다. 둘레 별이 비쳐야 "이 중 하나" 로 읽힌다. 막는 것은 그대로다.
+   * 덤은 **한 겹, 한 값, 아무것도 안 막는다** (S15P21A405-354).
+   *
+   * 진하기를 단계마다 달리했더니 화면이 들쭉날쭉했고, 무엇보다 진한 단계에서는 짚어 준 곳
+   * 밖의 조작이 아예 막혔다. 안내를 따라가는 중에도 지도를 둘러보고 다른 것을 눌러 볼 수
+   * 있어야 한다 — 튜토리얼은 **가리켜 주기만** 하고 손을 묶지 않는다.
+   *
+   * `pointer-events-none` 이라 네 장이 덮고 있어도 휠·클릭·드래그가 그대로 아래로 간다.
+   * 구멍은 이제 막는 장치가 아니라 "여기" 라고 눈에 띄게 하는 장치다.
    */
-  if (!rect) return <div className="pointer-events-auto fixed inset-0 bg-void/40" />;
+  const dim = "pointer-events-none fixed bg-void/40";
+  // 짚을 자리가 없는 단계(확대·별)는 통째로 덮는다 — 손짓이 그 위에 따로 그려진다
+  if (!rect) return <div className={`${dim} inset-0`} />;
 
   const w = rect.x1 - rect.x0;
   const h = rect.y1 - rect.y0;

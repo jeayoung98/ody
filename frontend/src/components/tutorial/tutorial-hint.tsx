@@ -5,14 +5,12 @@ import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { MouseWheelIcon } from "@/components/common/icons";
 
 /**
- * 휠을 굴리라는 손짓 (S15P21A405-351). 아주 약한 덤·블러를 화면에 깔고 그 위에 마우스를 띄운다.
- *
- * **막지 않는다.** 이 단계에서 해야 할 일이 휠을 굴리는 것이라, 덤이 이벤트를 먹으면
- * 안내한 동작이 안 된다.
+ * 휠을 굴리라는 손짓 (S15P21A405-351). 덤은 다른 단계와 같은 한 겹을 쓰고
+ * (`tutorial-spotlight.tsx`) 여기서는 그 위에 마우스만 올린다.
  */
 export function WheelHint() {
   return (
-    <div className="pointer-events-none fixed inset-0 grid place-items-center bg-void/25 backdrop-blur-[1.5px]">
+    <div className="pointer-events-none fixed inset-0 grid place-items-center">
       <div className="flex flex-col items-center gap-2.5">
         <div className="relative">
           <MouseWheelIcon className="text-teal drop-shadow-[0_0_16px_#4fe3ce]" />

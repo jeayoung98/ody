@@ -22,6 +22,14 @@ const ZOOM_STEP_RATIO = 3;
 /** 첫 휠부터 이 시간이 지나야 넘어간다. 배율을 일찍 채워도 그 동안은 지도를 그냥 둘러보게 둔다 */
 const ZOOM_EXPLORE_MS = 5000;
 
+/** 안내 카드 자리. 그 단계에서 봐야 할 것을 안 가리는 쪽으로 비켜 준다 */
+const CARD_AT = {
+  top: "top-[120px] left-1/2 -translate-x-1/2",
+  // 우측 패널을 보는 단계 — 가운데면 그 패널을 가린다
+  left: "top-[120px] left-[24px]",
+  bottom: "bottom-[92px] left-1/2 -translate-x-1/2",
+} as const;
+
 /**
  * 단계별 태스크(확대 · 짚어 준 별 누르기 · 주변 탐색 · 여정 세 단계)를 주고 완료되면 다음으로.
  * 마지막 단계가 끝나면 지금 내 곡(재생/선택한 곡)을 시작점으로 저장하고 메인으로 간다.
@@ -68,10 +76,17 @@ export default function TutorialOverlay() {
    */
   const startMusicId = useJourneyStore((s) => s.startMusicId);
   const endMusicId = useJourneyStore((s) => s.endMusicId);
+  /**
+   * 펼쳐진 화면을 보는 단계는 **여정으로 넘어가겠다고 직접 누를 때** 끝난다 (S15P21A405-354).
+   * 누르는 길이 둘이라(만들기 상자가 바로 열리거나 여정 패널이 열리거나) 여기서도 결과를 본다.
+   */
+  const composerOpen = useJourneyStore((s) => s.isComposerOpen);
+  const activePanel = usePanelStore((s) => s.activePanel);
   useEffect(() => {
+    if (composerOpen || activePanel === "journey") complete("look");
     if (startMusicId != null) complete("journey-start");
     if (endMusicId != null) complete("journey-end");
-  }, [startMusicId, endMusicId, stepIndex, complete]);
+  }, [composerOpen, activePanel, startMusicId, endMusicId, stepIndex, complete]);
 
   const step = TUTORIAL_STEPS[stepIndex];
   const needsStar = step?.hint === "star";
@@ -118,34 +133,22 @@ export default function TutorialOverlay() {
   }, [zooming, complete]);
 
   /**
-   * 짚을 별 하나를 고른다. 별이 아직 안 그려졌을 수 있어 한 번 실패하면 다시 묻는다 —
-   * 첫 프레임에는 `visible` 이 비어 있다.
+   * 짚을 별 하나를 고른다. **안 보이게 되면 다시 고른다** (S15P21A405-354) — 이 단계에서도
+   * 확대·이동이 자유로우므로 짚어 둔 별이 화면 밖으로 나가 버릴 수 있고, 그러면 손짓만
+   * 사라진 채 무엇을 누르라는 건지 알 수 없게 된다. 첫 프레임에 `visible` 이 비어 있는
+   * 경우도 같은 되묻기로 넘어간다.
    */
   useEffect(() => {
     if (!needsStar) return;
-    let id = window.setTimeout(function pick() {
-      const chosen = getMapEngine()?.pickTutorialStar(CARD_BOTTOM) ?? null;
-      if (chosen != null) setStarId(chosen);
-      else id = window.setTimeout(pick, 200);
-    }, 0);
-    return () => window.clearTimeout(id);
+    let cur: number | null = null;
+    const id = window.setInterval(() => {
+      const e = getMapEngine();
+      if (!e || (cur != null && e.starPos(cur))) return;
+      cur = e.pickTutorialStar(CARD_BOTTOM);
+      setStarId(cur);
+    }, 300);
+    return () => window.clearInterval(id);
   }, [needsStar, stepIndex]);
-
-  /**
-   * 지도 조작을 막는 단계 (`lock`). 어둠막은 그 위를 지나는 휠만 막을 뿐, 뚫어 놓은 구멍
-   * 위에서는 그대로 통한다 — 짚어 준 별을 누르는 것 말고는 아무것도 안 되게 하려면 휠 자체를
-   * 잡아야 한다. 캡처 단계에서 멈추므로 지도의 `onWheel` 까지 가지 않는다.
-   */
-  const locked = !!step?.lock;
-  useEffect(() => {
-    if (!locked) return;
-    const block = (e: Event) => {
-      e.preventDefault();
-      e.stopPropagation();
-    };
-    window.addEventListener("wheel", block, { capture: true, passive: false });
-    return () => window.removeEventListener("wheel", block, { capture: true });
-  }, [locked]);
 
   /**
    * 짚은 별을 눌렀다. 지도에서 별을 누른 것과 같게 처리하고(보기만 — 재생은 안 한다)
@@ -165,27 +168,11 @@ export default function TutorialOverlay() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[60]">
-      {/* 보여 주기만 하는 단계는 덮지 않는다. 아무 데나 누르면 넘어간다 */}
-      {step.free ? (
-        <button
-          type="button"
-          aria-label="계속"
-          className="pointer-events-auto absolute inset-0 cursor-pointer"
-          onClick={() => complete("look")}
-        />
-      ) : (
-        /* 어둠막 먼저 — 안내 카드가 그 위에 와야 건너뛰기가 눌린다.
-           확대 단계는 손짓이 직접 옅은 덤을 깔므로 여기서는 덮지 않는다 */
-        !zooming && <TutorialSpotlight spotlight={step.spotlight} ringOnly={step.ringOnly} />
-      )}
+      {/* 덤 먼저 — 안내 카드와 손짓이 그 위에 와야 한다. 덤은 아무것도 막지 않는다 */}
+      <TutorialSpotlight spotlight={step.spotlight} ringOnly={step.ringOnly} />
       {step.hint === "wheel" && !wheeled && <WheelHint />}
       {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
-      <div
-        className={`pointer-events-auto absolute left-1/2 w-[min(340px,84vw)] -translate-x-1/2 ${
-          // 여정은 우측 패널을 보며 하는 단계다 — 카드가 위에 있으면 그 패널을 가린다
-          step.card === "bottom" ? "bottom-[92px]" : "top-[120px]"
-        }`}
-      >
+      <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
         <TutorialStepCard index={stepIndex} total={TUTORIAL_STEPS.length} title={step.title} description={step.description} onSkip={skipTutorial} />
       </div>
     </div>

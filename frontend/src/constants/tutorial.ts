@@ -8,16 +8,17 @@
  * 여정은 **세 단계로 쪼갠다** (S15P21A405-349). 예전에는 출발곡 하나만 고르면 넘어가 버려서,
  * 정작 경로가 생기는 지점인 "여정 만들기" 를 안 배운 채 끝났다.
  *
+ * **어느 칸도 조작을 막지 않는다** (S15P21A405-354). 튜토리얼은 가리켜 주기만 하고, 그 사이에도
+ * 지도를 둘러보거나 다른 것을 눌러 볼 수 있다.
+ *
  * 각 칸이 하는 일:
- * - `spotlight` — 밝히고 **나머지는 막을** 자리 (S15P21A405-347)
- * - `ringOnly` — 고리만 두르고 **막지는 않을** 자리. 이게 찾아지면 이쪽이 이긴다
- * - `hint` — 밝힌 자리 한가운데에 띄울 그림
- * - `card` — 안내 카드를 위에 둘지 아래에 둘지. 우측 패널을 봐야 하는 단계는 아래다
- * - `lock` — 지도 조작(휠·이동)까지 막을지
- * - `free` — 어둠막을 아예 덮지 않고, 아무 데나 누르면 넘어가는 단계인지
+ * - `spotlight` — 연한 덤을 덮고 **이 자리만 구멍을 내어** 고리를 두른다
+ * - `ringOnly` — 덮지 않고 **고리만** 두른다. 이게 찾아지면 이쪽이 이긴다
+ * - `hint` — 덮은 위에 따로 그릴 손짓 (`wheel` 마우스 · `star` 짚은 별)
+ * - `card` — 안내 카드 자리. 우측 패널을 보는 단계는 `left`·`bottom` 으로 비켜 준다
  *
  * `spotlight`·`ringOnly` 는 앞에서부터 먼저 찾아지는 것을 쓴다. `"map"` 은 지도가 실제로
- * 보이는 사각형, `"star"` 는 이 단계에서 짚어 준 별 하나다 (`tutorial-spotlight.tsx`).
+ * 보이는 사각형이다 (`tutorial-spotlight.tsx`).
  */
 export const TUTORIAL_STEPS = [
   {
@@ -25,17 +26,11 @@ export const TUTORIAL_STEPS = [
     title: "확대해보세요",
     description: "휠을 굴려 별지도를 확대해보세요. 확대할수록 별이 더 드러나고, 화면 안 곡이 충분히 줄면 벽에 닿아요. 계속 밀면 다음 겹으로 파고들어요.",
     task: "zoom",
-    /**
-     * **막지 않는다** (S15P21A405-350 · 351). 이 단계에서 해야 할 일이 휠을 굴리는 것이라
-     * 덤이 이벤트를 먹으면 안내한 동작 자체가 안 된다. 손짓(`hint`)이 아주 약한 덤·블러를
-     * 같이 깔고, 처음 휠을 굴리는 순간 통째로 사라진다.
-     */
+    // 짚을 자리가 없다 — 통째로 연하게 덮고 그 위에 휠 손짓만 올린다. 처음 굴리면 손짓은 사라진다
     spotlight: [],
     ringOnly: [],
     hint: "wheel",
     card: "top",
-    lock: false,
-    free: false,
   },
   {
     key: "click",
@@ -43,16 +38,14 @@ export const TUTORIAL_STEPS = [
     description: "밝게 짚어 둔 별을 눌러보세요. 곡 상세가 열리고 화면이 그 별로 옮겨져요. 재생을 눌러야 내 위치가 따라갑니다.",
     task: "select",
     /**
-     * 구멍을 뚫지 않는다 (S15P21A405-351). 짚은 별은 `hint` 가 **오버레이 위에 직접 그리고**
-     * 클릭도 거기서 받는다 — 캔버스 별에 기대면 안 보이거나 아예 없다. 그래서 화면은
-     * 통째로 덮고(`spotlight: []`), 어느 별이든 되는 단계가 아니라 지도 조작도 막는다.
+     * 구멍을 뚫지 않는다. 짚은 별은 `hint` 가 **오버레이 위에 직접 그리고** 클릭도 거기서
+     * 받는다 — 캔버스 별에 기대면 안 보이거나 아예 없다. 통째로 덮되 **막지는 않는다**
+     * (S15P21A405-354): 짚어 준 별 말고 다른 별을 눌러 봐도 되고, 확대·이동도 된다.
      */
     spotlight: [],
     ringOnly: [],
     hint: "star",
     card: "top",
-    lock: true,
-    free: false,
   },
   {
     key: "nearby",
@@ -62,22 +55,22 @@ export const TUTORIAL_STEPS = [
     spotlight: ["nearby"],
     ringOnly: [],
     hint: "none",
-    card: "top",
-    lock: false,
-    free: false,
+    // 우측 곡 상세가 처음 뜨는 자리다 — 카드가 가운데 있으면 그걸 가린다
+    card: "left",
   },
   {
     key: "look",
     title: "이렇게 펼쳐져요",
-    description: "가운데가 기준 곡, 둘레가 소리로 가장 가까운 10곡이에요. 하나씩 눌러 들어보세요. 다 보셨으면 아무 곳이나 누르세요.",
-    // 화면을 보여 주는 단계다. 덮지 않고, 아무 데나 누르면 넘어간다
+    description: "가운데가 기준 곡, 둘레가 소리로 가장 가까운 10곡이에요. 하나씩 눌러 들어보세요. 다 들어봤으면 오른쪽 여정 버튼을 누르세요.",
+    /**
+     * 들어 보는 단계다. 아무 데나 누르면 넘어가게 두면 한 곡도 못 들어 본 채 끝나므로,
+     * **여정으로 넘어가겠다고 직접 누를 때** 넘어간다 (S15P21A405-354).
+     */
     task: "look",
-    spotlight: [],
+    spotlight: ["journey"],
     ringOnly: [],
     hint: "none",
-    card: "top",
-    lock: false,
-    free: true,
+    card: "left",
   },
   {
     key: "journey-start",
@@ -92,8 +85,6 @@ export const TUTORIAL_STEPS = [
     ringOnly: ["journey-composer", "panel-journey"],
     hint: "none",
     card: "bottom",
-    lock: false,
-    free: false,
   },
   {
     key: "journey-end",
@@ -104,8 +95,6 @@ export const TUTORIAL_STEPS = [
     ringOnly: ["journey-composer", "panel-journey"],
     hint: "none",
     card: "bottom",
-    lock: false,
-    free: false,
   },
   {
     key: "journey-create",
@@ -117,8 +106,6 @@ export const TUTORIAL_STEPS = [
     ringOnly: ["journey-create", "journey-composer", "panel-journey"],
     hint: "none",
     card: "bottom",
-    lock: false,
-    free: false,
   },
 ] as const;
 export type TutorialTask = (typeof TUTORIAL_STEPS)[number]["task"];

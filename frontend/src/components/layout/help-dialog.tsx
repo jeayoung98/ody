@@ -1,21 +1,39 @@
 "use client";
 
+import { useRouter } from "next/navigation";
 import Box from "@/components/common/box";
+import Button from "@/components/common/button";
 import { CloseIcon } from "@/components/common/icons";
 import IconButton from "@/components/common/icon-button";
-import { LAYER_COUNT, NEARBY_COUNT } from "@/constants";
+import { FEATURES, LAYER_COUNT, NEARBY_COUNT, ROUTES } from "@/constants";
 
-const HELP_ITEMS = [
+/**
+ * 감춘 기능은 설명에서도 뺀다 (S15P21A405-333) — 안내를 읽고 찾아 나섰는데 없으면 그게 버그로 읽힌다.
+ * `when` 이 없으면 항상 보인다.
+ */
+const HELP_ITEMS: { icon: string; title: string; body: string; when?: boolean }[] = [
   { icon: "🗺️", title: "지도", body: `음악을 좌표로 만든 별지도예요. ${LAYER_COUNT}개의 레이어가 있고, 각 레이어는 2개의 축으로 이루어져요.` },
   { icon: "⭐", title: "별", body: "별 하나가 곡 하나예요. 색은 장르, 크기와 밝기는 재생수에 따라 달라져요." },
   { icon: "🔍", title: "파고들기", body: "확대하다 일정 이상 들어가면 다음 레이어로 파고들어요. 새 축 2개가 추가되며 좌표가 재정렬돼요." },
   { icon: "📡", title: "주변 탐색", body: `선택한 곡과 가장 가까운 ${NEARBY_COUNT}곡을 선으로 이어서 보여줘요. 줌아웃하면 해제돼요.` },
-  { icon: "✨", title: "별자리", body: "여정이나 플레이리스트처럼 곡 뭉치가 있을 때 별을 선으로 이어 별자리처럼 보여줘요." },
+  {
+    icon: "✨",
+    title: "별자리",
+    body: FEATURES.playlist
+      ? "여정이나 플레이리스트처럼 곡 뭉치가 있을 때 별을 선으로 이어 별자리처럼 보여줘요."
+      : "여정처럼 곡 뭉치가 있을 때 별을 선으로 이어 별자리처럼 보여줘요.",
+  },
   { icon: "📍", title: "내 위치", body: "청록색 마름모가 나예요. 별을 클릭하면 그 곡이 재생되면서 내 위치가 그리로 옮겨지고, 화면도 내 위치로 정렬돼요." },
-  { icon: "🚀", title: "따라가기", body: "다른 사람의 우주선에 탑승해 탐색 여정을 함께해요. 탑승 중엔 지도 조작이 잠기고 하차 버튼으로 내릴 수 있어요." },
-];
+  {
+    icon: "🚀",
+    title: "따라가기",
+    body: "다른 사람의 우주선에 탑승해 탐색 여정을 함께해요. 탑승 중엔 지도 조작이 잠기고 하차 버튼으로 내릴 수 있어요.",
+    when: FEATURES.social,
+  },
+].filter((item) => item.when !== false);
 
 export default function HelpDialog({ onClose }: { onClose: () => void }) {
+  const router = useRouter();
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-tin">
@@ -26,6 +44,12 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
             <IconButton label="닫기" onClick={onClose}>
               <CloseIcon />
             </IconButton>
+          }
+          footer={
+            /* 튜토리얼은 첫 진입에 한 번만 뜬다 (TutorialGate). 잊었을 때 돌아올 입구가 여기뿐이다 */
+            <Button className="w-full" onClick={() => router.push(ROUTES.tutorial)}>
+              튜토리얼 다시보기
+            </Button>
           }
         >
           <ul className="flex flex-col gap-3">

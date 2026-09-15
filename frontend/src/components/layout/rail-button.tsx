@@ -8,14 +8,17 @@ interface RailButtonProps {
   onClick: () => void;
   children: ReactNode;
   badge?: number;
+  /** 튜토리얼이 이 버튼을 밝힐 때 찾는 이름 (S15P21A405-347) */
+  "data-tutorial"?: string;
 }
 
 /** .railBtn — 활성 시 그라데이션 원 */
-export default function RailButton({ label, active, onClick, children, badge }: RailButtonProps) {
+export default function RailButton({ label, active, onClick, children, badge, "data-tutorial": dataTutorial }: RailButtonProps) {
   return (
     <button
       type="button"
       title={label}
+      data-tutorial={dataTutorial}
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}

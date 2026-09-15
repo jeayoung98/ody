@@ -4,13 +4,41 @@ import type { PanelType } from "@/constants";
 import { useMapStore } from "./use-map-store";
 
 /**
- * 패널이 닫히면 별자리 뷰도 같이 닫는다 (S15P21A405-316).
- * 별자리는 패널에 딸린 화면이다 — 패널 없이 지도만 가린 채 남으면 나가는 길이 안 보인다.
+ * 패널이 닫히면 **그 패널에 딸린 지도 뷰도 같이 닫는다** (S15P21A405-316 · 336).
+ *
+ * 별자리는 여정·플리에, 주변 탐색 고리는 그 곡 상세에 딸린 화면이다. 패널 없이 지도만 가린 채
+ * 남으면 나가는 길이 안 보인다 — 여정·주변 탐색·플리 세 흐름의 UX 를 같게 맞춘다.
+ * 예전에는 별자리만 내려서, 주변 탐색 중에 패널을 닫으면 고리가 그대로 남았다.
+ *
  * **목록은 지우지 않는다.** 플레이어바나 칩으로 언제든 다시 켤 수 있어야 한다.
  */
-function hideConstellation() {
-  useMapStore.getState().hideConstellationView();
+function hideMapView() {
+  const map = useMapStore.getState();
+  map.hideConstellationView();
+  if (map.viewMode === "nearby") map.exitNearby();
 }
+
+/**
+ * 패널을 **갈아탈 때** 그 패널과 상관없는 지도 뷰를 내린다 (S15P21A405-348).
+ *
+ * `hideMapView` 는 닫을 때만 불린다. 그래서 주변 탐색을 켜 둔 채 여정 패널을 열면 고리가
+ * 지도에 그대로 남았다 — 여정과 아무 상관 없는 화면이 겹쳐 보이고, 끄려면 그 곡 상세로
+ * 되돌아가야 했다. 뷰가 어느 패널에 딸린 것인지는 아래 두 줄이 전부다.
+ *
+ * **곡 상세는 둘 다의 예외다.** 주변 탐색 중 이웃을 누르면 그 이웃의 상세가 열리고,
+ * 여정 목록에서 곡을 눌러도 상세로 들어간다 — 둘 다 그 화면을 떠나는 동작이 아니다.
+ */
+function syncMapView(next: PanelType) {
+  const map = useMapStore.getState();
+  if (next !== "song" && map.viewMode === "nearby") map.exitNearby();
+  if (next !== "song" && next !== "journey" && next !== "playlist") map.hideConstellationView();
+}
+
+/** 패널을 여는 모든 길이 거쳐 간다 — 한 군데라도 빠지면 지도 뷰가 어긋난 채 남는다 */
+const open = (panel: PanelType, patch: object = {}) => {
+  syncMapView(panel);
+  return { activePanel: panel, back: null, collapsed: false, ...patch } as const;
+};
 
 /**
  * 곡 상세에서 **돌아갈 자리**. 여정·플리 목록에서 곡을 눌러 들어왔을 때만 잡힌다 —
@@ -65,13 +93,13 @@ export const usePanelStore = create<PanelState>()(
       back: null,
       collapsed: false,
 
-      openSong: (musicId) => set({ activePanel: "song", musicId, back: null, collapsed: false }, false, "openSong"),
+      openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
 
       openSongFromList: (musicId) => {
         const { activePanel, playlistId } = get();
         const back: PanelReturn | null =
           activePanel === "journey" ? { panel: "journey" } : activePanel === "playlist" && playlistId != null ? { panel: "playlist", playlistId } : null;
-        set({ activePanel: "song", musicId, back, collapsed: false }, false, "openSongFromList");
+        set(open("song", { musicId, back }), false, "openSongFromList");
       },
 
       goBack: () => {
@@ -81,24 +109,24 @@ export const usePanelStore = create<PanelState>()(
         else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, collapsed: false }, false, "goBack/playlist");
       },
 
-      openPlaylist: (playlistId) => set({ activePanel: "playlist", playlistId, back: null, collapsed: false }, false, "openPlaylist"),
-      openFeed: (email = null) => set({ activePanel: "feed", profileEmail: email, back: null, collapsed: false }, false, "openFeed"),
-      openJourney: () => set({ activePanel: "journey", back: null, collapsed: false }, false, "openJourney"),
-      openFriends: () => set({ activePanel: "friends", back: null, collapsed: false }, false, "openFriends"),
-      openChart: () => set({ activePanel: "chart", back: null, collapsed: false }, false, "openChart"),
+      openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
+      openFeed: (email = null) => set(open("feed", { profileEmail: email }), false, "openFeed"),
+      openJourney: () => set(open("journey"), false, "openJourney"),
+      openFriends: () => set(open("friends"), false, "openFriends"),
+      openChart: () => set(open("chart"), false, "openChart"),
 
       toggle: (panel) => {
         if (get().activePanel === panel) {
-          hideConstellation();
+          hideMapView();
           set({ activePanel: null, back: null }, false, "toggle/close");
           return;
         }
-        if (panel === "feed") set({ activePanel: "feed", profileEmail: null, back: null, collapsed: false }, false, "toggle/feed");
-        else set({ activePanel: panel, back: null, collapsed: false }, false, `toggle/${panel}`);
+        if (panel === "feed") set(open("feed", { profileEmail: null }), false, "toggle/feed");
+        else set(open(panel), false, `toggle/${panel}`);
       },
 
       close: () => {
-        hideConstellation();
+        hideMapView();
         set({ activePanel: null, back: null, collapsed: false }, false, "close");
       },
 

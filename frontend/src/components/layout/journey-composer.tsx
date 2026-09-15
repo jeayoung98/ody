@@ -5,6 +5,7 @@ import { CloseIcon } from "@/components/common/icons";
 import { useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { useTutorialStore } from "@/stores/use-tutorial-store";
 import JourneyComposerResult from "./journey-composer-result";
 import JourneyComposerSlot from "./journey-composer-slot";
 
@@ -50,6 +51,8 @@ export default function JourneyComposer() {
   const handleCreate = () => {
     requestRoute();
     openJourneyPanel();
+    // 튜토리얼의 여정 단계는 **경로를 만든 순간** 끝난다 (S15P21A405-343)
+    useTutorialStore.getState().complete("journey");
   };
 
   const pick = (musicId: number, target: "start" | "end") => {
@@ -59,7 +62,7 @@ export default function JourneyComposer() {
   };
 
   return (
-    <div data-hud className="glass animate-tin absolute top-4 left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[18px]! p-0!">
+    <div data-hud data-tutorial="journey-composer" className="glass animate-tin absolute top-4 left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[18px]! p-0!">
       <header className="flex items-center gap-2 px-4 pt-3">
         <span className="lbl">여정 만들기</span>
         <span className="flex-1" />
@@ -123,6 +126,7 @@ export default function JourneyComposer() {
           type="button"
           onClick={handleCreate}
           disabled={!ready}
+          data-tutorial="journey-create"
           className="grad-bg rounded-pill px-3.5 py-1.5 text-[12.5px] font-medium text-void transition-opacity duration-fast disabled:pointer-events-none disabled:opacity-30"
         >
           경로 만들기

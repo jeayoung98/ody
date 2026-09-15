@@ -9,6 +9,8 @@
 | [FEATURES.md](FEATURES.md) | **기능 명세 (Source of Truth).** 기능 ID의 기준 | 기획 담당 확인 후 항목별로 |
 | [BACKEND-NOTES.md](BACKEND-NOTES.md) | ERD·API·소켓 등 프론트↔백 협의 항목 | 항목을 발견한 파트가 추가하고 상대에게 알림 |
 | [AGENT-SCOPE.md](AGENT-SCOPE.md) | 에이전트 작업 규칙 — 모호한 요청은 코드를 훑기 전에 되묻고, 필요한 구간만 읽는다 (토큰 절약) | 누구나 추가 가능, 변경 시 팀 공지 |
+| [PC-AXES.md](PC-AXES.md) | **지도 16차원이 실제로 무엇을 가르는지.** 겹·축 라벨의 기준 | AI 파이프라인이 PCA 를 다시 학습하면 |
+
 
 문서를 고쳤으면 **반대편 파트에 알린다.** 절차는 [루트 CLAUDE.md §3](../../CLAUDE.md) 참고.
 

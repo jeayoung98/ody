@@ -444,21 +444,51 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
     }
   });
 
-  // 라벨: 제목만 (순번 없음). 진행도로 옅어지되 바닥을 둬서 아직 안 들은 곡도 읽힌다
+  /**
+   * 라벨: 제목만 (순번 없음). 진행도로 옅어지되 바닥을 둬서 아직 안 들은 곡도 읽힌다.
+   *
+   * **겹치면 비켜 주고, 비킬 자리가 없으면 그리지 않는다** (S15P21A405-330). 예전에는 무조건
+   * 별 아래 고정 자리에 그려서, 곡이 붙어 있는 구간은 제목이 서로 겹쳐 하나도 못 읽었다.
+   *
+   * 우선순위가 높은 것부터 자리를 잡는다 — 지금 듣는 곡 · 선택 · 호버는 **반드시** 읽혀야 하고,
+   * 그 셋은 제목도 안 자른다 (긴 제목은 누르거나 가리켜서 읽는다). 숨겨진 곡은 호버 툴팁이 맡는다.
+   */
   g.textAlign = "center";
   g.textBaseline = "middle";
-  pts.forEach((p, i) => {
+  g.font = `600 11px ${FONTS.body}`;
+  const H = 17;
+  const gap = CONSTELLATION.labelGapPx;
+  // 별 자리를 먼저 채워 둔다 — 남의 제목이 별을 덮으면 그 별이 안 보인다
+  const taken = pts.map((p) => ({ x0: p.x - 9, y0: p.y - 9, x1: p.x + 9, y1: p.y + 9 }));
+  const hits = (b: { x0: number; y0: number; x1: number; y1: number }) =>
+    taken.some((t) => b.x0 < t.x1 + gap && b.x1 > t.x0 - gap && b.y0 < t.y1 + gap && b.y1 > t.y0 - gap);
+  // 앞자리일수록 먼저 자리를 잡는다. 같은 등급이면 여정 순서대로
+  const rank = (i: number) => (i === cursor ? 0 : pts[i].id === e.selectedId ? 1 : pts[i].id === e.hoverId ? 2 : 3);
+  const order = pts.map((_, i) => i).sort((a, b) => rank(a) - rank(b) || a - b);
+  for (const i of order) {
+    const p = pts[i];
     const s = e.songs[e.songs.findIndex((x) => x.musicId === p.id)];
+    const must = rank(i) < 3;
+    const title = fitText(g, s.title, must ? 260 : 120);
+    const w = g.measureText(title).width + 12;
+    // 아래 → 위 → 오른쪽 → 왼쪽. 아래가 기본이라 대부분은 예전과 같은 자리에 그대로 앉는다
+    const spots = [
+      { x0: p.x - w / 2, y0: p.y + 14 },
+      { x0: p.x - w / 2, y0: p.y - 14 - H },
+      { x0: p.x + 14, y0: p.y - H / 2 },
+      { x0: p.x - 14 - w, y0: p.y - H / 2 },
+    ].map((q) => ({ ...q, x1: q.x0 + w, y1: q.y0 + H }));
+    // 읽혀야 하는 라벨은 자리가 없어도 기본 자리에 그린다 — 안 보이는 것보다 겹치는 게 낫다
+    const box = spots.find((q) => !hits(q)) ?? (must ? spots[0] : null);
+    if (!box) continue;
+    taken.push(box);
     g.globalAlpha = k * Math.max(CONSTELLATION.labelMinAlpha, alphaOf(i));
-    g.font = `600 11px ${FONTS.body}`;
-    const title = fitText(g, s.title, 120);
-    const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, p.x - tw / 2 - 6, p.y + 12, tw + 12, 17, 5);
+    roundRect(g, box.x0, box.y0, w, H, 5);
     g.fill();
     g.fillStyle = "#dbe4f2";
-    g.fillText(title, p.x, p.y + 21);
-  });
+    g.fillText(title, box.x0 + w / 2, box.y0 + H / 2);
+  }
 
   // 지금 듣는 곡 위에 내 위치 다이아몬드
   if (cursor >= 0) {
@@ -580,7 +610,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   /**
-   * 별 밑 라벨 — 제목, (있으면) 부제, 선택한 곡이면 **"둘러보기 ›" 링크** (S15P21A405-288).
+   * 별 밑 라벨 — 제목, (있으면) 부제, 선택한 곡이면 **"주변 보기 ›" 링크** (S15P21A405-288).
    * 이웃을 누르는 것만으로는 건너가지 않으므로(선택·재생만), 건너가는 길이 시선이 있는 자리에 글씨로 보여야 한다.
    * 떠다니는 버튼을 얹는 대신 이미 있는 라벨 묶음 안에 넣는다. 히트 영역은 엔진에 적어 두고 클릭은 map-view 가 받는다
    */
@@ -605,7 +635,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
       g.globalAlpha = a * pulse;
       g.font = `600 10px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
-      const label = "둘러보기 ›";
+      const label = "주변 보기 ›";
       const lw = g.measureText(label).width;
       g.fillText(label, x, y + HOP_LINK.dy);
       e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: y + HOP_LINK.dy - HOP_LINK.h / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h };

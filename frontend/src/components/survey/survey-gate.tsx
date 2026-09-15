@@ -5,9 +5,20 @@ import dynamic from "next/dynamic";
 /**
  * 설문 마운트 지점 (S15P21A405-250).
  *
- * **기존 코드에 남는 건 이 컴포넌트를 렌더하는 한 줄뿐이다.** 걷어낼 때는 그 한 줄을 지우고
- * survey 관련 파일(components/survey, hooks/survey, stores/use-survey-store,
- * constants/survey, types/survey, lib/anonymous-id, app/bff/feedback)을 삭제하면 끝난다.
+ * ## 걷어내는 법 — 명령 두 줄이 전부다
+ *
+ * ```bash
+ * rm -rf src/components/survey src/hooks/survey src/stores/use-survey-store.ts \
+ *        src/constants/survey.ts src/types/survey.ts src/lib/anonymous-id.ts src/app/bff/feedback
+ * grep -rl REMOVE-WITH-SURVEY --exclude-dir=node_modules --exclude-dir=.next . \
+ *   | xargs sed -i '/REMOVE-WITH-SURVEY/d'
+ * ```
+ *
+ * 위 파일들은 **전부 설문 전용**이라 다른 데서 안 쓴다. 설문 바깥에 남는 자리는
+ * `REMOVE-WITH-SURVEY` 표식으로 찾는다 — **표식 없는 자리를 만들지 않는다.**
+ *
+ * 공용 상수(`query-keys` `api-endpoints`)·스토어·`lib/api` 통로에는 설문이 한 글자도 없다.
+ * 의존은 한 방향이라 설문이 기존 것을 **읽기만** 한다. 지워도 나머지가 깨지지 않는다.
  *
  * 본체를 **동적으로 불러온다** — `NEXT_PUBLIC_SURVEY_ENABLED` 가 꺼진 빌드에서는
  * 설문 코드가 초기 번들에 들어가지 않고 받아오지도 않는다. 정적 import 로 두면

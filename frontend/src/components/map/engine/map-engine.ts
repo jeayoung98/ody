@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_AXES, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { axisLine, CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -217,7 +217,7 @@ export class MapEngine {
    */
   meHop: { x: number; y: number; t0: number } | null = null;
   /**
-   * 주변 탐색 중 선택한 이웃 라벨 밑의 "둘러보기 ›" 링크 히트 영역 (S15P21A405-288).
+   * 주변 탐색 중 선택한 이웃 라벨 밑의 "주변 보기 ›" 링크 히트 영역 (S15P21A405-288).
    * 그리는 쪽(drawProbe)이 매 프레임 채우고, 없으면 null — 글씨가 있는 곳이 곧 누를 수 있는 곳이어야 한다
    */
   hopLink: { id: number; x: number; y: number; w: number; h: number } | null = null;
@@ -270,6 +270,9 @@ export class MapEngine {
   route: number[] = [];
   /** 별자리 뷰 안에서의 이동·확대. 지도 카메라와 별개다 (오버레이는 화면 좌표 배치) */
   overlay = { zoom: 1, dx: 0, dy: 0 };
+  /** 다가가는 중인 별자리 곡. 좌표가 아니라 ID 다 — {@link overlayFocus} 참고 */
+  private overlayFocusId: number | null = null;
+  private overlayFocusZoom = 1;
   /** 상주 별들이 차지하는 월드 범위. 카메라를 이 근처에 붙잡아 둔다 */
   private bbox = { x0: -1, x1: 1, y0: -1, y1: 1 };
   /** 별자리 오버레이 뷰 상태. layout = 백엔드가 준 16차원 압축 2D 고정 배치 (PATH-01) */
@@ -415,13 +418,13 @@ export class MapEngine {
       return;
     }
     // 전환이 끝난 뒤 도착한 응답: 같은 자리에서 집합만 교차 페이드한다. 다이빙을 다시 하지 않는다
-    const ax = LAYER_AXES[layer];
+    const axes = axisLine(layer);
     this.morph(
       layer,
       { ...this.cam },
       ns,
       `${LAYER_NAMES[layer]} — 상주 ${songs.length.toLocaleString()}곡`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       1,
       this.entryS,
       "fade",
@@ -585,12 +588,42 @@ export class MapEngine {
   /** 별자리 뷰에 들어갈 때 초기화 */
   overlayReset() {
     this.overlay = { zoom: 1, dx: 0, dy: 0 };
+    this.overlayFocusId = null;
   }
 
   overlayPan(dx: number, dy: number) {
+    this.overlayFocusId = null;
     this.overlay.dx += dx;
     this.overlay.dy += dy;
     this.clampOverlay();
+  }
+
+  /**
+   * 별자리 뷰에서 **그 곡으로 다가간다** (S15P21A405-330) — 배치 영역 한복판에 놓고 확대한다.
+   *
+   * 배치 안의 곡을 눌렀는데 화면이 안 움직이면 "눌렸나?" 가 된다. 지도 본체에서는 `viewSong`
+   * 이 맡는 일인데, 별자리는 카메라가 아니라 오버레이 변환으로 그려지므로 여기가 그 자리다.
+   *
+   * **목표를 좌표가 아니라 곡 ID 로 들고 있는다.** 클릭과 동시에 우측 패널이 열려 배치 영역이
+   * 좁아지고 `constellationFit` 이 다시 잡히는데, 그 변화는 다음 프레임에야 반영된다 —
+   * 좌표로 굳혀 두면 좁아진 화면에서 엉뚱한 자리로 간다. 매 프레임 다시 계산하면 영역이
+   * 어떻게 변하든 그 곡이 한복판으로 온다.
+   */
+  overlayFocus(id: number) {
+    const c = this.constellation;
+    if (!c || c.exitingAt || !c.layout.some((q) => q.musicId === id)) return;
+    this.overlayFocusId = id;
+    // 이미 더 확대해 둔 상태면 끌어내리지 않는다 — 들여다보던 배율을 빼앗는 꼴이다
+    this.overlayFocusZoom = Math.min(OVERLAY_ZOOM.max, Math.max(this.overlay.zoom, CONSTELLATION.focusZoom));
+  }
+
+  /** 그 곡을 한복판에 놓으려면 오버레이가 어디에 있어야 하나 (지금 영역·목표 배율 기준) */
+  private overlayDest(id: number, zoom: number) {
+    const p = this.constellation?.layout.find((q) => q.musicId === id);
+    if (!p) return null;
+    const fit = this.constellationFit();
+    // `constellationPos` 의 역산이다: tx = cx + (p.x-bx)·s·zoom + dx 를 cx 에 놓는 dx
+    return { dx: -(p.x - fit.bx) * fit.s * zoom, dy: (p.y - fit.by) * fit.s * zoom };
   }
 
   /**
@@ -603,6 +636,7 @@ export class MapEngine {
    * 한복판을 붙잡으면 확대해도 보고 있던 자리가 그대로 있고, 거기서 끌어 끝 별로 가면 된다.
    */
   overlayWheel(deltaY: number) {
+    this.overlayFocusId = null;
     const o = this.overlay;
     const next = Math.min(OVERLAY_ZOOM.max, Math.max(OVERLAY_ZOOM.min, o.zoom * Math.exp(-deltaY * WHEEL_ZOOM)));
     // 한복판 고정 = 지금 한복판에 있는 배치 지점이 그대로 한복판에 남는다
@@ -1488,14 +1522,48 @@ export class MapEngine {
     a.subset = subset;
   }
 
-  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율, gateZoomMul = 게이트 개방 지점 */
+  /** 지금 배율이 이 레이어에 들어온 배율의 몇 배인가. 1 = 진입 배율 */
   zoomK() {
     return this.cam.s / this.entryS;
   }
 
-  /** 레이어 안에서 충분히(gateZoomMul 배) 확대했는가 — 그 전에는 파고들 수 없다 */
+  /**
+   * 파고들 만큼 좁혔는가 (S15P21A405-342).
+   *
+   * **화면 안 곡 수**로 잰다 — 배율 배수로 재면 진입 배율이 겹마다 달라서 같은 배수가 어떤 겹에선
+   * 207곡, 어떤 겹에선 1곡을 뜻했다. 곡 수는 확대할수록 단조 감소라 반드시 언젠가 열린다.
+   *
+   * **비어 있어도 막지 않는다.** 빈 화면은 "더 확대해라" 가 아니라 "이미 다 좁혔다" 다 —
+   * 성긴 곳에서 파고들어도 {@link drillBox} 가 가장 가까운 곡을 가운데 두고 상자를 넓혀
+   * `minInView` 만큼 모아 보낸다.
+   */
   private zoomedEnough() {
-    return this.zoomK() >= DRILL.gateZoomMul;
+    return this.zoomK() >= DRILL.gateMinZoom && this.countInView() <= this.gateMaxInView();
+  }
+
+  /**
+   * 게이트가 열리는 화면 안 곡 수 — **밀도 × 지금 보이는 넓이**다.
+   *
+   * 수로 고정하면 큰 모니터에서는 같은 배율에 더 많이 보여 훨씬 많이 확대해야 한다.
+   * 우측 패널이 열려 영역이 좁아져도 같은 이유로 함께 줄어든다.
+   * 바닥은 `minInView` 다 — 그보다 적게 잡으면 파고들기가 쓸 곡보다 적어진다.
+   */
+  private gateMaxInView() {
+    const f = this.freeRect();
+    const areaMpx = ((f.x1 - f.x0) * (f.y1 - f.y0)) / 1e6;
+    return Math.max(DRILL.minInView, DRILL.gateMaxDensity * areaMpx);
+  }
+
+  /**
+   * 게이트까지 얼마나 왔나 (0~1). 안내 막대가 이걸로 찬다 — 게이트 조건과 같은 값을 봐야
+   * 막대가 꽉 찼는데 안 열리거나, 덜 찼는데 열리는 일이 없다.
+   */
+  gateProgress() {
+    const byZoom = Math.min(1, this.zoomK() / DRILL.gateMinZoom);
+    const n = this.countInView();
+    const max = this.gateMaxInView();
+    const byCount = n <= max ? 1 : max / n;
+    return Math.min(byZoom, byCount);
   }
 
   /**
@@ -1554,8 +1622,8 @@ export class MapEngine {
       for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
       big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${p.inView.toLocaleString()}곡 기준`;
     }
-    const ax = LAYER_AXES[nl];
-    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    const axes = axisLine(nl);
+    this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big, axes);
   }
 
   /** 응답으로 받은 곡들을 상주 마스크로. 처음 보는 곡은 편입하고, 고정 곡은 남긴다 */
@@ -1628,19 +1696,34 @@ export class MapEngine {
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
-    const mi = this.myId != null ? this.index.get(this.myId) : undefined;
+    /**
+     * **배율은 그 겹에 처음 들어왔던 것으로 되돌린다** (S15P21A405-327).
+     *
+     * `p.cam.s` 는 게이트를 밀며 한 겹 최대(`zoomRange.max`)까지 확대된 뒤 대기 중 `waitZoom`
+     * 까지 더해진 값이라 진입 배율의 7배를 넘는다. 그대로 복원하면 **축소하려고 휠을 돌렸는데
+     * 최대 확대 상태의 좁은 구역에 착지하고**, 그 구역이 비어 있으면 화면에 별이 하나도 없다.
+     * 진입 배율은 그 겹이 화면에 맞춰지던 배율이므로 여기로 오면 별이 화면을 채운다.
+     */
+    const s = p.entryS;
+    /**
+     * 내 곡을 가운데 두는 건 **그 곡이 이 겹에 상주할 때만** 이다.
+     * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.
+     */
+    const mi0 = this.myId != null ? this.index.get(this.myId) : undefined;
+    const mi = mi0 != null && p.subset[mi0] ? mi0 : undefined;
     const f = this.freeRect();
     // 내 자리가 있으면 그 곡을 가운데 두고 떠오른다. 없으면 두고 온 카메라 그대로
     const c: MapCamera =
       mi == null
-        ? { ...p.cam }
+        ? { ...p.cam, s }
         : {
             ...p.cam,
-            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / p.cam.s,
-            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / p.cam.s,
+            s,
+            cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
+            cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
-    const ax = LAYER_AXES[p.layer];
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`, -1, p.entryS);
+    const axes = axisLine(p.layer);
+    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, axes, -1, p.entryS);
   }
 
   // ------------------------------------------------------------------ input
@@ -1744,14 +1827,14 @@ export class MapEngine {
       cx: s.pc[targetLayer * 2] - (fr.cx - this.W / 2) / scale,
       cy: s.pc[targetLayer * 2 + 1] + (fr.cy - this.H / 2) / scale,
     };
-    const ax = LAYER_AXES[targetLayer];
+    const axes = axisLine(targetLayer);
     this.touched = true;
     this.morph(
       targetLayer,
       cam,
       this.subset,
       `${s.title} — ${LAYER_NAMES[targetLayer]}${ro(LAYER_NAMES[targetLayer])}`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       targetLayer > this.layer ? 1 : -1,
     );
   }
@@ -1782,6 +1865,49 @@ export class MapEngine {
     if (ov) return ov;
     const i = this.index.get(id);
     return i == null ? null : { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
+  }
+
+  /**
+   * 튜토리얼이 "이 별을 눌러 보세요" 라고 짚을 별 하나 (S15P21A405-349).
+   *
+   * 지도가 실제로 보이는 사각형 안에서, 안내 카드에 가리지 않을 만큼 아래에 있는 별 중
+   * 아무거나 고른다. 화면 밖이나 카드 뒤의 별을 짚으면 짚어 준 의미가 없다.
+   *
+   * **`freeRect` 만으로는 모자란다** (S15P21A405-350). 그건 우측 패널 폭만 빼 줄 뿐
+   * 계기판·레일·플레이어바 같은 HUD 상자는 그 안에 그대로 들어 있다. 그 뒤에 깔린 별이
+   * 뽑히면 구멍을 뚫어도 HUD 상자만 보인다 — `blocked` 로 상자를 한 번 더 걸러야 한다.
+   *
+   * 남은 것 중에서는 **밝은 쪽 절반**에서 뽑는다. 재생수가 적은 별은 점이 희미해서,
+   * 짚어 줘도 눈에 안 들어온다.
+   */
+  pickTutorialStar(cardBottom: number): number | null {
+    const f = this.freeRect();
+    const inView = (v: VisibleStar) => v.px > f.x0 + 40 && v.px < f.x1 - 40 && v.py > f.y0 + 40 && v.py < f.y1 - 40;
+    /**
+     * **빈손으로 끝나면 안 된다** (S15P21A405-351). 화면에 보이는 별이 열 개 남짓일 때가 있어서,
+     * 세 조건을 다 걸면 하나도 안 남고 그 단계에서 튜토리얼이 멈춰 버린다. 좋은 자리부터 보되
+     * 없으면 한 겹씩 양보하고, 마지막에는 보이는 별 아무거나라도 짚는다.
+     */
+    const clear = (v: VisibleStar) => !this.blocked(v.px, v.py);
+    const tries = [
+      (v: VisibleStar) => inView(v) && v.py > cardBottom && clear(v), // 카드 아래 · HUD 밖
+      (v: VisibleStar) => inView(v) && clear(v), //                      HUD 밖
+      inView, //                                                         화면 안
+      () => true, //                                                     보이기만 하면
+    ];
+    const ok = tries.map((t) => this.visible.filter(t)).find((list) => list.length > 0);
+    if (!ok) return null;
+    // 남은 것 중에서는 밝은 쪽 절반. 재생수가 적은 별은 점이 희미해 짚어 줘도 눈에 안 들어온다
+    const bright = [...ok].sort((a, b) => this.songs[b.i].weight - this.songs[a.i].weight).slice(0, Math.max(1, Math.ceil(ok.length / 2)));
+    return this.songs[bright[Math.floor(Math.random() * bright.length)].i].musicId;
+  }
+
+  /** 그 별이 지금 화면 어디에 있나. 안 보이면 null — 카메라가 움직이면 매 프레임 달라진다 */
+  starPos(musicId: number): { x: number; y: number; r: number } | null {
+    const i = this.index.get(musicId);
+    if (i == null) return null;
+    const v = this.visible.find((x) => x.i === i);
+    return v ? { x: v.px, y: v.py, r: v.r } : null;
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {
@@ -1833,16 +1959,22 @@ export class MapEngine {
    * 재생 때문에 레이어를 강제로 옮기지도 않는다. 대신 가생이에 옅은 점으로 방향만 뜬다.
    */
   travelTo(id: number) {
-    if (!this.index.has(id)) return;
-    this.playingId = id;
     /**
      * 이 겹에 없는 곡(주변 탐색에서 고른 이웃 곡 등)이어도 **자리는 기억한다.**
      * 기억해 두지 않으면 "내 위치로 가기" 가 한참 전에 재생한 딴 곡으로 데려간다 —
      * 화살표는 지금 곡 쪽을 가리키는데 버튼은 딴 데로 가니 안 먹은 것처럼 보인다.
+     *
+     * **지도가 아직 모르는 곡이어도 마찬가지다** (S15P21A405-328). 예전에는 그때 맨 앞에서
+     * 빠져나가 `home` 이 이전 곡에 남았고, 버튼이 지금 듣는 곡이 아닌 데로 데려갔다.
+     * 지금은 기록을 먼저 갈아 끼운다 — 그 곡을 지도가 모르면 `canGoHome` 이 false 라
+     * 버튼이 꺼질 뿐이고, 곡이 도착하는 순간 제대로 살아난다.
      */
+    this.playingId = id;
     this.home = { musicId: id, boxes: [...this.boxes] };
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
+    // 여기부터는 좌표가 있어야 한다 — 지도에 없는 곡은 데려갈 자리가 없다
+    if (!this.index.has(id)) return;
     /**
      * 주변 탐색 중 **고리 안 곡**을 재생하면 정찰이다 (S15P21A405-288) — 우주선만 그 별의 고리 자리로
      * 건너뛰고 고리·카메라는 그대로다. 이웃은 대개 이 겹에 상주하지 않아(isAlive 가 아니라) 아래
@@ -2027,14 +2159,14 @@ export class MapEngine {
     this.meFlight = null;
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
-    const ax = LAYER_AXES[target];
+    const axes = axisLine(target);
     this.touched = true;
     this.morph(
       target,
       { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
       ns,
       `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       target > this.layer ? 1 : -1,
     );
     return "moved";
@@ -2051,7 +2183,7 @@ export class MapEngine {
     this.stack = [];
     this.boxes = [];
     this.selectedId = id;
-    const ax = LAYER_AXES[0];
+    const axes = axisLine(0);
     const scale = this.fitCam(0, ns, id).s * FOCUS.zoomMul;
     const f = this.freeRect();
     const s = this.songs[this.index.get(id)!];
@@ -2061,7 +2193,7 @@ export class MapEngine {
       { s: scale, cx: s.pc[0] - (f.cx - this.W / 2) / scale, cy: s.pc[1] + (f.cy - this.H / 2) / scale },
       ns,
       `${s.title} — ${LAYER_NAMES[0]}${ro(LAYER_NAMES[0])} 떠오르는 중`,
-      `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`,
+      axes,
       -1,
     );
   }
@@ -2163,7 +2295,7 @@ export class MapEngine {
     const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
     const target = this.layer + dir;
     if (target < 0 || target >= LAYER_COUNT) return false;
-    const ax = LAYER_AXES[target];
+    const axes = axisLine(target);
     const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
@@ -2172,7 +2304,7 @@ export class MapEngine {
     this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
     // 우주선·내 위치는 새 레이어 좌표로 옮긴다
     this.friendPos.delete(f.leader.email);
-    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, `가로 ${ax.x[0]} ↔ ${ax.x[1]}   ·   세로 ${ax.y[0]} ↔ ${ax.y[1]}`);
+    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`, axes);
     f.phase = "view";
     f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
     return true;
@@ -2293,6 +2425,26 @@ export class MapEngine {
       } else if (this.pressure > 0) {
         this.pressure = Math.max(0, this.pressure - DRILL.pressureDecay);
         if (this.pressure === 0) this.prefetch = null;
+      }
+      // 별자리 안에서 그 곡으로 다가가기 (S15P21A405-330). 목표 자리는 영역이 바뀔 수 있어 매 프레임 다시 잰다
+      if (this.overlayFocusId != null) {
+        const t = this.overlayDest(this.overlayFocusId, this.overlayFocusZoom);
+        if (!t || !this.constellationActive()) this.overlayFocusId = null;
+        else {
+          const o = this.overlay;
+          const k = 1 - Math.pow(0.001, 16 / 1000) * 0.85;
+          o.zoom = lerp(o.zoom, this.overlayFocusZoom, k);
+          o.dx = lerp(o.dx, t.dx, k);
+          o.dy = lerp(o.dy, t.dy, k);
+          // 마지막 반 픽셀은 붙여 버린다 — 보간만으로는 영영 안 닿고 매 프레임 계산이 남는다
+          if (Math.abs(o.dx - t.dx) < 0.5 && Math.abs(o.dy - t.dy) < 0.5 && Math.abs(o.zoom / this.overlayFocusZoom - 1) < 0.002) {
+            o.zoom = this.overlayFocusZoom;
+            o.dx = t.dx;
+            o.dy = t.dy;
+            this.overlayFocusId = null;
+          }
+          this.clampOverlay();
+        }
       }
       // 카메라 목표 추적
       if (this.camTarget) {
@@ -2521,6 +2673,8 @@ export class MapEngine {
       residentCount: this.residentCount(),
       viewportCount: this.viewportCount,
       zoomK: Math.round(this.zoomK() * 100) / 100,
+      gateProgress: this.gateProgress(),
+      gateAtCount: Math.round(this.gateMaxInView()),
       gateOpen: !this.anim && !this.pending && this.gateOpen(),
       atBottom: this.layer >= LAYER_COUNT - 1,
       canRise: this.stack.length > 0,

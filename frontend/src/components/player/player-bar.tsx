@@ -1,14 +1,16 @@
 "use client";
 
 import { LocateIcon, NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
+import { UNPLAYABLE_NOTICE } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
+import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
-import { openYoutube } from "@/lib/youtube";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
 
@@ -35,15 +37,23 @@ export default function PlayerBar() {
    * 안 나는 게 제일 나쁘다.
    */
   const overlayOpen = viewMode !== "default";
+  const openSong = usePanelStore((s) => s.openSong);
+  const openPlaylist = usePanelStore((s) => s.openPlaylist);
+  const openJourney = usePanelStore((s) => s.openJourney);
+  /**
+   * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
+   * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
+   * 거부된 경우(오버레이·따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
+   */
   const handleGoHome = () => {
     const r = goHome();
     if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
     else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+    else if (r !== "none" && currentMusicId != null) openSong(currentMusicId);
   };
-  const openSong = usePanelStore((s) => s.openSong);
-  const openPlaylist = usePanelStore((s) => s.openPlaylist);
-  const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
+  // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
+  useDeferredNext();
 
   /**
    * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
@@ -69,19 +79,24 @@ export default function PlayerBar() {
     } else openSong(currentMusicId);
   };
 
-  /** 사이트 안에서 들을 수 있는 곡인가 — 공식 플레이어 임베드가 붙는다 (규칙 6 D15) */
-  const canEmbed = data?.videoId != null;
-  const canPlay = data ? canEmbed || data.youtubeUrl != null : currentMusicId != null;
+  /**
+   * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
+   * 곡 정보가 아직 안 왔으면 막지 않는다. 도착하면 그때 판정이 잡힌다.
+   */
+  const video = useVideoIdQuery(currentMusicId);
+  const canPlay = video.data ? video.data.videoId != null : currentMusicId != null;
 
   /**
-   * `videoId` 가 있으면 **사이트 안에서** 재생한다 — `youtube-embed.tsx` 가 스토어를 보고 움직이므로
-   * 여기서는 토글만 하면 된다.
+   * 재생은 `youtube-embed.tsx` 가 스토어를 보고 움직이므로 여기서는 토글만 하면 된다.
    *
-   * 없으면 예전 경로다: 백엔드가 준 검색 URL 을 새 탭으로 연다 (규칙 6 — `lib/youtube.ts`).
-   * **멈춤 → 재생** 으로 넘어갈 때만 연다. 멈출 때도 열면 탭이 계속 쌓인다.
+   * 음원이 없는 곡이면 **왜 안 되는지 알려 준다** (S15P21A405-336). 예전에는 버튼이 꺼져 있어
+   * 눌러도 아무 일도 안 났는데, 그러면 고장으로 읽힌다.
    */
   const handleToggle = () => {
-    if (!canEmbed && !isPlaying) openYoutube(data?.youtubeUrl);
+    if (!canPlay) {
+      showToast(UNPLAYABLE_NOTICE);
+      return;
+    }
     toggle();
   };
   const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
@@ -109,16 +124,22 @@ export default function PlayerBar() {
       >
         <i className="grad-bg absolute inset-0 opacity-55 [mask:radial-gradient(circle_at_50%_50%,#000_30%,transparent_72%)]" />
       </span>
-      <button type="button" onClick={openContext} className="min-w-0 flex-1 text-left" disabled={currentMusicId == null}>
-        <p className="truncate text-sm">
-          {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
-          {currentMusicId != null && !canPlay && <span className="ml-2 text-[10px] text-warn">재생 불가</span>}
-        </p>
-        <p className="truncate text-[10px] text-ink-3">
-          {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
-        </p>
-        <PlayerProgress active={isPlaying && currentMusicId != null} musicId={currentMusicId} />
-      </button>
+      {/*
+        진행 바는 **버튼 밖**이다 (S15P21A405-334). 안에 두면 바를 끌 때마다 패널이 같이 열리고,
+        버튼 안의 슬라이더라 키보드 조작도 서로 먹는다. 곡 정보만 버튼으로 남긴다
+      */}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <button type="button" onClick={openContext} className="min-w-0 text-left" disabled={currentMusicId == null}>
+          <p className="truncate text-sm">
+            {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
+            {currentMusicId != null && !canPlay && <span className="ml-2 text-[10px] text-warn">재생 불가</span>}
+          </p>
+          <p className="truncate text-[10px] text-ink-3">
+            {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
+          </p>
+        </button>
+        <PlayerProgress musicId={currentMusicId} durationSec={data?.duration} canPlay={canPlay} />
+      </span>
       {queue.length > 0 && (
         <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">
           {queueIndex + 1}/{queue.length}
@@ -127,7 +148,7 @@ export default function PlayerBar() {
       <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : canEmbed ? "재생" : "유튜브에서 듣기"} primary onClick={handleToggle} disabled={!canPlay}>
+      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} dimmed={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
       <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>

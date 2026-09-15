@@ -37,6 +37,7 @@ export const QUERY_KEYS = {
     all: ["music"] as const,
     detail: (id: number) => ["music", "detail", id] as const,
     search: (keyword: string) => ["music", "search", keyword] as const,
+    videoId: (id: number) => ["music", "video-id", id] as const,
   },
 
   user: {

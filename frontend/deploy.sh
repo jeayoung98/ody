@@ -6,31 +6,29 @@ readonly DEPLOY_ROOT="/var/www/ody"
 readonly RELEASES_DIR="${DEPLOY_ROOT}/releases"
 readonly CURRENT_LINK="${DEPLOY_ROOT}/current"
 readonly PREVIOUS_LINK="${DEPLOY_ROOT}/previous"
-readonly PUBLIC_BASE_URL="${ODY_FRONTEND_PUBLIC_BASE_URL:-https://j15a405.p.ssafy.io}"
 
+readonly FRONTEND_SERVICE="ody-frontend.service"
+readonly LOCAL_BASE_URL="http://127.0.0.1:3000"
+readonly PUBLIC_BASE_URL="${ODY_FRONTEND_PUBLIC_BASE_URL:-https://j15a405.p.ssafy.io}"
 
 readonly NGINX_CONFIG="/etc/nginx/sites-available/backend"
 readonly NGINX_NEXT_CONFIG="/etc/nginx/sites-available/backend.next"
 readonly NGINX_LEGACY_BACKUP="/etc/nginx/sites-available/backend.before-next"
 
-# NGINX_CONFIG는 backend blue-green upstream, TLS, Certbot 등과 프론트 location을
-# 한 파일에 같이 담고 있다. Frontend 배포는 이 마커 사이의 프론트 location 블록만
-# 이식하고, 그 바깥(특히 backend upstream 줄)은 절대 건드리지 않는다 — 그 줄의
-# 소유권은 backend/deploy.sh(blue-green)에만 있다.
-readonly NGINX_FRONTEND_BLOCK_BEGIN='# BEGIN ODY-FRONTEND-LOCATIONS (managed by frontend/deploy.sh; do not edit by hand)'
-readonly NGINX_FRONTEND_BLOCK_END='# END ODY-FRONTEND-LOCATIONS'
-
 readonly LOCK_FILE="/run/lock/ody-frontend-deploy.lock"
 readonly RETAIN_RELEASES=5
+
 
 log() {
     printf '[frontend-deploy] %s\n' "$*"
 }
 
+
 fail() {
     printf '[frontend-deploy] ERROR: %s\n' "$*" >&2
     exit 1
 }
+
 
 usage() {
     cat <<'EOF'
@@ -41,135 +39,105 @@ Usage:
 EOF
 }
 
+
 require_root() {
     if [[ ${EUID} -ne 0 ]]; then
         exec sudo -n "$0" "$@"
     fi
 }
 
+
 validate_release_id() {
-    [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || fail "Invalid release id."
+    [[ $1 =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,127}$ ]] || \
+        fail "Invalid release id."
 }
 
+
 assert_layout() {
-    [[ ${DEPLOY_ROOT} == "/var/www/ody" ]] || fail "Unexpected deploy root."
-    [[ ${RELEASES_DIR} == "${DEPLOY_ROOT}/releases" ]] || fail "Unexpected releases directory."
+    [[ ${DEPLOY_ROOT} == "/var/www/ody" ]] || \
+        fail "Unexpected deploy root."
+
+    [[ ${RELEASES_DIR} == "${DEPLOY_ROOT}/releases" ]] || \
+        fail "Unexpected releases directory."
 }
+
 
 atomic_link() {
     local target=$1
     local link=$2
     local temporary="${link}.new.$$"
 
+    rm -f -- "${temporary}"
+
     ln -s "${target}" "${temporary}"
     mv -Tf "${temporary}" "${link}"
 }
 
+
 link_target() {
     local link=$1
+
     if [[ -L ${link} ]]; then
         readlink -f "${link}"
     fi
 }
 
+
 validate_archive() {
     local artifact=$1
     local member
 
-    [[ -f ${artifact} && -r ${artifact} ]] || fail "Artifact is not readable: ${artifact}"
-    tar -tzf "${artifact}" >/dev/null || fail "Artifact is not a readable gzip tar archive."
+    [[ -f ${artifact} && -r ${artifact} ]] || \
+        fail "Artifact is not readable: ${artifact}"
+
+    tar -tzf "${artifact}" >/dev/null || \
+        fail "Artifact is not a readable gzip tar archive."
 
     while IFS= read -r member; do
-        [[ ${member} != /* ]] || fail "Artifact contains an absolute path."
-        [[ ${member} != ".." && ${member} != ../* && ${member} != */../* ]] || \
+        [[ ${member} != /* ]] || \
+            fail "Artifact contains an absolute path."
+
+        [[ ${member} != ".." &&
+           ${member} != ../* &&
+           ${member} != */../* ]] || \
             fail "Artifact contains a parent-directory path."
     done < <(tar -tzf "${artifact}")
-
-    if tar -tvzf "${artifact}" | grep -Eq '^[lh]'; then
-        fail "Artifact must not contain symbolic or hard links."
-    fi
 }
+
 
 validate_release() {
     local directory=$1
     local release_id=$2
 
-    [[ -d ${directory} ]] || fail "Release directory is missing: ${directory}"
-    [[ -s ${directory}/index.html ]] || fail "index.html is missing or empty."
-    [[ -f ${directory}/healthz.txt ]] || fail "healthz.txt is missing."
-    [[ $(tr -d '\r\n' < "${directory}/healthz.txt") == "ok" ]] || fail "Invalid health marker."
-    [[ -f ${directory}/build-id.txt ]] || fail "build-id.txt is missing."
-    [[ $(tr -d '\r\n' < "${directory}/build-id.txt") == "${release_id}" ]] || \
+    [[ -d ${directory} ]] || \
+        fail "Release directory is missing: ${directory}"
+
+    # Next.js standalone 실행 파일
+    [[ -s ${directory}/server.js ]] || \
+        fail "server.js is missing or empty."
+
+    # Next.js static asset
+    [[ -d ${directory}/.next/static ]] || \
+        fail ".next/static directory is missing."
+
+    # Jenkins에서 생성한 health marker
+    [[ -f ${directory}/public/healthz.txt ]] || \
+        fail "public/healthz.txt is missing."
+
+    [[ $(tr -d '\r\n' < "${directory}/public/healthz.txt") == "ok" ]] || \
+        fail "Invalid health marker."
+
+    # Jenkins Build Number
+    [[ -f ${directory}/public/build-id.txt ]] || \
+        fail "public/build-id.txt is missing."
+
+    [[ $(tr -d '\r\n' < "${directory}/public/build-id.txt") == "${release_id}" ]] || \
         fail "Artifact build id does not match the requested release id."
 }
 
+
 nginx_check() {
     nginx -t
-}
-
-extract_frontend_block() {
-    local file=$1
-
-    awk \
-        -v begin="${NGINX_FRONTEND_BLOCK_BEGIN}" \
-        -v end="${NGINX_FRONTEND_BLOCK_END}" \
-        '
-            $0 == begin { flag = 1 }
-            flag { print }
-            $0 == end { flag = 0 }
-        ' \
-        "${file}"
-}
-
-
-# template(NGINX_NEXT_CONFIG 또는 NGINX_LEGACY_BACKUP)의 마커 사이 블록을
-# target(NGINX_CONFIG)의 같은 마커 사이에만 이식한 결과를 out에 만든다.
-# 마커 바깥 내용(backend upstream, TLS, Certbot, /api/, /actuator/ 등)은
-# target 그대로 보존된다. 마커가 없거나 개수가 안 맞으면 손대지 않고 실패한다.
-splice_frontend_block() {
-    local template=$1
-    local target=$2
-    local out=$3
-
-    local block_file
-    block_file="$(mktemp)"
-
-    extract_frontend_block "${template}" > "${block_file}"
-
-    if [[ ! -s ${block_file} ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers are missing in ${template}."
-    fi
-
-    if [[ $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${template}") -ne 1 ||
-          $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_END}" "${template}") -ne 1 ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers must appear exactly once in ${template}."
-    fi
-
-    if [[ $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${target}") -ne 1 ||
-          $(grep -c -F -x "${NGINX_FRONTEND_BLOCK_END}" "${target}") -ne 1 ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers are missing or duplicated in ${target}. Backend upstream/TLS/Certbot blocks are intentionally left untouched; add the markers there manually before deploying."
-    fi
-
-    local begin_line end_line
-
-    begin_line="$(grep -n -F -x "${NGINX_FRONTEND_BLOCK_BEGIN}" "${target}" | cut -d: -f1)"
-    end_line="$(grep -n -F -x "${NGINX_FRONTEND_BLOCK_END}" "${target}" | cut -d: -f1)"
-
-    if [[ ${begin_line} -ge ${end_line} ]]; then
-        rm -f -- "${block_file}"
-        fail "Frontend location markers are out of order in ${target}."
-    fi
-
-    {
-        head -n "$((begin_line - 1))" "${target}"
-        cat "${block_file}"
-        tail -n "+$((end_line + 1))" "${target}"
-    } > "${out}"
-
-    rm -f -- "${block_file}"
 }
 
 
@@ -205,26 +173,14 @@ reload_nginx() {
         return 1
     fi
 
-    log "Updating frontend location blocks in Nginx configuration."
+    log "Activating Next.js Nginx configuration."
 
-    local candidate backup
-    candidate="$(mktemp)"
-    backup="$(mktemp)"
-
-    splice_frontend_block "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}" "${candidate}"
-
-    cp "${NGINX_CONFIG}" "${backup}"
-    cp "${candidate}" "${NGINX_CONFIG}"
-    rm -f -- "${candidate}"
+    cp "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}"
 
     if ! nginx_check; then
-        log "Updated Nginx configuration is invalid; restoring previous configuration."
-        cp "${backup}" "${NGINX_CONFIG}"
-        rm -f -- "${backup}"
+        log "Next.js Nginx configuration is invalid."
         return 1
     fi
-
-    rm -f -- "${backup}"
 
     systemctl reload nginx
 }
@@ -235,26 +191,14 @@ restore_legacy_nginx() {
         return 1
     fi
 
-    log "Restoring legacy frontend location blocks in Nginx configuration."
+    log "Restoring legacy Nginx configuration."
 
-    local candidate backup
-    candidate="$(mktemp)"
-    backup="$(mktemp)"
-
-    splice_frontend_block "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}" "${candidate}"
-
-    cp "${NGINX_CONFIG}" "${backup}"
-    cp "${candidate}" "${NGINX_CONFIG}"
-    rm -f -- "${candidate}"
+    cp "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}"
 
     if ! nginx_check; then
-        log "Restored legacy Nginx configuration is invalid; keeping previous configuration."
-        cp "${backup}" "${NGINX_CONFIG}"
-        rm -f -- "${backup}"
+        log "Restored legacy Nginx configuration is invalid."
         return 1
     fi
-
-    rm -f -- "${backup}"
 
     systemctl reload nginx
 }
@@ -297,17 +241,50 @@ wait_local_health() {
     return 1
 }
 
+
 public_health() {
     local release_id=$1
     local marker
+    local actuator_status
 
-    curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/" >/dev/null
-    marker="$(curl -fsS --retry 5 --retry-delay 1 --max-time 10 \
-        "${PUBLIC_BASE_URL}/build-id.txt?release=${release_id}")"
-    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || return 1
+    log "Checking public frontend."
 
-    # 백엔드 의존성 검사는 프론트엔드 배포 성공/실패 조건에서 제외
-    # curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/api/hello" >/dev/null
+    curl -fsS \
+        --retry 5 \
+        --retry-delay 1 \
+        --max-time 10 \
+        "${PUBLIC_BASE_URL}/" \
+        >/dev/null
+
+    marker="$(
+        curl -fsS \
+            --retry 5 \
+            --retry-delay 1 \
+            --max-time 10 \
+            "${PUBLIC_BASE_URL}/build-id.txt?release=${release_id}"
+    )"
+
+    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || \
+        return 1
+
+    log "Checking backend API."
+
+    curl -fsS \
+        --retry 5 \
+        --retry-delay 1 \
+        --max-time 10 \
+        "${PUBLIC_BASE_URL}/api/hello" \
+        >/dev/null
+
+    actuator_status="$(
+        curl -sS \
+            -o /dev/null \
+            -w '%{http_code}' \
+            --max-time 10 \
+            "${PUBLIC_BASE_URL}/actuator/health"
+    )"
+
+    [[ ${actuator_status} == "403" || ${actuator_status} == "404" ]]
 }
 
 
@@ -328,12 +305,19 @@ restore_links() {
     fi
 }
 
+
 safe_remove_release() {
     local directory=$1
-    [[ ${directory} == "${RELEASES_DIR}/"* ]] || fail "Refusing to remove a path outside releases."
-    [[ ${directory} != "${RELEASES_DIR}" ]] || fail "Refusing to remove the releases root."
+
+    [[ ${directory} == "${RELEASES_DIR}/"* ]] || \
+        fail "Refusing to remove a path outside releases."
+
+    [[ ${directory} != "${RELEASES_DIR}" ]] || \
+        fail "Refusing to remove the releases root."
+
     rm -rf -- "${directory}"
 }
+
 
 prune_releases() {
     local current_target
@@ -347,21 +331,34 @@ prune_releases() {
 
     while IFS= read -r entry; do
         path="${entry#* }"
-        if [[ ${path} == "${current_target}" || ${path} == "${previous_target}" ]]; then
+
+        if [[ ${path} == "${current_target}" ||
+              ${path} == "${previous_target}" ]]; then
             continue
         fi
+
         kept=$((kept + 1))
+
         if (( kept > RETAIN_RELEASES )); then
             log "Removing old release: $(basename "${path}")"
             safe_remove_release "${path}"
         fi
-    done < <(find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d \
-        ! -name '.incoming-*' -printf '%T@ %p\n' | sort -nr)
+    done < <(
+        find "${RELEASES_DIR}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            ! -name '.incoming-*' \
+            -printf '%T@ %p\n' |
+            sort -nr
+    )
 }
+
 
 deploy_release() {
     local artifact=$1
     local release_id=$2
+
     local release_dir
     local incoming
     local old_current
@@ -369,49 +366,127 @@ deploy_release() {
 
     validate_release_id "${release_id}"
     validate_archive "${artifact}"
+
     release_dir="${RELEASES_DIR}/${release_id}"
     incoming="${RELEASES_DIR}/.incoming-${release_id}-$$"
 
-    install -d -o root -g www-data -m 0755 "${DEPLOY_ROOT}" "${RELEASES_DIR}"
+    install -d \
+        -o root \
+        -g www-data \
+        -m 0755 \
+        "${DEPLOY_ROOT}" \
+        "${RELEASES_DIR}"
+
     old_current="$(link_target "${CURRENT_LINK}")"
     old_previous="$(link_target "${PREVIOUS_LINK}")"
 
     if [[ -e ${release_dir} ]]; then
         validate_release "${release_dir}" "${release_id}"
+
         log "Using existing immutable release: ${release_id}"
     else
-        install -d -o root -g www-data -m 0755 "${incoming}"
-        trap 'if [[ -n ${incoming:-} && -d ${incoming} ]]; then safe_remove_release "${incoming}"; fi' EXIT
-        tar -xzf "${artifact}" -C "${incoming}" --no-same-owner --no-same-permissions
+        install -d \
+            -o root \
+            -g www-data \
+            -m 0755 \
+            "${incoming}"
+
+        trap '
+            if [[ -n ${incoming:-} && -d ${incoming} ]]; then
+                safe_remove_release "${incoming}"
+            fi
+        ' EXIT
+
+        tar \
+            -xzf "${artifact}" \
+            -C "${incoming}" \
+            --no-same-owner
+
         validate_release "${incoming}" "${release_id}"
-        find "${incoming}" -type d -exec chmod 0755 {} +
-        find "${incoming}" -type f -exec chmod 0644 {} +
+
+        # 디렉터리는 읽기/탐색 가능하게 유지
+        find "${incoming}" \
+            -type d \
+            -exec chmod 0755 {} +
+
+        # 실행 비트는 보존하고 group/other write 권한만 제거
+        find "${incoming}" \
+            -type f \
+            -exec chmod go-w {} +
+
         chown -R root:www-data "${incoming}"
+
+        # Next.js runtime cache는 서비스 프로세스가 쓸 수 있게 한다.
+        install -d \
+            -o www-data \
+            -g www-data \
+            -m 0755 \
+            "${incoming}/.next/cache"
+
         mv "${incoming}" "${release_dir}"
+
         incoming=""
+
         trap - EXIT
     fi
 
     nginx_check
+
     if [[ -n ${old_current} && -d ${old_current} ]]; then
         atomic_link "${old_current}" "${PREVIOUS_LINK}"
     fi
+
     atomic_link "${release_dir}" "${CURRENT_LINK}"
 
-    if ! nginx_check || ! public_health "${release_id}"; then
+    # 새 current를 기준으로 Next.js 재시작
+    if ! restart_frontend ||
+        ! wait_local_health "${release_id}" ||
+        ! reload_nginx ||
+        ! public_health "${release_id}"; then
+
         log "Health verification failed; restoring previous symlinks."
+
         restore_links "${old_current}" "${old_previous}"
-        nginx_check
-        [[ -z ${old_current} ]] || public_health "$(basename "${old_current}")" || true
+
+        # 이전 release가 Next.js라면 이전 Next 서버로 복구
+        if [[ -n ${old_current} &&
+            -s ${old_current}/server.js ]]; then
+
+            log "Restoring previous Next.js release."
+
+            systemctl restart "${FRONTEND_SERVICE}" || true
+            wait_local_health "$(basename "${old_current}")" || true
+
+            # Next.js Nginx 설정 유지
+            nginx_check || true
+            systemctl reload nginx || true
+
+        else
+            # 첫 Next.js 전환 실패:
+            # 기존 Vite release + 기존 정적 Nginx 설정으로 복구
+            log "Restoring legacy static frontend."
+
+            systemctl stop "${FRONTEND_SERVICE}" || true
+
+            if ! restore_legacy_nginx; then
+                log "WARNING: Failed to restore legacy Nginx configuration."
+            fi
+        fi
+
         fail "Deployment rolled back."
     fi
 
+    systemctl enable "${FRONTEND_SERVICE}"
+
     prune_releases
+
     log "Deployment successful: ${release_id}"
 }
 
+
 rollback_release() {
     local requested=${1:-}
+
     local target
     local release_id
     local old_current
@@ -419,7 +494,9 @@ rollback_release() {
 
     old_current="$(link_target "${CURRENT_LINK}")"
     old_previous="$(link_target "${PREVIOUS_LINK}")"
-    [[ -n ${old_current} ]] || fail "There is no active release."
+
+    [[ -n ${old_current} ]] || \
+        fail "There is no active release."
 
     if [[ -n ${requested} ]]; then
         validate_release_id "${requested}"
@@ -427,34 +504,73 @@ rollback_release() {
     else
         target="${old_previous}"
     fi
-    [[ -n ${target} && -d ${target} ]] || fail "Rollback release is unavailable."
-    [[ ${target} != "${old_current}" ]] || fail "Requested release is already active."
+
+    [[ -n ${target} && -d ${target} ]] || \
+        fail "Rollback release is unavailable."
+
+    [[ ${target} != "${old_current}" ]] || \
+        fail "Requested release is already active."
+
     release_id="$(basename "${target}")"
+
     validate_release "${target}" "${release_id}"
 
     nginx_check
+
     atomic_link "${old_current}" "${PREVIOUS_LINK}"
     atomic_link "${target}" "${CURRENT_LINK}"
-    if ! nginx_check || ! public_health "${release_id}"; then
+
+    if ! restart_frontend ||
+       ! wait_local_health "${release_id}" ||
+       ! nginx_check ||
+       ! public_health "${release_id}"; then
+
         log "Rollback verification failed; restoring original symlinks."
+
         restore_links "${old_current}" "${old_previous}"
-        nginx_check
+
+        systemctl restart "${FRONTEND_SERVICE}" || true
+
+        nginx_check || true
+
         fail "Rollback was not applied."
     fi
+
     log "Rollback successful: ${release_id}"
 }
+
 
 show_status() {
     printf 'current=%s\n' "$(link_target "${CURRENT_LINK}")"
     printf 'previous=%s\n' "$(link_target "${PREVIOUS_LINK}")"
+
+    if frontend_service_exists; then
+        printf 'service=%s\n' "$(
+            systemctl is-active "${FRONTEND_SERVICE}" 2>/dev/null || true
+        )"
+    else
+        printf 'service=missing\n'
+    fi
+
     if [[ -d ${RELEASES_DIR} ]]; then
-        find "${RELEASES_DIR}" -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+        printf '%s\n' 'releases:'
+
+        find "${RELEASES_DIR}" \
+            -mindepth 1 \
+            -maxdepth 1 \
+            -type d \
+            ! -name '.incoming-*' \
+            -printf '  %f\n' |
+            sort
     fi
 }
 
+
 main() {
     local action=${1:-}
+
     shift || true
+
     assert_layout
     require_root "${action}" "$@"
 
@@ -472,39 +588,51 @@ main() {
         ln \
         systemctl \
         journalctl \
-        seq \
-        mktemp \
-        awk \
-        grep \
-        head \
-        tail \
-        cut; do
+        seq; do
 
         command -v "${command_name}" >/dev/null || \
             fail "Required command is missing: ${command_name}"
     done
 
     exec 9>"${LOCK_FILE}"
-    flock -n 9 || fail "Another Frontend deployment is running."
+
+    flock -n 9 || \
+        fail "Another Frontend deployment is running."
 
     case "${action}" in
         deploy)
-            [[ $# -eq 2 ]] || { usage; exit 2; }
+            [[ $# -eq 2 ]] || {
+                usage
+                exit 2
+            }
+
             deploy_release "$1" "$2"
             ;;
+
         rollback)
-            [[ $# -le 1 ]] || { usage; exit 2; }
+            [[ $# -le 1 ]] || {
+                usage
+                exit 2
+            }
+
             rollback_release "${1:-}"
             ;;
+
         status)
-            [[ $# -eq 0 ]] || { usage; exit 2; }
+            [[ $# -eq 0 ]] || {
+                usage
+                exit 2
+            }
+
             show_status
             ;;
+
         *)
             usage
             exit 2
             ;;
     esac
 }
+
 
 main "$@"

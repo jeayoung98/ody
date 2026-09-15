@@ -1,8 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
 import { useState } from "react";
-import { ROUTES } from "@/constants";
 import { useMapStore } from "@/stores/use-map-store";
 import AxisCompass from "./axis-compass";
 import LayerGauge from "./layer-gauge";
@@ -19,12 +17,12 @@ import MinimapCanvas from "./minimap-canvas";
  */
 export default function MinimapPanel() {
   /**
-   * 튜토리얼로 들어오면 **접은 채로** 시작한다 (S15P21A405-350). 처음 보는 화면에서는
-   * 별지도가 어떤 곳인지부터 넓게 보여 주는 게 낫다 — 계기판은 지금 어디쯤인지 궁금해진
-   * 다음에 필요해진다. 첫 값일 뿐이라 언제든 핸들로 편다.
+   * **접은 채로 시작한다** (S15P21A405-350 · 358). 별지도가 어떤 곳인지부터 넓게 보여 주는
+   * 게 낫다 — 계기판은 지금 어디쯤인지 궁금해진 다음에 필요해진다. 축이 어느 쪽인지는
+   * 지도 가장자리가 늘 적어 두고 있어서(`map-axis-labels`) 펴지 않아도 아쉽지 않다.
+   * 첫 값일 뿐이라 언제든 핸들로 편다.
    */
-  const onTutorial = usePathname() === ROUTES.tutorial;
-  const [open, setOpen] = useState(!onTutorial);
+  const [open, setOpen] = useState(false);
   const layer = useMapStore((s) => s.layer);
 
   return (

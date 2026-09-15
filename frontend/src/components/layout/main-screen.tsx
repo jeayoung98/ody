@@ -16,6 +16,7 @@ import SearchBar from "./search-bar";
 import SearchOpenButton from "./search-open-button";
 import FollowBanner from "@/components/map/follow-banner";
 import GhostBanner from "@/components/map/ghost-banner";
+import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
@@ -49,6 +50,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   return (
     <div className="fixed inset-0 overflow-hidden bg-void text-ink">
       <MapView occludedRight={occludedRight} />
+      {/* 축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다 */}
+      <MapAxisLabels occludedRight={occludedRight} />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}

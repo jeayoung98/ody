@@ -45,7 +45,8 @@ export interface EngineSnapshot {
   pressure: number;
   pressureDir: 1 | -1 | 0;
   /** 모프 진행 중 안내 문구 */
-  morph: { big: string; sub: string } | null;
+  /** 전환 안내. `sub` 는 겹을 불러오는 중일 때만 있다 — 축 문장은 지도 가장자리가 맡는다 (S15P21A405-358) */
+  morph: { big: string; sub?: string } | null;
   /** 내 곡 = 내 위치. 곡을 재생해야 생긴다 — 없으면 표식을 그리지 않는다 */
   myMusicId: number | null;
   /**

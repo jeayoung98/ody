@@ -28,6 +28,7 @@ export default function RightPanel() {
   return (
     <aside
       data-hud
+      data-tutorial={`panel-${activePanel}`}
       className={`animate-tin absolute top-[68px] right-[74px] z-20 flex max-h-[calc(100vh-158px)] w-right-panel flex-col transition-transform duration-300 ease-out ${
         collapsed ? "translate-x-[calc(100%+74px)]" : ""
       }`}

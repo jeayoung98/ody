@@ -62,7 +62,7 @@ export default function JourneyComposer() {
   };
 
   return (
-    <div data-hud className="glass animate-tin absolute top-4 left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[18px]! p-0!">
+    <div data-hud data-tutorial="journey-composer" className="glass animate-tin absolute top-4 left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[18px]! p-0!">
       <header className="flex items-center gap-2 px-4 pt-3">
         <span className="lbl">여정 만들기</span>
         <span className="flex-1" />

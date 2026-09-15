@@ -7,6 +7,7 @@ import { useCompleteTutorialMutation } from "@/hooks/mutations/use-complete-tuto
 import { writeStorage } from "@/lib/storage";
 import { useMapStore } from "@/stores/use-map-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
+import TutorialSpotlight from "./tutorial-spotlight";
 import TutorialStepCard from "./tutorial-step-card";
 
 /**
@@ -41,6 +42,8 @@ export default function TutorialOverlay() {
 
   return (
     <div className="pointer-events-none absolute inset-0 z-[60]">
+      {/* 어둠막 먼저 — 안내 카드가 그 위에 와야 건너뛰기가 눌린다 */}
+      <TutorialSpotlight spotlight={step.spotlight} ringOnly={step.ringOnly} />
       <div className="pointer-events-auto absolute top-[120px] left-1/2 w-[min(340px,84vw)] -translate-x-1/2">
         <TutorialStepCard
           index={stepIndex}

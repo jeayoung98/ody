@@ -28,7 +28,13 @@ export default function Rail() {
   return (
     <nav data-hud className="glass absolute top-1/2 right-[18px] z-[21] flex -translate-y-1/2 flex-col gap-1.5 rounded-pill! p-1.5">
       {items.map((item) => (
-        <RailButton key={item.key} label={item.label} active={activePanel === item.key} onClick={() => toggle(item.key as PanelType)}>
+        <RailButton
+          key={item.key}
+          label={item.label}
+          active={activePanel === item.key}
+          onClick={() => toggle(item.key as PanelType)}
+          data-tutorial={item.key}
+        >
           {ICONS[item.key]}
         </RailButton>
       ))}

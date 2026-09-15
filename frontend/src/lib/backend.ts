@@ -126,8 +126,6 @@ interface BackendMusicSummary {
   genres: string[] | null;
   /** 검색 URL. 재생 URL 이 아니다 (규칙 6) */
   youtubeUrl: string | null;
-  /** 공식 플레이어 임베드용 영상 ID. 2026-09-14 실호출 기준 전 곡 null 이다 */
-  videoId: string | null;
   location: BackendLocation | null;
 }
 
@@ -238,8 +236,7 @@ export function toMusic(res: BackendMusicDetail): Music {
     duration: res.duration,
     album: res.album,
     youtubeUrl: res.youtubeUrl,
-    // 임베드 재생의 유일한 입력이다 (규칙 6). 없으면 화면이 검색 링크로 떨어진다
-    videoId: res.videoId ?? null,
+    // videoId 는 매핑하지 않는다 — 전용 엔드포인트가 출처다 (S15P21A405-340)
     location: res.location ? (toPcArray(res.location) as Music["location"]) : null,
     playCnt: res.playCnt ?? 0,
     youtubeCnt: res.youtubeCnt ?? 0,

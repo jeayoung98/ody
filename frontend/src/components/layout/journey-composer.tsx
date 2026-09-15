@@ -5,6 +5,7 @@ import { CloseIcon } from "@/components/common/icons";
 import { useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { useTutorialStore } from "@/stores/use-tutorial-store";
 import JourneyComposerResult from "./journey-composer-result";
 import JourneyComposerSlot from "./journey-composer-slot";
 
@@ -50,6 +51,8 @@ export default function JourneyComposer() {
   const handleCreate = () => {
     requestRoute();
     openJourneyPanel();
+    // 튜토리얼의 여정 단계는 **경로를 만든 순간** 끝난다 (S15P21A405-343)
+    useTutorialStore.getState().complete("journey");
   };
 
   const pick = (musicId: number, target: "start" | "end") => {

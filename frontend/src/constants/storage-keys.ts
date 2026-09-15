@@ -17,4 +17,6 @@ export const STORAGE_KEYS = {
   playingMusicId: "ody:playing-music-id",
   /** 튜토리얼 건너뛰기/완료 로컬 캐시 */
   tutorialDone: "ody:tutorial-done",
+  /** 테스트 안내 화면을 봤는가 (S15P21A405-343). 한 번 보면 다시 띄우지 않는다 */
+  testGuideSeen: "ody:test-guide-seen",
 } as const;

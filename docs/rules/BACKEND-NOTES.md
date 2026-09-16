@@ -182,6 +182,7 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-8 | ~~`GET /api/music/{id}/representative-layers`~~ | — | — | **철회 — 만들지 않아도 된다.** 검색 결과를 누르면 그 곡이 대표곡인 첫 레이어로 자동 전환하려던 것이었는데, **SEARCH-01 이 v1.4 에서 바뀌어** 그 전환을 없애고 고스트별(MAP-12)로 대체했다. 프론트에 남아 있던 훅·목 라우트는 아무데서도 안 쓰여 삭제했다 (S15P21A405-269) | ❌ 철회 (2026-09-12) |
 | A-7 | `POST /api/music/{id}/play` | `{ source, playedMs }` | ok | 재생 로그 (`play_history`). `source` 값은 `MAP` / `JOURNEY` / `PLAYLIST` / `FOLLOW` | 협의 전 |
 | A-28 | `POST /api/music/{id}/report` | `{ reason }` | `{ reportId }` | **곡 신고 (S15P21A405-377). 아직 없다 — 프론트는 목 라우트(`/bff/music/{id}/report`)로 받고 있다.** 지도에 오는 662만 곡에 음원이 아닌 것이 섞여 있어서, 사용자가 만났을 때 알릴 자리가 필요하다. `reason` 은 `spoken`(말소리) / `noise`(잡음) / `other`(기타) 셋. **값을 바꾸지 말아 달라** — 화면 문구와 저장 값을 갈라 뒀고, 값이 바뀌면 집계가 끊긴다. 비로그인으로도 받아야 한다(1차 배포가 로그인을 안 태운다, A-17) — 설문처럼 이 경로만 permitAll. **지금 본문은 `reason` 하나뿐이다** — 사람 식별자는 안 보낸다(아래 참고). 테이블 제안은 아래 "곡 신고 테이블" 참고 | 협의 전 |
+| A-29 | `POST /api/feedback` 의 `reason` 에 **`compare` 를 더해 달라** | `{ …, reason: "compare" }` | — | **곡 신고와 다른 건이다 (S15P21A405-380).** 부정 응답 이유 넷(`dup`·`mood`·`tempo`·`spoken`)은 모두 **방금 들은 곡**에 대한 판단인데, 이상한 쪽이 **비교 상대**(주변=기준곡, 여정=앞 곡)일 때 말할 자리가 없다. 그러면 사용자가 엉뚱한 이유를 골라, 지표에서 "알고리즘이 고른 연결이 나쁘다" 로 읽힌다. **프론트는 이미 이 값을 보낸다** — CHECK 제약을 늘려 주기 전까지 이 이유로 낸 응답은 거부된다 (조용히 사라지지는 않고 카드에 재시도·포기로 드러난다). 자세한 것은 아래 "설문 이유 `compare` 추가" 참고 | 협의 전 |
 | A-10 | `POST /api/auth/signup` | `{ email, password, nickname }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 가입 (AUTH-01) | ✅ 구현됨 (backend/dev, S15P21A405-121) · 프론트 반영 완료 |
 | A-11 | `POST /api/auth/login` | `{ email, password }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 로그인 (AUTH-02) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
 | A-12 | `GET /api/users/nickname-available?nickname=` | nickname | `{ available }` | 닉네임 중복 확인 (AUTH-01) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
@@ -279,3 +280,53 @@ CREATE INDEX music_report_by_music ON music_report (music_id, reason);
 - 본문은 `{ reason }` 하나뿐이다. `musicId` 는 경로에 있고, 사람 식별자는 위 사유로 아직 안 보낸다.
 - 실호출 표식(`okLive`)을 달지 않았다 — 목을 실데이터로 오해하지 않기 위해서다.
 - 실연동이 붙으면 라우트 핸들러만 바꾸면 되고 화면·훅은 그대로다.
+
+
+## 설문 이유 `compare` 추가 (S15P21A405-380)
+
+### 무엇을 바꿔야 하나
+
+`explore_feedback.reason` 이 받는 값에 **`compare` 하나**를 더해 주면 된다. 테이블 구조는 그대로다.
+
+```sql
+-- 기존 CHECK 이 값을 열거하고 있다면 (프론트 타입이 그렇게 가정한다: types/survey.ts)
+ALTER TABLE explore_feedback DROP CONSTRAINT explore_feedback_reason_chk;
+ALTER TABLE explore_feedback ADD CONSTRAINT explore_feedback_reason_chk
+  CHECK (reason IS NULL OR reason IN ('dup', 'mood', 'tempo', 'spoken', 'compare'));
+
+-- enum 타입으로 되어 있다면
+ALTER TYPE explore_feedback_reason ADD VALUE 'compare';
+```
+
+**지금 CHECK 목록이 실제로 무엇인지 우리가 모른다.** 프론트 타입 주석이 "백엔드 CHECK 제약과 같은 값이어야 한다" 고만 적고 있고, 배포본에 `reason` 값을 확인해 볼 방법이 없었다(다른 필수 필드 때문에 `400 INVALID_INPUT` 만 돌아온다). 지금 제약이 어떻게 되어 있는지 알려 주면 위 둘 중 맞는 쪽으로 정리하겠다.
+
+### 값 이름을 `compare` 로 한 이유
+
+- 모드를 가리지 않는다. 주변은 기준곡, 여정은 앞 곡인데 **저장 코드는 하나여야** 한 표에서 분석된다 (기존 `mood`/`tempo` 도 문구만 모드별로 다르다).
+- 프론트 계약에서 그 곡을 이미 `compare` 라고 부른다 (`SurveyEdge.compare`, `compareLabel`).
+- 어느 곡인지는 이미 행에 있다 — 주변은 `anchor_music_id`, 여정은 `prev_music_id`. 이유 값에 곡을 또 담을 필요가 없다.
+
+`anchor` 로 하지 않은 이유: 여정에서 비교 상대는 `anchorMusicId`(출발곡)가 아니라 `prevMusicId`(앞 역)라, 이름이 데이터와 어긋난다.
+
+### 지표에서 어떻게 다뤄야 하나 — 여기가 중요하다
+
+**이 응답을 "연결이 나쁘다" 로 세면 안 된다.** 나머지 넷과 방향이 반대다.
+
+| 이유 | 무엇이 나쁘다는 말인가 | 지표 |
+| --- | --- | --- |
+| `dup` `mood` `tempo` `spoken` | 알고리즘이 고른 **그 연결**이 나쁘다 | 정밀도 분모·분자에 포함 |
+| **`compare`** | 연결이 아니라 **비교 상대 곡 자체**가 이상하다 | **정밀도 계산에서 제외.** 대신 그 곡(`anchor_music_id` / `prev_music_id`)을 따로 집계해 데이터 정제 대상으로 본다 |
+
+`compare` 를 그냥 부정으로 세면, 기준곡 하나가 이상할 때 그 곡의 이웃 10개가 전부 "나쁜 연결" 로 찍혀 지표가 통째로 내려앉는다.
+
+### 곡 신고(A-28)와의 관계
+
+둘 다 "이 곡이 이상하다" 를 받지만 자리가 다르다.
+
+| | A-28 곡 신고 | A-29 `reason = compare` |
+| --- | --- | --- |
+| 어디서 | 곡 상세 패널, 아무 때나 | 설문 카드, 부정 답 뒤 |
+| 무엇을 | 그 곡 자체 (`spoken`/`noise`/`other`) | 비교 상대가 이상해서 이 문항이 무효라는 신호 |
+| 표 | `music_report` (신설 요청) | `explore_feedback` (기존) |
+
+합치지 않는 편이 낫다고 본다 — 설문 쪽은 **그 문항을 지표에서 빼는 근거**가 되어야 하고, 신고 쪽은 곡 데이터 정제 대상 목록이다. 다만 `compare` 가 쌓인 곡을 신고와 함께 보면 정제 우선순위를 정하기 쉬울 것이다.

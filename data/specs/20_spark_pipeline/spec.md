@@ -39,7 +39,7 @@
 | S2 전처리 | 추출 특징 + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` `mbid` + `f_000..f_269` f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인. 잡은 `spark/jobs/preprocess.py` |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` `mbid` + pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet`. 잡은 `spark/jobs/pca.py` |
 | S4 트리 배정 | coords + `map_tree/tree.json` + `split_axes.npz` | `node_paths/` `mbid` + `leaf_id` + `node_d1` + `node_d2` | 말단 노드 일치 100%. 표본 5,000곡 실측 완료. 잡은 `spark/jobs/tree_assign.py` |
-| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R9 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
+| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R10 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | 원래 문장: `check_contract.py --strict --prev` 통과. **`--prev` 는 적용 불가 — 아래 S6 절 참조.** 대체 기준은 `--strict` 통과 + 내용 대조. 잡은 `spark/jobs/artifact_export.py` |
 
 ## S1 대표행 선택 — 제출본 2,946만 → 곡 740만
@@ -52,6 +52,7 @@ census 제출본 29,460,584
   → 2~5. MBID 당 1행 선택
   → 곡 7,404,506
   → (S5 가 R1~R9 로 780,107 더 자름)  →  6,624,399
+  → (R10 제목 잡음 33,646 더 자름. 2026-09-14 추가)  →  6,590,753
 ```
 
 ### 선택 규칙 (완전 결정적)
@@ -201,6 +202,8 @@ root 에서 시작해 깊이 6 까지 한 칸씩
 S1 대표행 7,404,506
   → 규칙 R1~R9 적용        제외 780,107 (10.54%)
   → 남는 곡 6,624,399
+  → R10 제목 잡음 (v4)     신규 제외 33,646 (0.45%)   누적 813,753 (10.99%)
+  → 남는 곡 6,590,753
 ```
 
 행을 지우지 않는다. 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`, `flag_*` 로 표시한다(`data/AGENTS.md` 규칙 2). 임계값은 `pipeline/exclusion_rules.json`(v3)에서만 읽고 잡 코드에 숫자를 적지 않는다(규칙 9). 테스트가 하드코딩 여부를 검사한다.
@@ -217,6 +220,7 @@ S1 대표행 7,404,506
 | R7_samplerate | 0 | 0 | **꺼짐**. `flag_low_sr` 만 만든다 |
 | R8_silence | 116 | 78 | 하위 분위 음량 + 무음률 높음 |
 | R9_corrupt | 0 | 0 | **꺼짐**. `flag_clipped` 만 만든다 |
+| R10_title_noise | 48,952 | 33,646 | 제목이 곡을 식별하지 못하는 행. `lower(trim(title_raw))` 가 JSON 정규식 5종 중 하나에 맞음: `[untitled]`·`Untitled 3`(단독), 빈 제목·구두점만, `Track 01`(track/pista/piste/titel/faixa/traccia), `Intro`·`Outro`·`Skit`·`Interlude` 단독, `Unknown`·`Sans Titre`·`無題`. **v4 추가(2026-09-14, S15P21A405-299)** — 기준 카탈로그 `catalog_v2` 는 R1~R9 라 R10 열은 `catalog_v2` 에서 재계산한 값이다. 숫자만 제목(`1999`·`22`)과 `untitled` 부분 일치(`Untitled (How Does It Feel)`)는 실제 곡이라 넣지 않았다 |
 
 R5·R6 은 거리 보호가 있다. 대표와 좌표 거리가 `protect_dist`(4.0) 를 넘는 멤버는 제목이 같아도 접지 않는다. 근거는 같은 녹음의 제출본 거리 p90 이 5.18 이고 제목만 같은 묶음의 멤버 거리 median 이 5.34 라는 감사 A6·A7 이다.
 
@@ -338,24 +342,35 @@ client 모드에서는 드라이버가 예외로 죽어도 SparkContext 가 정�
 - AC4 실행 문서 `spark/README.md`: 제출 명령, 자원(executor 수·메모리), 소요 시간, **증거 수집 절차** 기록.
 - AC5 HDFS 에 입력이 올라가 있고 행 수가 로컬 원본과 같다: `hdfs:///ody/data/raw_features_extracted`. **2026-09-10 실측 6,617,603행(파일 28개, 8.7G)** — 계획서의 7,404,506 은 틀린 수치였다(아래 참조).
 
-### 입력 데이터가 완전하지 않다 (2026-09-10 확인)
-`work/v2_feats` 는 30개 파트 중 **28개**다. `part10`, `part24` 가 빠져 있다.
+### 입력은 완전하다 — 디렉터리를 하나 덜 읽었다 (2026-09-11 정정)
+
+**2026-09-10 에 "30파트 중 28파트뿐" 이라고 적었다. 틀렸다.** `part10`·`part24` 는 `work/v2_feats_pilot/` 에 있다. 파일럿 추출 산출물이 본 추출의 첫 조각이라 디렉터리가 둘로 나뉘어 있고, 원본 `pipeline/exclusion_apply.py` 는 둘 다 순회한다. 우리 코드가 `work/v2_feats` 하나만 읽은 것이 원인이었다.
 
 | 집합 | 행 수 |
 |---|---|
 | manifest (S1 대표행) | 7,404,506 |
+| `v2_feats` 28파일 | 6,617,603 |
+| `v2_feats_pilot` 2파일 (part10·part24) | 786,903 |
+| **특징 합계** | **7,404,506** = manifest 와 정확히 같다 |
 | `coords_v2.parquet` | 6,624,399 |
-| v2_feats (28파트) | 6,617,603 |
-| coords ∩ feats | 5,891,253 |
-| coords 에만 있음 (특징 없음) | 733,146 |
-| feats 에만 있음 (제외된 곡) | 726,350 |
+| coords 에만 있음 (특징 없음) | **0** (이전 주장 733,146) |
 
-검산: 6,617,603 = 5,891,253 + 726,350. 빠진 786,903 = coords 733,146 + 제외곡 53,757. manifest 7,404,506 과 제외 780,107 에 정확히 맞는다.
+확인한 방법: 추출기를 다시 돌리니 `part-10 이미 완료: work/v2_feats_pilot/part10.parquet` 라고 답했다. 두 디렉터리를 합쳐 세면 mbid 7,404,506개로 manifest 와 같고, `bpm` 유한값도 전 행에 있다.
 
-**결과: 현재 입력으로는 S3 의 전곡 패리티(위 표)를 검증할 수 없다.** coords 의 11.1% 에 특징이 없다.
-- 교집합 5,891,253곡(coords 의 88.9%)으로는 검증할 수 있다. 그 범위에서는 기준을 그대로 적용한다.
-- 원본 `acousticbrainz-lowlevel-json-20220623-{10,24}.tar.zst` 는 로컬에 있고 추출기(`dmadkr/scripts/extract_v2_features.py`)도 있다. 파트당 약 5분이므로 재추출하면 전곡 검증이 가능해진다.
-- 재추출 여부는 결정 대기(열린 질문 Q7). 결정 전까지 S3 패리티 범위는 **교집합**으로 읽는다.
+**증거 하나 더.** S5 의 R8 분위값을 30파트로 다시 계산하면 **8.517061680322513e-05** 로 원본 `exclusion_report.json` 기록과 **소수점 끝자리까지 같다**. 28파트로는 8.011e-05 였다. 원본이 두 디렉터리를 읽었다는 뜻이고, 차이의 원인이 데이터가 아니라 읽기 범위였음을 보여준다.
+
+#### 이 오해가 남긴 자리를 되돌렸다
+| 무엇 | 이전 | 지금 |
+|---|---|---|
+| S3 전곡 패리티 범위 | 교집합 5,891,253곡 | **전곡 6,624,399곡 가능** |
+| `tests/test_catalog_rules.py` R8 | 기록 분위값 주입, 113/116 일치 | 30파트 직접 계산, **116/116 완전 일치** |
+| `ingest/build_csv.py` bpm | 733,146곡 NULL | 두 디렉터리를 읽어 전 행 확보 |
+| 열린 질문 Q7 (재추출) | 결정 대기 | **종결 — 재추출 불필요** |
+
+특징을 읽는 코드는 **항상 두 디렉터리를 본다**(`ingest/build_csv.py:feature_dirs`).
+
+#### HDFS 입력은 아직 28파트다
+`hdfs:///ody/data/raw_features_extracted` 에는 `v2_feats` 28파일(8.7 G)만 올라가 있다. 클러스터에서 전곡을 돌리려면 파일럿 2파일(약 1 GB)을 더 올려야 한다. AC0 은 이미 충족했고(S2·S3 SUCCEEDED), 전곡 AC1 을 클러스터로 채울 때 함께 올린다.
 
 우선순위: 일정이 부족하면 **AC0 → AC1(표본) → AC1(전곡) → AC2** 순으로 확보한다. AC0 없이 AC1 만 로컬에서 채우는 것은 요건 미충족이다.
 

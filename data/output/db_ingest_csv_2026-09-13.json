@@ -1,0 +1,37 @@
+{
+  "stage": "S18-csv",
+  "out_dir": "C:/Users/SSAFY/Desktop/dmadkr/work/ingest_csv_2026-09-13",
+  "inputs": {
+    "coords": "C:\\Users\\SSAFY\\Desktop\\S15P21A405\\data\\serving\\v2.1-pca16\\coords_v2.parquet",
+    "catalog": "C:\\Users\\SSAFY\\Desktop\\S15P21A405\\data\\work\\catalog_v2.parquet",
+    "meta": "C:\\Users\\SSAFY\\Desktop\\S15P21A405\\data\\work\\v2_song_meta.parquet",
+    "feats": [
+      "C:\\Users\\SSAFY\\Desktop\\S15P21A405\\data\\work\\v2_feats",
+      "C:\\Users\\SSAFY\\Desktop\\S15P21A405\\data\\work\\v2_feats_pilot"
+    ],
+    "album_meta": "C:\\Users\\SSAFY\\Desktop\\S15P21A405\\data\\work\\v2_meta.parquet"
+  },
+  "music_rows": 6624399,
+  "id_range": [
+    1,
+    6624399
+  ],
+  "genre_rows": 29,
+  "music_genre_rows": 71285,
+  "songs_with_genre": 66036,
+  "songs_without_genre": 6558363,
+  "title_truncated": 700,
+  "artist_truncated": 0,
+  "album_truncated": 387,
+  "missing_catalog": 0,
+  "missing_bpm": 0,
+  "album_filled": 6580215,
+  "release_year_filled": 6384141,
+  "album_mbid_filled": 4567869,
+  "null_columns": [
+    "youtube_url"
+  ],
+  "next_music_id_for_backend": 6624400,
+  "expected_rows": 6624399,
+  "rows_match": true
+}

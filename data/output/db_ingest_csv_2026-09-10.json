@@ -27,5 +27,6 @@
   ],
   "next_music_id_for_backend": 6624400,
   "expected_rows": 6624399,
-  "rows_match": true
+  "rows_match": true,
+  "correction_2026-09-11": "2026-09-11 정정 (D16): 이 기록의 '파트 2개 누락'·'특징 없는 733,146곡' 은 사실이 아니다. part10·part24 는 work/v2_feats_pilot/ 에 있었고 우리 코드가 v2_feats 한 디렉터리만 읽었다. 두 디렉터리 합계 7,404,506행 = manifest. R8 분위값 30파트 재계산이 원본 기록과 끝자리까지 일치해 확인됐다. 측정 수치 자체는 그대로 두고 해석만 정정한다(규칙 1). 이 파일의 missing_bpm 733,146 은 그래서 생긴 값이다. 고친 뒤 music.bpm 을 갱신했다."
 }

@@ -58,5 +58,6 @@
       "fix": "sudo pip3 install --break-system-packages -U pandas → 3.0.5"
     }
   ],
-  "warning": "client 모드에서는 드라이버 예외가 나도 SparkContext 가 정상 종료되면 YARN 이 SUCCEEDED 로 기록한다. 실패한 0001·0002 도 SUCCEEDED 로 남아 있다. AC0 판정은 application id 만 보지 말고 출력 경로의 행 수까지 확인해야 한다."
+  "warning": "client 모드에서는 드라이버 예외가 나도 SparkContext 가 정상 종료되면 YARN 이 SUCCEEDED 로 기록한다. 실패한 0001·0002 도 SUCCEEDED 로 남아 있다. AC0 판정은 application id 만 보지 말고 출력 경로의 행 수까지 확인해야 한다.",
+  "correction_2026-09-11": "2026-09-11 정정 (D16): 이 기록의 '파트 2개 누락'·'특징 없는 733,146곡' 은 사실이 아니다. part10·part24 는 work/v2_feats_pilot/ 에 있었고 우리 코드가 v2_feats 한 디렉터리만 읽었다. 두 디렉터리 합계 7,404,506행 = manifest. R8 분위값 30파트 재계산이 원본 기록과 끝자리까지 일치해 확인됐다. 측정 수치 자체는 그대로 두고 해석만 정정한다(규칙 1)."
 }

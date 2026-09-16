@@ -15,6 +15,13 @@
 #   3. HNSW 병렬 빌드가 /dev/shm 64MB 를 넘겨 "could not resize shared memory segment".
 #      해결: SET max_parallel_maintenance_workers = 0. shm-size 를 늘리려면 컨테이너 재생성이 필요하다.
 #
+# 2026-09-11 에 배운 것 둘:
+#   4. 특징은 work/v2_feats 와 work/v2_feats_pilot 두 곳에 나뉘어 있다(D16).
+#      한쪽만 읽으면 786,903행이 빠진다. build_csv.py 가 이제 둘 다 읽는다.
+#   5. 적재가 끝난 뒤 컬럼 하나를 고치려고 733k 행을 UPDATE 하면 HNSW·GiST 유지 비용이 지배해
+#      30분이 지나도 안 끝난다. 인덱스를 내리고 UPDATE 한 뒤 다시 만드는 편이 빠르다
+#      (UPDATE 2분 + GiST 21초 x2 + HNSW 65분). **처음부터 CSV 를 맞게 만드는 것이 가장 싸다.**
+#
 # 사용법 (master 아니라 app-node 에서):
 #   scp -i ~/.ssh/J15A405T.pem music.csv genre.csv music_genre.csv ubuntu@j15a405.p.ssafy.io:/tmp/ingest/
 #   bash load_postgres.sh /tmp/ingest
@@ -31,6 +38,47 @@ run_sql() { docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$P
 echo "== 0. 적재 전 상태"
 run_sql "SELECT 'music' AS t, count(*) FROM music UNION ALL SELECT 'genre', count(*) FROM genre UNION ALL SELECT 'music_genre', count(*) FROM music_genre;"
 
+# 재적재(D17) — 이 스크립트의 본 경로는 빈 테이블에 COPY 한다. 행이 있으면 중복 적재가 되므로 멈춘다.
+# 다시 채우려면 사람이 ODY_ALLOW_RELOAD=1 을 주고 실행한다. 그때는 TRUNCATE 가 아니라 **UPDATE 조인**이다:
+#   - BE 의 playlist_item 이 music 을 FK 로 참조해서 TRUNCATE 가 막힌다(2026-09-13 실측). CASCADE 는 플레이리스트를 지운다.
+#   - CSV 를 임시 테이블에 COPY 하고 id 로 조인해 album·release_year·album_mbid·bpm 네 컬럼만 덧씌운다.
+#     기존 행·play_cnt·youtube_cnt·BE 가 추가한 곡·genre·music_genre 는 그대로다. id 는 mbid 순이라 CSV 와 DB 가 같다(D13).
+#   - UPDATE 중 인덱스 유지 비용을 피하려고 HNSW·GiST 를 내리고 GiST 는 바로 다시 만든다(각 21초). HNSW 는 7단계에서.
+#   - location 은 바꾸지 않는다. map_sample 도 그대로다.
+EXISTING=$(docker exec -i "$CONTAINER" bash -lc 'psql -tA -U $POSTGRES_USER -d $POSTGRES_DB -c "SELECT count(*) FROM music;"' | tr -d '[:space:]')
+RELOAD=0
+if [ "${EXISTING:-0}" != "0" ]; then
+  if [ "${ODY_ALLOW_RELOAD:-0}" != "1" ]; then
+    echo "!! music 에 ${EXISTING} 행이 있다. 재적재면 ODY_ALLOW_RELOAD=1 bash load_postgres.sh <dir> 로 다시 실행한다. 중단." >&2
+    exit 1
+  fi
+  RELOAD=1
+  echo "== 0b. 재적재 모드 — music ${EXISTING}행에 UPDATE 조인 (album·release_year·album_mbid·bpm). genre·music_genre 는 건드리지 않는다"
+  docker cp "$CSV_DIR/music.csv" "$CONTAINER:/tmp/music.csv"
+  RELOAD_SQL="/tmp/reload_$(date +%s).sql"   # 컨테이너 /tmp 에 남은 이전 파일과 소유자가 다르면 덮어쓰기가 막힌다. 매번 새 이름.
+  docker exec -i "$CONTAINER" bash -lc "cat > $RELOAD_SQL" <<'SQL'
+\timing on
+SET maintenance_work_mem = '2GB';
+SET max_parallel_maintenance_workers = 0;
+CREATE TEMP TABLE music_stage (LIKE music INCLUDING DEFAULTS);
+COPY music_stage (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid)
+  FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true, FORCE_NOT_NULL (title));
+SELECT count(*) AS stage_rows FROM music_stage;
+DROP INDEX IF EXISTS music_location_hnsw_idx;
+DROP INDEX IF EXISTS music_l1_gist;
+DROP INDEX IF EXISTS music_l2_gist;
+UPDATE music m
+   SET album = s.album, release_year = s.release_year, album_mbid = s.album_mbid, bpm = s.bpm
+  FROM music_stage s
+ WHERE m.id = s.id AND m.mbid = s.mbid;
+CREATE INDEX music_l1_gist ON music USING gist (point((location::real[])[1], (location::real[])[2]));
+CREATE INDEX music_l2_gist ON music USING gist (point((location::real[])[3], (location::real[])[4]));
+VACUUM ANALYZE music;
+SQL
+  docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB -f $RELOAD_SQL"
+fi
+
+if [ "$RELOAD" = "0" ]; then
 echo "== 1. CSV 를 컨테이너로"
 for f in music.csv genre.csv music_genre.csv; do
   docker cp "$CSV_DIR/$f" "$CONTAINER:/tmp/$f"
@@ -44,7 +92,8 @@ docker exec -i "$CONTAINER" bash -lc "cat > /tmp/copy.sql" <<'SQL'
 \timing on
 COPY genre (id, name) FROM '/tmp/genre.csv' WITH (FORMAT csv, HEADER true);
 -- title 이 빈 문자열인 곡이 3,977개 있다. FORCE_NOT_NULL 이 없으면 NULL 로 들어가 NOT NULL 위반이다.
-COPY music (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt)
+-- album_mbid 는 BE 가 2026-09-13 에 추가한 컬럼(D17). 없으면 먼저: ALTER TABLE music ADD COLUMN album_mbid VARCHAR(36);
+COPY music (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid)
   FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true, FORCE_NOT_NULL (title));
 COPY music_genre (id, music_id, genre_id) FROM '/tmp/music_genre.csv' WITH (FORMAT csv, HEADER true);
 SQL
@@ -58,20 +107,30 @@ run_sql "DO \\\$\\\$ DECLARE m bigint; g bigint; l bigint; BEGIN
   IF l <> $EXPECT_LINKS THEN RAISE EXCEPTION 'music_genre % != %', l, $EXPECT_LINKS; END IF;
 END \\\$\\\$;"
 
-echo "== 5. 비어 있어야 하는 세 컬럼 (스펙 18 AC4)"
-run_sql "SELECT count(*) AS must_be_zero FROM music WHERE release_year IS NOT NULL OR album IS NOT NULL OR youtube_url IS NOT NULL;"
+fi   # RELOAD=0 (빈 테이블 COPY 경로) 끝. 아래 검증은 두 경로 공통.
+
+echo "== 5. 채워진 컬럼 (스펙 18 AC4, D17) — 기대 album ≈ 6,580,000 · release_year ≈ 6,384,000 · album_mbid ≈ 4,568,000 · bpm NULL 0 · youtube_url 0"
+run_sql "SELECT count(*) FILTER (WHERE album IS NOT NULL AND album <> '') AS album_filled,
+                count(*) FILTER (WHERE release_year IS NOT NULL) AS release_year_filled,
+                count(*) FILTER (WHERE album_mbid IS NOT NULL) AS album_mbid_filled,
+                count(*) FILTER (WHERE bpm IS NULL) AS bpm_null,
+                count(*) FILTER (WHERE youtube_url IS NOT NULL) AS youtube_url_must_be_zero
+         FROM music;"
+run_sql "SELECT album, release_year, album_mbid FROM music WHERE mbid = '0e11c0fd-a1da-4b88-a438-7ef55c5809ec';"   # Pink Floyd - Time: The Dark Side of the Moon | 1973
 
 echo "== 6. 좌표 차원과 표본"
 run_sql "SELECT vector_dims(location) AS dims, count(*) FROM music WHERE location IS NOT NULL GROUP BY 1;"
 
 echo "== 7. HNSW 다시 만들기 — 병렬을 끄지 않으면 /dev/shm 64MB 에 걸려 실패한다"
-docker exec -i "$CONTAINER" bash -lc "cat > /tmp/hnsw.sql" <<'SQL'
+HNSW_SQL="/tmp/hnsw_$(date +%s).sql"   # 지난 실행 파일이 다른 유저 소유로 남아 Permission denied 가 났다(2026-09-13). 매번 새 이름.
+docker exec -i "$CONTAINER" bash -lc "cat > $HNSW_SQL" <<'SQL'
 \timing on
-SET maintenance_work_mem = '2GB';
+-- 6GB: 2GB 로는 275만 튜플에서 그래프가 메모리를 넘쳐 디스크 경로로 떨어진다(2026-09-10). 컨테이너 8GB 전제. 65분 실측(2026-09-11)은 6GB 값이다.
+SET maintenance_work_mem = '6GB';
 SET max_parallel_maintenance_workers = 0;
 CREATE INDEX music_location_hnsw_idx ON music USING hnsw (location vector_l2_ops);
 SQL
-docker exec -i "$CONTAINER" bash -lc 'psql -U $POSTGRES_USER -d $POSTGRES_DB -f /tmp/hnsw.sql'
+docker exec -i "$CONTAINER" bash -lc "psql -U \$POSTGRES_USER -d \$POSTGRES_DB -f $HNSW_SQL"
 
 echo "== 8. BE 에게 전달할 값"
 run_sql "SELECT max(id) AS max_music_id, max(id) + 1 AS next_id_for_backend FROM music;"

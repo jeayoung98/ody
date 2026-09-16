@@ -1,6 +1,10 @@
 # 18 적재 파이프라인 (music·genre·music_genre + Neo4j) — spec
 
-상태 ✅(2026-09-11 적재·인덱스 완료) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · 결정 **D11**, **D13** · 선행: 스펙 17 T1(Postgres 자원 상향)
+상태 ✅(2026-09-11 적재 → 2026-09-13 D17 재적재·HNSW 재빌드 완료) · Jira **S15P21A405-125**(스펙) · **S15P21A405-209**(적재 1단계) · **S15P21A405-291**(album·release_year 재패스) · 결정 **D11**, **D13**, **D16**, **D17** · 선행: 스펙 17 T1(Postgres 자원 상향)
+
+> **D17 (2026-09-13)** — `album`·`release_year` 를 채우고 `album_mbid` 를 새로 적재한다. D11 의 "1차 NULL" 은 해제됐다.
+> 재료는 덤프 메타데이터 재패스 `ingest/meta_pass.py` → `meta_merge.py` → `work/v2_meta.parquet`. 커버리지 album **99.33%** · release_year **96.37%** · album_mbid **68.96%**.
+> 아래 "비어 두는 세 필드" 절은 D11 당시 판단이며 이력으로 남긴다. 현재 규칙은 §재패스 절.
 
 ## 목적
 Spark 가 만든 좌표와 카탈로그를 서비스가 쓰는 형태로 PostgreSQL 과 Neo4j 에 적재한다.
@@ -68,7 +72,7 @@ music_genre  id BIGINT PK · music_id BIGINT NOT NULL · genre_id BIGINT NOT NUL
 
 ### 실측이 스펙 초안 숫자와 다른 곳 둘
 1. **장르 곡 수 67,472 → 66,036.** 67,472 는 **manifest 기준**이고 그중 **1,436곡이 S5 제외 규칙에 걸려** `coords` 에 없다. 링크는 71,285개다(곡당 코드 여러 개). AC5·AC6 을 이 수치로 고쳤다.
-2. **`bpm` 이 733,146곡에서 NULL.** `v2_feats` 가 28/30 파트라 그렇다(열린 질문 Q7). `coords` 에만 있는 곡 수와 정확히 같다.
+2. **`bpm` 이 733,146곡에서 NULL 이었다.** 원인은 파트 누락이 아니라 `v2_feats_pilot` 를 안 읽은 것이다(2026-09-11 정정, Q7 종결). `ingest/build_csv.py` 가 이제 두 디렉터리를 읽는다.
 
 ## 적재 2단계 — 실제 DB 적재 (완료 2026-09-10)
 
@@ -86,7 +90,37 @@ music_genre  id BIGINT PK · music_id BIGINT NOT NULL · genre_id BIGINT NOT NUL
 | 크기 | `music` 힙 1,376 MB(총 1,518 MB) · DB 2,540 MB · Neo4j 스토어 4.2 GB |
 | Neo4j 적재 | Music 노드 653초 · 장르 그래프 157초 |
 
-`location` 은 전 행 `vector(16)` 이고 세 컬럼(`release_year`·`album`·`youtube_url`)은 전 행 NULL 이다(AC4 통과).
+`location` 은 전 행 `vector(16)` 이고 세 컬럼(`release_year`·`album`·`youtube_url`)은 전 행 NULL 이다(당시 AC4 통과. D17 이후 `youtube_url` 만 NULL).
+
+## 재패스 — album · release_year · album_mbid (D17, 2026-09-13)
+
+좌표 파이프라인은 270개 특징만 읽고 `metadata.tags` 를 안 실었다. 그래서 덤프를 한 번 더 읽되 **태그만** 읽는다.
+
+| 단계 | 스크립트 | 실측 |
+|---|---|---|
+| 파트 스트리밍 | `ingest/meta_pass.py` (`run_meta_pass.sh` 로 30파트) | 단독 5.4분/파트, PAR=4 에서 13분/파트(디스크 I/O 병목). 30파트 약 2시간. 제출본 26,275,868행, 파싱 실패 0 |
+| 곡 단위 병합 | `ingest/meta_merge.py` → `work/v2_meta.parquet` | 22분. 6,624,399곡 전부에 제출본 ≥ 1 |
+| CSV 조인 | `ingest/build_csv.py` (`--album-meta`, 기본 `work/v2_meta.parquet`) | `album_filled`·`release_year_filled`·`album_mbid_filled` 를 리포트에 남긴다 |
+
+곡 값 선택 규칙: **대표 제출본**(manifest 의 part·offset, 좌표를 만든 그 파일) 값 우선, 없으면 제출본 전체 **최빈값**(동률은 정렬 앞).
+`min` 은 오태그를 집는다 — Pink Floyd 'Time' 179개 제출본 중 1973 이 82개, 1966 이 7개인데 min 은 1966 이다.
+`release_year` 는 `originaldate` → `date` 앞 4자리(리마스터 발매일 대신 원 발매), 1900~2026 만. `album_mbid`·rgid 는 UUID 형식이 아니면 비운다(28,082행).
+
+커버리지(`output/meta_merge_2026-09-13.json`): album **99.33%** · release_year **96.37%** · album_mbid **68.96%** · rgid 63.07% · albumartist 71.46%.
+
+`album_mbid` 는 커버 아트 키다. BE 가 조회 시 `https://coverartarchive.org/release/{album_mbid}/front-250` 을 만든다(릴리스 60개 실호출 98.3% 응답 → 곡 기준 약 68%). 이미지는 저장하지 않는다.
+BE 가 `music.album_mbid VARCHAR(36)` 을 2026-09-13 추가했다. COPY 컬럼 목록(`load_postgres.sh`)이 이 컬럼을 포함한다.
+
+### 운영 DB 재적재 실측 (2026-09-13)
+- **TRUNCATE 불가** — BE 의 `playlist_item` 이 `music` 을 FK 로 참조한다. `load_postgres.sh` 의 `ODY_ALLOW_RELOAD=1` 경로는 **UPDATE 조인**이다: CSV 를 임시 테이블에 COPY(62초) → HNSW·GiST 드롭 → `UPDATE music … FROM music_stage WHERE id = id AND mbid = mbid` → GiST 재생성 → `VACUUM ANALYZE`. 기존 행·카운터·플레이리스트 무손상.
+- 5단계 결과: `album_filled` **6,580,215** · `release_year_filled` **6,384,141** · `album_mbid_filled` **4,567,869** · `bpm_null` **0** · `youtube_url` 0. Pink Floyd 'Time' → `The Dark Side of the Moon` / 1973 / `d6e9d69f-…`. CSV 리포트와 한 자리도 다르지 않다.
+- 재적재 전 확인: `play_cnt`/`youtube_cnt` 사용 0, BE 추가 곡 0, genre 29, links 71,285 — BE 가 쓴 데이터 없음.
+- `music_l2_gist` 가 서버에 없었다(09-11 이후 사라짐). 이번에 다시 만들어졌다. BE 가 만든 `idx_music_vec_1_to_4`·`idx_music_pc1_4` 가 따로 있다 — 정의 확인 필요.
+- 컨테이너 `/tmp/hnsw.sql` 이 이전 실행의 다른 소유자 파일로 남아 `Permission denied`. 스크립트는 이제 실행마다 새 파일명을 쓴다.
+- HNSW 재빌드 **1:09:33** (`maintenance_work_mem` 6GB, 컨테이너 8GB, 병렬 0). 2GB 로 시작한 첫 시도는 취소했다 — 09-11 의 65분 실측이 6GB 값이고 2GB 는 275만 튜플부터 디스크 경로다. 재빌드 중 BE 유사도 검색은 전체 스캔으로 동작했다.
+- `pg_indexes` 의 `PK_MUSIC` 은 대문자 이름이라 `indexname::regclass` 가 실패한다. `quote_ident(indexname)::regclass` 로.
+
+상태: ✅ 재적재·인덱스 완료 (2026-09-13).
 
 ### 자원은 재시작 없이 올렸다
 ```bash
@@ -138,14 +172,15 @@ SET maintenance_work_mem = '2GB';                                   # 세션 단
 `duration` | `real` | ✅ 보유 | `catalog_v2.length` (초) |
 `bpm` | `real` | ✅ 보유 | **270 특징 목록의 3번째 `rhythm.bpm`**. `v2_feats` 에서 꺼낸다 |
 `location` | `vector(16)` | ✅ 보유 | `coords_v2.parquet` 의 `pc1..pc16`. **PCA-16 지도 좌표**(D7) |
-`release_year` | `smallint` | ⬜ **1차 NULL** | 없음. 아래 참조 |
-`album` | `text` | ⬜ **1차 NULL** | 없음. 아래 참조 |
-`youtube_url` | `text` | ⬜ **1차 NULL** | 채우지 않는다. 아래 참조 |
+`release_year` | `smallint` | ✅ **D17 재패스** (96.37%) | `work/v2_meta.parquet` ← 덤프 `metadata.tags.originaldate`/`date` |
+`album` | `text` | ✅ **D17 재패스** (99.33%) | `work/v2_meta.parquet` ← `metadata.tags.album` |
+`album_mbid` | `varchar(36)` | ✅ **D17 재패스** (68.96%) | `work/v2_meta.parquet` ← `metadata.tags.musicbrainz_albumid`. 커버 아트 키 |
+`youtube_url` | `text` | ⬜ **NULL** | 채우지 않는다(D11·D15). 아래 참조 |
 
 ### `location` 은 지도 좌표다
 아티스트 출신 지역이 아니다(2026-09-10 사용자 확인). PCA-16 좌표 그대로이고 차원은 D7 로 16 이 확정돼 있다. 거리는 L2 이며 후처리 임계값(τ_dup 1.6624, τ_far 4.912)이 모두 L2 기준이라 다른 거리로 바꾸면 규칙이 깨진다.
 
-### 비어 두는 세 필드
+### 비어 두는 세 필드 (D11 당시 판단 — 이력. `release_year`·`album` 은 D17 로 채워졌다)
 **`release_year`** — `pipeline/catalog_audit.py` A8 에 기록이 있다. AB 문서의 `metadata.tags.date` 를 제목 추출 당시 수집하지 않았고, 연도를 쓰려면 원본 재패스가 필요하다. MusicBrainz canonical dump 도 팀 저장소에 없다. D5 가 이미 2차로 미뤄둔 항목이다.
 
 **`album`** — 같은 이유다. canonical dump 의 release group 조인이 필요하다.
@@ -239,8 +274,8 @@ D1 이 길이 규칙을 60초~6분으로 좁히기로 정했고 그것이 v2.2 �
 ## 수용 기준
 - AC1 `music` 행 수 == `manifest.songs`(6,624,399). 전 행의 `mbid` 가 소문자 UUID, `id` 가 1..6,624,399 연속(D13).
 - AC2 `location` 이 `vector(16)` 이고, 무작위 1,000행이 `coords_v2.parquet` 과 **비트 단위로 같다**(Jira S15P21A405-35 좌표 불변성 게이트).
-- AC3 `bpm` 이 `v2_feats` 의 `rhythm.bpm` 을 소수 1자리로 반올림한 값과 같다. **733,146곡은 NULL** 이다(파트 2개 누락, Q7). 표본 1,000행.
-- AC4 `release_year`·`album`·`youtube_url` 은 전 행 NULL. 값이 들어 있으면 실패다(출처 없는 값이 섞였다는 뜻).
+- AC3 `bpm` 이 특징의 `rhythm.bpm` 을 소수 1자리로 반올림한 값과 같다. 표본 1,000행. 2026-09-11 정정: 733,146곡이 NULL 이었던 것은 파트 누락이 아니라 `v2_feats_pilot` 디렉터리를 안 읽어서였다. 두 디렉터리를 읽도록 고치고 DB 를 갱신했다.
+- AC4 ~~`release_year`·`album`·`youtube_url` 은 전 행 NULL~~ → **D17 개정(2026-09-13)**: `album` 채워진 행 ≥ 6,580,000 · `release_year` ≥ 6,380,000 · `album_mbid` ≥ 4,560,000 (전부 UUID 형식) · `youtube_url` 전 행 NULL · Pink Floyd 'Time'(`0e11c0fd-…`) = `The Dark Side of the Moon` / 1973. 원 AC4 판정(2026-09-10 통과)은 보존한다.
 - AC5 `genre` 행 수 == **29**(멜론 코드 종류), `music_genre` 행 수 == **71,285**(곡 66,036개). 2026-09-10 CSV 실측값이다.
 - AC6 `music_genre` 가 없는 곡이 **6,558,363**곡이고 그것이 정상임을 문서와 테스트가 함께 말한다.
 - AC7 Neo4j `(:Music)` 노드 수 == `music` 행 수, `genres` 배열이 `music_genre` 와 일치. **통과** (6,624,399 노드, `HAS_GENRE` 71,285).
@@ -249,8 +284,9 @@ D1 이 길이 규칙을 60초~6분으로 좁히기로 정했고 그것이 v2.2 �
 
 ## 비범위
 - DDL 작성. BE 가 이미 만들었다. 우리는 데이터만 넣는다(열린 질문 Q2 는 BE 쪽에서 해소됐다).
-- `release_year`·`album` 수집. 원본 재패스가 필요하고 2차다.
-- `youtube_url` 수집. 규칙 6 으로 금지.
+- ~~`release_year`·`album` 수집~~ — D17 로 범위에 들어왔다.
+- 커버 아트 이미지 저장·URL 조립. BE 가 `album_mbid` 로 조회 시 만든다.
+- `youtube_url` 전곡 수집. D11·D15.
 - 장르 커버리지 확대. 스펙 13.
 - Postgres 컨테이너 자원 상향. 스펙 17 T1.
 - 사용자·플레이리스트 테이블. BE1 담당(Jira S15P21A405-89).

@@ -47,4 +47,16 @@ class WebSocketSessionRegistryTests {
 		registry.register("session-1", "offline@x.com");
 		assertThat(registry.nextSeq("offline@x.com")).isEqualTo(1L);
 	}
+
+	@Test
+	@DisplayName("현재 메시지 순번을 조회해도 값은 올라가지 않는다")
+	void currentSequenceDoesNotIncrease() {
+		WebSocketSessionRegistry registry = new WebSocketSessionRegistry();
+		registry.register("session-1", "user@x.com");
+		registry.nextSeq("user@x.com");
+
+		assertThat(registry.currentSeq("user@x.com")).isEqualTo(1L);
+		assertThat(registry.currentSeq("user@x.com")).isEqualTo(1L);
+		assertThat(registry.nextSeq("user@x.com")).isEqualTo(2L);
+	}
 }

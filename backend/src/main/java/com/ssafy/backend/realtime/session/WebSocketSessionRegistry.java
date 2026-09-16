@@ -59,4 +59,10 @@ public class WebSocketSessionRegistry {
 		AtomicLong seq = seqByEmail.get(email);
 		return seq == null ? 0L : seq.incrementAndGet();
 	}
+
+	/** 현재 메시지 순번을 반환한다. 연결이 없으면 0이다. */
+	public long currentSeq(String email) {
+		AtomicLong seq = seqByEmail.get(email);
+		return seq == null ? 0L : seq.get();
+	}
 }

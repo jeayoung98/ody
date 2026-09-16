@@ -21,6 +21,7 @@ import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.session.WebSocketSessionRegistry;
 import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 import lombok.RequiredArgsConstructor;
@@ -44,6 +45,7 @@ public class NearbyPeopleService {
 	private final UserDisplayResolver userDisplayResolver;
 	private final MeetingService meetingService;
 	private final RiderCountPort riderCountPort;
+	private final WebSocketSessionRegistry sessionRegistry; // 현재 소켓 메시지 순번
 
 	/**
 	 * 지금 이 사람 기준으로 주변사람 목록 패널을 연다
@@ -79,6 +81,8 @@ public class NearbyPeopleService {
 			log.warn("주변사람 목록 거부 reason={}", RealtimeWsErrorCode.PRESENCE_STALE);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
+		// 이 순번 이후의 실시간 변경만 목록에 반영한다.
+		long snapshotSeq = sessionRegistry.currentSeq(email);
 
 		// 4) 구독 등록이 끝난 뒤 그 곡들 각각을 지금 누가 듣고 있는지 읽어온다.
 		Map<Long, Set<String>> listenersByMusic = nearbyRepo.listeners(musicIds);
@@ -101,7 +105,7 @@ public class NearbyPeopleService {
 		}
 
 		log.info("[Nearby] 주변사람 목록 완료 myMusicId={} 사람수={}", myMusicId, people.size());
-		return new NearbySnapshot(myMusicId, people);
+		return new NearbySnapshot(myMusicId, snapshotSeq, people);
 	}
 
 	/**

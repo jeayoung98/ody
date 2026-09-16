@@ -32,6 +32,7 @@ import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.session.WebSocketSessionRegistry;
 import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 /**
@@ -46,6 +47,7 @@ class NearbyPeopleServiceTests {
     @Mock UserDisplayResolver userDisplayResolver;
     @Mock MeetingService meetingService;
     @Mock RiderCountPort riderCountPort;
+    @Mock WebSocketSessionRegistry sessionRegistry;
     @InjectMocks NearbyPeopleService service;
 
     private static final String ME = "me@x.com";
@@ -68,6 +70,7 @@ class NearbyPeopleServiceTests {
                 new NeighborSong(100L, "내 곡", "가수A", new double[16], 0.0),
                 new NeighborSong(200L, "비슷한 곡", "가수B", new double[16], 0.5)));
         when(nearbyRepo.replaceSubscriptions(ME, 1L, List.of(100L, 200L))).thenReturn(true);
+        when(sessionRegistry.currentSeq(ME)).thenReturn(7L);
         when(nearbyRepo.listeners(List.of(100L, 200L))).thenReturn(Map.of(
                 100L, Set.of(ME, "u1@x.com"),
                 200L, Set.of("u2@x.com")));
@@ -80,6 +83,7 @@ class NearbyPeopleServiceTests {
         NearbySnapshot res = service.open(ME);
 
         assertThat(res.anchorMusicId()).isEqualTo(100L);
+        assertThat(res.snapshotSeq()).isEqualTo(7L);
         assertThat(res.people()).extracting(NearbyPerson::nickname)
                 .containsExactlyInAnyOrder("nick1", "nick2"); // 나(ME)는 없음
         assertThat(res.people()).filteredOn(person -> person.email().equals("u1@x.com"))
@@ -125,8 +129,9 @@ class NearbyPeopleServiceTests {
 
         service.open(ME);
 
-        InOrder order = inOrder(nearbyRepo);
+        InOrder order = inOrder(nearbyRepo, sessionRegistry);
         order.verify(nearbyRepo).replaceSubscriptions(ME, 1L, List.of(100L, 200L));
+        order.verify(sessionRegistry).currentSeq(ME);
         order.verify(nearbyRepo).listeners(List.of(100L, 200L));
     }
 

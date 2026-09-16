@@ -35,6 +35,7 @@ import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
+import com.ssafy.backend.realtime.session.WebSocketSessionRegistry;
 import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 /** Redis·소켓 없이 주변사람 델타 분류만 검증한다. */
@@ -49,6 +50,7 @@ class NearbyDeltaServiceTests {
 	@Mock MeetingService meetingService;
 	@Mock RiderCountPort riderCountPort;
 	@Mock PresenceRedisRepository presenceRepo;
+	@Mock WebSocketSessionRegistry sessionRegistry;
 	@Mock NearbyPeopleService nearbyPeopleService;
 	@InjectMocks NearbyDeltaService service;
 
@@ -129,7 +131,7 @@ class NearbyDeltaServiceTests {
 		}).when(nearbyRepo).unsubscribe(eq(viewer), eq(List.of(20L)));
 		when(nearbyRepo.subscribers(20L)).thenAnswer(invocation -> Set.copyOf(activeSubscribers));
 		NearbyPeopleService closeService = new NearbyPeopleService(
-				presenceRepo, neighborPort, nearbyRepo, userDisplayResolver, meetingService, riderCountPort);
+				presenceRepo, neighborPort, nearbyRepo, userDisplayResolver, meetingService, riderCountPort, sessionRegistry);
 
 		closeService.close(viewer);
 		service.onPositionChanged(change(null, 20L));
@@ -141,7 +143,7 @@ class NearbyDeltaServiceTests {
 	@Test
 	@DisplayName("내 곡이 바뀌고 패널이 열려 있으면 구독과 목록을 다시 만든다")
 	void ownAnchorChangeReopensAndPublishesSnapshot() {
-		NearbySnapshot snapshot = new NearbySnapshot(20L, List.of());
+		NearbySnapshot snapshot = new NearbySnapshot(20L, 5L, List.of());
 		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
 		when(nearbyRepo.subscribers(20L)).thenReturn(Set.of(ACTOR));
 		when(nearbyRepo.hasMeta(ACTOR)).thenReturn(true);

@@ -35,7 +35,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
           {music.album && <MarqueeText text={music.album} className="text-xs text-ink-3 drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]" />}
         </div>
         <TransportButton label={isThisPlaying ? "정지" : "재생"} primary dimmed={!!blocked} onClick={toggle}>
-          {isThisPlaying ? <PauseIcon /> : <PlayIcon />}
+          {isThisPlaying ? <PauseIcon size={17} /> : <PlayIcon size={17} />}
         </TransportButton>
       </div>
       <div className="flex flex-wrap gap-[5px]">

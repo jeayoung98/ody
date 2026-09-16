@@ -130,6 +130,25 @@ export const FlagIcon = ({ size = 14, ...p }: P) => (
  * 신고 — 경광등(삐용삐용). 깃발보다 "무슨 일이 있었다" 는 뜻이 바로 읽힌다 (S15P21A405-384).
  * 받침 · 돔 · 위로 뻗는 빛 두 줄.
  */
+/**
+ * 여정 출발 — 별에서 떠나는 화살. 도착(`ArriveIcon`)과 짝이고, 색은 여정 패널과 같게
+ * 출발 teal · 도착 violet 로 쓴다 (`journey-endpoints.tsx`).
+ */
+export const DepartIcon = ({ size = 13, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="6.4" cy="17.6" r="3.1" />
+    <path d="M9.9 14.1 18 6" />
+    <path d="M12.6 6H18v5.4" />
+  </svg>
+);
+/** 여정 도착 — 별로 들어오는 화살 */
+export const ArriveIcon = ({ size = 13, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="17.6" cy="17.6" r="3.1" />
+    <path d="M6 6l7.4 7.4" />
+    <path d="M8.8 13.4h4.6V8.8" />
+  </svg>
+);
 export const SirenIcon = ({ size = 15, ...p }: P) => (
   <svg {...base(size, p)}>
     <path d="M7.6 18.6v-3.4a4.4 4.4 0 0 1 8.8 0v3.4" />

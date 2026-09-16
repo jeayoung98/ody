@@ -83,6 +83,28 @@ class NearbyRedisIntegrationTests {
 	}
 
 	@Test
+	@DisplayName("곡별 청취자는 서로 섞지 않고 빈 곡도 함께 반환한다")
+	void listenersStayGroupedByMusic() {
+		TestKeys data = testKeys();
+		String firstListener = "first-listener-" + UUID.randomUUID() + "@test.local";
+		String sharedListener = "shared-listener-" + UUID.randomUUID() + "@test.local";
+		String secondListener = "second-listener-" + UUID.randomUUID() + "@test.local";
+		String firstKey = key("listeners:" + data.music1());
+		String secondKey = key("listeners:" + data.music2());
+		key("listeners:" + data.music3());
+
+		redis.opsForSet().add(firstKey, firstListener, sharedListener);
+		redis.opsForSet().add(secondKey, sharedListener, secondListener);
+
+		var result = nearbyRepo.listeners(List.of(data.music1(), data.music2(), data.music3()));
+
+		assertThat(result).containsOnlyKeys(data.music1(), data.music2(), data.music3());
+		assertThat(result.get(data.music1())).containsExactlyInAnyOrder(firstListener, sharedListener);
+		assertThat(result.get(data.music2())).containsExactlyInAnyOrder(sharedListener, secondListener);
+		assertThat(result.get(data.music3())).isEmpty();
+	}
+
+	@Test
 	@DisplayName("새 접속의 구독은 오래된 닫기 요청으로 삭제되지 않는다")
 	void staleCloseKeepsNewSubscriptions() {
 		TestKeys data = testKeys();
@@ -114,6 +136,26 @@ class NearbyRedisIntegrationTests {
 		assertThat(redis.hasKey(metaKey)).isFalse();
 		assertThat(redis.opsForSet().isMember(sharedSubscribers, data.email())).isFalse();
 		assertThat(redis.opsForSet().isMember(newSubscribers, data.email())).isFalse();
+	}
+
+	@Test
+	@DisplayName("오래된 접속은 주변사람 구독을 바꾸지 못한다")
+	void staleReplaceKeepsCurrentSubscriptions() {
+		TestKeys data = testKeys();
+		String presenceKey = key("presence:user:" + data.email());
+		String metaKey = key("nearby:meta:" + data.email());
+		String staleSubscribers = key("nearby:subscribers:" + data.music1());
+		String currentSubscribers = key("nearby:subscribers:" + data.music2());
+
+		redis.opsForHash().put(presenceKey, "epoch", "2");
+		assertThat(nearbyRepo.replaceSubscriptions(data.email(), 2L, List.of(data.music2()))).isTrue();
+
+		assertThat(nearbyRepo.replaceSubscriptions(data.email(), 1L, List.of(data.music1()))).isFalse();
+
+		assertThat(redis.opsForSet().isMember(staleSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(currentSubscribers, data.email())).isTrue();
+		assertThat(redis.opsForHash().get(metaKey, "epoch")).isEqualTo("2");
+		assertThat(redis.opsForHash().get(metaKey, "musicIds")).isEqualTo(Long.toString(data.music2()));
 	}
 
 	@Test
@@ -203,6 +245,69 @@ class NearbyRedisIntegrationTests {
 		assertThat(redis.hasKey(presenceKey)).isTrue();
 		assertThat(redis.hasKey(metaKey)).isTrue();
 		assertThat(redis.opsForSet().isMember(subscribersKey, data.email())).isTrue();
+	}
+
+	@Test
+	@DisplayName("실제로 만료된 사용자는 상태와 구독을 함께 삭제한다")
+	void expiredLeaveRemovesStateAndSubscriptions() {
+		TestKeys data = testKeys();
+		String presenceKey = key("presence:user:" + data.email());
+		String listenerKey = key("listeners:" + data.music1());
+		String layerListenerKey = key("layer-listeners:" + data.layer() + ":" + data.music1());
+		String activeCellKey = key("active-song:cell:" + data.layer() + ":3:4");
+		String activeCellsKey = key("active-song:cells:" + data.layer());
+		String userCountKey = key("cell:usercount:" + data.layer());
+		String metaKey = key("nearby:meta:" + data.email());
+		String firstSubscribers = key("nearby:subscribers:" + data.music1());
+		String secondSubscribers = key("nearby:subscribers:" + data.music2());
+		long sweepTime = System.currentTimeMillis();
+		expiryEmail = data.email();
+
+		presenceRepo.connect(data.email(), 7L, 60_000L);
+		assertThat(presenceRepo.join(data.email(), null, null, null, null,
+				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
+		assertThat(nearbyRepo.replaceSubscriptions(
+				data.email(), 7L, List.of(data.music1(), data.music2()))).isTrue();
+		redis.opsForZSet().add("presence:expiry", data.email(), sweepTime - 1);
+
+		assertThat(presenceRepo.applyLeaveExpired(data.email(), sweepTime)).containsExactly(
+				Long.toString(data.music1()), Integer.toString(data.layer()), "3", "4", "7");
+
+		assertThat(redis.hasKey(presenceKey)).isFalse();
+		assertThat(redis.opsForZSet().score("presence:expiry", data.email())).isNull();
+		assertThat(redis.opsForSet().isMember(listenerKey, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(layerListenerKey, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(activeCellKey, Long.toString(data.music1()))).isFalse();
+		assertThat(redis.opsForSet().isMember(activeCellsKey, "3:4")).isFalse();
+		assertThat(redis.opsForHash().get(userCountKey, "3:4")).isNull();
+		assertThat(redis.hasKey(metaKey)).isFalse();
+		assertThat(redis.opsForSet().isMember(firstSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(secondSubscribers, data.email())).isFalse();
+	}
+
+	@Test
+	@DisplayName("사용자 상태가 없어도 남은 주변사람 구독을 삭제한다")
+	void leaveRemovesOrphanSubscriptions() {
+		TestKeys data = testKeys();
+		String presenceKey = key("presence:user:" + data.email());
+		String metaKey = key("nearby:meta:" + data.email());
+		String firstSubscribers = key("nearby:subscribers:" + data.music1());
+		String secondSubscribers = key("nearby:subscribers:" + data.music2());
+		expiryEmail = data.email();
+
+		redis.opsForHash().putAll(metaKey, java.util.Map.of(
+				"epoch", "7", "musicIds", data.music1() + "," + data.music2()));
+		redis.opsForSet().add(firstSubscribers, data.email());
+		redis.opsForSet().add(secondSubscribers, data.email());
+		redis.opsForZSet().add("presence:expiry", data.email(), System.currentTimeMillis() - 1);
+
+		assertThat(redis.hasKey(presenceKey)).isFalse();
+		assertThat(presenceRepo.applyLeave(data.email(), 7L)).isEmpty();
+
+		assertThat(redis.hasKey(metaKey)).isFalse();
+		assertThat(redis.opsForSet().isMember(firstSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(secondSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForZSet().score("presence:expiry", data.email())).isNull();
 	}
 
 	private TestKeys testKeys() {

@@ -1,7 +1,6 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -124,19 +123,18 @@ class NearbyDeltaServiceTests {
 	void closeStopsLaterDeltas() {
 		String viewer = "viewer@x.com";
 		Set<String> activeSubscribers = new HashSet<>(Set.of(viewer));
-		when(nearbyRepo.subscribedMusicIds(viewer)).thenReturn(List.of(20L));
 		doAnswer(invocation -> {
-			activeSubscribers.remove(invocation.getArgument(0, String.class));
-			return null;
-		}).when(nearbyRepo).unsubscribe(eq(viewer), eq(List.of(20L)));
+			activeSubscribers.remove(viewer);
+			return true;
+		}).when(nearbyRepo).closeSubscriptions(viewer, 1L);
 		when(nearbyRepo.subscribers(20L)).thenAnswer(invocation -> Set.copyOf(activeSubscribers));
 		NearbyPeopleService closeService = new NearbyPeopleService(
 				presenceRepo, neighborPort, nearbyRepo, userDisplayResolver, meetingService, riderCountPort, sessionRegistry);
 
-		closeService.close(viewer);
+		closeService.close(viewer, 1L);
 		service.onPositionChanged(change(null, 20L));
 
-		verify(nearbyRepo).deleteMeta(viewer);
+		verify(nearbyRepo).closeSubscriptions(viewer, 1L);
 		verifyNoInteractions(publisher);
 	}
 

@@ -53,6 +53,16 @@ public class RedisScriptConfig {
 		return script;
 	}
 
+	/** 현재 접속이(현재 세션아이디일때) 요청한 주변사람 구독만 닫는 스크립트. */
+	@Bean
+	public DefaultRedisScript<Long> nearbySubscriptionCloseScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/nearby-subscription-close.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
 	private DefaultRedisScript<List> listScript(String path) {
 		DefaultRedisScript<List> script = new DefaultRedisScript<>();
 		script.setScriptSource(new ResourceScriptSource(new ClassPathResource(path)));

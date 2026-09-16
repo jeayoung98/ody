@@ -109,15 +109,13 @@ public class NearbyPeopleService {
 	}
 
 	/**
-	 * 저장된 곡 목록으로 주변사람 구독을 닫는다.
+	 *  패널을 연 접속 버전과 닫기 요청의 접속 버전이 같을 때만 구독을 닫는다.
+	 *
 	 * @param email 패널을 닫은 사용자 이메일
+	 * @param epoch 패널을 연 접속 버전
 	 */
-	public void close(String email) {
-		List<Long> musicIds = nearbyRepo.subscribedMusicIds(email); //구독중 곡 목록 조회
-		if (!musicIds.isEmpty()) {
-			nearbyRepo.unsubscribe(email, musicIds); // 각 곡들 구독 해제
-		}
-		nearbyRepo.deleteMeta(email);//meta 삭제
-		log.info("[Nearby] 주변사람 구독 종료 곡수={}", musicIds.size());
+	public void close(String email, long epoch) {
+		boolean closed = nearbyRepo.closeSubscriptions(email, epoch);
+		log.info("[Nearby] 주변사람 구독 종료 성공={}", closed);
 	}
 }

@@ -24,20 +24,23 @@ import org.springframework.stereotype.Repository;
 @Profile("realtime")
 public class NearbyRedisRepository {
 
-	private static final String PRESENCE_USER_PREFIX = "presence:user:";
-	private static final String LISTENERS_PREFIX = "listeners:";
-	private static final String SUBSCRIBERS_PREFIX = "nearby:subscribers:";
-	private static final String META_PREFIX = "nearby:meta:";
-	private static final String META_MUSIC_IDS = "musicIds";
+	private static final String PRESENCE_USER_PREFIX = "presence:user:"; // 사용자 현재 상태
+	private static final String LISTENERS_PREFIX = "listeners:"; // 곡별 현재 청취자
+	private static final String SUBSCRIBERS_PREFIX = "nearby:subscribers:"; // 곡별 주변사람 변경 수신자
+	private static final String META_PREFIX = "nearby:meta:"; // 사용자별 주변사람 구독 정보
 
-	private final StringRedisTemplate redis;
-	private final DefaultRedisScript<Long> nearbySubscriptionReplaceScript;
+	private final StringRedisTemplate redis; // Redis 읽기와 쓰기
+	private final DefaultRedisScript<Long> nearbySubscriptionReplaceScript; // 구독 곡 등록과 교체
+	private final DefaultRedisScript<Long> nearbySubscriptionCloseScript; // 현재 접속의 구독 종료
 
 	public NearbyRedisRepository(StringRedisTemplate redis,
 			@Qualifier("nearbySubscriptionReplaceScript")
-			DefaultRedisScript<Long> nearbySubscriptionReplaceScript) {
+			DefaultRedisScript<Long> nearbySubscriptionReplaceScript,
+			@Qualifier("nearbySubscriptionCloseScript")
+			DefaultRedisScript<Long> nearbySubscriptionCloseScript) {
 		this.redis = redis;
 		this.nearbySubscriptionReplaceScript = nearbySubscriptionReplaceScript;
+		this.nearbySubscriptionCloseScript = nearbySubscriptionCloseScript;
 	}
 
 	/**
@@ -74,13 +77,12 @@ public class NearbyRedisRepository {
 		return result != null && result == 1L;
 	}
 
-	/** 전달받은 곡별 구독자 Set에서 사용자를 제거한다. 마지막 멤버가 빠진 빈 Set 키는 Redis가 함께 없앤다. */
-	public void unsubscribe(String email, Collection<Long> musicIds) {
-		for (Long musicId : musicIds) {
-			if (musicId != null) {
-				redis.opsForSet().remove(SUBSCRIBERS_PREFIX + musicId, email);
-			}
-		}
+	/** 현재 접속이(현재 세션아이디일때) 요청한 주변사람 구독만 닫는다 */
+	public boolean closeSubscriptions(String email, long epoch) {
+		Long result = redis.execute(nearbySubscriptionCloseScript,
+				List.of(META_PREFIX + email),
+				email, Long.toString(epoch), SUBSCRIBERS_PREFIX);
+		return result != null && result == 1L;
 	}
 
 	/** 해당 곡의 청취자 변화를 구독 중인 사용자(email)를 조회한다. */
@@ -89,24 +91,17 @@ public class NearbyRedisRepository {
 		return members != null ? members : Set.of();
 	}
 
-	/** 저장해 둔 구독 곡 목록을 읽는다. 패널을 열지 않았거나 저장값이 비어 있으면 빈 목록이다. */
-	public List<Long> subscribedMusicIds(String email) {
-		Object value = redis.opsForHash().get(META_PREFIX + email, META_MUSIC_IDS);
-		if (value == null || value.toString().isBlank()) {
-			return List.of();
-		}
-		return List.of(value.toString().split(",")).stream()
-				.map(Long::valueOf)
-				.toList();
-	}
-
 	/** 사용자가 근처 패널을 열어 구독 meta를 가지고 있는지 확인한다. */
 	public boolean hasMeta(String email) {
 		return Boolean.TRUE.equals(redis.hasKey(META_PREFIX + email));
 	}
 
-	/** 사용자의 구독 meta를 삭제한다. 곡별 Set 해제는 저장 목록을 읽은 뒤 별도로 수행해야 한다. */
-	public void deleteMeta(String email) {
-		redis.delete(META_PREFIX + email);
-	}
+	/** 기존에 있던 메서드는 삭제 (구독한 곡 조회 , 해제, 구독정보 삭제가 따로 진행되었음)
+	 * 문제: 중간에 새 접속이 패널을 열면 (옛 접속이 구독 곡 조회 → 새 접속이 새 구독 저장 → 옛 접속이 새 구독까지 삭제) 등 원자성 문제
+	 * nearby-subscription-close.lua에서 한번에 진행하는 걸로 수정
+	 *
+	 * subscribedMusicIds()  → 구독 곡 조회
+	 * unsubscribe()         → 곡별 구독 해제
+	 * deleteMeta()          → 구독 정보 삭제
+	 */
 }

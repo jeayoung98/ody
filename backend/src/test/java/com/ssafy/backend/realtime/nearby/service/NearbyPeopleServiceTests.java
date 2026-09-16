@@ -169,16 +169,14 @@ class NearbyPeopleServiceTests {
 	}
 
 	@Test
-	@DisplayName("닫기는 저장된 곡으로만 구독을 해제하고 meta를 지운다")
-	void closeUsesSavedMusicIds() {
-		when(nearbyRepo.subscribedMusicIds(ME)).thenReturn(List.of(100L, 200L));
+	@DisplayName("닫기는 현재 접속 버전으로 구독을 해제한다")
+	void closeUsesCurrentEpoch() {
+		when(nearbyRepo.closeSubscriptions(ME, 7L)).thenReturn(true);
 
-		service.close(ME);
+		service.close(ME, 7L);
 
-		InOrder order = inOrder(nearbyRepo);
-		order.verify(nearbyRepo).subscribedMusicIds(ME);
-		order.verify(nearbyRepo).unsubscribe(ME, List.of(100L, 200L));
-		order.verify(nearbyRepo).deleteMeta(ME);
-		verifyNoInteractions(presenceRepo, neighborPort, userDisplayResolver, meetingService, riderCountPort);
+		verify(nearbyRepo).closeSubscriptions(ME, 7L);
+		verifyNoInteractions(presenceRepo, neighborPort, userDisplayResolver,
+				meetingService, riderCountPort, sessionRegistry);
 	}
 }

@@ -16,8 +16,9 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 
 /**
- * 주변사람 버튼 (RT-10, S15P21A405-309). 본인 대상 API — 누구인지는 토큰에서 꺼낸다(Principal), 몸통(body) 없음.
- * 버튼 누르면 이걸 한 번 부르고 목록을 받는다. 이후 사람이 들고 나는 변화는 소켓으로 따로 온다(델타, T2)
+ *  주변사람 패널을 열 때 전체 목록을 반환하고 실시간 변경 구독을 시작한다.
+ *  HTTP REST 요청 → 패널 열기 → 전체 목록 반환 + 실시간 구독 시작
+ *
  * realtime 프로파일에서만 뜬다 — 데모(무로그인)에선 미로드.
  * 실제 인증하려면 SecurityConfig 에서 /api/realtime/** 를 authenticated() 로 올려야 한다(현재 permitAll → principal=null).
  */
@@ -30,7 +31,9 @@ public class NearbyController {
 
 	private final NearbyPeopleService nearbyPeopleService;
 
-	/** 주변사람 목록 조회. 내가 지금 듣는 곡 기준으로 비슷한 곡 듣는 사람들을 가까운 순으로 준다. */
+	/** 주변사람 목록 조회.
+	 * 내가 지금 듣는 곡 기준으로 비슷한 곡 듣는 사람들을 가까운 순으로 주고,
+	 * 목록에 이미 반영된 소켓 메시지의 마지막 순번도 함께 준다. (소켓과 rest의 시차로 이미 반영된건  버림/반영 선택용) */
 	@Operation(summary = "주변사람 목록 조회", description = "내가 지금 듣는 곡과 비슷한 곡을 듣는 사람을 가까운 순으로 조회한다.")
 	@PostMapping("/nearby")
 	public ApiResponse<NearbySnapshot> nearby(Principal principal) {

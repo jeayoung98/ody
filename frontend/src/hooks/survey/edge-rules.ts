@@ -27,8 +27,10 @@ export interface Trail {
  * 이웃을 하나씩 들어보는 정찰이라 기준이 안 움직인다. 직전 곡을 요구하면 A→B 만 성립하고
  * A→C·A→D 는 영영 못 묻는다 — 10곡 들려주고 1건을 받는 꼴이다.
  *
- * 기준곡을 한 번도 안 들었으면(선택만 했으면) 그 탐색의 간선은 전부 무효다 — 비교할 소리가
- * 사용자에게 없다.
+ * **기준곡을 들었는지는 묻지 않는다** (S15P21A405-373, 335 결정 1 수정). 예전에는 "비교할
+ * 소리가 사용자에게 없다" 는 이유로 기준곡 미청취면 간선을 전부 버렸는데, 그러면 이웃부터
+ * 눌러본 사람은 설문을 한 건도 못 봤다. 이제 설문 카드 안에서 기준곡을 다시 들을 수 있으므로
+ * (S15P21A405-371 · 372) 그 전제가 사라졌다 — 일단 묻고, 기억이 안 나면 카드에서 들으면 된다.
  */
 export function nearbyEdge(
   musicId: number,
@@ -38,8 +40,6 @@ export function nearbyEdge(
   const { sessionId, center, neighbors } = list;
   const i = neighbors.findIndex((n) => n.musicId === musicId);
   if (i < 0) return null;
-  // 기준곡을 들어봤어야 비교가 성립한다
-  if (!trail.played.has(center.musicId)) return null;
   // 들려주지 못한 곡은 추천 품질과 무관하다 — 묻지도, 행을 남기지도 않는다
   if (trail.unplayable.has(center.musicId) || trail.unplayable.has(musicId)) return null;
   return {

@@ -47,12 +47,15 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
    * 10곡을 순서대로 듣는다 (S15P21A405-359). 열 번 눌러야 다 듣던 것을 한 번으로 줄인다 —
    * 이번 테스트가 묻는 게 "이 10곡이 닮게 들리나" 라 끝까지 듣는 사람이 많을수록 좋다.
    *
-   * **중심곡은 큐에 안 넣는다.** 방금 듣던 곡이고, 설문이 묻는 것도 이웃이 닮았나이다.
+   * **중심곡을 큐의 첫 곡으로 넣는다** (S15P21A405-373). 설문이 묻는 것은 "기준곡과 닮았나" 라
+   * 기준곡 소리를 먼저 들려줘야 답할 근거가 생긴다. 예전에는 "방금 듣던 곡" 이라는 전제로
+   * 빼뒀는데, 상세만 열고 바로 순차 재생을 누르면 그 전제가 깨져 한 곡도 안 들은 채 이웃이
+   * 시작됐다. 기준곡 자신은 이웃 목록에 없으므로 간선도 설문도 생기지 않는다.
    * 고리도 같이 켠다 — 소리는 이웃을 도는데 지도는 딴 데 있으면 무엇을 듣는지 안 보인다.
    */
   const handlePlayAll = () => {
-    const ids = items.map((m) => m.id);
-    if (!ids.length) return;
+    const ids = [centerMusicId, ...items.map((m) => m.id)];
+    if (ids.length < 2) return;
     startActivity("nearby", String(centerMusicId), () => {
       if (!inNearby || nearbyCenterMusicId !== centerMusicId) enterNearby(centerMusicId);
       playQueue({ kind: "nearby", centerMusicId }, ids);

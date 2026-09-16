@@ -132,31 +132,21 @@ test("selection, closing a panel and changing views preserve a question snapshot
   await flush(); assert.equal(s().pending, pending); assert.equal(s().prompt, null);
   p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().prompt, pending); answer(); await audible();
-  assert.equal(s().pending, null, "D was selected but never heard");
+  // 기준곡을 안 들었어도 묻는다 (S15P21A405-373, 335 결정 1 수정)
+  assert.equal(s().pending.target.anchorMusicId, 4);
 });
 
-test("after selecting D and hearing E, hearing D unlocks future D-neighbor pairs", async () => {
-  await play(5, { kind: "nearby", centerMusicId: 4 }); assert.equal(s().pending, null);
-  await play(4, { kind: "nearby", centerMusicId: 4 });
+test("hearing a neighbor asks even when the anchor was never heard", async () => {
+  // 335 결정 1 은 "비교할 소리가 없다" 며 버렸지만, 이제 카드 안에서 기준곡을 들을 수 있다
   await play(5, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().pending.target.anchorMusicId, 4);
+  assert.equal(s().pending.target.musicId, 5);
 });
 
 test("a just-heard D seeds D nearby without replaying D", async () => {
   await play(4); map.getState().enterNearby(4);
   await play(5, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().pending.target.anchorMusicId, 4);
-});
-
-test("returning after actual D exploration requires hearing A again", async () => {
-  await pendingNearby(); p().playSingle(4); answer(); await audible();
-  p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
-  answer(); await audible(); // A→D is still owed before entering D→E.
-  p().playSingle(3, { kind: "nearby", centerMusicId: 1 }); answer(); await audible();
-  assert.equal(s().pending, null);
-  await play(1, { kind: "nearby", centerMusicId: 1 });
-  await play(3, { kind: "nearby", centerMusicId: 1 });
-  assert.equal(s().pending.target.anchorMusicId, 1);
 });
 
 test("view-only detour does not expire A's listening eligibility", async () => {
@@ -208,8 +198,10 @@ test("journey B→C is preserved before playing F in a selected-only D nearby vi
   assert.equal(s().prompt, owed);
   assert.equal(p().currentMusicId, 3);
   answer(); await audible();
-  assert.equal(s().pending, null, "D was not heard, so D→F must not exist");
-  await play(4, { kind: "nearby", centerMusicId: 4 });
+  // D 를 듣지 않았어도 D→E 를 묻는다 (S15P21A405-373)
+  assert.equal(s().pending.target.anchorMusicId, 4);
+  // 이제 D→E 가 먼저 밀려 있으므로 D 로 가려면 그것부터 답해야 한다
+  p().playSingle(4, { kind: "nearby", centerMusicId: 4 }); answer(); await audible();
   await play(6, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().pending.target.anchorMusicId, 4);
   assert.equal(s().pending.target.musicId, 6);
@@ -343,40 +335,6 @@ test("changing predecessor at the same rank cannot overwrite a different backend
   assert.equal(skipped.edge.target.rank, adjacent.edge.target.rank);
   assert.notEqual(skipped.edge.target.prevMusicId, adjacent.edge.target.prevMusicId);
   assert.notEqual(skipped.edge.target.sessionId, adjacent.edge.target.sessionId);
-});
-
-/* 기준곡 먼저 들려주기 (S15P21A405-371) */
-
-test("hearing a neighbor before its anchor plays the anchor instead", async () => {
-  const nearby = { kind: "nearby", centerMusicId: 1 };
-  // 기준곡 1을 한 번도 안 들은 채 이웃 2를 누른다
-  p().playSingle(2, nearby);
-  await flush();
-  assert.equal(p().currentMusicId, 1, "이웃이 아니라 기준곡이 걸려야 한다");
-});
-
-test("after the anchor is heard, neighbors play as asked", async () => {
-  const nearby = { kind: "nearby", centerMusicId: 1 };
-  await play(1, nearby);
-  p().playSingle(2, nearby);
-  await flush();
-  assert.equal(p().currentMusicId, 2);
-});
-
-test("a just-heard song counts as its own anchor", async () => {
-  // 4를 듣고 그 주변을 연다 — 자취는 비어 있어도 귀에는 방금 남아 있다
-  await play(4, { kind: "nearby", centerMusicId: 4 });
-  p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
-  await flush();
-  assert.equal(p().currentMusicId, 5, "방금 들은 곡을 다시 틀어선 안 된다");
-});
-
-test("an unplayable anchor does not block its neighbors", async () => {
-  const nearby = { kind: "nearby", centerMusicId: 1 };
-  s().markUnplayable(1);
-  p().playSingle(2, nearby);
-  await flush();
-  assert.equal(p().currentMusicId, 2, "들을 수 없는 곡을 들으라고 하면 거기서 막힌다");
 });
 
 /* 설문 카드가 떠 있는 동안의 재생 (S15P21A405-371) */

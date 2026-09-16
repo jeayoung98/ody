@@ -82,13 +82,3 @@ const JOURNEY: SurveyDefinition = {
 };
 
 export const SURVEYS = { nearby: NEARBY, journey: JOURNEY } as const;
-
-/**
- * 기준곡을 아직 안 들은 채 이웃을 누를 때 (S15P21A405-371).
- *
- * 주변 탐색 설문은 "기준곡과 견줘서 닮았나" 를 묻기 때문에, 기준곡 소리를 들어본 적이 없으면
- * 물을 수가 없다 (결정 1). 그런데 화면은 그 순서를 알려주지 않아서 이웃부터 눌러보게 되고,
- * 그러면 설문이 한 건도 안 뜬다. **막지 말고 기준곡을 대신 틀어 준다** — 하라는 말만 하고
- * 사용자가 알아서 찾게 두면 또 못 찾는다.
- */
-export const ANCHOR_FIRST_NOTICE = "기준곡을 먼저 들려드릴게요. 듣고 나서 이웃 곡을 눌러 주세요";

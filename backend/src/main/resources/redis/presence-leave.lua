@@ -14,7 +14,7 @@
 -- ARGV[8] 셀별 사용자 수 키
 -- ARGV[9] 곡별 주변사람 구독 키
 --
--- 반환: 지운 곡과 위치. 지운 값이 없으면 빈 목록.
+-- 반환: 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록.
 
 local email     = ARGV[1]
 local epoch     = ARGV[2]
@@ -49,11 +49,12 @@ else
   end
 end
 
--- 현재 재생 위치를 읽는다.
+-- 현재 재생 위치와 접속 버전을 읽는다.
 local musicId = redis.call('HGET', KEYS[1], 'musicId')
 local layer   = redis.call('HGET', KEYS[1], 'layer')
 local cellX   = redis.call('HGET', KEYS[1], 'cellX')
 local cellY   = redis.call('HGET', KEYS[1], 'cellY')
+local storedEpoch = redis.call('HGET', KEYS[1], 'epoch')
 
 -- 재생 중이었다면 곡과 위치를 지운다.
 local removed = {}
@@ -75,7 +76,7 @@ if musicId then
   if c <= 0 then
     redis.call('HDEL', ARGV[8] .. layer, cellF)
   end
-  removed = {musicId, layer, cellX, cellY}
+  removed = {musicId, layer, cellX, cellY, storedEpoch}
 end
 
 -- 주변사람 구독과 사용자 상태를 지운다.

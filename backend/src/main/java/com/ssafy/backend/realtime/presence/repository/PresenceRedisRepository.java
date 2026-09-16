@@ -159,7 +159,7 @@ public class PresenceRedisRepository {
 	 *
 	 * @param email 사용자 이메일
 	 * @param epoch 종료할 접속 버전
-	 * @return 지운 곡과 위치. 지운 값이 없으면 빈 목록
+	 * @return 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록
 	 */
 	public List<String> applyLeave(String email, long epoch) {
 		return doLeave(email, Long.toString(epoch), "");
@@ -171,7 +171,7 @@ public class PresenceRedisRepository {
 	 *
 	 * @param email 사용자 이메일
 	 * @param sweepTimeMs 만료 확인 시각
-	 * @return 지운 곡과 위치. 지운 값이 없으면 빈 목록
+	 * @return 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록
 	 */
 	public List<String> applyLeaveExpired(String email, long sweepTimeMs) {
 		return doLeave(email, "", Long.toString(sweepTimeMs));
@@ -183,7 +183,7 @@ public class PresenceRedisRepository {
 	 * @param email 사용자 이메일
 	 * @param epoch 직접 종료 시 확인할 접속 버전
 	 * @param sweepTime 만료 종료 시 확인할 시각
-	 * @return 지운 곡과 위치. 지운 값이 없으면 빈 목록
+	 * @return 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록
 	 */
 	@SuppressWarnings("unchecked")
 	private List<String> doLeave(String email, String epoch, String sweepTime) {

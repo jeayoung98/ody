@@ -1,7 +1,7 @@
 package com.ssafy.backend.realtime.event;
 
 /**
- * 위치 변경 이벤트 — 화면 사용자(RT-22)·근처 사람(RT-11) 델타의 공통 입력(plan §F5).
+ * 화면 사용자와 주변사람 갱신에 함께 쓰는 위치 변경 정보.
  * 진입: oldMusicId=null. 이탈: newMusicId=null. 이동: 둘 다 present. 셀은 "{cellX}:{cellY}".
  */
 public record PositionChanged(

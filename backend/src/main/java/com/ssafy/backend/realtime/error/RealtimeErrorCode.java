@@ -9,7 +9,7 @@ import lombok.Getter;
 /**
  * 실시간 도메인 에러 (BE3 소유). 기존 MusicErrorCode 패턴으로 공통 ErrorCode 계약 확장.
  * 정본 §0.5 에러표에 PRESENCE_ERROR 추가 요청(BE1) — contracts/music-play.md §3.
- * WebSocket 오류 코드는 {@link RealtimeWsErrorCode}로 따로 관리한다.
+ * WebSocket 오류 코드는 {@link WebSocketErrorCode}로 따로 관리한다.
  */
 @Getter
 public enum RealtimeErrorCode implements ErrorCode {

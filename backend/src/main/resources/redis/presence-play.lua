@@ -1,6 +1,6 @@
 -- presence-play.lua — 재생 선언(RT-02) = 이동. "재생 = 위치 이동의 유일한 원본".
 -- 활성 배치 코어는 presence-join.lua 와 동일. 차이: 새 (레이어,곡) 청취자를 '만남 후보'로 반환한다.
--- 좌표·셀(부동소수)은 Java(CoordinateMapper)에서 계산해 정수·문자열만 넘긴다(Lua 안 부동소수 금지).
+-- 좌표·셀(부동소수)은 Java(MusicPositionCalculator)에서 계산해 정수·문자열만 넘긴다(Lua 안 부동소수 금지).
 --
 -- KEYS[1] presence:user:{email}
 --

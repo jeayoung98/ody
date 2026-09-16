@@ -7,24 +7,24 @@ import org.springframework.web.socket.config.annotation.EnableWebSocketMessageBr
 import org.springframework.web.socket.config.annotation.StompEndpointRegistry;
 import org.springframework.web.socket.config.annotation.WebSocketMessageBrokerConfigurer;
 
-import com.ssafy.backend.realtime.config.StompAuthChannelInterceptor;
+import com.ssafy.backend.realtime.config.WebSocketAuthInterceptor;
 
 import lombok.RequiredArgsConstructor;
 
-//인증 로직 자체는 realtime/config/StompAuthChannelInterceptor(realtime 소유)에 있고 여기서 등록만
+/** WebSocket 연결 주소와 메시지 경로를 설정한다. */
 
 @Configuration
 @EnableWebSocketMessageBroker
 @RequiredArgsConstructor
 public class WebSocketConfig implements WebSocketMessageBrokerConfigurer {
 
-	private final StompAuthChannelInterceptor authInterceptor;
+	private final WebSocketAuthInterceptor authInterceptor;
 
 	@Override
 	public void configureMessageBroker(MessageBrokerRegistry registry) {
 		registry.enableSimpleBroker("/topic", "/queue");
 		registry.setApplicationDestinationPrefixes("/app");
-		registry.setUserDestinationPrefix("/user"); //prefix
+		registry.setUserDestinationPrefix("/user");
 	}
 
 	@Override

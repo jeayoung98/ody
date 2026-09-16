@@ -163,13 +163,13 @@
         "normalize": "lower(trim(title_raw))",
         "patterns": {
           "untitled": "^[\\[\\(]?untitled[\\]\\)]?\\s*(#?\\s*[0-9]+|track\\s*[0-9]*)?$",
-          "empty_or_punct": "^[\\s!-/:-@\\[-`{-~]*$",
+          "empty_or_punct": "^[\\s 　 -​﻿!-/:-@\\[-`{-~]*$",
           "track_number": "^(track|pista|piste|titel|faixa|traccia)\\s*#?\\s*[0-9]+$",
           "structural_only": "^(intro|outro|skit|interlude|intermission|segue)\\s*([0-9]+|\\(.*\\)|\\[.*\\])?$",
           "unknown_title": "^(unknown( title| track)?|no title|sin t[ií]tulo|sans titre|ohne titel|無題|제목 ?없음)\\s*[0-9]*$"
         }
       },
-      "basis": "catalog_v2 실측(2026-09-14): 전체 적중 48,952 / R1~R9 미적중 신규 제외 33,646 (0.454%). 패턴별 신규 제외 untitled 11,746 · empty_or_punct 5,198 · track_number 3,005 · structural_only 13,381 · unknown_title 316. 총 제외 813,753 (10.99%) < 중단 임계 15%. 정규식은 Python re 와 Java rlike 에서 같게 동작하도록 \b·\\d·\\w 를 쓰지 않고 ASCII 범위로 적는다. 넣지 않은 패턴: 'untitled' 부분 일치(D'Angelo 'Untitled (How Does It Feel)'), 숫자만 제목(Prince '1999', Taylor Swift '22'), silence/talk/Part N/video/'01 - 제목' 파일명형 — 실제 곡 적중. 운영 DB 에서 수동 삭제했던 untitled 를 규칙으로 옮긴 것(규칙 2·9)."
+      "basis": "catalog_v2 실측(2026-09-14): 전체 적중 48,952 / R1~R9 미적중 신규 제외 33,646 (0.454%). 패턴별 신규 제외 untitled 11,746 · empty_or_punct 5,198 · track_number 3,005 · structural_only 13,381 · unknown_title 316. 총 제외 813,753 (10.99%) < 중단 임계 15%. 정규식은 Python re 와 Java rlike 에서 같게 동작하도록 \b·\\d·\\w 를 쓰지 않고 ASCII 범위로 적는다. 넣지 않은 패턴: 'untitled' 부분 일치(D'Angelo 'Untitled (How Does It Feel)'), 숫자만 제목(Prince '1999', Taylor Swift '22'), silence/talk/Part N/video/'01 - 제목' 파일명형 — 실제 곡 적중. 운영 DB 에서 수동 삭제했던 untitled 를 규칙으로 옮긴 것(규칙 2·9). 2026-09-16: 빈 제목 패턴에 유니코드 공백(NBSP·U+3000·U+2000~200B·BOM)을 리터럴로 넣었다 — \\s 는 pyarrow RE2 와 Java rlike 에서 ASCII 전용이라 numpy 경로와 Spark 경로가 1행(-　...-) 갈렸다."
     },
     {
       "id": "R11_test_signal",

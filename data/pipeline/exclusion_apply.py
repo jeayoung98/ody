@@ -361,7 +361,12 @@ def main(dry_run=True):
     co = pd.read_parquet(os.path.join(SERV, "coords_v2.parquet")); co[keep].to_parquet(os.path.join(SERV_NEW, "coords_v2.parquet"), compression="zstd", index=False)
     npth = pd.read_parquet(os.path.join(SERV, "map_tree", "node_paths_v2.parquet")); npth["mbid"] = npth["mbid"].astype(str).str.lower()
     npth = npth.set_index("mbid").loc[cat.loc[keep, "mbid"]].reset_index(); npth.to_parquet(os.path.join(SERV_NEW, "map_tree", "node_paths_v2.parquet"), compression="zstd", index=False)
-    shutil.copy(os.path.join(ROOT, "serving", "postprocess_rules.json"), SERV_NEW)
+    # 이 저장소는 후처리 규칙을 번들 안에 둔다(serving/<v>/postprocess_rules.json).
+    # 원본 dmadkr 레이아웃은 serving/ 바로 아래였다. 둘 다 받아준다.
+    rules_src = os.path.join(ROOT, "serving", "postprocess_rules.json")
+    if not os.path.exists(rules_src):
+        rules_src = os.path.join(SERV, "postprocess_rules.json")
+    shutil.copy(rules_src, SERV_NEW)
     m = json.load(io.open(os.path.join(SERV, "manifest.json"), encoding="utf-8"))
     m.update({"bundle_version": "v2.1-pca16-" + time.strftime("%Y-%m-%d"), "status": "PROMOTED (v2.1 = v2 + 카탈로그 정제, fit·트리 동일)",
               "songs": int(keep.sum()), "songs_before_exclusion": N, "exclusion_rules_hash": rules_hash, "exclusion_rules": "pipeline/exclusion_rules.json",

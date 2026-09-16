@@ -37,11 +37,15 @@ sys.path.insert(0, os.path.join(ROOT, "pipeline"))
 
 import catalog_rules as S5  # noqa: E402
 
-CATALOG_ROWS = 7_404_506
-TOTAL_EXCLUDED = 780_107
-R6_GROUPS_MULTI = 589_543          # exclusion_report.json 기록값
-R1_LONG_ROWS = 29_966             # 규칙 basis A1 기록값
-R8_LOUDNESS_QUANTILE = 8.517061680322513e-05   # 원본 exclusion_report.json 기록값
+# 기준 카탈로그는 **v5 를 v2.1 번들 위에 올린 2단계 산출물**이다(D18, AGENTS.md 규칙 2 단서).
+# 그래서 행 수가 manifest 7,404,506 이 아니라 v3 를 지난 6,624,399 다. v3 카탈로그는
+# work/catalog_v2_v3_2026-09-16.parquet 에 남아 있다.
+CATALOG_ROWS = 6_624_399
+TOTAL_EXCLUDED = 1_930_196         # output/exclusion_report.json (2026-09-16, v5)
+R6_GROUPS_MULTI = 208_508          # v5: R5 가 전부 접은 뒤 남은 다중 묶음
+R1_LONG_ROWS = 914_728             # v5: 6분(360s) 초과. 예외 태그 없음
+R8_LOUDNESS_QUANTILE = 8.70464301406173e-05   # 모집단이 662만이라 v3 의 8.517e-05 와 다르다
+R8_HITS = 6_625                    # v5 R8 적중(무조건 분기 포함)
 FEATURE_DIRS = ("v2_feats", "v2_feats_pilot")          # 파일럿에 part10·part24 가 있다
 SAMPLE_ROWS = 8000
 SAMPLE_GROUPS = 200
@@ -289,23 +293,31 @@ def _artist_norm(work, wanted):
     return out
 
 
-R10_HITS_TOTAL = 48_952            # 규칙 basis 기록값 (2026-09-14)
-R10_NEW_EXCLUDED = 33_646          # R1~R9 미적중 행 중 R10 적중
+R10_HITS_TOTAL = 33_646            # v5 카탈로그(base 6,624,399) 실측 2026-09-16
 
 
 def test_r10_counts_match_basis(catalog, rules_pair):
-    """R10 적중 수가 JSON basis 에 적은 실측과 같다. 기준 카탈로그(R1~R9)에는 R10 이 없어 신규 제외로 센다."""
+    """R10 적중 수가 기준 카탈로그와 같고, 적중한 행은 전부 R10 사유로 제외돼 있다."""
     rules, _ = rules_pair
     rule = rules["R10_title_noise"]
-    total = new = 0
+    total = tagged = 0
     for rg in range(catalog.metadata.num_row_groups):
-        table = catalog.read_row_group(rg, columns=["title_raw", "excluded"])
-        for title, excluded in zip(table.column("title_raw").to_pylist(), table.column("excluded").to_pylist()):
+        table = catalog.read_row_group(rg, columns=["title_raw", "excluded_reason"])
+        for title, reasons in zip(table.column("title_raw").to_pylist(),
+                                  table.column("excluded_reason").to_pylist()):
             if S5.is_title_noise(title, rule):
                 total += 1
-                new += not excluded
-    assert (total, new) == (R10_HITS_TOTAL, R10_NEW_EXCLUDED)
-    assert (TOTAL_EXCLUDED + new) / CATALOG_ROWS < 0.15
+                tagged += "R10_title_noise" in set(reasons or ())
+    assert total == R10_HITS_TOTAL
+    assert tagged == total, "R10 적중인데 사유에 R10 이 없는 행이 있다"
+    assert TOTAL_EXCLUDED / CATALOG_ROWS < rules_json_stop_threshold()
+
+
+def rules_json_stop_threshold():
+    """중단 임계도 JSON 에서만 읽는다. v5 는 0.40 이다(D18)."""
+    import json
+    return json.load(open(os.path.join(ROOT, "pipeline", "exclusion_rules.json"),
+                          encoding="utf-8"))["stop_if_total_excluded_share"]
 
 
 def test_catalog_row_count(catalog):
@@ -370,7 +382,7 @@ def test_row_rules_match_catalog(catalog, audit, rules_pair):
 
 
 def test_r1_long_songs_use_real_tags(catalog, work, rules_pair):
-    """20분 넘는 곡: 예외 태그는 유지, 태그 없는 곡은 30분 상한. 실제 태그로 확인한다."""
+    """v5: 상한(6분)을 넘으면 태그와 무관하게 전부 제외다. 예외 태그 목록이 비어 있음을 함께 본다."""
     import pyarrow.parquet as pq
     rules, _ = rules_pair
     params = rules["R1_length"]["params"]
@@ -397,8 +409,10 @@ def test_r1_long_songs_use_real_tags(catalog, work, rules_pair):
 
     for row in picked:
         got = S5.r1_length({"length": row["length"]}, rules["R1_length"], tags.get(row["mbid"], ()))
-        assert got == ("R1_length" in set(row["excluded_reason"] or ())), (row["mbid"], row["length"])
-    assert any(tags.values()), "표본에 태그 있는 곡이 하나도 없으면 예외 경로를 못 본 것이다"
+        assert got is True, (row["mbid"], row["length"])          # v5 는 예외가 없다
+        assert "R1_length" in set(row["excluded_reason"] or ()), (row["mbid"], row["length"])
+    assert not params.get("long_exempt_tags"), "v5 는 예외 태그를 두지 않는다(D18)"
+    assert any(tags.values()), "표본에 태그 있는 곡이 하나도 없으면 태그 경로를 못 본 것이다"
 
 
 def test_r8_silence_matches_catalog(catalog, work, rules_pair):
@@ -423,14 +437,24 @@ def test_r8_silence_matches_catalog(catalog, work, rules_pair):
             for mbid, loud, dyn, sil in zip(table.column("mbid").to_pylist(), *columns):
                 features[mbid.lower()] = (float(loud), float(dyn), float(sil))
 
-    # 분위값을 직접 계산해 원본 기록과 대조한다(주입하지 않는다)
+    # 분위값을 직접 계산해 기록과 대조한다(주입하지 않는다).
+    # 모집단은 **기준 카탈로그의 곡**이다. 특징 파일에는 이전 단계가 자른 곡도 들어 있어서
+    # 전부 넣으면 v3 값(8.517e-05)이 나온다. 2단계 산출물의 분위는 base 곡으로만 잰다(D18).
     params = rules["R8_silence"]["params"]
-    quantile = float(np.nanpercentile(np.concatenate(loudness), params["loudness_bottom_pct"]))
+    catalog_mbids = set()
+    for rg in range(catalog.metadata.num_row_groups):
+        catalog_mbids.update(m.lower() for m in catalog.read_row_group(rg, columns=["mbid"]).column("mbid").to_pylist())
+    population = np.array([features[m][0] for m in catalog_mbids if m in features], dtype=np.float64)
+    quantile = float(np.nanpercentile(population, params["loudness_bottom_pct"]))
     assert quantile == R8_LOUDNESS_QUANTILE,         "30파트 분위값 {} 가 원본 기록과 다르다. 디렉터리를 다 읽었는지 보라".format(quantile)
 
+    # v5 는 음량 하위 hard_loudness_bottom_pct 를 조건 없이 자른다. 그 분위도 직접 계산한다.
+    hard_pct = params.get("hard_loudness_bottom_pct")
+    hard_q = None if hard_pct is None else float(np.nanpercentile(population, hard_pct))
     recomputed = {mbid for mbid, (loud, dyn, sil) in features.items()
-                  if S5._r8({"loudness": loud, "dyn_complexity": dyn, "silence60": sil},
-                            params, quantile)}
+                  if mbid in catalog_mbids
+                  and S5._r8({"loudness": loud, "dyn_complexity": dyn, "silence60": sil},
+                             params, quantile, hard_q)}
     truth = set()
     for rg in range(catalog.metadata.num_row_groups):
         table = catalog.read_row_group(rg, columns=["mbid", "excluded_reason"])
@@ -440,11 +464,11 @@ def test_r8_silence_matches_catalog(catalog, work, rules_pair):
                 truth.add(mbid.lower())
 
     assert recomputed == truth, "R8 판정이 기준 카탈로그와 완전히 같아야 한다"
-    assert len(recomputed) == 116, "원본 exclusion_report.json 의 R8 적중 수"
+    assert len(recomputed) == R8_HITS, "output/exclusion_report.json 의 R8 적중 수"
 
 
 def test_r5_representative_is_never_folded(catalog, rules_pair):
-    """canonical 묶음의 대표는 접히지 않는다. 보호된 멤버는 좌표 거리가 임계를 넘는다."""
+    """canonical 묶음의 대표는 접히지 않는다. v5 는 거리 보호가 없어 나머지 멤버는 전부 접힌다."""
     import pyarrow.parquet as pq
     rules, _ = rules_pair
     protect = rules["R5_dup_canonical"]["params"].get("protect_dist")
@@ -472,7 +496,12 @@ def test_r5_representative_is_never_folded(catalog, rules_pair):
                 protected.append((rep["mbid"], row["mbid"]))
     assert len(groups) == SAMPLE_GROUPS
 
-    # 접힌 멤버는 서빙 좌표에서 빠져 있으므로 거리를 다시 볼 수 없다. 보호된 멤버만 확인한다.
+    if protect is None:
+        # v5(D18): 거리 보호를 없앴다. 대표가 아닌 멤버는 좌표 거리와 무관하게 전부 접힌다.
+        assert protected == [], "protect_dist 가 None 인데 접히지 않은 멤버가 있다"
+        return
+
+    # protect_dist 가 있을 때만 거리로 확인한다. 접힌 멤버는 서빙 좌표에서 빠져 다시 볼 수 없다.
     wanted = {mbid for pair in protected for mbid in pair}
     coords = {}
     bundle = os.path.join(ROOT, "serving", "v2.1-pca16", "coords_v2.parquet")

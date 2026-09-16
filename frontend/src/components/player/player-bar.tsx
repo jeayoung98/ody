@@ -3,9 +3,7 @@
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
-import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
-import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";

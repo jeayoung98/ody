@@ -4,14 +4,13 @@ import { useCallback } from "react";
 import { ACTIVITY_CONFIRM, type ActivityKind } from "@/constants";
 import { useStopFollowMutation } from "@/hooks/mutations/use-follow-mutation";
 import { useConfirmStore } from "@/stores/use-confirm-store";
+import { ownedMapRepresentation, playbackActivity, type PlaybackActivity } from "@/lib/play-context";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { runPlaybackTransition } from "@/stores/use-blocking-store";
 
-interface CurrentActivity {
-  kind: ActivityKind;
-  /** 같은 종류라도 대상이 다르면 다른 활동으로 본다 (플리 A → 플리 B) */
-  targetKey: string;
+interface CurrentActivity extends PlaybackActivity {
   detail: string | null;
 }
 
@@ -20,10 +19,8 @@ function currentActivity(): CurrentActivity | null {
   const f = useFollowStore.getState();
   if (f.leaderEmail) return { kind: "follow", targetKey: f.leaderEmail, detail: f.leaderNickname };
   const p = usePlayerStore.getState();
-  if (p.context.kind === "playlist") return { kind: "playlist", targetKey: String(p.context.playlistId), detail: null };
-  if (p.context.kind === "journey") return { kind: "journey", targetKey: `${p.context.startMusicId}-${p.context.endMusicId}`, detail: null };
-  if (p.context.kind === "nearby") return { kind: "nearby", targetKey: String(p.context.centerMusicId), detail: null };
-  return null;
+  const activity = playbackActivity(p.context, p.queue.length);
+  return activity ? { ...activity, detail: null } : null;
 }
 
 /**
@@ -43,7 +40,13 @@ export function useStartActivity() {
         return;
       }
       usePlayerStore.getState().stop();
-      useMapStore.getState().clearConstellation();
+      const map = useMapStore.getState();
+      // Only tear down the representation owned by the activity being stopped.
+      // A newly-created journey may already have replaced a nearby/journey view;
+      // clearing unconditionally here erased that new route.
+      const owned = ownedMapRepresentation(map, cur);
+      if (owned === "nearby") map.exitNearby();
+      else if (owned === "constellation") map.clearConstellation();
     },
     [stopFollow],
   );
@@ -52,7 +55,7 @@ export function useStartActivity() {
     (next: ActivityKind, targetKey: string, begin: () => void) => {
       const cur = currentActivity();
       if (!cur || (cur.kind === next && cur.targetKey === targetKey)) {
-        begin();
+        runPlaybackTransition(begin);
         return;
       }
       ask({
@@ -60,10 +63,10 @@ export function useStartActivity() {
         message: ACTIVITY_CONFIRM.message(cur.kind, cur.detail, next),
         confirmLabel: ACTIVITY_CONFIRM.confirm,
         cancelLabel: ACTIVITY_CONFIRM.cancel,
-        onConfirm: () => {
+        onConfirm: () => runPlaybackTransition(() => {
           stopCurrent(cur);
           begin();
-        },
+        }),
       });
     },
     [ask, stopCurrent],

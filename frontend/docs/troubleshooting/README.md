@@ -23,6 +23,7 @@
 | [008](008-hover-flag-stuck-after-card-unmount.md) | 호버 카드를 한 번 쓰면 별 호버가 영영 안 잡힘 | 포인터 밑에서 사라진 카드가 `mouseleave` 를 못 쏴 "카드 위" 플래그가 굳음 | S15P21A405-277 |
 | [010](010-constellation-layout-403-on-localhost.md) | 로컬에서만 별자리가 안 그려짐 (배포는 멀쩡) | rewrite 가 브라우저 `Origin` 을 그대로 넘겨 백엔드가 403 — 배치가 영영 안 옴 | S15P21A405-303 |
 | [011](011-ascend-lands-at-max-zoom-empty-screen.md) | 겹을 떠오르면 화면에 별이 하나도 없음 | 게이트를 미느라 7.7배까지 확대된 배율을 그대로 복원 — [006](006-layer-entry-scale-lost-on-ascend.md) 이 반만 고친 자리 | S15P21A405-327 |
+| [012](012-survey-playback-lifecycle.md) | 설문이 사라지거나 다음 곡이 멈춤·튜토리얼 완료 복원 누락 | 재생 의도와 실제 청취를 혼동하고 뷰·제출 수명주기를 결합, 로컬 완료값 미복원 | S15P21A405-369 |
 
 ---
 

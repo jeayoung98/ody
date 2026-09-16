@@ -4,6 +4,8 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PLAYBACK_BLOCKED, SKIPPED_UNPLAYABLE } from "@/constants";
 import { usePlayability, useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { logVideoId } from "@/lib/live-log";
+import { reportPlayback } from "@/lib/playback-events";
+import { useBlockingStore } from "@/stores/use-blocking-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { registerPlayer, type PlayerHandle } from "./player-registry";
@@ -55,7 +57,25 @@ interface YtPlayer extends PlayerHandle {
   pauseVideo: () => void;
   stopVideo: () => void;
   getPlayerState: () => number;
+  getVideoUrl: () => string;
   destroy: () => void;
+}
+
+/**
+ * The constructor returns before the iframe API attaches its methods. Fast
+ * Refresh can also preserve `ready=true` while replacing that raw object.
+ */
+function readyPlayer(value: YtPlayer | null): value is YtPlayer {
+  if (!value) return false;
+  const player = value as unknown as Record<string, unknown>;
+  return ["loadVideoById", "playVideo", "pauseVideo", "stopVideo", "getPlayerState", "getVideoUrl",
+    "getCurrentTime", "getDuration", "seekTo", "destroy"].every((key) => typeof player[key] === "function");
+}
+
+/** Use the documented current-video URL, not private iframe fields. */
+function currentVideoId(player: YtPlayer): string | null {
+  try { return new URL(player.getVideoUrl()).searchParams.get("v"); }
+  catch { return null; }
 }
 
 interface YtNamespace {
@@ -67,6 +87,7 @@ interface YtNamespace {
       events?: {
         onReady?: () => void;
         onStateChange?: (e: { data: number }) => void;
+        onError?: (e: { data: number }) => void;
       };
     },
   ) => YtPlayer;
@@ -153,25 +174,20 @@ export default function YoutubeEmbed() {
   useEffect(() => {
     if (!isPlaying || blocked !== PLAYBACK_BLOCKED.noVideo) return;
     const p = usePlayerStore.getState();
+    if (p.currentMusicId !== currentMusicId || p.playSeq !== playSeq || currentMusicId == null) return;
+    reportPlayback({ musicId: currentMusicId, playSeq, state: "unavailable", at: Date.now() });
     // 단독 재생은 넘길 곳이 없다. 그 자리에서 안내만 보고 멈춰 있는 게 맞다
-    if (p.queue.length === 0) return;
+    if (p.queue.length === 0) { p.pause(); return; }
 
     const before = p.currentMusicId;
-    /**
-     * `next()` 가 안 움직이는 이유는 둘이다 — **큐 끝**이거나, 떠나기 전에 물을 것이 있어
-     * **보류**됐거나 (S15P21A405-335). 보류면 끼어든 쪽이 볼일을 마친 뒤 그대로 다시 부르므로
-     * 여기서 멈추면 안 된다. 결과로는 둘을 못 가리니 **부르기 전에 큐 끝인지 재 둔다.**
-     */
-    const atEnd = p.queueIndex + 1 >= p.queue.length;
+    // 큐 끝/보류/재개는 전환 통로가 처리한다. 여기서 별도로 pause 하지 않는다.
     p.next();
     const after = usePlayerStore.getState();
     if (after.currentMusicId === before) {
-      // 마지막 정차였다 — 넘길 곳이 없으니 여기서 끝이다. ▶ 로 되돌린다 (S15P21A405-361 과 같은 자리)
-      if (atEnd) after.pause();
       return;
     }
     showToast(SKIPPED_UNPLAYABLE);
-  }, [currentMusicId, blocked, isPlaying, showToast]);
+  }, [currentMusicId, playSeq, blocked, isPlaying, showToast]);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YtPlayer | null>(null);
@@ -185,6 +201,9 @@ export default function YoutubeEmbed() {
   const wantPlayRef = useRef(0);
   /** 마지막으로 건 재생 번호. 같은 곡이어도 번호가 다르면 다시 건다 (S15P21A405-338) */
   const loadedSeqRef = useRef(-1);
+  const loadedMusicRef = useRef<number | null>(null);
+  const endedSeqRef = useRef<number | null>(null);
+  const startedSeqRef = useRef<number | null>(null);
 
   /**
    * 플레이어가 스스로 바뀐 상태를 스토어에 되돌린다 — 유튜브 화면에서 직접 누를 수도 있어서
@@ -197,39 +216,49 @@ export default function YoutubeEmbed() {
    */
   const onStateChange = useCallback((e: { data: number }) => {
     const p = usePlayerStore.getState();
+    const player = playerRef.current;
+    // Ignore stale reports during load/lookup, including the previous video's end.
+    if (!readyPlayer(player) || p.currentMusicId == null || loadedMusicRef.current !== p.currentMusicId || loadedSeqRef.current !== p.playSeq
+      || currentVideoId(player) !== loadedIdRef.current) return;
+    if (player.getPlayerState() !== e.data) return;
+    const report = (state: "playing" | "paused") => reportPlayback({ musicId: p.currentMusicId!, playSeq: p.playSeq, state, at: Date.now() });
     if (e.data === PLAYING) {
       wantPlayRef.current = 0;
-      if (!p.isPlaying) p.toggle();
+      if (!p.isPlaying || useBlockingStore.getState().busy) { player.pauseVideo(); return; }
+      startedSeqRef.current = p.playSeq;
+      endedSeqRef.current = null;
+      report("playing");
       return;
     }
+    report("paused");
     if (e.data === ENDED) {
+      if (startedSeqRef.current !== p.playSeq || endedSeqRef.current === p.playSeq || useBlockingStore.getState().busy) return;
+      endedSeqRef.current = p.playSeq;
       wantPlayRef.current = 0;
-      const before = p.currentMusicId;
-      const atEnd = p.queueIndex + 1 >= p.queue.length;
       p.next();
-      /**
-       * **넘어갈 곡이 없으면 거기서 재생이 끝난 것이다** (S15P21A405-361). `next()` 는 그 경우
-       * 아무것도 하지 않고 빠져나오므로 `isPlaying` 이 true 로 남아, 소리는 멎었는데 버튼만 ⏸ 인
-       * 채 0:00 에 서 있었다 — 다시 들으려면 두 번 눌러야 했다. 멈춤으로 내려놓으면 ▶ 로 돌아오고,
-       * 한 번 누르면 플레이어가 끝난 영상을 처음부터 다시 튼다. 단독 재생만이 아니라 여정·플리의
-       * 마지막 곡도 같은 자리다.
-       *
-       * **보류된 넘김은 끝난 게 아니다** (S15P21A405-258 · 335) — 떠나기 전에 물을 것이 있으면
-       * `next()` 가 멈춰 서고, 카드가 닫힐 때 그대로 다시 불린다. 그때 여기서 멈춰 두면 다음 곡이
-       * 소리 없이 걸린다. 결과만 봐서는 큐 끝과 구분되지 않으니 **부르기 전에** 재 둔다.
-       */
-      const after = usePlayerStore.getState();
-      if (atEnd && after.currentMusicId === before) after.pause();
       return;
     }
     if (e.data === UNSTARTED || e.data === CUED || e.data === PAUSED) {
-      if (wantPlayRef.current > 0) {
+      if (wantPlayRef.current > 0 && p.isPlaying && !useBlockingStore.getState().busy) {
         wantPlayRef.current -= 1;
-        playerRef.current?.playVideo();
+        player.playVideo();
         return;
       }
       if (e.data === PAUSED && p.isPlaying) p.pause();
     }
+  }, []);
+
+  const onError = useCallback((e: { data: number }) => {
+    const p = usePlayerStore.getState();
+    if (p.currentMusicId == null || loadedMusicRef.current !== p.currentMusicId || loadedSeqRef.current !== p.playSeq
+      || !readyPlayer(playerRef.current) || currentVideoId(playerRef.current) !== loadedIdRef.current) return;
+    wantPlayRef.current = 0;
+    // Only definitive removed/private/embedding-disabled errors can bridge a gap.
+    // Network/HTML5/client errors are unknown, never evidence of unavailability.
+    const unavailable = [100, 101, 150].includes(e.data);
+    reportPlayback({ musicId: p.currentMusicId, playSeq: p.playSeq, state: unavailable ? "unavailable" : "paused", at: Date.now() });
+    if (unavailable && p.queue.length) p.next();
+    else p.pause();
   }, []);
 
   /**
@@ -240,6 +269,8 @@ export default function YoutubeEmbed() {
     let cancelled = false;
     const host = hostRef.current;
     if (!host) return;
+    // Fast Refresh preserves React state but recreates the imperative player.
+    setReady(false);
     loadIframeApi().then(() => {
       if (cancelled || !window.YT || playerRef.current) return;
       playerRef.current = new window.YT.Player(host, {
@@ -254,11 +285,13 @@ export default function YoutubeEmbed() {
          */
         events: {
           onReady: () => {
+            if (cancelled || !readyPlayer(playerRef.current)) return;
             setReady(true);
             // 진행 바가 재생 시계를 읽고 위치를 옮길 수 있게 내놓는다 (S15P21A405-334)
             registerPlayer(playerRef.current);
           },
           onStateChange,
+          onError,
         },
       });
       // 개발 편의: 콘솔에서 플레이어 상태를 들여다볼 수 있게 (지도 엔진의 `__odyEngine` 과 같은 용도)
@@ -267,11 +300,12 @@ export default function YoutubeEmbed() {
     return () => {
       cancelled = true;
       registerPlayer(null);
-      playerRef.current?.destroy();
+      if (readyPlayer(playerRef.current)) playerRef.current.destroy();
       playerRef.current = null;
       loadedIdRef.current = null;
+      loadedMusicRef.current = null;
     };
-  }, [onStateChange]);
+  }, [onStateChange, onError]);
 
   /**
    * 곡 교체. `loadVideoById` 는 스스로 재생을 시작하지만 **그것만 믿지 않는다** — 자동재생이
@@ -281,11 +315,13 @@ export default function YoutubeEmbed() {
    * 통째로 사라지며 플레이어가 버려졌지만, 이제는 계속 살아 있으므로 여기서 멈춰 줘야 한다.
    */
   useEffect(() => {
-    if (!ready || !playerRef.current) return;
+    const player = playerRef.current;
+    if (!ready || !readyPlayer(player)) return;
     if (!videoId) {
       if (loadedIdRef.current) {
-        playerRef.current.stopVideo();
+        player.stopVideo();
         loadedIdRef.current = null;
+        loadedMusicRef.current = null;
       }
       return;
     }
@@ -293,14 +329,18 @@ export default function YoutubeEmbed() {
     if (loadedIdRef.current === videoId && loadedSeqRef.current === playSeq) return;
     loadedSeqRef.current = playSeq;
     loadedIdRef.current = videoId;
+    loadedMusicRef.current = currentMusicId;
+    startedSeqRef.current = null;
+    endedSeqRef.current = null;
     // 틀던 중에 갈아끼우는 것이면 **계속 틀겠다는 뜻**이다. 전환 중 상태 보고에 흔들리지 않게 남긴다
     if (usePlayerStore.getState().isPlaying) wantPlayRef.current = REPLAY_TRIES;
-    playerRef.current.loadVideoById(videoId);
-  }, [ready, videoId, playSeq]);
+    player.loadVideoById(videoId);
+  }, [ready, videoId, playSeq, currentMusicId]);
 
   // 재생·정지를 스토어에 맞춘다. `videoId` 도 본다 — 곡을 갈아끼운 직후 한 번 더 단언하려고
   useEffect(() => {
-    if (!ready || !videoId || !playerRef.current) return;
+    const player = playerRef.current;
+    if (!ready || !videoId || !readyPlayer(player)) return;
     if (isPlaying) {
       /**
        * **끝난 곡을 다시 트는 것은 새로 거는 것과 같다** (S15P21A405-361). 플레이어가 처음으로
@@ -308,12 +348,12 @@ export default function YoutubeEmbed() {
        * `onStateChange` 가 "사용자가 멈췄다" 로 읽어 `isPlaying` 을 되돌린다 — 눌렀더니 0:00 에서
        * 다시 멈추고 한 번 더 눌러야 했다. 곡을 갈아끼울 때와 같은 자리라 같은 재시도를 건다.
        */
-      if (playerRef.current.getPlayerState() === ENDED) wantPlayRef.current = REPLAY_TRIES;
-      playerRef.current.playVideo();
+      if (player.getPlayerState() === ENDED) wantPlayRef.current = REPLAY_TRIES;
+      player.playVideo();
     } else {
       // 사용자가 직접 멈춘 것이니 전환 중 재시도도 접는다
       wantPlayRef.current = 0;
-      playerRef.current.pauseVideo();
+      player.pauseVideo();
     }
   }, [ready, isPlaying, videoId]);
 

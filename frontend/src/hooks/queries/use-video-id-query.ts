@@ -1,11 +1,14 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS, PLAYBACK_BLOCKED, QUERY_KEYS, type PlaybackBlocked } from "@/constants";
+import type { VideoIdLookup } from "@/types";
 
 interface VideoIdResult {
   musicId: number;
-  /** 사이트 안에서 틀 수 있는 영상. 없으면 null — 아직 음원이 연결되지 않은 곡이다 (SONG-04) */
+  /** 사이트 안에서 틀 수 있는 영상. `lookup` 이 `found` 일 때만 채워진다 */
   videoId: string | null;
+  /** 검색이 어디까지 갔는가. `"없다"` 와 `"모른다"` 를 가른다 (S15P21A405-332) */
+  lookup: VideoIdLookup;
 }
 
 /**
@@ -37,10 +40,14 @@ export function useVideoIdQuery(musicId: number | null) {
  * **아직 모르는 동안(`pending`)에는 막지 않는다.** 도착하면 그때 판정이 잡힌다 — 여기서 미리
  * 막으면 곡을 열 때마다 잠깐씩 `재생 불가` 가 스쳐 지나간다.
  */
-export function usePlayability(musicId: number | null): { canPlay: boolean; blocked: PlaybackBlocked | null } {
-  const { status, data } = useVideoIdQuery(musicId);
+export function usePlayability(musicId: number | null): { canPlay: boolean; blocked: PlaybackBlocked | null; retry: () => void } {
+  const { status, data, refetch } = useVideoIdQuery(musicId);
 
-  if (status === "error") return { canPlay: false, blocked: PLAYBACK_BLOCKED.lookupFailed };
-  if (status === "success" && data.videoId == null) return { canPlay: false, blocked: PLAYBACK_BLOCKED.noVideo };
-  return { canPlay: true, blocked: null };
+  /** 막힌 이유가 다시 시도해볼 만한 것이면 버튼을 누를 때 한 번 더 물어본다 */
+  const retry = () => void refetch();
+
+  if (status === "error") return { canPlay: false, blocked: PLAYBACK_BLOCKED.lookupFailed, retry };
+  if (status === "success" && data.lookup === "notFound") return { canPlay: false, blocked: PLAYBACK_BLOCKED.noVideo, retry };
+  if (status === "success" && data.lookup === "unsearched") return { canPlay: false, blocked: PLAYBACK_BLOCKED.notSearched, retry };
+  return { canPlay: true, blocked: null, retry };
 }

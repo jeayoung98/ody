@@ -34,7 +34,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
    * 예전에는 `videoId` 가 없으면 유튜브 검색 링크를 새 탭으로 열었다. 탭이 열리면 탐색 흐름이
    * 끊겨서 그 길을 걷어냈다. 이제 사이트 안에서 못 트는 곡은 `재생 불가` 다 (SONG-04).
    */
-  const { canPlay, blocked } = usePlayability(music.id);
+  const { canPlay, blocked, retry } = usePlayability(music.id);
 
   /** 지금 이 곡이 울리고 있나 — 버튼이 상태를 보여줘야 또 누르지 않는다 (S15P21A405-325) */
   const isThisPlaying = canPlay && currentMusicId === music.id && isPlaying;
@@ -52,6 +52,8 @@ export default function SongActions({ music }: { music: MusicDetail }) {
      */
     if (blocked) {
       showToast(blocked.notice);
+      // 아직 안 찾아본 곡·조회 실패는 다시 부르면 채워질 수 있다 (S15P21A405-332)
+      if (blocked.retryable) retry();
       return;
     }
     if (isThisPlaying) {

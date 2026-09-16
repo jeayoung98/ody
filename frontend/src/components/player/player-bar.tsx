@@ -64,7 +64,7 @@ export default function PlayerBar() {
   };
 
   /** 들을 수 있는 곡인가 — 판단과 문구는 `usePlayability` 한 곳에서 온다 (S15P21A405-364) */
-  const { canPlay: playable, blocked } = usePlayability(currentMusicId);
+  const { canPlay: playable, blocked, retry } = usePlayability(currentMusicId);
   const canPlay = playable && currentMusicId != null;
 
   /**
@@ -78,6 +78,8 @@ export default function PlayerBar() {
     if (currentMusicId == null) return;
     if (blocked) {
       showToast(blocked.notice);
+      // "잠시 후 다시 눌러 주세요" 가 빈말이 되지 않게, 누른 김에 다시 물어본다 (캐시가 30분이라 저절로는 안 간다)
+      if (blocked.retryable) retry();
       return;
     }
     toggle();

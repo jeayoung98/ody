@@ -1,9 +1,20 @@
 import { failLive, okLive } from "@/lib/api-response";
 import { backendPost, BackendError } from "@/lib/backend";
+import type { VideoIdLookup } from "@/types";
 
 interface BackendVideoIdBatch {
   items?: { musicId: number; videoId: string | null }[];
 }
+
+/**
+ * 백엔드가 **검색해봤는데 없었다**를 알리는 값 (S15P21A405-332).
+ *
+ * `null` 은 아직 검색 전이라는 뜻이라 **의미가 다르다.** 그런데 둘 다 "영상 없음" 으로 뭉개면
+ * 다시 부를 곡과 기다려도 안 될 곡이 같아진다. 게다가 `"none"` 은 빈 문자열이 아니라서
+ * 예전 `found || null` 식을 그대로 통과했다 — 프론트가 영상이 있다고 믿고 `loadVideoById("none")`
+ * 을 걸었고, 유튜브가 그런 영상을 못 찾아 **소리도 안 나고 안내도 없었다.**
+ */
+const NOT_FOUND = "none";
 
 /**
  * GET /bff/music/{id}/video-id — 곡 하나의 `videoId` (SONG-03).
@@ -26,9 +37,11 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const upstream = "/api/music/videoid";
   try {
     const data = await backendPost<BackendVideoIdBatch>(upstream, { musicIds: [musicId] });
-    // 한 곡만 보냈으므로 답도 한 줄이다. 빈 문자열은 "없음" 과 같게 본다
-    const found = data.items?.find((v) => v.musicId === musicId)?.videoId;
-    return okLive({ musicId, videoId: found || null }, upstream);
+    // 한 곡만 보냈으므로 답도 한 줄이다. 곡 자체가 없으면 items 가 비어 온다 — 그것도 "아직 모름" 이다
+    const raw = data.items?.find((v) => v.musicId === musicId)?.videoId ?? null;
+    // 빈 문자열은 `"none"` 과 같게 본다 — 검색 결과가 비었다는 뜻이다
+    const lookup: VideoIdLookup = raw === NOT_FOUND || raw === "" ? "notFound" : raw ? "found" : "unsearched";
+    return okLive({ musicId, videoId: lookup === "found" ? raw : null, lookup }, upstream);
   } catch (e) {
     const err = e as BackendError;
     return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);

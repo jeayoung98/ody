@@ -54,3 +54,6 @@ export const PLAYBACK_BLOCKED = {
 
 /** {@link PLAYBACK_BLOCKED} 의 한 항목 */
 export type PlaybackBlocked = (typeof PLAYBACK_BLOCKED)[keyof typeof PLAYBACK_BLOCKED];
+
+/** 못 트는 곡을 자동으로 넘겼을 때 (S15P21A405-364). 조용히 넘기면 곡이 사라진 것으로 보인다 */
+export const SKIPPED_UNPLAYABLE = "재생할 수 없는 곡을 건너뛰었어요";

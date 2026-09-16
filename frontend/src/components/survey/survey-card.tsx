@@ -8,6 +8,7 @@ import { NO_GENRE_ID } from "@/constants/map";
 import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
 import { buildSubmission } from "@/hooks/survey/submission";
+import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import { questionKey, type SurveyReason, type SurveySong } from "@/types/survey";
 
@@ -32,7 +33,35 @@ function CheckIcon() {
  * 제목은 **자르지 않는다.** 말줄임으로 끊으면 어느 곡인지 못 알아보는 경우가 생긴다.
  * 가수는 한 줄만 — 곡을 가리는 값이 아니라 거드는 값이다.
  */
-function SurveySongRow({ label, song, highlight = false }: { label: string; song: SurveySong; highlight?: boolean }) {
+/** 다시 듣기 버튼 아이콘 — 지금 울리는 곡이면 소리 표시로 바뀐다 (색만으로 가르지 않는다) */
+function ReplayIcon({ sounding }: { sounding: boolean }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden className="h-3.5 w-3.5 shrink-0" fill="currentColor">
+      {sounding ? <path d="M3 6h2.5L9 3v10L5.5 10H3zM11 5.5a3.5 3.5 0 0 1 0 5v-1.4a2.2 2.2 0 0 0 0-2.2z" /> : <path d="M5 3.5l7 4.5-7 4.5z" />}
+    </svg>
+  );
+}
+
+function SurveySongRow({
+  label,
+  song,
+  highlight = false,
+}: {
+  label: string;
+  song: SurveySong;
+  highlight?: boolean;
+}) {
+  /**
+   * **두 곡 다 다시 들어볼 수 있어야 한다** (S15P21A405-371). 이웃을 두어 곡 건너오면 기준곡이
+   * 기억나지 않는데, 카드가 화면을 덮고 있어 지도로 확인할 수도 없다. 기억에 없는 것을 두고
+   * "비슷했나요" 를 답하면 그 답은 찍기다.
+   *
+   * 들려주지 못하는 곡은 누를 수 없게 둔다 — 눌러도 아무 일이 없으면 고장으로 읽힌다.
+   */
+  const preview = usePlayerStore((s) => s.preview);
+  const sounding = usePlayerStore((s) => s.currentMusicId) === song.musicId;
+  const unplayable = useSurveyStore((s) => s.unplayable).has(song.musicId);
+
   /**
    * 커버는 **지도가 쓰는 절차적 그림을 그대로 가져온다** (`coverFor`).
    *
@@ -78,6 +107,16 @@ function SurveySongRow({ label, song, highlight = false }: { label: string; song
           </p>
           <p className={`mt-1 truncate text-[13px] ${highlight ? "text-ink-2" : "text-ink-3"}`}>{song.artist ?? "Unknown"}</p>
         </div>
+        <button
+          type="button"
+          onClick={() => preview(song.musicId)}
+          disabled={unplayable}
+          aria-label={`${song.title} 다시 듣기`}
+          className="flex shrink-0 items-center gap-1 rounded-pill border border-line px-2.5 py-1.5 text-[11.5px] text-ink-2 transition hover:border-violet hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-2"
+        >
+          <ReplayIcon sounding={sounding} />
+          {unplayable ? "재생 불가" : sounding ? "재생 중" : "다시 듣기"}
+        </button>
       </div>
     </div>
   );

@@ -80,7 +80,8 @@ test("journey asks A→B before C; success resumes C exactly once and playing", 
   await pendingJourney();
   const seq = p().playSeq;
   p().next();
-  assert.equal(p().currentMusicId, 2); assert.equal(p().isPlaying, false);
+  // 답하는 동안에도 소리는 이어진다 — 못 들은 곡을 평가하게 두지 않는다 (S15P21A405-371)
+  assert.equal(p().currentMusicId, 2); assert.equal(p().isPlaying, true);
   assert.equal(s().prompt.target.prevMusicId, 1);
   const row = answer();
   assert.equal(p().currentMusicId, 3); assert.equal(p().isPlaying, true);
@@ -342,4 +343,65 @@ test("changing predecessor at the same rank cannot overwrite a different backend
   assert.equal(skipped.edge.target.rank, adjacent.edge.target.rank);
   assert.notEqual(skipped.edge.target.prevMusicId, adjacent.edge.target.prevMusicId);
   assert.notEqual(skipped.edge.target.sessionId, adjacent.edge.target.sessionId);
+});
+
+/* 기준곡 먼저 들려주기 (S15P21A405-371) */
+
+test("hearing a neighbor before its anchor plays the anchor instead", async () => {
+  const nearby = { kind: "nearby", centerMusicId: 1 };
+  // 기준곡 1을 한 번도 안 들은 채 이웃 2를 누른다
+  p().playSingle(2, nearby);
+  await flush();
+  assert.equal(p().currentMusicId, 1, "이웃이 아니라 기준곡이 걸려야 한다");
+});
+
+test("after the anchor is heard, neighbors play as asked", async () => {
+  const nearby = { kind: "nearby", centerMusicId: 1 };
+  await play(1, nearby);
+  p().playSingle(2, nearby);
+  await flush();
+  assert.equal(p().currentMusicId, 2);
+});
+
+test("a just-heard song counts as its own anchor", async () => {
+  // 4를 듣고 그 주변을 연다 — 자취는 비어 있어도 귀에는 방금 남아 있다
+  await play(4, { kind: "nearby", centerMusicId: 4 });
+  p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
+  await flush();
+  assert.equal(p().currentMusicId, 5, "방금 들은 곡을 다시 틀어선 안 된다");
+});
+
+test("an unplayable anchor does not block its neighbors", async () => {
+  const nearby = { kind: "nearby", centerMusicId: 1 };
+  s().markUnplayable(1);
+  p().playSingle(2, nearby);
+  await flush();
+  assert.equal(p().currentMusicId, 2, "들을 수 없는 곡을 들으라고 하면 거기서 막힌다");
+});
+
+/* 설문 카드가 떠 있는 동안의 재생 (S15P21A405-371) */
+
+test("an open question keeps the sound going but stops the listening clock", async () => {
+  await pendingJourney();
+  p().next();
+  assert.ok(s().prompt, "질문이 떠 있어야 한다");
+  assert.equal(p().isPlaying, true, "답하는 동안에도 소리는 이어져야 한다");
+  const target = s().prompt.target.musicId;
+  const listened = s().stintMs(target);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(s().stintMs(target), listened, "시계는 멈춰 있어야 한다");
+});
+
+test("replaying a song from the card does not move the queue", async () => {
+  await pendingJourney();
+  p().next();
+  const { queue, queueIndex, context } = p();
+  const compare = s().prompt.compare.musicId;
+  p().preview(compare);
+  assert.equal(p().currentMusicId, compare, "누른 곡이 울려야 한다");
+  assert.equal(p().isPlaying, true);
+  assert.deepEqual(p().queue, queue, "큐는 그대로여야 한다");
+  assert.equal(p().queueIndex, queueIndex);
+  assert.deepEqual(p().context, context);
+  assert.ok(s().prompt, "다시 듣는다고 질문이 닫히면 안 된다");
 });

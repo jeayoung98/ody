@@ -2,28 +2,31 @@ package com.ssafy.backend.realtime.port;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
-import com.ssafy.backend.music.dto.MusicDetailRow;
-import com.ssafy.backend.music.mapper.MusicDetailMapper;
+import com.ssafy.backend.music.detail.MusicDetailReader;
+import com.ssafy.backend.music.dto.Location;
 
+@SuppressWarnings("unchecked")
 class MusicLocationAdapterTest {
 
-	private final MusicDetailMapper mapper = mock(MusicDetailMapper.class);
-	private final MusicLocationAdapter adapter = new MusicLocationAdapter(mapper);
+	private final MusicDetailReader reader = mock(MusicDetailReader.class);
+	private final MusicLocationAdapter adapter = new MusicLocationAdapter(reader);
 
 	@Test
-	@DisplayName("row 의 pc1~pc16 을 순서대로 double[16] 으로 옮긴다")
+	@DisplayName("PC1부터 PC16까지 순서대로 배열에 담는다")
 	void mapsPcInOrder() {
-		MusicDetailRow row = new MusicDetailRow();
-		row.setPc1(1);   row.setPc2(2);   row.setPc3(3);   row.setPc4(4);
-		row.setPc5(5);   row.setPc6(6);   row.setPc7(7);   row.setPc8(8);
-		row.setPc9(9);   row.setPc10(10); row.setPc11(11); row.setPc12(12);
-		row.setPc13(13); row.setPc14(14); row.setPc15(15); row.setPc16(16);
-		when(mapper.findById(42L)).thenReturn(row);
+		when(reader.findLocationsByIds(List.of(42L))).thenReturn(Map.of(42L, location(1)));
 
 		assertThat(adapter.findLocation(42L)).hasValueSatisfying(pc -> {
 			assertThat(pc).hasSize(16);
@@ -34,9 +37,39 @@ class MusicLocationAdapterTest {
 	}
 
 	@Test
-	@DisplayName("없는 곡(null row)은 Optional.empty")
+	@DisplayName("없는 곡은 빈 결과를 돌려준다")
 	void missingSong_empty() {
-		when(mapper.findById(999L)).thenReturn(null);
+		when(reader.findLocationsByIds(List.of(999L))).thenReturn(Map.of());
 		assertThat(adapter.findLocation(999L)).isEmpty();
+	}
+
+	@Test
+	@DisplayName("30개가 넘는 곡은 30개씩 나눠 읽는다")
+	void readsAtMostThirtyIdsAtOnce() {
+		List<Long> ids = new ArrayList<>();
+		Map<Long, Location> firstResult = new LinkedHashMap<>();
+		for (long id = 1; id <= 31; id++) {
+			ids.add(id);
+			if (id <= 30) {
+				firstResult.put(id, location(id));
+			}
+		}
+		when(reader.findLocationsByIds(ids.subList(0, 30))).thenReturn(firstResult);
+		when(reader.findLocationsByIds(List.of(31L))).thenReturn(Map.of(31L, location(31)));
+
+		Map<Long, double[]> result = adapter.findLocations(ids);
+
+		assertThat(result).hasSize(31);
+		ArgumentCaptor<List<Long>> idsCaptor = ArgumentCaptor.forClass(List.class);
+		verify(reader, org.mockito.Mockito.times(2)).findLocationsByIds(idsCaptor.capture());
+		assertThat(idsCaptor.getAllValues()).allSatisfy(batch -> assertThat(batch).hasSizeLessThanOrEqualTo(30));
+	}
+
+	private static Location location(double start) {
+		return new Location(
+				start, start + 1, start + 2, start + 3,
+				start + 4, start + 5, start + 6, start + 7,
+				start + 8, start + 9, start + 10, start + 11,
+				start + 12, start + 13, start + 14, start + 15);
 	}
 }

@@ -7,10 +7,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Repository;
+
+import com.ssafy.backend.realtime.geometry.CellGrid.Cell;
 
 import lombok.RequiredArgsConstructor;
 
@@ -82,6 +85,47 @@ public class PresenceRedisRepository {
 	public Long currentLayer(String email) {
 		Object v = redis.opsForHash().get(PRESENCE_USER_PREFIX + email, "layer");
 		return v == null ? null : Long.valueOf(v.toString());
+	}
+
+	/**
+	 * 화면 셀마다 현재 재생 중인 곡을 한 번에 읽는다.
+	 * @param layer 현재 레이어
+	 * @param cells 확인할 화면 셀
+	 * @return 셀별 재생 중인 곡 ID
+	 */
+	public Map<Cell, Set<Long>> findActiveMusicIdsByCell(int layer, List<Cell> cells) {
+		List<String> keys = cells.stream()
+				.map(cell -> ACTIVE_CELL_PREFIX + layer + ":" + cell.cellX() + ":" + cell.cellY())
+				.toList();
+		List<Object> values = readSetsAtOnce(keys);
+
+		Map<Cell, Set<Long>> result = new java.util.LinkedHashMap<>();
+		for (int i = 0; i < cells.size(); i++) {
+			Set<Long> musicIds = toStringSet(values.get(i)).stream()
+					.map(Long::valueOf)
+					.collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+			result.put(cells.get(i), Set.copyOf(musicIds));
+		}
+		return result;
+	}
+
+	/**
+	 * 곡마다 현재 레이어에서 듣고 있는 사용자를 한 번에 읽는다.
+	 * @param layer 현재 레이어
+	 * @param musicIds 확인할 곡 ID
+	 * @return 곡별 청취자 이메일
+	 */
+	public Map<Long, Set<String>> findListenersByMusic(int layer, List<Long> musicIds) {
+		List<String> keys = musicIds.stream()
+				.map(musicId -> LAYER_LISTENERS_PREFIX + layer + ":" + musicId)
+				.toList();
+		List<Object> values = readSetsAtOnce(keys);
+
+		Map<Long, Set<String>> result = new java.util.LinkedHashMap<>();
+		for (int i = 0; i < musicIds.size(); i++) {
+			result.put(musicIds.get(i), Set.copyOf(toStringSet(values.get(i))));
+		}
+		return result;
 	}
 
 	/** CONNECT — presence 생성(정지: epoch·connectedAt 만, 곡·좌표 없음 → 남에게 안 보임). 곡 배치는 join 이 한다. */
@@ -179,7 +223,6 @@ public class PresenceRedisRepository {
 
 	/**
 	 * 두 종료 경로를 같은 Redis 스크립트로 처리한다.
-	 *
 	 * @param email 사용자 이메일
 	 * @param epoch 직접 종료 시 확인할 접속 버전
 	 * @param sweepTime 만료 종료 시 확인할 시각
@@ -228,6 +271,44 @@ public class PresenceRedisRepository {
 
 		Long n = redis.execute(usercountRecountScript, List.of(USERCOUNT_PREFIX + layer), args.toArray());
 		return n != null ? n : 0L;
+	}
+
+	/**
+	 * 여러 Redis Set을 한 번의 통신으로 읽는다.
+	 * @param keys 읽을 Redis 키
+	 * @return 키 순서와 같은 조회 결과
+	 */
+	private List<Object> readSetsAtOnce(List<String> keys) {
+		if (keys.isEmpty()) {
+			return List.of();
+		}
+		byte[][] serializedKeys = keys.stream()
+				.map(redis.getStringSerializer()::serialize)
+				.toArray(byte[][]::new);
+		return redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : serializedKeys) {
+				connection.setCommands().sMembers(key);
+			}
+			return null;
+		});
+	}
+
+	/**
+	 * Redis Set 조회 결과를 문자열 목록으로 바꾼다.
+	 * @param value Redis 조회 결과
+	 * @return 문자열 목록
+	 */
+	private static Set<String> toStringSet(Object value) {
+		if (!(value instanceof Set<?> set)) {
+			return Set.of();
+		}
+		Set<String> result = new LinkedHashSet<>();
+		for (Object item : set) {
+			if (item != null) {
+				result.add(item.toString());
+			}
+		}
+		return result;
 	}
 
 	private static Long toLong(Object o) {

@@ -1,15 +1,15 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { coverFor } from "@/components/map/render/sprites";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
 import { NO_GENRE_ID } from "@/constants/map";
 import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
-import { useBlockingStore } from "@/stores/use-blocking-store";
+import { buildSubmission } from "@/hooks/survey/submission";
 import { useSurveyStore } from "@/stores/use-survey-store";
-import type { SurveyReason, SurveySong } from "@/types/survey";
+import { questionKey, type SurveyReason, type SurveySong } from "@/types/survey";
 
 /** 고른 것이 눌린 티가 나게 — 테두리 발광만으로는 어두운 배경에서 안 보인다 */
 const SELECTED_CLASS = "bg-violet/25! border-violet! text-white! shadow-glow-violet";
@@ -84,7 +84,7 @@ function SurveySongRow({ label, song, highlight = false }: { label: string; song
 }
 
 /**
- * 설문 카드 (S15P21A405-294).
+ * 설문 카드 (S15P21A405-294 · 335).
  *
  * 질문 하나에 답 둘. **부정일 때만** 이유를 한 번 더 묻는다 — 긍정 이유는 백엔드가
  * 아예 저장하지 않는다(`CHECK ((verdict = false) = (reason IS NOT NULL))`).
@@ -93,6 +93,7 @@ function SurveySongRow({ label, song, highlight = false }: { label: string; song
  * 부정은 이유를 골라야 제출된다 — 이유 없는 부정은 서버가 거부한다.
  *
  * 제출해야만 닫힌다 — X·바깥 클릭·ESC 로 닫히지 않는다. 테스터에게 응답을 강제하는 설계다.
+ * 닫히는 순간 **보류돼 있던 이탈이 실행된다** (`close`) — 누르려던 곡이 그때 나온다.
  *
  * **최종 배포 때 걷어낼 기능이다.**
  */
@@ -100,7 +101,10 @@ export default function SurveyCard() {
   const prompt = useSurveyStore((s) => s.prompt);
   const stintMs = useSurveyStore((s) => s.stintMs);
   const close = useSurveyStore((s) => s.close);
-  const markSent = useSurveyStore((s) => s.markSent);
+  const saving = useSurveyStore((s) => s.saving);
+  const saveError = useSurveyStore((s) => s.saveError);
+  const submission = useSurveyStore((s) => s.submission);
+  const waiting = useSurveyStore((s) => s.queued != null && s.prompt == null);
   const submit = useSurveySubmit();
 
   /** `verdict` 가 false 면 이유를 고르는 중이다 */
@@ -110,32 +114,23 @@ export default function SurveyCard() {
     reason: null,
   });
 
-  /**
-   * 카드가 떠 있는 동안 자동 넘김을 막는다 (S15P21A405-258).
-   *
-   * 재생 코드를 직접 붙잡지 않는다 — 공용 플래그만 올린다. 설문을 통째로 지워도
-   * 그 플래그는 늘 비어 있는 상태가 되어 재생이 원래대로 돈다.
-   */
-  const block = useBlockingStore((s) => s.block);
-  const unblock = useBlockingStore((s) => s.unblock);
-  useEffect(() => {
-    if (!prompt) return;
-    block("survey");
-    return () => unblock("survey");
-  }, [prompt, block, unblock]);
-
   // 대상이 바뀌면 답을 새로 시작한다 (effect 안 setState 대신 "adjusting state during render")
-  const key = prompt ? `${prompt.target.sessionId}:${prompt.target.rank}` : "";
+  const key = prompt ? `${prompt.target.sessionId}:${questionKey(prompt.target)}` : "";
   if (state.key !== key) setState({ key, verdict: null, reason: null });
 
-  if (!prompt) return null;
+  if (!prompt) return waiting ? (
+    <div className="fixed inset-0 z-[80] flex items-center justify-center bg-overlay" role="status">
+      <Box title="잠깐만요">탐색 결과와 이전 설문 응답을 확인하고 있어요…</Box>
+    </div>
+  ) : null;
   const target = prompt.target;
   const definition = SURVEYS[target.mode];
 
   const send = (verdict: boolean, reason: SurveyReason | null) => {
-    submit.mutate({ target, verdict, reason, listenedMs: stintMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
-    markSent(target);
-    close();
+    const row = submission ?? buildSubmission({ target, verdict, reason, listenedMs: stintMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
+    if (!useSurveyStore.getState().beginSubmission(row)) return;
+    setState((s) => ({ ...s, verdict: row.verdict, reason: row.reason }));
+    submit.mutate(row);
   };
 
   const askingReason = state.verdict === false;
@@ -162,11 +157,12 @@ export default function SurveyCard() {
           <div className="flex flex-col gap-2">
             <p className="text-base leading-relaxed font-medium text-ink">{definition.question}</p>
             <div className="flex flex-wrap gap-2">
-              <Button size="md" onClick={() => send(true, null)}>
+              <Button size="md" disabled={submission != null} aria-pressed={state.verdict === true} className={state.verdict === true ? SELECTED_CLASS : ""} onClick={() => send(true, null)}>
                 {definition.yes}
               </Button>
               <Button
                 size="md"
+                disabled={submission != null}
                 aria-pressed={askingReason}
                 className={askingReason ? SELECTED_CLASS : ""}
                 onClick={() => setState((s) => ({ ...s, verdict: false }))}
@@ -185,6 +181,7 @@ export default function SurveyCard() {
                   <Button
                     key={r.value}
                     size="md"
+                    disabled={submission != null}
                     aria-pressed={state.reason === r.value}
                     className={state.reason === r.value ? SELECTED_CLASS : ""}
                     onClick={() => setState((s) => ({ ...s, reason: r.value }))}
@@ -197,9 +194,19 @@ export default function SurveyCard() {
               <div className="mt-1 flex items-center justify-between gap-2">
                 {/* 이유 없는 부정은 서버가 거부한다 — 고르기 전에는 제출을 막는다 */}
                 <span className="text-[12.5px] text-ink-3">이유를 하나 골라주세요</span>
-                <Button variant="primary" size="md" disabled={state.reason == null} onClick={() => send(false, state.reason)}>
+                <Button variant="primary" size="md" disabled={state.reason == null || submission != null} onClick={() => send(false, state.reason)}>
                   제출
                 </Button>
+              </div>
+            </div>
+          )}
+          {saving && <p role="status" className="text-sm text-ink-2">저장 중이에요. 완료되면 다음 곡이 나와요.</p>}
+          {saveError && (
+            <div className="flex flex-col gap-2" role="alert">
+              <p className="text-sm text-ink-2">저장을 확인하지 못했어요. 고른 답은 유지돼 있어요. 다시 시도하거나 저장 확인 없이 계속 들을 수 있어요.</p>
+              <div className="flex gap-2">
+                <Button variant="primary" onClick={() => send(submission!.verdict!, submission!.reason)}>다시 시도</Button>
+                <Button onClick={close}>저장하지 않고 계속 듣기</Button>
               </div>
             </div>
           )}

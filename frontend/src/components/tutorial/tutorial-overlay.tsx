@@ -4,7 +4,7 @@ import { useCallback, useEffect, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ROUTES, STORAGE_KEYS, TUTORIAL_STEPS } from "@/constants";
 import { useCompleteTutorialMutation } from "@/hooks/mutations/use-complete-tutorial-mutation";
-import { removeStorage, writeStorage } from "@/lib/storage";
+import { removeStorage } from "@/lib/storage";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -33,7 +33,7 @@ const CARD_AT = {
 
 /**
  * 단계별 태스크(확대 · 짚어 준 별 누르기 · 주변 탐색 · 여정 세 단계)를 주고 완료되면 다음으로.
- * 마지막 단계가 끝나면 지금 내 곡(재생/선택한 곡)을 시작점으로 저장하고 메인으로 간다.
+ * 마지막 단계의 마무리 화면 또는 건너뛰기를 거쳐 연습 상태를 비우고 메인으로 간다.
  */
 export default function TutorialOverlay() {
   const stepIndex = useTutorialStore((s) => s.stepIndex);
@@ -41,7 +41,7 @@ export default function TutorialOverlay() {
   const complete = useTutorialStore((s) => s.complete);
   const skip = useTutorialStore((s) => s.skip);
   const reset = useTutorialStore((s) => s.reset);
-  const completeMutation = useCompleteTutorialMutation();
+  const { mutate: completeTutorial } = useCompleteTutorialMutation();
   /** 이 단계가 짚어 준 별. 단계가 바뀔 때마다 새로 고른다 */
   const [starId, setStarId] = useState<number | null>(null);
 
@@ -65,10 +65,12 @@ export default function TutorialOverlay() {
     removeStorage(STORAGE_KEYS.myMusicId);
     removeStorage(STORAGE_KEYS.myHome);
     removeStorage(STORAGE_KEYS.playingMusicId);
-    writeStorage(STORAGE_KEYS.tutorialDone, true);
-    completeMutation.mutate(undefined, { onSettled: () => window.location.replace(ROUTES.home) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    useTutorialStore.getState().finish();
+    // Local completion is authoritative for navigation. Server sync is best effort
+    // and uses keepalive, so a slow/offline API cannot trap the user in the outro.
+    completeTutorial();
+    window.location.replace(ROUTES.home);
+  }, [completeTutorial]);
 
   const skipTutorial = () => {
     skip();

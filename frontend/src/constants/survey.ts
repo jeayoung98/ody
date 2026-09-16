@@ -1,5 +1,5 @@
 /**
- * 설문 문항·상수 (S15P21A405-294).
+ * 설문 문항·상수 (S15P21A405-294 · 335).
  *
  * **문항을 바꾸려면 이 파일만 고친다.** 다만 `reason` 값은 백엔드
  * `explore_feedback.reason` 의 CHECK 제약과 같아야 한다 — 없는 값을 보내면 DB 가 거부한다.
@@ -10,17 +10,19 @@
  */
 import type { SurveyDefinition } from "@/types/survey";
 
-/** 이만큼 들은 뒤에야 묻는다. 못 채우고 떠난 곡은 묻지 않고 무응답 행만 보낸다 */
-export const SURVEY_MIN_LISTEN_MS = 20_000;
-
-/** 개발용 — 이 쿼리가 붙으면 청취 시간과 무관하게 즉시 띄운다 (`?survey=force`) */
-export const SURVEY_FORCE_PARAM = "survey";
-
-/** 위 강제 플래그를 탭 세션에 남겨두는 자리 */
-export const SURVEY_FORCE_KEY = "ody:survey-force";
+/**
+ * **청취 시간 조건은 없다** (S15P21A405-335 · 346).
+ *
+ * 예전에는 두 곡을 각각 20초 이상 들었을 때만 물었다(`SURVEY_MIN_LISTEN_MS`). 그 조건이
+ * 표본을 너무 줄였고 짧게 훑는 탐색에서는 아무것도 안 남았다. 지금은 **알고리즘이 제안한
+ * 간선을 밟았으면** 묻는다 — 얼마나 들었는지는 `listened_sec` 값으로만 남고 판정에 안 쓴다.
+ * 조건이 사라지면서 `?survey=force` 도 할 일이 없어져 함께 걷어냈다.
+ */
 
 /** 익명 사용자 식별자를 담는 자리. 정본이 이 키를 지정한다 */
 export const SURVEY_ANON_KEY = "ody_anon_id";
+export const SURVEY_API = { feedback: "/bff/feedback", answered: "/bff/feedback/answered" } as const;
+export const SURVEY_QUERY_KEYS = { answered: ["survey", "answered"] as const };
 
 /**
  * 평가 대상 곡에 붙는 말. **모드가 달라도 같다** — 비교 상대(`compareLabel`)는 기준곡이냐

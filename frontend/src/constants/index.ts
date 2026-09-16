@@ -4,6 +4,7 @@ export * from "./live-api-paths";
 export * from "./routes";
 export * from "./storage-keys";
 export * from "./auth";
+export * from "./test-tools";
 export * from "./features";
 export * from "./messages";
 export * from "./map";

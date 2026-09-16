@@ -7,7 +7,7 @@
     "build": "next build",
     "start": "next start",
     "lint": "eslint",
-    "test": "tsc --noEmit"
+    "test": "tsc --noEmit && node --require ./tests/register.cjs --test tests/*.test.cjs"
   },
   "dependencies": {
     "@tanstack/react-query": "^5.102.8",

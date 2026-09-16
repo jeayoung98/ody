@@ -46,7 +46,7 @@ import catalog_rules as S5  # noqa: E402  (S5 행 단위 제외 규칙을 단건
 from manifest_rows import FP_KEY_COLUMNS, load_cohort, load_fingerprints  # noqa: E402
 
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
-TEXT_COLUMNS = {"mbid", "title", "artist", "album", "youtube_url"}
+TEXT_COLUMNS = {"mbid", "title", "artist", "album", "youtube_url", "album_mbid"}
 BPM_INDEX = KC.KEPT.index("rhythm.bpm")
 
 

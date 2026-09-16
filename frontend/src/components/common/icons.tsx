@@ -113,3 +113,16 @@ export const HelpIcon = ({ size = 17, ...p }: P) => (
     <circle cx="12" cy="17" r=".8" fill="currentColor" stroke="none" />
   </svg>
 );
+
+/**
+ * 신고 — 깃발. 곡이 음원이 아닐 때 알리는 자리에 쓴다 (S15P21A405-378).
+ *
+ * 경고 삼각형(⚠)을 쓰지 않았다. 그건 "이 화면에 문제가 있다" 는 신호라, 사용자가 **스스로
+ * 누르는 입구**에 놓으면 앱이 고장 난 것처럼 읽힌다. 깃발은 "여기 표시해 둔다" 쪽이다.
+ */
+export const FlagIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M5 21V4" />
+    <path d="M5 4h11l-2.2 3.6L16 11H5" />
+  </svg>
+);

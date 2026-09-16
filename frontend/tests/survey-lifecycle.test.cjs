@@ -343,3 +343,37 @@ test("changing predecessor at the same rank cannot overwrite a different backend
   assert.notEqual(skipped.edge.target.prevMusicId, adjacent.edge.target.prevMusicId);
   assert.notEqual(skipped.edge.target.sessionId, adjacent.edge.target.sessionId);
 });
+
+/* 기준곡 먼저 들려주기 (S15P21A405-371) */
+
+test("hearing a neighbor before its anchor plays the anchor instead", async () => {
+  const nearby = { kind: "nearby", centerMusicId: 1 };
+  // 기준곡 1을 한 번도 안 들은 채 이웃 2를 누른다
+  p().playSingle(2, nearby);
+  await flush();
+  assert.equal(p().currentMusicId, 1, "이웃이 아니라 기준곡이 걸려야 한다");
+});
+
+test("after the anchor is heard, neighbors play as asked", async () => {
+  const nearby = { kind: "nearby", centerMusicId: 1 };
+  await play(1, nearby);
+  p().playSingle(2, nearby);
+  await flush();
+  assert.equal(p().currentMusicId, 2);
+});
+
+test("a just-heard song counts as its own anchor", async () => {
+  // 4를 듣고 그 주변을 연다 — 자취는 비어 있어도 귀에는 방금 남아 있다
+  await play(4, { kind: "nearby", centerMusicId: 4 });
+  p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
+  await flush();
+  assert.equal(p().currentMusicId, 5, "방금 들은 곡을 다시 틀어선 안 된다");
+});
+
+test("an unplayable anchor does not block its neighbors", async () => {
+  const nearby = { kind: "nearby", centerMusicId: 1 };
+  s().markUnplayable(1);
+  p().playSingle(2, nearby);
+  await flush();
+  assert.equal(p().currentMusicId, 2, "들을 수 없는 곡을 들으라고 하면 거기서 막힌다");
+});

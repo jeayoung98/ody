@@ -1,13 +1,16 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+// 설문 전용 상수는 배럴(@/constants)에 없다 — 설문을 폴더째 지울 때 걸리지 않게 하려는 것이다
+import { ANCHOR_FIRST_NOTICE } from "@/constants/survey";
 import { GENRE_NAMES } from "@/constants/map";
 import { api } from "@/lib/api";
 import { subscribePlayback } from "@/lib/playback-events";
-import { useBlockingStore } from "@/stores/use-blocking-store";
+import { useBlockingStore, type PlaybackIntent } from "@/stores/use-blocking-store";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import type { JourneyRoute, NearbyResponse } from "@/types";
 import type { Exploration } from "./listening-flow";
 
@@ -95,7 +98,29 @@ export function connectSurveyPlayback(client: QueryClient): () => void {
     });
   });
 
-  const gate = (resume: () => void) => {
+  const gate = (resume: () => void, intent?: PlaybackIntent) => {
+    /**
+     * **기준곡을 먼저 들려준다** (S15P21A405-371).
+     *
+     * 주변 탐색 설문은 기준곡과 견줘 묻기 때문에 그 소리를 들어본 적이 없으면 물을 수가 없다
+     * (S15P21A405-335 결정 1). 그런데 화면은 그 순서를 알려주지 않아서, 사용자는 이웃 별부터
+     * 눌러보고 설문은 한 건도 안 뜬다 — 조용히 아무 일도 안 일어나니 이유를 알 길이 없다.
+     *
+     * 그래서 **막기만 하지 않고 기준곡을 대신 튼다.** 하라는 말만 하고 사용자가 알아서 찾게
+     * 두면 또 못 찾는다. 기준곡을 들은 뒤에는 이 갈래를 지나가지 않는다.
+     *
+     * 기준곡이 재생 불가면 비켜 준다 — 들을 수 없는 곡을 들으라고 하면 거기서 막힌다.
+     */
+    if (intent?.context?.kind === "nearby") {
+      const anchor = intent.context.centerMusicId;
+      const s = survey.getState();
+      if (intent.musicId !== anchor && !s.hasHeard(anchor) && !s.unplayable.has(anchor)) {
+        useToastStore.getState().show(ANCHOR_FIRST_NOTICE);
+        usePlayerStore.getState().playSingle(anchor, intent.context);
+        return true;
+      }
+    }
+
     const held = survey.getState().gate(() => {
       blocking.getState().setBusy(false);
       resume();

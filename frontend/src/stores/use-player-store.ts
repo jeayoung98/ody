@@ -59,7 +59,7 @@ export const usePlayerStore = create<PlayerState>()(
       runPlaybackTransition(() => {
         if (map.constellationMusicIds.length && !map.constellationMusicIds.includes(musicId)) useMapStore.getState().clearConstellation();
         set({ currentMusicId: musicId, isPlaying: true, context, queue, queueIndex, playSeq: get().playSeq + 1 }, false, "playSingle");
-      });
+      }, { musicId, context });
     },
     playQueue: (context, musicIds, startIndex = 0) => {
       if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= musicIds.length) return;
@@ -67,7 +67,7 @@ export const usePlayerStore = create<PlayerState>()(
       runPlaybackTransition(() => set({
         context, queue, queueIndex: startIndex, currentMusicId: queue[startIndex],
         isPlaying: true, playSeq: get().playSeq + 1,
-      }, false, "playQueue"));
+      }, false, "playQueue"), { musicId: queue[startIndex], context });
     },
     detachContext: () => set({ context: { kind: "single" }, queue: [], queueIndex: 0 }, false, "detachContext"),
     toggle: () => {

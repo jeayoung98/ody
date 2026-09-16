@@ -24,6 +24,8 @@ interface SurveyState {
   hear: (musicId: number, source: Exploration | null) => void;
   markUnplayable: (musicId: number) => void;
   setResolving: (resolving: boolean) => void;
+  /** 이 곡에서 실제로 소리가 난 적이 있나. 재생 요청이 아니라 확인된 청취만 센다 */
+  hasHeard: (musicId: number) => boolean;
   gate: (resume: () => void) => boolean;
   close: () => void;
   loadAnswered: (keys: readonly string[]) => void;
@@ -73,6 +75,16 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
   },
   markUnplayable: (musicId) => set((s) => ({ unplayable: new Set(s.unplayable).add(musicId) })),
   setResolving: (resolving) => set({ resolving }),
+  /**
+   * **직전에 들은 곡도 들은 것으로 센다.** 그 곡의 주변을 막 연 참이면 아직 이 탐색의 자취
+   * (`flow`)에는 없지만, 사용자 귀에는 방금 남아 있다 — 369 가 "방금 들은 곡은 새 탐색의
+   * 출발 근거로 쓸 수 있다" 로 정해 둔 것과 같은 자리다. 여기서 빠뜨리면 방금 들은 곡을
+   * 다시 틀어 주는 꼴이 된다.
+   */
+  hasHeard: (musicId) => {
+    const s = get();
+    return s.flow?.played.has(musicId) === true || s.lastAudible === musicId;
+  },
   gate: (resume) => {
     const s = get();
     // First intent wins. Late ended/next reports cannot retarget an open dialog.

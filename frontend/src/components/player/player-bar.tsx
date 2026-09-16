@@ -91,7 +91,7 @@ export default function PlayerBar() {
       {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
       <LocateButton />
       <span
-        className="relative h-9 w-9 shrink-0 overflow-hidden rounded-[9px]"
+        className="relative h-9 w-9 shrink-0 overflow-hidden rounded-[11px]"
         style={{ background: rgb ? `linear-gradient(140deg,${rgba(rgb, 0.5)},#13102a)` : "linear-gradient(140deg,#12203c,#1b1330)" }}
       >
         <i className="grad-bg absolute inset-0 opacity-55 [mask:radial-gradient(circle_at_50%_50%,#000_30%,transparent_72%)]" />

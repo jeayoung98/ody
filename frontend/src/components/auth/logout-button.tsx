@@ -14,7 +14,7 @@ export default function LogoutButton() {
       type="button"
       disabled={logout.isPending}
       onClick={() => logout.mutate(undefined, { onSettled: () => router.replace(ROUTES.login) })}
-      className="w-full rounded-[10px] border border-line px-3 py-2.5 text-[12px] text-ink-2 transition-colors hover:border-line-2 hover:text-ink disabled:opacity-50"
+      className="w-full rounded-[13px] border border-line px-3 py-2.5 text-[12px] text-ink-2 transition-colors hover:border-line-2 hover:text-ink disabled:opacity-50"
     >
       {logout.isPending ? "로그아웃 중…" : "로그아웃"}
     </button>

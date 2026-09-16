@@ -17,7 +17,7 @@ export default function AuthField({ label, hint, error, trailing, ...input }: Au
     <label className="block">
       <span className="mb-1.5 block text-[11.5px] font-medium text-ink-2">{label}</span>
       <span
-        className={`flex items-center gap-2 rounded-[10px] border bg-white/[.03] px-3.5 py-3 transition-colors focus-within:bg-white/[.05] ${
+        className={`flex items-center gap-2 rounded-[13px] border bg-white/[.03] px-3.5 py-3 transition-colors focus-within:bg-white/[.05] ${
           error ? "border-bad/60" : "border-line focus-within:border-teal/60"
         }`}
       >

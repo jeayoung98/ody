@@ -114,7 +114,7 @@ export default function MinimapCanvas() {
 
   return (
     <div
-      className="relative h-24 cursor-crosshair overflow-hidden rounded-[10px] border border-white/[.075] bg-[#050810]"
+      className="relative h-24 cursor-crosshair overflow-hidden rounded-[13px] border border-white/[.075] bg-[#050810]"
       onPointerDown={(e) => {
         const eng = getMapEngine();
         if (!eng || !eng.N) return;

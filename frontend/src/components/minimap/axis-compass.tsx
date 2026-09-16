@@ -17,7 +17,7 @@ export default function AxisCompass() {
   const faintY = !ax.y[0];
   const cl = "absolute text-[9.5px] leading-[1.3] text-ink-2 [&_b]:font-medium [&_b]:text-ink";
   return (
-    <div className="relative mt-px h-[106px] rounded-[10px] border border-white/[.055] bg-gradient-to-b from-white/[.02] to-transparent">
+    <div className="relative mt-px h-[106px] rounded-[13px] border border-white/[.055] bg-gradient-to-b from-white/[.02] to-transparent">
       <span className="absolute top-1/2 right-[10%] left-[10%] h-px bg-white/[.11]" />
       <span className="absolute top-[12%] bottom-[12%] left-1/2 w-px bg-white/[.11]" />
       <span className="absolute top-1/2 left-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-pill bg-teal shadow-[0_0_12px_#4fe3ce]" />

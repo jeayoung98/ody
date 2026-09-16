@@ -19,7 +19,7 @@ export default function SongRelatedPlaylists({ items }: { items: MusicDetail["re
             onClick={() => openPlaylist(p.id)}
             className="flex w-full items-center gap-2.5 rounded-box-sm border border-transparent px-[9px] py-2 text-left text-sm transition-colors hover:border-line hover:bg-white/[.055]"
           >
-            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[7px] text-xs shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]" style={{ background: "linear-gradient(140deg,#12203c,#1b1330)" }}>
+            <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] text-xs shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]" style={{ background: "linear-gradient(140deg,#12203c,#1b1330)" }}>
               ♪
             </span>
             <span className="min-w-0 flex-1 truncate">{p.playlistName}</span>

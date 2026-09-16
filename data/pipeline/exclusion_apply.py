@@ -82,8 +82,10 @@ def scan_feature_columns(meta, columns):
             if f.endswith(".parquet"):
                 t = pd.read_parquet(os.path.join(WORK, d_, f), columns=["mbid"] + list(columns))
                 ii = pos.reindex(t["mbid"].astype(str).str.lower()).to_numpy()
+                keep = np.isfinite(ii)              # 특징 파일에는 이 번들에 없는 곡도 있다
+                idx = ii[keep].astype(np.int64)
                 for c in columns:
-                    out[c][ii] = t[c]
+                    out[c][idx] = t[c].to_numpy()[keep]
     return out
 
 

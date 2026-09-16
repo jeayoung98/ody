@@ -88,7 +88,7 @@ def test_sql_fills_cell_counts():
     """칸별 곡 수를 채워야 FE 가 점 크기와 LIMIT 을 판단한다."""
     sql = io.open(SQL_FILE, encoding="utf-8").read()
     assert "cnt      integer" in sql
-    assert "UPDATE map_sample s SET cnt = c.n" in sql
+    assert 'UPDATE :"sample_tbl" s SET cnt = c.n' in sql
 
 
 def test_sql_uses_same_cell_size():
@@ -102,11 +102,16 @@ def test_sql_uses_same_cell_size():
 def test_sql_is_idempotent_and_grants_read_role():
     """두 번 돌려도 같아야 한다. 읽기 전용 롤에도 권한을 준다."""
     sql = io.open(SQL_FILE, encoding="utf-8").read()
-    assert "CREATE INDEX IF NOT EXISTS music_l1_gist" in sql
-    assert "CREATE INDEX IF NOT EXISTS music_l2_gist" in sql
-    assert "CREATE TABLE IF NOT EXISTS map_sample" in sql
-    assert "DELETE FROM map_sample WHERE layer = 1;" in sql, "재적재 전에 지운다"
-    assert "GRANT SELECT ON map_sample TO ody_read;" in sql
+    # 테이블·인덱스 이름은 psql 변수다(S15P21A405-381). 기본값은 music·map_sample·music_l*_gist 이고
+    # 재적재본은 -v music_tbl=music_v2 -v sample_tbl=map_sample_v2 로 준다.
+    assert 'CREATE INDEX IF NOT EXISTS :"l1_idx" ON :"music_tbl"' in sql
+    assert 'CREATE INDEX IF NOT EXISTS :"l2_idx" ON :"music_tbl"' in sql
+    assert 'CREATE TABLE IF NOT EXISTS :"sample_tbl"' in sql
+    assert 'DELETE FROM :"sample_tbl" WHERE layer = 1;' in sql, "재적재 전에 지운다"
+    assert 'GRANT SELECT ON :"sample_tbl" TO ody_read;' in sql
+    for name, default in (("music_tbl", "music"), ("sample_tbl", "map_sample"),
+                          ("l1_idx", "music_l1_gist"), ("l2_idx", "music_l2_gist")):
+        assert r"\set {} {}".format(name, default) in sql, "변수 기본값이 있어야 기존 절차가 그대로 돈다"
     assert "max_parallel_maintenance_workers = 0" in sql, "컨테이너 /dev/shm 64MB 제약"
 
 

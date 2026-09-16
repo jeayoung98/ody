@@ -177,14 +177,12 @@
       "params": {
         "normalize": "lower(trim(title_raw))",
         "patterns": {
-          "tone": "(^|[^a-z])(sine|square|saw|triangle)\\s*(wave|tone|sweep)",
           "test_tone": "(^|[^a-z])(test\\s*(tone|signal|track|record)|calibration|kalibrierung)",
           "frequency": "^[0-9]+(\\.[0-9]+)?\\s*(hz|khz)([^a-z]|$)",
-          "noise": "(^|[^a-z])(white|pink|brown|grey|gray)\\s*noise([^a-z]|$)",
           "sweep": "(^|[^a-z])(frequency|freq)\\s*sweep"
         }
       },
-      "basis": "캘리브레이션·측정 신호는 음악이 아니고 좌표가 극단으로 튄다. 목표 적중 206(2026-09-16 이전 세션 실측)."
+      "basis": "캘리브레이션·측정 신호는 음악이 아니고 좌표가 극단으로 튄다. 2026-09-16 실측 적중 211(목표 206). sine/square wave 와 white/pink noise 패턴은 뺐다 — Disclosure·The Monochrome Set 의 White Noise, HKE 의 Sine Wave 처럼 실제 곡을 집어 693까지 늘어났다."
     },
     {
       "id": "R12_spoken_nonmusic",
@@ -215,7 +213,7 @@
           "narrator": "(^|[^a-z])(read\\s*by|narrated\\s*by|gelesen\\s*von|l[uú]\\s*by)"
         }
       },
-      "basis": "낭독물은 음악 좌표계에 들어가면 이웃 품질을 해친다. 태그(audiobook)와 제목·아티스트 표기를 함께 본다. 목표 적중 7,732."
+      "basis": "낭독물은 음악 좌표계에 들어가면 이웃 품질을 해친다. 태그(audiobook)와 제목(chapter·Hörbuch)·아티스트(read by) 표기를 함께 본다. 2026-09-16 실측 적중 8,948(목표 7,732). 차이 1,216 은 프랑스어 chapitre(535)와 독일어 gelesen von(1,418) 낭독자 표기를 남겨 둔 몫이다 — 표본이 전부 진짜 낭독물이라 좁히지 않았다. audiobook 태그 적중이 0 인 것은 R2 가 이미 그 태그를 잘라 base 에 없기 때문이다."
     },
     {
       "id": "R15_static",
@@ -228,10 +226,10 @@
         ],
         "onset_feature": "rhythm.onset_rate",
         "hard_bottom_pct": 1.0,
-        "soft_bottom_pct": 2.0,
+        "soft_bottom_pct": 5.0,
         "onset_bottom_pct": 5.0
       },
-      "basis": "드론·단일 톤·정지성 녹음. 세 변동성 특징이 모두 하위 1% 면 무조건, 모두 하위 2% 이고 onset_rate 도 하위 5% 면 제외. 목표 적중 2,933 + 15,178."
+      "basis": "드론·단일 톤·정지성 녹음. 세 변동성 특징이 모두 하위 1% 면 무조건, 모두 하위 5% 이고 onset_rate 도 하위 5% 면 제외. 2026-09-16 실측(base 6,624,399): hard 2,935 · soft 15,183 · 합집합 16,276. 목표표의 2,933 + 15,178 은 두 분기를 겹침 없이 더한 표기다."
     },
     {
       "id": "R16_title_nonmusic",
@@ -250,7 +248,6 @@
           "commentary",
           "monologue",
           "dialogue",
-          "poem",
           "poetry",
           "speech",
           "sermon",
@@ -284,14 +281,13 @@
           "podcast",
           "episode",
           "radio show",
-          "test",
           "silence",
           "applause",
           "crowd noise"
         ],
         "word_boundary": true
       },
-      "basis": "제목이 비음악임을 직접 말하는 행. R10 이 '제목 전체가 잡음'인 경우만 잡는 것과 달리 제목 안 단어를 본다. 목표 적중 74,136 · 신규 35,195."
+      "basis": "제목이 비음악임을 직접 말하는 행. R10 이 제목 전체를 볼 때 이 규칙은 제목 안 단어를 본다(단어 경계). 2026-09-16 실측 적중 74,256(목표 74,136). test·poem 은 뺐다 — Rorschach Test (DnB Remix), Coral Island: IV. Poem II 같은 실제 곡을 집어 2,622곡이 더 잘렸다. poetry 는 남긴다."
     },
     {
       "id": "R17_artist_unknown",

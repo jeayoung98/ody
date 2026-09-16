@@ -1,0 +1,1742 @@
+{
+  "n_songs": 6624399,
+  "rules_hash": "260c79d11e91d2b2",
+  "total_excluded": 1926555,
+  "total_share": 0.29082713767694246,
+  "prev_total_share": null,
+  "by_depth1_prev": null,
+  "stop_threshold": 0.4,
+  "stopped": false,
+  "per_rule": {
+    "R1_length": {
+      "hits": 1095960,
+      "share": 0.16544293301173435,
+      "unique_hits": 881687,
+      "sample": [
+        {
+          "artist": "Stephen Marley",
+          "title": "Inna Di Red (Feat. Ben Harper)",
+          "length_s": 381.5,
+          "sr": 44100,
+          "codec": "alac"
+        },
+        {
+          "artist": "Autechre",
+          "title": "Cavity Job",
+          "length_s": 370.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Cincinnati Pops \"Big Band\" Orchestra",
+          "title": "When the Saints Go Marchin' In",
+          "length_s": 573.4,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "The Slow Voyage",
+          "title": "Exotic Mirror",
+          "length_s": 497.6,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Edward Ka-Spel",
+          "title": "Inferno",
+          "length_s": 534.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Malcolm Strachan",
+          "title": "Uncle Bobby's Last Orders",
+          "length_s": 404.0,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Robert Fripp",
+          "title": "Time Stands Still",
+          "length_s": 561.5,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "James McMurtry & The Heartless Bastards",
+          "title": "No More Buffalo",
+          "length_s": 412.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Ahmad Jamal",
+          "title": "Angel Eyes",
+          "length_s": 410.9,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "All Them Witches",
+          "title": "Born Under a Bad Sign",
+          "length_s": 578.9,
+          "sr": 44100,
+          "codec": "flac"
+        }
+      ]
+    },
+    "R2_nonmusic": {
+      "hits": 0,
+      "share": 0.0,
+      "unique_hits": 0,
+      "sample": []
+    },
+    "R3_no_key": {
+      "hits": 0,
+      "share": 0.0,
+      "unique_hits": 0,
+      "sample": []
+    },
+    "R4_cohort": {
+      "hits": 0,
+      "share": 0.0,
+      "unique_hits": 0,
+      "sample": []
+    },
+    "R5_dup_canonical": {
+      "hits": 471469,
+      "share": 0.07117158854712707,
+      "unique_hits": 369136,
+      "sample": [
+        {
+          "artist": "Pavement",
+          "title": "Kris Kraft",
+          "length_s": 158.6,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "moe.",
+          "title": "Okayalright",
+          "length_s": 261.7,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "God Dethroned",
+          "title": "serpent king",
+          "length_s": 181.3,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "The Legendary Pink Dots",
+          "title": "Defeated",
+          "length_s": 123.7,
+          "sr": 44100,
+          "codec": "aac"
+        },
+        {
+          "artist": "W.A.S.P.",
+          "title": "Inside the Electric Circus",
+          "length_s": 271.5,
+          "sr": 44100,
+          "codec": "alac"
+        },
+        {
+          "artist": "Vangelis",
+          "title": "Longing",
+          "length_s": 225.4,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Porcupine Tree",
+          "title": "Degree Zero of Liberty",
+          "length_s": 105.1,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Project One",
+          "title": "Smokin'",
+          "length_s": 313.6,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Ismael Quintana",
+          "title": "Oyelo Que Te Conviene",
+          "length_s": 305.8,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Memphis Slim",
+          "title": "I Believe I'll Settle Down",
+          "length_s": 185.2,
+          "sr": 48000,
+          "codec": "aac"
+        }
+      ]
+    },
+    "R6_dup_version": {
+      "hits": 392438,
+      "share": 0.05924129872008012,
+      "unique_hits": 310728,
+      "sample": [
+        {
+          "artist": "Choirboys",
+          "title": "Never Gonna Die",
+          "length_s": 242.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Jean Sibelius",
+          "title": "Tapiola, Op. 112",
+          "length_s": 1076.0,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Brandy",
+          "title": "I Wanna Be Down",
+          "length_s": 242.3,
+          "sr": 44100,
+          "codec": "alac"
+        },
+        {
+          "artist": "Tears for Fears",
+          "title": "Everybody Wants to Rule the World (extended mix)",
+          "length_s": 281.9,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Nancy Wilson",
+          "title": "Tonight May Have to Last Me All My Life",
+          "length_s": 171.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Uriah Heep",
+          "title": "Sympathy",
+          "length_s": 283.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Charlie Parker",
+          "title": "La cucaracha",
+          "length_s": 163.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Kyau & Albert",
+          "title": "Always a Fool (club mix)",
+          "length_s": 465.2,
+          "sr": 48000,
+          "codec": "alac"
+        },
+        {
+          "artist": "Jimmy Jones",
+          "title": "Good Timin'",
+          "length_s": 121.8,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Gene Vincent",
+          "title": "Up a Lazy River",
+          "length_s": 140.8,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R7_samplerate": {
+      "hits": 12504,
+      "share": 0.0018875674608368246,
+      "unique_hits": 7400,
+      "sample": [
+        {
+          "artist": "Harry Allen with Bill Charlap Trio",
+          "title": "Mood Indigo",
+          "length_s": 302.3,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Ricardo Lemvo & Makina Loca",
+          "title": "Mujer Divina",
+          "length_s": 237.6,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Little Tony",
+          "title": "Cuore matto",
+          "length_s": 172.4,
+          "sr": 32000,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Rita Lee",
+          "title": "Agora É Moda",
+          "length_s": 255.1,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Cole Porter",
+          "title": "Tom, Dick or Harry",
+          "length_s": 235.3,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "H.G. Wells",
+          "title": "Chapter 4",
+          "length_s": 1549.4,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "片岡真央, 朝日温子 & 戸高一生",
+          "title": "Downtown by Night: 1 (Snowy)",
+          "length_s": 46.1,
+          "sr": 32728,
+          "codec": "flac"
+        },
+        {
+          "artist": "Rita Reys & Bengt Hallberg",
+          "title": "After You've Gone",
+          "length_s": 176.6,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Woody Guthrie",
+          "title": "Stackolee",
+          "length_s": 166.7,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Claude François",
+          "title": "Disco Météo",
+          "length_s": 210.2,
+          "sr": 22050,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R8_silence": {
+      "hits": 6625,
+      "share": 0.0010000907252114494,
+      "unique_hits": 2474,
+      "sample": [
+        {
+          "artist": "Gergely Vajda",
+          "title": "Lightshadow-Trembling",
+          "length_s": 355.6,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Gustav Mahler",
+          "title": "Symphony no. 9 in D: 4. Adagio. Sehr langsam und noch zurückhaltend",
+          "length_s": 1614.1,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Frédéric Chopin",
+          "title": "Piano Sonata No. 3 in B minor, Op. 58: III. Largo",
+          "length_s": 850.3,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Angela Gheorghiu",
+          "title": "La bohème: Sì. Mi chiamano Mimì",
+          "length_s": 288.5,
+          "sr": 48000,
+          "codec": "flac"
+        },
+        {
+          "artist": "戸島壮太郎",
+          "title": "S.E. COLLECTION",
+          "length_s": 179.5,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Thurídur Jónsdóttir",
+          "title": "Flutter",
+          "length_s": 1251.2,
+          "sr": 192000,
+          "codec": "flac"
+        },
+        {
+          "artist": "Claude Debussy",
+          "title": "Préludes, Livre I: Voiles",
+          "length_s": 220.4,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Sergei Rachmaninov",
+          "title": "All-Night Vigil, op. 37: XI. Velichit dusha moya Gospoda",
+          "length_s": 383.2,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Keith Rowe / John Tilbury",
+          "title": "Oxleay",
+          "length_s": 1049.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Ludwig van Beethoven",
+          "title": "Piano Sonata in B-flat major \"Hammerklavier\", op. 106: Adagio sostenut",
+          "length_s": 1027.6,
+          "sr": 44100,
+          "codec": "flac"
+        }
+      ]
+    },
+    "R9_corrupt": {
+      "hits": 3756,
+      "share": 0.0005669948322859175,
+      "unique_hits": 2029,
+      "sample": [
+        {
+          "artist": "overscape",
+          "title": "underground stories",
+          "length_s": 236.8,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Kassel Jaeger",
+          "title": "Lineament",
+          "length_s": 458.0,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Noto",
+          "title": "4'03''",
+          "length_s": 242.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Toshimaru Nakamura",
+          "title": "Semi",
+          "length_s": 416.7,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Exos",
+          "title": "At",
+          "length_s": 295.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Philippe Guez & Patrick Maarek",
+          "title": "Lost Emperor",
+          "length_s": 67.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Amhain",
+          "title": "Sm5r",
+          "length_s": 1215.8,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Spykes",
+          "title": "[untitled]",
+          "length_s": 623.8,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Bermuda Hay",
+          "title": "天気雨",
+          "length_s": 242.4,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "volhnn",
+          "title": "I",
+          "length_s": 1207.5,
+          "sr": 44100,
+          "codec": "flac"
+        }
+      ]
+    },
+    "R10_title_noise": {
+      "hits": 33645,
+      "share": 0.005078951313168183,
+      "unique_hits": 5919,
+      "sample": [
+        {
+          "artist": "Bruce Springsteen & The E Street Band",
+          "title": "Intro (Live)",
+          "length_s": 74.1,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "sonnov",
+          "title": "untitled",
+          "length_s": 1298.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Sunburned Hand of the Man",
+          "title": "Untitled 3",
+          "length_s": 597.9,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Megadeth",
+          "title": "Intro",
+          "length_s": 121.3,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "test",
+          "title": "",
+          "length_s": 305.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Ron Carter",
+          "title": "",
+          "length_s": 204.0,
+          "sr": 44100,
+          "codec": "alac"
+        },
+        {
+          "artist": "Infestment",
+          "title": "Intro",
+          "length_s": 37.6,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Penthouse Suite",
+          "title": "Intro",
+          "length_s": 120.6,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "F.U.K.T",
+          "title": "Outro",
+          "length_s": 41.9,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "sonnov",
+          "title": "untitled",
+          "length_s": 571.4,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R11_test_signal": {
+      "hits": 693,
+      "share": 0.00010461326378438256,
+      "unique_hits": 386,
+      "sample": [
+        {
+          "artist": "Wizard Magic",
+          "title": "white noise machine",
+          "length_s": 287.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Wastëland Riders",
+          "title": "2410 Hz",
+          "length_s": 90.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "The Monochrome Set",
+          "title": "White Noise",
+          "length_s": 185.7,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Stereophile",
+          "title": "Music Articulation Test Tone",
+          "length_s": 79.5,
+          "sr": 44100,
+          "codec": "alac"
+        },
+        {
+          "artist": "Disclosure feat. AlunaGeorge",
+          "title": "White Noise",
+          "length_s": 215.6,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "John Tejada",
+          "title": "Calibration",
+          "length_s": 414.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "HKE",
+          "title": "Sine Wave",
+          "length_s": 183.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "The Dig",
+          "title": "Clouds In The White Noise",
+          "length_s": 226.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "The Brew",
+          "title": "Pink Noise King",
+          "length_s": 328.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Markus Schulz",
+          "title": "65.4hz (extended mix)",
+          "length_s": 484.2,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R12_spoken_nonmusic": {
+      "hits": 23008,
+      "share": 0.00347322074047774,
+      "unique_hits": 16373,
+      "sample": [
+        {
+          "artist": "Homer & Jethro",
+          "title": "The Battle of Kookamonga",
+          "length_s": 160.0,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Strong Bad",
+          "title": "The System is Down",
+          "length_s": 106.6,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "The 12th Man",
+          "title": "The Cab Ride",
+          "length_s": 154.0,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Desdamona",
+          "title": "Get By",
+          "length_s": 260.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Paula Poundstone",
+          "title": "Airport Security",
+          "length_s": 62.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "David Mitchell & Robert Webb",
+          "title": "Friends of Saddam Hussein",
+          "length_s": 201.3,
+          "sr": 32000,
+          "codec": "mp3"
+        },
+        {
+          "artist": "ANT",
+          "title": "Only The Pretty Ones",
+          "length_s": 105.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "La Touche",
+          "title": "Neicie's Strut",
+          "length_s": 140.8,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "The 12th Man",
+          "title": "12th Man Again! 06",
+          "length_s": 149.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "U2",
+          "title": "I Shall Be Released (Feat. Peter Gabriel, Sting, Bryan Adams & Lou Ree",
+          "length_s": 466.3,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R13_audiobook": {
+      "hits": 8949,
+      "share": 0.0013509150037610959,
+      "unique_hits": 5358,
+      "sample": [
+        {
+          "artist": "The Open University",
+          "title": "Block 2, Chapter 2, Activity 39: Tuning and Temperament",
+          "length_s": 1194.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Henry James",
+          "title": "The Golden, Bowl (Unabridged): 'You say your husband's ill?'",
+          "length_s": 192.7,
+          "sr": 44100,
+          "codec": "aac"
+        },
+        {
+          "artist": "Louis-Ferdinand Céline lu par Denis Podalydès",
+          "title": "Chapitre 4 : Une jeune fille, un châle, un tablier blanc, sortaient de",
+          "length_s": 277.8,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "David Michaelis read by Holter Graham",
+          "title": "Part 17",
+          "length_s": 511.0,
+          "sr": 22050,
+          "codec": "mp3"
+        },
+        {
+          "artist": "J.K. Rowling",
+          "title": "Kapitel 08-04: Der Meister der Zaubertränke",
+          "length_s": 153.5,
+          "sr": 32000,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Fidel Castro read by Todd McLaren & Patrick Lawlor",
+          "title": "Part 223",
+          "length_s": 154.0,
+          "sr": 44100,
+          "codec": "aac"
+        },
+        {
+          "artist": "Fidel Castro read by Todd McLaren & Patrick Lawlor",
+          "title": "Part 265",
+          "length_s": 180.2,
+          "sr": 44100,
+          "codec": "aac"
+        },
+        {
+          "artist": "Fidel Castro read by Todd McLaren & Patrick Lawlor",
+          "title": "Part 36",
+          "length_s": 167.0,
+          "sr": 44100,
+          "codec": "aac"
+        },
+        {
+          "artist": "Victor Hugo, Philippe Sollier",
+          "title": "Partie 4 - L'idylle rue Plumet et l'épopée rue Saint-Denis - Chapitre ",
+          "length_s": 715.7,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Maggie Stiefvater read by Will Patton",
+          "title": "Chapter 16 - The Raven Boys",
+          "length_s": 862.4,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R15_static": {
+      "hits": 5666,
+      "share": 0.0008553228753280109,
+      "unique_hits": 2871,
+      "sample": [
+        {
+          "artist": "Lord Redstone, Erdstall, Spectral Kingdom, Vindkal",
+          "title": "Lord Redstone - Mushrooms",
+          "length_s": 219.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Jeremy Young",
+          "title": "Filament I",
+          "length_s": 1740.3,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Morton Feldman",
+          "title": "Three Voices: Slow Waltz",
+          "length_s": 307.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Robert Etoll",
+          "title": "Haunting Drone A",
+          "length_s": 48.5,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Airwalking",
+          "title": "Westminster Tones #17",
+          "length_s": 48.0,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Tomoo Kosugi",
+          "title": "Pool",
+          "length_s": 232.0,
+          "sr": 48000,
+          "codec": "flac"
+        },
+        {
+          "artist": "Watain",
+          "title": "Dead but Dreaming",
+          "length_s": 124.9,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Harry Oldfield",
+          "title": "Stick quartz and Madagascar quartz interference",
+          "length_s": 157.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Tom Hall",
+          "title": "Parallel-s",
+          "length_s": 346.3,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Almøst Silent",
+          "title": "Gap 1",
+          "length_s": 60.2,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R16_title_nonmusic": {
+      "hits": 76857,
+      "share": 0.011602109112086999,
+      "unique_hits": 33452,
+      "sample": [
+        {
+          "artist": "Sofa Talk",
+          "title": "Tomi Chair's Feeling of Nature Intro",
+          "length_s": 159.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Loreena McKennitt",
+          "title": "Band Intro",
+          "length_s": 185.6,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Analog Mechanics",
+          "title": "Intro (Instrumental)",
+          "length_s": 111.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "The Metaphysical Vs. Rosetta Stoned",
+          "title": "Rorschach Test (DnB Remix)",
+          "length_s": 226.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Bette Davis",
+          "title": "All About Eve Dialogue",
+          "length_s": 216.2,
+          "sr": 44100,
+          "codec": "alac"
+        },
+        {
+          "artist": "Porcupine Tree",
+          "title": "Intro",
+          "length_s": 128.4,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Welter Records",
+          "title": "Aies - Untitled 1",
+          "length_s": 658.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "武満徹",
+          "title": "Coral Island: IV. Poem II",
+          "length_s": 235.9,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Archie Shepp, Damu the Fudgemunk & Raw Poetic",
+          "title": "Valuable Lesson",
+          "length_s": 60.0,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "NEUPINK",
+          "title": "YAAAA (INTRO)",
+          "length_s": 34.4,
+          "sr": 44100,
+          "codec": "mp3"
+        }
+      ]
+    },
+    "R17_artist_unknown": {
+      "hits": 62341,
+      "share": 0.009410815984967088,
+      "unique_hits": 46589,
+      "sample": [
+        {
+          "artist": "Various Artists",
+          "title": "Center of the Earth - Son of Gaia",
+          "length_s": 714.2,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Various Artists",
+          "title": "Corydon Singers - Duruflé: In Pardisum",
+          "length_s": 193.4,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Various Artists",
+          "title": "Bunkerkoller - The People's March",
+          "length_s": 342.5,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Various Artists",
+          "title": "Uncle Squidz - Smoking PCP in Cyberia, BRB",
+          "length_s": 210.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Various Artists",
+          "title": "Katie Caulfield - The Christmas Waltz",
+          "length_s": 158.9,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "VA",
+          "title": "Filthy Rich Preacher - fLockK",
+          "length_s": 322.1,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "VA",
+          "title": "The Triumph of Neptune: II. Hornpipe",
+          "length_s": 92.3,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "[unknown]",
+          "title": "Soul Survivor",
+          "length_s": 270.6,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Various Artists",
+          "title": "Square.HEAD - stimulated",
+          "length_s": 141.5,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "[unknown]",
+          "title": "Syamui And Jalali, Lovesong From Herat",
+          "length_s": 438.3,
+          "sr": 44100,
+          "codec": "flac"
+        }
+      ]
+    }
+  },
+  "overlap": {
+    "R1_length & R5_dup_canonical": 92274,
+    "R1_length & R6_dup_version": 77782,
+    "R1_length & R7_samplerate": 2075,
+    "R1_length & R8_silence": 3743,
+    "R1_length & R9_corrupt": 1379,
+    "R5_dup_canonical & R7_samplerate": 1938,
+    "R5_dup_canonical & R8_silence": 132,
+    "R5_dup_canonical & R9_corrupt": 212,
+    "R6_dup_version & R7_samplerate": 902,
+    "R6_dup_version & R8_silence": 727,
+    "R6_dup_version & R9_corrupt": 74,
+    "R7_samplerate & R8_silence": 5,
+    "R7_samplerate & R9_corrupt": 3,
+    "R8_silence & R9_corrupt": 23,
+    "R10_title_noise & R1_length": 11007,
+    "R10_title_noise & R5_dup_canonical": 10004,
+    "R10_title_noise & R6_dup_version": 478,
+    "R10_title_noise & R7_samplerate": 134,
+    "R10_title_noise & R8_silence": 60,
+    "R10_title_noise & R9_corrupt": 167,
+    "R10_title_noise & R12_spoken_nonmusic": 132,
+    "R10_title_noise & R13_audiobook": 50,
+    "R10_title_noise & R15_static": 298,
+    "R10_title_noise & R16_title_nonmusic": 25127,
+    "R10_title_noise & R17_artist_unknown": 611,
+    "R11_test_signal & R1_length": 193,
+    "R11_test_signal & R5_dup_canonical": 37,
+    "R11_test_signal & R6_dup_version": 51,
+    "R11_test_signal & R7_samplerate": 1,
+    "R11_test_signal & R8_silence": 1,
+    "R11_test_signal & R9_corrupt": 17,
+    "R11_test_signal & R15_static": 23,
+    "R11_test_signal & R16_title_nonmusic": 37,
+    "R11_test_signal & R17_artist_unknown": 50,
+    "R12_spoken_nonmusic & R1_length": 4208,
+    "R12_spoken_nonmusic & R5_dup_canonical": 996,
+    "R12_spoken_nonmusic & R6_dup_version": 497,
+    "R12_spoken_nonmusic & R7_samplerate": 356,
+    "R12_spoken_nonmusic & R8_silence": 19,
+    "R12_spoken_nonmusic & R9_corrupt": 12,
+    "R12_spoken_nonmusic & R13_audiobook": 467,
+    "R12_spoken_nonmusic & R15_static": 6,
+    "R12_spoken_nonmusic & R16_title_nonmusic": 513,
+    "R12_spoken_nonmusic & R17_artist_unknown": 242,
+    "R13_audiobook & R1_length": 2485,
+    "R13_audiobook & R5_dup_canonical": 315,
+    "R13_audiobook & R6_dup_version": 52,
+    "R13_audiobook & R7_samplerate": 512,
+    "R13_audiobook & R8_silence": 1,
+    "R13_audiobook & R9_corrupt": 2,
+    "R13_audiobook & R15_static": 3,
+    "R13_audiobook & R16_title_nonmusic": 42,
+    "R13_audiobook & R17_artist_unknown": 16,
+    "R15_static & R1_length": 2424,
+    "R15_static & R5_dup_canonical": 367,
+    "R15_static & R6_dup_version": 168,
+    "R15_static & R7_samplerate": 13,
+    "R15_static & R8_silence": 6,
+    "R15_static & R9_corrupt": 40,
+    "R15_static & R16_title_nonmusic": 363,
+    "R15_static & R17_artist_unknown": 69,
+    "R16_title_nonmusic & R1_length": 23557,
+    "R16_title_nonmusic & R5_dup_canonical": 11680,
+    "R16_title_nonmusic & R6_dup_version": 2382,
+    "R16_title_nonmusic & R7_samplerate": 348,
+    "R16_title_nonmusic & R8_silence": 153,
+    "R16_title_nonmusic & R9_corrupt": 238,
+    "R16_title_nonmusic & R17_artist_unknown": 1091,
+    "R17_artist_unknown & R1_length": 12919,
+    "R17_artist_unknown & R5_dup_canonical": 1436,
+    "R17_artist_unknown & R6_dup_version": 647,
+    "R17_artist_unknown & R7_samplerate": 131,
+    "R17_artist_unknown & R8_silence": 59,
+    "R17_artist_unknown & R9_corrupt": 55
+  },
+  "extra": {
+    "R5_members": 471469,
+    "R5_protected": 0,
+    "R5_fold": 471469,
+    "R5_member_dist_median": 8.27999210357666,
+    "R6_groups_multi": 208508,
+    "R6_members": 392438,
+    "R6_protected": 0,
+    "R6_fold": 392438,
+    "R8_loud_q_hard": 8.70464301406173e-05,
+    "R8_loud_q": 8.70464301406173e-05,
+    "R15_hard": 2935,
+    "R15_soft_and_slow": 4573
+  },
+  "R6_groups": [
+    {
+      "rep": {
+        "artist": "Alphawezen",
+        "title": "Electricity Drive",
+        "codec": "flac",
+        "nsub": 6
+      },
+      "members": [
+        {
+          "title": "Electricity Drive (The Lost Radio Version)",
+          "dist": 4.65,
+          "codec": "mp3",
+          "folded": true
+        },
+        {
+          "title": "Electricity Drive (The Lost Radio Version)",
+          "dist": 4.21,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Makyo",
+        "title": "Devadasi (Kif Mix)",
+        "codec": "flac",
+        "nsub": 2
+      },
+      "members": [
+        {
+          "title": "Devadasi (Sunrise Beach Mix)",
+          "dist": 26.8,
+          "codec": "mp3",
+          "folded": true
+        },
+        {
+          "title": "Devadasi (Sunrise Beach Mix)",
+          "dist": 26.8,
+          "codec": "mp3",
+          "folded": true
+        },
+        {
+          "title": "Devadasi (Mantra Mix)",
+          "dist": 27.27,
+          "codec": "vorbis",
+          "folded": true
+        },
+        {
+          "title": "Devadasi (Kif Mix)",
+          "dist": 26.55,
+          "codec": "mp3",
+          "folded": true
+        },
+        {
+          "title": "Devadasi (Kif Mix)",
+          "dist": 26.5,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Ludwig van Beethoven",
+        "title": "Piano Sonata no. 17 in D minor, op. 31 no. 2 \"The Tempest\": II. Adagio",
+        "codec": "flac",
+        "nsub": 14
+      },
+      "members": [
+        {
+          "title": "Piano Sonata no. 17 in D minor, op. 31 no. 2 \"The Tempest\": II. Adagio",
+          "dist": 5.11,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Piano Sonata No. 17 In D Minor, Op. 31 No. 2 \"The Tempest\": II. Adagio",
+          "dist": 4.28,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Piano Sonata no. 17 in D minor, op. 31 no. 2 \"The Tempest\": II. Adagio",
+          "dist": 4.77,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Piano Sonata no. 17 in D minor, op. 31 no. 2 \"The Tempest\": II. Adagio",
+          "dist": 5.82,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Midfield General",
+        "title": "Devil in Sports Casual",
+        "codec": "flac",
+        "nsub": 1
+      },
+      "members": [
+        {
+          "title": "Devil in Sports Casual",
+          "dist": 4.27,
+          "codec": "vorbis",
+          "folded": true
+        },
+        {
+          "title": "Devil In Sports Casual (Fatboy Slim's Does My Beat Look Big In This Mi",
+          "dist": 14.13,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Édith Piaf",
+        "title": "Tiens, V'là Un Marin",
+        "codec": "flac",
+        "nsub": 3
+      },
+      "members": [
+        {
+          "title": "Tiens v'là un marin",
+          "dist": 7.67,
+          "codec": "vorbis",
+          "folded": true
+        },
+        {
+          "title": "Tiens V'là Un Marin",
+          "dist": 7.38,
+          "codec": "mp3",
+          "folded": true
+        },
+        {
+          "title": "Tiens v'là un marin",
+          "dist": 8.2,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Wolfgang Amadeus Mozart",
+        "title": "Quartet for Strings No. 11 in E-flat major, K. 171 \"Quartetti Vienna\":",
+        "codec": "flac",
+        "nsub": 12
+      },
+      "members": [
+        {
+          "title": "Quartet for Strings No. 11 in E-flat major, K. 171 \"Quartetti Vienna\":",
+          "dist": 4.78,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Die Warzau",
+        "title": "Bodybag",
+        "codec": "alac",
+        "nsub": 7
+      },
+      "members": [
+        {
+          "title": "Bodybag (dub edit)",
+          "dist": 7.66,
+          "codec": "alac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "James S. Levine",
+        "title": "Sound 2 Lite",
+        "codec": "mp3",
+        "nsub": 4
+      },
+      "members": [
+        {
+          "title": "Sound 2 Lite (30 second version)",
+          "dist": 9.94,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Tillman Sillescu",
+        "title": "Drop the Bomb",
+        "codec": "mp3",
+        "nsub": 1
+      },
+      "members": [
+        {
+          "title": "Drop the Bomb (30 second version)",
+          "dist": 5.38,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Consolidated",
+        "title": "Tool and Die",
+        "codec": "flac",
+        "nsub": 12
+      },
+      "members": [
+        {
+          "title": "Tool and Die (version 1)",
+          "dist": 7.23,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Pilote",
+        "title": "Turtle",
+        "codec": "flac",
+        "nsub": 2
+      },
+      "members": [
+        {
+          "title": "Turtle",
+          "dist": 28.34,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Turtle (Bonobo mix)",
+          "dist": 29.05,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Edgar Froese",
+        "title": "Specific Gravity of Smile",
+        "codec": "flac",
+        "nsub": 3
+      },
+      "members": [
+        {
+          "title": "Specific Gravity of Smile",
+          "dist": 9.49,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Gustav Mahler",
+        "title": "Symphony no. 4 in G: III. Ruhevoll",
+        "codec": "flac",
+        "nsub": 4
+      },
+      "members": [
+        {
+          "title": "Symphony no. 4 in G: III. Ruhevoll",
+          "dist": 5.47,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Imaginary Forces",
+        "title": "Make Ends Meet",
+        "codec": "flac",
+        "nsub": 1
+      },
+      "members": [
+        {
+          "title": "Make Ends Meet (London Something version)",
+          "dist": 10.22,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Robyn Hitchcock and The Egyptians",
+        "title": "Veins of the Queen",
+        "codec": "flac",
+        "nsub": 8
+      },
+      "members": [
+        {
+          "title": "Veins of the Queen (royal mix)",
+          "dist": 4.85,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "The Dave Clark Five",
+        "title": "Look Before You Leap",
+        "codec": "flac",
+        "nsub": 8
+      },
+      "members": [
+        {
+          "title": "Look Before You Leap",
+          "dist": 7.4,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Electrocado",
+        "title": "Speedle (AMB Remix)",
+        "codec": "mp3",
+        "nsub": 1
+      },
+      "members": [
+        {
+          "title": "Speedle (CloZee Remix)",
+          "dist": 15.09,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Anne Murray",
+        "title": "Things",
+        "codec": "mp3",
+        "nsub": 3
+      },
+      "members": [
+        {
+          "title": "Things",
+          "dist": 4.33,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Jimmy Somerville",
+        "title": "Rolling",
+        "codec": "pcm_s16be",
+        "nsub": 5
+      },
+      "members": [
+        {
+          "title": "Rolling",
+          "dist": 23.95,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Neil Young",
+        "title": "The Old Country Waltz",
+        "codec": "flac",
+        "nsub": 50
+      },
+      "members": [
+        {
+          "title": "The Old Country Waltz",
+          "dist": 7.8,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Nina Simone",
+        "title": "Pirate Jenny (live)",
+        "codec": "flac",
+        "nsub": 1
+      },
+      "members": [
+        {
+          "title": "Pirate Jenny (Live)",
+          "dist": 9.44,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Nitzer Ebb",
+        "title": "Backlash",
+        "codec": "alac",
+        "nsub": 5
+      },
+      "members": [
+        {
+          "title": "Backlash (William Orbit Mix)",
+          "dist": 5.04,
+          "codec": "alac",
+          "folded": true
+        },
+        {
+          "title": "Backlash (mix No.2)",
+          "dist": 6.13,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Paradise Lost",
+        "title": "Last Regret",
+        "codec": "flac",
+        "nsub": 9
+      },
+      "members": [
+        {
+          "title": "Last Regret",
+          "dist": 6.83,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Last Regret",
+          "dist": 6.33,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Last Regret (Lost in Prague orchestra mix)",
+          "dist": 6.82,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Reinhard Mey",
+        "title": "Es schneit in meinen Gedanken",
+        "codec": "flac",
+        "nsub": 4
+      },
+      "members": [
+        {
+          "title": "Es schneit in meinen Gedanken",
+          "dist": 5.42,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Wolfgang Amadeus Mozart",
+        "title": "Così fan tutte, K. 588: Act I, Scene I. No. 3 Terzetto \"Una bella sere",
+        "codec": "flac",
+        "nsub": 6
+      },
+      "members": [
+        {
+          "title": "Così fan tutte, K. 588: Act I, Scene I. No. 3 Terzetto \"Una bella sere",
+          "dist": 7.66,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Così fan tutte, K. 588: Act I, Scene I. No. 3 Terzetto \"Una bella sere",
+          "dist": 4.35,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Seeming",
+        "title": "Worldburners Unite (7\" version)",
+        "codec": "flac",
+        "nsub": 5
+      },
+      "members": [
+        {
+          "title": "Worldburners Unite (Pandemic mix)",
+          "dist": 7.17,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Worldburners Unite (World Gone Dark mix)",
+          "dist": 7.79,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Lam",
+        "title": "I",
+        "codec": "flac",
+        "nsub": 2
+      },
+      "members": [
+        {
+          "title": "I",
+          "dist": 23.69,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "John Williams",
+        "title": "Parade of the Ewoks",
+        "codec": "flac",
+        "nsub": 64
+      },
+      "members": [
+        {
+          "title": "Parade of the Ewoks",
+          "dist": 5.6,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Parade of the Ewoks",
+          "dist": 5.69,
+          "codec": "flac",
+          "folded": true
+        },
+        {
+          "title": "Parade of the Ewoks",
+          "dist": 4.17,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Almaty",
+        "title": "Almaty - Gennaro",
+        "codec": "mp3",
+        "nsub": 3
+      },
+      "members": [
+        {
+          "title": "Almaty - Gennaro (Octo Octa's Hope on Hope on Hope Mix)",
+          "dist": 9.02,
+          "codec": "mp3",
+          "folded": true
+        }
+      ]
+    },
+    {
+      "rep": {
+        "artist": "Birdy",
+        "title": "Wings",
+        "codec": "flac",
+        "nsub": 64
+      },
+      "members": [
+        {
+          "title": "Wings",
+          "dist": 10.33,
+          "codec": "mp3",
+          "folded": true
+        },
+        {
+          "title": "Wings (Orchestra mix)",
+          "dist": 5.64,
+          "codec": "flac",
+          "folded": true
+        }
+      ]
+    }
+  ],
+  "by_depth1": {
+    "root.0": {
+      "songs": 1553809,
+      "excluded_share": 0.3089395157319851
+    },
+    "root.1": {
+      "songs": 1761407,
+      "excluded_share": 0.2844544162706291
+    },
+    "root.2": {
+      "songs": 1705702,
+      "excluded_share": 0.26518055322676526
+    },
+    "root.3": {
+      "songs": 1603481,
+      "excluded_share": 0.3075577446817268
+    }
+  },
+  "elapsed_min": 14.510144861539205
+}

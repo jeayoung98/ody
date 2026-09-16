@@ -146,8 +146,10 @@ def test_r10_title_noise_samples(rules_pair):
         assert not S5.row_masks({"title_raw": title}, rules)["R10_title_noise"], title
 
 
-R11_HITS = ["Sine Wave 440", "1000 Hz Test Tone", "White Noise", "Test Signal", "Frequency Sweep"]
-R11_KEEP = ["Sine of the Times", "Noise Pollution", "Test Drive", "Sweep the Leg"]
+R11_HITS = ["1000 Hz Test Tone", "Test Signal", "Frequency Sweep", "440 Hz", "20 kHz"]
+# v5 실측(2026-09-16): sine wave·white noise 패턴은 실제 곡을 집어서 뺐다. 이 제목들은 통과해야 한다.
+R11_KEEP = ["Sine of the Times", "Noise Pollution", "Test Drive", "Sweep the Leg",
+            "White Noise", "Sine Wave", "Clouds In The White Noise"]
 R16_HITS = ["Intro", "The Best Intro Ever", "Band Interview 1998", "Guided Meditation",
             "DJ Mix Vol. 3", "Full Album", "Station ID", "Silence"]
 R16_KEEP = ["Introduction to Love", "Interviewer", "Mixtapes and Memories".replace("Mixtape", "Tape"),

@@ -247,9 +247,10 @@ def compute(meta, X, R):
     # R13 오디오북 — 태그 + 제목 + 아티스트 표기
     r = rules["R13_audiobook"]; p = r["params"]
     hits13 = allhits[allhits["keyword"].isin(p["keywords"])]
-    m13 = meta["mbid"].isin(set(hits13["mbid"])).to_numpy()
-    m13 |= any_pattern(title, p["title_patterns"].values())
-    m13 |= any_pattern(artist, p["artist_patterns"].values())
+    # pandas 가 주는 배열은 읽기 전용일 수 있다. 제자리 연산(|=) 대신 새 배열을 만든다.
+    m13 = (meta["mbid"].isin(set(hits13["mbid"])).to_numpy()
+           | any_pattern(title, p["title_patterns"].values())
+           | any_pattern(artist, p["artist_patterns"].values()))
     masks["R13_audiobook"] = m13 if r.get("enabled") else np.zeros(N, bool)
 
     # R15 정지성 — 변동성 세 특징의 분위. 하위 1% 전부이거나, 하위 2% 이고 onset_rate 도 하위 5%
@@ -319,7 +320,8 @@ def main(dry_run=True):
             if a < b:
                 ov = int((masks[a] & masks[b]).sum())
                 if ov: S["overlap"]["{} & {}".format(a, b)] = ov
-    # R6 묶음 30개
+    # R6 묶음 30개. protect_dist 가 None(v5)이면 거리와 무관하게 전부 접힌다
+    pd6_report = {r["id"]: r for r in R["rules"]}["R6_dup_version"]["params"].get("protect_dist")
     mem, rep = extra["R6_mem"], extra["R6_rep"]
     gs = rng.choice(mem["g"].unique(), min(30, mem["g"].nunique()), replace=False)
     S["R6_groups"] = []
@@ -327,7 +329,7 @@ def main(dry_run=True):
         r_ = int(rep[g_]); ms = mem[mem["g"] == g_]
         S["R6_groups"].append({"rep": {"artist": meta["artist_raw"].iat[r_][:40], "title": meta["title_raw"].iat[r_][:70], "codec": meta["codec"].iat[r_], "nsub": int(meta["n_submissions"].iat[r_])},
                                "members": [{"title": meta["title_raw"].iat[int(i)][:70], "dist": round(float(d), 2), "codec": meta["codec"].iat[int(i)],
-                                            "folded": bool(d <= R["rules"][5]["params"]["protect_dist"])} for i, d in zip(ms["i"], ms["dist"])][:10]})
+                                            "folded": pd6_report is None or bool(d <= pd6_report)} for i, d in zip(ms["i"], ms["dist"])][:10]})
     # depth-1 노드별 제외 비율
     d1 = meta["node_d1"].to_numpy()
     S["by_depth1"] = {n: {"songs": int((d1 == n).sum()), "excluded_share": float(excl[d1 == n].mean())} for n in sorted(set(d1))}

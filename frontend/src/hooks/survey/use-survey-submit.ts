@@ -2,6 +2,7 @@
 
 import { useMutation } from "@tanstack/react-query";
 import { getAnonymousId } from "@/lib/anonymous-id";
+import { api } from "@/lib/api";
 import type { SurveyReason, SurveySubmission, SurveyTarget } from "@/types/survey";
 
 /**
@@ -67,15 +68,9 @@ function buildRow(input: SubmitInput): SurveySubmission {
  */
 export function useSurveySubmit() {
   return useMutation({
-    mutationFn: async (input: SubmitInput) => {
-      const res = await fetch(FEEDBACK_PATH, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(buildRow(input)),
-      });
-      if (!res.ok) throw new Error(`설문 전송 실패 (${res.status})`);
-      return res.json();
-    },
+    // 공용 통로로 보낸다 — 실연동 응답이면 다른 API 와 같은 형식으로 콘솔에 찍힌다 (`lib/live-log.ts`)
+    mutationFn: (input: SubmitInput) =>
+      api<{ feedbackId: number }>(FEEDBACK_PATH, { method: "POST", body: JSON.stringify(buildRow(input)) }),
     // 응답을 못 보내도 사용자를 막지 않는다 — 설문은 부가 기능이다
     retry: 1,
   });

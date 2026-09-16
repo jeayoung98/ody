@@ -5,7 +5,6 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -174,15 +173,12 @@ class NearbyDeltaServiceTests {
 	}
 
 	@Test
-	@DisplayName("같은 곡을 다시 재생하면 목록을 다시 만들지 않는다")
-	void sameMusicDoesNotReissueSnapshot() {
-		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
-
+	@DisplayName("같은 곡이면 구독 조회와 델타 발송을 하지 않는다")
+	void sameMusicSkipsNearbyUpdate() {
 		service.onPositionChanged(change(10L, 10L));
 
-		verify(nearbyRepo, times(2)).subscribers(10L);
-		verify(nearbyRepo, never()).hasMeta(ACTOR);
-		verifyNoInteractions(nearbyPeopleService, publisher);
+		verifyNoInteractions(nearbyRepo, userDisplayResolver, publisher,
+				meetingService, riderCountPort, nearbyPeopleService);
 	}
 
 	private PositionChanged change(Long oldMusicId, Long newMusicId) {

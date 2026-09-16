@@ -7,11 +7,11 @@ import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Profile;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
-
-import lombok.RequiredArgsConstructor;
 
 /**
  * 근처 사람 스냅샷 + 델타가 쓰는 레디스 접근.
@@ -22,15 +22,23 @@ import lombok.RequiredArgsConstructor;
  */
 @Repository
 @Profile("realtime")
-@RequiredArgsConstructor
 public class NearbyRedisRepository {
 
+	private static final String PRESENCE_USER_PREFIX = "presence:user:";
 	private static final String LISTENERS_PREFIX = "listeners:";
 	private static final String SUBSCRIBERS_PREFIX = "nearby:subscribers:";
 	private static final String META_PREFIX = "nearby:meta:";
 	private static final String META_MUSIC_IDS = "musicIds";
 
 	private final StringRedisTemplate redis;
+	private final DefaultRedisScript<Long> nearbySubscriptionReplaceScript;
+
+	public NearbyRedisRepository(StringRedisTemplate redis,
+			@Qualifier("nearbySubscriptionReplaceScript")
+			DefaultRedisScript<Long> nearbySubscriptionReplaceScript) {
+		this.redis = redis;
+		this.nearbySubscriptionReplaceScript = nearbySubscriptionReplaceScript;
+	}
 
 	/**
 	 * 곡 목록을 받아 곡마다 "지금 그 곡 듣는 사람들(email)" 을 돌려준다.
@@ -46,13 +54,24 @@ public class NearbyRedisRepository {
 		return result;
 	}
 
-	/** 곡별 구독자 Set에 사용자를 등록한다. 같은 사용자를 다시 등록해도 Redis Set이라 중복되지 않는다. */
-	public void subscribe(String email, Collection<Long> musicIds) {
-		for (Long musicId : musicIds) {
-			if (musicId != null) {
-				redis.opsForSet().add(SUBSCRIBERS_PREFIX + musicId, email);
-			}
-		}
+	/**
+	 * 주변사람 구독 곡을 새 목록으로 바꾼다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param epoch 접속 버전
+	 * @param musicIds 새 구독 곡
+	 * @return 현재 접속이면 true
+	 */
+	public boolean replaceSubscriptions(String email, long epoch, Collection<Long> musicIds) {
+		String value = musicIds.stream()
+				.filter(java.util.Objects::nonNull)
+				.distinct()
+				.map(String::valueOf)
+				.collect(Collectors.joining(","));
+		Long result = redis.execute(nearbySubscriptionReplaceScript,
+				List.of(PRESENCE_USER_PREFIX + email, META_PREFIX + email),
+				email, Long.toString(epoch), SUBSCRIBERS_PREFIX, value);
+		return result != null && result == 1L;
 	}
 
 	/** 전달받은 곡별 구독자 Set에서 사용자를 제거한다. 마지막 멤버가 빠진 빈 Set 키는 Redis가 함께 없앤다. */
@@ -68,16 +87,6 @@ public class NearbyRedisRepository {
 	public Set<String> subscribers(long musicId) {
 		Set<String> members = redis.opsForSet().members(SUBSCRIBERS_PREFIX + musicId);
 		return members != null ? members : Set.of();
-	}
-
-	/** 패널을 연 사용자가 구독한 곡 목록을 저장한다. 입력 순서를 유지하고 중복·null 곡은 제거한다. */
-	public void saveMeta(String email, Collection<Long> musicIds) {
-		String value = musicIds.stream()
-				.filter(java.util.Objects::nonNull)
-				.distinct()
-				.map(String::valueOf)
-				.collect(Collectors.joining(","));
-		redis.opsForHash().put(META_PREFIX + email, META_MUSIC_IDS, value);
 	}
 
 	/** 저장해 둔 구독 곡 목록을 읽는다. 패널을 열지 않았거나 저장값이 비어 있으면 빈 목록이다. */

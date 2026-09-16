@@ -1,7 +1,6 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -47,7 +46,7 @@ public class NearbyPeopleService {
 	private final RiderCountPort riderCountPort;
 
 	/**
-	 * 지금 이 사람 기준으로 주변사람 목록을 만든다.
+	 * 지금 이 사람 기준으로 주변사람 목록 패널을 연다
 	 *
 	 * @param email 버튼 누른 사람(토큰에서 꺼낸 값)
 	 * @return 내 곡과 비슷한 곡을 듣는 사람들을 가까운 순으로 담은 목록
@@ -74,19 +73,12 @@ public class NearbyPeopleService {
 			throw new CustomException(RealtimeErrorCode.SERVICE_UNAVAILABLE);
 		}
 
-		// 3) 목록을 읽기 전에 이 곡들의 변화를 먼저 구독한다.
-		//    반대 순서면 목록을 읽는 사이 생긴 변화가 스냅샷과 델타 양쪽에서 빠질 수 있다.
-		//    다시 연 경우에는 새 곡부터 등록한 뒤 더 이상 보지 않는 옛 곡만 해제한다.
+		// 3) 목록 조회 중 생기는 변경도 받도록 구독을 먼저 바꾼다.
 		List<Long> musicIds = songs.stream().map(NeighborSong::musicId).toList();
-		List<Long> previousMusicIds = nearbyRepo.subscribedMusicIds(email);
-		nearbyRepo.subscribe(email, musicIds);
-
-		Set<Long> removedMusicIds = new LinkedHashSet<>(previousMusicIds);
-		removedMusicIds.removeAll(musicIds);
-		if (!removedMusicIds.isEmpty()) {
-			nearbyRepo.unsubscribe(email, removedMusicIds);
+		if (!nearbyRepo.replaceSubscriptions(email, me.epoch(), musicIds)) {
+			log.warn("주변사람 목록 거부 reason={}", RealtimeWsErrorCode.PRESENCE_STALE);
+			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
-		nearbyRepo.saveMeta(email, musicIds);
 
 		// 4) 구독 등록이 끝난 뒤 그 곡들 각각을 지금 누가 듣고 있는지 읽어온다.
 		Map<Long, Set<String>> listenersByMusic = nearbyRepo.listeners(musicIds);

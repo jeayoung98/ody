@@ -39,7 +39,7 @@
 | S2 전처리 | 추출 특징 + feature_list(skew) + model_bundle(delta_f, impute_median, scaler, clip) | `features_pre/` `mbid` + `f_000..f_269` f32 | 표본 10만: 최대 절대 오차 < 1e-4 vs 기존 파이프라인. 잡은 `spark/jobs/preprocess.py` |
 | S3 PCA | features_pre + pca_mean, pca_components | `coords/` `mbid` + pc1..pc16 | **전곡** 최대 절대 오차 < 1e-4 vs `coords_v2.parquet`. 잡은 `spark/jobs/pca.py` |
 | S4 트리 배정 | coords + `map_tree/tree.json` + `split_axes.npz` | `node_paths/` `mbid` + `leaf_id` + `node_d1` + `node_d2` | 말단 노드 일치 100%. 표본 5,000곡 실측 완료. 잡은 `spark/jobs/tree_assign.py` |
-| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R10 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | 제외 780,107, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
+| S5 카탈로그·규칙 | manifest_rows + coords + titles + canonical + 태그·감사 + 규칙 R1~R17 | `catalog/` 전 행 + `excluded`·`excluded_reason[]`·`dup_group_id`·`is_representative`·`flag_*` | v5 누적 제외 2,710,303, 규칙별 적중 수 동일. 규칙은 아래 별도 절. 잡은 `spark/jobs/catalog_rules.py` |
 | S6 아티팩트 | 위 전부 | `serving/<v>/` 계약 파일 + manifest(입력·규칙 해시) | 원래 문장: `check_contract.py --strict --prev` 통과. **`--prev` 는 적용 불가 — 아래 S6 절 참조.** 대체 기준은 `--strict` 통과 + 내용 대조. 잡은 `spark/jobs/artifact_export.py` |
 
 ## S1 대표행 선택 — 제출본 2,946만 → 곡 740만
@@ -52,7 +52,7 @@ census 제출본 29,460,584
   → 2~5. MBID 당 1행 선택
   → 곡 7,404,506
   → (S5 가 R1~R9 로 780,107 더 자름)  →  6,624,399
-  → (R10 제목 잡음 33,646 더 자름. 2026-09-14 추가)  →  6,590,753
+  → (규칙 v5 가 1,930,196 더 자름. 2026-09-16, D18)  →  4,694,203
 ```
 
 ### 선택 규칙 (완전 결정적)
@@ -194,19 +194,41 @@ root 에서 시작해 깊이 6 까지 한 칸씩
 
 내부 노드는 1,365개이고 `split_axes.npz` 의 축 집합이 `tree.json` 의 내부 노드 집합과 정확히 같다(테스트가 검사).
 
-## S5 카탈로그 제외 규칙 — 곡 740만 → 662만
+## S5 카탈로그 제외 규칙 — 곡 740만 → 469만 (v5)
 
 **곡 수를 줄이는 두 번째이자 마지막 단계다.** 첫 번째는 S1 대표행 선택이다.
 
 ```text
 S1 대표행 7,404,506
-  → 규칙 R1~R9 적용        제외 780,107 (10.54%)
-  → 남는 곡 6,624,399
-  → R10 제목 잡음 (v4)     신규 제외 33,646 (0.45%)   누적 813,753 (10.99%)
-  → 남는 곡 6,590,753
+  → 규칙 R1~R9 적용 (v3)   제외 780,107 (10.54%)
+  → 남는 곡 6,624,399                                   ← 운영 DB 의 현재 music
+  → 규칙 v5 적용           신규 제외 1,930,196 (29.14%)  누적 2,710,303 (36.60%)
+  → 남는 곡 4,694,203                                   ← music_v2 적재 대상 (S15P21A405-381)
 ```
 
-행을 지우지 않는다. 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`, `flag_*` 로 표시한다(`data/AGENTS.md` 규칙 2). 임계값은 `pipeline/exclusion_rules.json`(v3)에서만 읽고 잡 코드에 숫자를 적지 않는다(규칙 9). 테스트가 하드코딩 여부를 검사한다.
+### v5 규칙별 적중 (2026-09-16 실측, base 6,624,399 · `output/exclusion_dryrun.json`)
+`ODY_BUNDLE_BASE=serving/v2.1-pca16 python pipeline/run.py --stage s1_dryrun` 으로 잰 값이다.
+
+| 규칙 | 적중 | 단독 적중 | 무엇을 자르나 |
+|---|---:|---:|---|
+| R1_length | 1,095,960 | 878,742 | **60초 미만·6분 초과**(D1 적용, 예외 태그 없음) |
+| R5_dup_canonical | 471,469 | 369,053 | 같은 canonical 은 거리 보호 없이 대표 1곡만 |
+| R6_dup_version | 392,438 | 310,568 | 같은 아티스트·정규화 제목도 전부 접는다. R5 로 접힌 행은 묶음에서 빼므로 독립 계산값(863,907)보다 작다 |
+| R16_title_nonmusic | 74,256 | 31,682 | 제목 안 비음악 키워드 47개(단어 경계) |
+| R17_artist_unknown | 62,341 | 46,533 | 아티스트가 빈 값·unknown·Various Artists·traditional |
+| R10_title_noise | 33,645 | 5,913 | 제목 전체가 잡음(untitled·Track N·Intro 단독) |
+| R12_spoken_nonmusic | 23,008 | 16,388 | spoken word·field recording·comedy 태그 |
+| R15_static | 16,276 | 8,521 | 변동성 세 특징 하위 1% 전부, 또는 하위 5% + onset_rate 하위 5% |
+| R7_samplerate | 12,504 | 7,400 | 44.1kHz 미만 |
+| R13_audiobook | 8,949 | 5,361 | 낭독물(chapter N·Hörbuch·read by·gelesen von) |
+| R8_silence | 6,625 | 2,471 | 음량 하위 분위 + 무음/저복잡도, 하위 0.1% 는 무조건 |
+| R9_corrupt | 3,756 | 2,027 | 극단 특징 5개 이상 |
+| R11_test_signal | 211 | 96 | 측정 신호(test tone·N Hz·frequency sweep) |
+| R2·R3·R4 | v3 단계에서 이미 적용 | — | base 가 이미 지난 규칙이라 신규 적중 없음 |
+
+중단 임계는 v4 의 15% 로는 멈춘다(v5 총 제외 36.60%). D18 로 **0.40** 으로 올렸다.
+
+행을 지우지 않는다. 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`, `flag_*` 로 표시한다(`data/AGENTS.md` 규칙 2). 임계값은 `pipeline/exclusion_rules.json`(v5)에서만 읽고 잡 코드에 숫자를 적지 않는다(규칙 9). 테스트가 하드코딩 여부를 검사한다.
 
 ### 규칙별 적중 (원본 기록, `dmadkr/output/exclusion_report.json`)
 | 규칙 | 적중 | 단독 적중 | 무엇을 자르나 |

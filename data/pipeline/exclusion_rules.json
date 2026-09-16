@@ -1,28 +1,24 @@
 {
-  "version": "exclusion_rules_v4",
-  "status": "v4 — R10_title_noise 추가(2026-09-14, Jira S15P21A405-299): 제목이 곡을 식별하지 못하는 행(untitled·빈 제목·Track N·Intro/Outro 단독·Unknown) 제외. v3 — 사용자 결정(2026-09-06 #2): R2 에서 'spoken word','field recording' 제거→flag_spoken/flag_fieldrec. 조건부 사전 승인으로 dry-run 조건 통과 시 적용.",
+  "version": "exclusion_rules_v5",
+  "status": "v5 — 사용자 결정(2026-09-16, Jira S15P21A405-382) \"조금이라도 이상하면 자름\": R11·R12·R13·R15·R16·R17 추가, R1 을 D1 의 60s~6min 으로, R7·R9 를 제외로 전환, R5·R6 의 거리 보호 해제(중복 전부 접기), R8 에 음량 하위 0.1% 무조건 제외 추가. 목표 잔존 4,688,786(manifest 7,404,506 의 63.3%). v4 — R10_title_noise 추가(2026-09-14, Jira S15P21A405-299): 제목이 곡을 식별하지 못하는 행(untitled·빈 제목·Track N·Intro/Outro 단독·Unknown) 제외. v3 — 사용자 결정(2026-09-06 #2): R2 에서 'spoken word','field recording' 제거→flag_spoken/flag_fieldrec. 조건부 사전 승인으로 dry-run 조건 통과 시 적용.",
   "principles": [
     "삭제 아님, 표시(excluded, excluded_reason[])",
     "곡 개별 제외 금지 — 규칙으로만",
     "모든 규칙에 basis(감사 항목+수치)",
     "커버곡 유지, live/acoustic/remix/instrumental/unplugged/demo/karaoke/cover 는 별도 묶음"
   ],
-  "stop_if_total_excluded_share": 0.15,
+  "stop_if_total_excluded_share": 0.4,
   "rules": [
     {
       "id": "R1_length",
       "enabled": true,
       "params": {
-        "min_s": 30,
-        "max_s": 1200,
-        "max_s_untagged": 1800,
-        "long_exempt_tags": [
-          "classical",
-          "opera",
-          "ambient"
-        ]
+        "min_s": 60,
+        "max_s": 360,
+        "max_s_untagged": 360,
+        "long_exempt_tags": []
       },
-      "basis": "A1: <30s 99,950 (1.35%). >20min 29,966 중 태그 있는 13,143곡의 35.7%가 클래식/오페라/앰비언트 → 예외 유지. 미태그 >20min 표본에 롱폼 앰비언트/일렉트로닉 정상 음악 다수 → 미태그 곡은 상한 30min(1800s) 적용(사용자 결정). 태그 있는 비예외 곡은 20min 상한."
+      "basis": "D1 적용(2026-09-07 사용자 결정, v5 에서 실행): 곡 길이 60s~6min 만 남긴다. 예외 태그 없음 — 클래식·앰비언트 롱폼도 자른다. 실측 적중 1,095,960(짧은 181,232 · 긴 914,728). A1: <30s 99,950 (1.35%). >20min 29,966 중 태그 있는 13,143곡의 35.7%가 클래식/오페라/앰비언트 → 예외 유지. 미태그 >20min 표본에 롱폼 앰비언트/일렉트로닉 정상 음악 다수 → 미태그 곡은 상한 30min(1800s) 적용(사용자 결정). 태그 있는 비예외 곡은 20min 상한."
     },
     {
       "id": "R2_nonmusic",
@@ -86,15 +82,15 @@
           "part",
           "offset"
         ],
-        "protect_dist": 4.0
+        "protect_dist": null
       },
-      "basis": "canonical redirect 후 같은 canonical 복수 mbid → 대표 1행. dry-run v1: 멤버 763,015 (10.3%), 멤버-대표 좌표 거리 median 6.31 — MB 병합 ≠ 같은 소리. R6 와 동일한 거리 보호 4.0 추가 (A7 같은 녹음 87%가 4 이내). 보호 시 접힘 ≈241,660 (3.3%)."
+      "basis": "v5: 거리 보호 해제 — 같은 canonical recording 이면 좌표 거리와 무관하게 대표 1곡만 남긴다. canonical redirect 후 같은 canonical 복수 mbid → 대표 1행. dry-run v1: 멤버 763,015 (10.3%), 멤버-대표 좌표 거리 median 6.31 — MB 병합 ≠ 같은 소리. R6 와 동일한 거리 보호 4.0 추가 (A7 같은 녹음 87%가 4 이내). 보호 시 접힘 ≈241,660 (3.3%)."
     },
     {
       "id": "R6_dup_version",
       "enabled": true,
       "params": {
-        "protect_dist": 4.0,
+        "protect_dist": null,
         "keep_live_as_distinct": true,
         "drop_modifiers": [
           "remaster(ed)",
@@ -130,15 +126,15 @@
         ],
         "year_source": "없음 (A8) — 연도 우선 단계 생략"
       },
-      "basis": "A6: 2곡+ 묶음 706,401 / 접힘 후보 1,520,985 (20.5%) / 거리>4 보호 918,463 (60.4%) / 접힘 예상 602,522 (8.1%). 임계 4.0 근거 = A7 같은 MBID 제출본 거리 median 0.58·p90 5.18 (진짜 같은 녹음의 87%는 4 이내) vs A6 묶음 멤버 거리 median 5.34 (제목 같아도 대부분 다른 연주). 미분류 괄호 719,842곡은 키에 남겨 접지 않음(보수)."
+      "basis": "v5: 거리 보호 해제 — 같은 아티스트·정규화 제목이면 전부 접는다. live·remix·acoustic 은 distinct_modifiers 로 여전히 별개 묶음이다. A6: 2곡+ 묶음 706,401 / 접힘 후보 1,520,985 (20.5%) / 거리>4 보호 918,463 (60.4%) / 접힘 예상 602,522 (8.1%). 임계 4.0 근거 = A7 같은 MBID 제출본 거리 median 0.58·p90 5.18 (진짜 같은 녹음의 87%는 4 이내) vs A6 묶음 멤버 거리 median 5.34 (제목 같아도 대부분 다른 연주). 미분류 괄호 719,842곡은 키에 남겨 접지 않음(보수)."
     },
     {
       "id": "R7_samplerate",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "min_sr": 44100
       },
-      "basis": "A2: <44100 18,047곡 (0.24%), 좌표 편향 최대 |0.46| std (pc3) < 0.5 → 제외 대신 flag_low_sr 컬럼."
+      "basis": "v5: 표시에서 제외로 전환. 44.1kHz 미만은 인코딩 품질이 좌표를 흔든다. A2: <44100 18,047곡 (0.24%), 좌표 편향 최대 |0.46| std (pc3) < 0.5 → 제외 대신 flag_low_sr 컬럼."
     },
     {
       "id": "R8_silence",
@@ -146,18 +142,19 @@
       "params": {
         "loudness_bottom_pct": 0.1,
         "dyn_lt": 0.1,
-        "silence60_gt": 0.9
+        "silence60_gt": 0.9,
+        "hard_loudness_bottom_pct": 0.1
       },
-      "basis": "A3: average_loudness 하위 0.1% 7,405곡 중 silence_rate_60dB>0.9 116곡 (dynamic_complexity<0.1 은 0곡). 표본: Headspace 명상, John Cage, 무음 히든트랙."
+      "basis": "v5: 음량 하위 0.1% 는 dynamic_complexity·무음률 조건 없이 제외한다. A3: average_loudness 하위 0.1% 7,405곡 중 silence_rate_60dB>0.9 116곡 (dynamic_complexity<0.1 은 0곡). 표본: Headspace 명상, John Cage, 무음 히든트랙."
     },
     {
       "id": "R9_corrupt",
-      "enabled": false,
+      "enabled": true,
       "params": {
         "min_clipped_features": 5,
         "flag_column": "flag_clipped"
       },
-      "basis": "A4: ≥5 특징 적중 4,762곡 표본이 실험·노이즈 음악(손상 아님) → 제외하지 않고 flag_clipped 컬럼만(사용자 결정)."
+      "basis": "v5: 표시에서 제외로 전환. 극단 특징 5개 이상. A4: ≥5 특징 적중 4,762곡 표본이 실험·노이즈 음악(손상 아님) → 제외하지 않고 flag_clipped 컬럼만(사용자 결정)."
     },
     {
       "id": "R10_title_noise",
@@ -166,13 +163,161 @@
         "normalize": "lower(trim(title_raw))",
         "patterns": {
           "untitled": "^[\\[\\(]?untitled[\\]\\)]?\\s*(#?\\s*[0-9]+|track\\s*[0-9]*)?$",
-          "empty_or_punct": "^[\\s!-/:-@\\[-`{-~]*$",
+          "empty_or_punct": "^[\\s 　 -​﻿!-/:-@\\[-`{-~]*$",
           "track_number": "^(track|pista|piste|titel|faixa|traccia)\\s*#?\\s*[0-9]+$",
           "structural_only": "^(intro|outro|skit|interlude|intermission|segue)\\s*([0-9]+|\\(.*\\)|\\[.*\\])?$",
           "unknown_title": "^(unknown( title| track)?|no title|sin t[ií]tulo|sans titre|ohne titel|無題|제목 ?없음)\\s*[0-9]*$"
         }
       },
-      "basis": "catalog_v2 실측(2026-09-14): 전체 적중 48,952 / R1~R9 미적중 신규 제외 33,646 (0.454%). 패턴별 신규 제외 untitled 11,746 · empty_or_punct 5,198 · track_number 3,005 · structural_only 13,381 · unknown_title 316. 총 제외 813,753 (10.99%) < 중단 임계 15%. 정규식은 Python re 와 Java rlike 에서 같게 동작하도록 \b·\\d·\\w 를 쓰지 않고 ASCII 범위로 적는다. 넣지 않은 패턴: 'untitled' 부분 일치(D'Angelo 'Untitled (How Does It Feel)'), 숫자만 제목(Prince '1999', Taylor Swift '22'), silence/talk/Part N/video/'01 - 제목' 파일명형 — 실제 곡 적중. 운영 DB 에서 수동 삭제했던 untitled 를 규칙으로 옮긴 것(규칙 2·9)."
+      "basis": "catalog_v2 실측(2026-09-14): 전체 적중 48,952 / R1~R9 미적중 신규 제외 33,646 (0.454%). 패턴별 신규 제외 untitled 11,746 · empty_or_punct 5,198 · track_number 3,005 · structural_only 13,381 · unknown_title 316. 총 제외 813,753 (10.99%) < 중단 임계 15%. 정규식은 Python re 와 Java rlike 에서 같게 동작하도록 \b·\\d·\\w 를 쓰지 않고 ASCII 범위로 적는다. 넣지 않은 패턴: 'untitled' 부분 일치(D'Angelo 'Untitled (How Does It Feel)'), 숫자만 제목(Prince '1999', Taylor Swift '22'), silence/talk/Part N/video/'01 - 제목' 파일명형 — 실제 곡 적중. 운영 DB 에서 수동 삭제했던 untitled 를 규칙으로 옮긴 것(규칙 2·9). 2026-09-16: 빈 제목 패턴에 유니코드 공백(NBSP·U+3000·U+2000~200B·BOM)을 리터럴로 넣었다 — \\s 는 pyarrow RE2 와 Java rlike 에서 ASCII 전용이라 numpy 경로와 Spark 경로가 1행(-　...-) 갈렸다."
+    },
+    {
+      "id": "R11_test_signal",
+      "enabled": true,
+      "params": {
+        "normalize": "lower(trim(title_raw))",
+        "patterns": {
+          "test_tone": "(^|[^a-z])(test\\s*(tone|signal|track|record)|calibration|kalibrierung)",
+          "frequency": "^[0-9]+(\\.[0-9]+)?\\s*(hz|khz)([^a-z]|$)",
+          "sweep": "(^|[^a-z])(frequency|freq)\\s*sweep"
+        }
+      },
+      "basis": "캘리브레이션·측정 신호는 음악이 아니고 좌표가 극단으로 튄다. 2026-09-16 실측 적중 211(목표 206). sine/square wave 와 white/pink noise 패턴은 뺐다 — Disclosure·The Monochrome Set 의 White Noise, HKE 의 Sine Wave 처럼 실제 곡을 집어 693까지 늘어났다."
+    },
+    {
+      "id": "R12_spoken_nonmusic",
+      "enabled": true,
+      "params": {
+        "keywords": [
+          "spoken word",
+          "field recording",
+          "comedy"
+        ]
+      },
+      "basis": "v3 에서 flag 로 돌렸던 세 태그를 v5 에서 제외로 되돌린다(사용자 결정 2026-09-16). 적중 목표 23,008. 근거 파일은 work/audit_A5_hits.parquet."
+    },
+    {
+      "id": "R13_audiobook",
+      "enabled": true,
+      "params": {
+        "keywords": [
+          "audiobook"
+        ],
+        "normalize": "lower(trim(title_raw)) / lower(trim(artist_raw))",
+        "title_patterns": {
+          "chapter": "(^|[^a-z])(chapter|kapitel|teil|cap[ií]tulo|chapitre|capitolo)\\s*#?\\s*[0-9]+",
+          "audiobook": "(^|[^a-z])(audiobook|h[oö]rbuch|h[oö]rspiel|libro\\s*hablado)",
+          "part_of_book": "(^|[^a-z])(unabridged|abridged)([^a-z]|$)"
+        },
+        "artist_patterns": {
+          "narrator": "(^|[^a-z])(read\\s*by|narrated\\s*by|gelesen\\s*von|l[uú]\\s*by)"
+        }
+      },
+      "basis": "낭독물은 음악 좌표계에 들어가면 이웃 품질을 해친다. 태그(audiobook)와 제목(chapter·Hörbuch)·아티스트(read by) 표기를 함께 본다. 2026-09-16 실측 적중 8,948(목표 7,732). 차이 1,216 은 프랑스어 chapitre(535)와 독일어 gelesen von(1,418) 낭독자 표기를 남겨 둔 몫이다 — 표본이 전부 진짜 낭독물이라 좁히지 않았다. audiobook 태그 적중이 0 인 것은 R2 가 이미 그 태그를 잘라 base 에 없기 때문이다."
+    },
+    {
+      "id": "R15_static",
+      "enabled": true,
+      "params": {
+        "features": [
+          "lowlevel.spectral_flux.var",
+          "tonal.hpcp_entropy.var",
+          "lowlevel.spectral_complexity.var"
+        ],
+        "onset_feature": "rhythm.onset_rate",
+        "hard_bottom_pct": 1.0,
+        "soft_bottom_pct": 5.0,
+        "onset_bottom_pct": 5.0
+      },
+      "basis": "드론·단일 톤·정지성 녹음. 세 변동성 특징이 모두 하위 1% 면 무조건, 모두 하위 5% 이고 onset_rate 도 하위 5% 면 제외. 2026-09-16 실측(base 6,624,399): hard 2,935 · soft 15,183 · 합집합 16,276. 목표표의 2,933 + 15,178 은 두 분기를 겹침 없이 더한 표기다."
+    },
+    {
+      "id": "R16_title_nonmusic",
+      "enabled": true,
+      "params": {
+        "normalize": "lower(trim(title_raw))",
+        "keywords": [
+          "intro",
+          "outro",
+          "interlude",
+          "intermission",
+          "segue",
+          "skit",
+          "untitled",
+          "interview",
+          "commentary",
+          "monologue",
+          "dialogue",
+          "poetry",
+          "speech",
+          "sermon",
+          "prayer",
+          "lecture",
+          "lesson",
+          "meditation",
+          "guided meditation",
+          "hypnosis",
+          "affirmation",
+          "asmr",
+          "drone",
+          "soundscape",
+          "field recording",
+          "sound effect",
+          "sfx",
+          "foley",
+          "jingle",
+          "bumper",
+          "station id",
+          "trailer",
+          "teaser",
+          "promo",
+          "advertisement",
+          "commercial",
+          "dj mix",
+          "megamix",
+          "full album",
+          "continuous mix",
+          "mixtape",
+          "podcast",
+          "episode",
+          "radio show",
+          "silence",
+          "applause",
+          "crowd noise"
+        ],
+        "word_boundary": true
+      },
+      "basis": "제목이 비음악임을 직접 말하는 행. R10 이 제목 전체를 볼 때 이 규칙은 제목 안 단어를 본다(단어 경계). 2026-09-16 실측 적중 74,256(목표 74,136). test·poem 은 뺐다 — Rorschach Test (DnB Remix), Coral Island: IV. Poem II 같은 실제 곡을 집어 2,622곡이 더 잘렸다. poetry 는 남긴다."
+    },
+    {
+      "id": "R17_artist_unknown",
+      "enabled": true,
+      "params": {
+        "normalize": "lower(trim(artist_raw)), 괄호·대괄호 제거",
+        "values": [
+          "",
+          "unknown",
+          "unknown artist",
+          "no artist",
+          "none",
+          "n/a",
+          "na",
+          "various",
+          "various artists",
+          "va",
+          "v.a.",
+          "anonymous",
+          "anonym",
+          "traditional",
+          "trad",
+          "trad.",
+          "folk traditional",
+          "untitled",
+          "-",
+          "?"
+        ]
+      },
+      "basis": "아티스트를 식별할 수 없으면 검색·이웃·여정 어디에도 쓸 수 없다. 목표 적중 62,295 · 신규 48,056."
     }
   ]
 }

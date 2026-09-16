@@ -23,7 +23,10 @@ import pyarrow.parquet as pq
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 WORK = os.path.join(ROOT, "work"); OUT = os.path.join(ROOT, "output"); PIPE = os.path.dirname(os.path.abspath(__file__))
-SERV = os.path.join(ROOT, "serving", "v2-pca16"); SERV_NEW = os.path.join(ROOT, "serving", "v2.1-pca16")
+# 입력 번들(규칙을 적용할 대상)과 출력 번들. v5 는 이미 R1~R9 를 지난 v2.1 위에서 돈다:
+#   ODY_BUNDLE_BASE=serving/v2.1-pca16 ODY_BUNDLE_NEW=serving/v2.2-pca16
+SERV = os.environ.get("ODY_BUNDLE_BASE") or os.path.join(ROOT, "serving", "v2-pca16")
+SERV_NEW = os.environ.get("ODY_BUNDLE_NEW") or os.path.join(ROOT, "serving", "v2.1-pca16")
 sys.path.insert(0, os.path.join(ROOT, "scripts")); sys.path.insert(0, PIPE)
 from korean_common import KEPT                                    # noqa: E402
 from catalog_audit import r6_key, load_titles_majority, LONG_EXEMPT_KW   # noqa: E402
@@ -64,17 +67,52 @@ def scan_tags_for(mbids):
     return out
 
 
-def scan_silence_features(meta):
+SILENCE_COLUMNS = ["lowlevel.average_loudness", "lowlevel.dynamic_complexity", "lowlevel.silence_rate_60dB.mean"]
+
+
+def scan_feature_columns(meta, columns):
+    """v2_feats·v2_feats_pilot 두 디렉터리에서 주어진 특징 컬럼을 곡 순서대로 모은다.
+
+    두 디렉터리를 모두 읽어야 한다 — pilot 를 빼면 bpm 이 733,146곡에서 비었던 것과 같은 사고가 난다(Q7).
+    """
     pos = pd.Series(np.arange(len(meta)), index=meta["mbid"])
-    loud = np.full(len(meta), np.nan); dyn = np.full(len(meta), np.nan); sil = np.full(len(meta), np.nan)
-    cols = ["mbid", "lowlevel.average_loudness", "lowlevel.dynamic_complexity", "lowlevel.silence_rate_60dB.mean"]
+    out = {c: np.full(len(meta), np.nan) for c in columns}
     for d_ in ("v2_feats", "v2_feats_pilot"):
         for f in sorted(os.listdir(os.path.join(WORK, d_))):
             if f.endswith(".parquet"):
-                t = pd.read_parquet(os.path.join(WORK, d_, f), columns=cols)
+                t = pd.read_parquet(os.path.join(WORK, d_, f), columns=["mbid"] + list(columns))
                 ii = pos.reindex(t["mbid"].astype(str).str.lower()).to_numpy()
-                loud[ii] = t[cols[1]]; dyn[ii] = t[cols[2]]; sil[ii] = t[cols[3]]
-    return loud, dyn, sil
+                keep = np.isfinite(ii)              # 특징 파일에는 이 번들에 없는 곡도 있다
+                idx = ii[keep].astype(np.int64)
+                for c in columns:
+                    out[c][idx] = t[c].to_numpy()[keep]
+    return out
+
+
+def scan_silence_features(meta):
+    got = scan_feature_columns(meta, SILENCE_COLUMNS)
+    return tuple(got[c] for c in SILENCE_COLUMNS)
+
+
+def norm_title(series):
+    """R10·R11·R13·R16 공통 입력. JSON 의 normalize = lower(trim(title_raw)) 와 같다."""
+    return series.fillna("").str.strip().str.lower()
+
+
+def any_pattern(text, patterns):
+    """JSON 에 적힌 정규식 중 하나라도 맞으면 True. 정규식은 이 파일에 두지 않는다."""
+    hit = np.zeros(len(text), bool)
+    for pat in patterns:
+        hit |= text.str.contains(pat, regex=True).to_numpy()
+    return hit
+
+
+def keyword_pattern(keywords, word_boundary=True):
+    """키워드 목록 → 정규식 하나. word_boundary 면 앞뒤가 알파벳이 아닐 때만 맞는다."""
+    body = "|".join(re.escape(k) for k in keywords if k)
+    if not body:
+        return None
+    return "(^|[^a-z])(" + body + ")([^a-z]|$)" if word_boundary else "(" + body + ")"
 
 
 def compute(meta, X, R):
@@ -156,12 +194,13 @@ def compute(meta, X, R):
     df["rep"] = df["g"].map(rep).to_numpy()
     mem = df[df["i"] != df["rep"]].copy()
     mem["dist"] = np.linalg.norm(X[mem["i"].to_numpy()] - X[mem["rep"].to_numpy()], axis=1)
-    fold = mem[mem["dist"] <= p["protect_dist"]]
+    pd6 = p.get("protect_dist")
+    fold = mem if pd6 is None else mem[mem["dist"] <= pd6]
     m6 = np.zeros(N, bool); m6[fold["i"].to_numpy()] = True
     masks["R6_dup_version"] = m6 if r.get("enabled") else np.zeros(N, bool)
     is_rep = np.zeros(N, bool); is_rep[rep.to_numpy()] = True
     extra.update({"R6_groups_multi": int((np.bincount(codes) > 1).sum()), "R6_members": int(len(mem)),
-                  "R6_protected": int((mem["dist"] > p["protect_dist"]).sum()), "R6_fold": int(len(fold)),
+                  "R6_protected": int(len(mem) - len(fold)), "R6_fold": int(len(fold)),
                   "dup_group_id": g, "is_representative": is_rep, "R6_mem": mem, "R6_rep": rep})
 
     # R7
@@ -169,11 +208,18 @@ def compute(meta, X, R):
     m7 = np.isfinite(sr) & (sr < r["params"]["min_sr"])
     masks["R7_samplerate"] = m7 if r.get("enabled") else np.zeros(N, bool); extra["flag_low_sr"] = m7
 
-    # R8
+    # R8 — 특징 파일은 여기서 한 번만 읽는다. R15 가 쓰는 네 컬럼도 같이 가져온다
     r = rules["R8_silence"]
-    loud, dyn, sil = scan_silence_features(meta)
+    p15 = rules["R15_static"]["params"]
+    feat = scan_feature_columns(meta, SILENCE_COLUMNS + list(p15["features"]) + [p15["onset_feature"]])
+    loud, dyn, sil = (feat[c] for c in SILENCE_COLUMNS)
     q = np.nanpercentile(loud, r["params"]["loudness_bottom_pct"])
     m8 = (loud <= q) & ((dyn < r["params"]["dyn_lt"]) | (sil > r["params"]["silence60_gt"]))
+    hard_pct = r["params"].get("hard_loudness_bottom_pct")
+    if hard_pct is not None:
+        q_hard = np.nanpercentile(loud, hard_pct)
+        m8 = m8 | (loud <= q_hard)            # 하위 0.1% 는 조건 없이(v5)
+        extra["R8_loud_q_hard"] = float(q_hard)
     masks["R8_silence"] = m8 if r.get("enabled") else np.zeros(N, bool); extra["R8_loud_q"] = float(q)
 
     # R9
@@ -183,6 +229,56 @@ def compute(meta, X, R):
     m9 = meta["mbid"].isin(set(a4["mbid"])).to_numpy()
     masks["R9_corrupt"] = m9 if r.get("enabled") else np.zeros(N, bool)
     extra["flag_clipped"] = m9
+
+    title = norm_title(meta["title_raw"])
+    artist = norm_title(meta["artist_raw"])
+
+    # R11 측정 신호
+    r = rules["R11_test_signal"]
+    m11 = any_pattern(title, r["params"]["patterns"].values())
+    masks["R11_test_signal"] = m11 if r.get("enabled") else np.zeros(N, bool)
+
+    # R12 spoken word·field recording·comedy — v3 에서 flag 로 뺐던 태그를 제외로 되돌린다
+    r = rules["R12_spoken_nonmusic"]
+    hits12 = allhits[allhits["keyword"].isin(r["params"]["keywords"])]
+    m12 = meta["mbid"].isin(set(hits12["mbid"])).to_numpy()
+    masks["R12_spoken_nonmusic"] = m12 if r.get("enabled") else np.zeros(N, bool)
+
+    # R13 오디오북 — 태그 + 제목 + 아티스트 표기
+    r = rules["R13_audiobook"]; p = r["params"]
+    hits13 = allhits[allhits["keyword"].isin(p["keywords"])]
+    # pandas 가 주는 배열은 읽기 전용일 수 있다. 제자리 연산(|=) 대신 새 배열을 만든다.
+    m13 = (meta["mbid"].isin(set(hits13["mbid"])).to_numpy()
+           | any_pattern(title, p["title_patterns"].values())
+           | any_pattern(artist, p["artist_patterns"].values()))
+    masks["R13_audiobook"] = m13 if r.get("enabled") else np.zeros(N, bool)
+
+    # R15 정지성 — 변동성 세 특징의 분위. 하위 1% 전부이거나, 하위 2% 이고 onset_rate 도 하위 5%
+    r = rules["R15_static"]; p = p15
+    got = feat
+    hard = np.ones(N, bool); soft = np.ones(N, bool)
+    for c in p["features"]:
+        v = got[c]
+        hard &= v <= np.nanpercentile(v, p["hard_bottom_pct"])
+        soft &= v <= np.nanpercentile(v, p["soft_bottom_pct"])
+    onset = got[p["onset_feature"]]
+    slow = onset <= np.nanpercentile(onset, p["onset_bottom_pct"])
+    m15 = hard | (soft & slow)
+    masks["R15_static"] = m15 if r.get("enabled") else np.zeros(N, bool)
+    extra.update({"R15_hard": int(hard.sum()), "R15_soft_and_slow": int((soft & slow).sum())})
+
+    # R16 제목 안의 비음악 키워드
+    r = rules["R16_title_nonmusic"]; p = r["params"]
+    pat16 = keyword_pattern(p["keywords"], p.get("word_boundary", True))
+    m16 = title.str.contains(pat16, regex=True).to_numpy() if pat16 else np.zeros(N, bool)
+    masks["R16_title_nonmusic"] = m16 if r.get("enabled") else np.zeros(N, bool)
+
+    # R17 아티스트 불명
+    r = rules["R17_artist_unknown"]
+    bare = artist.str.replace(r"[\[\]\(\)]", "", regex=True).str.strip()
+    m17 = bare.isin(set(r["params"]["values"])).to_numpy()
+    masks["R17_artist_unknown"] = m17 if r.get("enabled") else np.zeros(N, bool)
+
     return masks, extra
 
 
@@ -224,7 +320,8 @@ def main(dry_run=True):
             if a < b:
                 ov = int((masks[a] & masks[b]).sum())
                 if ov: S["overlap"]["{} & {}".format(a, b)] = ov
-    # R6 묶음 30개
+    # R6 묶음 30개. protect_dist 가 None(v5)이면 거리와 무관하게 전부 접힌다
+    pd6_report = {r["id"]: r for r in R["rules"]}["R6_dup_version"]["params"].get("protect_dist")
     mem, rep = extra["R6_mem"], extra["R6_rep"]
     gs = rng.choice(mem["g"].unique(), min(30, mem["g"].nunique()), replace=False)
     S["R6_groups"] = []
@@ -232,7 +329,7 @@ def main(dry_run=True):
         r_ = int(rep[g_]); ms = mem[mem["g"] == g_]
         S["R6_groups"].append({"rep": {"artist": meta["artist_raw"].iat[r_][:40], "title": meta["title_raw"].iat[r_][:70], "codec": meta["codec"].iat[r_], "nsub": int(meta["n_submissions"].iat[r_])},
                                "members": [{"title": meta["title_raw"].iat[int(i)][:70], "dist": round(float(d), 2), "codec": meta["codec"].iat[int(i)],
-                                            "folded": bool(d <= R["rules"][5]["params"]["protect_dist"])} for i, d in zip(ms["i"], ms["dist"])][:10]})
+                                            "folded": pd6_report is None or bool(d <= pd6_report)} for i, d in zip(ms["i"], ms["dist"])][:10]})
     # depth-1 노드별 제외 비율
     d1 = meta["node_d1"].to_numpy()
     S["by_depth1"] = {n: {"songs": int((d1 == n).sum()), "excluded_share": float(excl[d1 == n].mean())} for n in sorted(set(d1))}
@@ -264,7 +361,12 @@ def main(dry_run=True):
     co = pd.read_parquet(os.path.join(SERV, "coords_v2.parquet")); co[keep].to_parquet(os.path.join(SERV_NEW, "coords_v2.parquet"), compression="zstd", index=False)
     npth = pd.read_parquet(os.path.join(SERV, "map_tree", "node_paths_v2.parquet")); npth["mbid"] = npth["mbid"].astype(str).str.lower()
     npth = npth.set_index("mbid").loc[cat.loc[keep, "mbid"]].reset_index(); npth.to_parquet(os.path.join(SERV_NEW, "map_tree", "node_paths_v2.parquet"), compression="zstd", index=False)
-    shutil.copy(os.path.join(ROOT, "serving", "postprocess_rules.json"), SERV_NEW)
+    # 이 저장소는 후처리 규칙을 번들 안에 둔다(serving/<v>/postprocess_rules.json).
+    # 원본 dmadkr 레이아웃은 serving/ 바로 아래였다. 둘 다 받아준다.
+    rules_src = os.path.join(ROOT, "serving", "postprocess_rules.json")
+    if not os.path.exists(rules_src):
+        rules_src = os.path.join(SERV, "postprocess_rules.json")
+    shutil.copy(rules_src, SERV_NEW)
     m = json.load(io.open(os.path.join(SERV, "manifest.json"), encoding="utf-8"))
     m.update({"bundle_version": "v2.1-pca16-" + time.strftime("%Y-%m-%d"), "status": "PROMOTED (v2.1 = v2 + 카탈로그 정제, fit·트리 동일)",
               "songs": int(keep.sum()), "songs_before_exclusion": N, "exclusion_rules_hash": rules_hash, "exclusion_rules": "pipeline/exclusion_rules.json",

@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.messaging;
 
 /**
  * 발행 인터페이스 — 모든 브로드캐스트는 이것만 호출

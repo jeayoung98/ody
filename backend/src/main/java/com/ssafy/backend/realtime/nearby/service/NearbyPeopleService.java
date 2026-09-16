@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -9,25 +10,27 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
-import com.ssafy.backend.realtime.common.UserDisplayResolver;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
+import com.ssafy.backend.realtime.meeting.MeetingService;
 import com.ssafy.backend.realtime.nearby.dto.NearbyPerson;
 import com.ssafy.backend.realtime.nearby.dto.NearbySnapshot;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort;
 import com.ssafy.backend.realtime.nearby.port.NeighborPort.NeighborSong;
+import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 주변사람 버튼을 눌렀을 때 목록을 만들어 주는 곳 (RT-10, T1).
- * 순서: 내가 지금 듣는 곡 확인 → 비슷한 곡들 가져오기 → 곡마다 듣는 사람을 꺼내 사람 한 명씩 목록에 담기.
- * 지도에 점으로 찍지 않고 목록만 준다(지도 점은 뷰포트가 따로 한다). 실시간 변화는 T2에서.
+ * 주변사람 버튼을 눌렀을 때 목록을 만들고 실시간 변화를 구독하는 곳 (RT-10·11, T1·T2).
+ * 순서: 내가 지금 듣는 곡 확인 → 비슷한 곡들 가져오기 → 구독 등록 → 곡마다 듣는 사람을 꺼내 목록에 담기.
+ * 지도에 점으로 찍지 않고 목록만 준다(지도 점은 뷰포트가 따로 한다).
  * realtime 켰을 때만 뜬다.
  */
 @Slf4j
@@ -40,6 +43,8 @@ public class NearbyPeopleService {
 	private final NeighborPort neighborPort;
 	private final NearbyRedisRepository nearbyRepo;
 	private final UserDisplayResolver userDisplayResolver;
+	private final MeetingService meetingService;
+	private final RiderCountPort riderCountPort;
 
 	/**
 	 * 지금 이 사람 기준으로 주변사람 목록을 만든다.
@@ -52,7 +57,7 @@ public class NearbyPeopleService {
 		//    아직 아무 곡도 안 틀었으면(기준 곡이 없으면) 목록을 만들 수 없어서 막는다.
 		PresenceSnapshot me = presenceRepo.snapshot(email);
 		if (me == null || me.musicId() == null) {
-			log.warn("주변사람 목록 거부 reason={}", WsCode.PRESENCE_NO_ANCHOR);
+			log.warn("주변사람 목록 거부 reason={}", RealtimeWsErrorCode.PRESENCE_NO_ANCHOR);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 		long myMusicId = me.musicId();
@@ -69,11 +74,24 @@ public class NearbyPeopleService {
 			throw new CustomException(RealtimeErrorCode.SERVICE_UNAVAILABLE);
 		}
 
-		// 3) 그 곡들 각각을 지금 누가 듣고 있는지 한 번에 읽어온다.
+		// 3) 목록을 읽기 전에 이 곡들의 변화를 먼저 구독한다.
+		//    반대 순서면 목록을 읽는 사이 생긴 변화가 스냅샷과 델타 양쪽에서 빠질 수 있다.
+		//    다시 연 경우에는 새 곡부터 등록한 뒤 더 이상 보지 않는 옛 곡만 해제한다.
 		List<Long> musicIds = songs.stream().map(NeighborSong::musicId).toList();
+		List<Long> previousMusicIds = nearbyRepo.subscribedMusicIds(email);
+		nearbyRepo.subscribe(email, musicIds);
+
+		Set<Long> removedMusicIds = new LinkedHashSet<>(previousMusicIds);
+		removedMusicIds.removeAll(musicIds);
+		if (!removedMusicIds.isEmpty()) {
+			nearbyRepo.unsubscribe(email, removedMusicIds);
+		}
+		nearbyRepo.saveMeta(email, musicIds);
+
+		// 4) 구독 등록이 끝난 뒤 그 곡들 각각을 지금 누가 듣고 있는지 읽어온다.
 		Map<Long, Set<String>> listenersByMusic = nearbyRepo.listeners(musicIds);
 
-		// 4) 곡마다 듣는 사람을 꺼내 사람 한 명씩 목록에 넣는다. 나 자신은 뺀다.
+		// 5) 곡마다 듣는 사람을 꺼내 사람 한 명씩 목록에 넣는다. 나 자신은 뺀다.
 		//    곡이 가까운 순으로 와 있어서 이 순서대로 넣으면 목록도 자연히 가까운 순이 된다.
 		List<NearbyPerson> people = new ArrayList<>();
 		for (NeighborSong song : songs) {
@@ -84,12 +102,26 @@ public class NearbyPeopleService {
 				}
 				UserView who = userDisplayResolver.resolve(listener);
 				people.add(new NearbyPerson(
-						who.nickname(), who.imageUrl(),
+						listener, who.nickname(), who.imageUrl(),
+						meetingService.countWith(email, listener), riderCountPort.count(listener),
 						song.musicId(), song.title(), song.artist(), song.distance()));
 			}
 		}
 
 		log.info("[Nearby] 주변사람 목록 완료 myMusicId={} 사람수={}", myMusicId, people.size());
 		return new NearbySnapshot(myMusicId, people);
+	}
+
+	/**
+	 * 저장된 곡 목록으로 주변사람 구독을 닫는다.
+	 * @param email 패널을 닫은 사용자 이메일
+	 */
+	public void close(String email) {
+		List<Long> musicIds = nearbyRepo.subscribedMusicIds(email); //구독중 곡 목록 조회
+		if (!musicIds.isEmpty()) {
+			nearbyRepo.unsubscribe(email, musicIds); // 각 곡들 구독 해제
+		}
+		nearbyRepo.deleteMeta(email);//meta 삭제
+		log.info("[Nearby] 주변사람 구독 종료 곡수={}", musicIds.size());
 	}
 }

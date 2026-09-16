@@ -6,10 +6,10 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.realtime.common.PositionChanged;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode;
-import com.ssafy.backend.realtime.common.RealtimeErrorCode.WsCode;
-import com.ssafy.backend.realtime.common.RealtimeEventBus;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
+import com.ssafy.backend.realtime.event.PositionChanged;
+import com.ssafy.backend.realtime.event.RealtimeEventBus;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper.Placement;
 import com.ssafy.backend.realtime.mapper.PlayHistoryMapper;
@@ -52,18 +52,18 @@ public class PlayDeclarationService {
 	 * @param musicId 재생 곡 id — 좌표 계산의 유일한 입력
 	 * @param source  진입 경로(MAP/JOURNEY/PLAYLIST/FOLLOW) — play_history 기록용(③)
 	 * @return {playHistoryId, musicId, layer, x, y, cellX, cellY}
-	 * @throws CustomException PRESENCE_ERROR — 미연결/앵커없음/좌표없음/STALE(로그에 WsCode 사유)
+	 * @throws CustomException PRESENCE_ERROR — 미연결/앵커없음/좌표없음/STALE(로그에 RealtimeWsErrorCode 사유)
 	 */
 	public PlayResponse play(String email, long musicId, String source) {
 		// 1) 이 사람이 지금 접속해서 어느 레이어를 보고 있는지 가져온다(재생은 지금 보는 레이어에서 일어남).
 		//    접속 안 했으면 NOT_CONNECTED, 레이어가 없으면(아직 자리 안 잡음) NO_ANCHOR 로 거부.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null || before.epoch() == null) {
-			log.warn("play 거부 reason={} musicId={}", WsCode.PRESENCE_NOT_CONNECTED, musicId);
+			log.warn("play 거부 reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_NOT_CONNECTED, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 		if (before.layer() == null) {
-			log.warn("play 거부 reason={} musicId={}", WsCode.PRESENCE_NO_ANCHOR, musicId);
+			log.warn("play 거부 reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_NO_ANCHOR, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 		int layer = before.layer();
@@ -71,7 +71,7 @@ public class PlayDeclarationService {
 		// 2) 곡 좌표는 서버가 musicId 로 직접 찾는다(클라가 보낸 좌표는 안 믿음). 없으면 거부.
 		double[] pc = musicLocationPort.findLocation(musicId)
 				.orElseThrow(() -> {
-					log.warn("play 거부 reason={} musicId={}", WsCode.PRESENCE_LOCATION_NULL, musicId);
+					log.warn("play 거부 reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_LOCATION_NULL, musicId);
 					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 				});
 
@@ -86,7 +86,7 @@ public class PlayDeclarationService {
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 		if (meeting == null) {
 			// 그 사이 이 사람 상태가 딴 데서 바뀜(예: 재접속) → 이번 재생은 무시(STALE).
-			log.warn("play STALE reason={} musicId={}", WsCode.PRESENCE_STALE, musicId);
+			log.warn("play STALE reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_STALE, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 

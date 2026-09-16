@@ -1,4 +1,4 @@
-package com.ssafy.backend.realtime.common;
+package com.ssafy.backend.realtime.user;
 
 import java.util.Collection;
 import java.util.List;

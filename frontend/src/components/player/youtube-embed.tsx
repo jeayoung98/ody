@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { PLAYBACK_BLOCKED, SKIPPED_UNPLAYABLE } from "@/constants";
 import { usePlayability, useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
+import { logVideoId } from "@/lib/live-log";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { registerPlayer, type PlayerHandle } from "./player-registry";
@@ -41,6 +42,12 @@ const CUED = 5;
  * 무한히 매달리지 않게 횟수를 둔다.
  */
 const REPLAY_TRIES = 3;
+
+/** 이보다 오래된 응답이면 이번에 조회한 게 아니라 캐시에 있던 것으로 본다 (로그 표시용) */
+const CACHE_HIT_MS = 1000;
+
+/** 재생 맥락을 로그에 쓸 한국어 이름으로 (`context.kind` 그대로 찍으면 화면 말과 달라 헷갈린다) */
+const CONTEXT_LABEL: Record<string, string> = { single: "단독", playlist: "플리", journey: "여정", nearby: "주변 탐색" };
 
 interface YtPlayer extends PlayerHandle {
   loadVideoById: (id: string) => void;
@@ -100,11 +107,35 @@ export default function YoutubeEmbed() {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   // videoId 는 **전용 엔드포인트**가 출처다 — 상세 응답에 딸려 오던 것을 더 쓰지 않는다 (S15P21A405-340)
-  const videoId = useVideoIdQuery(currentMusicId).data?.videoId ?? null;
+  const { status, data, error, dataUpdatedAt } = useVideoIdQuery(currentMusicId);
+  const videoId = data?.videoId ?? null;
   const playSeq = usePlayerStore((s) => s.playSeq);
   // 같은 쿼리를 한 번 더 읽는다 — 키가 같아 요청은 그대로 한 번이다
   const { blocked } = usePlayability(currentMusicId);
   const showToast = useToastStore((s) => s.show);
+
+  /**
+   * **소리가 날지 안 날지를 곡마다 콘솔에 남긴다** (S15P21A405-363).
+   *
+   * 여기가 그 판단을 실제로 내리는 유일한 자리다 — 플레이어바·상세의 버튼은 같은 값을 보고
+   * 모양만 정한다. 응답이 아니라 **곡을 기준으로** 찍으므로, 캐시라 요청이 안 나간 곡도 남는다.
+   *
+   * 캐시 여부는 `dataUpdatedAt` 이 방금인지로 본다. `isFetchedAfterMount` 는 못 쓴다 — 이 컴포넌트는
+   * 앱이 뜰 때 한 번 붙어 계속 살아 있어서, 아까 상세 화면이 받아둔 값도 "마운트 뒤 조회" 로 세어진다.
+   */
+  useEffect(() => {
+    if (currentMusicId == null) return;
+    const p = usePlayerStore.getState();
+    const label = CONTEXT_LABEL[p.context.kind] ?? p.context.kind;
+    logVideoId(currentMusicId, {
+      status,
+      lookup: data?.lookup ?? "unsearched",
+      videoId: data?.videoId ?? null,
+      error: error as { code?: string; message?: string } | null,
+      fromCache: Date.now() - dataUpdatedAt > CACHE_HIT_MS,
+      where: p.queue.length ? `${label} ${p.queueIndex + 1}/${p.queue.length}` : label,
+    });
+  }, [currentMusicId, status, data, error, dataUpdatedAt]);
 
   /**
    * **찾아봤는데 음원이 없는 곡은 건너뛴다** (S15P21A405-364).

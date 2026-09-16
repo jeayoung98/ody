@@ -14,10 +14,13 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { MusicDetail } from "@/types";
 import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
+import SongReportMenu from "./song-report-menu";
 
 /** 재생 · 플리에 추가 · 여정 출발/도착으로 지정 */
 export default function SongActions({ music }: { music: MusicDetail }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  /** 신고 사유 목록이 열려 있나 (S15P21A405-377). 고르면 보내고 닫힌다 */
+  const [reportOpen, setReportOpen] = useState(false);
   const playWithConfirm = usePlaySong();
   const pause = usePlayerStore((s) => s.pause);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
@@ -105,6 +108,19 @@ export default function SongActions({ music }: { music: MusicDetail }) {
           {blocked.detail} {blocked.ref && <span className="text-ink-4">{blocked.ref}</span>}
         </Note>
       )}
+      {/*
+        곡 신고 (S15P21A405-377). **눈에 띄지 않게 둔다** — 자주 쓸 것이 아니라 이상한 곡을
+        만났을 때만 찾는 자리다. 재생·여정 버튼과 같은 무게로 놓으면 그쪽을 가린다.
+      */}
+      <button
+        type="button"
+        onClick={() => setReportOpen((v) => !v)}
+        aria-expanded={reportOpen}
+        className="self-start text-[11.5px] text-ink-4 underline decoration-line underline-offset-2 transition hover:text-ink-2"
+      >
+        이 곡 신고
+      </button>
+      {reportOpen && <SongReportMenu musicId={music.id} onDone={() => setReportOpen(false)} />}
       {FEATURES.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );

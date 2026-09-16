@@ -91,6 +91,11 @@ export const API_ENDPOINTS = {
     play: (id: number) => `/bff/music/${id}/play`,
     /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
     videoId: (id: number) => `/bff/music/${id}/video-id`,
+    /**
+     * 곡 신고 (S15P21A405-377). **목이다** — 백엔드에 아직 없다 (BACKEND-NOTES A-23).
+     * 실연동이 붙으면 그때 경로를 백엔드 것으로 맞춘다.
+     */
+    report: (id: number) => `/bff/music/${id}/report`,
   },
 
   /**

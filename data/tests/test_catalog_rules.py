@@ -1,9 +1,12 @@
 # -*- coding: utf-8 -*-
 """S5 카탈로그 제외 규칙 패리티 (spec 20, Jira S15P21A405-128).
 
-    S1 대표행 7,404,506  →  규칙 R1~R9  →  제외 780,107  →  남는 곡 6,624,399
+    S1 대표행 7,404,506  →  규칙 R1~R9  →  제외 780,107  →  남는 곡 6,624,399   (v4 카탈로그)
+    그 위에 v5(R10~R17 + R1·R5~R9 강화)  →  남는 곡 4,688,786
 
-기준은 `work/catalog_v2.parquet` 이다. 원본 numpy 파이프라인(`pipeline/exclusion_apply.py`)이
+기준은 `work/catalog_v2.parquet` 이다. **그 파일을 만든 규칙 버전에서만 대조가 성립한다** —
+`rules_hash` 가 현재 `exclusion_rules.json` 과 다르면 패리티 검사는 skip 한다(v5 를 적용해도
+카탈로그를 다시 만들기 전까지는 판정이 다른 게 정상이기 때문이다). 원본 numpy 파이프라인(`pipeline/exclusion_apply.py`)이
 실제로 만든 판정이 거기 `excluded`·`excluded_reason[]` 로 들어 있고, 이 테스트는 이식 구현이
 같은 판정을 내는지 대조한다. 대용량이 없는 머신에서는 skip 한다.
 
@@ -58,11 +61,14 @@ def test_rules_come_from_json_only(rules_pair):
     rules, digest = rules_pair
     assert list(rules) == ["R1_length", "R2_nonmusic", "R3_no_key", "R4_cohort", "R5_dup_canonical",
                            "R6_dup_version", "R7_samplerate", "R8_silence", "R9_corrupt",
-                           "R10_title_noise"]
+                           "R10_title_noise", "R11_test_signal", "R12_spoken_nonmusic",
+                           "R13_audiobook", "R15_static", "R16_title_nonmusic", "R17_artist_unknown"]
     assert rules["R10_title_noise"]["enabled"] is True
     assert len(rules["R10_title_noise"]["params"]["patterns"]) == 5
-    assert rules["R7_samplerate"]["enabled"] is False
-    assert rules["R9_corrupt"]["enabled"] is False
+    assert rules["R7_samplerate"]["enabled"] is True, "v5 에서 제외로 전환"
+    assert rules["R9_corrupt"]["enabled"] is True, "v5 에서 제외로 전환"
+    assert rules["R5_dup_canonical"]["params"]["protect_dist"] is None, "v5: 중복 전부 접기"
+    assert rules["R6_dup_version"]["params"]["protect_dist"] is None, "v5: 중복 전부 접기"
     assert len(digest) == 16
 
     source = open(os.path.join(ROOT, "spark", "jobs", "catalog_rules.py"), encoding="utf-8").read()
@@ -71,23 +77,23 @@ def test_rules_come_from_json_only(rules_pair):
         assert literal not in body, "임계값 {} 가 코드에 하드코딩돼 있다".format(literal)
 
 
-def test_disabled_rules_only_produce_flags(rules_pair):
-    """R7·R9 는 꺼져 있어 제외에 기여하지 않지만 flag 컬럼은 만든다."""
+def test_low_quality_rules_exclude_and_flag(rules_pair):
+    """v5: R7·R9 는 제외하면서 flag 컬럼도 계속 만든다(규칙 2 의 표시는 유지)."""
     rules, _ = rules_pair
     row = {"sample_rate": 22050.0, "n_clipped_features": 9, "title_raw": "t", "artist_raw": "a",
            "fingerprint": 74, "length": 200.0}
     masks = S5.row_masks(row, rules)
-    assert masks["R7_samplerate"] is False
-    assert masks["R9_corrupt"] is False
+    assert masks["R7_samplerate"] is True
+    assert masks["R9_corrupt"] is True
     flags = S5.row_flags(row, rules)
     assert flags["flag_low_sr"] is True
     assert flags["flag_clipped"] is True
 
 
 def test_fold_group_protects_far_members(rules_pair):
-    """대표와 먼 멤버는 접지 않는다. 임계는 JSON 의 protect_dist."""
+    """protect_dist 가 있으면 먼 멤버를 보호하고, None(v5)이면 전부 접는다."""
     rules, _ = rules_pair
-    protect = rules["R6_dup_version"]["params"]["protect_dist"]
+    protect = 4.0                       # 이 검사만의 값. JSON 의 v5 값은 None 이라 아래에서 따로 본다
     zero = [0.0] * 16
     near, far = list(zero), list(zero)
     near[0] = protect - 0.5
@@ -98,6 +104,9 @@ def test_fold_group_protects_far_members(rules_pair):
     rep, folded = S5.fold_group(rows, S5.r5_order_key, protect)
     assert rep == 0
     assert folded == {1}
+    rep, folded = S5.fold_group(rows, S5.r5_order_key, rules["R6_dup_version"]["params"]["protect_dist"])
+    assert rep == 0
+    assert folded == {1, 2}, "v5 는 거리 보호 없이 전부 접는다"
 
 
 def test_representative_order_keys():
@@ -137,6 +146,74 @@ def test_r10_title_noise_samples(rules_pair):
         assert not S5.row_masks({"title_raw": title}, rules)["R10_title_noise"], title
 
 
+R11_HITS = ["Sine Wave 440", "1000 Hz Test Tone", "White Noise", "Test Signal", "Frequency Sweep"]
+R11_KEEP = ["Sine of the Times", "Noise Pollution", "Test Drive", "Sweep the Leg"]
+R16_HITS = ["Intro", "The Best Intro Ever", "Band Interview 1998", "Guided Meditation",
+            "DJ Mix Vol. 3", "Full Album", "Station ID", "Silence"]
+R16_KEEP = ["Introduction to Love", "Interviewer", "Mixtapes and Memories".replace("Mixtape", "Tape"),
+            "Silent Night", "Testify"]
+R13_HITS = [{"title_raw": "Chapter 12"}, {"title_raw": "Hoerbuch Teil 3"},
+            {"title_raw": "Moby Dick (Unabridged)"}, {"artist_raw": "read by Stephen Fry"},
+            {"a5_keywords": ["audiobook"]}]
+R13_KEEP = [{"title_raw": "Chapter of Life"}, {"artist_raw": "Reader"}, {"title_raw": "Teil"}]
+R17_HITS = ["", "Unknown", "[unknown]", "Various Artists", "(traditional)", "Anonymous", "?"]
+R17_KEEP = ["Unknown Mortal Orchestra", "Various Cruelties", "Tradition", "The Anonymous Choir"]
+
+
+def test_r11_test_signal_samples(rules_pair):
+    rules, _ = rules_pair
+    for title in R11_HITS:
+        assert S5.row_masks({"title_raw": title}, rules)["R11_test_signal"], title
+    for title in R11_KEEP:
+        assert not S5.row_masks({"title_raw": title}, rules)["R11_test_signal"], title
+
+
+def test_r16_title_keywords_need_word_boundary(rules_pair):
+    rules, _ = rules_pair
+    for title in R16_HITS:
+        assert S5.row_masks({"title_raw": title}, rules)["R16_title_nonmusic"], title
+    for title in R16_KEEP:
+        assert not S5.row_masks({"title_raw": title}, rules)["R16_title_nonmusic"], title
+
+
+def test_r13_audiobook_samples(rules_pair):
+    rules, _ = rules_pair
+    for row in R13_HITS:
+        assert S5.row_masks(row, rules)["R13_audiobook"], row
+    for row in R13_KEEP:
+        assert not S5.row_masks(row, rules)["R13_audiobook"], row
+
+
+def test_r17_artist_unknown_samples(rules_pair):
+    rules, _ = rules_pair
+    for artist in R17_HITS:
+        assert S5.row_masks({"artist_raw": artist}, rules)["R17_artist_unknown"], artist
+    for artist in R17_KEEP:
+        assert not S5.row_masks({"artist_raw": artist}, rules)["R17_artist_unknown"], artist
+
+
+def test_r12_spoken_tags_now_exclude(rules_pair):
+    """v3 에서 flag 로 돌렸던 세 태그가 v5 에서는 제외다. flag 컬럼도 그대로 남는다."""
+    rules, _ = rules_pair
+    row = {"a5_keywords": ["spoken word"], "title_raw": "t", "artist_raw": "a"}
+    assert S5.row_masks(row, rules)["R12_spoken_nonmusic"] is True
+    assert S5.row_flags(row, rules)["flag_spoken"] is True
+
+
+def test_r15_static_uses_quantiles(rules_pair):
+    """R15 는 분위값이 없으면 판정하지 않고, 있으면 하위 1% 전부 또는 하위 2%+느린 onset 을 잡는다."""
+    rules, _ = rules_pair
+    p = rules["R15_static"]["params"]
+    quantiles = {name: (0.1, 0.2) for name in p["features"]}
+    quantiles[p["onset_feature"]] = 0.5
+    low = {name: 0.05 for name in p["features"]}
+    mid = {name: 0.15 for name in p["features"]}
+    assert S5.row_masks(dict(low), rules, quantiles=quantiles)["R15_static"] is True
+    assert S5.row_masks(dict(mid, **{p["onset_feature"]: 0.4}), rules, quantiles=quantiles)["R15_static"] is True
+    assert S5.row_masks(dict(mid, **{p["onset_feature"]: 9.0}), rules, quantiles=quantiles)["R15_static"] is False
+    assert S5.row_masks(dict(low), rules)["R15_static"] is False, "분위값 없으면 판정 없음"
+
+
 def test_job_imports_without_pyspark():
     assert S5.PC[0] == "pc1" and len(S5.PC) == 16
     assert "flag_low_sr" in S5.FLAG_COLUMNS
@@ -152,10 +229,23 @@ def work(root):
     return path
 
 
+def numpy_rules_hash():
+    """`pipeline/exclusion_apply.py` 가 카탈로그에 적는 해시. 파일 바이트의 sha256 앞 16자다."""
+    import hashlib
+    path = os.path.join(ROOT, "pipeline", "exclusion_rules.json")
+    return hashlib.sha256(open(path, "rb").read()).hexdigest()[:16]
+
+
 @pytest.fixture(scope="module")
 def catalog(work):
     import pyarrow.parquet as pq
-    return pq.ParquetFile(os.path.join(work, "catalog_v2.parquet"))
+    parquet = pq.ParquetFile(os.path.join(work, "catalog_v2.parquet"))
+    if "rules_hash" in parquet.schema_arrow.names:
+        written = parquet.read_row_group(0, columns=["rules_hash"]).column("rules_hash")[0].as_py()
+        if written != numpy_rules_hash():
+            pytest.skip("catalog_v2 는 규칙 {} 산출물이고 현재 규칙은 {} 다. "
+                        "s1_apply 로 카탈로그를 다시 만든 뒤 대조한다".format(written, numpy_rules_hash()))
+    return parquet
 
 
 @pytest.fixture(scope="module")

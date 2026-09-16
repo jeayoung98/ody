@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """S5 카탈로그 제외 규칙 (spec 20, Jira S15P21A405-128).
 
-    S1 대표행 7,404,506  →  규칙 R1~R10  →  제외 813,753  →  남는 곡 6,590,753
+    S1 대표행 7,404,506  →  규칙 R1~R17  →  제외 2,715,720  →  남는 곡 4,688,786 (v5)
 
 곡 수를 줄이는 두 번째이자 마지막 단계다. 첫 번째는 S1(`manifest_rows.py`).
 **삭제가 아니라 표시다**(규칙 2). 모든 행을 그대로 내고 `excluded`, `excluded_reason[]`,
@@ -19,11 +19,18 @@ numpy 기준 구현은 `pipeline/exclusion_apply.py`, 임계값은 `pipeline/exc
     R4 cohort      코호트 밖 지문. S1 이 이미 걸러서 적중 0 이 정상(명시용)
     R5 dup_canon   같은 canonical 여러 mbid → 대표 1행. 좌표 거리 protect_dist 초과는 보호
     R6 dup_version 제목 정규화 키 + artist_norm 묶음 → 대표 1행. 같은 거리 보호
-    R7 samplerate  enabled=false. flag_low_sr 만 만든다
-    R8 silence     average_loudness 하위 분위 + (dynamic_complexity 낮음 or 무음률 높음)
-    R9 corrupt     enabled=false. flag_clipped 만 만든다
+    R7 samplerate  v5 에서 제외로 전환(min_sr 미만). flag_low_sr 도 계속 만든다
+    R8 silence     average_loudness 하위 분위 + (dynamic_complexity 낮음 or 무음률 높음).
+                   v5: hard_loudness_bottom_pct 하위는 조건 없이 제외
+    R9 corrupt     v5 에서 제외로 전환(극단 특징 min_clipped_features 이상). flag_clipped 유지
     R10 title_noise 제목이 곡을 식별하지 못하는 행. lower(trim(title_raw)) 가 JSON 의 정규식
                    (untitled·빈 제목·Track N·Intro/Outro 단독·Unknown) 중 하나에 맞으면 제외
+    R11 test_signal 측정·캘리브레이션 신호(sine wave·test tone·1kHz·white noise)
+    R12 spoken     spoken word·field recording·comedy 태그. v3 의 flag 를 v5 에서 제외로 되돌림
+    R13 audiobook  audiobook 태그 + 제목(chapter N·Hörbuch) + 아티스트(read by·gelesen von)
+    R15 static     변동성 세 특징 하위 1% 전부, 또는 하위 2% 이고 onset_rate 하위 5%
+    R16 title_nonmusic 제목 안의 비음악 키워드 40여 개(단어 경계)
+    R17 artist_unknown 아티스트가 빈 값·unknown·Various Artists·traditional 등
 
 ## 이식하지 않는 것
 dry-run 리포트, 브릿지 풀 Hit@10 재검증, 서빙 번들 내보내기. 앞의 둘은 fit·QA 산물이고
@@ -120,6 +127,51 @@ def is_title_noise(title, rule):
     return any(re.search(p, t) for p in rule["params"]["patterns"].values())
 
 
+def matches_any(text, patterns):
+    """정규식 중 하나라도 맞으면 True. 정규식은 JSON 에서만 온다(규칙 9)."""
+    t = (text or "").strip().lower()
+    return any(re.search(p, t) for p in patterns)
+
+
+def keyword_regex(keywords, word_boundary=True):
+    """키워드 목록 → 정규식 하나. numpy 경로(exclusion_apply.keyword_pattern)와 같은 문자열."""
+    body = "|".join(re.escape(k) for k in keywords if k)
+    if not body:
+        return None
+    return "(^|[^a-z])(" + body + ")([^a-z]|$)" if word_boundary else "(" + body + ")"
+
+
+def is_artist_unknown(artist, rule):
+    """R17. 괄호·대괄호를 떼고 소문자 비교. 값 목록은 JSON 에 있다."""
+    text = re.sub(r"[\[\]\(\)]", "", (artist or "").strip().lower()).strip()
+    return text in set(rule["params"]["values"])
+
+
+def is_audiobook(row, rule):
+    """R13. 태그·제목·아티스트 셋 중 하나라도 맞으면 True."""
+    p = rule["params"]
+    if set(row.get("a5_keywords") or ()) & set(p["keywords"]):
+        return True
+    return (matches_any(row.get("title_raw"), p["title_patterns"].values())
+            or matches_any(row.get("artist_raw"), p["artist_patterns"].values()))
+
+
+def is_static(row, rule, quantiles):
+    """R15. quantiles 는 {특징: (하위1%, 하위2%)} 와 onset 의 하위5%."""
+    p = rule["params"]
+    hard = soft = True
+    for name in p["features"]:
+        value = _num(row.get(name))
+        if value is None:
+            return False
+        q_hard, q_soft = quantiles[name]
+        hard = hard and value <= q_hard
+        soft = soft and value <= q_soft
+    onset = _num(row.get(p["onset_feature"]))
+    slow = onset is not None and onset <= quantiles[p["onset_feature"]]
+    return hard or (soft and slow)
+
+
 def has_no_modifier(title):
     """R6 대표 선정의 1순위. 제거 수식어도 미분류 블록도 없는 제목."""
     _key, _keep, dropped, unknown = r6_key(title)
@@ -167,15 +219,17 @@ def r1_length(row, rule, tags):
     return length > p.get("max_s_untagged", p["max_s"])      # 미태그는 더 넉넉한 상한
 
 
-def _r8(row, p, loud_q):
+def _r8(row, p, loud_q, hard_q=None):
     loud = _num(row.get("loudness"))
+    if hard_q is not None and loud is not None and loud <= hard_q:
+        return True                                          # v5: 하위 0.1% 는 조건 없이
     if loud_q is None or loud is None or loud > loud_q:
         return False
     dyn, sil = _num(row.get("dyn_complexity")), _num(row.get("silence60"))
     return (dyn is not None and dyn < p["dyn_lt"]) or (sil is not None and sil > p["silence60_gt"])
 
 
-def row_masks(row, rules, tags=(), loud_q=None):
+def row_masks(row, rules, tags=(), loud_q=None, quantiles=None, hard_q=None):
     """행 하나로 판정되는 규칙들. R5·R6 은 묶음이 필요해서 여기 없다."""
     out = {}
     for rid, rule in rules.items():
@@ -194,11 +248,24 @@ def row_masks(row, rules, tags=(), loud_q=None):
             sr = _num(row.get("sample_rate"))
             hit = sr is not None and sr < p["min_sr"]
         elif rid == "R8_silence":
-            hit = _r8(row, p, loud_q)
+            hit = _r8(row, p, loud_q, hard_q)
         elif rid == "R9_corrupt":
             hit = int(row.get("n_clipped_features") or 0) >= p["min_clipped_features"]
         elif rid == "R10_title_noise":
             hit = is_title_noise(row.get("title_raw"), rule)
+        elif rid == "R11_test_signal":
+            hit = matches_any(row.get("title_raw"), p["patterns"].values())
+        elif rid == "R12_spoken_nonmusic":
+            hit = bool(set(row.get("a5_keywords") or ()) & set(p["keywords"]))
+        elif rid == "R13_audiobook":
+            hit = is_audiobook(row, rule)
+        elif rid == "R15_static":
+            hit = quantiles is not None and is_static(row, rule, quantiles)
+        elif rid == "R16_title_nonmusic":
+            pattern = keyword_regex(p["keywords"], p.get("word_boundary", True))
+            hit = bool(pattern) and bool(re.search(pattern, (row.get("title_raw") or "").strip().lower()))
+        elif rid == "R17_artist_unknown":
+            hit = is_artist_unknown(row.get("artist_raw"), rule)
         else:
             continue                           # R5·R6 은 fold_group 이 판정한다
         out[rid] = bool(hit) and enabled
@@ -284,13 +351,17 @@ def _fold_columns(df, group_col, order_cols, protect_dist, prefix):
             .withColumn(prefix + "_fold", member & close))
 
 
-def apply_rules(df, rules, loud_q):
+def apply_rules(df, rules, loud_q, quantiles=None, hard_q=None):
     """행 단위 + 묶음 단위 규칙을 모두 적용한다. 행은 하나도 버리지 않는다.
 
     df 에 필요한 컬럼: mbid, canonical, artist_norm, artist_raw, title_raw, length,
     sample_rate, lossless, part, offset, fingerprint, n_submissions, pc1..pc16,
     has_tag, has_exempt_tag, a5_keywords(array<string>), n_clipped_features,
     loudness, dyn_complexity, silence60.
+
+    v5 는 R15 때문에 특징 네 컬럼이 더 필요하다: lowlevel.spectral_flux.var,
+    tonal.hpcp_entropy.var, lowlevel.spectral_complexity.var, rhythm.onset_rate.
+    컬럼 이름은 JSON 의 R15_static.params 가 정한다. quantiles 는 feature_quantiles() 가 준다.
     """
     from pyspark.sql import functions as F
     from pyspark.sql.types import BooleanType, StringType
@@ -298,7 +369,10 @@ def apply_rules(df, rules, loud_q):
     p1 = rules["R1_length"]["params"]
     p2 = rules["R2_nonmusic"]["params"]
     p8 = rules["R8_silence"]["params"]
+    quantiles = quantiles or {}
     title_norm = F.lower(F.trim(F.coalesce(F.col("title_raw"), F.lit(""))))
+    artist_norm_txt = F.lower(F.trim(F.coalesce(F.col("artist_raw"), F.lit(""))))
+    artist_bare = F.trim(F.regexp_replace(artist_norm_txt, r"[\[\]\(\)]", ""))
     title_noise = F.lit(False)
     for pattern in rules["R10_title_noise"]["params"]["patterns"].values():
         title_noise = title_noise | title_norm.rlike(pattern)
@@ -321,7 +395,20 @@ def apply_rules(df, rules, loud_q):
         "R9_corrupt": (F.coalesce(F.col("n_clipped_features"), F.lit(0))
                        >= F.lit(rules["R9_corrupt"]["params"]["min_clipped_features"])),
         "R10_title_noise": title_noise,
+        "R11_test_signal": _rlike_any(title_norm, rules["R11_test_signal"]["params"]["patterns"].values()),
+        "R12_spoken_nonmusic": F.arrays_overlap(
+            "a5_keywords", F.array(*[F.lit(k) for k in rules["R12_spoken_nonmusic"]["params"]["keywords"]])),
+        "R13_audiobook": (
+            F.arrays_overlap("a5_keywords",
+                             F.array(*[F.lit(k) for k in rules["R13_audiobook"]["params"]["keywords"]]))
+            | _rlike_any(title_norm, rules["R13_audiobook"]["params"]["title_patterns"].values())
+            | _rlike_any(artist_norm_txt, rules["R13_audiobook"]["params"]["artist_patterns"].values())),
+        "R15_static": _static_expr(F, rules["R15_static"]["params"], quantiles),
+        "R16_title_nonmusic": _keyword_expr(title_norm, rules["R16_title_nonmusic"]["params"]),
+        "R17_artist_unknown": artist_bare.isin(rules["R17_artist_unknown"]["params"]["values"]),
     }
+    if hard_q is not None:            # v5: 음량 하위 0.1% 는 조건 없이 제외
+        masks["R8_silence"] = masks["R8_silence"] | (F.col("loudness") <= F.lit(float(hard_q)))
     out = df
     for rid, expr in masks.items():
         enabled = rules[rid].get("enabled") or rid == "R4_cohort"   # R4 는 명시용으로 항상 본다
@@ -376,6 +463,64 @@ def apply_rules(df, rules, loud_q):
     return out.drop(*[c for c in out.columns if c.startswith("_")])
 
 
+def _rlike_any(column, patterns):
+    """컬럼이 정규식 중 하나라도 맞으면 True. numpy 경로의 any_pattern 과 같은 판정이다."""
+    from pyspark.sql import functions as F
+    out = F.lit(False)
+    for pattern in patterns:
+        out = out | column.rlike(pattern)
+    return out
+
+
+def _keyword_expr(column, params):
+    """R16. 키워드 목록을 정규식 하나로 만들어 rlike. 단어 경계는 JSON 이 정한다."""
+    from pyspark.sql import functions as F
+    pattern = keyword_regex(params["keywords"], params.get("word_boundary", True))
+    return column.rlike(pattern) if pattern else F.lit(False)
+
+
+def _static_expr(F, params, quantiles):
+    """R15. 분위값이 없으면 판정하지 않는다(전부 False)."""
+    if not quantiles or params["onset_feature"] not in quantiles:
+        return F.lit(False)
+    hard = F.lit(True); soft = F.lit(True)
+    for name in params["features"]:
+        q_hard, q_soft = quantiles[name]
+        hard = hard & (F.col("`{}`".format(name)) <= F.lit(float(q_hard)))
+        soft = soft & (F.col("`{}`".format(name)) <= F.lit(float(q_soft)))
+    slow = F.col("`{}`".format(params["onset_feature"])) <= F.lit(float(quantiles[params["onset_feature"]]))
+    return hard | (soft & slow)
+
+
+def feature_quantiles(df, rules):
+    """R15·R8 이 쓰는 분위값. numpy 의 nanpercentile 과 같은 정의(percentile, 보간 포함)."""
+    from pyspark.sql import functions as F
+    p = rules["R15_static"]["params"]
+    out = {}
+    for name in p["features"]:
+        column = "`{}`".format(name)
+        clean = df.filter(F.col(column).isNotNull() & ~F.isnan(F.col(column)))
+        row = clean.selectExpr(
+            "percentile({}, {}) AS hard".format(column, p["hard_bottom_pct"] / 100.0),
+            "percentile({}, {}) AS soft".format(column, p["soft_bottom_pct"] / 100.0)).first()
+        out[name] = (float(row["hard"]), float(row["soft"]))
+    onset = "`{}`".format(p["onset_feature"])
+    clean = df.filter(F.col(onset).isNotNull() & ~F.isnan(F.col(onset)))
+    out[p["onset_feature"]] = float(
+        clean.selectExpr("percentile({}, {}) AS q".format(onset, p["onset_bottom_pct"] / 100.0)).first()["q"])
+    return out
+
+
+def hard_loudness_quantile(df, rules):
+    """R8 의 무조건 제외 분위. params 에 없으면 None."""
+    from pyspark.sql import functions as F
+    pct = rules["R8_silence"]["params"].get("hard_loudness_bottom_pct")
+    if pct is None:
+        return None
+    clean = df.filter(F.col("loudness").isNotNull() & ~F.isnan(F.col("loudness")))
+    return float(clean.selectExpr("percentile(loudness, {}) AS q".format(pct / 100.0)).first()["q"])
+
+
 def loudness_quantile(df, rules):
     """R8 분위값. 원본 numpy.nanpercentile(loudness, loudness_bottom_pct) 와 같다."""
     from pyspark.sql import functions as F
@@ -389,7 +534,9 @@ def run(spark, input_path, output_path, expect_excluded=None):
     rules, digest = load_rules()
     df = spark.read.parquet(input_path)
     loud_q = loudness_quantile(df, rules)
-    catalog = apply_rules(df, rules, loud_q).withColumn("rules_hash", F.lit(digest))
+    hard_q = hard_loudness_quantile(df, rules)
+    quantiles = feature_quantiles(df, rules)
+    catalog = apply_rules(df, rules, loud_q, quantiles, hard_q).withColumn("rules_hash", F.lit(digest))
     catalog.write.mode("overwrite").parquet(output_path)
     written = spark.read.parquet(output_path)
     total = written.count()
@@ -397,6 +544,7 @@ def run(spark, input_path, output_path, expect_excluded=None):
     report = {"stage": "S5", "input_path": input_path, "output_path": output_path,
               "rows": total, "excluded": excluded, "kept": total - excluded,
               "rules_hash": digest, "r8_loudness_quantile": loud_q,
+              "r8_hard_quantile": hard_q, "r15_quantiles": quantiles,
               "dup_group_id": "xxhash64(묶음 키). 원본 factorize 코드와 값은 다르고 분할은 같다"}
     if expect_excluded:
         report["expected_excluded"] = int(expect_excluded)

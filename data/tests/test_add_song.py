@@ -76,7 +76,9 @@ def test_album_meta_comes_from_tags(S, doc):
     song = S.song_from_doc(doc)
     assert song["meta"] == ("The Dark Side of the Moon", 1973, ALBUM_MBID), "originaldate 가 date 보다 앞"
     sql = S.insert_sql(song)
-    assert "The Dark Side of the Moon" in sql and "1973" in sql and ALBUM_MBID in sql
+    assert "The Dark Side of the Moon" in sql and "1973" in sql
+    # album_mbid 는 따옴표 안에 들어가야 한다. 빠지면 psql 이 syntax error 를 낸다(2026-09-16).
+    assert "'{}'".format(ALBUM_MBID) in sql
 
 
 def test_year_out_of_range_is_dropped(S, doc):

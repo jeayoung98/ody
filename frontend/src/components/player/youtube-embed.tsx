@@ -4,7 +4,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { PLAYBACK_BLOCKED, SKIPPED_UNPLAYABLE } from "@/constants";
 import { usePlayability, useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { logVideoId } from "@/lib/live-log";
-import { reportPlayback } from "@/lib/playback-events";
+import { playingAction, reportPlayback } from "@/lib/playback-events";
 import { useBlockingStore } from "@/stores/use-blocking-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
@@ -224,7 +224,10 @@ export default function YoutubeEmbed() {
     const report = (state: "playing" | "paused") => reportPlayback({ musicId: p.currentMusicId!, playSeq: p.playSeq, state, at: Date.now() });
     if (e.data === PLAYING) {
       wantPlayRef.current = 0;
-      if (!p.isPlaying || useBlockingStore.getState().busy) { player.pauseVideo(); return; }
+      // 멈출 때와 "세지만 않을" 때를 가른다 (S15P21A405-372). 규칙은 `playingAction` 이 갖는다
+      const action = playingAction(p.isPlaying, useBlockingStore.getState().busy);
+      if (action === "stop") { player.pauseVideo(); return; }
+      if (action === "silent") return;
       startedSeqRef.current = p.playSeq;
       endedSeqRef.current = null;
       report("playing");
@@ -239,7 +242,8 @@ export default function YoutubeEmbed() {
       return;
     }
     if (e.data === UNSTARTED || e.data === CUED || e.data === PAUSED) {
-      if (wantPlayRef.current > 0 && p.isPlaying && !useBlockingStore.getState().busy) {
+      // 카드가 떠 있어도 재생은 다시 건다 — 묻는 동안 소리가 끊기면 답할 근거가 없어진다 (S15P21A405-372)
+      if (wantPlayRef.current > 0 && p.isPlaying) {
         wantPlayRef.current -= 1;
         player.playVideo();
         return;

@@ -178,3 +178,23 @@ input {
     transition-duration: 0.06s !important;
   }
 }
+
+/**
+ * 좁은 화면 차단 (S15P21A405-379).
+ *
+ * **Tailwind 유틸리티로 쓰지 않는다.** `hidden max-[899px]:flex` 로 뒀더니 `display:none` 이
+ * 이겼다 — 둘의 특이도가 같아 스타일시트 순서로 결정되고, 그 순서가 이쪽에 불리했다.
+ * (`matchMedia('(max-width: 899px)')` 는 true 인데 계산된 display 가 none 이었다.)
+ * 여기서 직접 쓰면 순서가 내 손에 있어 그 문제가 없다.
+ *
+ * **기준 폭을 바꾸려면 아래 899 한 곳만 고친다.** 안내 문구의 "900px" 도 같이 맞춘다
+ * (`components/layout/small-screen-gate.tsx`).
+ */
+.small-screen-gate {
+  display: none;
+}
+@media (max-width: 899px) {
+  .small-screen-gate {
+    display: flex;
+  }
+}

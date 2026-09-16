@@ -86,3 +86,18 @@ export interface MusicWithGenres extends Music {
 
 /** 재생 가능한 곡 (youtubeUrl이 반드시 존재) */
 export type PlayableMusic = Music & { youtubeUrl: string };
+
+/**
+ * `videoId` 조회가 어디까지 갔는가 (S15P21A405-332, S15P21A405-364).
+ *
+ * **`"none"` 과 `null` 은 다르다.** 백엔드는 유튜브 검색을 **해봤는데 없었을 때** 문자열
+ * `"none"` 을 주고, **아직 검색해보지 않았을 때** `null` 을 준다. 둘을 같게 뭉개면
+ * "기다려도 안 되는 곡" 과 "다시 부르면 채워질 곡" 이 한 화면이 되어, 어느 쪽이든 거짓말이 된다.
+ */
+export type VideoIdLookup =
+  /** 영상이 있다 — 사이트 안에서 틀 수 있다 */
+  | "found"
+  /** 검색했지만 없었다 (`"none"`). 다시 눌러도 같은 답이다 */
+  | "notFound"
+  /** 아직 검색 전이다 (`null`). 다시 부르면 채워질 수 있다 */
+  | "unsearched";

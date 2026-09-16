@@ -52,11 +52,15 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
       if (!p) return;
       const t = p.getCurrentTime();
       const duration = p.getDuration();
-      setClock((c) => ({
-        ...c,
-        t: Number.isFinite(t) ? t : c.t,
-        duration: Number.isFinite(duration) && duration > 0 ? duration : c.duration,
-      }));
+      setClock((c) => {
+        const nt = Number.isFinite(t) ? t : c.t;
+        const nd = Number.isFinite(duration) && duration > 0 ? duration : c.duration;
+        /**
+         * 값이 그대로면 **같은 객체를 돌려준다.** 매 틱 새 객체를 만들면 멈춰 있을 때도, 아예 플레이어가
+         * 없을 때도 초당 4번씩 다시 그린다 — 바는 한 픽셀도 안 움직이는데.
+         */
+        return nt === c.t && nd === c.duration ? c : { ...c, t: nt, duration: nd };
+      });
     }, TICK_MS);
     return () => clearInterval(id);
   }, [musicId]);

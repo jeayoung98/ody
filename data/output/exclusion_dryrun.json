@@ -1,8 +1,8 @@
 {
   "n_songs": 6624399,
-  "rules_hash": "260c79d11e91d2b2",
-  "total_excluded": 1926555,
-  "total_share": 0.29082713767694246,
+  "rules_hash": "86003c6c1719d73e",
+  "total_excluded": 1930196,
+  "total_share": 0.2913767724438096,
   "prev_total_share": null,
   "by_depth1_prev": null,
   "stop_threshold": 0.4,
@@ -11,7 +11,7 @@
     "R1_length": {
       "hits": 1095960,
       "share": 0.16544293301173435,
-      "unique_hits": 881687,
+      "unique_hits": 878742,
       "sample": [
         {
           "artist": "Stephen Marley",
@@ -106,7 +106,7 @@
     "R5_dup_canonical": {
       "hits": 471469,
       "share": 0.07117158854712707,
-      "unique_hits": 369136,
+      "unique_hits": 369053,
       "sample": [
         {
           "artist": "Pavement",
@@ -183,7 +183,7 @@
     "R6_dup_version": {
       "hits": 392438,
       "share": 0.05924129872008012,
-      "unique_hits": 310728,
+      "unique_hits": 310568,
       "sample": [
         {
           "artist": "Choirboys",
@@ -337,7 +337,7 @@
     "R8_silence": {
       "hits": 6625,
       "share": 0.0010000907252114494,
-      "unique_hits": 2474,
+      "unique_hits": 2471,
       "sample": [
         {
           "artist": "Gergely Vajda",
@@ -414,7 +414,7 @@
     "R9_corrupt": {
       "hits": 3756,
       "share": 0.0005669948322859175,
-      "unique_hits": 2029,
+      "unique_hits": 2027,
       "sample": [
         {
           "artist": "overscape",
@@ -491,7 +491,7 @@
     "R10_title_noise": {
       "hits": 33645,
       "share": 0.005078951313168183,
-      "unique_hits": 5919,
+      "unique_hits": 5913,
       "sample": [
         {
           "artist": "Bruce Springsteen & The E Street Band",
@@ -566,16 +566,16 @@
       ]
     },
     "R11_test_signal": {
-      "hits": 693,
-      "share": 0.00010461326378438256,
-      "unique_hits": 386,
+      "hits": 211,
+      "share": 3.1851946116168426e-05,
+      "unique_hits": 96,
       "sample": [
         {
-          "artist": "Wizard Magic",
-          "title": "white noise machine",
-          "length_s": 287.2,
+          "artist": "Regurgitator",
+          "title": "384 Hz",
+          "length_s": 195.7,
           "sr": 44100,
-          "codec": "mp3"
+          "codec": "flac"
         },
         {
           "artist": "Wastëland Riders",
@@ -585,58 +585,58 @@
           "codec": "mp3"
         },
         {
-          "artist": "The Monochrome Set",
-          "title": "White Noise",
-          "length_s": 185.7,
+          "artist": "302 Acid",
+          "title": "Calibrations",
+          "length_s": 430.3,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Stereophile",
-          "title": "Music Articulation Test Tone",
-          "length_s": 79.5,
-          "sr": 44100,
-          "codec": "alac"
-        },
-        {
-          "artist": "Disclosure feat. AlunaGeorge",
-          "title": "White Noise",
-          "length_s": 215.6,
+          "artist": "Covenant",
+          "title": "20 Hz (TBM version)",
+          "length_s": 324.5,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "John Tejada",
-          "title": "Calibration",
-          "length_s": 414.5,
+          "artist": "Kapotte Muziek",
+          "title": "1 Khz",
+          "length_s": 117.9,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "HKE",
-          "title": "Sine Wave",
-          "length_s": 183.4,
+          "artist": "TsutsumiAi(堤あい)",
+          "title": "3000Hz",
+          "length_s": 412.2,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Regurgitator",
+          "title": "348 Hz",
+          "length_s": 180.2,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Maneesh de Moor",
+          "title": "136.1Hz Sun Salutation",
+          "length_s": 1499.2,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "The Dig",
-          "title": "Clouds In The White Noise",
-          "length_s": 226.5,
+          "artist": "Autosound 2000, Inc.",
+          "title": "8 khz, - 10 dB",
+          "length_s": 59.6,
           "sr": 44100,
-          "codec": "mp3"
+          "codec": "flac"
         },
         {
-          "artist": "The Brew",
-          "title": "Pink Noise King",
-          "length_s": 328.2,
-          "sr": 44100,
-          "codec": "mp3"
-        },
-        {
-          "artist": "Markus Schulz",
-          "title": "65.4hz (extended mix)",
-          "length_s": 484.2,
+          "artist": "Dub Tractor",
+          "title": "50 Hz Guitar",
+          "length_s": 363.8,
           "sr": 44100,
           "codec": "mp3"
         }
@@ -645,7 +645,7 @@
     "R12_spoken_nonmusic": {
       "hits": 23008,
       "share": 0.00347322074047774,
-      "unique_hits": 16373,
+      "unique_hits": 16388,
       "sample": [
         {
           "artist": "Homer & Jethro",
@@ -722,7 +722,7 @@
     "R13_audiobook": {
       "hits": 8949,
       "share": 0.0013509150037610959,
-      "unique_hits": 5358,
+      "unique_hits": 5361,
       "sample": [
         {
           "artist": "The Open University",
@@ -797,154 +797,154 @@
       ]
     },
     "R15_static": {
-      "hits": 5666,
-      "share": 0.0008553228753280109,
-      "unique_hits": 2871,
+      "hits": 16276,
+      "share": 0.0024569776065723093,
+      "unique_hits": 8521,
       "sample": [
         {
-          "artist": "Lord Redstone, Erdstall, Spectral Kingdom, Vindkal",
-          "title": "Lord Redstone - Mushrooms",
-          "length_s": 219.4,
+          "artist": "Michael Morley",
+          "title": "Redoubted and ennobled in solid applause",
+          "length_s": 1537.0,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Jeremy Young",
-          "title": "Filament I",
-          "length_s": 1740.3,
-          "sr": 44100,
-          "codec": "mp3"
-        },
-        {
-          "artist": "Morton Feldman",
-          "title": "Three Voices: Slow Waltz",
-          "length_s": 307.9,
-          "sr": 44100,
-          "codec": "mp3"
-        },
-        {
-          "artist": "Robert Etoll",
-          "title": "Haunting Drone A",
-          "length_s": 48.5,
+          "artist": "The Green Kingdom",
+          "title": "Neptune Blue",
+          "length_s": 730.0,
           "sr": 44100,
           "codec": "flac"
         },
         {
-          "artist": "Airwalking",
-          "title": "Westminster Tones #17",
-          "length_s": 48.0,
-          "sr": 44100,
-          "codec": "flac"
-        },
-        {
-          "artist": "Tomoo Kosugi",
-          "title": "Pool",
-          "length_s": 232.0,
+          "artist": "r beny",
+          "title": "saudade",
+          "length_s": 228.8,
           "sr": 48000,
           "codec": "flac"
         },
         {
-          "artist": "Watain",
-          "title": "Dead but Dreaming",
-          "length_s": 124.9,
+          "artist": "Francis Monkman",
+          "title": "Orion (a)",
+          "length_s": 135.8,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Exportion",
+          "title": "Void",
+          "length_s": 440.0,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Smoke & Vapor",
+          "title": "She 不見了",
+          "length_s": 115.0,
           "sr": 44100,
           "codec": "flac"
         },
         {
-          "artist": "Harry Oldfield",
-          "title": "Stick quartz and Madagascar quartz interference",
-          "length_s": 157.1,
+          "artist": "Maurizio Bianchi",
+          "title": "5980-84 A.M.",
+          "length_s": 256.2,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Tom Hall",
-          "title": "Parallel-s",
-          "length_s": 346.3,
+          "artist": "[no artist]",
+          "title": "1kHz Sine Wave @ -60dB",
+          "length_s": 31.0,
+          "sr": 44100,
+          "codec": "flac"
+        },
+        {
+          "artist": "Louie Aronowitz",
+          "title": "Ab Tire",
+          "length_s": 218.0,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Almøst Silent",
-          "title": "Gap 1",
-          "length_s": 60.2,
+          "artist": "Ausland",
+          "title": "t",
+          "length_s": 760.1,
           "sr": 44100,
           "codec": "mp3"
         }
       ]
     },
     "R16_title_nonmusic": {
-      "hits": 76857,
-      "share": 0.011602109112086999,
-      "unique_hits": 33452,
+      "hits": 74256,
+      "share": 0.011209469719441718,
+      "unique_hits": 31682,
       "sample": [
         {
-          "artist": "Sofa Talk",
-          "title": "Tomi Chair's Feeling of Nature Intro",
-          "length_s": 159.9,
+          "artist": "Phantasmagoria",
+          "title": "Gensoukyoku ~Eternal Silence~",
+          "length_s": 405.5,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Loreena McKennitt",
-          "title": "Band Intro",
-          "length_s": 185.6,
+          "artist": "Gandalf",
+          "title": "A Place in the Sun - Interlude",
+          "length_s": 79.6,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Analog Mechanics",
-          "title": "Intro (Instrumental)",
-          "length_s": 111.1,
+          "artist": "Brenk & Fid Mella",
+          "title": "Brenk - Sign Skit",
+          "length_s": 47.9,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "The Metaphysical Vs. Rosetta Stoned",
-          "title": "Rorschach Test (DnB Remix)",
-          "length_s": 226.2,
+          "artist": "[unknown]",
+          "title": "[untitled]",
+          "length_s": 194.7,
+          "sr": 48000,
+          "codec": "flac"
+        },
+        {
+          "artist": "Adam Beyer & Thomas Krome",
+          "title": "[untitled]",
+          "length_s": 184.5,
           "sr": 44100,
           "codec": "mp3"
         },
         {
-          "artist": "Bette Davis",
-          "title": "All About Eve Dialogue",
-          "length_s": 216.2,
+          "artist": "[unknown]",
+          "title": "Interlude",
+          "length_s": 75.3,
           "sr": 44100,
-          "codec": "alac"
+          "codec": "mp3"
         },
         {
-          "artist": "Porcupine Tree",
-          "title": "Intro",
-          "length_s": 128.4,
+          "artist": "Mattia Trani",
+          "title": "DARK MINDS(INTRO)",
+          "length_s": 113.0,
+          "sr": 44100,
+          "codec": "mp3"
+        },
+        {
+          "artist": "Lammping",
+          "title": "'21 Interlude",
+          "length_s": 77.3,
+          "sr": 48000,
+          "codec": "flac"
+        },
+        {
+          "artist": "Sisqó",
+          "title": "Close Your Eyes (Interlude)",
+          "length_s": 72.2,
           "sr": 44100,
           "codec": "flac"
         },
         {
-          "artist": "Welter Records",
-          "title": "Aies - Untitled 1",
-          "length_s": 658.2,
-          "sr": 44100,
-          "codec": "mp3"
-        },
-        {
-          "artist": "武満徹",
-          "title": "Coral Island: IV. Poem II",
-          "length_s": 235.9,
-          "sr": 44100,
-          "codec": "flac"
-        },
-        {
-          "artist": "Archie Shepp, Damu the Fudgemunk & Raw Poetic",
-          "title": "Valuable Lesson",
-          "length_s": 60.0,
-          "sr": 44100,
-          "codec": "mp3"
-        },
-        {
-          "artist": "NEUPINK",
-          "title": "YAAAA (INTRO)",
-          "length_s": 34.4,
+          "artist": "MRTRY",
+          "title": "TETHER TIGHT (OUTRO)",
+          "length_s": 96.0,
           "sr": 44100,
           "codec": "mp3"
         }
@@ -953,7 +953,7 @@
     "R17_artist_unknown": {
       "hits": 62341,
       "share": 0.009410815984967088,
-      "unique_hits": 46589,
+      "unique_hits": 46533,
       "sample": [
         {
           "artist": "Various Artists",
@@ -1051,18 +1051,16 @@
     "R10_title_noise & R9_corrupt": 167,
     "R10_title_noise & R12_spoken_nonmusic": 132,
     "R10_title_noise & R13_audiobook": 50,
-    "R10_title_noise & R15_static": 298,
+    "R10_title_noise & R15_static": 718,
     "R10_title_noise & R16_title_nonmusic": 25127,
     "R10_title_noise & R17_artist_unknown": 611,
-    "R11_test_signal & R1_length": 193,
-    "R11_test_signal & R5_dup_canonical": 37,
-    "R11_test_signal & R6_dup_version": 51,
+    "R11_test_signal & R1_length": 86,
+    "R11_test_signal & R5_dup_canonical": 16,
+    "R11_test_signal & R6_dup_version": 3,
     "R11_test_signal & R7_samplerate": 1,
-    "R11_test_signal & R8_silence": 1,
-    "R11_test_signal & R9_corrupt": 17,
+    "R11_test_signal & R9_corrupt": 13,
     "R11_test_signal & R15_static": 23,
-    "R11_test_signal & R16_title_nonmusic": 37,
-    "R11_test_signal & R17_artist_unknown": 50,
+    "R11_test_signal & R17_artist_unknown": 29,
     "R12_spoken_nonmusic & R1_length": 4208,
     "R12_spoken_nonmusic & R5_dup_canonical": 996,
     "R12_spoken_nonmusic & R6_dup_version": 497,
@@ -1070,8 +1068,8 @@
     "R12_spoken_nonmusic & R8_silence": 19,
     "R12_spoken_nonmusic & R9_corrupt": 12,
     "R12_spoken_nonmusic & R13_audiobook": 467,
-    "R12_spoken_nonmusic & R15_static": 6,
-    "R12_spoken_nonmusic & R16_title_nonmusic": 513,
+    "R12_spoken_nonmusic & R15_static": 11,
+    "R12_spoken_nonmusic & R16_title_nonmusic": 485,
     "R12_spoken_nonmusic & R17_artist_unknown": 242,
     "R13_audiobook & R1_length": 2485,
     "R13_audiobook & R5_dup_canonical": 315,
@@ -1079,24 +1077,24 @@
     "R13_audiobook & R7_samplerate": 512,
     "R13_audiobook & R8_silence": 1,
     "R13_audiobook & R9_corrupt": 2,
-    "R13_audiobook & R15_static": 3,
-    "R13_audiobook & R16_title_nonmusic": 42,
+    "R13_audiobook & R15_static": 8,
+    "R13_audiobook & R16_title_nonmusic": 37,
     "R13_audiobook & R17_artist_unknown": 16,
-    "R15_static & R1_length": 2424,
-    "R15_static & R5_dup_canonical": 367,
-    "R15_static & R6_dup_version": 168,
-    "R15_static & R7_samplerate": 13,
-    "R15_static & R8_silence": 6,
-    "R15_static & R9_corrupt": 40,
-    "R15_static & R16_title_nonmusic": 363,
-    "R15_static & R17_artist_unknown": 69,
-    "R16_title_nonmusic & R1_length": 23557,
-    "R16_title_nonmusic & R5_dup_canonical": 11680,
-    "R16_title_nonmusic & R6_dup_version": 2382,
-    "R16_title_nonmusic & R7_samplerate": 348,
-    "R16_title_nonmusic & R8_silence": 153,
-    "R16_title_nonmusic & R9_corrupt": 238,
-    "R16_title_nonmusic & R17_artist_unknown": 1091,
+    "R15_static & R1_length": 6658,
+    "R15_static & R5_dup_canonical": 993,
+    "R15_static & R6_dup_version": 515,
+    "R15_static & R7_samplerate": 17,
+    "R15_static & R8_silence": 15,
+    "R15_static & R9_corrupt": 94,
+    "R15_static & R16_title_nonmusic": 908,
+    "R15_static & R17_artist_unknown": 223,
+    "R16_title_nonmusic & R1_length": 22889,
+    "R16_title_nonmusic & R5_dup_canonical": 11577,
+    "R16_title_nonmusic & R6_dup_version": 2307,
+    "R16_title_nonmusic & R7_samplerate": 342,
+    "R16_title_nonmusic & R8_silence": 140,
+    "R16_title_nonmusic & R9_corrupt": 210,
+    "R16_title_nonmusic & R17_artist_unknown": 1042,
     "R17_artist_unknown & R1_length": 12919,
     "R17_artist_unknown & R5_dup_canonical": 1436,
     "R17_artist_unknown & R6_dup_version": 647,
@@ -1116,7 +1114,7 @@
     "R8_loud_q_hard": 8.70464301406173e-05,
     "R8_loud_q": 8.70464301406173e-05,
     "R15_hard": 2935,
-    "R15_soft_and_slow": 4573
+    "R15_soft_and_slow": 15183
   },
   "R6_groups": [
     {
@@ -1723,20 +1721,20 @@
   "by_depth1": {
     "root.0": {
       "songs": 1553809,
-      "excluded_share": 0.3089395157319851
+      "excluded_share": 0.3102537055712768
     },
     "root.1": {
       "songs": 1761407,
-      "excluded_share": 0.2844544162706291
+      "excluded_share": 0.28586862661497314
     },
     "root.2": {
       "songs": 1705702,
-      "excluded_share": 0.26518055322676526
+      "excluded_share": 0.2649894295721058
     },
     "root.3": {
       "songs": 1603481,
-      "excluded_share": 0.3075577446817268
+      "excluded_share": 0.30720476263828506
     }
   },
-  "elapsed_min": 14.510144861539205
+  "elapsed_min": 8.088492918014527
 }

@@ -80,7 +80,7 @@ spark-submit ... --files serving/v2.1-pca16/map_tree/tree.json,serving/v2.1-pca1
   jobs/tree_assign.py --in hdfs:///ody/data/coords --out hdfs:///ody/data/node_paths \
   --tree-json tree.json --split-axes split_axes.npz
 # S5 카탈로그 제외 규칙
-spark-submit ... jobs/catalog_rules.py --in hdfs:///ody/data/catalog_input --out hdfs:///ody/data/catalog --expect-excluded 780107
+spark-submit ... jobs/catalog_rules.py --in hdfs:///ody/data/catalog_input --out hdfs:///ody/data/catalog --expect-excluded 2710303   # 규칙 v5(D18). v3 는 780107
 # S6 번들 내보내기 — 세 표를 정렬해 쓴 뒤 로컬로 내려 조립한다
 spark-submit ... jobs/artifact_export.py --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords \
   --node-paths hdfs:///ody/data/node_paths --out hdfs:///ody/data/bundle_stage

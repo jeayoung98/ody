@@ -1,27 +1,27 @@
-# S1 dry-run — 카탈로그 제외 규칙 (rules 260c79d11e91d2b2)
+# S1 dry-run — 카탈로그 제외 규칙 (rules 86003c6c1719d73e)
 
-총 제외 **1,926,555** / 6,624,399 = **29.08%** (중단 임계 40%) 
+총 제외 **1,930,196** / 6,624,399 = **29.14%** (중단 임계 40%) 
 
 | 규칙 | 적중 | 비율 | 단독 적중 | 근거 |
 |:--|--:|--:|--:|:--|
-| R1_length | 1,095,960 | 16.544% | 881,687 | D1 적용(2026-09-07 사용자 결정, v5 에서 실행): 곡 길이 60s~6min 만 남긴다. 예외 태그 없음 — 클래식·앰비언트 롱폼도 자른다. 실측 적중 1,095,960(짧은 181,232 · 긴 914,728). A1: <30s 99,950 (1.35%). >20min 29,966 중 태그 있는 13,143곡의 35.7%가 클래식/오페라/앰비언트 → 예외 유지. 미태그 >20min 표본에 롱폼 앰비언트/일렉트로닉 정상 음악 다수 → 미태그 곡은 상한 30min(1800s) 적용(사용자 결정). 태그 있는 비예외 곡은 20min 상한. |
+| R1_length | 1,095,960 | 16.544% | 878,742 | D1 적용(2026-09-07 사용자 결정, v5 에서 실행): 곡 길이 60s~6min 만 남긴다. 예외 태그 없음 — 클래식·앰비언트 롱폼도 자른다. 실측 적중 1,095,960(짧은 181,232 · 긴 914,728). A1: <30s 99,950 (1.35%). >20min 29,966 중 태그 있는 13,143곡의 35.7%가 클래식/오페라/앰비언트 → 예외 유지. 미태그 >20min 표본에 롱폼 앰비언트/일렉트로닉 정상 음악 다수 → 미태그 곡은 상한 30min(1800s) 적용(사용자 결정). 태그 있는 비예외 곡은 20min 상한. |
 | R2_nonmusic | 0 | 0.000% | 0 | A5: 12개 키워드 적중 합집합 35,901. comedy(20,876)·spoken word(단독 5,376)·field recording(단독 1,083)은 dry-run 표본에서 음악 오적중(Hobart Smith, Biosphere, The Streets 등 — 두 태그는 음악 장르 표기로도 쓰임) → 제외에서 빼고 flag 컬럼(사용자 결정). 나머지 9개 유지. |
 | R3_no_key | 0 | 0.000% | 0 | D7(서빙 진단): 키 없는 곡 3.2%. 여기서는 title·artist 원문 모두 결측인 곡만. |
 | R4_cohort | 0 | 0.000% | 0 | work/v2_cohort.json (CONFIRMED_BY_GATE_V2). 매니페스트가 이미 코호트만 담아 적중 0 예상 — 명시용. |
-| R5_dup_canonical | 471,469 | 7.117% | 369,136 | v5: 거리 보호 해제 — 같은 canonical recording 이면 좌표 거리와 무관하게 대표 1곡만 남긴다. canonical redirect 후 같은 canonical 복수 mbid → 대표 1행. dry-run v1: 멤버 763,015 (10.3%), 멤버-대표 좌표 거리 median 6.31 — MB 병합 ≠ 같은 소리. R6 와 동일한 거리 보호 4.0 추가 (A7 같은 녹음 87%가 4 이내). 보호 시 접힘 ≈241,660 (3.3%). |
-| R6_dup_version | 392,438 | 5.924% | 310,728 | v5: 거리 보호 해제 — 같은 아티스트·정규화 제목이면 전부 접는다. live·remix·acoustic 은 distinct_modifiers 로 여전히 별개 묶음이다. A6: 2곡+ 묶음 706,401 / 접힘 후보 1,520,985 (20.5%) / 거리>4 보호 918,463 (60.4%) / 접힘 예상 602,522 (8.1%). 임계 4.0 근거 = A7 같은 MBID 제출본 거리 median 0.58·p90 5.18 (진짜 같은 녹음의 87%는 4 이내) vs A6 묶음 멤버 거리 median 5.34 (제목 같아도 대부분 다른 연주). 미분류 괄호 719,842곡은 키에 남겨 접지 않음(보수). |
+| R5_dup_canonical | 471,469 | 7.117% | 369,053 | v5: 거리 보호 해제 — 같은 canonical recording 이면 좌표 거리와 무관하게 대표 1곡만 남긴다. canonical redirect 후 같은 canonical 복수 mbid → 대표 1행. dry-run v1: 멤버 763,015 (10.3%), 멤버-대표 좌표 거리 median 6.31 — MB 병합 ≠ 같은 소리. R6 와 동일한 거리 보호 4.0 추가 (A7 같은 녹음 87%가 4 이내). 보호 시 접힘 ≈241,660 (3.3%). |
+| R6_dup_version | 392,438 | 5.924% | 310,568 | v5: 거리 보호 해제 — 같은 아티스트·정규화 제목이면 전부 접는다. live·remix·acoustic 은 distinct_modifiers 로 여전히 별개 묶음이다. A6: 2곡+ 묶음 706,401 / 접힘 후보 1,520,985 (20.5%) / 거리>4 보호 918,463 (60.4%) / 접힘 예상 602,522 (8.1%). 임계 4.0 근거 = A7 같은 MBID 제출본 거리 median 0.58·p90 5.18 (진짜 같은 녹음의 87%는 4 이내) vs A6 묶음 멤버 거리 median 5.34 (제목 같아도 대부분 다른 연주). 미분류 괄호 719,842곡은 키에 남겨 접지 않음(보수). |
 | R7_samplerate | 12,504 | 0.189% | 7,400 | v5: 표시에서 제외로 전환. 44.1kHz 미만은 인코딩 품질이 좌표를 흔든다. A2: <44100 18,047곡 (0.24%), 좌표 편향 최대 |0.46| std (pc3) < 0.5 → 제외 대신 flag_low_sr 컬럼. |
-| R8_silence | 6,625 | 0.100% | 2,474 | v5: 음량 하위 0.1% 는 dynamic_complexity·무음률 조건 없이 제외한다. A3: average_loudness 하위 0.1% 7,405곡 중 silence_rate_60dB>0.9 116곡 (dynamic_complexity<0.1 은 0곡). 표본: Headspace 명상, John Cage, 무음 히든트랙. |
-| R9_corrupt | 3,756 | 0.057% | 2,029 | v5: 표시에서 제외로 전환. 극단 특징 5개 이상. A4: ≥5 특징 적중 4,762곡 표본이 실험·노이즈 음악(손상 아님) → 제외하지 않고 flag_clipped 컬럼만(사용자 결정). |
-| R10_title_noise | 33,645 | 0.508% | 5,919 | catalog_v2 실측(2026-09-14): 전체 적중 48,952 / R1~R9 미적중 신규 제외 33,646 (0.454%). 패턴별 신규 제외 untitled 11,746 · empty_or_punct 5,198 · track_number 3,005 · structural_only 13,381 · unknown_title 316. 총 제외 813,753 (10.99%) < 중단 임계 15%. 정규식은 Python re 와 Java rlike 에서 같게 동작하도록 ·\d·\w 를 쓰지 않고 ASCII 범위로 적는다. 넣지 않은 패턴: 'untitled' 부분 일치(D'Angelo 'Untitled (How Does It Feel)'), 숫자만 제목(Prince '1999', Taylor Swift '22'), silence/talk/Part N/video/'01 - 제목' 파일명형 — 실제 곡 적중. 운영 DB 에서 수동 삭제했던 untitled 를 규칙으로 옮긴 것(규칙 2·9). |
-| R11_test_signal | 693 | 0.010% | 386 | 캘리브레이션·측정 신호는 음악이 아니고 좌표가 극단으로 튄다. 목표 적중 206(2026-09-16 이전 세션 실측). |
-| R12_spoken_nonmusic | 23,008 | 0.347% | 16,373 | v3 에서 flag 로 돌렸던 세 태그를 v5 에서 제외로 되돌린다(사용자 결정 2026-09-16). 적중 목표 23,008. 근거 파일은 work/audit_A5_hits.parquet. |
-| R13_audiobook | 8,949 | 0.135% | 5,358 | 낭독물은 음악 좌표계에 들어가면 이웃 품질을 해친다. 태그(audiobook)와 제목·아티스트 표기를 함께 본다. 목표 적중 7,732. |
-| R15_static | 5,666 | 0.086% | 2,871 | 드론·단일 톤·정지성 녹음. 세 변동성 특징이 모두 하위 1% 면 무조건, 모두 하위 2% 이고 onset_rate 도 하위 5% 면 제외. 목표 적중 2,933 + 15,178. |
-| R16_title_nonmusic | 76,857 | 1.160% | 33,452 | 제목이 비음악임을 직접 말하는 행. R10 이 '제목 전체가 잡음'인 경우만 잡는 것과 달리 제목 안 단어를 본다. 목표 적중 74,136 · 신규 35,195. |
-| R17_artist_unknown | 62,341 | 0.941% | 46,589 | 아티스트를 식별할 수 없으면 검색·이웃·여정 어디에도 쓸 수 없다. 목표 적중 62,295 · 신규 48,056. |
+| R8_silence | 6,625 | 0.100% | 2,471 | v5: 음량 하위 0.1% 는 dynamic_complexity·무음률 조건 없이 제외한다. A3: average_loudness 하위 0.1% 7,405곡 중 silence_rate_60dB>0.9 116곡 (dynamic_complexity<0.1 은 0곡). 표본: Headspace 명상, John Cage, 무음 히든트랙. |
+| R9_corrupt | 3,756 | 0.057% | 2,027 | v5: 표시에서 제외로 전환. 극단 특징 5개 이상. A4: ≥5 특징 적중 4,762곡 표본이 실험·노이즈 음악(손상 아님) → 제외하지 않고 flag_clipped 컬럼만(사용자 결정). |
+| R10_title_noise | 33,645 | 0.508% | 5,913 | catalog_v2 실측(2026-09-14): 전체 적중 48,952 / R1~R9 미적중 신규 제외 33,646 (0.454%). 패턴별 신규 제외 untitled 11,746 · empty_or_punct 5,198 · track_number 3,005 · structural_only 13,381 · unknown_title 316. 총 제외 813,753 (10.99%) < 중단 임계 15%. 정규식은 Python re 와 Java rlike 에서 같게 동작하도록 ·\d·\w 를 쓰지 않고 ASCII 범위로 적는다. 넣지 않은 패턴: 'untitled' 부분 일치(D'Angelo 'Untitled (How Does It Feel)'), 숫자만 제목(Prince '1999', Taylor Swift '22'), silence/talk/Part N/video/'01 - 제목' 파일명형 — 실제 곡 적중. 운영 DB 에서 수동 삭제했던 untitled 를 규칙으로 옮긴 것(규칙 2·9). |
+| R11_test_signal | 211 | 0.003% | 96 | 캘리브레이션·측정 신호는 음악이 아니고 좌표가 극단으로 튄다. 2026-09-16 실측 적중 211(목표 206). sine/square wave 와 white/pink noise 패턴은 뺐다 — Disclosure·The Monochrome Set 의 White Noise, HKE 의 Sine Wave 처럼 실제 곡을 집어 693까지 늘어났다. |
+| R12_spoken_nonmusic | 23,008 | 0.347% | 16,388 | v3 에서 flag 로 돌렸던 세 태그를 v5 에서 제외로 되돌린다(사용자 결정 2026-09-16). 적중 목표 23,008. 근거 파일은 work/audit_A5_hits.parquet. |
+| R13_audiobook | 8,949 | 0.135% | 5,361 | 낭독물은 음악 좌표계에 들어가면 이웃 품질을 해친다. 태그(audiobook)와 제목(chapter·Hörbuch)·아티스트(read by) 표기를 함께 본다. 2026-09-16 실측 적중 8,948(목표 7,732). 차이 1,216 은 프랑스어 chapitre(535)와 독일어 gelesen von(1,418) 낭독자 표기를 남겨 둔 몫이다 — 표본이 전부 진짜 낭독물이라 좁히지 않았다. audiobook 태그 적중이 0 인 것은 R2 가 이미 그 태그를 잘라 base 에 없기 때문이다. |
+| R15_static | 16,276 | 0.246% | 8,521 | 드론·단일 톤·정지성 녹음. 세 변동성 특징이 모두 하위 1% 면 무조건, 모두 하위 5% 이고 onset_rate 도 하위 5% 면 제외. 2026-09-16 실측(base 6,624,399): hard 2,935 · soft 15,183 · 합집합 16,276. 목표표의 2,933 + 15,178 은 두 분기를 겹침 없이 더한 표기다. |
+| R16_title_nonmusic | 74,256 | 1.121% | 31,682 | 제목이 비음악임을 직접 말하는 행. R10 이 제목 전체를 볼 때 이 규칙은 제목 안 단어를 본다(단어 경계). 2026-09-16 실측 적중 74,256(목표 74,136). test·poem 은 뺐다 — Rorschach Test (DnB Remix), Coral Island: IV. Poem II 같은 실제 곡을 집어 2,622곡이 더 잘렸다. poetry 는 남긴다. |
+| R17_artist_unknown | 62,341 | 0.941% | 46,533 | 아티스트를 식별할 수 없으면 검색·이웃·여정 어디에도 쓸 수 없다. 목표 적중 62,295 · 신규 48,056. |
 
-겹침: R1_length & R5_dup_canonical 92,274, R1_length & R6_dup_version 77,782, R10_title_noise & R16_title_nonmusic 25,127, R16_title_nonmusic & R1_length 23,557, R17_artist_unknown & R1_length 12,919, R16_title_nonmusic & R5_dup_canonical 11,680, R10_title_noise & R1_length 11,007, R10_title_noise & R5_dup_canonical 10,004, R12_spoken_nonmusic & R1_length 4,208, R1_length & R8_silence 3,743, R13_audiobook & R1_length 2,485, R15_static & R1_length 2,424
+겹침: R1_length & R5_dup_canonical 92,274, R1_length & R6_dup_version 77,782, R10_title_noise & R16_title_nonmusic 25,127, R16_title_nonmusic & R1_length 22,889, R17_artist_unknown & R1_length 12,919, R16_title_nonmusic & R5_dup_canonical 11,577, R10_title_noise & R1_length 11,007, R10_title_noise & R5_dup_canonical 10,004, R15_static & R1_length 6,658, R12_spoken_nonmusic & R1_length 4,208, R1_length & R8_silence 3,743, R13_audiobook & R1_length 2,485
 
 R1 >20min: 예외태그 0 · 미태그 0 (그중 <30min 유지 0) · R5 멤버 471,469 / 보호 0 / 접힘 471,469 (거리 median 8.28) · R6 묶음 208,508 / 멤버 392,438 / 보호 0 / 접힘 392,438 · R8 분위값 0.0001
 
@@ -134,16 +134,16 @@ R1 >20min: 예외태그 0 · 미태그 0 (그중 <30min 유지 0) · R5 멤버 4
 
 | 아티스트 | 제목 | 길이 | SR | 코덱 |
 |:--|:--|--:|--:|:--|
-| Wizard Magic | white noise machine | 287.2 | 44100 | mp3 |
+| Regurgitator | 384 Hz | 195.7 | 44100 | flac |
 | Wastëland Riders | 2410 Hz | 90.4 | 44100 | mp3 |
-| The Monochrome Set | White Noise | 185.7 | 44100 | mp3 |
-| Stereophile | Music Articulation Test Tone | 79.5 | 44100 | alac |
-| Disclosure feat. AlunaGeorge | White Noise | 215.6 | 44100 | mp3 |
-| John Tejada | Calibration | 414.5 | 44100 | mp3 |
-| HKE | Sine Wave | 183.4 | 44100 | mp3 |
-| The Dig | Clouds In The White Noise | 226.5 | 44100 | mp3 |
-| The Brew | Pink Noise King | 328.2 | 44100 | mp3 |
-| Markus Schulz | 65.4hz (extended mix) | 484.2 | 44100 | mp3 |
+| 302 Acid | Calibrations | 430.3 | 44100 | mp3 |
+| Covenant | 20 Hz (TBM version) | 324.5 | 44100 | mp3 |
+| Kapotte Muziek | 1 Khz | 117.9 | 44100 | mp3 |
+| TsutsumiAi(堤あい) | 3000Hz | 412.2 | 44100 | flac |
+| Regurgitator | 348 Hz | 180.2 | 44100 | flac |
+| Maneesh de Moor | 136.1Hz Sun Salutation | 1499.2 | 44100 | mp3 |
+| Autosound 2000, Inc. | 8 khz, - 10 dB | 59.6 | 44100 | flac |
+| Dub Tractor | 50 Hz Guitar | 363.8 | 44100 | mp3 |
 
 ### R12_spoken_nonmusic 표본
 
@@ -179,31 +179,31 @@ R1 >20min: 예외태그 0 · 미태그 0 (그중 <30min 유지 0) · R5 멤버 4
 
 | 아티스트 | 제목 | 길이 | SR | 코덱 |
 |:--|:--|--:|--:|:--|
-| Lord Redstone, Erdstall, Spectral Kingdom, Vindkal | Lord Redstone - Mushrooms | 219.4 | 44100 | mp3 |
-| Jeremy Young | Filament I | 1740.3 | 44100 | mp3 |
-| Morton Feldman | Three Voices: Slow Waltz | 307.9 | 44100 | mp3 |
-| Robert Etoll | Haunting Drone A | 48.5 | 44100 | flac |
-| Airwalking | Westminster Tones #17 | 48.0 | 44100 | flac |
-| Tomoo Kosugi | Pool | 232.0 | 48000 | flac |
-| Watain | Dead but Dreaming | 124.9 | 44100 | flac |
-| Harry Oldfield | Stick quartz and Madagascar quartz interference | 157.1 | 44100 | mp3 |
-| Tom Hall | Parallel-s | 346.3 | 44100 | mp3 |
-| Almøst Silent | Gap 1 | 60.2 | 44100 | mp3 |
+| Michael Morley | Redoubted and ennobled in solid applause | 1537.0 | 44100 | mp3 |
+| The Green Kingdom | Neptune Blue | 730.0 | 44100 | flac |
+| r beny | saudade | 228.8 | 48000 | flac |
+| Francis Monkman | Orion (a) | 135.8 | 44100 | mp3 |
+| Exportion | Void | 440.0 | 44100 | mp3 |
+| Smoke & Vapor | She 不見了 | 115.0 | 44100 | flac |
+| Maurizio Bianchi | 5980-84 A.M. | 256.2 | 44100 | mp3 |
+| [no artist] | 1kHz Sine Wave @ -60dB | 31.0 | 44100 | flac |
+| Louie Aronowitz | Ab Tire | 218.0 | 44100 | mp3 |
+| Ausland | t | 760.1 | 44100 | mp3 |
 
 ### R16_title_nonmusic 표본
 
 | 아티스트 | 제목 | 길이 | SR | 코덱 |
 |:--|:--|--:|--:|:--|
-| Sofa Talk | Tomi Chair's Feeling of Nature Intro | 159.9 | 44100 | mp3 |
-| Loreena McKennitt | Band Intro | 185.6 | 44100 | mp3 |
-| Analog Mechanics | Intro (Instrumental) | 111.1 | 44100 | mp3 |
-| The Metaphysical Vs. Rosetta Stoned | Rorschach Test (DnB Remix) | 226.2 | 44100 | mp3 |
-| Bette Davis | All About Eve Dialogue | 216.2 | 44100 | alac |
-| Porcupine Tree | Intro | 128.4 | 44100 | flac |
-| Welter Records | Aies - Untitled 1 | 658.2 | 44100 | mp3 |
-| 武満徹 | Coral Island: IV. Poem II | 235.9 | 44100 | flac |
-| Archie Shepp, Damu the Fudgemunk & Raw Poetic | Valuable Lesson | 60.0 | 44100 | mp3 |
-| NEUPINK | YAAAA (INTRO) | 34.4 | 44100 | mp3 |
+| Phantasmagoria | Gensoukyoku ~Eternal Silence~ | 405.5 | 44100 | mp3 |
+| Gandalf | A Place in the Sun - Interlude | 79.6 | 44100 | mp3 |
+| Brenk & Fid Mella | Brenk - Sign Skit | 47.9 | 44100 | mp3 |
+| [unknown] | [untitled] | 194.7 | 48000 | flac |
+| Adam Beyer & Thomas Krome | [untitled] | 184.5 | 44100 | mp3 |
+| [unknown] | Interlude | 75.3 | 44100 | mp3 |
+| Mattia Trani | DARK MINDS(INTRO) | 113.0 | 44100 | mp3 |
+| Lammping | '21 Interlude | 77.3 | 48000 | flac |
+| Sisqó | Close Your Eyes (Interlude) | 72.2 | 44100 | flac |
+| MRTRY | TETHER TIGHT (OUTRO) | 96.0 | 44100 | mp3 |
 
 ### R17_artist_unknown 표본
 
@@ -307,9 +307,9 @@ R1 >20min: 예외태그 0 · 미태그 0 (그중 <30min 유지 0) · R5 멤버 4
 
 | 노드 | 곡 | 이전 | 이번 | 전체 대비 |
 |:--|--:|--:|--:|--:|
-| root.0 | 1,553,809 | - | 30.89% | 1.06x |
-| root.1 | 1,761,407 | - | 28.45% | 0.98x |
-| root.2 | 1,705,702 | - | 26.52% | 0.91x |
-| root.3 | 1,603,481 | - | 30.76% | 1.06x |
+| root.0 | 1,553,809 | - | 31.03% | 1.06x |
+| root.1 | 1,761,407 | - | 28.59% | 0.98x |
+| root.2 | 1,705,702 | - | 26.50% | 0.91x |
+| root.3 | 1,603,481 | - | 30.72% | 1.05x |
 
 삭제 없음 · 곡 개별 제외 없음 · fit·트리 재학습 없음 · v1 아카이브 미수정.

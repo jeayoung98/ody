@@ -2,7 +2,7 @@
 export interface PlaybackEvent {
   musicId: number;
   playSeq: number;
-  state: "playing" | "paused" | "unavailable";
+  state: "playing" | "paused" | "ended" | "unavailable";
   at: number;
 }
 

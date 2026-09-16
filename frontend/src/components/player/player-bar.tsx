@@ -12,6 +12,7 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import LocateButton from "./locate-button";
 import PlayerProgress from "./player-progress";
 import TransportButton from "./transport-button";
+import { track } from "@/lib/analytics/client";
 
 /**
  * #transport — 지금 재생 중인 곡. 곡 정보를 클릭하면 우측 패널이 열린다.
@@ -74,6 +75,7 @@ export default function PlayerBar() {
   const handleToggle = () => {
     if (currentMusicId == null) return;
     if (blocked) {
+      track("action_blocked", { action: "play", reason: blocked.ref, music_id: currentMusicId });
       showToast(blocked.notice);
       // "잠시 후 다시 눌러 주세요" 가 빈말이 되지 않게, 누른 김에 다시 물어본다 (캐시가 30분이라 저절로는 안 간다)
       if (blocked.retryable) retry();
@@ -85,7 +87,7 @@ export default function PlayerBar() {
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : context.kind === "nearby" ? "주변 음악" : null;
 
   return (
-    <div className="glass flex min-w-0 flex-1 items-center gap-3 rounded-pill! py-2 pr-3.5 pl-2.5">
+    <div data-analytics-manual className="glass flex min-w-0 flex-1 items-center gap-3 rounded-pill! py-2 pr-3.5 pl-2.5">
       {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
       <LocateButton />
       <span
@@ -115,13 +117,13 @@ export default function PlayerBar() {
           {queueIndex + 1}/{queue.length}
         </span>
       )}
-      <TransportButton label="이전" onClick={prev} disabled={queue.length === 0}>
+      <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={queue.length === 0}>
         <PrevIcon />
       </TransportButton>
       <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} dimmed={!canPlay}>
         {isPlaying ? <PauseIcon /> : <PlayIcon />}
       </TransportButton>
-      <TransportButton label="다음" onClick={next} disabled={queue.length === 0}>
+      <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={queue.length === 0}>
         <NextIcon />
       </TransportButton>
     </div>

@@ -12,6 +12,8 @@ import JourneyEmptyPrompt from "./journey-empty-prompt";
 import JourneyEndpoints from "./journey-endpoints";
 import JourneyStopList from "./journey-stop-list";
 import JourneySummary from "./journey-summary";
+import { analyticsContext, trackOnce } from "@/lib/analytics/client";
+import { journeyResult } from "@/lib/analytics/flows";
 
 /**
  * 여정 패널 (JOURNEY-01, PATH-01/02) — **결과를 보여주는 화면**이다.
@@ -28,6 +30,16 @@ export default function JourneyPanel() {
   const stops = route.data?.stops;
   const routeStart = route.data?.startMusicId;
   const routeEnd = route.data?.endMusicId;
+  useEffect(() => {
+    if (!isRouteRequested || startMusicId == null || endMusicId == null) return;
+    if (route.isError) journeyResult(startMusicId, endMusicId, "error", 0);
+    if (!route.data) return;
+    const count = route.data.stops.length;
+    journeyResult(startMusicId, endMusicId, count ? "success" : "empty", count);
+    trackOnce(`journey-results:${analyticsContext().journey_id ?? `${startMusicId}-${endMusicId}`}`, "journey_results_viewed", {
+      start_music_id: startMusicId, end_music_id: endMusicId, result_count: count,
+    });
+  }, [isRouteRequested, startMusicId, endMusicId, route.data, route.isError]);
   useEffect(() => {
     if (!stops || stops.length < 2 || routeStart == null || routeEnd == null) return;
     /**

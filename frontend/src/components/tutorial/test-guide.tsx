@@ -1,6 +1,8 @@
 "use client";
 
 import Button from "@/components/common/button";
+import { useEffect } from "react";
+import { setAnalyticsContext, trackOnce } from "@/lib/analytics/client";
 
 /** 필수로 답해야 하는 설문 둘 — 이번 테스트의 핵심이다 */
 const SURVEYS = [
@@ -28,6 +30,10 @@ const SURVEYS = [
  * 지도 위에 얹지 않고 화면을 통째로 덮는다 — 읽고 시작하는 자리라 뒤가 보일 이유가 없다.
  */
 export default function TestGuide({ onStart }: { onStart: () => void }) {
+  useEffect(() => {
+    setAnalyticsContext({ phase: "guide" });
+    trackOnce("guide", "test_guide_viewed");
+  }, []);
   return (
     <div className="fixed inset-0 z-[80] overflow-y-auto bg-void">
       {/* 별이 깔린 머리말 — 앱 안으로 들어간다는 게 첫 화면에서 읽혀야 한다 */}

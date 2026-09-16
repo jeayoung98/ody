@@ -5,6 +5,7 @@ import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
+import { track } from "@/lib/analytics/client";
 
 /**
  * 내 위치로 가기 — 재생으로 내 자리가 정해졌던 겹·화면으로 돌아간다 (MAP-08).
@@ -31,6 +32,7 @@ export default function LocateButton() {
   const handleClick = () => {
     const showToast = useToastStore.getState().show;
     const r = useMapStore.getState().goHome();
+    track("map_locate_used", { outcome: r });
     if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
     else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
     else if (r !== "none") {
@@ -41,6 +43,7 @@ export default function LocateButton() {
 
   return (
     <button
+      data-analytics-manual
       type="button"
       onClick={handleClick}
       disabled={!canGoHome}

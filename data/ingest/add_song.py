@@ -16,8 +16,15 @@
 - `title` 은 `metadata.tags.title` 또는 `--title`. `music.title` 이 NOT NULL 이라 비면 중단.
 - `lossless` 는 `metadata.audio_properties.lossless`. S2 의 delta_f 보정이 이 값으로 갈린다.
 
-## 하지 않는 것
-S5 카탈로그 규칙(R1~R10). 묶음 규칙 R5·R6 은 단건에 적용할 수 없다. genre·Neo4j·HNSW 도 범위 밖.
+## S5 규칙은 행 단위만 적용한다
+제외 규칙 중 **행 하나로 판정되는 것**(R1 길이·R3·R7·R10 제목 잡음·R11 측정 신호·R13 오디오북·
+R16 제목 비음악·R17 아티스트 불명)은 `spark/jobs/catalog_rules.row_masks` 를 그대로 불러 검사하고,
+걸리면 중단한다. 규칙 정의는 `pipeline/exclusion_rules.json` 하나이며 이 파일에 복제하지 않는다.
+`--ignore-rules` 로만 통과시킨다.
+
+묶음 규칙 R5·R6(중복 접기)과 분위 기반 R8·R15 는 전곡 분포가 있어야 하므로 단건에서 판정하지
+않는다. genre·Neo4j·HNSW 도 범위 밖이다.
+
 SQL 실행도 하지 않는다 — 운영 DB 는 사람이 DBeaver 로 실행한다.
 """
 import argparse
@@ -34,7 +41,8 @@ for sub in ("scripts", "ingest", os.path.join("spark", "jobs")):
     sys.path.insert(0, os.path.join(ROOT, sub))
 
 import korean_common as KC  # noqa: E402  (import 시 serving/CURRENT.json 번들을 읽는다)
-from build_csv import MUSIC_COLUMNS, music_row  # noqa: E402
+from build_csv import EMPTY_META, MUSIC_COLUMNS, music_row  # noqa: E402
+import catalog_rules as S5  # noqa: E402  (S5 행 단위 제외 규칙을 단건에도 적용한다)
 from manifest_rows import FP_KEY_COLUMNS, load_cohort, load_fingerprints  # noqa: E402
 
 UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$")
@@ -66,6 +74,36 @@ def check_extractor(doc, allow_foreign=False):
     return fp
 
 
+YEAR_RE = re.compile(r"^\s*(\d{4})")
+YEAR_MIN, YEAR_MAX = 1900, 2026
+
+
+def _year(doc):
+    """meta_merge 와 같은 규칙: originaldate → date 앞 4자리, 1900~2026 만."""
+    for key in ("originaldate", "date"):
+        match = YEAR_RE.match(_tag(doc, key) or "")
+        if match and YEAR_MIN <= int(match.group(1)) <= YEAR_MAX:
+            return int(match.group(1))
+    return None
+
+
+def album_meta(doc):
+    """build_csv.music_row 가 받는 (album, release_year, album_mbid). D17 재패스와 같은 출처다."""
+    return (_tag(doc, "album"), _year(doc), _tag(doc, "musicbrainz_albumid"))
+
+
+def check_row_rules(song, ignore=False):
+    """행 단위 S5 규칙. 걸리면 AddSongError — 전곡 파이프라인이 자를 곡을 단건으로 넣지 않는다."""
+    rules, _ = S5.load_rules()
+    row = {"title_raw": song["title"], "artist_raw": song["artist"], "length": song["length"],
+           "sample_rate": song["sample_rate"], "fingerprint": song["fingerprint"],
+           "a5_keywords": [], "n_clipped_features": 0}
+    hits = [rid for rid, hit in S5.row_masks(row, rules).items() if hit and rid != "R4_cohort"]
+    if hits and not ignore:
+        raise AddSongError("S5 제외 규칙에 걸린다: {}. --ignore-rules 로만 넣는다".format(", ".join(hits)))
+    return hits
+
+
 def song_from_doc(doc, mbid=None, title=None, artist=None, lossless=None, allow_foreign=False):
     """lowlevel JSON 하나 → music 한 행(dict). 좌표는 float32 16개."""
     fp = check_extractor(doc, allow_foreign)
@@ -87,7 +125,8 @@ def song_from_doc(doc, mbid=None, title=None, artist=None, lossless=None, allow_
     bpm = X[0, BPM_INDEX]
     return {"mbid": mbid, "title": title, "artist": artist, "lossless": bool(lossless),
             "fingerprint": fp, "bpm": None if np.isnan(bpm) else float(bpm),
-            "length": props.get("length"), "coords": coords}
+            "length": props.get("length"), "sample_rate": props.get("sample_rate"),
+            "meta": album_meta(doc), "coords": coords}
 
 
 def _literal(column, value):
@@ -100,15 +139,20 @@ def _literal(column, value):
     return str(value)
 
 
-def insert_sql(song):
-    """music 한 행 INSERT. id 는 MAX(id)+1, 같은 mbid 가 있으면 넣지 않는다(멱등)."""
-    row, _title_cut, _artist_cut = music_row(None, song["mbid"], song["title"], song["artist"],
-                                             song["bpm"], song["length"], song["coords"])
-    values = ["(SELECT COALESCE(MAX(id), 0) + 1 FROM music)"]
+def insert_sql(song, table="music"):
+    """한 행 INSERT. id 는 MAX(id)+1, 같은 mbid 가 있으면 넣지 않는다(멱등).
+
+    컬럼 목록과 값 형식은 `build_csv.music_row` 가 정한다 — 전곡 CSV 와 같은 규칙이어야
+    좌표·앨범·연도가 한 테이블 안에서 다르게 들어가지 않는다.
+    """
+    row, _title_cut, _artist_cut, _album_cut = music_row(
+        None, song["mbid"], song["title"], song["artist"], song["bpm"], song["length"],
+        song["coords"], song.get("meta", EMPTY_META))
+    values = ["(SELECT COALESCE(MAX(id), 0) + 1 FROM {})".format(table)]
     values += [_literal(col, val) for col, val in zip(MUSIC_COLUMNS[1:], row[1:])]
-    return ("INSERT INTO music ({cols})\nSELECT {vals}\n"
-            "WHERE NOT EXISTS (SELECT 1 FROM music WHERE mbid = {mbid});\n").format(
-                cols=", ".join(MUSIC_COLUMNS), vals=", ".join(values),
+    return ("INSERT INTO {table} ({cols})\nSELECT {vals}\n"
+            "WHERE NOT EXISTS (SELECT 1 FROM {table} WHERE mbid = {mbid});\n").format(
+                table=table, cols=", ".join(MUSIC_COLUMNS), vals=", ".join(values),
                 mbid=_literal("mbid", song["mbid"]))
 
 
@@ -121,6 +165,10 @@ def main():
     ap.add_argument("--lossy", dest="lossless", action="store_false")
     ap.add_argument("--allow-foreign-extractor", action="store_true",
                     help="코호트 밖 essentia 빌드도 통과시킨다. 좌표 신뢰 불가, 실험용")
+    ap.add_argument("--table", default=os.environ.get("ODY_MUSIC_TABLE", "music"),
+                    help="INSERT 대상 테이블. 재적재본은 music_v2 (기본 music)")
+    ap.add_argument("--ignore-rules", action="store_true",
+                    help="행 단위 S5 제외 규칙에 걸려도 넣는다")
     args = ap.parse_args()
     if len(args.json) > 1 and (args.mbid or args.title):
         ap.error("--mbid/--title 는 JSON 하나일 때만")
@@ -132,9 +180,13 @@ def main():
             doc = json.load(io.open(path, encoding="utf-8"))
             song = song_from_doc(doc, args.mbid, args.title, args.artist, args.lossless,
                                  args.allow_foreign_extractor)
-            out.write(insert_sql(song))
+            rule_hits = check_row_rules(song, args.ignore_rules)
+            out.write(insert_sql(song, args.table))
+            album, year, album_mbid = song["meta"]
             report.append({"json": path, "mbid": song["mbid"], "title": song["title"],
                            "fingerprint": song["fingerprint"], "bpm": song["bpm"],
+                           "album": album, "release_year": year, "album_mbid": album_mbid,
+                           "rule_hits": rule_hits, "table": args.table,
                            "coords": [float(c) for c in song["coords"]]})
         out.write("COMMIT;\n")
     print(json.dumps({"out": args.out, "songs": report}, ensure_ascii=False, indent=1))

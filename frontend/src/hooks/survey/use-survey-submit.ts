@@ -3,10 +3,9 @@
 import { useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { getAnonymousId } from "@/lib/anonymous-id";
+import { api } from "@/lib/api";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import { questionKey, type AnsweredRow, type SurveyReason, type SurveySubmission, type SurveyTarget } from "@/types/survey";
-import { api } from "@/lib/api";
-import type { SurveyReason, SurveySubmission, SurveyTarget } from "@/types/survey";
 
 /**
  * 우리 Next 서버의 통로. 그 안에서 백엔드 `POST /api/feedback` 을 대신 부른다.

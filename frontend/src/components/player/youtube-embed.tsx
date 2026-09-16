@@ -126,13 +126,17 @@ export default function YoutubeEmbed() {
     if (p.queue.length === 0) return;
 
     const before = p.currentMusicId;
+    /**
+     * `next()` 가 안 움직이는 이유는 둘이다 — **큐 끝**이거나, 떠나기 전에 물을 것이 있어
+     * **보류**됐거나 (S15P21A405-335). 보류면 끼어든 쪽이 볼일을 마친 뒤 그대로 다시 부르므로
+     * 여기서 멈추면 안 된다. 결과로는 둘을 못 가리니 **부르기 전에 큐 끝인지 재 둔다.**
+     */
+    const atEnd = p.queueIndex + 1 >= p.queue.length;
     p.next();
     const after = usePlayerStore.getState();
-    // 막는 창 때문에 미뤄 둔 것이면 `useDeferredNext` 가 창이 닫힐 때 넘긴다 (S15P21A405-258)
-    if (after.pendingNext) return;
-    // 마지막 정차였다 — 넘길 곳이 없으니 여기서 끝이다. ▶ 로 되돌린다 (S15P21A405-361 과 같은 자리)
     if (after.currentMusicId === before) {
-      after.pause();
+      // 마지막 정차였다 — 넘길 곳이 없으니 여기서 끝이다. ▶ 로 되돌린다 (S15P21A405-361 과 같은 자리)
+      if (atEnd) after.pause();
       return;
     }
     showToast(SKIPPED_UNPLAYABLE);
@@ -170,6 +174,7 @@ export default function YoutubeEmbed() {
     if (e.data === ENDED) {
       wantPlayRef.current = 0;
       const before = p.currentMusicId;
+      const atEnd = p.queueIndex + 1 >= p.queue.length;
       p.next();
       /**
        * **넘어갈 곡이 없으면 거기서 재생이 끝난 것이다** (S15P21A405-361). `next()` 는 그 경우
@@ -178,11 +183,12 @@ export default function YoutubeEmbed() {
        * 한 번 누르면 플레이어가 끝난 영상을 처음부터 다시 튼다. 단독 재생만이 아니라 여정·플리의
        * 마지막 곡도 같은 자리다.
        *
-       * **미뤄 둔 넘김은 끝난 게 아니다** (S15P21A405-258) — 막는 창이 닫히면 이어서 넘어가므로
-       * 그때는 재생 상태를 건드리지 않는다. 여기서 멈춰 두면 다음 곡이 소리 없이 걸린다.
+       * **보류된 넘김은 끝난 게 아니다** (S15P21A405-258 · 335) — 떠나기 전에 물을 것이 있으면
+       * `next()` 가 멈춰 서고, 카드가 닫힐 때 그대로 다시 불린다. 그때 여기서 멈춰 두면 다음 곡이
+       * 소리 없이 걸린다. 결과만 봐서는 큐 끝과 구분되지 않으니 **부르기 전에** 재 둔다.
        */
       const after = usePlayerStore.getState();
-      if (!after.pendingNext && after.currentMusicId === before) after.pause();
+      if (atEnd && after.currentMusicId === before) after.pause();
       return;
     }
     if (e.data === UNSTARTED || e.data === CUED || e.data === PAUSED) {

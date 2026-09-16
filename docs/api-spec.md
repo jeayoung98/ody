@@ -555,7 +555,7 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 
 ## 5. 탐색 설문 (S15P21A405-289)
 
-> 주변 탐색(§3.5)·경로 탐색(§3.3)에서 **곡 하나가 끝날 때마다** FE 가 1건 보낸다. 20초 이상 들은 곡은 설문이 강제로 뜨고 응답해야 다음 동작이 가능하다(질문 1개 👍/👎, 👎 면 이유 칩 하나 필수). 20초 전에 끝났거나 스킵한 곡은 설문 없이 `verdict=null` 로 보낸다.
+> 주변 탐색(§3.5)·경로 탐색(§3.3)에서 **곡 하나를 떠날 때마다** FE 가 1건 보낸다. 설문이 강제로 뜨고 응답해야 다음 동작이 가능하다(질문 1개 👍/👎, 👎 면 이유 칩 하나 필수). 청취 시간 조건은 없다(20초 조건 제거, S15P21A405-346). 답하지 않고 떠난 곡은 `verdict=null` 로 보낸다. 같은 사람은 같은 문항에 한 번만 답한다(§5.2).
 > 설문 방식·분석 쿼리는 `docs/notion/product/01_EXPLORE_SURVEY.md`. 테이블 DDL 은 `backend/src/main/resources/db/explore_feedback.sql`.
 > 거리·bpm 은 보내지 않는다 — 분석 시 `music.location`·`music.bpm` 을 조인해 계산한다(여정 응답은 거리를 노출하지 않음).
 
@@ -589,7 +589,7 @@ req:
 | `targetMusicId` | int | journey O | 도착곡 id. nearby 는 null |
 | `prevMusicId` | int | — | journey: 앞 역 id (1역은 출발곡). nearby 는 null |
 | `musicId` | int | O | 평가 대상 곡 |
-| `verdict` | bool | — | nearby: "기준곡과 비슷했나요?" / journey: "앞 곡에서 자연스럽게 이어졌나요?" `true`/`false`. 20초 전 종료·스킵은 설문 없이 `null` 로 **그래도 보낸다** |
+| `verdict` | bool | — | nearby: "기준곡과 비슷했나요?" / journey: "앞 곡에서 자연스럽게 이어졌나요?" `true`/`false`. 답하지 않고 떠난 곡은 `null` 로 **그래도 보낸다** |
 | `reason` | `dup` \| `mood` \| `tempo` \| `spoken` | verdict=false 면 O | 단일 선택. 같은 곡 / 분위기 다름 / 템포 다름 / 음악 아님. `verdict` 가 `true`/`null` 이면 보내지 않는다 |
 | `listenedSec` | int | — | 실제 들은 초 |
 | `skipped` | bool | — | 스킵으로 끝났는가. 기본 false |
@@ -597,5 +597,24 @@ req:
 res: `{ "success": true, "data": { "feedbackId": 7 }, "error": null }`
 
 - 같은 `(sessionId, rank)` 재요청은 `verdict`·`reason`·`listenedSec`·`skipped` 만 갱신하고 같은 `feedbackId` 를 돌려준다(답 바꾸기).
+- **같은 사람은 같은 문항에 한 번만 답한다** (S15P21A405-346). 사람 = 로그인 이메일 또는 `anonymousId`, 문항 = `(mode, anchorMusicId, prevMusicId, musicId)`.
+  다른 세션에서 이미 `verdict` 를 남긴 문항이면 저장하지 않고 **그 첫 답의 `feedbackId` 를 200 으로 돌려준다**(에러 아님). `verdict=null` 로만 남은 기록은 답이 아니므로 다시 답할 수 있다.
+  FE 는 §5.2 로 답한 문항을 미리 받아 설문을 띄우지 않는다.
 - 서버가 `bundle`(`ody.serving.bundle`)과 임계값 스냅샷(`rules`)을 행에 찍는다. 규칙을 바꾼 뒤 전후 비교용.
 - 에러 `INVALID_INPUT`(400): mode·reason 값 범위 밖, rank 0 또는 50 초과, uuid 형식 오류, journey 에 `targetMusicId` 없음, nearby 에 `targetMusicId`/`prevMusicId` 있음, `verdict=false` 인데 `reason` 없음, `verdict≠false` 인데 `reason` 있음.
+
+### 5.2 이미 답한 문항 조회
+`GET /api/feedback/answered?anonymousId=<uuid>` · **인증 선택** (S15P21A405-346).
+로그인 이메일 또는 `anonymousId` 중 하나로 사람을 찾는다. 둘 다 있으면 둘 중 하나라도 같은 행 전부.
+FE 는 탐색 결과를 받은 뒤 이 목록에 있는 문항엔 설문을 띄우지 않는다.
+
+res:
+```json
+{ "success": true, "data": [
+  { "mode": "nearby",  "anchorMusicId": 10234, "prevMusicId": null,  "musicId": 10877, "verdict": false },
+  { "mode": "journey", "anchorMusicId": 10234, "prevMusicId": 10877, "musicId": 11020, "verdict": true }
+], "error": null }
+```
+
+- `verdict=null` 인 기록(답하지 않고 떠남)은 포함하지 않는다.
+- 에러 `INVALID_INPUT`(400): 비로그인인데 `anonymousId` 없음, `anonymousId` 가 uuid 형식이 아님.

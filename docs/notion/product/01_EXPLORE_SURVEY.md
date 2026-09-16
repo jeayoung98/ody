@@ -18,8 +18,9 @@
 | 범위 탐색(여정) | 앞 곡에서 자연스럽게 이어졌나요? | 👍 / 👎 | 갑자기 바뀜 · 템포 다름 · 같은 곡 반복 · 음악 아님 |
 
 규칙
-- **20초 이상 들은 곡에만 뜬다.** 20초가 지나면 설문이 강제로 뜨고, 응답해야 다음 동작(다음 곡·스킵·이동)이 가능하다. 👎 이면 이유 칩 하나를 반드시 고른다.
-- 20초 전에 끝났거나 스킵한 곡은 설문을 띄우지 않는다. 대신 `verdict=null` 로 그래도 보낸다. 어떤 곡을 빨리 넘겼는지가 그 자체로 신호다(`skipped`, `listened_sec`).
+- **곡을 떠날 때 뜬다.** 청취 시간 조건 없음(20초 조건은 S15P21A405-346 에서 제거). 응답해야 다음 동작(다음 곡·스킵·이동)이 가능하다. 👎 이면 이유 칩 하나를 반드시 고른다.
+- 답하지 않고 떠난 곡은 `verdict=null` 로 그래도 보낸다. 어떤 곡을 빨리 넘겼는지가 그 자체로 신호다(`skipped`, `listened_sec`).
+- **같은 사람은 같은 문항에 한 번만 답한다.** 사람 = 로그인 이메일 또는 `anonymous_id`, 문항 = (mode, 기준곡, 앞 역, 대상곡). 두 번째 응답은 서버가 저장하지 않고 첫 답의 id 를 돌려준다. FE 는 `GET /api/feedback/answered` 로 답한 문항을 미리 받아 설문을 띄우지 않는다.
 - 비로그인 사용자 응답도 저장한다. 사람 구분은 브라우저 localStorage 의 UUID(`anonymous_id`)로 한다. 응답 100건이 1명인지 10명인지 알아야 정밀도를 믿을 수 있다.
 - 5점 척도·자유 텍스트 없음. 내부 채점이 O/X 라 척도를 맞추고, 탭 수를 늘리지 않는다. "고민되면 👎".
 
@@ -46,7 +47,7 @@ row 1개 = 곡 1개 재생. 테이블 `explore_feedback` (DDL `backend/src/main/
 | `target_music_id` | journey: 도착곡 |
 | `prev_music_id` | journey: 앞 역 (1역은 출발곡) |
 | `music_id` | 평가 대상 곡 |
-| `verdict` | true / false / NULL(20초 전 종료·스킵. 설문 안 뜸) |
+| `verdict` | true / false / NULL(답하지 않고 떠남) |
 | `reason` | `dup` `mood` `tempo` `spoken`. `verdict=false` 면 필수, 아니면 NULL. 단일 선택 |
 | `listened_sec`, `skipped` | 암묵 신호. 사용자에게 묻지 않고 자동 수집 |
 | `user_email` | 로그인 시. 비로그인 NULL |
@@ -55,6 +56,7 @@ row 1개 = 곡 1개 재생. 테이블 `explore_feedback` (DDL `backend/src/main/
 저장하지 않는 것: 거리, bpm 차이, 곡 길이. 전부 `music` 테이블에 있으니 분석 시 조인한다(`music.location` 은 pgvector, `<->` 가 L2 거리). 여정 응답은 거리를 노출하지 않아 FE 가 보낼 수도 없다.
 
 `UNIQUE(session_id, rank)`. 답을 바꾸면 같은 행이 갱신된다.
+사람 기준 중복은 UNIQUE 로 못 잡는다(사람 키가 `user_email` OR `anonymous_id`). 서버가 저장 전에 `verdict IS NOT NULL` 인 같은 문항을 조회해 막는다. 동시 요청 둘이 겹치는 극단은 집계에서 `anonymous_id`·문항별 첫 행만 센다.
 
 ## 4. API
 
@@ -133,7 +135,7 @@ GROUP BY skipped, verdict ORDER BY skipped, verdict;
 
 ## 6. 아직 안 한 것
 
-- 프론트 설문 UI (별도 이슈). 20초 타이머·강제 모달·localStorage UUID 는 FE 몫.
+- 프론트 설문 UI (S15P21A405-335). 강제 모달·localStorage UUID·답한 문항 미리 받기는 FE 몫.
 - 사람당 응답 상한. 한 사람이 수백 건 보내면 정밀도가 그 사람 취향이 된다. 분석 시 `anonymous_id` 별로 최대 N건만 표본화하는 쿼리를 나중에.
 - 여정 방식(linear/axis) 컬럼. 여정 응답이 방식을 노출하지 않아(FR-023) 지금은 기록 불가. 응답에 방식이 추가되면 컬럼 하나 추가.
 - 집계 API. 위 SQL 을 직접 실행한다. 대시보드가 필요해지면 그때.

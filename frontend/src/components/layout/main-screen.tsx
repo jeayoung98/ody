@@ -67,7 +67,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {overlay}
       <Toast />
       <ConfirmDialog />
-      {/* 설문 — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
+      {/* 설문 — NEXT_PUBLIC_TEST_TOOLS 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
       <SurveyGate />{/* REMOVE-WITH-SURVEY */}
     </div>
   );

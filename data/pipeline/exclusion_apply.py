@@ -368,21 +368,40 @@ def main(dry_run=True):
         rules_src = os.path.join(SERV, "postprocess_rules.json")
     shutil.copy(rules_src, SERV_NEW)
     m = json.load(io.open(os.path.join(SERV, "manifest.json"), encoding="utf-8"))
-    m.update({"bundle_version": "v2.1-pca16-" + time.strftime("%Y-%m-%d"), "status": "PROMOTED (v2.1 = v2 + 카탈로그 정제, fit·트리 동일)",
+    m.update({"bundle_version": os.path.basename(SERV_NEW) + "-" + time.strftime("%Y-%m-%d"),
+              "status": "PROMOTED ({} = {} + 카탈로그 정제, fit·트리 동일)".format(
+                  os.path.basename(SERV_NEW), os.path.basename(SERV)),
               "songs": int(keep.sum()), "songs_before_exclusion": N, "exclusion_rules_hash": rules_hash, "exclusion_rules": "pipeline/exclusion_rules.json",
               "excluded_total": int(excl.sum()), "catalog": "work/catalog_v2.parquet"})
     json.dump(m, io.open(os.path.join(SERV_NEW, "manifest.json"), "w", encoding="utf-8"), indent=2, ensure_ascii=False)
     # 최소 재검증: 브릿지 풀 Hit@10 전/후 + 사라진 정답 파트너
-    reval = revalidate(meta, X, excl)
-    S["revalidation"] = reval
+    try:
+        S["revalidation"] = revalidate(meta, X, excl)
+    except FileNotFoundError as missing:
+        # 번들·카탈로그는 이미 썼다. 재검증 입력이 없다고 그것을 버리지 않는다.
+        S["revalidation"] = {"skipped": "입력 없음: {}".format(missing)}
+        print("재검증 건너뜀 — {} 이 output/ 에도 work/ 에도 없다".format(missing), flush=True)
     json.dump(S, io.open(os.path.join(OUT, "exclusion_report.json"), "w", encoding="utf-8"), indent=2, ensure_ascii=False, default=float)
     write_md(S, R, False)
     print("apply 완료: catalog_v2 {} 행, 제외 {}, serving/v2.1-pca16 {} 곡 ({:.1f}m)".format(fmt(N), fmt(excl.sum()), fmt(keep.sum()), (time.time() - t0) / 60))
 
 
+def qa_input(name):
+    """재검증 입력(브릿지 풀·멜론 정답쌍)을 찾는다.
+
+    QA 산물이라 저장소에 커밋하지 않는다(규칙 4). output/ 에 없으면 work/ 에서 찾고,
+    둘 다 없으면 재검증을 건너뛴다.
+    """
+    for base in (OUT, WORK):
+        path = os.path.join(base, name)
+        if os.path.exists(path):
+            return path
+    raise FileNotFoundError(name)
+
+
 def revalidate(meta, X, excl):
-    br = pd.read_parquet(os.path.join(OUT, "bridge_v2.parquet")); br["mbid"] = br["mbid"].astype(str).str.lower()
-    lab = pd.read_parquet(os.path.join(OUT, "labels_melon_pairs_v2.parquet")); m2m = br.set_index("melon_id")["mbid"]
+    br = pd.read_parquet(qa_input("bridge_v2.parquet")); br["mbid"] = br["mbid"].astype(str).str.lower()
+    lab = pd.read_parquet(qa_input("labels_melon_pairs_v2.parquet")); m2m = br.set_index("melon_id")["mbid"]
     pa = lab["song_a"].map(m2m).to_numpy(); pb = lab["song_b"].map(m2m).to_numpy()
     pos = pd.Series(np.arange(len(meta)), index=meta["mbid"])
     ia = pos.reindex(pa).to_numpy(); ib = pos.reindex(pb).to_numpy(); ok = np.isfinite(ia) & np.isfinite(ib)

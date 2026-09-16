@@ -61,7 +61,7 @@ export const usePlayerStore = create<PlayerState>()(
       runPlaybackTransition(() => {
         if (map.constellationMusicIds.length && !map.constellationMusicIds.includes(musicId)) useMapStore.getState().clearConstellation();
         set({ currentMusicId: musicId, isPlaying: true, context, queue, queueIndex, playSeq: get().playSeq + 1 }, false, "playSingle");
-      }, { musicId, context });
+      });
     },
     playQueue: (context, musicIds, startIndex = 0) => {
       if (!Number.isInteger(startIndex) || startIndex < 0 || startIndex >= musicIds.length) return;
@@ -69,7 +69,7 @@ export const usePlayerStore = create<PlayerState>()(
       runPlaybackTransition(() => set({
         context, queue, queueIndex: startIndex, currentMusicId: queue[startIndex],
         isPlaying: true, playSeq: get().playSeq + 1,
-      }, false, "playQueue"), { musicId: queue[startIndex], context });
+      }, false, "playQueue"));
     },
     /**
      * **다시 들려주기** (S15P21A405-371). 설문 카드 안에서 기준곡·이전 정거장을 눌렀을 때 쓴다.

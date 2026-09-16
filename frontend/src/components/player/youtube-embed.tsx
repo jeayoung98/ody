@@ -221,7 +221,7 @@ export default function YoutubeEmbed() {
     if (!readyPlayer(player) || p.currentMusicId == null || loadedMusicRef.current !== p.currentMusicId || loadedSeqRef.current !== p.playSeq
       || currentVideoId(player) !== loadedIdRef.current) return;
     if (player.getPlayerState() !== e.data) return;
-    const report = (state: "playing" | "paused") => reportPlayback({ musicId: p.currentMusicId!, playSeq: p.playSeq, state, at: Date.now() });
+    const report = (state: "playing" | "paused" | "ended") => reportPlayback({ musicId: p.currentMusicId!, playSeq: p.playSeq, state, at: Date.now() });
     if (e.data === PLAYING) {
       wantPlayRef.current = 0;
       // 멈출 때와 "세지만 않을" 때를 가른다 (S15P21A405-372). 규칙은 `playingAction` 이 갖는다
@@ -233,7 +233,7 @@ export default function YoutubeEmbed() {
       report("playing");
       return;
     }
-    report("paused");
+    report(e.data === ENDED ? "ended" : "paused");
     if (e.data === ENDED) {
       if (startedSeqRef.current !== p.playSeq || endedSeqRef.current === p.playSeq || useBlockingStore.getState().busy) return;
       endedSeqRef.current = p.playSeq;

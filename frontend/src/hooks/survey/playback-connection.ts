@@ -84,7 +84,7 @@ export function connectSurveyPlayback(client: QueryClient): () => void {
     if (event.musicId !== p.currentMusicId || event.playSeq !== p.playSeq) return;
     const s = survey.getState();
     if (event.state === "unavailable") { s.markUnplayable(event.musicId); return; }
-    if (event.state === "paused") { s.enter(null, false, event.at); return; }
+    if (event.state === "paused" || event.state === "ended") { s.enter(null, false, event.at); return; }
     // 조용한 이유를 남긴다 (S15P21A405-375) — 이 문에서 되돌아가면 설문 판정까지 가지 않는다
     if (!p.isPlaying || blocking.getState().busy) {
       logSurveySkip(event.musicId, !p.isPlaying ? "재생 상태가 아니다" : "답을 강제하는 창이 떠 있다");

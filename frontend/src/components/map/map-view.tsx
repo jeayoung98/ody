@@ -25,6 +25,9 @@ import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { useViewport } from "./use-viewport";
+import { ANALYTICS } from "@/constants/analytics";
+import { analyticsContext, track, trackOnce } from "@/lib/analytics/client";
+import { nearbyResults } from "@/lib/analytics/flows";
 
 interface MapViewProps {
   /** 우측 패널·레일 등으로 가려진 폭(px). 중앙 계산에서 제외한다 */
@@ -54,6 +57,14 @@ export default function MapView({ occludedRight }: MapViewProps) {
   /** 호버 카드의 DOM. 마우스가 그 위인지 매번 다시 재려고 들고 있는다 */
   const hideTimer = useRef<number | null>(null);
   const drag = useRef<{ x: number; y: number; moved: number } | null>(null);
+  const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const wheelStart = useRef<{ layer: number; zoom: number; mode: string } | null>(null);
+  useEffect(() => () => { if (wheelTimer.current) clearTimeout(wheelTimer.current); }, []);
+  useEffect(() => {
+    if (!cardOn || !hoverSong) return;
+    const timer = setTimeout(() => track("music_hovered", { music_id: hoverSong.musicId, source: "hover_card" }), ANALYTICS.hoverMs);
+    return () => clearTimeout(timer);
+  }, [cardOn, hoverSong]);
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
@@ -159,6 +170,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       engine.restoreHome(readStorage<{ musicId: number; boxes: LayerBox[] }>(STORAGE_KEYS.myHome));
     }
     engine.setLayerSongs(boxes.length, songs);
+    trackOnce("map-ready", "map_ready", { result_count: songs.length, layer: boxes.length });
   }, [engine, boxes, songs]);
   // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
   useEffect(() => {
@@ -170,7 +182,10 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   // 주변 탐색: 유사곡 10곡이 오면 연출 뷰로 진입, 모드가 꺼지면 복귀
   useEffect(() => {
-    if (viewMode === "nearby" && nearby) engine.enterProbe(nearby.center, nearby.neighbors);
+    if (viewMode === "nearby" && nearby) {
+      engine.enterProbe(nearby.center, nearby.neighbors);
+      nearbyResults(nearby.center.musicId, nearby.neighbors.length);
+    }
     else if (viewMode !== "nearby") engine.exitProbe();
   }, [engine, viewMode, nearby]);
   // 별자리 오버레이 뷰: 배치가 도착하면 대형으로 모이고, 뷰를 닫으면 제자리로 흩어진다 (PATH-01)
@@ -260,6 +275,17 @@ export default function MapView({ occludedRight }: MapViewProps) {
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
       const mode = useMapStore.getState().viewMode;
+      const mapSnapshot = useMapStore.getState();
+      wheelStart.current ??= { layer: mapSnapshot.layer, zoom: mapSnapshot.zoomK, mode };
+      if (wheelTimer.current) clearTimeout(wheelTimer.current);
+      const eventContext = analyticsContext();
+      wheelTimer.current = setTimeout(() => {
+        const start = wheelStart.current;
+        wheelStart.current = null;
+        if (!start) return;
+        const end = useMapStore.getState();
+        track("map_zoom_completed", { ...eventContext, view_mode: start.mode, from_layer: start.layer, layer: end.layer, from_zoom: start.zoom, zoom: end.zoomK });
+      }, ANALYTICS.wheelSettleMs);
       // 오버레이가 떠 있으면 뒷화면 지도는 건드리지 않는다 — 휠은 오버레이 안에서만 작동
       if (mode === "constellation") {
         engine.overlayWheel(e.deltaY);
@@ -386,6 +412,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const pressSong = useCallback(
     (s: MapPoint) => {
       const map = useMapStore.getState();
+      track("music_clicked", { music_id: s.musicId, source: "canvas", action: map.selectedMusicId === s.musicId ? "play" : "inspect" });
       if (map.selectedMusicId === s.musicId) {
         playSong(s);
         return;
@@ -412,7 +439,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
         holdFired.current = false;
         return;
       }
-      if (!d || d.moved > 5) return;
+      if (!d) return;
+      if (d.moved > 5) { track("map_pan_completed", { distance_px: Math.round(d.moved) }); return; }
       const r = e.currentTarget.getBoundingClientRect();
       const mx = e.clientX - r.left;
       const my = e.clientY - r.top;
@@ -431,6 +459,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       // 고스트별을 누르면 상세만 열고 화면은 그대로 둔다 — 이동은 상세 안 버튼으로 (MAP-12)
       const gid = engine.hitGhost(mx, my);
       if (gid != null) {
+        track("music_clicked", { music_id: gid, source: "ghost", action: "inspect" });
         selectMusic(gid);
         openSong(gid);
         return;
@@ -448,6 +477,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       // 여정 지정 모드면 클릭이 출발·도착 칸을 번갈아 채운다 (JOURNEY-01)
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {
+        track("music_clicked", { music_id: id, source: "canvas", action: `set_${journey.pickTarget}` });
         journey.pickForNext(id);
         selectMusic(id);
         return;
@@ -457,6 +487,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
     [engine, cancelHold, openFeed, openSong, pressSong, selectMusic],
   );
   const onMouseLeave = useCallback(() => {
+    if (drag.current && drag.current.moved > 5) track("map_pan_completed", { distance_px: Math.round(drag.current.moved), reason: "leave" });
     drag.current = null;
     cancelHold();
     scheduleHide();
@@ -469,6 +500,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   return (
     <div
+      data-analytics-manual
       ref={ref}
       className={`stage-bg absolute inset-0 select-none overflow-hidden ${cursor}`}
       onWheel={onWheel}

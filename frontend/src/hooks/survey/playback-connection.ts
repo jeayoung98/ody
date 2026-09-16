@@ -10,6 +10,7 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import type { JourneyRoute, NearbyResponse } from "@/types";
 import type { Exploration } from "./listening-flow";
+import { logSurveyHear, logSurveySkip } from "./survey-log";
 
 const RESOLVE_TIMEOUT_MS = 10_000;
 
@@ -84,14 +85,23 @@ export function connectSurveyPlayback(client: QueryClient): () => void {
     const s = survey.getState();
     if (event.state === "unavailable") { s.markUnplayable(event.musicId); return; }
     if (event.state === "paused") { s.enter(null, false, event.at); return; }
-    if (!p.isPlaying || blocking.getState().busy) return;
+    // 조용한 이유를 남긴다 (S15P21A405-375) — 이 문에서 되돌아가면 설문 판정까지 가지 않는다
+    if (!p.isPlaying || blocking.getState().busy) {
+      logSurveySkip(event.musicId, !p.isPlaying ? "재생 상태가 아니다" : "답을 강제하는 창이 떠 있다");
+      return;
+    }
     s.enter(event.musicId, true, event.at);
-    if (heardSeq === event.playSeq) return;
+    if (heardSeq === event.playSeq) { logSurveySkip(event.musicId, "이 재생 세대는 이미 청취로 셌다"); return; }
     heardSeq = event.playSeq;
     s.setResolving(true);
     void source.then((exploration) => {
-      if (disposed || usePlayerStore.getState().playSeq !== event.playSeq) return;
+      if (disposed || usePlayerStore.getState().playSeq !== event.playSeq) {
+        logSurveySkip(event.musicId, "탐색 결과가 늦게 와서 이 재생은 지나갔다");
+        return;
+      }
       survey.getState().hear(event.musicId, exploration);
+      const after = survey.getState();
+      logSurveyHear({ musicId: event.musicId, exploration, pending: after.pending, flow: after.flow, answered: (edge) => after.hasAnswered(edge.target) });
     });
   });
 
@@ -102,8 +112,17 @@ export function connectSurveyPlayback(client: QueryClient): () => void {
     });
     if (held) {
       blocking.getState().setBusy(true);
+      /**
+       * **시계는 멈추고 소리는 잇는다** (S15P21A405-371).
+       *
+       * `enter(null, false)` 가 청취 시간을 여기서 끊으므로 답하는 동안의 시간은
+       * `listenedSec` 에 들어가지 않는다. 그 아래에서 `pause()` 까지 부르면 **소리도 끊겨서**,
+       * 제대로 듣지 못한 곡을 두고 "비슷했나요" 를 답하게 된다 — 들을 수 없으면 답도 찍기다.
+       *
+       * 카드가 떠 있는 동안 들어오는 재생 보고는 위 구독이 `busy` 로 무시하므로, 소리를
+       * 이어도 자취(`flow`)나 시계가 다시 돌지는 않는다.
+       */
       survey.getState().enter(null, false, Date.now());
-      usePlayerStore.getState().pause();
     }
     return held;
   };

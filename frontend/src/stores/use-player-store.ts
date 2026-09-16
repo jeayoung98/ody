@@ -24,6 +24,8 @@ interface PlayerState {
   restoreLast: (musicId: number) => void;
   playSingle: (musicId: number, origin?: PlayContext) => void;
   playQueue: (context: Exclude<PlayContext, { kind: "single" }>, musicIds: number[], startIndex?: number) => void;
+  /** 답을 강제하는 창 안에서 곡을 다시 들려준다. 큐·맥락·자리는 그대로 두고 울리는 곡만 바꾼다 */
+  preview: (musicId: number) => void;
   toggle: () => void;
   pause: () => void;
   next: () => void;
@@ -69,6 +71,16 @@ export const usePlayerStore = create<PlayerState>()(
         isPlaying: true, playSeq: get().playSeq + 1,
       }, false, "playQueue"));
     },
+    /**
+     * **다시 들려주기** (S15P21A405-371). 설문 카드 안에서 기준곡·이전 정거장을 눌렀을 때 쓴다.
+     *
+     * `runPlaybackTransition` 을 지나지 않는다 — 카드가 떠 있는 동안 게이트는 "첫 목적지가
+     * 이긴다" 로 새 재생을 통째로 삼키므로, 그 길로 가면 아무 소리도 안 난다. 여기서 바꾸는
+     * 것은 **지금 울리는 곡뿐**이고 큐·맥락·자리는 그대로라, 답한 뒤 보류돼 있던 목적지로
+     * 그대로 이어진다.
+     */
+    preview: (musicId) =>
+      set((s) => (s.currentMusicId === musicId ? { isPlaying: true } : { currentMusicId: musicId, isPlaying: true, playSeq: s.playSeq + 1 }), false, "preview"),
     detachContext: () => set({ context: { kind: "single" }, queue: [], queueIndex: 0 }, false, "detachContext"),
     toggle: () => {
       if (!useBlockingStore.getState().busy) set((s) => ({ isPlaying: s.currentMusicId != null && !s.isPlaying }), false, "toggle");

@@ -80,7 +80,8 @@ test("journey asks A→B before C; success resumes C exactly once and playing", 
   await pendingJourney();
   const seq = p().playSeq;
   p().next();
-  assert.equal(p().currentMusicId, 2); assert.equal(p().isPlaying, false);
+  // 답하는 동안에도 소리는 이어진다 — 못 들은 곡을 평가하게 두지 않는다 (S15P21A405-371)
+  assert.equal(p().currentMusicId, 2); assert.equal(p().isPlaying, true);
   assert.equal(s().prompt.target.prevMusicId, 1);
   const row = answer();
   assert.equal(p().currentMusicId, 3); assert.equal(p().isPlaying, true);
@@ -131,31 +132,21 @@ test("selection, closing a panel and changing views preserve a question snapshot
   await flush(); assert.equal(s().pending, pending); assert.equal(s().prompt, null);
   p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().prompt, pending); answer(); await audible();
-  assert.equal(s().pending, null, "D was selected but never heard");
+  // 기준곡을 안 들었어도 묻는다 (S15P21A405-373, 335 결정 1 수정)
+  assert.equal(s().pending.target.anchorMusicId, 4);
 });
 
-test("after selecting D and hearing E, hearing D unlocks future D-neighbor pairs", async () => {
-  await play(5, { kind: "nearby", centerMusicId: 4 }); assert.equal(s().pending, null);
-  await play(4, { kind: "nearby", centerMusicId: 4 });
+test("hearing a neighbor asks even when the anchor was never heard", async () => {
+  // 335 결정 1 은 "비교할 소리가 없다" 며 버렸지만, 이제 카드 안에서 기준곡을 들을 수 있다
   await play(5, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().pending.target.anchorMusicId, 4);
+  assert.equal(s().pending.target.musicId, 5);
 });
 
 test("a just-heard D seeds D nearby without replaying D", async () => {
   await play(4); map.getState().enterNearby(4);
   await play(5, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().pending.target.anchorMusicId, 4);
-});
-
-test("returning after actual D exploration requires hearing A again", async () => {
-  await pendingNearby(); p().playSingle(4); answer(); await audible();
-  p().playSingle(5, { kind: "nearby", centerMusicId: 4 });
-  answer(); await audible(); // A→D is still owed before entering D→E.
-  p().playSingle(3, { kind: "nearby", centerMusicId: 1 }); answer(); await audible();
-  assert.equal(s().pending, null);
-  await play(1, { kind: "nearby", centerMusicId: 1 });
-  await play(3, { kind: "nearby", centerMusicId: 1 });
-  assert.equal(s().pending.target.anchorMusicId, 1);
 });
 
 test("view-only detour does not expire A's listening eligibility", async () => {
@@ -207,8 +198,10 @@ test("journey B→C is preserved before playing F in a selected-only D nearby vi
   assert.equal(s().prompt, owed);
   assert.equal(p().currentMusicId, 3);
   answer(); await audible();
-  assert.equal(s().pending, null, "D was not heard, so D→F must not exist");
-  await play(4, { kind: "nearby", centerMusicId: 4 });
+  // D 를 듣지 않았어도 D→E 를 묻는다 (S15P21A405-373)
+  assert.equal(s().pending.target.anchorMusicId, 4);
+  // 이제 D→E 가 먼저 밀려 있으므로 D 로 가려면 그것부터 답해야 한다
+  p().playSingle(4, { kind: "nearby", centerMusicId: 4 }); answer(); await audible();
   await play(6, { kind: "nearby", centerMusicId: 4 });
   assert.equal(s().pending.target.anchorMusicId, 4);
   assert.equal(s().pending.target.musicId, 6);
@@ -342,4 +335,31 @@ test("changing predecessor at the same rank cannot overwrite a different backend
   assert.equal(skipped.edge.target.rank, adjacent.edge.target.rank);
   assert.notEqual(skipped.edge.target.prevMusicId, adjacent.edge.target.prevMusicId);
   assert.notEqual(skipped.edge.target.sessionId, adjacent.edge.target.sessionId);
+});
+
+/* 설문 카드가 떠 있는 동안의 재생 (S15P21A405-371) */
+
+test("an open question keeps the sound going but stops the listening clock", async () => {
+  await pendingJourney();
+  p().next();
+  assert.ok(s().prompt, "질문이 떠 있어야 한다");
+  assert.equal(p().isPlaying, true, "답하는 동안에도 소리는 이어져야 한다");
+  const target = s().prompt.target.musicId;
+  const listened = s().stintMs(target);
+  await new Promise((r) => setTimeout(r, 20));
+  assert.equal(s().stintMs(target), listened, "시계는 멈춰 있어야 한다");
+});
+
+test("replaying a song from the card does not move the queue", async () => {
+  await pendingJourney();
+  p().next();
+  const { queue, queueIndex, context } = p();
+  const compare = s().prompt.compare.musicId;
+  p().preview(compare);
+  assert.equal(p().currentMusicId, compare, "누른 곡이 울려야 한다");
+  assert.equal(p().isPlaying, true);
+  assert.deepEqual(p().queue, queue, "큐는 그대로여야 한다");
+  assert.equal(p().queueIndex, queueIndex);
+  assert.deepEqual(p().context, context);
+  assert.ok(s().prompt, "다시 듣는다고 질문이 닫히면 안 된다");
 });

@@ -1,9 +1,12 @@
 "use client";
 
 import { useCallback } from "react";
-import { LEAVE_LIST_CONFIRM } from "@/constants";
+import { ACTIVITY_CONFIRM, LEAVE_LIST_CONFIRM } from "@/constants";
+import { playbackActivity, samePlayContext, shouldConfirmListExit, visiblePlayContext } from "@/lib/play-context";
 import { useConfirmStore } from "@/stores/use-confirm-store";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { useMapStore } from "@/stores/use-map-store";
+import { runPlaybackTransition, useBlockingStore } from "@/stores/use-blocking-store";
 
 /**
  * 곡 하나를 재생하는 **유일한 통로** (S15P21A405-341).
@@ -27,13 +30,38 @@ export function usePlaySong() {
    */
   return useCallback(
     (musicId: number, after?: () => void) => {
-      const play = () => {
-        usePlayerStore.getState().playSingle(musicId);
+      const map = useMapStore.getState();
+      // Snapshot the visible exploration. Inferring it later from the player
+      // is wrong while the user has opened a new nearby/path view but the old
+      // queue is still playing.
+      const origin = visiblePlayContext(map, musicId);
+      const commit = () => {
+        usePlayerStore.getState().playSingle(musicId, origin);
         after?.();
       };
-      const { context, queue } = usePlayerStore.getState();
-      // 순차 재생 중이 아니거나, 그 목록 안의 곡이면 그대로 튼다
-      if (context.kind === "single" || queue.includes(musicId)) {
+      const { context, queue, currentMusicId } = usePlayerStore.getState();
+      if (currentMusicId === musicId && (!origin || samePlayContext(origin, context))) {
+        if (!useBlockingStore.getState().busy) commit();
+        return;
+      }
+      const play = () => runPlaybackTransition(commit);
+      const currentActivity = playbackActivity(context, queue.length);
+      if (origin && currentActivity && !samePlayContext(origin, context)) {
+        const next = origin.kind;
+        if (next !== "single") {
+          ask({
+            title: ACTIVITY_CONFIRM.title(next),
+            message: ACTIVITY_CONFIRM.message(currentActivity.kind, null, next),
+            confirmLabel: ACTIVITY_CONFIRM.confirm,
+            cancelLabel: ACTIVITY_CONFIRM.cancel,
+            onConfirm: play,
+          });
+          return;
+        }
+      }
+      // 수동 주변 탐색은 큐가 없어도 같은 탐색 안의 곡이다. 실제 순차 재생 목록을
+      // 벗어날 때만 확인한다.
+      if (context.kind === "single" || !shouldConfirmListExit(context, queue, musicId, origin)) {
         play();
         return;
       }

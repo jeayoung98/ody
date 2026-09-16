@@ -54,7 +54,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     const ids = items.map((m) => m.id);
     if (!ids.length) return;
     startActivity("nearby", String(centerMusicId), () => {
-      if (!inNearby) enterNearby(centerMusicId);
+      if (!inNearby || nearbyCenterMusicId !== centerMusicId) enterNearby(centerMusicId);
       playQueue({ kind: "nearby", centerMusicId }, ids);
       recordPlay({ musicId: ids[0], source: "MAP", playedMs: 0 });
     });

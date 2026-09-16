@@ -6,7 +6,7 @@ import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
 export function useCompleteTutorialMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: () => api<{ ok: boolean }>(API_ENDPOINTS.auth.completeTutorial, { method: "POST" }),
+    mutationFn: () => api<{ ok: boolean }>(API_ENDPOINTS.auth.completeTutorial, { method: "POST", keepalive: true }),
     onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.auth.me }),
   });
 }

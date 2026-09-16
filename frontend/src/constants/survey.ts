@@ -21,6 +21,8 @@ import type { SurveyDefinition } from "@/types/survey";
 
 /** 익명 사용자 식별자를 담는 자리. 정본이 이 키를 지정한다 */
 export const SURVEY_ANON_KEY = "ody_anon_id";
+export const SURVEY_API = { feedback: "/bff/feedback", answered: "/bff/feedback/answered" } as const;
+export const SURVEY_QUERY_KEYS = { answered: ["survey", "answered"] as const };
 
 /**
  * 평가 대상 곡에 붙는 말. **모드가 달라도 같다** — 비교 상대(`compareLabel`)는 기준곡이냐

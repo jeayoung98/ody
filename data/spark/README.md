@@ -92,9 +92,40 @@ python3 -c "import sys; sys.path.insert(0,'spark/jobs'); import artifact_export 
     'serving/v2.1-pca16', 'work/catalog_v2.parquet', 780107, '<규칙 해시>', \
     'v2.2-pca16-YYYY-MM-DD')['songs'])"
 python tests/check_contract.py serving/v2.2-pca16-candidate --strict
+
+# S7 적재 CSV — HDFS 에서 읽어 HDFS 에 쓴다. 그 뒤 COPY 는 ingest/run_db_load.sh 가 잇는다
+spark-submit ... --py-files ingest/build_csv.py jobs/db_load_csv.py   --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords   --meta hdfs:///ody/data/v2_meta --song-meta hdfs:///ody/data/v2_song_meta   --feats hdfs:///ody/data/v2_feats hdfs:///ody/data/v2_feats_pilot   --out hdfs:///ody/data/ingest_csv --expect-rows 4694202   --report output/spark_run_S7_YYYY-MM-DD.json
 ```
 
-단계 순서: `manifest_rows.py`(S1) → `feature_select.py`(S1.5) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
+## S7 — 파이프라인 끝에서 DB 까지
+
+`ingest/run_db_load.sh` 가 네 단계를 잇는다: **spark-submit → `hdfs dfs -getmerge` + 헤더 → app-node 로 scp → `load_postgres.sh`(COPY)**.
+
+```bash
+# master-node 에서. --apply 가 없으면 CSV 전송까지만 하고 멈춘다
+ODY_MUSIC_TABLE=music_v2 ODY_LINK_TABLE=music_genre_v2   bash ingest/run_db_load.sh --expect-rows 4694202 --apply
+```
+
+**JDBC 로 바로 INSERT 하지 않는다.** PostgreSQL 5432 는 host port 가 없고 `ody-internal` 도커
+네트워크에만 열려 있어(`docs/infra/SECURITY.md`) YARN executor 가 붙을 경로가 없다. 그리고 `COPY` 는
+662만행 **66초** 실측인데 JDBC 배치는 분 단위다. 파일로 내보내고 서버가 빨아들이는 쪽이 맞다.
+
+### 선행 조건 — HDFS 에 있어야 하는 것
+| 경로 | 무엇 | 없으면 |
+|---|---|---|
+| `/ody/data/catalog` | S5 산출(`excluded` 포함) | 필수 |
+| `/ody/data/coords` | S3 산출 `mbid` + `pc1..pc16` | 필수 |
+| `/ody/data/v2_feats`·`v2_feats_pilot` | `rhythm.bpm`. **둘 다** 올려야 한다(D16) | 필수 |
+| `/ody/data/v2_meta` | `album`·`release_year`·`albumid`(D17 재패스) | 없으면 세 컬럼이 빈 값 |
+| `/ody/data/v2_song_meta` | 장르 코드 `gnr` | 없으면 `music_genre` 가 비어 나온다 |
+
+`v2_meta`·`v2_song_meta` 는 로컬 `work/` 에만 있으므로 `hdfs dfs -put` 으로 먼저 올린다.
+
+### 헤더를 잡이 쓰지 않는 이유
+파트 파일마다 헤더가 들어가면 `COPY` 가 그 줄을 데이터로 읽는다. 잡은 헤더 없이 쓰고,
+`run_db_load.sh` 가 `getmerge` 뒤에 한 번만 붙인다(`COPY ... HEADER true` 와 짝).
+
+단계 순서: `manifest_rows.py`(S1) → `feature_select.py`(S1.5) → `preprocess.py`(S2) → `pca.py`(S3) → `tree_assign.py`(S4) → `catalog_rules.py`(S5) → `artifact_export.py`(S6) → `db_load_csv.py`(S7). 각 잡은 `--sample N` 으로 표본 실행 후 전곡.
 
 곡 수를 줄이는 잡은 **S1 과 S5 둘**이다(제출본 2,946만 → 곡 740만 → 662만). 차원을 줄이는 잡은 S1.5a·S1.5b·S3 이다.
 

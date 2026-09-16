@@ -72,3 +72,14 @@ test("visible journey star restores its queue after another activity", () => {
   player.getState().next();
   assert.equal(player.getState().currentMusicId, 22);
 });
+
+/* "재생 중" 보고를 받았을 때의 갈래 (S15P21A405-372) */
+const { playingAction } = require("../src/lib/playback-events.ts");
+
+test("an open question silences the report, not the sound", () => {
+  // 예전 코드는 이 둘을 한 조건으로 묶어 카드가 뜨는 순간 소리를 끊었다
+  assert.equal(playingAction(true, true), "silent", "묻는 동안에는 세지만 않는다 — 멈추지 않는다");
+  assert.equal(playingAction(false, true), "stop", "우리가 멈춘 상태면 소리도 멈춘다");
+  assert.equal(playingAction(false, false), "stop");
+  assert.equal(playingAction(true, false), "count");
+});

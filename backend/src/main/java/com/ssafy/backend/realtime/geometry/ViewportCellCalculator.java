@@ -1,5 +1,7 @@
 package com.ssafy.backend.realtime.geometry;
 
+import java.util.Comparator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.Map;
 import java.util.Objects;
@@ -28,6 +30,10 @@ public final class ViewportCellCalculator {
 	 * @param userCountByCell 셀마다 표시할 사용자 수
 	 */
 	public record CombinedCells(int cellsPerRow, Map<Cell, Integer> userCountByCell) {
+		/** 결과가 밖에서 바뀌지 않도록 복사한다. */
+		public CombinedCells {
+			userCountByCell = Map.copyOf(userCountByCell);
+		}
 	}
 
 	/**
@@ -69,6 +75,55 @@ public final class ViewportCellCalculator {
 			Map<Cell, Integer> originalUserCountByCell,
 			int maxCellsToDisplay,
 			int originalCellsPerRow) {
-		throw new UnsupportedOperationException("TODO(내부작업)");
+		Objects.requireNonNull(originalUserCountByCell, "셀별 사용자 수가 필요하다");
+		if (maxCellsToDisplay < 1) {
+			throw new IllegalArgumentException("표시할 셀 수는 1 이상이어야 한다");
+		}
+		if (originalCellsPerRow < 1 || (originalCellsPerRow & (originalCellsPerRow - 1)) != 0) {
+			throw new IllegalArgumentException("한 줄의 셀 수는 2의 제곱수여야 한다");
+		}
+
+		Map<Cell, Integer> current = positiveCells(originalUserCountByCell, originalCellsPerRow);
+		int cellsPerRow = originalCellsPerRow;
+		while (current.size() > maxCellsToDisplay && cellsPerRow > 1) {
+			current = combineTwoByTwo(current);
+			cellsPerRow /= 2;
+		}
+		return new CombinedCells(cellsPerRow, current);
+	}
+
+	/** 사용자 수가 있는 올바른 셀만 셀 번호 순서로 복사한다. */
+	private static Map<Cell, Integer> positiveCells(Map<Cell, Integer> source, int cellsPerRow) {
+		Map<Cell, Integer> result = new LinkedHashMap<>();
+		source.entrySet().stream()
+				.sorted(Map.Entry.comparingByKey(Comparator
+						.comparingInt(Cell::cellX)
+						.thenComparingInt(Cell::cellY)))
+				.forEach(entry -> {
+					Cell cell = Objects.requireNonNull(entry.getKey(), "셀 위치가 필요하다");
+					Integer count = Objects.requireNonNull(entry.getValue(), "사용자 수가 필요하다");
+					if (cell.cellX() < 0 || cell.cellX() >= cellsPerRow
+							|| cell.cellY() < 0 || cell.cellY() >= cellsPerRow) {
+						throw new IllegalArgumentException("셀 번호가 격자 범위를 벗어났다");
+					}
+					if (count < 0) {
+						throw new IllegalArgumentException("사용자 수는 음수일 수 없다");
+					}
+					if (count > 0) {
+						result.put(cell, count);
+					}
+				});
+		return result;
+	}
+
+	/** 이웃한 2×2 셀의 사용자 수를 하나로 합친다. */
+	private static Map<Cell, Integer> combineTwoByTwo(Map<Cell, Integer> source) {
+		Map<Cell, Integer> result = new LinkedHashMap<>();
+		for (Map.Entry<Cell, Integer> entry : source.entrySet()) {
+			Cell cell = entry.getKey();
+			Cell combined = new Cell(cell.cellX() / 2, cell.cellY() / 2);
+			result.merge(combined, entry.getValue(), Math::addExact);
+		}
+		return result;
 	}
 }

@@ -20,7 +20,8 @@ class MusicPositionCalculatorTests {
 		for (int a = 1; a <= axisCount; a++) {
 			ar.add(new RealtimeProperties.AxisRange(a, -10.0, 10.0));
 		}
-		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(grid, 36, 64, 250, 5000);
+		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(
+				grid, Math.min(36, grid * grid), 20, 64, 250, 5000);
 		return new MusicPositionCalculator(new RealtimeProperties(null, null, vp,  ar));
 	}
 
@@ -41,7 +42,7 @@ class MusicPositionCalculatorTests {
 	@Test
 	@DisplayName("레이어2는 PC3·PC4 축을 읽는다")
 	void layer2_usesAxes3and4() {
-		MusicPositionCalculator m = mapper(20, 4);
+		MusicPositionCalculator m = mapper(16, 4);
 		// pc = [1,2,3,4] → 레이어2는 pc[2]=3(x), pc[3]=4(y)
 		MusicPositionCalculator.Placement p = m.calculate(new double[] {1, 2, 3, 4}, 2);
 		assertThat(p.axisX()).isEqualTo(3);
@@ -80,7 +81,7 @@ class MusicPositionCalculatorTests {
 	@Test
 	@DisplayName("축 누락·min>=max 설정은 생성 시 예외")
 	void badConfig_throws() {
-		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(4, 36, 64, 250, 5000);
+		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(4, 16, 20, 64, 250, 5000);
 		// min >= max
 		List<RealtimeProperties.AxisRange> bad = List.of(
 				new RealtimeProperties.AxisRange(1, 5.0, 5.0),

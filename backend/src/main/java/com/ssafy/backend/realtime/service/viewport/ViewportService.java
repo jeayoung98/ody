@@ -36,8 +36,6 @@ import lombok.RequiredArgsConstructor;
 @RequiredArgsConstructor
 public class ViewportService {
 
-	private static final int MAX_INDIVIDUAL_USERS = 20; // 화면에 따로 표시할 최대 사용자 수
-
 	private final MusicPositionCalculator musicPositionCalculator; // 곡 좌표를 화면 위치와 셀로 변환
 	private final RealtimeProperties properties; // 화면 셀 수 기준
 	private final ViewportRedisRepository viewportRepository; // 화면 셀 구독 교체
@@ -91,7 +89,7 @@ public class ViewportService {
 		Map<Long, List<String>> visibleListeners = findVisibleListeners(
 				email, visibleMusicIds, listenersByMusic);
 		int userCount = visibleListeners.values().stream().mapToInt(List::size).sum();
-		if (userCount > MAX_INDIVIDUAL_USERS) {
+		if (userCount > properties.viewport().individualUserCap()) {
 			return OpenResult.clusteredRequired();
 		}
 

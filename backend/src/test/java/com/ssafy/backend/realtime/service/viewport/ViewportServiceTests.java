@@ -128,6 +128,22 @@ class ViewportServiceTests {
 	}
 
 	@Test
+	@DisplayName("기본 셀이 정확히 36개면 개별 사용자 방식으로 처리한다")
+	void thirtySixCellsUsesIndividualMode() {
+		ViewportRange viewport = new ViewportRange(1, 0, 5, 0, 5, List.of());
+		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(13L), eq(viewport), anySet()))
+				.thenReturn(ReplaceResult.APPLIED);
+		when(presenceRepository.findActiveMusicIdsByCell(eq(1), anyList())).thenReturn(Map.of());
+		when(musicLocationService.findLocations(List.of())).thenReturn(Map.of());
+		when(presenceRepository.findListenersByMusic(1, List.of())).thenReturn(Map.of());
+
+		OpenResult result = service.open(ME, 7L, 13L, viewport);
+
+		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
+		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.INDIVIDUAL);
+	}
+
+	@Test
 	@DisplayName("사용자가 20명을 넘으면 일부 개별 목록을 만들지 않는다")
 	void tooManyUsersDoesNotReturnPartialSnapshot() {
 		ViewportRange viewport = layerOneViewport();
@@ -147,6 +163,33 @@ class ViewportServiceTests {
 		assertThat(result.status()).isEqualTo(OpenStatus.CLUSTERED_REQUIRED);
 		assertThat(result.snapshot()).isNull();
 		verifyNoInteractions(userDisplayService, riderCountService);
+	}
+
+	@Test
+	@DisplayName("사용자가 정확히 20명이면 개별 사용자 방식으로 처리한다")
+	void twentyUsersUsesIndividualMode() {
+		ViewportRange viewport = layerOneViewport();
+		List<String> emails = IntStream.rangeClosed(1, 20)
+				.mapToObj(i -> "user" + i + "@example.com")
+				.toList();
+		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(14L), eq(viewport), anySet()))
+				.thenReturn(ReplaceResult.APPLIED);
+		when(presenceRepository.findActiveMusicIdsByCell(eq(1), anyList()))
+				.thenReturn(Map.of(new Cell(1, 1), Set.of(101L)));
+		when(musicLocationService.findLocations(List.of(101L))).thenReturn(Map.of(101L, pc(1, 1, 0, 0)));
+		when(presenceRepository.findListenersByMusic(1, List.of(101L)))
+				.thenReturn(Map.of(101L, Set.copyOf(emails)));
+		when(userDisplayService.find(anyString()))
+				.thenAnswer(invocation -> new UserDisplay(invocation.getArgument(0), null));
+		when(riderCountService.count(anyString())).thenReturn(0);
+
+		OpenResult result = service.open(ME, 7L, 14L, viewport);
+
+		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
+		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.INDIVIDUAL);
+		assertThat(result.snapshot().groups())
+				.flatExtracting(group -> group.users())
+				.hasSize(20);
 	}
 
 	@Test
@@ -195,7 +238,7 @@ class ViewportServiceTests {
 		return new RealtimeProperties(
 				new RealtimeProperties.Presence(15_000, 45_000, 10_000, 60_000),
 				new RealtimeProperties.Nearby(10),
-				new RealtimeProperties.ViewportSettings(16, 36, 64, 250, 5_000),
+				new RealtimeProperties.ViewportSettings(16, 36, 20, 64, 250, 5_000),
 				ranges);
 	}
 

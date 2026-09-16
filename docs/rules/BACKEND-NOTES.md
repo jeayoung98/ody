@@ -4,7 +4,7 @@
 프론트가 임의로 정할 수 없는 것들이며, 목(mock) API로 임시 구현해둔 것도 전부 여기에 적는다.
 
 - 상태: `협의 전` / `협의 중` / `반영됨`
-- 최종 수정: 2026-09-12
+- 최종 수정: 2026-09-15
 
 **항목을 추가했으면 문서만 고치고 끝내지 말고 백엔드에 직접 알린다** ([루트 CLAUDE.md §3](../../CLAUDE.md)).
 반대로 백엔드가 API·응답·에러 코드를 바꿨으면 여기와 [FEATURES.md](FEATURES.md)를 갱신하고 프론트에 알린다.
@@ -196,6 +196,9 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-20 | **곡 장르가 비어 있다** | `GET /api/music/detail?id=` · `nearby` · `major` | `genres: []` | 배포 데이터 1,082곡이 **전부** 빈 배열이다 (2026-09-14 실측). 프론트는 장르로 별 색과 앨범 커버 대체색을 칠하는데(`genreColor`), 값이 없으면 전부 `무장르`(id 10) 한 색이 된다 — **지도가 단색이 되고 설문 카드의 두 곡이 같은 색 사각형으로 보인다.** 목 데이터에서는 색이 나뉘어서 이 문제가 안 보였다 | 협의 전 |
 | A-21 | **앨범 커버 주소** | — | `albumCoverUrl` 을 `detail`·`nearby`·`journey` 응답에 추가 | 프론트에 자리는 이미 있다(`components/common/album-cover.tsx`) — 값만 오면 곡 상세와 설문 카드가 함께 커버를 그린다. 지금 응답에는 `mbid` 와 `album` 이름이 있는데, `mbid` 를 Cover Art Archive 의 `release`·`release-group` 으로 조회하면 404 다(2026-09-14 실측) — **recording MBID 로 보이므로 recording → release 를 한 번 더 타야 커버에 닿는다.** 프론트에서 곡마다 외부 조회를 하면 요청이 곡 수만큼 늘어서 백엔드가 미리 담아주는 쪽이 맞다 | 협의 전 |
 | A-22 | **주변 탐색 이웃에 `duration` 이 없다** | `GET /api/music/nearby?id=` | `neighbors[].duration` 추가 | 설문의 `listened_sec` 은 이제 **실제 재생된 시간**이라(임베드의 재생·정지를 따라간다) `videoId` 가 있는 곡은 끝나면 시계도 멈춘다. 문제는 **`videoId` 가 없는 곡**이다 — 임베드가 안 붙어 재생 여부가 낙관값이라 안 멈추고, 카드를 띄워두거나 탭을 놔두면 곡 길이보다 큰 값이 나온다 (2026-09-14 실측: 이웃 10곡 중 1곡 `1623627` 이 `videoId` 없음). 곡 길이를 알면 거기서 자를 수 있는데 **이웃 응답에 `duration` 이 없다**(현재 키: id·title·artist·album·genres·youtubeUrl·videoId·location·distance). 경로 탐색(`stops[].duration`)에는 있어서 거기만 잘린다. 덤으로 `center` 는 키가 id·title·artist·location 4개뿐이라 장르·앨범도 안 온다 | 협의 전 |
+| A-23 | **`GET /api/feedback/answered` 가 아직 머지 전이다** (S15P21A405-346) | `anonymousId=<uuid>` (인증 선택) | `[{ mode, anchorMusicId, prevMusicId, musicId, verdict }]` | S15P21A405-346 이 **같은 사람 × 같은 문항 1회 저장**을 넣으면서 이 조회도 함께 만들었는데, `backend/dev` 에도 **아직 안 들어갔다** (2026-09-15 확인, MR 단계). 프론트는 이게 없으면 방금 답한 문항을 또 묻고 서버는 저장하지 않고 조용히 버린다 — 사용자에게는 같은 질문이 두 번 뜨는 고장으로 보인다. 프론트는 `/bff/feedback/answered` 통로를 만들어 두고 **실패를 삼키게** 해 뒀으니(404 면 이번 탭에서 답한 것만 기억) 머지 전에도 안 깨진다. 배포 DB 에 `explore_feedback_003_answered_index.sql` 실행이 함께 필요하다 | 협의 전 (**FE 준비 완료, BE 머지 대기**) |
+| A-24 | **설문 `prev_music_id` 가 경로표의 인접 역이 아닐 수 있다** | `POST /api/feedback` | 그대로 | 재생 불가 역(`videoId` 없음)은 **없는 셈 치고 간선을 잇는다** (S15P21A405-335). A→B→C 에서 B 를 못 들려줬으면 `prev=A, music=C, rank=2` 인 행이 정상적으로 생긴다. `findAnsweredId` 의 문항 키가 `prev` 를 포함하므로 저장·중복 방지는 그대로 동작한다. **다만 정본(`01_EXPLORE_SURVEY.md` §5)의 "역 번호별 끊김률" 쿼리는 `rank` 기준**이라, rank 와 prev 가 인접하지 않는 행이 섞인다는 것을 알고 읽어야 한다. 거리 구간별 정밀도 쿼리는 `COALESCE(prev, anchor)` 로 조인하므로 영향 없다 | 협의 전 (알림) |
+| A-25 | **재생 불가 곡에서 순차 재생이 멈춘다** | — | — | `videoId` 가 없는 곡은 임베드가 안 붙어 `ended` 이벤트가 안 오고, 그래서 `next()` 가 안 불려 **그 곡에서 큐가 정지한다.** 주변 10곡 순차 재생·여정 재생에서 그 뒤 곡을 아무도 못 듣는다 (2026-09-14 실측: 이웃 10곡 중 1곡이 `videoId` 없음 → 평균적으로 10곡 중 뒤쪽 절반이 날아간다). 설문 표본을 직접 깎지만 **설문 버그가 아니라 재생 버그**라 S15P21A405-335 범위 밖이다. 프론트 별도 이슈 필요 | 프론트 과제 (기록용) |
 
 ---
 

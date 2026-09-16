@@ -9,7 +9,7 @@ import { SURVEY_TARGET_LABEL, SURVEYS } from "@/constants/survey";
 import { useSurveySubmit } from "@/hooks/survey/use-survey-submit";
 import { useBlockingStore } from "@/stores/use-blocking-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
-import type { SurveyReason, SurveySong } from "@/types/survey";
+import { questionKey, type SurveyReason, type SurveySong } from "@/types/survey";
 
 /** 고른 것이 눌린 티가 나게 — 테두리 발광만으로는 어두운 배경에서 안 보인다 */
 const SELECTED_CLASS = "bg-violet/25! border-violet! text-white! shadow-glow-violet";
@@ -84,7 +84,7 @@ function SurveySongRow({ label, song, highlight = false }: { label: string; song
 }
 
 /**
- * 설문 카드 (S15P21A405-294).
+ * 설문 카드 (S15P21A405-294 · 335).
  *
  * 질문 하나에 답 둘. **부정일 때만** 이유를 한 번 더 묻는다 — 긍정 이유는 백엔드가
  * 아예 저장하지 않는다(`CHECK ((verdict = false) = (reason IS NOT NULL))`).
@@ -93,6 +93,7 @@ function SurveySongRow({ label, song, highlight = false }: { label: string; song
  * 부정은 이유를 골라야 제출된다 — 이유 없는 부정은 서버가 거부한다.
  *
  * 제출해야만 닫힌다 — X·바깥 클릭·ESC 로 닫히지 않는다. 테스터에게 응답을 강제하는 설계다.
+ * 닫히는 순간 **보류돼 있던 이탈이 실행된다** (`close`) — 누르려던 곡이 그때 나온다.
  *
  * **최종 배포 때 걷어낼 기능이다.**
  */
@@ -100,7 +101,7 @@ export default function SurveyCard() {
   const prompt = useSurveyStore((s) => s.prompt);
   const stintMs = useSurveyStore((s) => s.stintMs);
   const close = useSurveyStore((s) => s.close);
-  const markSent = useSurveyStore((s) => s.markSent);
+  const markAnswered = useSurveyStore((s) => s.markAnswered);
   const submit = useSurveySubmit();
 
   /** `verdict` 가 false 면 이유를 고르는 중이다 */
@@ -111,21 +112,20 @@ export default function SurveyCard() {
   });
 
   /**
-   * 카드가 떠 있는 동안 자동 넘김을 막는다 (S15P21A405-258).
+   * 카드가 떠 있는 동안 되감기를 막는다 (S15P21A405-258).
    *
    * 재생 코드를 직접 붙잡지 않는다 — 공용 플래그만 올린다. 설문을 통째로 지워도
-   * 그 플래그는 늘 비어 있는 상태가 되어 재생이 원래대로 돈다.
+   * 그 플래그는 늘 내려가 있어 재생이 원래대로 돈다.
    */
-  const block = useBlockingStore((s) => s.block);
-  const unblock = useBlockingStore((s) => s.unblock);
+  const setBusy = useBlockingStore((s) => s.setBusy);
   useEffect(() => {
     if (!prompt) return;
-    block("survey");
-    return () => unblock("survey");
-  }, [prompt, block, unblock]);
+    setBusy(true);
+    return () => setBusy(false);
+  }, [prompt, setBusy]);
 
   // 대상이 바뀌면 답을 새로 시작한다 (effect 안 setState 대신 "adjusting state during render")
-  const key = prompt ? `${prompt.target.sessionId}:${prompt.target.rank}` : "";
+  const key = prompt ? questionKey(prompt.target) : "";
   if (state.key !== key) setState({ key, verdict: null, reason: null });
 
   if (!prompt) return null;
@@ -134,7 +134,7 @@ export default function SurveyCard() {
 
   const send = (verdict: boolean, reason: SurveyReason | null) => {
     submit.mutate({ target, verdict, reason, listenedMs: stintMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
-    markSent(target);
+    markAnswered(target);
     close();
   };
 

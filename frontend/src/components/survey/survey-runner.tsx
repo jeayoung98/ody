@@ -1,20 +1,21 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
-import { SURVEY_MIN_LISTEN_MS } from "@/constants/survey";
+import { useEffect, useMemo } from "react";
+import { GENRE_NAMES } from "@/constants/map";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { sendUnanswered } from "@/hooks/survey/use-survey-submit";
-import { useJourneyTargets, useNearbyTargets } from "@/hooks/survey/use-survey-targets";
-import { SURVEY_FORCED, useSurveyTrigger } from "@/hooks/survey/use-survey-trigger";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
+import { useJourneyEdges, useNearbyEdges } from "@/hooks/survey/use-survey-edges";
+import { sendUnanswered, useLoadAnswered } from "@/hooks/survey/use-survey-submit";
+import { useBlockingStore } from "@/stores/use-blocking-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
+import { useTutorialStore } from "@/stores/use-tutorial-store";
 import SurveyCard from "./survey-card";
-import { GENRE_NAMES } from "@/constants/map";
 import type { MapPoint } from "@/types/map";
 
-/** 이웃 한 곡에서 카드가 쓸 것만 뽑는다. 커버는 아직 응답에 없어서 비어 있다 */
+/** 이웃 한 곡에서 카드가 쓸 것만 뽑는다. `neighbors` 에는 곡 길이가 없다 (BACKEND-NOTES A-22) */
 function toTrack(p: MapPoint) {
   return { musicId: p.musicId, title: p.title, artist: p.artist, genreId: p.genreId };
 }
@@ -26,12 +27,20 @@ function indexOfGenre(name: string): number | null {
 }
 
 /**
- * 설문 본체 (S15P21A405-294).
+ * 설문 본체 (S15P21A405-294 · 335).
  *
  * `SurveyGate` 가 **동적으로 불러온다** — 플래그가 꺼진 빌드에서는 이 모듈이 아예 로드되지
  * 않는다. 그래서 설문 관련 import(스토어·훅·카드)가 전부 이 경계 안에 있어야 한다.
  *
- * 의존은 한 방향이다 — 설문이 기존 스토어·쿼리를 **읽기만** 한다. 기존 코드는 설문을 모른다.
+ * 의존은 한 방향이다 — 설문이 기존 스토어·쿼리를 **읽기만** 한다. 기존 코드가 설문에 대해
+ * 아는 것은 `use-blocking-store` 의 자리 하나뿐이고, 거기 꽂힌 것이 무엇인지는 모른다.
+ *
+ * ## 하는 일 넷
+ *
+ * 1. 밟은 자취를 남긴다 — 어떤 곡이 소리가 났고 어떤 곡이 못 들려준 곡인가
+ * 2. 지금 곡을 떠날 때 물을 간선을 정해 둔다 (`pending`)
+ * 3. 곡을 바꾸려는 쪽 앞에 끼어들 함수를 꽂는다 (`gate`)
+ * 4. 답 없이 페이지를 떠나면 무응답 행을 보낸다
  *
  * **최종 배포 때 걷어낼 기능이다.**
  */
@@ -41,13 +50,32 @@ export default function SurveyRunner() {
   const context = usePlayerStore((s) => s.context);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
+  /**
+   * **튜토리얼 중에는 아무것도 하지 않는다** (S15P21A405-335 결정 8).
+   *
+   * 단계가 별 고르기 → 주변 탐색 → 여정이라 튜토리얼이 직접 곡을 틀고 탐색을 켠다. 그대로 두면
+   * 스포트라이트 위로 설문 모달이 덮여 다음에 뭘 눌러야 할지가 안 보이고, 익히는 중에 찍은
+   * 답이 집계에 섞인다.
+   */
+  const tutorialDone = useTutorialStore((s) => s.isDone);
 
-  const beginVisit = useSurveyStore((s) => s.beginVisit);
-  const endVisit = useSurveyStore((s) => s.endVisit);
-  const setPlaying = useSurveyStore((s) => s.setPlaying);
-  const stintMs = useSurveyStore((s) => s.stintMs);
-  const markSent = useSurveyStore((s) => s.markSent);
-  const hasSent = useSurveyStore((s) => s.hasSent);
+  const enter = useSurveyStore((s) => s.enter);
+  const setPending = useSurveyStore((s) => s.setPending);
+  const markPlayed = useSurveyStore((s) => s.markPlayed);
+  const markUnplayable = useSurveyStore((s) => s.markUnplayable);
+  const setGate = useBlockingStore((s) => s.setGate);
+
+  useLoadAnswered();
+
+  /**
+   * 들려줄 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
+   *
+   * 한 곡씩만 묻는다. 그 조회는 DB 에 없으면 외부 API 를 불러 채우는 동작이라 미리 여러 곡을
+   * 칠 수 없다 (S15P21A405-340). 그래서 **앞으로 나올 역이 재생 가능한지는 알 수 없고**,
+   * 간선 판정도 그것을 필요로 하지 않는다 — 지나온 곡만 보면 되기 때문이다.
+   */
+  const video = useVideoIdQuery(currentMusicId);
+  const videoId = video.data?.videoId;
 
   /**
    * 같은 탐색 결과를 설문도 읽는다. 화면이 이미 받아 둔 캐시라 새 요청이 나가지 않는다
@@ -62,12 +90,12 @@ export default function SurveyRunner() {
   );
 
   /** 이웃 응답(`MapPoint`)은 장르 ID 를 그대로 준다 */
-  const nearbyTargets = useNearbyTargets(
+  const nearbyEdge = useNearbyEdges(
     useMemo(() => (nearby.data ? toTrack(nearby.data.center) : undefined), [nearby.data]),
     useMemo(() => nearby.data?.neighbors.map(toTrack), [nearby.data]),
   );
   /** 정거장은 장르를 이름으로 준다 — 색을 고르려면 ID 가 필요해서 이름표에서 되찾는다 */
-  const journeyTargets = useJourneyTargets(
+  const journeyEdge = useJourneyEdges(
     useMemo(
       () =>
         journey.data?.stops.map((s) => ({
@@ -82,93 +110,89 @@ export default function SurveyRunner() {
   );
 
   /**
-   * 지금 듣는 곡이 평가 대상인가. 경로 재생 중이면 경로 표, 주변 탐색 중이면 주변 표에서 찾는다.
+   * 어느 탐색이 이 재생을 이끌고 있나. **한 곡이 여정의 역이면서 주변의 이웃일 수 있어서**
+   * 우선순위를 정해 둔다 — 재생 컨텍스트가 먼저고, 그게 단독이면 지도 뷰를 본다.
    *
    * 주변 표는 **단일 재생이거나 주변 10곡 순차 재생일 때만** 본다. `viewMode` 는 지도 오버레이
    * 상태라 플리를 틀어도 안 꺼지고 (`playQueue` 는 `viewMode` 를 건드리지 않는다), 뷰를 켜 둔 채
    * 플리를 돌리면 그 곡이 마침 이웃 목록에 있을 때 주탐 행으로 들어간다. **플리는 사용자가 임의로
    * 담은 목록이라 우리 추천 결과가 아니다** — 재려는 건 주변 탐색·경로 탐색이 고른 연결이 사람
-   * 귀에도 맞느냐지 남이 만든 목록의 흐름이 아니다. 경로 재생은 바로 위에서 갈라지므로 여기
-   * 걸리는 건 플리뿐이다.
+   * 귀에도 맞느냐지 남이 만든 목록의 흐름이 아니다.
    *
    * `nearby` 는 **우리가 고른 10곡을 그대로 순서대로 트는 것**이라 단일 재생과 같은 자격이다
-   * (S15P21A405-359). 이 줄에서 빠지면 순차 재생으로 들은 곡은 설문을 못 받는다.
+   * (S15P21A405-359).
    */
   const inNearby = viewMode === "nearby" && (context.kind === "single" || context.kind === "nearby");
-  const table = inJourney ? journeyTargets : inNearby ? nearbyTargets : null;
-  const prompt = currentMusicId != null && table ? (table.get(currentMusicId) ?? null) : null;
 
   /**
-   * 떠나는 순간의 평가 대상을 붙들어 둔다.
-   *
-   * 아래 effect 는 **곡이 실제로 바뀔 때만** 돌아야 하는데(그래야 "넘겼다"가 참이다), 그러면
-   * 그 안의 `prompt` 는 곡을 틀던 시점 값에 묶인다. 목록이 나중에 도착해 평가 대상이 된 곡을
-   * 놓치므로, 대상은 ref 로 따로 최신값을 본다.
+   * **시계 하나, effect 하나.** 방문을 여는 것과 재생 시간을 재는 것을 갈라 두면 두 effect 의
+   * 실행 순서에 정답이 생기고, 그 불변식이 주석에만 걸려 있게 된다 — 뒤집히면 이전 곡의 방문에
+   * 시계를 켠다. 스토어가 곡을 보고 알아서 가른다.
    */
-  const promptRef = useRef<typeof prompt>(null);
   useEffect(() => {
-    promptRef.current = prompt;
-  }, [prompt]);
+    enter(currentMusicId, isPlaying, Date.now());
+  }, [currentMusicId, isPlaying, enter]);
 
   /**
-   * 곡별 청취 시간을 장부에 쌓고, **20초를 못 채우고 떠난 곡은 무응답 행으로 보낸다.**
-   *
-   * 의존은 `currentMusicId` **하나뿐이다.** 여기에 세션·순번을 넣으면, 곡은 그대로인데 이웃
-   * 목록만 갈린 순간(다른 별로 건너가기)에도 cleanup 이 돌아 **재생 중인 곡을 "넘겼다"고**
-   * 기록해 보낸다. 실제로 그랬다.
-   *
-   * 스킵한 곡을 통째로 빼면 정밀도가 실제보다 좋게 나온다 — 짧게 듣고 넘긴 곡이야말로
-   * 추천이 틀렸을 가능성이 높기 때문이다. 그래서 묻지 않고 행만 남긴다.
+   * 밟은 자취. **소리가 났는가로 가른다** — 새로고침 복원(`restoreLast`)은 곡만 되살리고
+   * 재생하지 않으므로 `isPlaying` 이 false 라 자취에 안 남는다. 들은 적 없는 곡을 비교 상대로
+   * 삼지 않기 위한 조건이다.
    */
   useEffect(() => {
-    if (currentMusicId == null) return;
-    // 카드가 재생 도중에 뜬다 — 그때 "지금까지 몇 초"를 알려면 방문이 스토어에 열려 있어야 한다
-    beginVisit(currentMusicId);
+    if (currentMusicId == null || videoId === undefined) return;
+    if (videoId == null) markUnplayable(currentMusicId);
+    else if (isPlaying) markPlayed(currentMusicId);
+  }, [currentMusicId, videoId, isPlaying, markPlayed, markUnplayable]);
 
-    // 탭 숨김(pagehide)과 곡 바뀜(cleanup)이 잇따라 오면 장부에 같은 시간이 두 번 들어간다
-    let settled = false;
-    const settle = (skipped: boolean) => {
-      if (settled) return;
-      settled = true;
-      const listenedMs = stintMs(currentMusicId); // 마감 전에 읽는다 — 이번 체류가 포함돼야 한다
-      endVisit();
+  /**
+   * 지금 곡을 떠날 때 물을 간선을 잡아 둔다.
+   *
+   * 자취(`played`·`lastPlayed`·`unplayable`)는 **스토어에서 그때그때 읽는다.** 구독하면
+   * 이 곡을 `markPlayed` 한 순간 `lastPlayed` 가 자기 자신이 되어 방금 잡은 간선을 스스로
+   * 무너뜨린다. 자취가 바뀌었다고 다시 풀 이유도 없다 — 간선은 들어온 순간에 정해진다.
+   */
+  useEffect(() => {
+    if (!tutorialDone || currentMusicId == null) return;
+    const resolve = inJourney ? journeyEdge : inNearby ? nearbyEdge : null;
+    const edge = resolve?.(currentMusicId, useSurveyStore.getState()) ?? null;
+    if (edge && useSurveyStore.getState().hasAnswered(edge.target)) return;
+    setPending(edge);
+  }, [tutorialDone, currentMusicId, inJourney, inNearby, journeyEdge, nearbyEdge, setPending, videoId]);
 
-      const leaving = promptRef.current;
-      if (!leaving || hasSent(leaving.target)) return;
-      // 20초를 넘겼으면 설문이 떴거나 뜰 조건이었다 — 그건 카드가 제출로 처리한다
-      if (!SURVEY_FORCED && listenedMs >= SURVEY_MIN_LISTEN_MS) return;
-      // 무응답 행의 `prevMusicId` 는 경로가 정한 앞 역 그대로다 — 비교 상대를 고를 일이 없다
-      sendUnanswered({ target: leaving.target, listenedMs, skipped, durationSec: leaving.subject.durationSec });
-      markSent(leaving.target);
+  /**
+   * 곡을 바꾸려는 쪽 앞에 끼어들 함수를 꽂는다.
+   *
+   * 재생 코드는 이게 설문인 줄 모르고 `heldBack()` 한 줄만 부른다. 튜토리얼 중이거나 설문을
+   * 지우면 꽂힌 것이 없어 전부 그냥 지나간다.
+   */
+  useEffect(() => {
+    if (!tutorialDone) return;
+    setGate(useSurveyStore.getState().gate);
+    return () => setGate(null);
+  }, [tutorialDone, setGate]);
+
+  /**
+   * 답 없이 페이지를 떠나면 행만 남긴다 (`verdict = null`).
+   *
+   * 청취 시간 조건이 사라진 뒤로 이 길은 하나뿐이다 — 곡을 바꾸는 다른 모든 길은 위 `gate` 가
+   * 붙잡아 물어보기 때문이다. 카드가 떴든 아직 안 떴든 밟은 간선이 남아 있으면 보낸다.
+   */
+  useEffect(() => {
+    const onLeave = () => {
+      const s = useSurveyStore.getState();
+      const edge = s.prompt ?? s.pending;
+      if (!edge) return;
+      sendUnanswered({
+        target: edge.target,
+        listenedMs: s.stintMs(edge.target.musicId),
+        skipped: false,
+        durationSec: edge.subject.durationSec,
+      });
+      s.setPending(null);
     };
-
-    // 탭을 닫거나 숨기면 곡이 바뀌지 않는다 — 그 자리에서 정리해 보낸다
-    const onLeave = () => settle(false);
     window.addEventListener("pagehide", onLeave);
-
-    return () => {
-      window.removeEventListener("pagehide", onLeave);
-      settle(true); // 곡이 바뀐 것은 사용자가 넘긴 것으로 본다
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [currentMusicId]);
-
-  /**
-   * **재생 중일 때만 시계가 돈다** (S15P21A405-308 임베드 이후).
-   *
-   * `videoId` 가 채워지면서 임베드 플레이어가 실제로 소리를 낸다. 유튜브 쪽에서 멈추면
-   * `isPlaying` 이 따라 내려오므로, 청취 시간이 "현재 곡으로 머문 시간" 이 아니라
-   * **실제로 재생된 시간**이 된다. 카드를 띄워둔 채 멈춰두면 더 안 쌓인다.
-   *
-   * 곡 바꾸기 effect **아래에 둔다.** 곡이 바뀌면 위에서 새 방문을 연 뒤 여기서 시계를
-   * 켜야 한다 — 순서가 바뀌면 이전 곡의 방문에 시계를 켠다.
-   */
-  useEffect(() => {
-    if (currentMusicId == null) return;
-    setPlaying(isPlaying, Date.now());
-  }, [currentMusicId, isPlaying, setPlaying]);
-
-  useSurveyTrigger(prompt, isPlaying);
+    return () => window.removeEventListener("pagehide", onLeave);
+  }, []);
 
   return <SurveyCard />;
 }

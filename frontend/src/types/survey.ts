@@ -1,5 +1,5 @@
 /**
- * 탐색 설문 (S15P21A405-294).
+ * 탐색 설문 (S15P21A405-294 · 335).
  *
  * **`explore_feedback` 테이블·`POST /api/feedback` 계약을 그대로 옮긴 것이다.**
  * 필드를 바꾸려면 백엔드와 함께 바꾼다 — 정본은 `docs/api-spec.md` 5.1 이다.
@@ -38,10 +38,10 @@ export interface SurveyDefinition {
 }
 
 /**
- * 평가 대상을 가리키는 값. **탐색 결과를 받는 순간 만들어 곡마다 들고 있는다.**
+ * 서버로 나가는 식별자. **평가 대상 간선 하나**를 가리킨다.
  *
- * `sessionId` 와 `rank` 가 행의 식별자다(`UNIQUE(session_id, rank)`). 그래서 같은 곡을
- * 다시 평가하면 새 행이 아니라 같은 행이 갱신된다.
+ * `sessionId` 와 `rank` 는 행의 자리(`UNIQUE(session_id, rank)`)이고, 같은 답을 두 번 받지
+ * 않는 기준은 그것이 아니라 **문항 키**다 (`questionKey`, S15P21A405-346).
  */
 export interface SurveyTarget {
   /** 탐색 1회. 주변·경로 응답을 받을 때 만든다 */
@@ -53,40 +53,36 @@ export interface SurveyTarget {
   anchorMusicId: Id;
   /** journey: 도착곡 */
   targetMusicId?: Id;
-  /** journey: 앞 역 (1역은 출발곡) */
+  /**
+   * journey: 비교 상대가 된 앞 역. **경로표의 바로 앞 역이 아닐 수 있다** — 재생 불가 역은
+   * 없는 셈 치고 이어붙이므로(S15P21A405-335) A→B→C 에서 B 가 못 들려준 곡이면 여기는 A 다.
+   */
   prevMusicId?: Id;
   /** 평가 대상 곡 */
   musicId: Id;
 }
 
 /**
- * 설문 하나를 띄우는 데 필요한 것.
+ * 답을 두 번 받지 않는 기준 (S15P21A405-346).
  *
- * **제목은 화면에만 쓰고 서버로 보내지 않는다.** 그래서 전송 타입(`SurveySubmission`)이
- * 상속하는 `SurveyTarget` 밖에 둔다 — 안에 넣으면 표시용 값이 그대로 요청에 실린다.
+ * 서버가 같은 사람 × 같은 문항을 한 번만 저장하고, 그 문항의 정의가 이것이다.
+ * **`sessionId` 와 `rank` 는 들어가지 않는다** — 같은 탐색을 다시 열면 세션이 새로 생기는데,
+ * 세션으로 세면 같은 질문을 또 묻고 서버는 저장하지 않고 조용히 버린다.
  */
-export interface SurveyPrompt {
-  /** `journey` 는 `prevMusicId` 가 아직 확정이 아니다 — 아래 `candidates` 로 정해진다 */
-  target: SurveyTarget;
-  /** 평가 대상 — 방금 들은 곡. 상대만 보여주면 둘 중 뭘 묻는지 알 수 없다 */
-  subject: SurveySong;
-  /**
-   * 비교 상대 후보. **늘 하나다** — 주변 탐색은 기준곡, 경로 탐색은 바로 앞 역.
-   *
-   * 그 곡을 20초 못 들었으면 **묻지 않는다.** 더 앞까지 거슬러 올라가지 않는다 —
-   * 경로에 없는 전환(1→3)을 평가하게 되기 때문이다 (S15P21A405-294 코멘트).
-   */
-  candidates: readonly SurveySong[];
-}
-
+export const questionKey = (t: { mode: SurveyMode; anchorMusicId: Id; prevMusicId?: Id | null; musicId: Id }) =>
+  `${t.mode}|${t.anchorMusicId}|${t.prevMusicId ?? ""}|${t.musicId}`;
 
 /**
- * 비교 상대가 정해진 상태. **스토어는 이것만 들고 있다** — 카드가 보여주는 것도,
- * 서버로 나가는 `prevMusicId` 도 여기서 확정된 값이다.
+ * 물을 준비가 끝난 간선 하나. **스토어는 이것만 들고 있다.**
+ *
+ * 곡 목록이 갈려도(건너가기·뷰 끄기) 물어야 할 것이 사라지면 안 되므로, 표를 가리키지 않고
+ * 필요한 값을 **복사해** 둔다.
  */
-export interface ResolvedPrompt {
+export interface SurveyEdge {
   target: SurveyTarget;
+  /** 평가 대상 — 방금 들은 곡 */
   subject: SurveySong;
+  /** 비교 상대 — 주변은 기준곡, 경로는 이어붙인 앞 역 */
   compare: SurveySong;
 }
 
@@ -108,17 +104,12 @@ export interface SurveySong {
    * (BACKEND-NOTES A-22) — 그때는 자를 수 없어 서버 상한(32767)만 적용된다.
    */
   durationSec?: number | null;
-  /**
-   * 별 색. 커버는 `coverFor` 가 이 값과 `musicId` 로 그린다.
-   *
-   * 지금은 `STAR_LOOK.randomColor` 가 켜져 있어 `musicId` 해시로만 색이 정해지고 이 값은
-   * 안 쓰인다 (실데이터에 장르가 거의 없어서다). 그 스위치가 내려가면 다시 쓰인다.
-   */
+  /** 별 색. 커버는 `coverFor` 가 이 값과 `musicId` 로 그린다 */
   genreId: number | null;
 }
 
 /**
- * 서버로 보내는 한 건. 곡 하나가 끝날 때마다 1건이다.
+ * 서버로 보내는 한 건. 간선 하나가 1건이다.
  *
  * `verdict` 와 `reason` 의 관계를 DB 가 강제한다:
  * `CHECK ((verdict = false) = (reason IS NOT NULL))` — 부정이면 이유가 **반드시** 있어야 하고,
@@ -127,7 +118,7 @@ export interface SurveySong {
 export interface SurveySubmission extends SurveyTarget {
   /** 브라우저 localStorage UUID. 비로그인 배포에서 사람을 구분하는 유일한 값 */
   anonymousId: string;
-  /** true 비슷·자연스러움 / false 아님 / null 20초 전 종료·스킵 */
+  /** true 비슷·자연스러움 / false 아님 / null 답하지 않고 페이지를 떠남 */
   verdict: boolean | null;
   /** `verdict === false` 일 때만 채운다 */
   reason: SurveyReason | null;
@@ -135,4 +126,13 @@ export interface SurveySubmission extends SurveyTarget {
   listenedSec: number;
   /** 사용자가 넘겼는가 */
   skipped: boolean;
+}
+
+/** `GET /api/feedback/answered` 한 줄 (S15P21A405-346). 문항 키를 만들 값만 온다 */
+export interface AnsweredRow {
+  mode: SurveyMode;
+  anchorMusicId: Id;
+  prevMusicId: Id | null;
+  musicId: Id;
+  verdict: boolean;
 }

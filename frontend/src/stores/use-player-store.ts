@@ -2,7 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { STORAGE_KEYS } from "@/constants";
 import { removeStorage, writeStorage } from "@/lib/storage";
-import { useBlockingStore } from "./use-blocking-store";
+import { heldBack, useBlockingStore } from "./use-blocking-store";
 import { useMapStore } from "./use-map-store";
 
 /**
@@ -26,11 +26,6 @@ interface PlayerState {
   /** 순차재생 큐 (플리/여정). single이면 빈 배열 */
   queue: number[];
   queueIndex: number;
-  /**
-   * 막는 창 때문에 미뤄 둔 "다음 곡" 예약 (S15P21A405-258).
-   * 창이 닫히면 `useDeferredNext` 가 이걸 보고 넘긴다.
-   */
-  pendingNext: boolean;
   /**
    * 재생을 **새로 시작할 때마다 올라가는 번호** (S15P21A405-338).
    *
@@ -67,7 +62,6 @@ export const usePlayerStore = create<PlayerState>()(
       context: { kind: "single" },
       queue: [],
       queueIndex: 0,
-      pendingNext: false,
       playSeq: 0,
 
       restoreLast: (musicId) => {
@@ -84,6 +78,13 @@ export const usePlayerStore = create<PlayerState>()(
        * 여정이 통째로 끊긴 것처럼 보였다.
        */
       playSingle: (musicId) => {
+        /**
+         * 지금 듣던 곡을 떠나기 전에 물을 것이 있으면 **여기서 멈춘다** (S15P21A405-335).
+         * 끼어든 쪽이 볼일을 마치면 아래 클로저가 그대로 다시 불려 정상 통과한다 —
+         * 그때는 물을 것이 없어져 `heldBack` 이 false 다.
+         */
+        if (heldBack(() => get().playSingle(musicId))) return;
+
         // 1. 지금 듣는 큐 안의 곡 — 자리만 옮긴다
         const { queue } = get();
         const atQueue = queue.indexOf(musicId);
@@ -124,6 +125,8 @@ export const usePlayerStore = create<PlayerState>()(
 
       playQueue: (context, musicIds, startIndex = 0) => {
         if (musicIds.length === 0) return;
+        // 목록 재생도 지금 곡을 떠나는 일이다 — 주변 탐색 중에 여정을 트는 경우가 여기다
+        if (heldBack(() => get().playQueue(context, musicIds, startIndex))) return;
         set(
           {
             context,
@@ -151,22 +154,18 @@ export const usePlayerStore = create<PlayerState>()(
       pause: () => set({ isPlaying: false }, false, "pause"),
 
       next: () => {
+        /**
+         * **큐 끝 검사보다 먼저 묻는다** (S15P21A405-335).
+         *
+         * 여기는 넘기는 길이 전부 지난다 — 임베드의 `ended` (S15P21A405-308), ⏭ 버튼.
+         * 그중 `ended` 는 **단일 재생에서도 온다.** 큐 끝을 먼저 보고 나가 버리면 곡이 끝나
+         * 멈춘 자리에서 아무 일도 안 일어나고, 사용자가 한참 딴 데를 돌다 다른 곡을 누를 때가
+         * 되어서야 설문이 뜬다. 다 들은 그 자리에서 묻는 편이 기억이 선명하다.
+         */
+        if (heldBack(() => get().next())) return;
         const { queue, queueIndex } = get();
         if (queueIndex + 1 >= queue.length) return;
-        /**
-         * 답을 강제하는 창(설문 등)이 떠 있으면 **미뤄 둔다** (S15P21A405-258).
-         *
-         * 곡이 끝나는 순간은 한 번뿐이라 그냥 무시하면 그 곡에서 영영 멈춘다. 그래서
-         * 예약만 걸고, 창이 닫히면 `useDeferredNext` 가 대신 넘긴다.
-         *
-         * 여기에 둔 이유는 넘기는 길이 여럿이기 때문이다 — 임베드 플레이어의 `ended`
-         * (S15P21A405-308), ⏭ 버튼, 앞으로 생길 것까지 전부 이 함수를 지난다.
-         */
-        if (useBlockingStore.getState().blockers.size > 0) {
-          set({ pendingNext: true }, false, "next/deferred");
-          return;
-        }
-        set({ queueIndex: queueIndex + 1, currentMusicId: queue[queueIndex + 1], pendingNext: false }, false, "next");
+        set({ queueIndex: queueIndex + 1, currentMusicId: queue[queueIndex + 1] }, false, "next");
       },
 
       prev: () => {
@@ -181,12 +180,12 @@ export const usePlayerStore = create<PlayerState>()(
          * 지금은 카드가 화면을 덮어 버튼을 누를 수 없지만, 그 불변식이 CSS 에만 걸려 있다.
          * 카드 모양을 바꾸는 순간 뚫리므로 여기서 코드로 막는다.
          */
-        if (useBlockingStore.getState().blockers.size > 0) return;
+        if (useBlockingStore.getState().busy) return;
         set({ queueIndex: queueIndex - 1, currentMusicId: queue[queueIndex - 1] }, false, "prev");
       },
 
       stop: () =>
-        set({ currentMusicId: null, isPlaying: false, context: { kind: "single" }, queue: [], queueIndex: 0, pendingNext: false }, false, "stop"),
+        set({ currentMusicId: null, isPlaying: false, context: { kind: "single" }, queue: [], queueIndex: 0 }, false, "stop"),
     }),
     { name: "player-store" },
   ),

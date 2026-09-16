@@ -3,6 +3,7 @@
 import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useDeferredNext } from "@/hooks/use-deferred-next";
 import { useJourneyStore } from "@/stores/use-journey-store";
@@ -32,8 +33,6 @@ export default function PlayerBar() {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
   const { data } = useMusicDetailQuery(currentMusicId);
-  // 자동 넘김은 임베드가 한다 (308). 여기서는 막는 창 때문에 미뤄 둔 넘김만 푼다 (258)
-  useDeferredNext();
 
   /**
    * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).

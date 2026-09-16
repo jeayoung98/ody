@@ -27,13 +27,15 @@ import lombok.RequiredArgsConstructor;
 public class PresenceRedisRepository {
 
 	// 키 포맷(data-model §1) — 오직 여기서만 조립
-	private static final String PRESENCE_USER_PREFIX = "presence:user:";
-	private static final String EXPIRY_KEY = "presence:expiry";
-	private static final String LISTENERS_PREFIX = "listeners:";
-	private static final String LAYER_LISTENERS_PREFIX = "layer-listeners:";
-	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:";
-	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:";
-	private static final String USERCOUNT_PREFIX = "cell:usercount:";
+	private static final String PRESENCE_USER_PREFIX = "presence:user:"; // 사용자 현재 상태
+	private static final String EXPIRY_KEY = "presence:expiry"; // 사용자별 접속 만료 시각
+	private static final String LISTENERS_PREFIX = "listeners:"; // 곡별 전체 청취자
+	private static final String LAYER_LISTENERS_PREFIX = "layer-listeners:"; // 레이어와 곡별 청취자
+	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:"; // 셀별 재생 중인 곡
+	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:"; // 레이어별 사용 중인 셀
+	private static final String USERCOUNT_PREFIX = "cell:usercount:"; // 레이어와 셀별 사용자 수
+	private static final String NEARBY_SUBSCRIBERS_PREFIX = "nearby:subscribers:"; // 곡별 주변사람 변경 수신자
+	private static final String NEARBY_META_PREFIX = "nearby:meta:"; // 사용자별 주변사람 구독 곡
 
 	/** 하트비트 = ZADD XX(존재할 때만 갱신). ZAddArgs 자바 API 대신 이식성 높은 인라인 Lua. */
 	private static final DefaultRedisScript<Long> TOUCH_SCRIPT = new DefaultRedisScript<>(
@@ -152,32 +154,44 @@ public class PresenceRedisRepository {
 	}
 
 	/**
-	 * 이탈 정리 원자(presence-leave.lua). 곡·셀은 스크립트 안에서 읽어 정리. 셀 제거는 그 레이어 청취자 기준(유령곡 방지).
-	 * explicit/disconnect 경로 — epoch 가드로 정리(새 세션이 덮어썼으면 no-op).
+	 * 사용자가 직접 나가거나 소켓이 끊기면 호출한다.
+	 * 종료 요청과 현재 접속의 버전이 같을 때만 상태와 주변사람 구독을 지운다.
 	 *
-	 * @return 제거된 [musicId, layer, cellX, cellY] 또는 빈 목록(no-op·비노출).
+	 * @param email 사용자 이메일
+	 * @param epoch 종료할 접속 버전
+	 * @return 지운 곡과 위치. 지운 값이 없으면 빈 목록
 	 */
 	public List<String> applyLeave(String email, long epoch) {
 		return doLeave(email, Long.toString(epoch), "");
 	}
 
 	/**
-	 * Sweep(만료 백스톱) 경로 — sweepTime 기준으로 현재 expiry 를 재확인해 여전히 만료일 때만 삭제(P2-c).
-	 * 감지·삭제 사이 재접속(connect 가 score 를 미래로 ZADD)이면 no-op → 새 세션 보존. epoch 미사용.
+	 * 접속이 만료되면 호출한다.
+	 * 다시 연결되지 않았을 때만 상태와 주변사람 구독을 지운다.
 	 *
-	 * @param sweepTimeMs 만료 감지 시각(ms). expiry score <= 이 값일 때만 정리.
-	 * @return 제거된 [musicId, layer, cellX, cellY] 또는 빈 목록(no-op·재접속됨).
+	 * @param email 사용자 이메일
+	 * @param sweepTimeMs 만료 확인 시각
+	 * @return 지운 곡과 위치. 지운 값이 없으면 빈 목록
 	 */
 	public List<String> applyLeaveExpired(String email, long sweepTimeMs) {
 		return doLeave(email, "", Long.toString(sweepTimeMs));
 	}
 
+	/**
+	 * 두 종료 경로를 같은 Redis 스크립트로 처리한다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param epoch 직접 종료 시 확인할 접속 버전
+	 * @param sweepTime 만료 종료 시 확인할 시각
+	 * @return 지운 곡과 위치. 지운 값이 없으면 빈 목록
+	 */
 	@SuppressWarnings("unchecked")
 	private List<String> doLeave(String email, String epoch, String sweepTime) {
-		List<String> keys = List.of(PRESENCE_USER_PREFIX + email, EXPIRY_KEY);
+		List<String> keys = List.of(PRESENCE_USER_PREFIX + email, EXPIRY_KEY, NEARBY_META_PREFIX + email);
 		List<String> result = redis.execute(presenceLeaveScript, keys,
 				email, epoch, sweepTime,
-				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX,
+				NEARBY_SUBSCRIBERS_PREFIX);
 		return result != null ? result : List.of();
 	}
 

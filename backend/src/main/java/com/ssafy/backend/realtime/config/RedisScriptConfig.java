@@ -28,7 +28,7 @@ public class RedisScriptConfig {
 		return listScript("redis/presence-play.lua");
 	}
 
-	/** 이탈 정리 원자 — 반환: 제거된 {musicId, layer, cellX, cellY} 또는 {}. */
+	/** 사용자 상태와 주변사람 구독을 함께 지우는 스크립트. */
 	@Bean
 	public DefaultRedisScript<List> presenceLeaveScript() {
 		return listScript("redis/presence-leave.lua");

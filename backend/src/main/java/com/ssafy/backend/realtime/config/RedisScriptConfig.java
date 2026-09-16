@@ -11,7 +11,6 @@ import org.springframework.scripting.support.ResourceScriptSource;
 /**
  * Lua 스크립트를 DefaultRedisScript 빈으로 등록. 원자성이 필요한 연산은 전부 Lua 로 처리한다.
  * 빈 이름 = 파라미터 이름으로 주입받는다(타입 소거로 이름 매칭 필요).
- *
  * 골격 단계: 스크립트 파일은 스텁(return {}). 실제 로직은 내부작업(R-04).
  */
 @Configuration
@@ -29,7 +28,7 @@ public class RedisScriptConfig {
 		return listScript("redis/presence-play.lua");
 	}
 
-	/** 이탈 정리 원자 — 반환: 제거된 {musicId, layer, cellX, cellY} 또는 {}. */
+	/** 사용자 상태와 주변사람 구독을 함께 지우는 스크립트. */
 	@Bean
 	public DefaultRedisScript<List> presenceLeaveScript() {
 		return listScript("redis/presence-leave.lua");
@@ -40,6 +39,26 @@ public class RedisScriptConfig {
 	public DefaultRedisScript<Long> usercountRecountScript() {
 		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
 		script.setScriptSource(new ResourceScriptSource(new ClassPathResource("redis/usercount-recount.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
+	/** 주변사람 구독 곡을 새 목록으로 바꾸는 스크립트. */
+	@Bean
+	public DefaultRedisScript<Long> nearbySubscriptionReplaceScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/nearby-subscription-replace.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
+	/** 현재 접속이(현재 세션아이디일때) 요청한 주변사람 구독만 닫는 스크립트. */
+	@Bean
+	public DefaultRedisScript<Long> nearbySubscriptionCloseScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/nearby-subscription-close.lua")));
 		script.setResultType(Long.class);
 		return script;
 	}

@@ -1,11 +1,9 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
-import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verifyNoMoreInteractions;
@@ -36,6 +34,7 @@ import com.ssafy.backend.realtime.nearby.port.RiderCountPort;
 import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
+import com.ssafy.backend.realtime.session.WebSocketSessionRegistry;
 import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 /** Redis·소켓 없이 주변사람 델타 분류만 검증한다. */
@@ -50,6 +49,7 @@ class NearbyDeltaServiceTests {
 	@Mock MeetingService meetingService;
 	@Mock RiderCountPort riderCountPort;
 	@Mock PresenceRedisRepository presenceRepo;
+	@Mock WebSocketSessionRegistry sessionRegistry;
 	@Mock NearbyPeopleService nearbyPeopleService;
 	@InjectMocks NearbyDeltaService service;
 
@@ -123,26 +123,25 @@ class NearbyDeltaServiceTests {
 	void closeStopsLaterDeltas() {
 		String viewer = "viewer@x.com";
 		Set<String> activeSubscribers = new HashSet<>(Set.of(viewer));
-		when(nearbyRepo.subscribedMusicIds(viewer)).thenReturn(List.of(20L));
 		doAnswer(invocation -> {
-			activeSubscribers.remove(invocation.getArgument(0, String.class));
-			return null;
-		}).when(nearbyRepo).unsubscribe(eq(viewer), eq(List.of(20L)));
+			activeSubscribers.remove(viewer);
+			return true;
+		}).when(nearbyRepo).closeSubscriptions(viewer, 1L);
 		when(nearbyRepo.subscribers(20L)).thenAnswer(invocation -> Set.copyOf(activeSubscribers));
 		NearbyPeopleService closeService = new NearbyPeopleService(
-				presenceRepo, neighborPort, nearbyRepo, userDisplayResolver, meetingService, riderCountPort);
+				presenceRepo, neighborPort, nearbyRepo, userDisplayResolver, meetingService, riderCountPort, sessionRegistry);
 
-		closeService.close(viewer);
+		closeService.close(viewer, 1L);
 		service.onPositionChanged(change(null, 20L));
 
-		verify(nearbyRepo).deleteMeta(viewer);
+		verify(nearbyRepo).closeSubscriptions(viewer, 1L);
 		verifyNoInteractions(publisher);
 	}
 
 	@Test
 	@DisplayName("내 곡이 바뀌고 패널이 열려 있으면 구독과 목록을 다시 만든다")
 	void ownAnchorChangeReopensAndPublishesSnapshot() {
-		NearbySnapshot snapshot = new NearbySnapshot(20L, List.of());
+		NearbySnapshot snapshot = new NearbySnapshot(20L, 5L, List.of());
 		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
 		when(nearbyRepo.subscribers(20L)).thenReturn(Set.of(ACTOR));
 		when(nearbyRepo.hasMeta(ACTOR)).thenReturn(true);
@@ -174,15 +173,12 @@ class NearbyDeltaServiceTests {
 	}
 
 	@Test
-	@DisplayName("같은 곡을 다시 재생하면 목록을 다시 만들지 않는다")
-	void sameMusicDoesNotReissueSnapshot() {
-		when(nearbyRepo.subscribers(10L)).thenReturn(Set.of(ACTOR));
-
+	@DisplayName("같은 곡이면 구독 조회와 델타 발송을 하지 않는다")
+	void sameMusicSkipsNearbyUpdate() {
 		service.onPositionChanged(change(10L, 10L));
 
-		verify(nearbyRepo, times(2)).subscribers(10L);
-		verify(nearbyRepo, never()).hasMeta(ACTOR);
-		verifyNoInteractions(nearbyPeopleService, publisher);
+		verifyNoInteractions(nearbyRepo, userDisplayResolver, publisher,
+				meetingService, riderCountPort, nearbyPeopleService);
 	}
 
 	private PositionChanged change(Long oldMusicId, Long newMusicId) {

@@ -47,10 +47,15 @@ public class NearbyDeltaService {
 	}
 
 	/**
-	 * 곡 변경을 ENTER·MOVE·LEAVE로 나눠 전달한다.
+	 * 주변사람 : 곡 변경을 ENTER·MOVE·LEAVE로 나눠 전달한다.
 	 * @param event 곡을 바꾼 사용자와 이전·현재 곡
 	 */
 	void onPositionChanged(PositionChanged event) {
+		// 곡이 같으면 주변사람 목록은 바뀌지 않는다.
+		if (Objects.equals(event.oldMusicId(), event.newMusicId())) {
+			return;
+		}
+
 		// 이전·현재 곡 구독자를 비교해야 LEAVE·ENTER·MOVE 수신자를 나눌 수 있다.
 		Set<String> oldSubscribers = subscribers(event.oldMusicId());
 		Set<String> newSubscribers = subscribers(event.newMusicId());
@@ -84,12 +89,11 @@ public class NearbyDeltaService {
 	}
 
 	/**
-	 * 패널이 열린 본인의 곡이 바뀌면 구독과 목록을 다시 만든다.
+	 * 주변사람 조회 패널이 열린 상태로 본인의 곡이 바뀌면 구독과 목록을 다시 만든다.
 	 * @param event 본인의 곡 변경 정보
 	 */
 	private void refreshOwnPanel(PositionChanged event) {
-		if (event.newMusicId() == null || Objects.equals(event.oldMusicId(), event.newMusicId())
-				|| !nearbyRepo.hasMeta(event.email())) { // 패널이 열렸는지 확인
+		if (event.newMusicId() == null || !nearbyRepo.hasMeta(event.email())) { // 패널이 열렸는지 확인
 			return;
 		}
 

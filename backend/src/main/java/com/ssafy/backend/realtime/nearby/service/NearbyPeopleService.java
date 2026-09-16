@@ -1,7 +1,6 @@
 package com.ssafy.backend.realtime.nearby.service;
 
 import java.util.ArrayList;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -22,6 +21,7 @@ import com.ssafy.backend.realtime.nearby.repository.NearbyRedisRepository;
 import com.ssafy.backend.realtime.presence.dto.UserView;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository;
 import com.ssafy.backend.realtime.presence.repository.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.session.WebSocketSessionRegistry;
 import com.ssafy.backend.realtime.user.UserDisplayResolver;
 
 import lombok.RequiredArgsConstructor;
@@ -45,9 +45,10 @@ public class NearbyPeopleService {
 	private final UserDisplayResolver userDisplayResolver;
 	private final MeetingService meetingService;
 	private final RiderCountPort riderCountPort;
+	private final WebSocketSessionRegistry sessionRegistry; // 현재 소켓 메시지 순번
 
 	/**
-	 * 지금 이 사람 기준으로 주변사람 목록을 만든다.
+	 * 지금 이 사람 기준으로 주변사람 목록 패널을 연다
 	 *
 	 * @param email 버튼 누른 사람(토큰에서 꺼낸 값)
 	 * @return 내 곡과 비슷한 곡을 듣는 사람들을 가까운 순으로 담은 목록
@@ -74,19 +75,14 @@ public class NearbyPeopleService {
 			throw new CustomException(RealtimeErrorCode.SERVICE_UNAVAILABLE);
 		}
 
-		// 3) 목록을 읽기 전에 이 곡들의 변화를 먼저 구독한다.
-		//    반대 순서면 목록을 읽는 사이 생긴 변화가 스냅샷과 델타 양쪽에서 빠질 수 있다.
-		//    다시 연 경우에는 새 곡부터 등록한 뒤 더 이상 보지 않는 옛 곡만 해제한다.
+		// 3) 목록 조회 중 생기는 변경도 받도록 구독을 먼저 바꾼다.
 		List<Long> musicIds = songs.stream().map(NeighborSong::musicId).toList();
-		List<Long> previousMusicIds = nearbyRepo.subscribedMusicIds(email);
-		nearbyRepo.subscribe(email, musicIds);
-
-		Set<Long> removedMusicIds = new LinkedHashSet<>(previousMusicIds);
-		removedMusicIds.removeAll(musicIds);
-		if (!removedMusicIds.isEmpty()) {
-			nearbyRepo.unsubscribe(email, removedMusicIds);
+		if (!nearbyRepo.replaceSubscriptions(email, me.epoch(), musicIds)) {
+			log.warn("주변사람 목록 거부 reason={}", RealtimeWsErrorCode.PRESENCE_STALE);
+			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
-		nearbyRepo.saveMeta(email, musicIds);
+		// 이 순번 이후의 실시간 변경만 목록에 반영한다.
+		long snapshotSeq = sessionRegistry.currentSeq(email);
 
 		// 4) 구독 등록이 끝난 뒤 그 곡들 각각을 지금 누가 듣고 있는지 읽어온다.
 		Map<Long, Set<String>> listenersByMusic = nearbyRepo.listeners(musicIds);
@@ -109,19 +105,17 @@ public class NearbyPeopleService {
 		}
 
 		log.info("[Nearby] 주변사람 목록 완료 myMusicId={} 사람수={}", myMusicId, people.size());
-		return new NearbySnapshot(myMusicId, people);
+		return new NearbySnapshot(myMusicId, snapshotSeq, people);
 	}
 
 	/**
-	 * 저장된 곡 목록으로 주변사람 구독을 닫는다.
+	 *  패널을 연 접속 버전과 닫기 요청의 접속 버전이 같을 때만 구독을 닫는다.
+	 *
 	 * @param email 패널을 닫은 사용자 이메일
+	 * @param epoch 패널을 연 접속 버전
 	 */
-	public void close(String email) {
-		List<Long> musicIds = nearbyRepo.subscribedMusicIds(email); //구독중 곡 목록 조회
-		if (!musicIds.isEmpty()) {
-			nearbyRepo.unsubscribe(email, musicIds); // 각 곡들 구독 해제
-		}
-		nearbyRepo.deleteMeta(email);//meta 삭제
-		log.info("[Nearby] 주변사람 구독 종료 곡수={}", musicIds.size());
+	public void close(String email, long epoch) {
+		boolean closed = nearbyRepo.closeSubscriptions(email, epoch);
+		log.info("[Nearby] 주변사람 구독 종료 성공={}", closed);
 	}
 }

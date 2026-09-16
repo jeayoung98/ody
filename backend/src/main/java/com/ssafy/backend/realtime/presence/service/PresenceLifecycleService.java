@@ -1,5 +1,7 @@
 package com.ssafy.backend.realtime.presence.service;
 
+import java.util.List;
+
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -7,6 +9,8 @@ import org.springframework.stereotype.Service;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeWsErrorCode;
+import com.ssafy.backend.realtime.event.PositionChanged;
+import com.ssafy.backend.realtime.event.RealtimeEventBus;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper;
 import com.ssafy.backend.realtime.geometry.CoordinateMapper.Placement;
 import com.ssafy.backend.realtime.port.MusicLocationPort;
@@ -24,8 +28,7 @@ import lombok.extern.slf4j.Slf4j;
  * 공유하되 만남·play_history 는 없다. 레이어 변경은 같은 곡으로 join 재호출 → 옛→새 레이어 이사.
  * 실제 이동(곡 변경·만남)은 /music/play(-272)에서만 발생.
  *
- * 곡 좌표는 클라 신뢰 없이 musicId 로 서버가 계산(CoordinateMapper). realtime 프로파일에서만 활성.
- * 델타 방송(fan-out)은 RT-22/11 범위라 여기서 발행하지 않는다(상태만 관리).
+ * 곡 좌표는 서버가 계산한다. 활성 배치와 이탈이 끝나면 위치 변경을 알린다.
  */
 @Slf4j
 @Service
@@ -36,6 +39,7 @@ public class PresenceLifecycleService {
 	private final PresenceRedisRepository presenceRedisRepository;
 	private final MusicLocationPort musicLocationPort;
 	private final CoordinateMapper coordinateMapper;
+	private final RealtimeEventBus eventBus; // 곡과 위치 변경 알림
 
 	@Value("${realtime.presence.ttl-ms:45000}")
 	private long ttlMs;
@@ -52,9 +56,11 @@ public class PresenceLifecycleService {
 	}
 
 	/**
-	 * join = 배치·이사. musicId 의 서버 좌표를 현재 레이어에 계산해 활성 배치한다(노출).
-	 * 같은 곡으로 다른 레이어에 join 하면 옛→새 레이어로 이사. 만남·play_history 없음.
+	 * 사용자를 곡 청취자로 배치한다.
+	 * 첫 곡 배치가 끝나면 진입을 알린다.
 	 *
+	 * @param email 사용자 이메일
+	 * @param request 곡과 레이어
 	 * @throws CustomException PRESENCE_ERROR — 좌표 없음/미연결/STALE(로그에 RealtimeWsErrorCode 사유)
 	 */
 	public void join(String email, JoinRequest request) {
@@ -84,18 +90,60 @@ public class PresenceLifecycleService {
 			log.warn("join STALE reason={} musicId={}", RealtimeWsErrorCode.PRESENCE_STALE, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
+
+		// 첫 곡 배치가 끝나면 주변사람 목록에 들어온 것을 알린다.
+		if (before.musicId() == null) {
+			eventBus.publish(new PositionChanged(
+					email, before.epoch(), layer,
+					null, musicId,
+					null, p.cellKey(),
+					p.xNorm(), p.yNorm()));
+		}
 		log.info("[Presence] join 완료 musicId={} layer={}", musicId, layer);
 	}
 
-	/** 명시적 이탈/DISCONNECT 정리 — 그 세션 epoch 가드로 presence·청취자·셀·인원수·만료큐 제거(FR-020·021). */
+	/**
+	 * 직접 종료한 사용자를 정리하고 퇴장을 알린다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param epoch 종료할 접속 버전
+	 */
 	public void leave(String email, long epoch) {
-		presenceRedisRepository.applyLeave(email, epoch);
-		// 제거 정보(LEAVE 델타)는 RT-22 구독자에게 방송 — 이번 범위 밖.
+		List<String> removed = presenceRedisRepository.applyLeave(email, epoch);
+		publishLeave(email, removed);
 		log.info("[Presence] 이탈 처리 완료 epoch={}", epoch);
 	}
 
-	/** 만료 정리(Sweep 백스톱) — 만료 감지 시각 기준으로 여전히 만료일 때만 정리(P2-c). 재접속이면 no-op. */
+	/**
+	 * 접속이 만료된 사용자를 정리하고 퇴장을 알린다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param sweepTimeMs 만료 확인 시각
+	 */
 	public void leaveExpired(String email, long sweepTimeMs) {
-		presenceRedisRepository.applyLeaveExpired(email, sweepTimeMs);
+		List<String> removed = presenceRedisRepository.applyLeaveExpired(email, sweepTimeMs);
+		publishLeave(email, removed);
+	}
+
+	/**
+	 * 실제로 지운 사용자의 퇴장을 알린다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param removed 지운 곡, 위치, 접속 버전
+	 */
+	private void publishLeave(String email, List<String> removed) {
+		if (removed.size() < 5) {
+			return;
+		}
+
+		Long musicId = Long.valueOf(removed.get(0));
+		int layer = Integer.parseInt(removed.get(1));
+		String cell = removed.get(2) + ":" + removed.get(3);
+		long removedEpoch = Long.parseLong(removed.get(4));
+		eventBus.publish(new PositionChanged(
+				email, removedEpoch, layer,
+				musicId, null,
+				cell, null,
+				null, null));
 	}
 }

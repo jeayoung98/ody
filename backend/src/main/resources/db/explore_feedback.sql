@@ -17,7 +17,7 @@ CREATE TABLE IF NOT EXISTS explore_feedback (
     prev_music_id    bigint      REFERENCES music(id),           -- journey: 앞 역 (1역은 출발곡)
     music_id         bigint      NOT NULL REFERENCES music(id),  -- 평가 대상 곡
     verdict          boolean,                                    -- true 비슷·자연스러움 / false 아님 / NULL 답하지 않고 떠남
-    reason           text        CHECK (reason IN ('dup', 'mood', 'tempo', 'spoken')),  -- verdict=false 면 필수
+    reason           text        CHECK (reason IN ('dup', 'mood', 'tempo', 'spoken', 'compare')),  -- verdict=false 면 필수
     listened_sec     smallint    CHECK (listened_sec >= 0),
     skipped          boolean     NOT NULL DEFAULT false,
     user_email       varchar(255),                               -- 비로그인 NULL. 탈퇴해도 응답은 남긴다(FK 없음)

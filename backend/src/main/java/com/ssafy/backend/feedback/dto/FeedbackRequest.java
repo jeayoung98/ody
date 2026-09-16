@@ -22,7 +22,7 @@ import jakarta.validation.constraints.Pattern;
  * @param prevMusicId   journey: 앞 역(1역은 출발곡). nearby 는 null
  * @param musicId       평가 대상 곡
  * @param verdict       true 비슷·자연스러움 / false 아님 / null 답하지 않고 떠남(설문 미응답)
- * @param reason        verdict=false 면 필수, 아니면 null: {@code dup} 같은 곡 · {@code mood} 분위기 · {@code tempo} 템포 · {@code spoken} 음악 아님
+ * @param reason        verdict=false 면 필수, 아니면 null: {@code dup} 같은 곡 · {@code mood} 분위기 · {@code tempo} 템포 · {@code spoken} 음악 아님 · {@code compare} 이전 곡 이상함
  * @param listenedSec   실제 들은 초
  * @param skipped       사용자가 스킵했는가
  */
@@ -36,7 +36,7 @@ public record FeedbackRequest(
 		Long prevMusicId,
 		@NotNull Long musicId,
 		Boolean verdict,
-		@Pattern(regexp = "dup|mood|tempo|spoken") String reason,
+		@Pattern(regexp = "dup|mood|tempo|spoken|compare") String reason,
 		@Min(0) @Max(32767) Integer listenedSec,
 		Boolean skipped) {
 }

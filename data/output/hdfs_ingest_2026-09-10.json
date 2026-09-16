@@ -50,7 +50,10 @@
   },
   "discrepancy": {
     "summary": "v2_feats 는 30개 파트 중 28개만 추출된 부분 데이터다. part10 과 part24 가 없다.",
-    "missing_parts": ["part10", "part24"],
+    "missing_parts": [
+      "part10",
+      "part24"
+    ],
     "missing_rows": 786903,
     "sets": {
       "manifest_mbid": 7404506,
@@ -67,11 +70,29 @@
     "decision_needed": "두 파트를 재추출해 전곡 패리티를 가능하게 할지, 교집합 88.9% 로 진행할지."
   },
   "acceptance": {
-    "AC_files": {"expected": 28, "actual": 28, "pass": true},
-    "AC_size": {"expected_human": "8.8GB 규모", "actual_human": "8.7 G", "pass": true},
-    "AC_rows": {"expected": 7404506, "actual": 6617603, "pass": false, "reason": "빠진 2파트. 위 discrepancy 참조."},
-    "AC_evidence_file": {"pass": true},
-    "AC_readme_hosts": {"pass": true}
+    "AC_files": {
+      "expected": 28,
+      "actual": 28,
+      "pass": true
+    },
+    "AC_size": {
+      "expected_human": "8.8GB 규모",
+      "actual_human": "8.7 G",
+      "pass": true
+    },
+    "AC_rows": {
+      "expected": 7404506,
+      "actual": 6617603,
+      "pass": false,
+      "reason": "빠진 2파트. 위 discrepancy 참조."
+    },
+    "AC_evidence_file": {
+      "pass": true
+    },
+    "AC_readme_hosts": {
+      "pass": true
+    }
   },
-  "source": "Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17"
+  "source": "Kakao Entertainment, melon (www.melon.com) · MLHD+ (MetaBrainz Foundation) · MusicBrainz canonical dump 2026-08-17",
+  "correction_2026-09-11": "2026-09-11 정정 (D16): 이 기록의 '파트 2개 누락'·'특징 없는 733,146곡' 은 사실이 아니다. part10·part24 는 work/v2_feats_pilot/ 에 있었고 우리 코드가 v2_feats 한 디렉터리만 읽었다. 두 디렉터리 합계 7,404,506행 = manifest. R8 분위값 30파트 재계산이 원본 기록과 끝자리까지 일치해 확인됐다. 측정 수치 자체는 그대로 두고 해석만 정정한다(규칙 1)."
 }

@@ -14,11 +14,12 @@
 - R5: canonical 묶음 200개에서 대표가 접히지 않고, 보호된 멤버는 좌표 거리가 임계 초과
 - R6: 묶음 200개에서 묶음 분할과 대표 선정이 기준과 완전히 같음
 
-## R8 분위값을 재계산하지 않고 기록값을 쓰는 이유
-현재 `work/v2_feats` 는 30개 파트 중 28개다(스펙 20 "입력 데이터가 완전하지 않다").
-28파트로 계산한 하위 0.1 퍼센타일은 8.011e-05 이고 원본 기록은 8.517e-05 다. 데이터가
-빠져서 생긴 차이이므로 분위값 자체의 패리티는 파트를 복구한 뒤에만 검증할 수 있다.
-기록값을 넣으면 R8 판정은 특징이 있는 행에서 완전히 일치한다(113/113, 남는 3행은 특징 없음).
+## R8 분위값도 직접 계산해 대조한다 (2026-09-11 정정)
+전에는 기록값을 주입했다. `work/v2_feats` 만 읽어 28파트(6,617,603행)로 계산하니 8.011e-05 가
+나왔고 원본 기록 8.517e-05 와 달랐기 때문이다. **파트가 빠진 게 아니라 디렉터리를 하나 덜 읽은
+것이었다.** part10·part24 는 `work/v2_feats_pilot` 에 있다(원본 `exclusion_apply.py` 도 두
+디렉터리를 순회한다). 30파트 7,404,506행으로 계산하면 **8.517061680322513e-05** 로 원본과
+정확히 같다. 이제 주입 없이 대조한다.
 """
 import collections
 import os
@@ -37,7 +38,8 @@ CATALOG_ROWS = 7_404_506
 TOTAL_EXCLUDED = 780_107
 R6_GROUPS_MULTI = 589_543          # exclusion_report.json 기록값
 R1_LONG_ROWS = 29_966             # 규칙 basis A1 기록값
-R8_LOUDNESS_QUANTILE = 8.517061680322513e-05
+R8_LOUDNESS_QUANTILE = 8.517061680322513e-05   # 원본 exclusion_report.json 기록값
+FEATURE_DIRS = ("v2_feats", "v2_feats_pilot")          # 파일럿에 part10·part24 가 있다
 SAMPLE_ROWS = 8000
 SAMPLE_GROUPS = 200
 FEATURE_COLUMNS = ("lowlevel.average_loudness", "lowlevel.dynamic_complexity",
@@ -55,7 +57,10 @@ def test_rules_come_from_json_only(rules_pair):
     """임계값은 JSON 에서만 온다. 잡 소스에 숫자를 적지 않는다(규칙 9)."""
     rules, digest = rules_pair
     assert list(rules) == ["R1_length", "R2_nonmusic", "R3_no_key", "R4_cohort", "R5_dup_canonical",
-                           "R6_dup_version", "R7_samplerate", "R8_silence", "R9_corrupt"]
+                           "R6_dup_version", "R7_samplerate", "R8_silence", "R9_corrupt",
+                           "R10_title_noise"]
+    assert rules["R10_title_noise"]["enabled"] is True
+    assert len(rules["R10_title_noise"]["params"]["patterns"]) == 5
     assert rules["R7_samplerate"]["enabled"] is False
     assert rules["R9_corrupt"]["enabled"] is False
     assert len(digest) == 16
@@ -113,6 +118,23 @@ def test_group_key_is_empty_without_artist_or_title():
     assert S5.r6_group_key("artist", "") == ""
     assert S5.r6_group_key("artist", "!!!") == "", "정규화 후 남는 글자가 없으면 묶지 않는다"
     assert S5.r6_group_key("artist", "Song (2011 Remaster)") == "artist||song"
+
+
+R10_HITS = [None, "[untitled]", "untitled", "Untitled 3", "Untitled #12", "", "  ", "...", "$",
+            "Track 01", "Track 7", "Pista 3", "Titel 08", "Intro", "Outro (Prod. 8Cee)", "Interlude",
+            "Skit 2", "Unknown", "Unknown Track", "Sans Titre", "無題", "제목 없음"]
+R10_KEEP = ["Untitled Love Song", "Untitled (How Does It Feel)", "Introspection", "Track of Time",
+            "Unknown Soldier", "Unknown Pleasures", "1999", "22", "7", "Intro to the Blues",
+            "Skit Skat", "夏", "Us", "Time"]
+
+
+def test_r10_title_noise_samples(rules_pair):
+    """R10 은 제목이 곡을 식별하지 못하는 행만 잡는다. 진짜 곡 제목은 통과한다."""
+    rules, _ = rules_pair
+    for title in R10_HITS:
+        assert S5.row_masks({"title_raw": title}, rules)["R10_title_noise"], title
+    for title in R10_KEEP:
+        assert not S5.row_masks({"title_raw": title}, rules)["R10_title_noise"], title
 
 
 def test_job_imports_without_pyspark():
@@ -173,6 +195,25 @@ def _artist_norm(work, wanted):
             if mbid in wanted:
                 out[mbid] = artist
     return out
+
+
+R10_HITS_TOTAL = 48_952            # 규칙 basis 기록값 (2026-09-14)
+R10_NEW_EXCLUDED = 33_646          # R1~R9 미적중 행 중 R10 적중
+
+
+def test_r10_counts_match_basis(catalog, rules_pair):
+    """R10 적중 수가 JSON basis 에 적은 실측과 같다. 기준 카탈로그(R1~R9)에는 R10 이 없어 신규 제외로 센다."""
+    rules, _ = rules_pair
+    rule = rules["R10_title_noise"]
+    total = new = 0
+    for rg in range(catalog.metadata.num_row_groups):
+        table = catalog.read_row_group(rg, columns=["title_raw", "excluded"])
+        for title, excluded in zip(table.column("title_raw").to_pylist(), table.column("excluded").to_pylist()):
+            if S5.is_title_noise(title, rule):
+                total += 1
+                new += not excluded
+    assert (total, new) == (R10_HITS_TOTAL, R10_NEW_EXCLUDED)
+    assert (TOTAL_EXCLUDED + new) / CATALOG_ROWS < 0.15
 
 
 def test_catalog_row_count(catalog):
@@ -269,25 +310,35 @@ def test_r1_long_songs_use_real_tags(catalog, work, rules_pair):
 
 
 def test_r8_silence_matches_catalog(catalog, work, rules_pair):
-    """R8 판정이 특징이 있는 모든 행에서 기준과 같다. 분위값은 원본 기록값을 넣는다."""
+    """R8 판정이 기준과 완전히 같다. 분위값도 30파트로 직접 계산해 대조한다."""
     import pyarrow.parquet as pq
     rules, _ = rules_pair
-    feats_dir = os.path.join(work, "v2_feats")
-    if not os.path.isdir(feats_dir):
-        pytest.skip("work/v2_feats 없음")
+    dirs = [os.path.join(work, name) for name in FEATURE_DIRS]
+    if not any(os.path.isdir(d) for d in dirs):
+        pytest.skip("특징 디렉터리 없음")
     features = {}
-    for name in sorted(os.listdir(feats_dir)):
-        if not name.endswith(".parquet"):
+    loudness = []
+    for feats_dir in dirs:
+        if not os.path.isdir(feats_dir):
             continue
-        table = pq.read_table(os.path.join(feats_dir, name), columns=["mbid"] + list(FEATURE_COLUMNS))
-        columns = [table.column(c).to_numpy(zero_copy_only=False) for c in FEATURE_COLUMNS]
-        for mbid, loud, dyn, sil in zip(table.column("mbid").to_pylist(), *columns):
-            features[mbid.lower()] = (float(loud), float(dyn), float(sil))
+        for name in sorted(os.listdir(feats_dir)):
+            if not name.endswith(".parquet"):
+                continue
+            table = pq.read_table(os.path.join(feats_dir, name),
+                                  columns=["mbid"] + list(FEATURE_COLUMNS))
+            columns = [table.column(c).to_numpy(zero_copy_only=False) for c in FEATURE_COLUMNS]
+            loudness.append(np.asarray(columns[0], dtype=np.float64))
+            for mbid, loud, dyn, sil in zip(table.column("mbid").to_pylist(), *columns):
+                features[mbid.lower()] = (float(loud), float(dyn), float(sil))
 
+    # 분위값을 직접 계산해 원본 기록과 대조한다(주입하지 않는다)
     params = rules["R8_silence"]["params"]
+    quantile = float(np.nanpercentile(np.concatenate(loudness), params["loudness_bottom_pct"]))
+    assert quantile == R8_LOUDNESS_QUANTILE,         "30파트 분위값 {} 가 원본 기록과 다르다. 디렉터리를 다 읽었는지 보라".format(quantile)
+
     recomputed = {mbid for mbid, (loud, dyn, sil) in features.items()
                   if S5._r8({"loudness": loud, "dyn_complexity": dyn, "silence60": sil},
-                            params, R8_LOUDNESS_QUANTILE)}
+                            params, quantile)}
     truth = set()
     for rg in range(catalog.metadata.num_row_groups):
         table = catalog.read_row_group(rg, columns=["mbid", "excluded_reason"])
@@ -296,10 +347,8 @@ def test_r8_silence_matches_catalog(catalog, work, rules_pair):
             if reasons and "R8_silence" in reasons:
                 truth.add(mbid.lower())
 
-    assert recomputed - truth == set(), "기준에 없는 곡을 R8 로 잡았다"
-    missing = {mbid for mbid in truth - recomputed if mbid not in features}
-    assert truth - recomputed == missing, "특징이 있는데 놓친 R8 곡이 있다"
-    assert len(recomputed) > 100
+    assert recomputed == truth, "R8 판정이 기준 카탈로그와 완전히 같아야 한다"
+    assert len(recomputed) == 116, "원본 exclusion_report.json 의 R8 적중 수"
 
 
 def test_r5_representative_is_never_folded(catalog, rules_pair):

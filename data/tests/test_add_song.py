@@ -65,3 +65,42 @@ def test_empty_title_rejected(S, doc):
     with pytest.raises(S.AddSongError):
         S.song_from_doc(doc)
     assert S.song_from_doc(doc, title="T")["title"] == "T"
+
+
+def test_album_meta_comes_from_tags(S, doc):
+    """D17 재패스와 같은 태그에서 album·release_year·album_mbid 를 읽는다."""
+    ALBUM_MBID = "d6e9d69f-1b3a-4c7e-9f4d-2a0b1c2d3e4f"
+    doc["metadata"]["tags"].update({"album": ["The Dark Side of the Moon"],
+                                    "originaldate": ["1973-03-24"], "date": ["1994-09-20"],
+                                    "musicbrainz_albumid": [ALBUM_MBID]})
+    song = S.song_from_doc(doc)
+    assert song["meta"] == ("The Dark Side of the Moon", 1973, ALBUM_MBID), "originaldate 가 date 보다 앞"
+    sql = S.insert_sql(song)
+    assert "The Dark Side of the Moon" in sql and "1973" in sql
+    # album_mbid 는 따옴표 안에 들어가야 한다. 빠지면 psql 이 syntax error 를 낸다(2026-09-16).
+    assert "'{}'".format(ALBUM_MBID) in sql
+
+
+def test_year_out_of_range_is_dropped(S, doc):
+    doc["metadata"]["tags"]["date"] = ["1799"]
+    assert S.song_from_doc(doc)["meta"][1] is None
+
+
+def test_table_name_is_configurable(S, doc):
+    """재적재본에 넣을 때 쓴다. 테이블 이름이 세 곳(INSERT·MAX(id)·NOT EXISTS)에 모두 반영된다."""
+    sql = S.insert_sql(S.song_from_doc(doc), table="music_v2")
+    assert sql.count("music_v2") == 3
+    assert "INTO music " not in sql
+
+
+def test_row_level_s5_rules_block_the_insert(S, doc):
+    """전곡 파이프라인이 자를 곡은 단건으로도 넣지 않는다. --ignore-rules 로만 통과."""
+    doc["metadata"]["tags"]["title"] = ["Untitled"]
+    song = S.song_from_doc(doc)
+    with pytest.raises(S.AddSongError):
+        S.check_row_rules(song)
+    assert "R10_title_noise" in S.check_row_rules(song, ignore=True)
+
+
+def test_clean_song_passes_row_rules(S, doc):
+    assert S.check_row_rules(S.song_from_doc(doc)) == []

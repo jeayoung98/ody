@@ -54,6 +54,18 @@ CREATE INDEX music_l2_gist ON music USING gist (point((location::real[])[3], (lo
 
 크기 **120 kB**. 깊은 레이어는 사용자 경로마다 영역이 달라 미리 계산할 수 없고, 이미 좁혀져 있어 실시간(82~145 ms)으로 충분하다.
 
+### 대표를 누르면 그 칸이 다음 레이어의 범위다
+칸 경계는 저장하지 않는다. `gx`·`gy` 로 계산된다.
+
+```text
+x ∈ [gx * 2.0, gx * 2.0 + 2.0)
+y ∈ [gy * 2.0, gy * 2.0 + 2.0)
+```
+
+첫 화면 응답에 이 네 수를 실어 보내면 FE 가 그대로 다음 레이어 질의의 `box` 로 쓴다.
+
+**칸마다 곡 수가 크게 다르다.** 중앙은 수십만, 가장자리는 한 곡이다. 대표만 주면 FE 가 점 크기도 못 정하고 `LIMIT 1000` 에 잘렸는지도 모른다. 그래서 `map_sample.cnt` 에 칸별 곡 수를 넣는다.
+
 ## 실측 (2026-09-11)
 근거 `output/map_layer_bench_2026-09-11.json`. 재현은 `ingest/build_map_layer.sql`, 질의 모음은 `ingest/map_layer_queries.sql`.
 

@@ -214,10 +214,22 @@ export default function YoutubeEmbed() {
       playerRef.current = new window.YT.Player(host, {
         // playsinline: iOS 가 전체화면으로 튀지 않게. origin: 임베드 호스트 확인용
         playerVars: { playsinline: 1, rel: 0, modestbranding: 1, origin: window.location.origin },
-        events: { onReady: () => setReady(true), onStateChange },
+        /**
+         * **`onReady` 안에서 내놓는다** (S15P21A405-366). 생성자가 돌려주는 객체는 iframe 이
+         * 올라오기 전이라 `getCurrentTime`·`getDuration`·`seekTo` 를 아직 갖고 있지 않다.
+         * 밖에서 곧바로 등록했더니 진행 바가 250ms 틱마다 꺼내 물어보다 그 창에서 터졌다
+         * (`p.getCurrentTime is not a function`). 등록 전에는 `getPlayer()` 가 null 이라
+         * 읽는 쪽이 이미 가진 가드에 걸린다 — 아래 다른 사용처들이 `ready` 를 보는 것과 같은 문이다.
+         */
+        events: {
+          onReady: () => {
+            setReady(true);
+            // 진행 바가 재생 시계를 읽고 위치를 옮길 수 있게 내놓는다 (S15P21A405-334)
+            registerPlayer(playerRef.current);
+          },
+          onStateChange,
+        },
       });
-      // 진행 바가 재생 시계를 읽고 위치를 옮길 수 있게 내놓는다 (S15P21A405-334)
-      registerPlayer(playerRef.current);
       // 개발 편의: 콘솔에서 플레이어 상태를 들여다볼 수 있게 (지도 엔진의 `__odyEngine` 과 같은 용도)
       if (process.env.NODE_ENV !== "production") (window as unknown as { __odyPlayer?: YtPlayer }).__odyPlayer = playerRef.current;
     });

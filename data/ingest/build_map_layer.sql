@@ -25,14 +25,36 @@
 -- 145 ms → 355 ms 로 **느려진다**(큰 비트맵 두 개 AND 비용 > 후보 축소 이득).
 -- 2레이어 이후 조건은 BETWEEN(heap 필터)으로 쓴다. music_l2_gist 는 평면 최근접 전용이다.
 
+-- ## 테이블 이름은 psql 변수로 받는다 (재적재본 music_v2 용, Jira S15P21A405-381)
+--   기본값:  music · map_sample · music_l1_gist · music_l2_gist
+--   재적재본:
+--     psql -v music_tbl=music_v2 -v sample_tbl=map_sample_v2 \
+--          -v l1_idx=music_v2_l1_gist -v l2_idx=music_v2_l2_gist -f build_map_layer.sql
+\if :{?music_tbl}
+\else
+  \set music_tbl music
+\endif
+\if :{?sample_tbl}
+\else
+  \set sample_tbl map_sample
+\endif
+\if :{?l1_idx}
+\else
+  \set l1_idx music_l1_gist
+\endif
+\if :{?l2_idx}
+\else
+  \set l2_idx music_l2_gist
+\endif
+
 \timing on
 SET maintenance_work_mem = '4GB';
 SET max_parallel_maintenance_workers = 0;   -- 컨테이너 /dev/shm 이 64MB 라 병렬은 실패한다
 
 -- 1) 레이어 평면 인덱스. 각 21초, 421 MB
-CREATE INDEX IF NOT EXISTS music_l1_gist ON music USING gist
+CREATE INDEX IF NOT EXISTS :"l1_idx" ON :"music_tbl" USING gist
   (point((location::real[])[1], (location::real[])[2]));
-CREATE INDEX IF NOT EXISTS music_l2_gist ON music USING gist
+CREATE INDEX IF NOT EXISTS :"l2_idx" ON :"music_tbl" USING gist
   (point((location::real[])[3], (location::real[])[4]));
 
 -- 2) 1레이어 첫 화면 대표 트랙
@@ -44,7 +66,7 @@ CREATE INDEX IF NOT EXISTS music_l2_gist ON music USING gist
 --
 -- 칸(2.0 단위)마다 **중심에 가장 가까운** 트랙 하나. 점수순으로 뽑으면 한쪽에 뭉친다.
 -- 제목·아티스트를 같이 넣어 music 조인을 없앤다(322 ms → 0.4 ms).
-CREATE TABLE IF NOT EXISTS map_sample (
+CREATE TABLE IF NOT EXISTS :"sample_tbl" (
   layer    smallint     NOT NULL,
   gx       smallint     NOT NULL,
   gy       smallint     NOT NULL,
@@ -56,13 +78,13 @@ CREATE TABLE IF NOT EXISTS map_sample (
   cnt      integer      NOT NULL DEFAULT 0,   -- 그 칸에 든 곡 수
   PRIMARY KEY (layer, gx, gy)
 );
-ALTER TABLE map_sample ADD COLUMN IF NOT EXISTS cnt integer NOT NULL DEFAULT 0;
-COMMENT ON TABLE map_sample IS '레이어 첫 화면용 격자 대표 트랙. 칸마다 중심에 가장 가까운 1개';
-COMMENT ON COLUMN map_sample.gx IS 'floor(x / 2.0). 셀 크기 2.0. 칸 범위는 [gx*2.0, gx*2.0+2.0)';
-COMMENT ON COLUMN map_sample.cnt IS '그 칸에 든 곡 수. 칸마다 편차가 크다(1 ~ 수십만). FE 가 점 크기와 LIMIT 판단에 쓴다';
+ALTER TABLE :"sample_tbl" ADD COLUMN IF NOT EXISTS cnt integer NOT NULL DEFAULT 0;
+COMMENT ON TABLE :"sample_tbl" IS '레이어 첫 화면용 격자 대표 트랙. 칸마다 중심에 가장 가까운 1개';
+COMMENT ON COLUMN :"sample_tbl".gx IS 'floor(x / 2.0). 셀 크기 2.0. 칸 범위는 [gx*2.0, gx*2.0+2.0)';
+COMMENT ON COLUMN :"sample_tbl".cnt IS '그 칸에 든 곡 수. 칸마다 편차가 크다(1 ~ 수십만). FE 가 점 크기와 LIMIT 판단에 쓴다';
 
-DELETE FROM map_sample WHERE layer = 1;
-INSERT INTO map_sample (layer, gx, gy, music_id, x, y, title, artist)
+DELETE FROM :"sample_tbl" WHERE layer = 1;
+INSERT INTO :"sample_tbl" (layer, gx, gy, music_id, x, y, title, artist)
 SELECT DISTINCT ON (gx, gy) 1, gx, gy, id, pc1, pc2, title, artist
 FROM (
   SELECT id, title, artist,
@@ -70,27 +92,27 @@ FROM (
          (location::real[])[2] AS pc2,
          floor((location::real[])[1] / 2.0)::smallint AS gx,
          floor((location::real[])[2] / 2.0)::smallint AS gy
-  FROM music
+  FROM :"music_tbl"
 ) s
 ORDER BY gx, gy, ((pc1 - (gx * 2.0 + 1.0)) ^ 2 + (pc2 - (gy * 2.0 + 1.0)) ^ 2), id;
 
 -- 칸마다 곡 수. 대표만 주면 FE 가 "이 칸에 몇 곡인지" 를 알 수 없다.
-UPDATE map_sample s SET cnt = c.n
+UPDATE :"sample_tbl" s SET cnt = c.n
 FROM (
   SELECT floor((location::real[])[1] / 2.0)::smallint AS gx,
          floor((location::real[])[2] / 2.0)::smallint AS gy,
          count(*) AS n
-  FROM music GROUP BY 1, 2
+  FROM :"music_tbl" GROUP BY 1, 2
 ) c
 WHERE s.layer = 1 AND s.gx = c.gx AND s.gy = c.gy;
 
-GRANT SELECT ON map_sample TO ody_read;
+GRANT SELECT ON :"sample_tbl" TO ody_read;
 
 -- 3) 검증
 SELECT count(*) AS sample_rows, min(gx) AS gx_min, max(gx) AS gx_max,
        min(gy) AS gy_min, max(gy) AS gy_max,
        sum(cnt) AS songs_covered, min(cnt) AS cnt_min, max(cnt) AS cnt_max
-FROM map_sample WHERE layer = 1;
-SELECT pg_size_pretty(pg_total_relation_size('map_sample')) AS sample_size,
-       pg_size_pretty(pg_relation_size('music_l1_gist'))   AS l1_size,
-       pg_size_pretty(pg_relation_size('music_l2_gist'))   AS l2_size;
+FROM :"sample_tbl" WHERE layer = 1;
+SELECT pg_size_pretty(pg_total_relation_size(:'sample_tbl')) AS sample_size,
+       pg_size_pretty(pg_relation_size(:'l1_idx'))          AS l1_size,
+       pg_size_pretty(pg_relation_size(:'l2_idx'))          AS l2_size;

@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Button from "@/components/common/button";
-import { PauseIcon, PlayIcon } from "@/components/common/icons";
+import { FlagIcon, PauseIcon, PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
 import { FEATURES } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
@@ -14,12 +14,12 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { MusicDetail } from "@/types";
 import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
-import SongReportMenu from "./song-report-menu";
+import SongReportDialog from "./song-report-dialog";
 
 /** 재생 · 플리에 추가 · 여정 출발/도착으로 지정 */
 export default function SongActions({ music }: { music: MusicDetail }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  /** 신고 사유 목록이 열려 있나 (S15P21A405-377). 고르면 보내고 닫힌다 */
+  /** 신고 팝업이 떠 있나 (S15P21A405-378). 고르면 보내고 닫힌다 */
   const [reportOpen, setReportOpen] = useState(false);
   const playWithConfirm = usePlaySong();
   const pause = usePlayerStore((s) => s.pause);
@@ -109,18 +109,14 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         </Note>
       )}
       {/*
-        곡 신고 (S15P21A405-377). **눈에 띄지 않게 둔다** — 자주 쓸 것이 아니라 이상한 곡을
-        만났을 때만 찾는 자리다. 재생·여정 버튼과 같은 무게로 놓으면 그쪽을 가린다.
+        곡 신고 (S15P21A405-377 · 378). 처음에는 밑줄 친 작은 글씨로 뒀는데 **아무도 못 찾았다.**
+        자주 쓸 것이 아니라고 본 판단은 맞았지만 약하게 둔 정도가 과했다. 아이콘을 붙여 버튼으로
+        올리되, 재생·여정보다는 한 단계 낮은 무게로 둔다.
       */}
-      <button
-        type="button"
-        onClick={() => setReportOpen((v) => !v)}
-        aria-expanded={reportOpen}
-        className="self-start text-[11.5px] text-ink-4 underline decoration-line underline-offset-2 transition hover:text-ink-2"
-      >
-        이 곡 신고
-      </button>
-      {reportOpen && <SongReportMenu musicId={music.id} onDone={() => setReportOpen(false)} />}
+      <Button size="sm" className="self-start" onClick={() => setReportOpen(true)}>
+        <FlagIcon size={12} /> 이 곡 신고
+      </Button>
+      {reportOpen && <SongReportDialog musicId={music.id} title={music.title} onClose={() => setReportOpen(false)} />}
       {FEATURES.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );

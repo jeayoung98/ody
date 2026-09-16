@@ -127,8 +127,17 @@ export function connectSurveyPlayback(client: QueryClient): () => void {
     });
     if (held) {
       blocking.getState().setBusy(true);
+      /**
+       * **시계는 멈추고 소리는 잇는다** (S15P21A405-371).
+       *
+       * `enter(null, false)` 가 청취 시간을 여기서 끊으므로 답하는 동안의 시간은
+       * `listenedSec` 에 들어가지 않는다. 그 아래에서 `pause()` 까지 부르면 **소리도 끊겨서**,
+       * 제대로 듣지 못한 곡을 두고 "비슷했나요" 를 답하게 된다 — 들을 수 없으면 답도 찍기다.
+       *
+       * 카드가 떠 있는 동안 들어오는 재생 보고는 위 구독이 `busy` 로 무시하므로, 소리를
+       * 이어도 자취(`flow`)나 시계가 다시 돌지는 않는다.
+       */
       survey.getState().enter(null, false, Date.now());
-      usePlayerStore.getState().pause();
     }
     return held;
   };

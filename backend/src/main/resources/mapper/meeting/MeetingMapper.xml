@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="UTF-8" ?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
-<mapper namespace="com.ssafy.backend.realtime.mapper.MeetingMapper">
+<mapper namespace="com.ssafy.backend.realtime.repository.mapper.MeetingMapper">
 
 	<!--
 		실제 테이블: public.meeting(user1, user2, cnt), PK(user1,user2). user1·user2 는 "user".email FK.

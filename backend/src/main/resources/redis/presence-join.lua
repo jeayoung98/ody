@@ -1,6 +1,6 @@
 -- presence-join.lua — 배치·이사(RT-01) 원자 처리. "join = 그 레이어·그 곡에 활성 배치".
 -- play 와 "활성 배치 코어"를 공유하되 만남 목록·play_history 는 없다(join 은 노출만, 이동 아님).
--- 좌표·셀(부동소수)은 Java(CoordinateMapper)에서 계산해 정수·문자열만 넘긴다(Lua 안 부동소수 금지).
+-- 좌표·셀(부동소수)은 Java(MusicPositionCalculator)에서 계산해 정수·문자열만 넘긴다(Lua 안 부동소수 금지).
 --
 -- KEYS[1] presence:user:{email}   -- 내 접속 상태(위치)
 --
@@ -21,7 +21,7 @@
 -- ARGV[15] activeCellsPrefix      "active-song:cells:"  (+ "L")          점유 셀 목록
 -- ARGV[16] usercountPrefix        "cell:usercount:"     (+ "L")          셀 인원수 해시
 --
--- 반환: {'OK'} 성공, {'STALE'} presence 없음/old 불일치(Sweep·재접속 경쟁).
+-- 반환: {'OK'} 성공, {'STALE'} 현재 상태가 없거나 이전 값이 다른 경우.
 
 local email = ARGV[1]
 local oldM, oldL, oldCellF = ARGV[2], ARGV[3], ARGV[4]

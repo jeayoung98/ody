@@ -40,7 +40,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       <div className="flex gap-2">
         <Button
           size="sm"
-          className="flex-1 text-2xs"
+          className="flex-1 text-base!"
           onClick={() => {
             setStart(music.id);
             openComposer("end");
@@ -50,7 +50,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         </Button>
         <Button
           size="sm"
-          className="flex-1 text-2xs"
+          className="flex-1 text-base!"
           onClick={() => {
             setEnd(music.id);
             openComposer("start");

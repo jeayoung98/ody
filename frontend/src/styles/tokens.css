@@ -83,6 +83,7 @@
   --text-lg: 15px;
   --text-xl: 18px;
   --text-2xl: 20px;
+  --text-3xl: 25px;
 
   /* ---------- 모션 ---------- */
   --duration-fast: 140ms;

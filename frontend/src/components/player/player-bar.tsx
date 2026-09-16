@@ -11,7 +11,7 @@ import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import LocateButton from "./locate-button";
 import PlayerProgress from "./player-progress";
-import TransportButton from "./transport-button";
+import TransportButton from "@/components/common/transport-button";
 import { track } from "@/lib/analytics/client";
 
 /**

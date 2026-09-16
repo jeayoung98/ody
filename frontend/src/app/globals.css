@@ -78,6 +78,47 @@ input {
   color: transparent;
 }
 
+/* ---------- 넘치는 한 줄 흘리기 (marquee-text.tsx) ---------- */
+/*
+ * 기본값은 **꺼짐**이다. 넘치는지는 브라우저에서 재야 알 수 있으므로 JS 가 재고 data-run 을 켠다
+ * (`marquee-text.tsx`). 서버 렌더에서는 사본이 숨겨진 채로 나가 같은 글자가 두 번 보이지 않는다.
+ */
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marquee-track {
+  display: inline-flex;
+  min-width: 100%;
+}
+.marquee[data-run="off"] .marquee-copy {
+  display: none;
+}
+.marquee[data-run="on"] {
+  -webkit-mask-image: linear-gradient(to right, #000 86%, transparent);
+  mask-image: linear-gradient(to right, #000 86%, transparent);
+}
+.marquee[data-run="on"] .marquee-track {
+  animation: marquee var(--marquee-dur) linear infinite;
+}
+/* 글자가 흐르면 읽던 자리를 놓친다 — 얹으면 멈춘다 */
+.marquee[data-run="on"]:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--marquee-shift)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee[data-run="on"] .marquee-track {
+    animation: none;
+  }
+}
+
 /* ---------- 스테이지 배경 (지도 뒤) ---------- */
 .stage-bg {
   background:

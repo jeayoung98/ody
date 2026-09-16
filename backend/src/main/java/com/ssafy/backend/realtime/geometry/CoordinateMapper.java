@@ -77,9 +77,7 @@ public class CoordinateMapper {
 	 * @throws IllegalArgumentException 레이어가 [1, maxLayer] 밖이거나 pc 길이가 부족할 때
 	 */
 	public Placement place(double[] pc, int layer) {
-		int[] axes = LayerAxes.axesOf(layer, maxLayer)
-				.orElseThrow(() -> new IllegalArgumentException(
-						"레이어 범위 밖: " + layer + " (1.." + maxLayer + ")"));
+		int[] axes = axesOf(layer);
 		int ax = axes[0];
 		int ay = axes[1];
 		if (pc == null || pc.length < ay) {
@@ -91,6 +89,22 @@ public class CoordinateMapper {
 		int cellX = Normalizer.cell(xNorm, grid);
 		int cellY = Normalizer.cell(yNorm, grid);
 		return new Placement(layer, ax, ay, xNorm, yNorm, cellX, cellY);
+	}
+
+	/** 레이어가 화면에 쓰는 두 축을 찾는다. */
+	public int[] axesOf(int layer) {
+		return LayerAxes.axesOf(layer, maxLayer)
+				.orElseThrow(() -> new IllegalArgumentException(
+						"레이어 범위 밖: " + layer + " (1.." + maxLayer + ")"));
+	}
+
+	/** 한 축의 원시 좌표를 셀 번호로 바꾼다. */
+	public int cellAt(double rawPc, int axis) {
+		if (axis < 1 || axis >= axisMin.length) {
+			throw new IllegalArgumentException("축 범위 밖: " + axis);
+		}
+		double normalized = Normalizer.normalize(rawPc, axisMin[axis], axisMax[axis]);
+		return Normalizer.cell(normalized, grid);
 	}
 
 	public int maxLayer() {

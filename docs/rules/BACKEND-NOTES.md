@@ -181,6 +181,7 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-6 | `GET /api/map/nearby/{musicId}` | musicId | `{ center, neighbors[10] }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10) | 협의 전 |
 | A-8 | ~~`GET /api/music/{id}/representative-layers`~~ | — | — | **철회 — 만들지 않아도 된다.** 검색 결과를 누르면 그 곡이 대표곡인 첫 레이어로 자동 전환하려던 것이었는데, **SEARCH-01 이 v1.4 에서 바뀌어** 그 전환을 없애고 고스트별(MAP-12)로 대체했다. 프론트에 남아 있던 훅·목 라우트는 아무데서도 안 쓰여 삭제했다 (S15P21A405-269) | ❌ 철회 (2026-09-12) |
 | A-7 | `POST /api/music/{id}/play` | `{ source, playedMs }` | ok | 재생 로그 (`play_history`). `source` 값은 `MAP` / `JOURNEY` / `PLAYLIST` / `FOLLOW` | 협의 전 |
+| A-28 | `POST /api/music/{id}/report` | `{ reason }` | `{ reportId }` | **곡 신고 (S15P21A405-377). 아직 없다 — 프론트는 목 라우트(`/bff/music/{id}/report`)로 받고 있다.** 지도에 오는 662만 곡에 음원이 아닌 것이 섞여 있어서, 사용자가 만났을 때 알릴 자리가 필요하다. `reason` 은 `spoken`(말소리) / `noise`(잡음) / `other`(기타) 셋. **값을 바꾸지 말아 달라** — 화면 문구와 저장 값을 갈라 뒀고, 값이 바뀌면 집계가 끊긴다. 비로그인으로도 받아야 한다(1차 배포가 로그인을 안 태운다, A-17) — 설문처럼 이 경로만 permitAll. **지금 본문은 `reason` 하나뿐이다** — 사람 식별자는 안 보낸다(아래 참고). 테이블 제안은 아래 "곡 신고 테이블" 참고 | 협의 전 |
 | A-10 | `POST /api/auth/signup` | `{ email, password, nickname }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 가입 (AUTH-01) | ✅ 구현됨 (backend/dev, S15P21A405-121) · 프론트 반영 완료 |
 | A-11 | `POST /api/auth/login` | `{ email, password }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 로그인 (AUTH-02) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
 | A-12 | `GET /api/users/nickname-available?nickname=` | nickname | `{ available }` | 닉네임 중복 확인 (AUTH-01) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
@@ -232,3 +233,49 @@ A-23의 과거 “BE 머지 전” 기록은 현재 상태가 아니다. 2026-09
 | S-3 | 접속 상태·현재 탐색 좌표 실시간 관리 (USER-03) | 주변 사람 목록의 실시간성 | 협의 전 |
 | S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 협의 전 |
 | S-5 | 따라가는 인원 수 (SOCIAL-11), 만난 횟수 카운팅 (SOCIAL-05) | 서버 집계 필요 | 협의 전 |
+
+
+## 곡 신고 테이블 제안 (S15P21A405-377)
+
+프론트가 먼저 붙였고 백엔드는 아직 없다. 아래는 **제안**이라 그대로 갈 필요는 없다 — 다만 `reason` 값 셋은 프론트가 이미 보내고 있으니 바꿀 때 알려 달라.
+
+```sql
+CREATE TABLE music_report (
+  report_id    BIGSERIAL    PRIMARY KEY,
+  music_id     BIGINT       NOT NULL REFERENCES music(music_id),
+  -- 1차 배포는 로그인을 안 태운다 (A-17). 로그인 사용자는 이메일이 남고, 아니면 NULL 이다
+  user_email   VARCHAR(255) NULL REFERENCES "user"(email),
+  -- 비로그인 신고를 사람 단위로 묶으려면 필요하다. **프론트가 아직 안 보낸다** (아래 "정해야 할 것" 참고)
+  anonymous_id UUID         NULL,
+  reason       VARCHAR(16)  NOT NULL,
+  created_at   TIMESTAMPTZ  NOT NULL DEFAULT now(),
+
+  CONSTRAINT music_report_reason_chk CHECK (reason IN ('spoken', 'noise', 'other')),
+  -- 로그인이든 아니든 누가 보냈는지는 하나는 있어야 집계가 된다
+  CONSTRAINT music_report_who_chk CHECK (user_email IS NOT NULL OR anonymous_id IS NOT NULL)
+);
+
+-- 같은 사람이 같은 곡을 여러 번 눌러도 한 건으로 본다. 한 사람이 몰아서 찍은 편향을 막는다
+CREATE UNIQUE INDEX music_report_once_per_user
+  ON music_report (music_id, COALESCE(user_email, anonymous_id::text));
+
+-- "신고가 많이 쌓인 곡" 을 뽑는 것이 이 표의 쓸모다
+CREATE INDEX music_report_by_music ON music_report (music_id, reason);
+```
+
+### 정해야 할 것
+
+| 항목 | 프론트 입장 | 정해야 하는 쪽 |
+| --- | --- | --- |
+| 중복 신고 | 같은 사람 × 같은 곡은 한 건. 두 번째는 200 으로 조용히 넘겨도 되고 409 여도 된다 — 프론트는 어느 쪽이든 같은 알림을 띄운다 | 백엔드 |
+| 비로그인 허용 | **허용해야 한다.** 1차 배포가 로그인을 안 태운다 (A-17) | 백엔드 |
+| 비로그인 사람 식별 | **프론트가 아직 안 보낸다.** 설문이 쓰는 `localStorage["ody_anon_id"]` 를 재사용하면 되지만, 그 파일(`lib/anonymous-id.ts`)은 **설문을 걷어낼 때 같이 지워지는 것**이라 신고가 기대면 그때 깨진다. 중복 방지를 사람 단위로 하려면 그 파일을 설문 밖으로 빼는 작업이 먼저다 — 필요하면 말해 달라, 프론트가 붙인다 | 양쪽 |
+| 신고 누적 후 처리 | 이번 범위 밖. 지도에서 곡을 거르는 기준(몇 건부터? 사유별 가중치?)은 정해진 바 없다 | 기획 |
+| `reason` 확장 | 지금 셋으로 시작. 늘리면 프론트 `constants/report.ts` 와 CHECK 제약을 **같이** 고쳐야 한다 | 양쪽 |
+
+### 프론트 현재 상태
+
+- 목 라우트가 받아서 서버 콘솔에 `[report:mock] <musicId> {"reason":"..."}` 만 남긴다. **아무 데도 저장되지 않는다.**
+- 본문은 `{ reason }` 하나뿐이다. `musicId` 는 경로에 있고, 사람 식별자는 위 사유로 아직 안 보낸다.
+- 실호출 표식(`okLive`)을 달지 않았다 — 목을 실데이터로 오해하지 않기 위해서다.
+- 실연동이 붙으면 라우트 핸들러만 바꾸면 되고 화면·훅은 그대로다.

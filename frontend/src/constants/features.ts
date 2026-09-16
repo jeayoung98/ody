@@ -1,3 +1,5 @@
+import { TEST_TOOLS } from "./test-tools";
+
 /**
  * 유저 테스트 동안 **잠깐 감춰 두는 기능** (S15P21A405-333).
  *
@@ -46,14 +48,12 @@ export const PANEL_ENABLED: Record<string, boolean> = {
 };
 
 /**
- * 유저 테스트 모드 (S15P21A405-343). **기본 켜짐** — 지금이 테스트 기간이다.
+ * 유저 테스트 모드 (S15P21A405-343). 켜져 있으면 튜토리얼 앞에 안내가 한 장 뜬다.
  *
  * `FEATURES` 와 방향이 반대인 것에 주의한다. 저건 "감춘 것을 켜는" 스위치라 기본 꺼짐이고,
- * 이건 [`SKIP_LOGIN`](./auth.ts) 처럼 "테스트용으로 켜 둔 것" 이라 기본 켜짐이다.
- * 되돌리는 시점도 `SKIP_LOGIN` 과 같다 — 유저 테스트 종료.
+ * 이건 테스트용으로 켜 둔 것이라 기본 켜짐이다.
  *
- * ```sh
- * NEXT_PUBLIC_TEST_MODE=0   # 테스트 안내 화면을 끄고 예전처럼 바로 튜토리얼로
- * ```
+ * 스위치는 [`TEST_TOOLS`](./test-tools.ts) 하나로 합쳤다 (S15P21A405-368) — 로그인 생략·설문과
+ * 늘 같이 켜지고 같이 꺼진다. 이름은 호출지에서 읽히라고 남긴다.
  */
-export const TEST_MODE = process.env.NEXT_PUBLIC_TEST_MODE !== "0";
+export const TEST_MODE = TEST_TOOLS;

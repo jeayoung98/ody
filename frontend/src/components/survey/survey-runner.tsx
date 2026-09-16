@@ -12,6 +12,7 @@ import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
+import { logSurveyGate } from "@/hooks/survey/survey-log";
 import SurveyCard from "./survey-card";
 import type { MapPoint } from "@/types/map";
 
@@ -152,10 +153,14 @@ export default function SurveyRunner() {
    * 무너뜨린다. 자취가 바뀌었다고 다시 풀 이유도 없다 — 간선은 들어온 순간에 정해진다.
    */
   useEffect(() => {
-    if (!tutorialDone || currentMusicId == null) return;
-    const resolve = inJourney ? journeyEdge : inNearby ? nearbyEdge : null;
-    const edge = resolve?.(currentMusicId, useSurveyStore.getState()) ?? null;
-    if (edge && useSurveyStore.getState().hasAnswered(edge.target)) return;
+    if (currentMusicId == null) return;
+    const trail = useSurveyStore.getState();
+    const resolve = !tutorialDone ? null : inJourney ? journeyEdge : inNearby ? nearbyEdge : null;
+    const edge = resolve?.(currentMusicId, trail) ?? null;
+    const alreadyAnswered = edge != null && trail.hasAnswered(edge.target);
+    // 안 뜨는 것이 정상인지 고장인지 콘솔에서 짚을 수 있게 한다 (S15P21A405-368)
+    logSurveyGate({ musicId: currentMusicId, tutorialDone, inJourney, inNearby, edge, alreadyAnswered, trail });
+    if (!tutorialDone || alreadyAnswered) return;
     setPending(edge);
   }, [tutorialDone, currentMusicId, inJourney, inNearby, journeyEdge, nearbyEdge, setPending, videoId]);
 

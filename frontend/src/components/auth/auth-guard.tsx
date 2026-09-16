@@ -37,7 +37,7 @@ let warned = false;
 function warnSkipped() {
   if (warned || process.env.NODE_ENV === "production") return;
   warned = true;
-  console.warn("[ODY] 로그인 게이트가 꺼져 있습니다 (유저 테스트용 임시, BACKEND-NOTES A-17). 켜려면 NEXT_PUBLIC_REQUIRE_LOGIN=1");
+  console.warn("[ODY] 로그인 게이트가 꺼져 있습니다 (유저 테스트용 임시, BACKEND-NOTES A-17). 켜려면 NEXT_PUBLIC_TEST_TOOLS=0");
 }
 
 /**

@@ -1,3 +1,5 @@
+import { TEST_TOOLS } from "./test-tools";
+
 /**
  * 로그인 게이트 (AUTH-02).
  *
@@ -8,6 +10,8 @@
  * **되돌리는 시점은 A-17 과 같다** — 유저 테스트 종료, 또는 로그인 실연동이 붙는 시점 중 먼저 오는 쪽.
  * 그때 이 상수를 지우고 `AuthGuard` 를 원래대로 되돌린다.
  *
- * 로그인·가입 화면을 손볼 때는 `NEXT_PUBLIC_REQUIRE_LOGIN=1` 로 다시 켠다.
+ * 로그인·가입 화면을 손볼 때는 `NEXT_PUBLIC_TEST_TOOLS=0` 으로 다시 켠다 (S15P21A405-368).
+ * 테스트 도구 셋이 늘 같이 켜지고 같이 꺼져서 스위치를 하나로 합쳤다 — 이름은 호출지에서
+ * 읽히라고 남긴다 (`auth-guard` 에서 `TEST_TOOLS` 보다 `SKIP_LOGIN` 이 무슨 뜻인지 분명하다).
  */
-export const SKIP_LOGIN = process.env.NEXT_PUBLIC_REQUIRE_LOGIN !== "1";
+export const SKIP_LOGIN = TEST_TOOLS;

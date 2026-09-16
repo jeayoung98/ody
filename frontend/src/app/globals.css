@@ -2,29 +2,37 @@
 @import "../styles/tokens.css";
 
 /* ---------- 기본 ---------- */
-html,
-body {
-  height: 100%;
-  background: var(--color-void);
-  color: var(--color-ink);
-  font-family: var(--font-body);
-  font-weight: 400;
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-}
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-input {
-  font: inherit;
-  color: inherit;
-}
-:focus-visible {
-  outline: 2px solid var(--color-teal);
-  outline-offset: 2px;
-  border-radius: 6px;
+/*
+ * **반드시 `@layer base` 안에 둔다.** 레이어 밖의 규칙은 레이어 안의 것을 **언제나** 이긴다 —
+ * 우선순위(specificity)와 무관하다. 예전에 이 블록이 레이어 밖에 있어서 `button { font: inherit }`
+ * 이 Tailwind 유틸리티(`.text-xs` 등, `@layer utilities`)를 눌러 버렸고, **버튼 글씨 크기 클래스가
+ * 전부 무시된 채** 상속값(16px)으로 그려졌다 (S15P21A405-384 에서 발견).
+ */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  input {
+    font: inherit;
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
 }
 ::-webkit-scrollbar {
   width: 8px;

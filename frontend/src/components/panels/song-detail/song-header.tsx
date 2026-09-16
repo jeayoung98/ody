@@ -2,7 +2,7 @@
 
 import Tag from "@/components/common/tag";
 import { genreColor } from "@/constants/design-tokens";
-import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
+import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { formatCount, formatDuration } from "@/lib/format";
 import type { MusicDetail } from "@/types";
 import SongHero from "./song-hero";
@@ -14,7 +14,7 @@ import SongHero from "./song-hero";
  */
 export default function SongHeader({ music }: { music: MusicDetail }) {
   const color = genreColor(music.genres[0]?.id ?? 0);
-  const video = useVideoIdQuery(music.id);
+  const { blocked } = usePlayability(music.id);
   return (
     <div className="flex flex-col gap-2">
       <SongHero music={music} />
@@ -33,7 +33,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         <Tag>{formatDuration(music.duration)}</Tag>
         <Tag tone="violet">▶ {formatCount(music.playCnt)}</Tag>
         {/* videoId 는 전용 엔드포인트가 출처다 (S15P21A405-340). 아직 모르는 동안에는 붙이지 않는다 */}
-        {video.data && video.data.videoId == null && <Tag tone="warn">재생 불가</Tag>}
+        {blocked && <Tag tone="warn">{blocked.badge}</Tag>}
       </div>
     </div>
   );

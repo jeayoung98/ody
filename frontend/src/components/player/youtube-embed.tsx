@@ -1,8 +1,10 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
+import { PLAYBACK_BLOCKED, SKIPPED_UNPLAYABLE } from "@/constants";
+import { usePlayability, useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
 import { usePlayerStore } from "@/stores/use-player-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { registerPlayer, type PlayerHandle } from "./player-registry";
 
 /**
@@ -100,6 +102,41 @@ export default function YoutubeEmbed() {
   // videoId 는 **전용 엔드포인트**가 출처다 — 상세 응답에 딸려 오던 것을 더 쓰지 않는다 (S15P21A405-340)
   const videoId = useVideoIdQuery(currentMusicId).data?.videoId ?? null;
   const playSeq = usePlayerStore((s) => s.playSeq);
+  // 같은 쿼리를 한 번 더 읽는다 — 키가 같아 요청은 그대로 한 번이다
+  const { blocked } = usePlayability(currentMusicId);
+  const showToast = useToastStore((s) => s.show);
+
+  /**
+   * **찾아봤는데 음원이 없는 곡은 건너뛴다** (S15P21A405-364).
+   *
+   * 여정·플리를 듣는 중에 그런 곡을 만나면 소리 없이 서 있었다 — 배지를 띄워도 멈춰 있는 건
+   * 같아서, 사용자가 직접 ⏭ 를 눌러야 이어졌다.
+   *
+   * **`notFound` 만 넘긴다.** `unsearched` 와 조회 실패는 다시 부르면 채워질 수 있어서, 넘기면
+   * 들을 수 있었을 곡을 버리는 셈이 된다. 그쪽은 안내만 띄우고 사용자가 정하게 둔다.
+   *
+   * **듣는 중일 때만이다.** 멈춰 두고 정차를 눌러 본 것뿐이면 마음대로 옮기지 않는다.
+   *
+   * 조용히 넘기지 않는다 — 알리지 않으면 곡이 사라진 것으로 보인다.
+   */
+  useEffect(() => {
+    if (!isPlaying || blocked !== PLAYBACK_BLOCKED.noVideo) return;
+    const p = usePlayerStore.getState();
+    // 단독 재생은 넘길 곳이 없다. 그 자리에서 안내만 보고 멈춰 있는 게 맞다
+    if (p.queue.length === 0) return;
+
+    const before = p.currentMusicId;
+    p.next();
+    const after = usePlayerStore.getState();
+    // 막는 창 때문에 미뤄 둔 것이면 `useDeferredNext` 가 창이 닫힐 때 넘긴다 (S15P21A405-258)
+    if (after.pendingNext) return;
+    // 마지막 정차였다 — 넘길 곳이 없으니 여기서 끝이다. ▶ 로 되돌린다 (S15P21A405-361 과 같은 자리)
+    if (after.currentMusicId === before) {
+      after.pause();
+      return;
+    }
+    showToast(SKIPPED_UNPLAYABLE);
+  }, [currentMusicId, blocked, isPlaying, showToast]);
 
   const hostRef = useRef<HTMLDivElement>(null);
   const playerRef = useRef<YtPlayer | null>(null);

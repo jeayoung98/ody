@@ -55,7 +55,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
             <PlaylistAddIcon size={17} />
           </TransportButton>
         )}
-        <TransportButton label={isThisPlaying ? "정지" : "재생"} primary disabled={dead} dimmed={!dead && !!blocked} onClick={toggle}>
+        <TransportButton label={dead ? "재생할 수 없는 곡이에요" : isThisPlaying ? "정지" : "재생"} primary disabled={dead} dimmed={!dead && !!blocked} onClick={toggle}>
           {isThisPlaying ? <PauseIcon size={17} /> : <PlayIcon size={17} />}
         </TransportButton>
       </div>

@@ -2,13 +2,15 @@
 
 import { ArriveIcon, DepartIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
+import { PLAYBACK_BLOCKED } from "@/constants";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import type { MusicDetail } from "@/types";
 
 /** 세그먼트 한 칸 — 둘이 한 덩어리라 `Button` 을 쓰지 않는다 (테두리가 두 겹이 된다) */
-const HALF = "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[14px] transition-colors duration-fast hover:bg-white/[.07]";
+const HALF =
+  "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[14px] transition-colors duration-fast not-disabled:hover:bg-white/[.07] disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
  * 이 곡을 여정의 **출발점 / 도착점**으로 지정 (JOURNEY-01).
@@ -30,6 +32,11 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   const openComposer = useOpenJourneyComposer();
   /** 왜 못 트는지 (SONG-04) — 판단은 `usePlayability` 한 곳에서 온다 */
   const { blocked } = usePlayability(music.id);
+  /**
+   * 찾아봤는데 음원이 없는 곡은 **여정 지점으로도 못 쓴다** (S15P21A405-384). 아무도 못 듣는
+   * 곡을 경로의 끝에 두면 그 여정은 시작이나 끝이 조용하다. 흐리게 두되 눌리지는 않는다.
+   */
+  const dead = blocked === PLAYBACK_BLOCKED.noVideo;
 
   return (
     <div className="flex flex-col gap-2">
@@ -37,7 +44,8 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       <div className="flex overflow-hidden rounded-box-sm border border-line bg-white/[.04]">
         <button
           type="button"
-          aria-label="이 곡을 여정 출발점으로 지정"
+          aria-label={dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 출발점으로 지정"}
+          disabled={dead}
           className={HALF}
           onClick={() => {
             setStart(music.id);
@@ -49,7 +57,8 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         <span aria-hidden className="w-px shrink-0 bg-line" />
         <button
           type="button"
-          aria-label="이 곡을 여정 도착점으로 지정"
+          aria-label={dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 도착점으로 지정"}
+          disabled={dead}
           className={HALF}
           onClick={() => {
             setEnd(music.id);

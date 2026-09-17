@@ -490,7 +490,20 @@ export default function MapView({ occludedRight }: MapViewProps) {
       // 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
       // 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다
       const song = hit ? engine.songs[hit.i] : heldSong.current;
-      if (!song) return;
+      if (!song) {
+        /**
+         * **주변 탐색 중 빈 곳을 누르면 고리를 닫는다** (S15P21A405-384).
+         *
+         * 곡 상세에서 켜는 버튼을 없애면서 패널 안에 끄는 길도 같이 사라졌다. 지도에서 바깥을
+         * 누르는 것은 "이건 그만 볼래" 와 같은 동작이라 여기에 붙인다 — 드래그(`moved > 5`)와
+         * 별·친구·고스트·오버레이는 위에서 이미 걸러졌으므로 여기는 정말 빈 곳이다.
+         * 패널은 건드리지 않는다. 곡을 보는 것과 고리를 보는 것은 다른 일이다.
+         */
+        // 분석 이벤트(`nearby_closed`)는 스토어 구독자가 알아서 남긴다 (`analytics/observe`)
+        const map = useMapStore.getState();
+        if (map.viewMode === "nearby") map.exitNearby();
+        return;
+      }
       const id = song.musicId;
       // 오버레이가 **떠 있는 동안에만** 그 안의 곡으로 가둔다 (PATH-01-1).
       // 닫힌 뒤에도 가두면 지도의 별이 영영 안 눌린다 — 실제로 그랬다 (S15P21A405-270)

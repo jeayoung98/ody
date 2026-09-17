@@ -6,7 +6,9 @@ import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
 import Loading from "@/components/common/loading";
 import { useFeatures } from "@/hooks/use-features";
+import { PLAYBACK_BLOCKED } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { usePanelBack } from "@/hooks/use-panel-back";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -60,6 +62,15 @@ export default function SongDetailPanel() {
    * 눌러 보기 전에 안다.
    */
   const back = usePanelBack();
+  /**
+   * 찾아봤는데 음원이 없는 곡 (S15P21A405-384).
+   *
+   * **아래를 통째로 접는다.** 못 듣는 곡을 두고 "이런 소리예요" 를 보여 주거나 "가장 비슷한
+   * 곡" 을 들려줄 수는 없다 — 비교할 소리가 없으니 설문의 근거도 안 생긴다. 남는 것은 제목·칩과
+   * **왜 안 되는지, 무엇을 해 주면 되는지**(신고) 한 줄이다.
+   */
+  const { blocked } = usePlayability(musicId);
+  const dead = blocked === PLAYBACK_BLOCKED.noVideo;
 
   /**
    * 곡이 바뀌면 **맨 위로 되돌린다** (S15P21A405-384). 패널은 곡이 바뀌어도 같은 상자를 쓰므로
@@ -104,18 +115,21 @@ export default function SongDetailPanel() {
             <SongHeader music={data} />
             {elsewhere && <SongElsewhereNote musicId={data.id} />}
             <SongActions music={data} />
-            <Divider />
             {/*
               정보 표(발매 국가·작곡가·곡 길이·장르·누적 재생 …)는 걷어냈다 (S15P21A405-384).
-              올 값은 넷뿐이었고 그중 셋은 제목 아래 칩이 이미 말한다 — 같은 값을 두 번 보여
-              주려고 표를 세울 이유가 없다. 안 오는 다섯 줄은 `-` 만 찍혀 고장처럼 보였다.
-              BPM 은 칩에도 없어 이 화면에서 사라진 유일한 값이다.
+              올 값은 넷뿐이었고 그중 셋은 제목 아래 칩이 이미 말한다. BPM 은 칩에도 없어
+              이 화면에서 사라진 유일한 값이다.
             */}
-            <SongPcList items={data.principalComponents} />
-            <Divider />
-            <SongNearbyList items={data.nearby} centerMusicId={data.id} />
-            {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다 */}
-            {features.playlist && <SongRelatedPlaylists items={data.relatedPlaylists} />}
+            {!dead && (
+              <>
+                <Divider />
+                <SongPcList items={data.principalComponents} />
+                <Divider />
+                <SongNearbyList items={data.nearby} centerMusicId={data.id} />
+                {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다 */}
+                {features.playlist && <SongRelatedPlaylists items={data.relatedPlaylists} />}
+              </>
+            )}
           </>
         )}
       </div>

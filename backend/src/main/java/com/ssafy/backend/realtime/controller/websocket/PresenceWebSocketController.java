@@ -14,6 +14,7 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
+import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.dto.presence.ViewportRequest;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
@@ -102,6 +103,35 @@ public class PresenceWebSocketController {
 				webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_STALE, "이전 소켓에서 보낸 화면 요청이다");
 			}
 			// 오래된 화면 요청은 무시한다.
+		} catch (IllegalArgumentException e) {
+			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, e.getMessage());
+		}
+	}
+
+	/**
+	 * 현재 소켓에서 마지막으로 연 화면의 구독을 닫는다.
+	 *
+	 * @param request 마지막 화면 요청 순번
+	 * @param principal 로그인한 사용자
+	 * @param sessionId 현재 소켓 세션 ID
+	 */
+	@MessageMapping("/presence/viewport/close")
+	public void closeViewport(
+			ViewportCloseRequest request,
+			Principal principal,
+			@Header("simpSessionId") String sessionId) {
+		String email = principal.getName();
+		Long epoch = webSocketSessionService.findEpoch(sessionId).orElse(null);
+		if (epoch == null) {
+			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_NOT_CONNECTED, "현재 소켓 연결을 찾을 수 없다");
+			return;
+		}
+
+		try {
+			if (request == null) {
+				throw new IllegalArgumentException("화면 닫기 요청이 비어 있다");
+			}
+			viewportService.closeCurrentScreen(email, epoch, request.validatedRequestSeq());
 		} catch (IllegalArgumentException e) {
 			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, e.getMessage());
 		}

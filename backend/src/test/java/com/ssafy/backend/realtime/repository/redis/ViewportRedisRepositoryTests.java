@@ -28,6 +28,7 @@ import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.geometry.ViewportRange.LayerBound;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.CloseResult;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 
 /** 화면 구독 스크립트에 전달하는 값과 결과를 검증한다. */
@@ -36,11 +37,12 @@ class ViewportRedisRepositoryTests {
 
 	private final StringRedisTemplate redis = mock(StringRedisTemplate.class);
 	private final DefaultRedisScript<Long> replaceScript = mock(DefaultRedisScript.class);
+	private final DefaultRedisScript<Long> closeScript = mock(DefaultRedisScript.class);
 	private ViewportRedisRepository repository;
 
 	@BeforeEach
 	void setUp() {
-		repository = new ViewportRedisRepository(redis, replaceScript);
+		repository = new ViewportRedisRepository(redis, replaceScript, closeScript);
 	}
 
 	@Test
@@ -91,6 +93,35 @@ class ViewportRedisRepositoryTests {
 				"user@x.com", 7L, 2L, viewport,
 				ViewportMode.INDIVIDUAL, Set.of(new Cell(0, 0))))
 				.isEqualTo(ReplaceResult.STALE_CONNECTION);
+	}
+
+	@Test
+	@DisplayName("화면을 닫을 때 접속 번호와 마지막 요청 순번을 전달한다")
+	void closesCurrentScreenWithConnectionAndRequestSequence() {
+		when(redis.execute(closeScript,
+				List.of("presence:user:user@x.com", "viewport:meta:user@x.com"),
+				"user@x.com", "7", "11", "viewport:cell:", "viewport:clustered:"))
+				.thenReturn(1L);
+
+		CloseResult result = repository.closeCurrentScreen("user@x.com", 7L, 11L);
+
+		assertThat(result).isEqualTo(CloseResult.CLOSED);
+		verify(redis).execute(closeScript,
+				List.of("presence:user:user@x.com", "viewport:meta:user@x.com"),
+				"user@x.com", "7", "11", "viewport:cell:", "viewport:clustered:");
+	}
+
+	@Test
+	@DisplayName("이전 화면 닫기와 이전 접속을 구분한다")
+	void distinguishesOldCloseAndStaleConnection() {
+		List<String> keys = List.of("presence:user:user@x.com", "viewport:meta:user@x.com");
+		Object[] args = {"user@x.com", "7", "11", "viewport:cell:", "viewport:clustered:"};
+		when(redis.execute(closeScript, keys, args)).thenReturn(0L, -1L);
+
+		assertThat(repository.closeCurrentScreen("user@x.com", 7L, 11L))
+				.isEqualTo(CloseResult.OLD_REQUEST);
+		assertThat(repository.closeCurrentScreen("user@x.com", 7L, 11L))
+				.isEqualTo(CloseResult.STALE_CONNECTION);
 	}
 
 	@Test

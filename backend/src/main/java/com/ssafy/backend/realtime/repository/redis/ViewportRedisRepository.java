@@ -39,17 +39,21 @@ public class ViewportRedisRepository {
 
 	private final StringRedisTemplate redis; // Redis 읽기와 쓰기
 	private final DefaultRedisScript<Long> replaceScript; // 지켜볼 셀 목록 변경
+	private final DefaultRedisScript<Long> closeScript; // 마지막 화면 구독 닫기
 
 	/**
 	 * 화면 구독 저장소를 만든다.
 	 * @param redis Redis 읽기와 쓰기
 	 * @param replaceScript 지켜볼 셀을 바꾸는 Lua
+	 * @param closeScript 마지막 화면 구독을 닫는 Lua
 	 */
 	public ViewportRedisRepository(
 			StringRedisTemplate redis,
-			@Qualifier("viewportSubscriptionReplaceScript") DefaultRedisScript<Long> replaceScript) {
+			@Qualifier("viewportSubscriptionReplaceScript") DefaultRedisScript<Long> replaceScript,
+			@Qualifier("viewportSubscriptionCloseScript") DefaultRedisScript<Long> closeScript) {
 		this.redis = redis;
 		this.replaceScript = replaceScript;
+		this.closeScript = closeScript;
 	}
 
 	/**
@@ -83,6 +87,25 @@ public class ViewportRedisRepository {
 				CELL_SUBSCRIBERS_PREFIX,
 				CLUSTERED_SUBSCRIBERS_PREFIX);
 		return ReplaceResult.from(result);
+	}
+
+	/**
+	 * 현재 접속에서 마지막으로 연 화면의 구독을 닫는다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param epoch 현재 접속 번호
+	 * @param requestSeq 마지막 화면 요청 순번
+	 * @return 닫기 결과
+	 */
+	public CloseResult closeCurrentScreen(String email, long epoch, long requestSeq) {
+		Long result = redis.execute(closeScript,
+				List.of(PRESENCE_USER_PREFIX + email, META_PREFIX + email),
+				email,
+				Long.toString(epoch),
+				Long.toString(requestSeq),
+				CELL_SUBSCRIBERS_PREFIX,
+				CLUSTERED_SUBSCRIBERS_PREFIX);
+		return CloseResult.from(result);
 	}
 
 	/**
@@ -385,6 +408,29 @@ public class ViewportRedisRepository {
 		private static ReplaceResult from(Long result) {
 			if (result != null && result == 1L) {
 				return APPLIED;
+			}
+			if (result != null && result == 0L) {
+				return OLD_REQUEST;
+			}
+			return STALE_CONNECTION;
+		}
+	}
+
+	/** 화면 구독 닫기 결과. */
+	public enum CloseResult {
+		CLOSED,
+		OLD_REQUEST,
+		STALE_CONNECTION;
+
+		/**
+		 * Lua 반환값을 닫기 결과로 바꾼다.
+		 *
+		 * @param result Lua 반환값
+		 * @return 화면 구독 닫기 결과
+		 */
+		private static CloseResult from(Long result) {
+			if (result != null && result == 1L) {
+				return CLOSED;
 			}
 			if (result != null && result == 0L) {
 				return OLD_REQUEST;

@@ -69,6 +69,16 @@ public class RedisScriptConfig {
 		return script;
 	}
 
+	/** 현재 접속에서 마지막으로 연 화면의 구독을 닫는다. */
+	@Bean
+	public DefaultRedisScript<Long> viewportSubscriptionCloseScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/viewport-subscription-close.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
 	/**
 	 * 목록을 돌려주는 Lua 파일을 읽는다.
 	 * @param path Lua 파일 경로

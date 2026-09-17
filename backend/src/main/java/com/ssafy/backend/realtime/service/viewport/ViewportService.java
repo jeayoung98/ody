@@ -107,6 +107,17 @@ public class ViewportService {
 	}
 
 	/**
+	 * 현재 접속에서 마지막으로 연 화면의 구독을 닫는다.
+	 *
+	 * @param email 요청한 사용자 이메일
+	 * @param epoch 현재 접속 번호
+	 * @param requestSeq 마지막 화면 요청 순번
+	 */
+	public void closeCurrentScreen(String email, long epoch, long requestSeq) {
+		viewportRepository.closeCurrentScreen(email, epoch, requestSeq);
+	}
+
+	/**
 	 * 개별 셀 구독을 지우고 셀별 인원수 화면으로 바꾼다.
 	 *
 	 * @param email 요청한 사용자 이메일

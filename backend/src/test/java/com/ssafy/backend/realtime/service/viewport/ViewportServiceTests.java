@@ -293,6 +293,15 @@ class ViewportServiceTests {
 		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
 	}
 
+	@Test
+	@DisplayName("화면 닫기를 Redis 저장소에 전달한다")
+	void closesCurrentScreen() {
+		service.closeCurrentScreen(ME, 7L, 18L);
+
+		verify(viewportRepository).closeCurrentScreen(ME, 7L, 18L);
+		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
+	}
+
 	/** 테스트에서 사용할 실시간 설정을 만든다. */
 	private static RealtimeProperties properties() {
 		List<RealtimeProperties.AxisRange> ranges = IntStream.rangeClosed(1, 16)

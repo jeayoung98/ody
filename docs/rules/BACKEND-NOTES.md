@@ -213,6 +213,7 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 
 | # | 내용 | 이유 | 상태 |
 | --- | --- | --- | --- |
+| A-33 | `GET /api/music/detail` 응답에 **발매년도가 없다** | `id` | 기존 필드 + `releaseYear` (또는 발매일) | 곡 상세 제목 아래 칩 줄에 발매년도를 넣기로 했다 (SONG-02, S15P21A405-384). ERD 에는 있는 값인데 상세 응답에 안 실려 프론트는 `toMusic` 에서 `releaseYear: null` 로 못 박고 있다(`lib/backend.ts`). 칩은 이미 붙여 뒀고 값이 오면 그대로 뜬다 — **지금은 영영 안 뜬다.** BPM·곡 길이·누적 재생은 잘 온다 | 협의 전 — BE 요청 필요 |
 | A-26 | 사람×문항 중복 저장의 원자성 확인 | `origin/backend/dev`의 346 구현은 `findAnsweredId` 후 `upsert`이고 UNIQUE는 `(session_id, rank)`다. 여러 탭의 동시 제출에는 중복 행이 가능하다. 프론트는 단일 탭 중복 제출을 막고 동일 본문으로 재시도하지만 DB 수준 보장은 할 수 없다. 사람 식별/집계 또는 원자적 저장 방안 확인 필요 | 협의 전 — BE 요청 필요 |
 | A-27 | 동일 세션·rank의 비교 상대 변경 방지와 실패 행 의미 | FE는 같은 rank에서 문항 키가 달라질 때 새 sessionId를 사용한다. 다른 탐색을 실제 청취했다가 복귀할 때도 새 세션이다. 저장 실패를 verdict=null로 바꾸지 않고, 응답 미시도 질문의 pagehide만 null로 보낸다. 저장 성공 후 응답 유실은 DB 실패 행과 구분할 수 없고, FE는 동일 식별자로 재시도한다 | FE 반영 — 분석 시 세션 분절/실패 표본 미저장에 유의 |
 

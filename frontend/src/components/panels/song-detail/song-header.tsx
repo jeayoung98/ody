@@ -52,22 +52,37 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
           {isThisPlaying ? <PauseIcon size={17} /> : <PlayIcon size={17} />}
         </TransportButton>
       </div>
+      {/*
+        칩은 값만 적는다 — 이름까지 적으면 줄이 금세 넘친다. 대신 **하나도 빠짐없이 `title` 을
+        단다** (S15P21A405-384): `2:43` 이 곡 길이인지 남은 시간인지, `1998` 이 발매년도인지
+        수록곡 수인지 칩만 봐서는 모른다. 마우스를 올리면 그 이름이 뜬다.
+      */}
       <div className="flex flex-wrap gap-[5px]">
         {music.genres.map((g) => (
-          <Tag key={g.id} color={color}>
+          <Tag key={g.id} color={color} title="장르">
             {g.name}
           </Tag>
         ))}
         {(music.moods ?? []).map((m) => (
-          <Tag key={m} tone="teal">
+          <Tag key={m} tone="teal" title="무드">
             {m}
           </Tag>
         ))}
-        {music.releaseYear && <Tag>{music.releaseYear}</Tag>}
-        <Tag>{formatDuration(music.duration)}</Tag>
-        <Tag tone="violet">▶ {formatCount(music.playCnt)}</Tag>
+        {/*
+          발매년도. **백엔드가 아직 안 준다** — 상세 응답에 없어서 `toMusic` 이 null 로 못 박는다
+          (BACKEND-NOTES). 값이 오기 시작하면 이 칩이 그대로 뜬다
+        */}
+        {music.releaseYear != null && <Tag title="발매년도">{music.releaseYear}</Tag>}
+        <Tag title="곡 길이">{formatDuration(music.duration)}</Tag>
+        <Tag tone="violet" title="누적 재생">
+          ▶ {formatCount(music.playCnt)}
+        </Tag>
         {/* videoId 는 전용 엔드포인트가 출처다 (S15P21A405-340). 아직 모르는 동안에는 붙이지 않는다 */}
-        {blocked && <Tag tone="warn">{blocked.badge}</Tag>}
+        {blocked && (
+          <Tag tone="warn" title={blocked.notice}>
+            {blocked.badge}
+          </Tag>
+        )}
       </div>
       {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>

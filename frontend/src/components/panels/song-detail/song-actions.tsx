@@ -4,6 +4,7 @@ import { useState } from "react";
 import Button from "@/components/common/button";
 import { FlagIcon, PauseIcon, PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
+import { PLAYBACK_BLOCKED } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useFeatures } from "@/hooks/use-features";
@@ -117,7 +118,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       <Button size="sm" className="self-start" onClick={() => setReportOpen(true)}>
         <FlagIcon size={12} /> 이 곡 신고
       </Button>
-      {reportOpen && <SongReportDialog musicId={music.id} title={music.title} onClose={() => setReportOpen(false)} />}
+      {reportOpen && <SongReportDialog musicId={music.id} title={music.title} unplayable={blocked === PLAYBACK_BLOCKED.noVideo} onClose={() => setReportOpen(false)} />}
       {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );

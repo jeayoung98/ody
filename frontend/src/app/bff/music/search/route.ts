@@ -1,4 +1,4 @@
-import { failLive, ok, okLive } from "@/lib/api-response";
+import { failLive, fail, ok, okLive } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, type BackendMusicDetail } from "@/lib/backend";
 import { SEARCH_PAGE_SIZE } from "@/constants";
 import { mockSearch } from "@/mocks/music";
@@ -16,21 +16,41 @@ interface BackendSearchResponse {
 }
 
 /**
- * GET /api/music/search?q=<키워드>&page=<0-based>
+ * GET /bff/music/search — 음악 검색 (SEARCH-01 · S15P21A405-399).
  *
- * 백엔드는 파라미터 이름이 `query` 이고 0-based `page` 를 요구한다. 여기서 이름을 맞춘다.
- * 응답은 **한 페이지**다 — 화면이 무한 스크롤로 이어 붙인다 (SEARCH-01).
+ * 화면이 보내는 조건은 셋 중 하나다.
+ *
+ * | 화면 → BFF | BFF → Backend |
+ * | --- | --- |
+ * | `?q=Love` | `?query=Love` |
+ * | `?artist=Radiohead` | `?artist=Radiohead` |
+ * | `?artist=Radiohead&music=Creep` | 그대로 |
+ * | `?music=Love&artist=Lana Del Rey` | 그대로 |
+ *
+ * 통합 검색만 이름이 다르다(`q` → `query`). 그 변환이 이 라우트가 있는 이유고, 화면은
+ * 백엔드 파라미터 이름을 몰라도 된다.
+ *
+ * **`query` 와 `music`/`artist` 를 섞지 않는다.** `music` 단독도 안 된다 — 백엔드가 400 이다.
+ * 화면 쪽에서 이미 막지만, 여기서 한 번 더 본다. 여기서 걸리면 무엇이 잘못됐는지 남는다.
+ *
+ * ⚠️ **배포 백엔드는 아직 `query`·`page` 만 받는다** (2026-09-17 스웨거 확인, S15P21A405-365 미배포).
+ * 그때까지 `artist`/`music` 경로는 목에서만 동작하고, 실백엔드로는 400 이 올라온다.
  */
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
   const q = (sp.get("q") ?? "").trim();
+  const artist = (sp.get("artist") ?? "").trim();
+  const music = (sp.get("music") ?? "").trim();
   const page = Math.max(0, Number(sp.get("page") ?? 0) || 0);
   const empty: MusicSearchPage = { items: [], page, hasNext: false };
-  if (!q) return ok(empty);
 
-  if (!isBackendEnabled()) return ok(mockSearchPage(q, page));
+  if (q && (artist || music)) return fail("INVALID_INPUT", "통합 검색과 조건 검색을 함께 쓸 수 없습니다.", 400);
+  if (music && !artist) return fail("INVALID_INPUT", "음악 조건만으로는 검색할 수 없습니다. 아티스트를 함께 지정하세요.", 400);
+  if (!q && !artist) return ok(empty);
 
-  const upstream = `/api/music/search?query=${encodeURIComponent(q)}&page=${page}`;
+  if (!isBackendEnabled()) return ok(mockSearchPage({ q, artist, music }, page));
+
+  const upstream = `/api/music/search?${backendQuery({ q, artist, music, page })}`;
   try {
     const res = await backendGet<BackendSearchResponse>(upstream);
     const body: MusicSearchPage = {
@@ -45,9 +65,21 @@ export async function GET(req: Request) {
   }
 }
 
-/** 목도 같은 모양으로 잘라 준다 — 화면이 실데이터와 목을 가려 쓰지 않게 */
-function mockSearchPage(q: string, page: number): MusicSearchPage {
-  const all = mockSearch(q);
+/** 백엔드 파라미터 이름으로 바꾼다 — 통합 검색만 `q` → `query` 다 */
+function backendQuery({ q, artist, music, page }: { q: string; artist: string; music: string; page: number }): string {
+  const p = new URLSearchParams();
+  if (q) p.set("query", q);
+  else {
+    p.set("artist", artist);
+    if (music) p.set("music", music);
+  }
+  p.set("page", String(page));
+  return p.toString();
+}
+
+/** 목도 같은 조건과 같은 페이지 모양으로 답한다 — 화면이 실데이터와 목을 가려 쓰지 않게 */
+function mockSearchPage(cond: { q: string; artist: string; music: string }, page: number): MusicSearchPage {
+  const all = mockSearch(cond);
   const from = page * SEARCH_PAGE_SIZE;
   return { items: all.slice(from, from + SEARCH_PAGE_SIZE), page, hasNext: from + SEARCH_PAGE_SIZE < all.length };
 }

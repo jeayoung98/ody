@@ -13,3 +13,9 @@ export const SEARCH_PAGE_SIZE = 10;
  * 조금 일찍 걸어 둔다. 그래도 기다림이 길어 목록 밑에 상태를 띄운다.
  */
 export const SEARCH_LOAD_MORE_MARGIN_PX = 160;
+
+/**
+ * 입력이 멎기를 기다리는 시간(ms). 한 글자마다 묻지 않는다 (S15P21A405-399).
+ * 닉네임 중복 검사(`nickname-check-field`)와 같은 값으로 맞춘다 — 같은 종류의 기다림이다.
+ */
+export const SEARCH_DEBOUNCE_MS = 350;

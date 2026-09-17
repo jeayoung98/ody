@@ -7,6 +7,7 @@ import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicSearchResult } from "@/types";
 import SearchResultList from "./search-result-list";
+import { useSearchAnalytics } from "@/hooks/use-search-analytics";
 
 /** #searchWrap — 상단 중앙 글래스 검색. 결과 클릭 시 지도상 위치로 이동 (SEARCH-01) */
 export default function SearchBar() {
@@ -15,10 +16,12 @@ export default function SearchBar() {
   const { data, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useMusicSearchQuery(keyword);
   // 받아 둔 페이지를 한 줄로 편다 — 화면은 "끊김 없는 한 목록"으로 본다
   const results = data?.pages.flatMap((p) => p.items) ?? [];
+  const analytics = useSearchAnalytics({ keyword, visible: open, pending: isPending, count: results.length, pages: data?.pages.length ?? 0, source: "map_search" });
   const focusMusic = useMapStore((s) => s.focusMusic);
   const openSong = usePanelStore((s) => s.openSong);
 
   const handleSelect = (r: MusicSearchResult) => {
+    analytics.select(r.id, results.findIndex((item) => item.id === r.id) + 1);
     setOpen(false);
     setKeyword("");
     openSong(r.id);
@@ -27,7 +30,7 @@ export default function SearchBar() {
   };
 
   return (
-    <div className="absolute top-4 left-1/2 z-[22] w-[min(380px,32vw)] -translate-x-1/2" data-hud>
+    <div data-analytics-manual className="absolute top-4 left-1/2 z-[22] w-[min(380px,32vw)] -translate-x-1/2" data-hud>
       <div className="glass flex items-center gap-[9px] rounded-pill! px-[13px] py-[9px]">
         <SearchIcon className="shrink-0 opacity-50" />
         <input
@@ -53,7 +56,7 @@ export default function SearchBar() {
           onSelect={handleSelect}
           hasMore={hasNextPage}
           isLoadingMore={isFetchingNextPage}
-          onLoadMore={fetchNextPage}
+          onLoadMore={() => { analytics.more(); void fetchNextPage(); }}
         />
       )}
     </div>

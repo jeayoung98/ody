@@ -6,6 +6,7 @@ import { ROUTES, STORAGE_KEYS } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { readStorage } from "@/lib/storage";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
+import { setAnalyticsContext, trackOnce } from "@/lib/analytics/client";
 
 /**
  * 완료/건너뛰기 기록을 로컬 또는 서버에서 복원한다.
@@ -17,10 +18,18 @@ export default function TutorialGate() {
 
   useEffect(() => {
     // Local completion/skip wins even while /me is loading or has failed.
-    if (useTutorialStore.getState().hydrateCompletion(me?.tutorialCompleted)) return;
+    if (useTutorialStore.getState().hydrateCompletion(me?.tutorialCompleted)) {
+      setAnalyticsContext({ phase: "free" });
+      trackOnce("free-explore", "free_explore_started");
+      return;
+    }
     if (!me) return;
     const saved = readStorage<number>(STORAGE_KEYS.myMusicId);
     if (saved == null) router.replace(ROUTES.tutorial);
+    else {
+      setAnalyticsContext({ phase: "free" });
+      trackOnce("free-explore", "free_explore_started");
+    }
   }, [me, router]);
 
   return null;

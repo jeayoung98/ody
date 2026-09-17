@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { formatDuration } from "@/lib/format";
 import { getPlayer } from "./player-registry";
+import { track } from "@/lib/analytics/client";
 
 /** 재생 시계를 물어보는 주기(ms). 3px 바에서는 이보다 촘촘해도 눈에 안 보인다 */
 const TICK_MS = 250;
@@ -79,6 +80,8 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   const shownDuration = duration || (durationSec != null && durationSec > 0 ? durationSec : 0);
 
   const commit = (next: number) => {
+    if (!seekable || scrub == null) return;
+    track("play_seeked", { music_id: musicId, from_sec: Math.round(clock.t), to_sec: Math.round(next) });
     getPlayer()?.seekTo(next, true);
     setClock((c) => ({ ...c, t: next }));
     setScrub(null);
@@ -87,6 +90,7 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   return (
     <span className="mt-[5px] flex items-center gap-1.5">
       <input
+        data-analytics-manual
         type="range"
         min={0}
         max={duration || 1}

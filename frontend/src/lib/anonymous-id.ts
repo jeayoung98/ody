@@ -13,12 +13,12 @@
  * **최종 배포 때 걷어낼 기능이다.**
  */
 import { SURVEY_ANON_KEY } from "@/constants/survey";
+let memoryId: string | undefined;
 
 /**
  * 이 브라우저의 익명 ID. 없으면 만들어 저장한다.
  *
- * 저장소가 막힌 환경(시크릿 모드 등)에서는 매번 새 값이 나온다 — 사람 구분이 안 될 뿐
- * 응답 수집 자체는 막지 않는다.
+ * 저장소가 막히면 문서가 살아 있는 동안 메모리 ID를 공유한다.
  */
 export function getAnonymousId(): string {
   if (typeof window === "undefined") return crypto.randomUUID();
@@ -26,10 +26,10 @@ export function getAnonymousId(): string {
   try {
     const saved = localStorage.getItem(SURVEY_ANON_KEY);
     if (saved) return saved;
-    const created = crypto.randomUUID();
+    const created = memoryId ??= crypto.randomUUID();
     localStorage.setItem(SURVEY_ANON_KEY, created);
     return created;
   } catch {
-    return crypto.randomUUID();
+    return memoryId ??= crypto.randomUUID();
   }
 }

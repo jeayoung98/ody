@@ -8,6 +8,9 @@ readonly CURRENT_LINK="${DEPLOY_ROOT}/current"
 readonly PREVIOUS_LINK="${DEPLOY_ROOT}/previous"
 
 readonly FRONTEND_SERVICE="ody-frontend.service"
+readonly FRONTEND_ENV_FILE="/etc/ody/frontend.env"
+readonly FRONTEND_ENV_DROP_IN_DIR="/etc/systemd/system/${FRONTEND_SERVICE}.d"
+readonly FRONTEND_ENV_DROP_IN="${FRONTEND_ENV_DROP_IN_DIR}/20-ody-frontend-env.conf"
 readonly LOCAL_BASE_URL="http://127.0.0.1:3000"
 readonly PUBLIC_BASE_URL="${ODY_FRONTEND_PUBLIC_BASE_URL:-https://j15a405.p.ssafy.io}"
 
@@ -139,6 +142,35 @@ nginx_check() {
 
 frontend_service_exists() {
     systemctl cat "${FRONTEND_SERVICE}" >/dev/null 2>&1
+}
+
+
+configure_frontend_environment() {
+    local temporary="${FRONTEND_ENV_DROP_IN}.tmp.$$"
+
+    [[ -f ${FRONTEND_ENV_FILE} && -r ${FRONTEND_ENV_FILE} ]] || \
+        fail "Frontend environment file is missing or unreadable: ${FRONTEND_ENV_FILE}"
+
+    frontend_service_exists || \
+        fail "Frontend systemd service does not exist: ${FRONTEND_SERVICE}"
+
+    install -d \
+        -o root \
+        -g root \
+        -m 0755 \
+        "${FRONTEND_ENV_DROP_IN_DIR}"
+
+    printf '[Service]\nEnvironmentFile=%s\n' "${FRONTEND_ENV_FILE}" > "${temporary}"
+
+    install \
+        -o root \
+        -g root \
+        -m 0644 \
+        "${temporary}" \
+        "${FRONTEND_ENV_DROP_IN}"
+
+    rm -f -- "${temporary}"
+    systemctl daemon-reload
 }
 
 
@@ -326,6 +358,7 @@ deploy_release() {
 
     validate_release_id "${release_id}"
     validate_archive "${artifact}"
+    configure_frontend_environment
 
     release_dir="${RELEASES_DIR}/${release_id}"
     incoming="${RELEASES_DIR}/.incoming-${release_id}-$$"
@@ -441,6 +474,8 @@ rollback_release() {
     local release_id
     local old_current
     local old_previous
+
+    configure_frontend_environment
 
     old_current="$(link_target "${CURRENT_LINK}")"
     old_previous="$(link_target "${PREVIOUS_LINK}")"

@@ -24,6 +24,10 @@ export const STORAGE_KEYS = {
    * 읽는 쪽은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나다.
    */
   surveyMode: "ody:survey-mode",
+  /** 없거나 `true`면 분석 전송, `false`면 이 브라우저의 GA4·PostHog 수집을 모두 끈다. */
+  analyticsMode: "ody:analytics-mode",
+  /** `true`일 때 이 브라우저의 GA4 이벤트만 DebugView 대상으로 표시한다. */
+  analyticsDebug: "ody:analytics-debug",
   /**
    * 발견 힌트를 이미 본 문맥들 (S15P21A405-393). `["map","nearby","journey"]` 꼴의 배열.
    * 문맥마다 키를 따로 두지 않는 이유는 힌트가 늘어날 때 키가 문맥 수만큼 곱해지기 때문이다.

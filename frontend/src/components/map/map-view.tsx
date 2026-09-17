@@ -62,11 +62,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
   const wheelTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const wheelStart = useRef<{ layer: number; zoom: number; mode: string } | null>(null);
   useEffect(() => () => { if (wheelTimer.current) clearTimeout(wheelTimer.current); }, []);
-  useEffect(() => {
-    if (!cardOn || !hoverSong) return;
-    const timer = setTimeout(() => track("music_hovered", { music_id: hoverSong.musicId, source: "hover_card" }), ANALYTICS.hoverMs);
-    return () => clearTimeout(timer);
-  }, [cardOn, hoverSong]);
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);

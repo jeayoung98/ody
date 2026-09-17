@@ -3,7 +3,6 @@ export const ANALYTICS = {
   checkpointMs: 120_000,
   searchSettleMs: 500,
   wheelSettleMs: 300,
-  hoverMs: 500,
   qualifiedMs: 20_000,
   startTimeoutMs: 15_000,
   queueLimit: 100,
@@ -16,5 +15,5 @@ export const POSTHOG_CORE_EVENTS = new Set([
   "nearby_opened", "nearby_closed", "nearby_results_viewed",
   "journey_create_requested", "journey_create_result", "journey_results_viewed",
   "play_requested", "play_started", "play_qualified", "play_ended", "playback_issue",
-  "engagement_recorded", "survey_shown", "survey_submit_result", "feature_request_failed",
+  "engagement_recorded", "feature_request_failed",
 ]);

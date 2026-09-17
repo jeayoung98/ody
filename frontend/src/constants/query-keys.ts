@@ -3,7 +3,7 @@
  * 모든 useQuery / invalidateQueries 는 반드시 여기 정의된 키를 사용한다.
  * 계층 구조: [도메인, 세부, 파라미터] — 상위 키로 invalidate 하면 하위가 함께 무효화된다.
  */
-import type { LayerBox } from "@/types";
+import type { LayerBox, SearchCondition } from "@/types";
 
 export const QUERY_KEYS = {
   health: ["health"] as const,
@@ -36,7 +36,16 @@ export const QUERY_KEYS = {
   music: {
     all: ["music"] as const,
     detail: (id: number) => ["music", "detail", id] as const,
-    search: (keyword: string) => ["music", "search", keyword] as const,
+    /**
+     * 검색 (S15P21A405-399). **모드까지 키에 넣는다** — 같은 문자열이라도 통합 검색과 아티스트
+     * 검색은 다른 질문이라, 조건을 바꿨을 때 이전 모드의 결과가 그대로 보이면 안 된다.
+     */
+    search: (c: SearchCondition) =>
+      (c.mode === "all"
+        ? (["music", "search", "all", c.query] as const)
+        : c.mode === "artist"
+          ? (["music", "search", "artist", c.artist, c.music] as const)
+          : (["music", "search", "music", c.music, c.artist] as const)),
     videoId: (id: number) => ["music", "video-id", id] as const,
   },
 

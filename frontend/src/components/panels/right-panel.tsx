@@ -1,6 +1,6 @@
 "use client";
 
-import { PANEL_ENABLED } from "@/constants";
+import { usePanelEnabled } from "@/hooks/use-features";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
 import FeedPanel from "./feed/feed-panel";
@@ -20,10 +20,11 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
 export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
   const collapsed = usePanelStore((s) => s.collapsed);
+  const panelEnabled = usePanelEnabled();
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다
-  if (!PANEL_ENABLED[activePanel]) return null;
+  if (!panelEnabled[activePanel]) return null;
 
   return (
     <aside

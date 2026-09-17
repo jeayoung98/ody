@@ -5,7 +5,7 @@ import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ChevronDownIcon } from "@/components/common/icons";
 import ProgressBar from "@/components/common/progress-bar";
 import SectionTitle from "@/components/common/section-title";
-import { pcAxisLabel } from "@/constants";
+import { pcAxisPair } from "@/constants";
 import SongPcChart, { type PcRow } from "./song-pc-chart";
 
 interface SongPcListProps {
@@ -24,7 +24,7 @@ const FULL_SD = 3;
  *
  * 예전에는 `PC1` … 처럼 번호만 달고 앞에서부터 여섯 개를 잘랐다. 숫자만으로는 그 값이 무슨
  * 소리를 뜻하는지 알 수 없고, 앞 여섯 개가 꼭 그 곡을 설명하는 축도 아니다 — 0 근처에 있는
- * 축은 아무 말도 안 해 준다. 지도가 겹마다 쓰는 축 이름을 그대로 가져와(`pcAxisLabel`)
+ * 축은 아무 말도 안 해 준다. 지도가 겹마다 쓰는 축 이름을 그대로 가져와(`pcAxisPair`)
  * 사용자가 보는 말과 지도를 맞추고, **치우친 순서**로 세운다.
  *
  * 치우침은 원값 크기가 아니라 **축별 표준편차로 나눈 값**으로 잰다. 축마다 흩어진 폭이
@@ -47,14 +47,18 @@ export default function SongPcList({ items }: SongPcListProps) {
   const rows = useMemo<PcRow[]>(
     () =>
       items
-        .map((p) => ({
-          axis: p.axis,
-          label: pcAxisLabel(p.axis, p.value),
-          // 잣대가 아직 없으면(지도가 안 떴을 때) 원값 순서로라도 세운다
-          sd: stats ? (p.value - stats.mean[p.axis]) / stats.sd[p.axis] : p.value,
-        }))
-        // 뜻이 없는 축(PC4 · PC12)은 뺀다 — 없는 의미를 지어 붙이면 그쪽으로 곡을 찾다가 헛수고한다
-        .filter((p): p is PcRow => p.label != null)
+        .map((p) => {
+          // 뜻이 없는 축(PC4 · PC12)은 쌍이 없다 — 없는 의미를 지어 붙이면 그쪽으로 곡을 찾다가 헛수고한다
+          const pair = pcAxisPair(p.axis);
+          return pair && {
+            axis: p.axis,
+            left: pair[0],
+            right: pair[1],
+            // 잣대가 아직 없으면(지도가 안 떴을 때) 원값 순서로라도 세운다
+            sd: stats ? (p.value - stats.mean[p.axis]) / stats.sd[p.axis] : p.value,
+          };
+        })
+        .filter((p): p is PcRow => p != null)
         .sort((a, b) => Math.abs(b.sd) - Math.abs(a.sd)),
     [items, stats],
   );
@@ -76,7 +80,10 @@ export default function SongPcList({ items }: SongPcListProps) {
                 {rest.map((pc) => (
                   <ProgressBar
                     key={pc.axis}
-                    label={pc.label}
+                    // 차트 라벨과 눈높이를 맞춘다 — 같은 칸인데 글씨만 커 보이면 따로 논다
+                    dense
+                    // 차트와 같은 기준으로 쪽을 고른다 — 막대가 가리키는 쪽의 말
+                    label={pc.sd >= 0 ? pc.right : pc.left}
                     code={`PC${pc.axis + 1}`}
                     percent={((Math.max(-FULL_SD, Math.min(FULL_SD, pc.sd)) / FULL_SD + 1) / 2) * 100}
                     valueText={`${pc.sd > 0 ? "+" : ""}${pc.sd.toFixed(1)}σ`}

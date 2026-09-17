@@ -24,7 +24,7 @@ export interface PcRow {
 const FULL_SD = 3;
 /** 막대 두께와 줄 간격(px). 축 눈금 자리를 더해 캔버스 높이를 낸다 */
 const BAR = 13;
-const ROW = 27;
+const ROW = 29;
 
 /**
  * 고정 주성분 상위 다섯 — **한 줄이 축 하나** (S15P21A405-384, 355).
@@ -56,7 +56,7 @@ export default function SongPcChart({ rows }: { rows: PcRow[] }) {
     const on = (i: number, side: "left" | "right") => (side === "right" ? data[i].sd >= 0 : data[i].sd < 0);
     /** 이 곡의 쪽은 또렷하고 크게, 반대쪽은 작고 흐리게 */
     const tickColor = (side: "left" | "right") => (ctx: { index: number }) => (on(ctx.index, side) ? PALETTE.ink2 : PALETTE.ink4);
-    const tickFont = (side: "left" | "right") => (ctx: { index: number }) => ({ family: FONTS.body, size: on(ctx.index, side) ? 9.5 : 8.5 });
+    const tickFont = (side: "left" | "right") => (ctx: { index: number }) => ({ family: FONTS.body, size: on(ctx.index, side) ? 11 : 9.5 });
 
     const chart = new Chart(canvas, {
       type: "bar",
@@ -83,7 +83,7 @@ export default function SongPcChart({ rows }: { rows: PcRow[] }) {
             border: { display: false },
             // 0 선만 또렷하게 — 막대가 어디서 출발하는지가 이 그림의 기준이다
             grid: { color: (ctx) => (ctx.tick.value === 0 ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.05)"), tickLength: 0 },
-            ticks: { stepSize: FULL_SD, color: PALETTE.ink4, font: { family: FONTS.mono, size: 8 }, padding: 3, callback: (v) => `${v}σ` },
+            ticks: { stepSize: FULL_SD, color: PALETTE.ink4, font: { family: FONTS.mono, size: 9 }, padding: 3, callback: (v) => `${v}σ` },
           },
           // 왼쪽 눈금 = 음수 쪽 말
           y: {

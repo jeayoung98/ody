@@ -69,7 +69,9 @@ export default function SongPcList({ items }: SongPcListProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionTitle aside={`치우친 순 ${open ? rows.length : top.length}/${rows.length}`}>고정 주성분</SectionTitle>
+      <SectionTitle tone="sentence" aside={`치우친 순 ${open ? rows.length : top.length}/${rows.length}`}>
+        이 곡을 설명하는 축
+      </SectionTitle>
       <SongPcChart rows={top} />
       {rest.length > 0 && (
         <>
@@ -80,8 +82,6 @@ export default function SongPcList({ items }: SongPcListProps) {
                 {rest.map((pc) => (
                   <ProgressBar
                     key={pc.axis}
-                    // 차트 라벨과 눈높이를 맞춘다 — 같은 칸인데 글씨만 커 보이면 따로 논다
-                    dense
                     // 차트와 같은 기준으로 쪽을 고른다 — 막대가 가리키는 쪽의 말
                     label={pc.sd >= 0 ? pc.right : pc.left}
                     code={`PC${pc.axis + 1}`}

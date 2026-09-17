@@ -151,6 +151,20 @@ export const ChevronDownIcon = ({ size = 16, ...p }: P) => (
     <path d="M6 9.5l6 6 6-6" />
   </svg>
 );
+/** 곡 길이 — 시계. 칩이 값만 적으므로 그 값이 무엇인지 아이콘이 먼저 말한다 (S15P21A405-384) */
+export const ClockIcon = ({ size = 11, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="12" cy="12" r="8.6" />
+    <path d="M12 7.4V12l3.2 2" />
+  </svg>
+);
+/** 발매년도 — 달력 */
+export const CalendarIcon = ({ size = 11, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="3.6" y="5.4" width="16.8" height="15" rx="2.6" />
+    <path d="M3.6 10.2h16.8M8.4 3.4v3.4M15.6 3.4v3.4" />
+  </svg>
+);
 /**
  * 플레이리스트에 추가 (SONG-05) — 목록 세 줄 + 더하기.
  * 하트를 쓰지 않았다. 하트는 "좋아요"(PATH-07)의 자리라 같은 화면에서 뜻이 갈린다.

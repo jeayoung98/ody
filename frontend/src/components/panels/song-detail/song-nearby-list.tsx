@@ -48,15 +48,16 @@ interface SongNearbyListProps {
 }
 
 /**
- * .nb10 — 가까운 10곡. 버튼으로 주변 탐색을 켜거나 이 곡 주변으로 **건너간다**(항해).
- * 목록의 곡을 누르면 **들어보기만** 한다(정찰) — 고리는 그대로고 우주선만 그 별로 옮겨간다 (S15P21A405-288)
+ * .nb10 — 가까운 10곡을 좌우로 미는 카드 줄로 보여 준다 (S15P21A405-384).
+ *
+ * 카드를 누르면 **주변 탐색이 켜지고** 그 곡으로 옮겨간다. 고리는 늘 "지금 보는 곡" 을 중심으로
+ * 다시 서므로, 카드를 타고 들어가며 이웃의 이웃을 따라갈 수 있다.
  */
 export default function SongNearbyList({ items, centerMusicId }: SongNearbyListProps) {
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
   const exitNearby = useMapStore((s) => s.exitNearby);
-  const selectMusic = useMapStore((s) => s.selectMusic);
   const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const openSong = usePanelStore((s) => s.openSong);
@@ -77,11 +78,9 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   };
   /** 카드 한 장 + 사이 간격만큼 민다 — 스냅이 다음 카드 머리에 맞춰 세운다 */
   const nudge = (dir: 1 | -1) => railRef.current?.scrollBy({ left: dir * (CARD_W + CARD_GAP) * 2, behavior: "smooth" });
-  // 주변 탐색 중인데 이 상세가 중심이 아닌 곡이면(이웃을 선택해 보는 중) 버튼은 건너가기다
-  const canHop = inNearby && centerMusicId !== nearbyCenterMusicId;
+  /** 이 곡을 중심으로 고리가 서 있나 */
+  const isOnHere = inNearby && nearbyCenterMusicId === centerMusicId;
 
-  /** 이 곡이 중심인 채로 켜져 있으면 끈다. 다른 곡이 중심이면 이리로 건너간다 */
-  const isOnHere = inNearby && !canHop;
   const handleEnter = () => {
     if (isOnHere) {
       exitNearby();
@@ -112,42 +111,59 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   };
 
   /**
-   * 이웃 곡을 고른다 — 선택·상세·재생. **건너가지는 않는다** (S15P21A405-288): 한 곡에 서서
-   * 이웃들을 차례로 들어보는 정찰이 되어야 하므로, 옮겨가는 것은 버튼으로만 한다.
+   * 이웃 카드를 고른다 — **고른 곡이 새 중심이 된다** (S15P21A405-384).
    *
-   * 재생은 꼭 부른다 — 안 부르면 상세만 옮겨가고 **소리는 직전 곡에 머문다.** 목록을 누르면
-   * 그 곡이 나와야 한다 (S15P21A405-262).
+   * 주변 탐색이 켜지고 고리가 그 곡 기준으로 다시 서며, 표식도 그 곡에 붙고 상세도 그 곡으로
+   * 바뀐다. 그래서 카드를 타고 이웃의 이웃으로 계속 걸어 들어갈 수 있다 — 예전에 따로 있던
+   * `이 곡 주변으로 건너가기` 버튼이 하던 일이라 그 버튼은 없앴다.
+   *
+   * 예전에는 **건너가지 않았다** (S15P21A405-288 의 정찰/항해 구분): 한 곡에 서서 이웃을 하나씩
+   * 들어보는 동작이었다. 카드가 목록이 아니라 지도와 짝이 된 지금은 고르는 것이 곧 그 자리로
+   * 가는 것이고, 안 그러면 **무엇을 고른 건지 지도에서 찾을 수가 없다.**
+   *
+   * 상세를 여기서 직접 여는 이유: `map-view` 에 "주변 탐색을 켜면 중심곡 상세도 연다" 는
+   * 효과가 있는데(S15P21A405-348), 먼저 열어 두면 그 효과가 **이미 맞다** 고 보고 건너뛴다.
+   * 안 그러면 한 번 더 여느라 돌아갈 자리(`back`)가 날아간다.
+   *
+   * 재생은 꼭 부른다 — 안 부르면 상세만 옮겨가고 **소리는 직전 곡에 머문다** (S15P21A405-262).
    * 설문도 여기에 기댄다 — 안 들려준 곡을 두고 "비슷했나요"를 묻게 된다. // REMOVE-WITH-SURVEY
    */
   const handlePick = (id: number) => {
-    selectMusic(id);
     openSong(id);
+    enterNearby(id);
+    useTutorialStore.getState().complete("nearby");
     // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
     playWithConfirm(id, () => recordPlay({ musicId: id, source: "MAP", playedMs: 0 }));
   };
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionTitle aside={inNearby ? <span className="text-teal">주변 탐색 중</span> : undefined}>주변 음악 {NEARBY_COUNT}곡</SectionTitle>
-      {/* 한 줄로 줄였다 (S15P21A405-384). 유사도 기준은 이번 유저 테스트가 묻는 것이라 남긴다 */}
-      <Note>
-        <b>유사도</b>는 임베딩 거리 기준 — 카드를 누르면 들어볼 수 있고, 줌아웃하면 주변 탐색이 풀려요.
-      </Note>
+      <SectionTitle tone="sentence" aside={inNearby ? <span className="text-teal">주변 탐색 중</span> : undefined}>
+        이 곡과 가장 비슷해요!
+      </SectionTitle>
       {/*
-        행동 줄을 카드 위로 올린다. **여는 버튼만 둔다** (S15P21A405-339) — 끄는 길은 이미
-        둘이다(좌상단 칩의 ✕, 우측 패널 닫기). 여기 세 번째를 두면 같은 일을 세 군데서 한다.
-        왼쪽 버튼은 상황에 따라 `주변 탐색 켜기` ↔ `이 곡 주변으로 건너가기` 로 글자가 바뀌므로
-        **아이콘만 두지 않는다** — 아이콘 하나로 두 뜻을 말할 수 없다.
+        안내문과 순차 재생을 한 줄에 둔다 (S15P21A405-384). 글이 두 줄로 앉아 버튼 높이(36px)와
+        맞물린다. 유사도 기준은 이번 유저 테스트가 묻는 것이라 문장은 남긴다.
       */}
-      <div className="flex items-center gap-1.5">
-        <Button variant={isOnHere ? "secondary" : "primary"} className="h-9 min-w-0 flex-1 py-0!" onClick={handleEnter}>
-          <CoronaIcon size={13} /> {isOnHere ? "주변 탐색 닫기" : canHop ? "이 곡 주변으로" : "주변 탐색 켜기"}
-        </Button>
+      <div className="flex items-center gap-2.5">
+        <div className="min-w-0 flex-1">
+          <Note>
+            <b>유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요! 카드를 누르면 그 곡으로 옮겨가요.
+          </Note>
+        </div>
         {/* 재생은 앱 어디서나 같은 동그란 버튼이다 (플레이어바·제목 줄과 같은 물건) */}
         <TransportButton label={`${NEARBY_COUNT}곡 순차 재생`} primary disabled={items.length === 0} onClick={handlePlayAll}>
           <PlayIcon size={15} />
         </TransportButton>
       </div>
+      {/*
+        **건너가기 버튼은 없앴다** (S15P21A405-384) — 카드를 고르면 고리가 그 곡 기준으로 다시
+        서므로 따로 건너갈 일이 없다. 남은 것은 켜기/끄기 한 쌍이고 하단 바 버튼도 토글이다
+        (예전 주석의 "여는 버튼만 둔다"(339)는 그 짝이 생기면서 이미 깨져 있었다).
+      */}
+      <Button variant={isOnHere ? "secondary" : "primary"} className="h-9 py-0!" onClick={handleEnter}>
+        <CoronaIcon size={13} /> {isOnHere ? "주변 탐색 닫기" : "주변 탐색 켜기"}
+      </Button>
       {/*
         카드 줄. 좌우 패딩만큼 음수 마진을 줘서 **패널 가장자리 밑으로 흘러 나간다** — 줄이
         화면 밖으로 이어진다는 신호다. 카드 폭 112 + 사이 8 이라 두 장 반이 보인다.

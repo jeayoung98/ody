@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { PauseIcon, PlaylistAddIcon, PlayIcon } from "@/components/common/icons";
+import { CalendarIcon, ClockIcon, PauseIcon, PlaylistAddIcon, PlayIcon } from "@/components/common/icons";
 import MarqueeText from "@/components/common/marquee-text";
 import Tag from "@/components/common/tag";
 import TransportButton from "@/components/common/transport-button";
@@ -53,9 +53,9 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         </TransportButton>
       </div>
       {/*
-        칩은 값만 적는다 — 이름까지 적으면 줄이 금세 넘친다. 대신 **하나도 빠짐없이 `title` 을
-        단다** (S15P21A405-384): `2:43` 이 곡 길이인지 남은 시간인지, `1998` 이 발매년도인지
-        수록곡 수인지 칩만 봐서는 모른다. 마우스를 올리면 그 이름이 뜬다.
+        칩은 값만 적는다 — 이름까지 적으면 줄이 금세 넘친다. 대신 **무엇의 값인지 왼쪽 아이콘이
+        먼저 말하고**(시계 = 곡 길이, 달력 = 발매년도, ▶ = 누적 재생), 마우스를 올리면 이름이
+        글자로 뜬다 (S15P21A405-384). 장르·무드는 값 자체가 이름이라 아이콘이 필요 없다.
       */}
       <div className="flex flex-wrap gap-[5px]">
         {music.genres.map((g) => (
@@ -72,8 +72,14 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
           발매년도. **백엔드가 아직 안 준다** — 상세 응답에 없어서 `toMusic` 이 null 로 못 박는다
           (BACKEND-NOTES). 값이 오기 시작하면 이 칩이 그대로 뜬다
         */}
-        {music.releaseYear != null && <Tag title="발매년도">{music.releaseYear}</Tag>}
-        <Tag title="곡 길이">{formatDuration(music.duration)}</Tag>
+        {music.releaseYear != null && (
+          <Tag title="발매년도">
+            <CalendarIcon /> {music.releaseYear}
+          </Tag>
+        )}
+        <Tag title="곡 길이">
+          <ClockIcon /> {formatDuration(music.duration)}
+        </Tag>
         <Tag tone="violet" title="누적 재생">
           ▶ {formatCount(music.playCnt)}
         </Tag>

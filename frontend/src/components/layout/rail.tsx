@@ -18,6 +18,11 @@ const ICONS: Record<(typeof NAV_ITEMS)[number]["key"], React.ReactNode> = {
 /**
  * #rail — 우측 세로 글래스 레일: 주변 사람 · 여정 · 차트 · 내 프로필.
  *
+ * **왼쪽에 둔다** (S15P21A405-406) — 오른쪽은 패널과 그 핸들이 쓰고 있어서 셋이 한쪽에 몰렸었다.
+ *
+ * 가운데가 아니라 **브랜드 블록 바로 아래**에 붙인다. 왼쪽 아래를 계기판이 쓰고 있어서
+ * 세로 가운데에 두면 겹친다 — 실측: 1024x768 에서 계기판이 342~750 을 차지한다.
+ *
  * 유저 테스트 동안 감춘 기능의 항목은 빠진다 (S15P21A405-333, `constants/features.ts`).
  * 지금은 여정만 남는다.
  */
@@ -37,7 +42,7 @@ export default function Rail() {
   if (!items.length) return null;
 
   return (
-    <nav data-hud className="glass absolute top-1/2 right-[18px] z-[21] flex -translate-y-1/2 flex-col gap-1.5 rounded-pill! p-1.5">
+    <nav data-hud className="glass absolute top-[190px] left-[18px] z-[21] flex flex-col gap-1.5 rounded-pill! p-1.5">
       {items.map((item) => (
         <RailButton
           key={item.key}

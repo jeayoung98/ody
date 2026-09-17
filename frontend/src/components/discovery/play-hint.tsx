@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useState, useSyncExternalStore } from "react";
 import { usePathname } from "next/navigation";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useStarScreenPos } from "@/components/tutorial/tutorial-hint";
@@ -40,6 +40,11 @@ const SETTLE_MS = 1600;
 
 /** 짚을 별을 이 아래에서 고른다 — 위쪽은 검색창·레이어 스테퍼가 쓴다 */
 const HUD_TOP = 150;
+
+/** 툴팁이 화면 끝에 닿지 않게 두는 여백(px) */
+const EDGE = 12;
+/** 별 중심에서 툴팁까지 띄우는 거리(px). 반짝임 고리(36px) 바깥 */
+const TIP_GAP = 46;
 
 const seen = () => readStorage<HintContext[]>(STORAGE_KEYS.playHintSeen) ?? [];
 
@@ -123,6 +128,31 @@ export default function PlayHint() {
     });
   }, [pending, context]);
 
+  /**
+   * 툴팁 크기를 잰다. 문구가 문맥마다 달라 폭이 고정이 아니고, 폭을 모르면 화면 안으로
+   * 밀어 넣을 수가 없다. 문맥이 바뀌면 이 컴포넌트가 통째로 사라졌다 다시 붙으므로
+   * ref 콜백이 다시 불려 값도 다시 잰다.
+   */
+  const [size, setSize] = useState({ w: 0, h: 0 });
+  const measure = useCallback((el: HTMLDivElement | null) => {
+    if (el) setSize({ w: el.offsetWidth, h: el.offsetHeight });
+  }, []);
+
+  /**
+   * 별을 따라가되 화면 밖으로 넘치지 않게 가둔다. 재기 전(첫 렌더)에는 별 위치 그대로 두고,
+   * 잰 뒤 한 번 더 그려지며 제자리를 잡는다 — 그 사이가 한 프레임이라 눈에 띄지 않는다.
+   */
+  const tip = (() => {
+    if (!at) return { x: 0, y: 0 };
+    if (!size.w) return { x: at.x, y: at.y + TIP_GAP };
+    const half = size.w / 2;
+    const x = Math.min(Math.max(at.x - half, EDGE), window.innerWidth - size.w - EDGE);
+    // 아래에 자리가 없으면 별 위로 뒤집는다
+    const below = at.y + TIP_GAP;
+    const y = below + size.h > window.innerHeight - EDGE ? at.y - TIP_GAP - size.h : below;
+    return { x, y };
+  })();
+
   const skip = () => {
     if (!context) return;
     track("play_hint_done", { context, result: "skipped" });
@@ -142,12 +172,22 @@ export default function PlayHint() {
       <i className="fixed block h-[72px] w-[72px] -translate-x-1/2 -translate-y-1/2 rounded-pill bg-[radial-gradient(circle,rgba(79,227,206,.45)_0%,transparent_65%)]" style={{ left: at.x, top: at.y }} />
       <i className="animate-tbeat fixed block h-9 w-9 -translate-x-1/2 -translate-y-1/2 rounded-pill border-2 border-teal" style={{ left: at.x, top: at.y }} />
       <i className="animate-tstar fixed block h-3.5 w-3.5 -translate-x-1/2 -translate-y-1/2 rounded-pill bg-white shadow-[0_0_18px_6px_rgba(79,227,206,.9)]" style={{ left: at.x, top: at.y }} />
-      {/* 툴팁은 별 아래에 붙는다. 별 위는 반짝임 고리가 쓴다 */}
-      <div className="animate-tin fixed -translate-x-1/2 translate-y-[46px]" style={{ left: at.x, top: at.y }}>
-        <div className="glass flex items-center gap-2 rounded-pill px-3 py-1.5 whitespace-nowrap">
-          <span className="text-[12.5px] text-ink">{LABEL[context]}</span>
-          <button type="button" onClick={skip} className="pointer-events-auto lbl cursor-pointer text-ink-3 hover:text-ink">
-            건너뛰기
+      {/*
+        툴팁은 별 아래에 붙는다 — 별 위는 반짝임 고리가 쓴다. 다만 **별을 그대로 따라가면
+        화면 끝에서 잘린다** (S15P21A405-396): 짚을 별은 화면 안에서 고르지만 툴팁은 그 별보다
+        넓어서, 왼쪽 끝 별에 붙이면 툴팁 왼쪽이 화면 밖으로 나간다. 그래서 잰 크기만큼 안으로 민다.
+        아래에 자리가 없으면 위로 뒤집는다.
+      */}
+      <div className="animate-tin fixed" style={{ left: tip.x, top: tip.y }}>
+        <div ref={measure} className="glass flex items-center gap-2 rounded-pill px-3 py-1.5 whitespace-nowrap">
+          <span className="text-center text-[12.5px] text-ink">{LABEL[context]}</span>
+          {/*
+            안내가 주인이다 — 건너뛰기를 같은 무게로 두면 둘 중 무엇을 보라는 건지 안 읽힌다.
+            크기·색을 **안쪽 span 에** 준다: `globals.css` 의 레이어 밖 `button { font: inherit; color: inherit }`
+            가 버튼에 직접 건 유틸리티를 이긴다 (레이어 없는 규칙이 `@layer utilities` 보다 세다).
+          */}
+          <button type="button" onClick={skip} className="pointer-events-auto cursor-pointer">
+            <span className="text-[11.5px] text-ink-3 transition-colors hover:text-ink">건너뛰기</span>
           </button>
         </div>
       </div>

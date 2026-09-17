@@ -32,14 +32,19 @@ export default function RightPanel() {
       data-tutorial={`panel-${activePanel}`}
       className={`animate-tin absolute top-[68px] right-[74px] z-20 flex max-h-[calc(100vh-158px)] w-right-panel flex-col transition-transform duration-300 ease-out ${
         /*
-          접혀도 몸통을 COLLAPSED_PEEK_PX(28px) 만큼 남긴다 (S15P21A405-406).
-          **클래스를 문자열로 짜 넣지 않는다** — Tailwind 는 소스를 훑어 유틸리티를 만들기 때문에
-          런타임에 조합한 이름은 CSS 가 생기지 않는다. 그래서 74 - 28 = 46 을 직접 적는다.
+          접으면 **핸들이 레일 바로 왼쪽에 붙는 데까지만** 들어간다 (S15P21A405-406).
+          싹 밀어 넣으면 거기에 무엇이 있었는지가 안 읽히고, 어중간히 남기면 남긴 몸통이
+          레일 뒤로 들어가 버린다. 핸들을 레일 옆에 세우면 "여기를 끌면 나온다" 가 바로 보인다.
 
-          **`_` 는 공백이 된다.** `calc(100%+46px)` 로 적으면 연산자 앞뒤 공백이 없어 CSS 가
-          통째로 버려지고 transform 이 아예 안 걸린다 — 예전 값(`calc(100%+74px)`)이 그랬다.
+          372 = 패널이 제자리에서 오른쪽으로 갈 거리.
+            제자리 왼쪽 끝 = 화면오른쪽 - (패널폭 376 + 패널여백 74) = -450
+            목표 왼쪽 끝   = 화면오른쪽 - (레일여백 18 + 레일폭 54 + 틈 6) = -78
+            372 = 450 - 78
+
+          **클래스를 런타임에 조합하지 않는다** — Tailwind 는 소스를 훑어 유틸리티를 만들어서
+          문자열로 짜 넣으면 CSS 가 생기지 않는다. 그래서 계산 결과를 직접 적는다.
         */
-        collapsed ? "translate-x-[calc(100%_+_46px)]" : ""
+        collapsed ? "translate-x-[372px]" : ""
       }`}
     >
       <PanelCollapseHandle />

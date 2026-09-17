@@ -138,13 +138,13 @@ class MusicDetailServiceTests {
 		when(reader.findDetail(10234L)).thenReturn(Optional.of(center));
 		when(nearby.neighborsOf(center))
 				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
-		when(enricher.resolve(10234L, "IU", "Love wins all", null)).thenReturn("centerVideoId");
+		when(enricher.resolve(10234L, "IU", "Love wins all", null, 275)).thenReturn("centerVideoId");
 
 		MusicDetailResponse res = serviceWith(reader, nearby, enricher).getDetail(10234L);
 
 		assertThat(res.detail().videoId()).isEqualTo("centerVideoId");
 		// 이웃곡은 최대 10건이라 순차 호출하면 느려져 걷어냈다 — DB 값(여기선 null) 그대로 나간다.
 		assertThat(res.neighbors().get(0).music().videoId()).isNull();
-		verify(enricher, Mockito.never()).resolve(Mockito.eq(1L), Mockito.any(), Mockito.any(), Mockito.any());
+		verify(enricher, Mockito.never()).resolve(Mockito.eq(1L), Mockito.any(), Mockito.any(), Mockito.any(), Mockito.any());
 	}
 }

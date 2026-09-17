@@ -5,17 +5,23 @@ import { API_ENDPOINTS, type ReportReason } from "@/constants";
 interface ReportMusicInput {
   musicId: number;
   reason: ReportReason;
+  /** `기타` 를 골랐을 때 적은 말. 다른 사유에는 없다 */
+  detailReason?: string;
 }
 
 /**
- * 곡 신고 (S15P21A405-377).
+ * 곡 신고 (S15P21A405-377 · 394).
  *
- * 지금은 목 라우트가 받는다 — 백엔드에 API 가 아직 없다 (BACKEND-NOTES A-23).
- * 실연동이 붙어도 이 훅은 그대로고 라우트 핸들러만 바뀐다.
+ * 라우트 핸들러가 배포 백엔드 `POST /api/music/report` 를 대신 부른다 (2026-09-17 실연동,
+ * BACKEND-NOTES A-28). 백엔드는 곡을 본문으로 받지만 그 번역은 라우트가 맡는다 —
+ * 여기서는 프론트 경로만 안다.
  */
 export function useReportMusicMutation() {
   return useMutation({
-    mutationFn: ({ musicId, reason }: ReportMusicInput) =>
-      api<{ reportId: number }>(API_ENDPOINTS.music.report(musicId), { method: "POST", body: JSON.stringify({ reason }) }),
+    mutationFn: ({ musicId, reason, detailReason }: ReportMusicInput) =>
+      api<{ reportId: number }>(API_ENDPOINTS.music.report(musicId), {
+        method: "POST",
+        body: JSON.stringify(detailReason ? { reason, detailReason } : { reason }),
+      }),
   });
 }

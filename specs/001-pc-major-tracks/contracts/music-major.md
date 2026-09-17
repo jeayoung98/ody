@@ -5,17 +5,18 @@
 ⟲ **2026-09-11 D15~D19 로 재작성.** 원안(중심좌표·원형 구역·`youtubeCnt` DESC·`MusicDetail` 응답)은
 [spec.md "대체된 요구사항 — 롤백 기록"](../spec.md) 절에 전문 보존돼 있다.
 
-⚠️ **정본 `docs/api-spec.md` §3.4 는 아직 원안이다.** 이 문서와 어긋나며 갱신은 T036 담당이다(헌법 II).
+`docs/api-spec.md` §0.6·§3.4와 2026-09-17 A-30~A-32까지 동기화했다.
 확정된 부분만 규범으로 적고, 미정은 표시한다(설계로 확정하지 않음).
 
-## 1. Request (D19 확정)
+## 1. Request (D19 확정, A-30 추가)
 
 `GET /api/music/major` · 인증 필요.
 
 | 항목 | 값 |
 | --- | --- |
 | Header | `Authorization: Bearer {accessToken}` (FR-002). 2026-09-10 dev `c820b53` 기본 거부 전환으로 `/music/**` 에 적용됨 |
-| `level` | int, required. 조회할 레이어 |
+| `level` | int, required, 1~8. 범위 밖 또는 비정수는 400 `INVALID_INPUT` |
+| `size` | int, optional, 1~10,000. 레이어별 상주 곡 수 측정 상한. 범위 밖 또는 비정수는 400 `INVALID_INPUT` |
 | 누적 축 범위 | **level≥2 에서 required.** 레이어 1..level-1 각각의 사각 범위. 1레이어는 파라미터 없음 |
 
 **레벨 ↔ 축 매핑(FR-003 확정, D15~D19 에서 변경 없음)**: 레이어 n → 평면 `pc(2n-1)`·`pc(2n)`.
@@ -32,32 +33,31 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 - 범위 파라미터의 이름·표기. BE2 제안은 `pc{n}min`·`pc{n}max`, FE1 은 "GET 으로 받는다"까지 확정. **설계가 아니라 표기 문제다**
 - (P1/B1) 공개 지원 레벨 상한, level 생략 동작, 축 번호 범위·`min > max`·비유한 수의 오류 규칙
 
-## 2. Success Response (D18 확정)
+## 2. Success Response (D18 확정, A-31·A-32 개정)
 
 200, 공통 성공 포맷(FR-005). 항목은 **`MapPoint`** 다 — 정본 §0.6 `MusicDetail` 이 아니다.
 
 ```json
 { "success": true, "data": { "content": [ {
   "musicId": 10234,
-  "pc": [-0.4213, 1.0872, "...", -0.123],
+  "pc": [-0.421, 1.087, "...", -0.123],
   "genreId": 10, "weight": 0,
   "title": "...", "artist": "...",
-  "youtubeUrl": "https://www.youtube.com/results?search_query=...",
-  "playable": true
+  "videoId": null, "playable": true
 } ] }, "error": null }
 ```
 
 | 필드 | 계약 |
 | --- | --- |
 | `musicId` | `music.id` (BIGINT, 1..6,624,399) |
-| `pc` | **정확히 16개** 배열. 클라이언트가 레이어 축으로 재투영하므로 전부 싣는다(D7 PCA-16) |
+| `pc` | **정확히 16개** 배열. 각 값은 응답에서 소수점 이하 최대 3자리로 반올림한다. 클라이언트가 레이어 축으로 재투영하므로 전부 싣는다(D7 PCA-16) |
 | `genreId` | **비음수 정수(MUST)**. FE 는 `design-tokens.ts` 의 `genreIdx() = Math.abs(genreId) % len` 로 색·스프라이트를 고르므로 음수도 터지지는 않는다(2026-09-12 FE 확인, `origin/frontend/dev`). 서버가 음수를 보낼 이유가 없어 검증은 유지 |
 | `weight` | 별 크기·밝기·클라이언트 선별용. 인기 지표 부재로 **현재 균일값**(D17) |
-| `youtubeUrl` | 유튜브 **검색** URL. `music.youtube_url` 이 662만 행 전부 NULL 이라 저장값을 읽지 않고 `title`·`artist` 로 만든다(D12). 둘 다 `map_sample` 에 있어 조인이 필요 없다 — 0.4 ms 이점 유지. 검색어를 만들 수 없으면 null (2026-09-12, S15P21A405-249) |
 | `title` / `artist` | 표시용. `artist` 는 null 가능 |
-| `playable` | 재생 링크 유무 = `youtubeUrl != null`. 제목·아티스트가 모두 빈 곱이 3,977개라 상수가 아니다. 1레이어 실측(2026-09-12): 1,094 / 1,094 **true** |
+| `playable` | 기존 재생 가능 여부 의미를 유지한다. 지도 응답에서 `youtubeUrl`을 제거해도 이 필드는 유지한다 |
 
 `ghostOnly` 는 FE 타입이 "목 확인용" 이라 명시하므로 **서버가 보내지 않는다**(MUST NOT).
+`youtubeUrl`도 지도 응답에서는 보내지 않는다(MUST NOT). 곡 상세(`/api/music/detail`)에서는 기존대로 유지한다.
 상세 필드(`bpm`·`duration`·`album`·`genres`·`mbid`·`playCnt`·`youtubeCnt`)는 `/music/{id}` 담당이다.
 담으면 `map_sample` 이 조인을 없애 얻은 0.4 ms 이점이 사라진다.
 
@@ -65,11 +65,17 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 클라이언트가 화면 픽셀 격자(86px)에서 한다. 격자는 줌에 따라 변해 서버가 적용할 수 없다.
 전역 상위 k 를 먼저 자른 뒤 범위로 거르지 않는다(MUST NOT, 원안에서 유지).
 
-**크기**: 1000 이 규모 기준이다(D18). 정확한 수는 강제하지 않는다 — 1레이어 실측 1,094칸도 허용된다.
+**크기**: `size`를 지정하면 모든 레이어에 반환 상한으로 적용한다. 후보가 충분하면 요청 수만큼, 부족하면 후보 수만큼 반환한다.
+1레이어도 요청값이 정적 표본보다 작으면 요청 수만큼, 크면 가용 표본 전체를 반환한다.
+`size`를 생략하면 현행 약 1,000곡 동작을 유지하며, 1레이어 정적 표본의 실제 개수를 정확히 1,000으로 자르지 않는다.
+1레이어에서 3,000·10,000곡을 측정하려면 정적 표본도 그 크기를 지원해야 한다. 현재 약 1천 건 표본만으로는 충족할 수 없다.
+
+**좌표 정밀도**: `HALF_UP` 3자리 반올림은 응답 표현에만 적용한다. 누적 범위 판정·공간 샘플링·저장 좌표는 원본 정밀도를 유지한다.
 
 ### 미정
-- (P3/B4) 후보 0곡의 상태·본문. 빈 배열+200 을 명시한 근거가 없다
 - 멜론 코드 29종 → FE 색 인덱스 매핑 (S15P21A405-240 대기). **무장르 인덱스는 10 으로 확정** — FE `constants/map.ts` 의 `NO_GENRE_ID` 와 같고 `GENRE_COLORS` 는 11칸이다(2026-09-12 확인). 매핑 확정 전까지는 장르 보유 1.0% 도 10 으로 내린다
+
+후보가 0곡이면 오류가 아니라 200과 빈 `content`를 반환한다.
 
 ## 3. Error Contract (확정, 기존 재사용)
 
@@ -79,7 +85,7 @@ port 가 `accumulated.size() == level - 1` 을 강제한다(`MajorQuery`, T004).
 
 | 상황 | 상태 | code |
 | --- | --- | --- |
-| 타입 위반(`level=abc`, PC에 `abc`) 등 검증 실패 | 400 | `VALIDATION_ERROR` |
+| `level`·`size` 범위 또는 타입 위반, 누적 범위 검증 실패 | 400 | `INVALID_INPUT` |
 | 토큰 위조·무효 | 401 | `INVALID_TOKEN` |
 | 토큰 만료 | 401 | `TOKEN_EXPIRED` |
 | 토큰 없음 | 401 | 세부 코드 미명시(P3-c) → 상태·공통 실패 구조까지만 |
@@ -122,13 +128,13 @@ LayerBox(int layer, double xMin, double yMin, double xMax, double yMax)
 port 가 강제하는 불변식: `accumulated.size() == level - 1`, `LayerBox` 범위 역전 금지,
 `MapPoint.pc` 16개, `MapPoint.genreId >= 0`.
 
-## 5. 원본 동기화 필요 (T036 — 이 문서는 원본 미수정)
+## 5. 원본 동기화 상태
 
-정본 `docs/api-spec.md` §3.4 가 원안이라 **이 문서와 호환 불가하게 어긋나 있다.** 헌법 II 는
-"경계를 넘는 변경은 구현 전에 계약을 정의·갱신해야 한다(MUST)" 이므로 T005 착수 전에 갱신한다.
+정본 `docs/api-spec.md` §3.4는 D15~D19 및 A-30~A-32 계약과 동기화됐다.
+Notion 정본 반영 여부는 별도로 확인해야 한다.
 
 - §3.4 요청: 중심좌표 `pc1~pc16` → **`level` + 누적 축 범위**(1레이어는 파라미터 없음)
-- §3.4 응답: `MusicDetail` 목록 → **`MapPoint` 7필드**
+- §3.4 응답: `MusicDetail` 목록 → **`MapPoint` 8필드**(`youtubeUrl` 제외, `videoId`·`playable` 포함)
 - §3.4 선정: 원형 내 `youtubeCnt` DESC 상위 k → **서버 공간 균등 / 클라이언트 인기순**
 - §3.4 축 개수 변화 설명 → 레이어 n → PC(2n-1)·PC(2n) (C1/C4, D15 이전부터 필요했던 정정)
 

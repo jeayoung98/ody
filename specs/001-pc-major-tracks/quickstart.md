@@ -21,7 +21,7 @@
 | --- | --- | --- |
 | A1 | 200, `success:true`, `data.content` 배열, `error` 없음 | MVC 슬라이스(기존 통과) |
 | A2 | 항목이 §0.6 필드 포함, `location.pc1~pc16` = 곡 기준선 좌표 | MVC 슬라이스 |
-| A3 | `youtubeUrl:null`이어도 항목 유지, null 보존 | MVC 슬라이스 |
+| A3 | 지도 응답에서 `youtubeUrl`을 제외하고 `playable:false` 곡도 유지 | MVC 슬라이스 |
 | A5 | `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) | MVC 슬라이스(기존 통과) |
 | A7 | `level=abc` / PC에 `abc` → 400 `VALIDATION_ERROR` + 공통 실패 구조 | MVC 슬라이스(level=abc는 400까지 통과, 코드는 아직 master `INVALID_INPUT` — M4 미해소) |
 | A8 | 내부 실패 → 500 `INTERNAL_ERROR` + 공통 실패 구조 | MVC 슬라이스(서비스 예외 mock) |

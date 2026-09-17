@@ -18,7 +18,6 @@ public class MapPointRow {
 	private Long musicId;
 	private String title;
 	private String artist;
-	private String youtubeUrl;
 
 	private double pc1;
 	private double pc2;

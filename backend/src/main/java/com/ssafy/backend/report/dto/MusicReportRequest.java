@@ -14,6 +14,6 @@ import jakarta.validation.constraints.Size;
  */
 public record MusicReportRequest(
         @NotNull @Min(1) Long musicId,
-        @NotNull @Pattern(regexp = "spoken|noise|other") String reason,
+        @NotNull String reason,
         @Size(max = 2000) String detailReason) {
 }

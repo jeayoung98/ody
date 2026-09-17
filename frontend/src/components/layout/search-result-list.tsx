@@ -90,6 +90,11 @@ export default function SearchResultList({
       onMouseDown={(e) => e.preventDefault()}
       className="glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[12px]!"
     >
+      {/*
+        두 조건을 **대칭으로** 보여 준다. 다만 하는 일은 같지 않다 — 아티스트는 그것만으로 바로
+        조회되지만, 제목은 백엔드가 `music` 단독을 400 으로 막아서 아티스트를 받을 때까지
+        기다린다. 그 차이는 아래 "아티스트를 입력하세요." 안내가 말해 준다.
+      */}
       {canPromote && (
         <div className="border-b border-white/[.08]">
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onPromote("artist")} className={ACTION_CLASS}>
@@ -97,7 +102,7 @@ export default function SearchResultList({
             <span className="shrink-0 text-ink-4">›</span>
           </button>
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onPromote("music")} className={ACTION_CLASS}>
-            <span className="truncate">“{input}” 음악을 아티스트로 좁히기</span>
+            <span className="truncate">“{input}”를 제목으로 검색</span>
             <span className="shrink-0 text-ink-4">›</span>
           </button>
         </div>

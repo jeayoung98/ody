@@ -117,11 +117,22 @@ export default function SearchBar() {
           }}
           onFocus={() => setOpen(true)}
           onBlur={() => setTimeout(() => setOpen(false), 150)}
-          // Escape 는 입력과 칩을 **모두** 지운다 (전달 문서 §2.1)
           onKeyDown={(e) => {
-            if (e.key !== "Escape") return;
-            reset();
-            setOpen(false);
+            // Escape 는 입력과 칩을 **모두** 지운다 (전달 문서 §2.1)
+            if (e.key === "Escape") {
+              reset();
+              setOpen(false);
+              return;
+            }
+            /**
+             * 입력이 빈 상태의 Backspace 는 칩을 지운다 — 칩도 지워 나가는 글자처럼 다룬다.
+             * 입력이 남아 있을 때는 평소대로 글자만 지운다. 글자를 지우다가 칩까지 같이
+             * 날아가면 되돌릴 방법이 없다.
+             */
+            if (e.key === "Backspace" && !input && chip) {
+              e.preventDefault();
+              removeChip();
+            }
           }}
         />
         <span className="lbl">search</span>

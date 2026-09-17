@@ -69,29 +69,40 @@ yarn application -list -appStates ALL
 
 `--bundle` 은 **드라이버가 읽는 로컬 경로**다. 번들 파라미터는 클로저에 실려 실행기로 가므로 `--files` 로 올릴 필요가 없다.
 
-### 아직 클러스터에서 돌리지 않은 잡
+### S1·S4·S5·S6 — `spark/run_cluster_parity.sh` 가 순서대로 제출한다 (S15P21A405-395)
+
+2026-09-17 기준 이 네 잡은 로컬 표본 패리티까지만 확인했고 클러스터 실행 증거가 없다. 스크립트 하나가
+입력 업로드 → 제출 → `yarn application -status` → `output/spark_run_S{1,4,5,6}_<날짜>.json` 까지 한다.
+
 ```bash
-# S1 대표행 선택
-spark-submit ... jobs/manifest_rows.py --in hdfs:///ody/data/census_all --out hdfs:///ody/data/manifest_rows
-# S1.5 특징 선택 (원본 JSON 에서 시작할 때만. 추출 특징으로 시작하면 이미 270이다)
+# 1) 로컬(Windows). S5 입력을 만든다 — 기준 구현 exclusion_apply 의 로더로 apply_rules 가 읽는 컬럼 전부를 한 표에
+ODY_BUNDLE_BASE=serving/v2.1-pca16 PYTHONUTF8=1 .venv/Scripts/python.exe spark/build_catalog_input.py
+#    → work/catalog_input.parquet (base 6,624,399곡)
+
+# 2) master-node 로 올린다 (rsync 없음, scp)
+scp -i ~/.ssh/J15A405T.pem data/work/census_all.parquet data/work/catalog_input.parquet ubuntu@j15a405a.p.ssafy.io:/home/ubuntu/stage/work/
+scp -r -i ~/.ssh/J15A405T.pem data/serving/v2.2-pca16 ubuntu@j15a405a.p.ssafy.io:/home/ubuntu/stage/serving/
+
+# 3) master-node
+bash ~/S15P21A405/data/spark/run_cluster_parity.sh            # S1 S4 S5 S6 전부
+bash ~/S15P21A405/data/spark/run_cluster_parity.sh S5 S6      # 일부만
+```
+
+| 단계 | 입력 | 출력 | 기대값 (스크립트가 검사) |
+|---|---|---|---|
+| S1 | `hdfs:///ody/data/census_all` | `manifest_rows` | 7,404,506행 |
+| S4 | `coords_v22` (번들 좌표) | `node_paths` | 트리 밖 배정 0 |
+| S5 | `catalog_input` (v2.1 base 6,624,399) | `catalog` | 제외 **1,930,196** (v5 dry-run 값) |
+| S6 | `catalog` + `coords_v22` + `node_paths` | `bundle_stage` → 로컬 조립 | `check_contract --strict` FAIL 0, `compare_bundle` vs `serving/v2.2-pca16` pass |
+
+S5 base 가 manifest 7,404,506 이 아닌 이유: v5 규칙은 v2.1 번들(R1~R9 v3 통과 662만) 위에서 정의됐고(D18),
+잘린 78만 곡의 좌표가 번들에 없다. 누적 2,710,303 은 v3 780,107 + v5 1,930,196 의 합이다.
+S4·S6 이 `coords` 아닌 `coords_v22` 를 읽는 이유: 클러스터 재계산 좌표는 최대 1.91e-06 달라 리프 100% 일치를
+보장할 수 없다. 좌표 계산 패리티는 S2·S3 실측(1.86e-06)이 따로 증명한다.
+
+```bash
+# S1.5 특징 선택 (원본 JSON 에서 시작할 때만. 추출 특징으로 시작하면 이미 270이다) — 클러스터 미실행
 spark-submit ... jobs/feature_select.py --from-raw ...
-# S4 트리 배정 — 트리 두 파일 경로를 직접 준다
-spark-submit ... --files serving/v2.1-pca16/map_tree/tree.json,serving/v2.1-pca16/map_tree/split_axes.npz \
-  jobs/tree_assign.py --in hdfs:///ody/data/coords --out hdfs:///ody/data/node_paths \
-  --tree-json tree.json --split-axes split_axes.npz
-# S5 카탈로그 제외 규칙
-spark-submit ... jobs/catalog_rules.py --in hdfs:///ody/data/catalog_input --out hdfs:///ody/data/catalog --expect-excluded 2710303   # 규칙 v5(D18). v3 는 780107
-# S6 번들 내보내기 — 세 표를 정렬해 쓴 뒤 로컬로 내려 조립한다
-spark-submit ... jobs/artifact_export.py --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords \
-  --node-paths hdfs:///ody/data/node_paths --out hdfs:///ody/data/bundle_stage
-hdfs dfs -get /ody/data/bundle_stage /home/ubuntu/stage/bundle_stage
-python3 -c "import sys; sys.path.insert(0,'spark/jobs'); import artifact_export as S6; \
-  print(S6.assemble_bundle('serving/v2.2-pca16-candidate', \
-    S6.single_parquet('/home/ubuntu/stage/bundle_stage/coords'), \
-    S6.single_parquet('/home/ubuntu/stage/bundle_stage/node_paths'), \
-    'serving/v2.1-pca16', 'work/catalog_v2.parquet', 780107, '<규칙 해시>', \
-    'v2.2-pca16-YYYY-MM-DD')['songs'])"
-python tests/check_contract.py serving/v2.2-pca16-candidate --strict
 
 # S7 적재 CSV — HDFS 에서 읽어 HDFS 에 쓴다. 그 뒤 COPY 는 ingest/run_db_load.sh 가 잇는다
 spark-submit ... --py-files ingest/build_csv.py jobs/db_load_csv.py   --catalog hdfs:///ody/data/catalog --coords hdfs:///ody/data/coords   --meta hdfs:///ody/data/v2_meta --song-meta hdfs:///ody/data/v2_song_meta   --feats hdfs:///ody/data/v2_feats hdfs:///ody/data/v2_feats_pilot   --out hdfs:///ody/data/ingest_csv --expect-rows 4694202   --report output/spark_run_S7_YYYY-MM-DD.json

@@ -9,7 +9,8 @@ import { usePanelStore, type PanelReturn } from "@/stores/use-panel-store";
  * 곡 상세에서 목록(여정·플리)으로 돌아가는 버튼.
  *
  * 돌아갈 자리를 두 군데서 찾는다 (S15P21A405-316).
- * 1. **어떻게 들어왔나** — 목록에서 곡을 눌러 들어왔으면 `back` 이 잡혀 있다
+ * 1. **어떻게 들어왔나** — 목록에서 곡을 눌러 들어왔거나 주변 음악 카드로 이웃에 들어왔으면
+ *    `back` 이 잡혀 있다 (S15P21A405-384)
  * 2. **지금 무엇을 듣고 있나** — 여정·플리가 진행 중이고 이 곡이 그 목록 안에 있으면,
  *    지도에서 바로 눌러 열었더라도 돌아갈 자리가 있다
  *
@@ -33,12 +34,13 @@ export default function PanelBackButton() {
   const handle = () => {
     // 들어온 기록이 있으면 그 길로, 없으면 지금 듣고 있는 목록을 연다
     if (back) goBack();
+    else if (target.panel === "song") return;
     else if (target.panel === "journey") openJourney();
     else openPlaylist(target.playlistId);
   };
 
   return (
-    <IconButton label={target.panel === "journey" ? "여정으로 돌아가기" : "플레이리스트로 돌아가기"} onClick={handle}>
+    <IconButton label={target.panel === "song" ? "직전 곡으로 돌아가기" : target.panel === "journey" ? "여정으로 돌아가기" : "플레이리스트로 돌아가기"} onClick={handle}>
       <BackIcon />
     </IconButton>
   );

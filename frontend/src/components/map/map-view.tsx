@@ -105,6 +105,9 @@ export default function MapView({ occludedRight }: MapViewProps) {
    */
   useEffect(() => {
     if (nearbyCenterMusicId == null) return;
+    // 켠 쪽이 패널을 이미 정했으면 비켜난다 (S15P21A405-384) — 이웃 카드를 고르면 중심은
+    // 이 곡이지만 상세는 **고른 이웃**이라, 여기서 중심곡을 열면 그걸 덮어쓴다
+    if (useMapStore.getState().nearbyPanelHandled) return;
     const p = usePanelStore.getState();
     // 이미 그 곡 상세가 떠 있으면 건드리지 않는다 — 다시 열면 돌아갈 자리(`back`)가 날아간다
     if (p.activePanel === "song" && p.musicId === nearbyCenterMusicId) return;

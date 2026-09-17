@@ -18,6 +18,8 @@ import { runPlaybackTransition, useBlockingStore } from "@/stores/use-blocking-s
  * **큐 안의 곡이면 묻지 않는다.** 목록을 벗어나는 게 아니라 그 안에서 자리를 옮기는 것이고,
  * `playSingle` 도 그 경우는 큐를 지키도록 되어 있다.
  *
+ * `opts.silent` 면 묻지 않는다 — 부르는 쪽이 이미 "자리를 옮긴다" 는 뜻으로 부른 경우다.
+ *
  * 다른 **활동**으로 갈아타는 것(여정 → 플리, 따라가기 등)은 여전히
  * [`useStartActivity`](./use-start-activity.ts) 가 맡는다 (ACT-01). 여기는 단일 곡 전용이다.
  */
@@ -29,7 +31,7 @@ export function usePlaySong() {
    * 확인창에서 취소했는데 "재생했다" 가 기록되면 안 된다.
    */
   return useCallback(
-    (musicId: number, after?: () => void) => {
+    (musicId: number, after?: () => void, opts?: { silent?: boolean }) => {
       const map = useMapStore.getState();
       // Snapshot the visible exploration. Inferring it later from the player
       // is wrong while the user has opened a new nearby/path view but the old
@@ -45,6 +47,15 @@ export function usePlaySong() {
         return;
       }
       const play = () => runPlaybackTransition(commit);
+      /**
+       * **묻지 않고 튼다** (S15P21A405-384). 주변 음악 카드처럼 *고르는 동작 자체가 자리를
+       * 옮기는 것* 일 때 쓴다 — 옮겨 다닐 때마다 "듣던 목록을 벗어납니다" 를 묻는 건 소음이다.
+       * 카드를 누르면 그 곡이 나오는 것이 이미 약속이다 (S15P21A405-262).
+       */
+      if (opts?.silent) {
+        play();
+        return;
+      }
       const currentActivity = playbackActivity(context, queue.length);
       if (origin && currentActivity && !samePlayContext(origin, context)) {
         const next = origin.kind;

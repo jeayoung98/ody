@@ -56,13 +56,16 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
+  const selectMusic = useMapStore((s) => s.selectMusic);
   const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
-  const openSong = usePanelStore((s) => s.openSong);
+  const openNeighborSong = usePanelStore((s) => s.openNeighborSong);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const startActivity = useStartActivity();
   const inNearby = viewMode === "nearby";
+  /** 이 상세의 곡을 중심으로 고리가 서 있나 */
+  const isOnHere = inNearby && nearbyCenterMusicId === centerMusicId;
   const railRef = useRef<HTMLDivElement>(null);
   /**
    * 줄 끝에 닿았나 — 닿은 쪽 화살표는 감춘다. **마우스로는 가로 스크롤이 거의 안 된다**
@@ -99,29 +102,29 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   };
 
   /**
-   * 이웃 카드를 고른다 — **고른 곡이 새 중심이 된다** (S15P21A405-384).
+   * 이웃 카드를 고른다 — **한 걸음씩 옮겨 간다** (S15P21A405-384, 288).
    *
-   * 주변 탐색이 켜지고 고리가 그 곡 기준으로 다시 서며, 표식도 그 곡에 붙고 상세도 그 곡으로
-   * 바뀐다. 그래서 카드를 타고 이웃의 이웃으로 계속 걸어 들어갈 수 있다 — 예전에 따로 있던
-   * `이 곡 주변으로 건너가기` 버튼이 하던 일이라 그 버튼은 없앴다.
+   * 고리는 그대로 두고 **표식만** 그 곡으로 간다. 상세도 그 곡으로 바뀌고 뒤로가기가 생긴다 —
+   * 한 곡에 서서 이웃들을 차례로 들어보는 동작이라, 한 번 눌렀다고 지도를 통째로 옮기지 않는다.
    *
-   * 예전에는 **건너가지 않았다** (S15P21A405-288 의 정찰/항해 구분): 한 곡에 서서 이웃을 하나씩
-   * 들어보는 동작이었다. 카드가 목록이 아니라 지도와 짝이 된 지금은 고르는 것이 곧 그 자리로
-   * 가는 것이고, 안 그러면 **무엇을 고른 건지 지도에서 찾을 수가 없다.**
+   * **그 이웃의 상세에서 또 이웃을 고르면 그때 고리가 옮겨 간다.** 이 상세의 곡이 중심이
+   * 아니라는 것은 "한 걸음 나와 있다" 는 뜻이고, 거기서 또 한 걸음 나가려면 먼저 이 곡이
+   * 중심이 되어야 한다. 중심이 옮겨가는 그림(1번만 남기고 넘어가는 전환)이 그 이동을 보여 준다.
    *
-   * 상세를 여기서 직접 여는 이유: `map-view` 에 "주변 탐색을 켜면 중심곡 상세도 연다" 는
-   * 효과가 있는데(S15P21A405-348), 먼저 열어 두면 그 효과가 **이미 맞다** 고 보고 건너뛴다.
-   * 안 그러면 한 번 더 여느라 돌아갈 자리(`back`)가 날아간다.
+   * 패널은 여기서 직접 정한다. `enterNearby` 의 두 번째 인자가 `map-view` 의 "중심곡 상세를
+   * 연다" 효과(348)를 비켜서게 한다 — 안 그러면 방금 고른 이웃을 중심곡이 덮어쓴다.
    *
-   * 재생은 꼭 부른다 — 안 부르면 상세만 옮겨가고 **소리는 직전 곡에 머문다** (S15P21A405-262).
-   * 설문도 여기에 기댄다 — 안 들려준 곡을 두고 "비슷했나요"를 묻게 된다. // REMOVE-WITH-SURVEY
+   * 재생은 **묻지 않고** 튼다 (`silent`). 카드를 누르는 것은 자리를 옮기는 동작이지 "이 곡을
+   * 틀까요" 를 고르는 순간이 아니다. 안 틀면 상세만 옮겨가고 소리는 직전 곡에 머문다
+   * (S15P21A405-262) — 설문도 여기에 기댄다. // REMOVE-WITH-SURVEY
    */
   const handlePick = (id: number) => {
-    openSong(id);
-    enterNearby(id);
+    // 한 걸음 나와 있었으면(이 곡이 중심이 아니면) 먼저 고리를 이 곡으로 옮긴다
+    if (!isOnHere) enterNearby(centerMusicId, true);
     useTutorialStore.getState().complete("nearby");
-    // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-    playWithConfirm(id, () => recordPlay({ musicId: id, source: "MAP", playedMs: 0 }));
+    openNeighborSong(id, centerMusicId);
+    selectMusic(id);
+    playWithConfirm(id, () => recordPlay({ musicId: id, source: "MAP", playedMs: 0 }), { silent: true });
   };
 
   return (

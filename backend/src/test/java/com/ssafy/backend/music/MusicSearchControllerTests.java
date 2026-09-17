@@ -1,8 +1,8 @@
 package com.ssafy.backend.music;
 
 import static org.hamcrest.Matchers.containsString;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
@@ -31,6 +31,7 @@ import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
+import com.ssafy.backend.music.search.MusicSearchCondition;
 
 /**
  * 검색 컨트롤러 슬라이스 테스트 (@WebMvcTest). 실제 MVC 검증·공통 GlobalExceptionHandler 동작 검증.
@@ -73,7 +74,7 @@ class MusicSearchControllerTests {
 	 */
 	@Test
 	void search_carriesVideoId_whenPresent() throws Exception {
-		when(musicService.search(anyString(), anyInt())).thenReturn(new PageResponse<>(
+		when(musicService.search(any(MusicSearchCondition.class), anyInt())).thenReturn(new PageResponse<>(
 				List.of(song(1L, "A", "IU", "https://y/1", "dQw4w9WgXcQ")), 0, 10, false));
 
 		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
@@ -91,7 +92,7 @@ class MusicSearchControllerTests {
 	 */
 	@Test
 	void videoIdIsSerializedAsNull_notOmitted_whenAbsent() throws Exception {
-		when(musicService.search(anyString(), anyInt())).thenReturn(new PageResponse<>(
+		when(musicService.search(any(MusicSearchCondition.class), anyInt())).thenReturn(new PageResponse<>(
 				List.of(song(1L, "A", "IU", "https://y/1")), 0, 10, false));
 
 		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
@@ -105,7 +106,7 @@ class MusicSearchControllerTests {
 		PageResponse<MusicSummary> page = new PageResponse<>(
 				List.of(song(10234L, "Love wins all", "IU", "https://youtu.be/x")),
 				0, 10, true);
-		when(musicService.search(eq("IU"), eq(0))).thenReturn(page);
+		when(musicService.search(eq(new MusicSearchCondition("IU", null, null)), eq(0))).thenReturn(page);
 
 		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
 				.andExpect(status().isOk())
@@ -126,7 +127,7 @@ class MusicSearchControllerTests {
 		PageResponse<MusicSummary> page = new PageResponse<>(
 				List.of(song(1L, "A", "x", "https://y/1"), song(2L, "B", "y", "https://y/2")),
 				0, 10, false);
-		when(musicService.search(anyString(), anyInt())).thenReturn(page);
+		when(musicService.search(any(MusicSearchCondition.class), anyInt())).thenReturn(page);
 
 		mockMvc.perform(get("/api/music/search").param("query", "wins").param("page", "0"))
 				.andExpect(status().isOk())
@@ -136,7 +137,7 @@ class MusicSearchControllerTests {
 
 	@Test
 	void search_emptyResult_returns200EmptyContent() throws Exception {
-		when(musicService.search(anyString(), anyInt()))
+		when(musicService.search(any(MusicSearchCondition.class), anyInt()))
 				.thenReturn(new PageResponse<>(List.of(), 0, 10, false));
 
 		mockMvc.perform(get("/api/music/search").param("query", "zzzznomatch").param("page", "0"))
@@ -177,12 +178,67 @@ class MusicSearchControllerTests {
 
 	@Test
 	void search_internalFailure_returns500() throws Exception {
-		when(musicService.search(anyString(), anyInt())).thenThrow(new RuntimeException("boom"));
+		when(musicService.search(any(MusicSearchCondition.class), anyInt())).thenThrow(new RuntimeException("boom"));
 
 		mockMvc.perform(get("/api/music/search").param("query", "IU").param("page", "0"))
 				.andExpect(status().isInternalServerError())
 				.andExpect(jsonPath("$.success").value(false))
 				.andExpect(jsonPath("$.data").doesNotExist())
+				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));
+	}
+
+	@Test
+	void artistOnlySearch_passesArtistCondition() throws Exception {
+		when(musicService.search(eq(new MusicSearchCondition(null, null, "Radiohead")), eq(0)))
+				.thenReturn(new PageResponse<>(List.of(), 0, 10, false));
+
+		mockMvc.perform(get("/api/music/search").param("artist", "Radiohead").param("page", "0"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content").isEmpty());
+	}
+
+	@Test
+	void combinedSearch_passesMusicAndArtistConditions() throws Exception {
+		when(musicService.search(eq(new MusicSearchCondition(null, "Love", "Lana Del Rey")), eq(0)))
+				.thenReturn(new PageResponse<>(List.of(), 0, 10, false));
+
+		mockMvc.perform(get("/api/music/search")
+				.param("music", "Love").param("artist", "Lana Del Rey").param("page", "0"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content").isEmpty());
+	}
+
+	@Test
+	void unsupportedConditionCombinations_returnInvalidInput() throws Exception {
+		mockMvc.perform(get("/api/music/search").param("page", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+		mockMvc.perform(get("/api/music/search").param("music", "Love").param("page", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+		mockMvc.perform(get("/api/music/search").param("query", "Love")
+				.param("artist", "IU").param("page", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+		mockMvc.perform(get("/api/music/search").param("artist", " ").param("page", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+		mockMvc.perform(get("/api/music/search").param("music", " ")
+				.param("artist", "IU").param("page", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+		mockMvc.perform(get("/api/music/search").param("artist", "IU"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+	}
+
+	@Test
+	void filteredSearch_internalFailure_returns500() throws Exception {
+		when(musicService.search(any(MusicSearchCondition.class), anyInt()))
+				.thenThrow(new RuntimeException("timeout"));
+
+		mockMvc.perform(get("/api/music/search").param("artist", "Radiohead").param("page", "0"))
+				.andExpect(status().isInternalServerError())
 				.andExpect(jsonPath("$.error.code").value("INTERNAL_SERVER_ERROR"));
 	}
 }

@@ -49,21 +49,41 @@ class PresenceServiceTests {
 		service.join(EMAIL, new JoinRequest(2, 20L));
 
 		verify(realtimeEventService).send(new PositionChanged(
-				EMAIL, 7L, 2,
+				EMAIL, 7L, null, 2,
 				null, 20L,
 				null, "2:7",
 				0.2, 0.7));
 	}
 
 	@Test
-	@DisplayName("이미 곡에 배치된 사용자는 진입을 다시 알리지 않는다")
-	void existingJoinDoesNotPublishEnter() {
+	@DisplayName("레이어를 옮기면 이전 위치와 새 위치를 알린다")
+	void layerChangePublishesMove() {
 		double[] location = new double[16];
 		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
 		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
 		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(20L, 1, 1, 1, 7L));
 		when(presenceRepository.join(EMAIL, 20L, 1, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(true);
+
+		service.join(EMAIL, new JoinRequest(2, 20L));
+
+		verify(realtimeEventService).send(new PositionChanged(
+				EMAIL, 7L, 1, 2,
+				20L, 20L,
+				"1:1", "2:7",
+				0.2, 0.7));
+	}
+
+	@Test
+	@DisplayName("곡과 레이어와 셀이 같으면 위치 변경을 알리지 않는다")
+	void samePositionDoesNotPublishMove() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(20L, 2, 2, 7, 7L));
+		when(presenceRepository.join(EMAIL, 20L, 2, 2, 7,
 				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(true);
 
 		service.join(EMAIL, new JoinRequest(2, 20L));
@@ -80,7 +100,7 @@ class PresenceServiceTests {
 		service.leave(EMAIL, 7L);
 
 		verify(realtimeEventService).send(new PositionChanged(
-				EMAIL, 7L, 2,
+				EMAIL, 7L, 2, null,
 				20L, null,
 				"3:4", null,
 				null, null));
@@ -95,7 +115,7 @@ class PresenceServiceTests {
 		service.leaveExpired(EMAIL, 1000L);
 
 		verify(realtimeEventService).send(new PositionChanged(
-				EMAIL, 7L, 2,
+				EMAIL, 7L, 2, null,
 				20L, null,
 				"3:4", null,
 				null, null));

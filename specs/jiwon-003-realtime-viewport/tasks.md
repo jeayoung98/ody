@@ -91,12 +91,12 @@
 
 ### Phase 9 — 서베이 (코드 변경 없음)
 
-- [ ] T079 [77] `PositionChanged.java`, 모든 publish 지점, `PresenceLifecycleService.java`, presence leave Lua, disconnect·expiry, `resync()` placeholder를 읽어 변경 경계를 확정한다.
+- [x] T079 [77] `PositionChanged.java`, 모든 publish 지점, `PresenceService.java`, presence leave Lua, disconnect·expiry, `resync()` placeholder를 읽어 변경 경계를 확정한다.
 
 ### Phase 10 — 이벤트 입력 보강
 
 - [ ] T080 [77] `backend/src/main/java/com/ssafy/backend/realtime/event/PositionChanged.java`를 old/new layer와 델타 정확 필터에 필요한 좌표 계약으로 변경한다.
-- [ ] T081 [77] `backend/src/main/java/com/ssafy/backend/realtime/presence/service/PresenceLifecycleService.java`가 최초 join뿐 아니라 레이어 이동 join에도 PositionChanged를 발행하게 한다.
+- [ ] T081 [77] `backend/src/main/java/com/ssafy/backend/realtime/service/presence/PresenceService.java`가 최초 join뿐 아니라 레이어 이동 join에도 PositionChanged를 발행하게 한다. playEnd는 마지막 위치 노출을 유지하므로 이벤트를 발행하지 않는다.
 - [ ] T082 [77] music play 서비스의 기존 PositionChanged 생성 지점을 새 계약에 맞추되 재생·만남·history 로직은 바꾸지 않는다.
 - [ ] T083 [P] [77] presence/play 기존 테스트에 최초 진입·곡 이동·레이어 이동·이탈 event 필드를 검증한다.
 

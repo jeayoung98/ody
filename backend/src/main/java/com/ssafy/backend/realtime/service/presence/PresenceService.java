@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.service.presence;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
@@ -22,13 +23,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 접속 생성 · join 배치·이사 · 하트비트 · 이탈/만료 정리 (RT-01·RT-05).
- *
- * connect = 정지(곡 없음, 남에게 안 보임). join = 그 레이어·그 곡에 활성 배치(노출) — play 와 "활성 배치"를
- * 공유하되 만남·play_history 는 없다. 레이어 변경은 같은 곡으로 join 재호출 → 옛→새 레이어 이사.
- * 실제 이동(곡 변경·만남)은 /music/play(-272)에서만 발생.
- *
- * 곡 좌표는 서버가 계산한다. 활성 배치와 이탈이 끝나면 위치 변경을 알린다.
+ * 실시간 접속과 지도 위치를 관리한다.
+ * connect는 접속만 만들고, join은 곡 위치에 사용자를 놓는다.
  */
 @Slf4j
 @Service
@@ -39,35 +35,38 @@ public class PresenceService {
 	private final PresenceRedisRepository presenceRedisRepository;
 	private final MusicLocationService musicLocationService;
 	private final MusicPositionCalculator musicPositionCalculator;
-	private final RealtimeEventService realtimeEventService; // 곡과 위치 변경 알림
+	private final RealtimeEventService realtimeEventService; // 위치 변경 전달
 
 	@Value("${realtime.presence.ttl-ms:45000}")
 	private long ttlMs;
 
-	/** CONNECT 직후 — presence 생성(정지: 활성 곡 없음). */
+	/** 소켓이 연결되면 접속 정보를 만든다. */
 	public void connect(String email, long epoch) {
 		presenceRedisRepository.connect(email, epoch, ttlMs);
 		log.info("[Presence] 접속 생성 완료 epoch={}", epoch);
 	}
 
-	/** 하트비트 — 만료 시각 갱신(FR-022). @return false 면 이미 sweep 됨(STALE) → 컨트롤러가 resync 유도. */
+	/**
+	 * 접속 만료 시각을 늦춘다.
+	 * @return 접속 정보가 남아 있으면 true
+	 */
 	public boolean heartbeat(String email) {
 		return presenceRedisRepository.touch(email, ttlMs);
 	}
 
 	/**
-	 * 사용자를 곡 청취자로 배치한다.
-	 * 첫 곡 배치가 끝나면 진입을 알린다.
+	 * 사용자를 곡 위치에 놓는다.
+	 * 처음 들어오거나 위치가 바뀌면 변경을 알린다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param request 곡과 레이어
-	 * @throws CustomException PRESENCE_ERROR — 좌표 없음/미연결/STALE(로그에 WebSocketErrorCode 사유)
+	 * @throws CustomException 곡 위치나 접속 정보를 찾을 수 없는 경우
 	 */
 	public void join(String email, JoinRequest request) {
 		long musicId = request.musicId();
 		int layer = request.layer();
 
-		// 1) 서버 권위 좌표 — 클라 좌표 불신, musicId 로 조회 후 현재 레이어에 배치.
+		// 1. 곡 좌표로 현재 레이어의 위치를 계산한다.
 		double[] pc = musicLocationService.findLocation(musicId)
 				.orElseThrow(() -> {
 					log.warn("join 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL, musicId);
@@ -75,14 +74,14 @@ public class PresenceService {
 				});
 		Placement p = musicPositionCalculator.calculate(pc, layer);
 
-		// 2) old 상태(정지면 null) — 이사 시 옛 레이어에서 빼기 위함.
+		// 2. 옮기기 전 위치를 읽는다.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null) {
 			log.warn("join 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_NOT_CONNECTED, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 3) 이전 위치에서 새 위치로 Redis 값을 한 번에 옮긴다.
+		// 3. 이전 위치에서 새 위치로 옮긴다.
 		boolean ok = presenceRedisRepository.join(email,
 				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
@@ -91,19 +90,24 @@ public class PresenceService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 첫 곡 배치가 끝나면 주변사람 목록에 들어온 것을 알린다.
-		if (before.musicId() == null) {
+		// 처음 자리를 잡거나 곡·레이어·셀이 바뀌면 새 위치를 알린다.
+		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
+		boolean positionChanged = before.musicId() == null
+				|| !Objects.equals(before.musicId(), musicId)
+				|| !Objects.equals(before.layer(), layer)
+				|| !Objects.equals(oldCell, p.cellKey());
+		if (positionChanged) {
 			realtimeEventService.send(new PositionChanged(
-					email, before.epoch(), layer,
-					null, musicId,
-					null, p.cellKey(),
+					email, before.epoch(), before.musicId() == null ? null : before.layer(), layer,
+					before.musicId(), musicId,
+					oldCell, p.cellKey(),
 					p.xNorm(), p.yNorm()));
 		}
 		log.info("[Presence] join 완료 musicId={} layer={}", musicId, layer);
 	}
 
 	/**
-	 * 직접 종료한 사용자를 정리하고 퇴장을 알린다.
+	 * 직접 나간 사용자의 위치를 지우고 퇴장을 알린다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param epoch 종료할 접속 버전
@@ -115,7 +119,7 @@ public class PresenceService {
 	}
 
 	/**
-	 * 접속이 만료된 사용자를 정리하고 퇴장을 알린다.
+	 * 접속이 만료된 사용자의 위치를 지우고 퇴장을 알린다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param sweepTimeMs 만료 확인 시각
@@ -126,7 +130,7 @@ public class PresenceService {
 	}
 
 	/**
-	 * 실제로 지운 사용자의 퇴장을 알린다.
+	 * 위치가 실제로 지워졌을 때만 퇴장을 알린다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param removed 지운 곡, 위치, 접속 버전
@@ -141,7 +145,7 @@ public class PresenceService {
 		String cell = removed.get(2) + ":" + removed.get(3);
 		long removedEpoch = Long.parseLong(removed.get(4));
 		realtimeEventService.send(new PositionChanged(
-				email, removedEpoch, layer,
+				email, removedEpoch, layer, null,
 				musicId, null,
 				cell, null,
 				null, null));

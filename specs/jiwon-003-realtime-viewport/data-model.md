@@ -43,6 +43,8 @@ minY, maxY: raw PC values for PC(2*layer)
 | `active-song:cells:{layer}` | Set | 활성 셀 목록 |
 | `cell:usercount:{layer}` | Hash | 기본 셀별 전체 인원수 |
 
+여기서 활성 사용자는 현재 음원이 재생 중인 사용자가 아니라 join으로 곡 위치에 배치되어 접속 중인 사용자다. 최초 join부터 포함하며 playEnd 뒤에도 유지하고 leave·disconnect·TTL 만료에서 제거한다.
+
 ### 신규 키 — viewport 소유
 
 | Key | Type | 값 | 목적 |

@@ -37,4 +37,18 @@ public record ViewportSnapshot(
 		return new ViewportSnapshot(
 				requestSeq, ViewportMode.INDIVIDUAL, layer, groups, null, List.of());
 	}
+
+	/**
+	 * 셀별 사용자 수 응답을 만든다.
+	 * @param requestSeq 화면 요청 순번
+	 * @param layer 현재 레이어
+	 * @param resolution 한 줄에 표시할 셀 수
+	 * @param cells 셀별 위치와 사용자 수
+	 * @return 셀별 사용자 수 응답
+	 */
+	public static ViewportSnapshot clustered(
+			long requestSeq, int layer, int resolution, List<ViewportCellCount> cells) {
+		return new ViewportSnapshot(
+				requestSeq, ViewportMode.CLUSTERED, layer, List.of(), resolution, cells);
+	}
 }

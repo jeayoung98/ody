@@ -58,7 +58,7 @@ class PresenceWebSocketControllerTests {
 		ViewportRange viewport = request.toViewport();
 		ViewportSnapshot snapshot = ViewportSnapshot.individual(3L, 1, List.of());
 		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
-		when(viewportService.open(EMAIL, 7L, 3L, viewport))
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 3L, viewport))
 				.thenReturn(new OpenResult(OpenStatus.SNAPSHOT, snapshot));
 
 		controller.viewport(request, PRINCIPAL, SESSION_ID);
@@ -99,7 +99,7 @@ class PresenceWebSocketControllerTests {
 	void sendsStaleConnectionError() {
 		ViewportRequest request = request(5L);
 		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(8L));
-		when(viewportService.open(EMAIL, 8L, 5L, request.toViewport()))
+		when(viewportService.updateCurrentScreen(EMAIL, 8L, 5L, request.toViewport()))
 				.thenReturn(new OpenResult(OpenStatus.STALE_CONNECTION, null));
 
 		controller.viewport(request, PRINCIPAL, SESSION_ID);
@@ -114,7 +114,7 @@ class PresenceWebSocketControllerTests {
 	void ignoresOldRequest() {
 		ViewportRequest request = request(2L);
 		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
-		when(viewportService.open(EMAIL, 7L, 2L, request.toViewport()))
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 2L, request.toViewport()))
 				.thenReturn(new OpenResult(OpenStatus.OLD_REQUEST, null));
 
 		controller.viewport(request, PRINCIPAL, SESSION_ID);
@@ -123,16 +123,20 @@ class PresenceWebSocketControllerTests {
 	}
 
 	@Test
-	@DisplayName("셀별 인원수 화면이 필요한 요청은 다음 구현 전까지 응답하지 않는다")
-	void waitsForClusteredSnapshotImplementation() {
+	@DisplayName("셀별 인원수 화면도 개인 큐로 보낸다")
+	void sendsCellCountSnapshot() {
 		ViewportRequest request = request(6L);
+		ViewportSnapshot snapshot = ViewportSnapshot.clustered(6L, 1, 16, List.of());
 		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
-		when(viewportService.open(EMAIL, 7L, 6L, request.toViewport()))
-				.thenReturn(new OpenResult(OpenStatus.CLUSTERED_REQUIRED, null));
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 6L, request.toViewport()))
+				.thenReturn(new OpenResult(OpenStatus.SNAPSHOT, snapshot));
 
 		controller.viewport(request, PRINCIPAL, SESSION_ID);
 
-		verifyNoInteractions(realtimeMessageService, webSocketErrorService);
+		verify(realtimeMessageService).sendToUser(
+				EMAIL, WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.VIEWPORT_SNAPSHOT, snapshot);
+		verifyNoInteractions(webSocketErrorService);
 	}
 
 	/** 첫 레이어의 정상 화면 요청을 만든다. */

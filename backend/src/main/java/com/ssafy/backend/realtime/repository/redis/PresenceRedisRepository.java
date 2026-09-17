@@ -128,6 +128,26 @@ public class PresenceRedisRepository {
 		return result;
 	}
 
+	/**
+	 * 곡마다 현재 레이어의 청취자 수를 한 번에 읽는다.
+	 * @param layer 현재 레이어
+	 * @param musicIds 확인할 곡 ID
+	 * @return 곡별 청취자 수
+	 */
+	public Map<Long, Integer> findListenerCountsByMusic(int layer, List<Long> musicIds) {
+		List<String> keys = musicIds.stream()
+				.map(musicId -> LAYER_LISTENERS_PREFIX + layer + ":" + musicId)
+				.toList();
+		List<Object> values = readSetSizesAtOnce(keys);
+
+		Map<Long, Integer> result = new java.util.LinkedHashMap<>();
+		for (int i = 0; i < musicIds.size(); i++) {
+			Object value = values.get(i);
+			result.put(musicIds.get(i), value == null ? 0 : Integer.parseInt(value.toString()));
+		}
+		return result;
+	}
+
 	/** CONNECT — presence 생성(정지: epoch·connectedAt 만, 곡·좌표 없음 → 남에게 안 보임). 곡 배치는 join 이 한다. */
 	public void connect(String email, long epoch, long ttlMs) {
 		long now = System.currentTimeMillis();
@@ -288,6 +308,22 @@ public class PresenceRedisRepository {
 		return redis.executePipelined((RedisCallback<Object>) connection -> {
 			for (byte[] key : serializedKeys) {
 				connection.setCommands().sMembers(key);
+			}
+			return null;
+		});
+	}
+
+	/** 여러 Redis Set의 항목 수를 한 번의 통신으로 읽는다. */
+	private List<Object> readSetSizesAtOnce(List<String> keys) {
+		if (keys.isEmpty()) {
+			return List.of();
+		}
+		byte[][] serializedKeys = keys.stream()
+				.map(redis.getStringSerializer()::serialize)
+				.toArray(byte[][]::new);
+		return redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : serializedKeys) {
+				connection.setCommands().sCard(key);
 			}
 			return null;
 		});

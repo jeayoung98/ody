@@ -14,7 +14,7 @@ import com.ssafy.backend.music.mapper.MajorTrackMapper;
  * {@link MajorTrackReader} 의 MyBatis 어댑터 (T016, 헌법 X: BE2 계약 / 실행 분리).
  *
  * 서버는 상주 집합을 공간적으로 고르게 돌려줄 뿐 인기순 선별을 하지 않는다(D16).
- * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-007).
+ * SELECT가 펼친 pc1~pc16은 재계산·재투영하지 않고 MapPoint 응답 경계에서만 3자리로 반올림한다(FR-007·FR-016).
  */
 @Repository
 public class MajorTrackReaderAdapter implements MajorTrackReader {
@@ -56,7 +56,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	@Override
 	public List<MapPoint> findResidentSet(MajorQuery query) {
 		List<MapPointRow> rows = query.isTopLevel()
-				? mapper.findLayerOneSample()
+				? mapper.findLayerOneSample(query.limit())
 				: mapper.findInAccumulatedBoxes(checkAxes(query.accumulated()), query.limit());
 		return rows.stream().map(MajorTrackReaderAdapter::toMapPoint).toList();
 	}
@@ -64,7 +64,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	private static MapPoint toMapPoint(MapPointRow row) {
 		// music.youtube_url 은 662만 행 전부 NULL 이라 읽지 않는다. map_sample 이 들고 있는
 		// title·artist 로 검색 URL 을 만든다 (D12) — 조인이 없어 0.4 ms 이점이 유지된다.
-		String youtubeUrl = YoutubeSearchUrl.of(row.getArtist(), row.getTitle());
+		boolean playable = YoutubeSearchUrl.of(row.getArtist(), row.getTitle()) != null;
 		return new MapPoint(
 				row.getMusicId(),
 				row.toPcList(),
@@ -72,9 +72,8 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 				UNIFORM_WEIGHT,
 				row.getTitle(),
 				row.getArtist(),
-				youtubeUrl,
 				VIDEO_ID_NOT_LOADED,
-				youtubeUrl != null);
+				playable);
 	}
 
 	/** 장르 인덱스를 정하는 유일한 지점. FE 매핑이 오면 여기만 바꾼다. */

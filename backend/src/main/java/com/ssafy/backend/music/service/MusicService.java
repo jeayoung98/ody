@@ -31,9 +31,7 @@ public class MusicService {
 
 	/** 주변곡 개수 고정 (정본 §3.2). */
 	private static final int NEIGHBOR_COUNT = 10;
-
-	/** 상주 집합 크기. 1000 이 규모 기준이다(D18) — 정확한 수는 강제하지 않는다. */
-	private static final int RESIDENT_SET_SIZE = 1000;
+	private static final int DEFAULT_RESIDENT_SET_SIZE = 1000;
 
 	private final Optional<MusicSearchReader> searchReader;
 	private final Optional<MusicDetailReader> detailReader;
@@ -58,16 +56,19 @@ public class MusicService {
 	 * 격자에서 한다(D16). 격자는 줌에 따라 변해 서버가 적용할 수 없다.
 	 * 전역 상위 k 를 먼저 자른 뒤 범위로 거르지 않는다(FR-013 MUST NOT).
 	 *
-	 * ponytail: 후보 0곡일 때 200 + 빈 배열을 돌려주는 것은 <b>B4 미확정 상태의 잠정 동작</b>이다.
-	 * plan.md 는 'B4 확정 전 구현하지 않는다' 고 적었으나, 조회 자체를 막을 수는 없어 가장 조용한
-	 * 기본값을 택했다. B4 가 정해지면 여기서 상태·본문을 바꾼다(빈 배열 + 200 을 계약으로 확정할 수도 있다).
+	 * size를 생략하면 2레이어 이상은 기존 1000곡 상한을 유지한다. 1레이어는 기존 정적 표본 전체를
+	 * 유지하고, size를 명시한 경우에만 모든 레이어에서 같은 상한을 적용한다(A-30).
 	 */
-	public MajorResponse getMajor(int level, List<LayerBox> accumulated) {
+	public MajorResponse getMajor(int level, List<LayerBox> accumulated, Integer requestedSize) {
 		MajorTrackReader reader = majorReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/major: 상주 집합 어댑터 대기 중"));
+		int limit = requestedSize != null
+				? requestedSize
+				: level == 1 ? Integer.MAX_VALUE : DEFAULT_RESIDENT_SET_SIZE;
 		MajorResponse response = new MajorResponse(
-				reader.findResidentSet(new MajorQuery(level, accumulated, RESIDENT_SET_SIZE)));
-		log.info("[Music] 대표곡 조회 완료 level={} count={}", level, response.content().size());
+				reader.findResidentSet(new MajorQuery(level, accumulated, limit)));
+		log.info("[Music] 대표곡 조회 완료 level={} requestedSize={} count={}",
+				level, requestedSize, response.content().size());
 		return response;
 	}
 

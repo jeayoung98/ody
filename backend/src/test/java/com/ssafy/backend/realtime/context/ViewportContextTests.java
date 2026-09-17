@@ -16,6 +16,7 @@ import com.ssafy.backend.realtime.controller.websocket.PresenceWebSocketControll
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
+import com.ssafy.backend.realtime.scheduler.ViewportCellCountScheduler;
 
 /** test·realtime 프로파일에서 뷰포트 구성 요소 연결을 확인한다. */
 @SpringBootTest(properties = "spring.profiles.active=test,realtime")
@@ -25,6 +26,7 @@ class ViewportContextTests {
 
 	// 부팅 중 스케줄러가 실제 Redis를 읽지 않게 막는다.
 	@MockitoBean PresenceRedisRepository presenceRedisRepository;
+	@MockitoBean ViewportRedisRepository viewportRedisRepository;
 
 	@Test
 	@DisplayName("realtime 프로파일에서 뷰포트 구성 요소가 모두 연결된다")
@@ -35,5 +37,6 @@ class ViewportContextTests {
 		assertThat(context.getBean(MusicPositionCalculator.class)).isNotNull();
 		assertThat(context.getBean(MusicLocationService.class)).isNotNull();
 		assertThat(context.getBean(RealtimeMessageService.class)).isNotNull();
+		assertThat(context.getBean(ViewportCellCountScheduler.class)).isNotNull();
 	}
 }

@@ -20,7 +20,8 @@ class MusicPositionCalculatorTests {
 		for (int a = 1; a <= axisCount; a++) {
 			ar.add(new RealtimeProperties.AxisRange(a, -10.0, 10.0));
 		}
-		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(grid, 36, 64, 250, 5000);
+		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(
+				grid, Math.min(36, grid * grid), 20, 64, 250, 5000);
 		return new MusicPositionCalculator(new RealtimeProperties(null, null, vp,  ar));
 	}
 
@@ -41,7 +42,7 @@ class MusicPositionCalculatorTests {
 	@Test
 	@DisplayName("레이어2는 PC3·PC4 축을 읽는다")
 	void layer2_usesAxes3and4() {
-		MusicPositionCalculator m = mapper(20, 4);
+		MusicPositionCalculator m = mapper(16, 4);
 		// pc = [1,2,3,4] → 레이어2는 pc[2]=3(x), pc[3]=4(y)
 		MusicPositionCalculator.Placement p = m.calculate(new double[] {1, 2, 3, 4}, 2);
 		assertThat(p.axisX()).isEqualTo(3);
@@ -58,6 +59,17 @@ class MusicPositionCalculatorTests {
 		MusicPositionCalculator.Placement p = m.calculate(new double[] {100, -100, 0, 0}, 1);
 		assertThat(p.cellX()).isEqualTo(3);  // > max → grid-1
 		assertThat(p.cellY()).isEqualTo(0);  // < min → 0
+	}
+
+	@Test
+	@DisplayName("합친 셀의 가운데를 지도에서 쓰는 위치로 바꾼다")
+	void findsRawCenterOfCombinedCell() {
+		MusicPositionCalculator m = mapper(16, 4);
+
+		MusicPositionCalculator.CellCenter center = m.findCellCenter(2, 2, 3, 8);
+
+		assertThat(center.x()).isCloseTo(-3.75, within(1e-9));
+		assertThat(center.y()).isCloseTo(-1.25, within(1e-9));
 	}
 
 	@Test
@@ -80,7 +92,7 @@ class MusicPositionCalculatorTests {
 	@Test
 	@DisplayName("축 누락·min>=max 설정은 생성 시 예외")
 	void badConfig_throws() {
-		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(4, 36, 64, 250, 5000);
+		RealtimeProperties.ViewportSettings vp = new RealtimeProperties.ViewportSettings(4, 16, 20, 64, 250, 5000);
 		// min >= max
 		List<RealtimeProperties.AxisRange> bad = List.of(
 				new RealtimeProperties.AxisRange(1, 5.0, 5.0),

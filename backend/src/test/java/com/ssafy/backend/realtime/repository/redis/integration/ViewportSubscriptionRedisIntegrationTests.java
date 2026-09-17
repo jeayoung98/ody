@@ -22,6 +22,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import com.ssafy.backend.realtime.config.RedisScriptConfig;
 import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
+import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 
@@ -90,10 +91,10 @@ class ViewportSubscriptionRedisIntegrationTests {
 		trackCell(1, added);
 
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 7L, 1L, first, Set.of(removed, shared)))
+				data.email(), 7L, 1L, first, ViewportMode.INDIVIDUAL, Set.of(removed, shared)))
 				.isEqualTo(ReplaceResult.APPLIED);
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 7L, 2L, second, Set.of(shared, added)))
+				data.email(), 7L, 2L, second, ViewportMode.INDIVIDUAL, Set.of(shared, added)))
 				.isEqualTo(ReplaceResult.APPLIED);
 
 		assertThat(isSubscribed(data.email(), 1, removed)).isFalse();
@@ -119,10 +120,10 @@ class ViewportSubscriptionRedisIntegrationTests {
 		trackCell(1, old);
 
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 7L, 5L, viewport, Set.of(current)))
+				data.email(), 7L, 5L, viewport, ViewportMode.INDIVIDUAL, Set.of(current)))
 				.isEqualTo(ReplaceResult.APPLIED);
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 7L, 4L, viewport, Set.of(old)))
+				data.email(), 7L, 4L, viewport, ViewportMode.INDIVIDUAL, Set.of(old)))
 				.isEqualTo(ReplaceResult.OLD_REQUEST);
 
 		assertThat(isSubscribed(data.email(), 1, current)).isTrue();
@@ -140,7 +141,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 		trackCell(1, cell);
 
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 1L, 1L, viewport, Set.of(cell)))
+				data.email(), 1L, 1L, viewport, ViewportMode.INDIVIDUAL, Set.of(cell)))
 				.isEqualTo(ReplaceResult.STALE_CONNECTION);
 
 		assertThat(isSubscribed(data.email(), 1, cell)).isFalse();
@@ -159,16 +160,59 @@ class ViewportSubscriptionRedisIntegrationTests {
 		trackCell(1, newCell);
 
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 1L, 99L, viewport, Set.of(oldCell)))
+				data.email(), 1L, 99L, viewport, ViewportMode.INDIVIDUAL, Set.of(oldCell)))
 				.isEqualTo(ReplaceResult.APPLIED);
 		redis.opsForHash().put("presence:user:" + data.email(), "epoch", "2");
 
 		assertThat(repository.replaceSubscriptions(
-				data.email(), 2L, 1L, viewport, Set.of(newCell)))
+				data.email(), 2L, 1L, viewport, ViewportMode.INDIVIDUAL, Set.of(newCell)))
 				.isEqualTo(ReplaceResult.APPLIED);
 		assertThat(isSubscribed(data.email(), 1, oldCell)).isFalse();
 		assertThat(isSubscribed(data.email(), 1, newCell)).isTrue();
 		assertThat(repository.findMeta(data.email()).orElseThrow().requestSeq()).isEqualTo(1L);
+	}
+
+	@Test
+	@DisplayName("개별 사용자 화면과 셀별 인원수 화면을 바꿀 때 이전 구독을 지운다")
+	void switchesModesWithoutOldSubscriptions() {
+		TestData data = testData();
+		connect(data.email(), 7L);
+		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		Cell first = new Cell(1, 1);
+		Cell second = new Cell(2, 2);
+		trackCell(1, first);
+		trackCell(1, second);
+		trackClustered(1);
+
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 1L, viewport, ViewportMode.INDIVIDUAL, Set.of(first)))
+				.isEqualTo(ReplaceResult.APPLIED);
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 1L, viewport, ViewportMode.CLUSTERED, Set.of()))
+				.isEqualTo(ReplaceResult.APPLIED);
+
+		assertThat(isSubscribed(data.email(), 1, first)).isFalse();
+		assertThat(isClustered(data.email(), 1)).isTrue();
+		assertThat(repository.findMeta(data.email())).hasValueSatisfying(meta -> {
+			assertThat(meta.mode()).isEqualTo(ViewportMode.CLUSTERED);
+			assertThat(meta.cells()).isEmpty();
+		});
+		assertThat(repository.findCellCountUsersByLayer(1))
+				.containsEntry(1, Set.of(data.email()));
+		assertThat(repository.findMetaByEmails(Set.of(data.email())))
+				.containsKey(data.email());
+
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 2L, viewport, ViewportMode.INDIVIDUAL, Set.of(second)))
+				.isEqualTo(ReplaceResult.APPLIED);
+
+		assertThat(isClustered(data.email(), 1)).isFalse();
+		assertThat(isSubscribed(data.email(), 1, second)).isTrue();
+		assertThat(repository.findCellCountUsersByLayer(1)).isEmpty();
+		assertThat(repository.findMeta(data.email())).hasValueSatisfying(meta -> {
+			assertThat(meta.mode()).isEqualTo(ViewportMode.INDIVIDUAL);
+			assertThat(meta.cells()).containsExactly(second);
+		});
 	}
 
 	private void connect(String email, long epoch) {
@@ -182,12 +226,24 @@ class ViewportSubscriptionRedisIntegrationTests {
 		keysToDelete.add(cellKey(layer, cell));
 	}
 
+	private void trackClustered(int layer) {
+		keysToDelete.add(clusteredKey(layer));
+	}
+
 	private boolean isSubscribed(String email, int layer, Cell cell) {
 		return Boolean.TRUE.equals(redis.opsForSet().isMember(cellKey(layer, cell), email));
 	}
 
+	private boolean isClustered(String email, int layer) {
+		return Boolean.TRUE.equals(redis.opsForSet().isMember(clusteredKey(layer), email));
+	}
+
 	private static String cellKey(int layer, Cell cell) {
 		return "viewport:cell:" + layer + ":" + cell.cellX() + ":" + cell.cellY();
+	}
+
+	private static String clusteredKey(int layer) {
+		return "viewport:clustered:" + layer;
 	}
 
 	private TestData testData() {

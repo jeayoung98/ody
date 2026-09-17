@@ -18,7 +18,11 @@ import SearchResultList from "./search-result-list";
  */
 type Chip = { kind: "artist" | "music"; value: string } | null;
 
-const CHIP_LABEL = { artist: "아티스트", music: "음악" } as const;
+/**
+ * 칩에 띄우는 조건 이름. **조건을 가리킬 때만 `제목`이다** — 결과를 가리키는 말은 `음악`
+ * 그대로 둔다("일치하는 음악이 없습니다"). 둘은 다른 것을 가리키므로 같은 말로 묶지 않는다.
+ */
+const CHIP_LABEL = { artist: "아티스트", music: "제목" } as const;
 
 /** 상태 → 검색 조건. 화면 상태와 요청 조건을 가르는 자리는 여기 하나다 */
 function conditionOf(chip: Chip, input: string): SearchCondition {
@@ -107,7 +111,7 @@ export default function SearchBar() {
         <input
           ref={inputRef}
           className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-3"
-          placeholder={chip ? (chip.kind === "artist" ? "음악 검색..." : "아티스트 검색...") : "음악 · 아티스트 검색"}
+          placeholder={chip ? (chip.kind === "artist" ? "제목 검색..." : "아티스트 검색...") : "음악 · 아티스트 검색"}
           autoComplete="off"
           spellCheck={false}
           value={input}

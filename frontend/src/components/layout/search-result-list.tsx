@@ -37,7 +37,7 @@ interface SearchResultListProps {
 function heading(c: SearchCondition): string {
   if (c.mode === "all") return "음악 또는 아티스트 검색 결과";
   if (c.mode === "artist") return c.music ? `${c.artist}의 “${c.music}” 음악` : `${c.artist}의 음악`;
-  return `“${c.music}” 음악의 아티스트 결과`;
+  return `“${c.music}” 제목의 아티스트 결과`;
 }
 
 /** #results .res — 바닥에 닿으면 다음 페이지를 이어 붙인다 (SEARCH-01) */
@@ -79,7 +79,7 @@ export default function SearchResultList({
 
   /** 통합 검색 상태에서만 조건을 굳힐 수 있다. 이미 칩이 있으면 두 번째 칩은 만들지 않는다 */
   const canPromote = condition.mode === "all" && input.length > 0;
-  /** 음악 칩만 세우고 아티스트를 아직 안 친 대기 상태 — 여기서는 요청 자체가 없다 */
+  /** 제목 칩만 세우고 아티스트를 아직 안 친 대기 상태 — 여기서는 요청 자체가 없다 */
   const awaitingArtist = condition.mode === "music" && !condition.artist;
 
   return (

@@ -77,7 +77,8 @@ if doc["final_status"] != "SUCCEEDED": sys.exit("!! FinalStatus 가 SUCCEEDED �
 PY
 }
 
-submit() {   # submit <stage> <app-name> <extra spark-submit args...> -- <job args...>
+# <app-name> 은 잡 안의 SparkSession.appName 과 같아야 한다. --name 은 그것에 덮어써져 YARN 에 남지 않는다(S2 기록: ody-preprocess).
+submit() {   # submit <stage> <app-name> <job.py> <job args...>
   local stage="$1" name="$2"; shift 2
   local log="$OUT/spark_run_${stage}_$STAMP.log"
   local cmd="$SPARK --master yarn --deploy-mode client $SPARK_CONF $RES --name $name $*"
@@ -108,20 +109,20 @@ want S5 && upload_if_missing "$HDFS/catalog_input" "$LOCAL_WORK/catalog_input.pa
 
 if want S1; then
   hdfs dfs -rm -r -f "$HDFS/manifest_rows"
-  submit S1 ody-S1-manifest-rows "$JOBS/manifest_rows.py" \
+  submit S1 ody-manifest-rows "$JOBS/manifest_rows.py" \
     --in "$HDFS/census_all" --out "$HDFS/manifest_rows" --expect-rows "$EXPECT_S1"
 fi
 
 if want S4; then
   hdfs dfs -rm -r -f "$HDFS/node_paths"
   # 트리 두 파일은 드라이버가 읽는다(client 모드, 로컬 경로). 축 값은 클로저에 실려 실행기로 간다.
-  submit S4 ody-S4-tree-assign "$JOBS/tree_assign.py" --in "$HDFS_COORDS" --out "$HDFS/node_paths" \
+  submit S4 ody-tree-assign "$JOBS/tree_assign.py" --in "$HDFS_COORDS" --out "$HDFS/node_paths" \
     --tree-json "$BUNDLE/map_tree/tree.json" --split-axes "$BUNDLE/map_tree/split_axes.npz"
 fi
 
 if want S5; then
   hdfs dfs -rm -r -f "$HDFS/catalog"
-  submit S5 ody-S5-catalog-rules "$JOBS/catalog_rules.py" \
+  submit S5 ody-catalog-rules "$JOBS/catalog_rules.py" \
     --in "$HDFS/catalog_input" --out "$HDFS/catalog" --expect-excluded "$EXPECT_S5_EXCLUDED" \
     --report "$OUT/spark_run_S5_${STAMP}_job.json"
 fi
@@ -131,7 +132,7 @@ if want S6; then
     hdfs dfs -test -e "$need" || { echo "!! $need 없음. S5·S4 를 먼저 돌려라" >&2; exit 1; }
   done
   hdfs dfs -rm -r -f "$HDFS/bundle_stage"
-  submit S6 ody-S6-artifact-export "$JOBS/artifact_export.py" \
+  submit S6 ody-artifact-export "$JOBS/artifact_export.py" \
     --catalog "$HDFS/catalog" --coords "$HDFS_COORDS" --node-paths "$HDFS/node_paths" --out "$HDFS/bundle_stage"
 
   echo "== S6 조립 — 세 표를 내려 번들을 만들고 계약 검사"

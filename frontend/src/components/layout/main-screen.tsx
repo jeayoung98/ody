@@ -20,6 +20,7 @@ import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
+import PlayHint from "@/components/discovery/play-hint";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
 /** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
@@ -67,6 +68,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       <BottomBar />
       {features.social && <ReactionButton />}
       {overlay}
+      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다 */}
+      <PlayHint />
       <Toast />
       <ConfirmDialog />
       {/* 설문 — NEXT_PUBLIC_TEST_TOOLS(빌드) + ody:survey-mode(브라우저) 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}

@@ -30,11 +30,13 @@ export function WheelHint() {
  * 안 나왔고, 나와도 재생수가 적은 곡은 점이 희미해 안 보였다. 여기서 그리면 어느 쪽도 없다.
  *
  * 자리는 **매 프레임 다시 묻는다** — 카메라가 조금이라도 움직이면 어제 잰 자리는 틀린 자리다.
+ * 그 추적은 {@link useStarScreenPos} 로 빼 뒀다 — 발견 힌트(S15P21A405-393)도 같은 자리를 쓴다.
  */
-export function StarHint({ musicId, onPick }: { musicId: number; onPick: () => void }) {
+export function useStarScreenPos(musicId: number | null) {
   const [at, setAt] = useState<{ x: number; y: number } | null>(null);
 
   useEffect(() => {
+    if (musicId == null) return;
     let raf = 0;
     const tick = () => {
       const c = document.querySelector("canvas")?.getBoundingClientRect();
@@ -48,6 +50,13 @@ export function StarHint({ musicId, onPick }: { musicId: number; onPick: () => v
     tick();
     return () => cancelAnimationFrame(raf);
   }, [musicId]);
+
+  // musicId 가 비면 마지막 자리가 남아 있다 — 그 자리는 이제 아무 뜻이 없으므로 여기서 가린다
+  return musicId == null ? null : at;
+}
+
+export function StarHint({ musicId, onPick }: { musicId: number; onPick: () => void }) {
+  const at = useStarScreenPos(musicId);
 
   if (!at) return null;
   return (

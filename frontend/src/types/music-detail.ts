@@ -58,8 +58,7 @@ export interface MusicSearchPage {
  *
  * - `all` 입력 하나를 제목·아티스트 양쪽에서 찾는다
  * - `artist` 아티스트를 고정한다. `music` 은 그 안에서 더 좁히는 선택 조건이라 비어도 된다
- * - `music` 음악을 고정한다. `artist` 는 **필수** — 백엔드가 `music` 단독 요청을 400 으로 막는다.
- *   비어 있는 동안은 아직 아무것도 묻지 않는 대기 상태다
+ * - `music` 음악을 고정한다. `artist` 가 비면 제목만 찾고, 값이 생기면 그 아티스트로 좁힌다
  */
 export type SearchCondition =
   | { mode: "all"; query: string }

@@ -2,7 +2,7 @@
 /**
  * 음악·아티스트 조건 검색 (SEARCH-01 · S15P21A405-399).
  *
- * 전달 문서 §7.2 의 "검색 훅" 검증 항목이다 — 세 유효 조합의 URL, `music` 단독 보류,
+ * 전달 문서 §7.2 의 "검색 훅" 검증 항목이다 — 네 유효 조합의 URL,
  * 조건별 query key. 직렬화가 틀리면 백엔드가 400 을 주는데 화면에서는 그냥 "검색 실패" 로만
  * 보여서, 여기서 잡지 않으면 원인을 찾는 데 오래 걸린다.
  */
@@ -10,6 +10,8 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { canSearch, searchRequestPath, flattenSearch } = require("../src/hooks/queries/use-music-search-query.ts");
 const { QUERY_KEYS } = require("../src/constants/index.ts");
+const { TITLE_SEARCH_MAX_UPSTREAM_PAGES } = require("../src/constants/search.ts");
+const { searchTitleOnlyPage } = require("../src/app/bff/music/search/route.ts");
 
 const params = (path) => Object.fromEntries(new URL(path, "http://x").searchParams);
 
@@ -37,12 +39,19 @@ test("음악을 아티스트로 좁히면 music 과 artist 를 함께 보낸다"
   });
 });
 
+test("제목 칩만 있어도 music 으로 검색한다", () => {
+  assert.deepEqual(params(searchRequestPath({ mode: "music", music: "Love", artist: "" }, 0)), {
+    music: "Love",
+    page: "0",
+  });
+});
+
 test("앞뒤 공백은 검색어가 아니다", () => {
   assert.deepEqual(params(searchRequestPath({ mode: "all", query: "  Love  " }, 2)), { q: "Love", page: "2" });
 });
 
-test("music 단독은 요청하지 않는다 — 백엔드가 400 이다", () => {
-  assert.equal(canSearch({ mode: "music", music: "Love", artist: "" }), false);
+test("music 단독도 요청한다 — BFF 가 통합 검색 결과를 제목으로 거른다", () => {
+  assert.equal(canSearch({ mode: "music", music: "Love", artist: "" }), true);
   assert.equal(canSearch({ mode: "music", music: "Love", artist: "Lana" }), true);
 });
 
@@ -77,6 +86,41 @@ test("받아 둔 페이지가 없으면 빈 목록이다", () => {
   assert.deepEqual(flattenSearch(undefined), []);
 });
 
+test("제목 단독 검색은 통합 검색 페이지를 훑어 한 페이지를 채운다", async () => {
+  let calls = 0;
+  const page = await searchTitleOnlyPage("Love", 0, async (upstreamPage) => {
+    calls += 1;
+    const count = upstreamPage === 0 ? 6 : 5;
+    return {
+      content: Array.from({ length: count }, (_, i) => ({ id: upstreamPage * 10 + i, title: `Love ${upstreamPage}-${i}`, artist: "Artist" })),
+      page: upstreamPage,
+      size: 10,
+      hasNext: true,
+    };
+  });
+
+  assert.equal(calls, 2);
+  assert.equal(page.items.length, 10);
+  assert.equal(page.hasNext, true);
+  assert.ok(page.items.every((item) => item.title.startsWith("Love")));
+});
+
+test("제목 단독 검색은 일치 결과가 없어도 정해진 페이지만 조회하고 끝낸다", async () => {
+  let calls = 0;
+  const page = await searchTitleOnlyPage("Love", 0, async (upstreamPage) => {
+    calls += 1;
+    return {
+      content: [{ id: upstreamPage, title: "Other", artist: "Love Artist" }],
+      page: upstreamPage,
+      size: 10,
+      hasNext: true,
+    };
+  });
+
+  assert.equal(calls, TITLE_SEARCH_MAX_UPSTREAM_PAGES);
+  assert.deepEqual(page, { items: [], page: 0, hasNext: false });
+});
+
 /**
  * 목 검색 (전달 문서 §10 — "프론트는 실제 연동 전에 목 라우트도 같은 요청·페이지 응답 형태로 맞춘다").
  * 배포 백엔드가 `artist`/`music` 을 아직 안 받아서, 세 경로를 지금 굴려 볼 수 있는 곳은 목뿐이다.
@@ -106,6 +150,12 @@ test("아티스트 + 음악은 둘 다 만족해야 한다", () => {
   // 좁힌 결과는 아티스트만 건 결과의 부분집합이다
   const wide = new Set(titles(mockSearch({ q: "", artist: "a", music: "" })));
   assert.ok(titles(both).every((t) => wide.has(t)));
+});
+
+test("음악 조건만 있으면 제목 앞일치 결과를 준다", () => {
+  const rows = mockSearch({ q: "", artist: "", music: "a" });
+  assert.ok(rows.length > 0);
+  assert.ok(rows.every((r) => r.title.toLowerCase().startsWith("a")));
 });
 
 test("조건이 하나도 없으면 아무것도 안 준다", () => {

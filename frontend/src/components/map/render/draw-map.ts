@@ -1034,14 +1034,14 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawFriends(g, e);
   drawSelected(g, e);
   drawGhost(g, e);
-  // 주변 탐색 중에는 내 표식이 고리 위에 앉으므로 고리 **위**에 그린다 — 정찰(S15P21A405-288)로
-  // 이웃 별을 옮겨 다니는 우주선이 어둡게 덮인 채로는 보이지 않는다
-  const meOnRing = !!e.probe && !e.probe.exitingAt;
-  if (!meOnRing) drawMe(g, e);
+  // 내 표식도 주변 탐색의 어둠에 덮인다 (S15P21A405-408). 고리를 펼치면 봐야 할 것은 이웃 별
+  // 열두 개고, 그 사이에서 혼자 밝은 표식은 고를 것이 아니면서 시선을 끈다.
+  // S15P21A405-288 에서는 반대로 골랐었다 — 고리 위를 옮겨 다니는 우주선을 계속 보이게 하려던 것.
+  // 위치는 `meScreen` 이 여전히 고리 위로 잡아 주므로, 덮인 채로도 어디 앉았는지는 읽힌다.
+  drawMe(g, e);
 
   drawConstellation(g, e, currentMusicId);
   drawProbe(g, e);
-  if (meOnRing) drawMe(g, e);
   drawHold(g, e);
   drawPressure(g, e);
 }

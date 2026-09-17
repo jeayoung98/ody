@@ -5,14 +5,13 @@ import { analyticsContext, onAnalyticsContextChange, track } from "./client";
 export class EngagementClock {
   private at: number;
   constructor(now: number) { this.at = now; }
-  take(now: number, visible: boolean, playing: boolean, blocked: boolean, survey: boolean) {
+  take(now: number, visible: boolean, playing: boolean, blocked: boolean) {
     const elapsed = Math.max(0, now - this.at);
     this.at = now;
     return {
       foreground_ms: visible ? Math.round(elapsed) : 0,
       explore_ms: visible && !blocked ? Math.round(elapsed) : 0,
       playback_ms: playing ? Math.round(elapsed) : 0,
-      survey_ms: visible && survey ? Math.round(elapsed) : 0,
     };
   }
 }
@@ -25,7 +24,7 @@ export function flushEngagement(reason: string): void {
   if (!clock) return;
   const c = analyticsContext();
   const blocked = !!c.blocked || !!c.help_open || c.phase === "guide" || c.phase === "loading";
-  const delta = clock.take(performance.now(), visible && !suspended, playing && !suspended, blocked, !!c.survey_open);
+  const delta = clock.take(performance.now(), visible && !suspended, playing && !suspended, blocked);
   if (Object.values(delta).some((n) => n > 0)) track("engagement_recorded", { ...delta, reason });
 }
 export function setActualPlaying(next: boolean): void {
@@ -43,6 +42,6 @@ export function startEngagement(): void {
     visible = document.visibilityState === "visible";
   });
   window.addEventListener("pagehide", () => { flushEngagement("pagehide"); suspended = true; });
-  window.addEventListener("pageshow", () => { clock?.take(performance.now(), false, false, false, false); suspended = false; });
+  window.addEventListener("pageshow", () => { clock?.take(performance.now(), false, false, false); suspended = false; });
   window.setInterval(() => flushEngagement("checkpoint"), ANALYTICS.checkpointMs);
 }

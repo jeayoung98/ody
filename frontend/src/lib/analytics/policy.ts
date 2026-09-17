@@ -19,14 +19,16 @@ export function sanitizeProperties(properties: AnalyticsProps): AnalyticsProps {
 }
 
 export function publicAnalyticsConfig(env: Record<string, string | undefined>): AnalyticsConfig {
+  const testPhase = (env.ANALYTICS_TEST_PHASE ?? "test").slice(0, 100);
+  const dataSource = env.USE_MOCK_API === "1" ? "mock" : "live";
   return {
-    mode: env.ANALYTICS_MODE === "live" ? "live" : env.ANALYTICS_MODE === "debug" ? "debug" : "off",
+    dataSource,
     gaId: /^G-[A-Z0-9]+$/.test(env.GA_MEASUREMENT_ID ?? "") ? env.GA_MEASUREMENT_ID! : "",
     posthogKey: /^phc_[a-zA-Z0-9]+$/.test(env.POSTHOG_PROJECT_KEY ?? "") ? env.POSTHOG_PROJECT_KEY! : "",
     posthogHost: env.POSTHOG_REGION === "eu" ? "https://eu.i.posthog.com" : "https://us.i.posthog.com",
     posthogMode: env.POSTHOG_MODE === "off" ? "off" : env.POSTHOG_MODE === "core" ? "core" : "all",
     replay: env.POSTHOG_REPLAY !== "false",
     release: (env.ANALYTICS_RELEASE ?? "unversioned").slice(0, 100),
-    testPhase: (env.ANALYTICS_TEST_PHASE ?? "test").slice(0, 100),
+    testPhase,
   };
 }

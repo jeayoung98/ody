@@ -1,6 +1,7 @@
 import { getAnonymousId } from "@/lib/anonymous-id";
 import { ANALYTICS } from "@/constants/analytics";
 import type { AnalyticsEvent, AnalyticsEventName, AnalyticsProps } from "@/types/analytics";
+import { createUuid } from "@/lib/uuid";
 
 type Sink = (event: AnalyticsEvent) => void;
 let sink: Sink | null = null;
@@ -10,7 +11,7 @@ let context: AnalyticsProps = {};
 let visitId: string | undefined;
 let beforeContext: (() => void) | undefined;
 
-export function analyticsId(): string { return crypto.randomUUID(); }
+export function analyticsId(): string { return createUuid(); }
 export function analyticsContext(): AnalyticsProps { return { ...context }; }
 export function onAnalyticsContextChange(callback: () => void): void { beforeContext = callback; }
 export function setAnalyticsContext(next: AnalyticsProps): void {

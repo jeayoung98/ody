@@ -1,12 +1,14 @@
 "use client";
 
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter } from "next/navigation";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
 import { CloseIcon } from "@/components/common/icons";
 import IconButton from "@/components/common/icon-button";
-import { LAYER_COUNT, NEARBY_COUNT, ROUTES } from "@/constants";
+import { LAYER_COUNT, NEARBY_COUNT, ROUTES, STORAGE_KEYS } from "@/constants";
 import { useFeatures } from "@/hooks/use-features";
+import { useSurveyMode } from "@/hooks/use-survey-mode";
+import { removeStorage } from "@/lib/storage";
 
 /**
  * 감춘 기능은 설명에서도 뺀다 (S15P21A405-333) — 안내를 읽고 찾아 나섰는데 없으면 그게 버그로 읽힌다.
@@ -41,6 +43,19 @@ function helpItems(features: ReturnType<typeof useFeatures>) {
 export default function HelpDialog({ onClose }: { onClose: () => void }) {
   const router = useRouter();
   const items = helpItems(useFeatures());
+  /**
+   * 테스트 안내 화면은 한 번 보면 다시 안 뜬다 — 본 표식을 지워야 돌아간다 (S15P21A405-392).
+   * 거기에 **이번 테스트에서 무엇을 보는지와 필수 설문 2개** 가 적혀 있어서, 지나친 테스터가
+   * 다시 읽을 길이 있어야 한다. 표식을 지우고 보내면 `TutorialEntry` 가 알아서 안내부터 띄운다.
+   */
+  const surveyMode = useSurveyMode();
+  const pathname = usePathname();
+  const replayGuide = () => {
+    removeStorage(STORAGE_KEYS.testGuideSeen);
+    // 이미 튜토리얼 화면이면 push 가 아무것도 안 한다 — 다시 올리려면 새로 그려야 한다
+    if (pathname === ROUTES.tutorial) window.location.reload();
+    else router.push(ROUTES.tutorial);
+  };
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-overlay backdrop-blur-sm" onClick={onClose}>
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-tin">
@@ -53,10 +68,18 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
             </IconButton>
           }
           footer={
-            /* 튜토리얼은 첫 진입에 한 번만 뜬다 (TutorialGate). 잊었을 때 돌아올 입구가 여기뿐이다 */
-            <Button className="w-full" onClick={() => router.push(ROUTES.tutorial)}>
-              튜토리얼 다시보기
-            </Button>
+            /* 튜토리얼·안내 화면 둘 다 첫 진입에 한 번만 뜬다. 잊었을 때 돌아올 입구가 여기뿐이다 */
+            <div className="flex gap-2">
+              {/* 안내 화면은 설문 모드에서만 뜬다 — 모드를 끄면 갈 곳이 없으니 버튼도 감춘다 */}
+              {surveyMode && (
+                <Button className="flex-1" onClick={replayGuide}>
+                  가이드 다시보기
+                </Button>
+              )}
+              <Button className="flex-1" onClick={() => router.push(ROUTES.tutorial)}>
+                튜토리얼 다시보기
+              </Button>
+            </div>
           }
         >
           <ul className="flex flex-col gap-3">

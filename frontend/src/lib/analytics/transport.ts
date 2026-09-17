@@ -18,6 +18,13 @@ let posthog: PostHog | undefined;
 let initialized = false;
 let gaId = "";
 
+/** Google 공식 gtag 스니펫과 동일하게 Arguments 객체를 dataLayer에 적재한다. */
+export function enqueueGtag(): void {
+  // Google 태그가 일반 배열과 구분하므로 공식 스니펫처럼 Arguments를 사용해야 한다.
+  // eslint-disable-next-line prefer-rest-params
+  window.dataLayer!.push(arguments);
+}
+
 function recordLocal(event: AnalyticsEvent, properties: AnalyticsEvent["properties"]): void {
   const entries = window.__odyAnalytics ??= [];
   entries.push({ ...event, properties });
@@ -64,7 +71,7 @@ async function applyConfig(next: AnalyticsConfig): Promise<void> {
   if (next.gaId && gaId !== next.gaId) {
     gaId = next.gaId;
     window.dataLayer ??= [];
-    window.gtag ??= (...args: unknown[]) => { window.dataLayer!.push(args); };
+    window.gtag ??= enqueueGtag;
     window.gtag("js", new Date());
     window.gtag("set", commonProperties(next));
     window.gtag("config", gaId, {

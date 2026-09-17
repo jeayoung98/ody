@@ -4,6 +4,7 @@ const assert = require("node:assert/strict");
 const { allowsPostHog, publicAnalyticsConfig, sanitizeProperties } = require("../src/lib/analytics/policy.ts");
 const { isLoopbackBackend, shouldPersistSurvey } = require("../src/lib/survey-persistence.ts");
 const { analyticsDebugEnabled, analyticsEnabled, analyticsEnvironment, analyticsRuntimePolicy } = require("../src/lib/analytics/mode.ts");
+const { enqueueGtag } = require("../src/lib/analytics/transport.ts");
 const { EngagementClock } = require("../src/lib/analytics/engagement.ts");
 const { PlaybackMeter } = require("../src/lib/analytics/playback.ts");
 const feedbackRoute = require("../src/app/bff/feedback/route.ts");
@@ -75,6 +76,18 @@ test("analytics browser switch defaults on and understands the shared true/false
   assert.equal(analyticsDebugEnabled(), true);
   values.set("ody:analytics-debug", "false");
   assert.equal(analyticsDebugEnabled(), false);
+  global.window = previousWindow;
+});
+
+test("gtag queues the Arguments object required by the official Google tag snippet", () => {
+  const previousWindow = global.window;
+  global.window = { dataLayer: [] };
+
+  enqueueGtag("config", "G-TEST", { debug_mode: true });
+
+  const [command] = global.window.dataLayer;
+  assert.equal(Object.prototype.toString.call(command), "[object Arguments]");
+  assert.deepEqual(Array.from(command), ["config", "G-TEST", { debug_mode: true }]);
   global.window = previousWindow;
 });
 

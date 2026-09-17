@@ -1,6 +1,8 @@
 package com.ssafy.backend.realtime.service.viewport;
 
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -115,6 +117,7 @@ class ViewportDeltaServiceTests {
 		verify(musicLocationService).findLocations(List.of(10L, 20L));
 		verify(userDisplayService).find(ACTOR);
 		verify(riderCountService).count(ACTOR);
+		verify(viewportMetrics).recordDelta(eq(4), eq(3), eq(3), anyLong());
 	}
 
 	@Test
@@ -204,6 +207,7 @@ class ViewportDeltaServiceTests {
 		service.handlePositionChanged(event);
 
 		verifyNoInteractions(musicLocationService, userDisplayService, riderCountService, realtimeMessageService);
+		verify(viewportMetrics).recordDelta(eq(1), eq(0), eq(0), anyLong());
 	}
 
 	@Test

@@ -32,6 +32,7 @@ import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
 import com.ssafy.backend.realtime.dto.viewport.ViewportUser;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.CloseResult;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 
@@ -67,7 +68,7 @@ public class ViewportService {
 		viewport.validate();
 		List<Cell> cells = ViewportCellCalculator.findCellsInCurrentScreen(viewport, musicPositionCalculator).stream().toList();
 		if (cells.size() > properties.viewport().clusterThresholdCells()) {
-			return recordOpen(startedAt,
+			return recordCurrentScreenResult(startedAt,
 					replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells),
 					cells.size(), 0, 0);
 		}
@@ -77,10 +78,10 @@ public class ViewportService {
 				email, epoch, requestSeq, viewport,
 				ViewportMode.INDIVIDUAL, new LinkedHashSet<>(cells));
 		if (replaceResult == ReplaceResult.OLD_REQUEST) {
-			return recordOpen(startedAt, OpenResult.oldRequest(), cells.size(), 0, 0);
+			return recordCurrentScreenResult(startedAt, OpenResult.oldRequest(), cells.size(), 0, 0);
 		}
 		if (replaceResult == ReplaceResult.STALE_CONNECTION) {
-			return recordOpen(startedAt, OpenResult.staleConnection(), cells.size(), 0, 0);
+			return recordCurrentScreenResult(startedAt, OpenResult.staleConnection(), cells.size(), 0, 0);
 		}
 
 		// 3. 셀의 곡을 찾고 실제 화면 안에 있는 곡만 남긴다.
@@ -103,20 +104,29 @@ public class ViewportService {
 				email, visibleMusicIds, listenersByMusic);
 		int userCount = visibleListeners.values().stream().mapToInt(List::size).sum();
 		if (userCount > properties.viewport().individualUserCap()) {
-			return recordOpen(startedAt,
+			return recordCurrentScreenResult(startedAt,
 					replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells),
 					cells.size(), candidateMusicIds.size(), userCount);
 		}
 
 		// 5. 곡 위치별 사용자 목록을 만들어 돌려준다.
 		List<ViewportMusicGroup> groups = createGroups(visibleMusic, visibleListeners);
-		return recordOpen(startedAt,
+		return recordCurrentScreenResult(startedAt,
 				OpenResult.snapshot(ViewportSnapshot.individual(requestSeq, viewport.layer(), groups)),
 				cells.size(), candidateMusicIds.size(), userCount);
 	}
 
-	/** 화면 목록 처리 결과를 지표로 남기고 그대로 돌려준다. */
-	private OpenResult recordOpen(
+	/**
+	 * 화면 목록 처리 결과를 기록하고 그대로 돌려준다.
+	 *
+	 * @param startedAt 시작 시각
+	 * @param result 화면 갱신 결과
+	 * @param cellCount 확인한 셀 수
+	 * @param candidateCount 확인한 곡 수
+	 * @param userCount 확인한 사용자 수
+	 * @return 화면 갱신 결과
+	 */
+	private OpenResult recordCurrentScreenResult(
 			long startedAt, OpenResult result,
 			int cellCount, int candidateCount, int userCount) {
 		String mode = result.snapshot() == null ? "NONE" : result.snapshot().mode().name();
@@ -134,7 +144,8 @@ public class ViewportService {
 	 * @param requestSeq 마지막 화면 요청 순번
 	 */
 	public void closeCurrentScreen(String email, long epoch, long requestSeq) {
-		viewportRepository.closeCurrentScreen(email, epoch, requestSeq);
+		CloseResult result = viewportRepository.closeCurrentScreen(email, epoch, requestSeq);
+		viewportMetrics.recordClose(result.name());
 	}
 
 	/**

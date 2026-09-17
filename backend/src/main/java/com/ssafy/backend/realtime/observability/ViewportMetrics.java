@@ -26,6 +26,7 @@ public class ViewportMetrics {
 	static final String CELL_COUNTS_TIME = "ody.realtime.viewport.cell_counts.time";
 	static final String CELL_COUNTS_TARGETS = "ody.realtime.viewport.cell_counts.targets";
 	static final String CELL_COUNTS_SENT = "ody.realtime.viewport.cell_counts.sent";
+	static final String CLOSE_TOTAL = "ody.realtime.viewport.close.total";
 
 	private final MeterRegistry meterRegistry; // 수집한 값을 보관하고 내보내는 곳
 
@@ -77,5 +78,14 @@ public class ViewportMetrics {
 		meterRegistry.timer(CELL_COUNTS_TIME).record(elapsedNanos, TimeUnit.NANOSECONDS);
 		meterRegistry.summary(CELL_COUNTS_TARGETS).record(targetCount);
 		meterRegistry.summary(CELL_COUNTS_SENT).record(sentCount);
+	}
+
+	/**
+	 * 화면 구독 닫기 결과를 기록한다.
+	 *
+	 * @param result 닫기 결과
+	 */
+	public void recordClose(String result) {
+		meterRegistry.counter(CLOSE_TOTAL, "result", result).increment();
 	}
 }

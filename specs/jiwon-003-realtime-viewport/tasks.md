@@ -95,39 +95,39 @@
 
 ### Phase 10 — 이벤트 입력 보강
 
-- [ ] T080 [77] `backend/src/main/java/com/ssafy/backend/realtime/event/PositionChanged.java`를 old/new layer와 델타 정확 필터에 필요한 좌표 계약으로 변경한다.
-- [ ] T081 [77] `backend/src/main/java/com/ssafy/backend/realtime/service/presence/PresenceService.java`가 최초 join뿐 아니라 레이어 이동 join에도 PositionChanged를 발행하게 한다. playEnd는 마지막 위치 노출을 유지하므로 이벤트를 발행하지 않는다.
-- [ ] T082 [77] music play 서비스의 기존 PositionChanged 생성 지점을 새 계약에 맞추되 재생·만남·history 로직은 바꾸지 않는다.
-- [ ] T083 [P] [77] presence/play 기존 테스트에 최초 진입·곡 이동·레이어 이동·이탈 event 필드를 검증한다.
+- [x] T080 [77] `backend/src/main/java/com/ssafy/backend/realtime/event/PositionChanged.java`를 old/new layer와 델타 정확 필터에 필요한 좌표 계약으로 변경한다.
+- [x] T081 [77] `backend/src/main/java/com/ssafy/backend/realtime/service/presence/PresenceService.java`가 최초 join뿐 아니라 레이어 이동 join에도 PositionChanged를 발행하게 한다. playEnd는 마지막 위치 노출을 유지하므로 이벤트를 발행하지 않는다.
+- [x] T082 [77] music play 서비스의 기존 PositionChanged 생성 지점을 새 계약에 맞추되 재생·만남·history 로직은 바꾸지 않는다.
+- [x] T083 [P] [77] presence/play 기존 테스트에 최초 진입·곡 이동·레이어 이동·이탈 event 필드를 검증한다.
 
 ### Phase 11 — 실시간 델타
 
-- [ ] T090 [P] [77] `backend/src/main/java/com/ssafy/backend/realtime/viewport/dto/ViewportDelta.java`에 대상 화면 requestSeq와 사용자 변경 필드를 추가한다.
-- [ ] T091 [77] `backend/src/main/java/com/ssafy/backend/realtime/viewport/service/ViewportDeltaService.java`를 추가하고 `@PostConstruct`에서 RealtimeEventBus를 구독한다.
-- [ ] T092 [77] 델타 서비스에 old/new 셀 후보, 수신자 meta batch, 실제 old/new 화면 포함 판정, ENTER/MOVE/LEAVE 분류를 구현한다.
-- [ ] T093 [77] 표시 정보·좌표·동승자 수를 이벤트당 한 번만 얻어 수신자별 중복 조회를 제거한다.
-- [ ] T094 [77] `RealtimeEventType.java`에 `VIEWPORT_ENTER`, `VIEWPORT_MOVE`, `VIEWPORT_LEAVE`를 추가한다.
-- [ ] T095 [P] [77] `backend/src/test/java/com/ssafy/backend/realtime/viewport/service/ViewportDeltaServiceTests.java`에 V40~V44·V50, 같은 셀 이동, requestSeq, query count를 검증한다.
+- [x] T090 [P] [77] `backend/src/main/java/com/ssafy/backend/realtime/viewport/dto/ViewportDelta.java`에 대상 화면 requestSeq와 사용자 변경 필드를 추가한다.
+- [x] T091 [77] `backend/src/main/java/com/ssafy/backend/realtime/viewport/service/ViewportDeltaService.java`를 추가하고 `@PostConstruct`에서 RealtimeEventBus를 구독한다.
+- [x] T092 [77] 델타 서비스에 old/new 셀 후보, 수신자 meta batch, 실제 old/new 화면 포함 판정, ENTER/MOVE/LEAVE 분류를 구현한다.
+- [x] T093 [77] 표시 정보·좌표·동승자 수를 이벤트당 한 번만 얻어 수신자별 중복 조회를 제거한다.
+- [x] T094 [77] `RealtimeEventType.java`에 `VIEWPORT_ENTER`, `VIEWPORT_MOVE`, `VIEWPORT_LEAVE`를 추가한다.
+- [x] T095 [P] [77] `backend/src/test/java/com/ssafy/backend/realtime/viewport/service/ViewportDeltaServiceTests.java`에 V40~V44·V50, 같은 셀 이동, requestSeq, query count를 검증한다.
 
 ### Phase 12 — 종료·이탈 정리
 
-- [ ] T100 [P] [77] `backend/src/main/java/com/ssafy/backend/realtime/viewport/dto/ViewportCloseRequest.java`를 추가한다.
-- [ ] T101 [77] `backend/src/main/resources/redis/viewport-subscription-close.lua`를 추가해 저장된 meta 기준 정리와 현재 epoch·최신 requestSeq 일치 검사를 수행한다.
-- [ ] T102 [77] `ViewportRedisRepository.java`에 close를 연결한다.
-- [ ] T103 [77] `PresenceStompController.java`에 `/presence/viewport/close`를 추가한다.
-- [ ] T104 [77] `backend/src/main/resources/redis/presence-leave.lua`에 viewport cell·clustered·meta 정리를 기존 epoch 보호 안에서 추가한다.
-- [ ] T105 [P] [77] repository 단위 테스트와 실제 Redis 통합 테스트에서 V45·V46·V48을 검증한다.
+- [x] T100 [P] [77] `backend/src/main/java/com/ssafy/backend/realtime/viewport/dto/ViewportCloseRequest.java`를 추가한다.
+- [x] T101 [77] `backend/src/main/resources/redis/viewport-subscription-close.lua`를 추가해 저장된 meta 기준 정리와 현재 epoch·최신 requestSeq 일치 검사를 수행한다.
+- [x] T102 [77] `ViewportRedisRepository.java`에 close를 연결한다.
+- [x] T103 [77] `PresenceStompController.java`에 `/presence/viewport/close`를 추가한다.
+- [x] T104 [77] `backend/src/main/resources/redis/presence-leave.lua`에 viewport cell·clustered·meta 정리를 기존 epoch 보호 안에서 추가한다.
+- [x] T105 [P] [77] repository 단위 테스트와 실제 Redis 통합 테스트에서 V45·V46·V48을 검증한다.
 
 ### Phase 13 — 재연결·전체 검증
 
-- [ ] T110 [77] `PresenceStompController.resync()`의 빈 TODO를 제거한다. 서버 자동 복원 대신 STALE 오류와 명시적 재전송 계약을 코드 주석·프론트 문서에 맞춘다.
-- [ ] T111 [P] [77] `backend/src/test/java/com/ssafy/backend/realtime/viewport/ViewportTwoSessionScenarioTests.java`에 ENTER→MOVE→LEAVE→close→reconnect 흐름을 작성한다.
-- [ ] T112 [77] realtime profile 전체 부팅과 full test/build를 실행한다.
-- [ ] T113 [77] realtime profile 없는 데모 부팅으로 영향 없음을 확인한다.
-- [ ] T114 [77] `specs/jiwon-003-realtime-viewport/quickstart.md` 결과 표를 실제 결과로 갱신한다.
+- [x] T110 [77] `PresenceStompController.resync()`의 빈 TODO를 제거한다. 서버 자동 복원 대신 STALE 오류와 명시적 재전송 계약을 코드 주석·프론트 문서에 맞춘다.
+- [x] T111 [P] [77] `backend/src/test/java/com/ssafy/backend/realtime/viewport/ViewportTwoSessionScenarioTests.java`에 ENTER→MOVE→LEAVE→close→reconnect 흐름을 작성한다.
+- [x] T112 [77] realtime profile 전체 부팅과 full test/build를 실행한다.
+- [x] T113 [77] realtime profile 없는 데모 부팅으로 영향 없음을 확인한다.
+- [x] T114 [77] `specs/jiwon-003-realtime-viewport/quickstart.md` 결과 표를 실제 결과로 갱신한다.
 - [ ] T115 [77] 프론트 담당자에게 `contracts/frontend-layer-navigation.md`와 `contracts/realtime-viewport-websocket.md`를 전달하고 실제 layer·boxes 변경→화면 안정화→join→viewport, 늦은 응답 갱신, D1, layer 변환, 재연결 순서를 확인받는다.
-- [ ] T116 [77] `ViewportService.java`, `ViewportDeltaService.java`, `ViewportCellCountsScheduler.java`에 처리 시간·모드·후보 수·발송 수·stale 거부 관측값을 추가하고 email·토큰·원시 좌표를 기록하지 않는다.
-- [ ] T117 [P] [77] `backend/src/test/java/com/ssafy/backend/realtime/viewport/ViewportObservabilityTests.java`에서 관측 필드와 개인정보 제외를 검증하고 `quickstart.md`에 로컬 확인 결과를 기록한다.
+- [x] T116 [77] `ViewportService.java`, `ViewportDeltaService.java`, `ViewportCellCountsScheduler.java`에 처리 시간·모드·후보 수·발송 수·stale 거부 관측값을 추가하고 email·토큰·원시 좌표를 기록하지 않는다.
+- [x] T117 [P] [77] `ViewportMetricsTests.java`와 각 서비스 테스트에서 관측값과 개인정보 제외를 검증하고 `quickstart.md`에 로컬 결과를 기록한다.
 
 **Checkpoint 77**: 전체 변경 파일·메서드, 검증 결과, 데모 영향, 남은 다중 인스턴스 위험을 사용자에게 보고한다. 사용자 확인 후에만 커밋·push·MR을 진행한다.
 

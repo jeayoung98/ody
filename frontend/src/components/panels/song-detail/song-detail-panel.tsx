@@ -7,6 +7,7 @@ import ErrorMessage from "@/components/common/error-message";
 import Loading from "@/components/common/loading";
 import { useFeatures } from "@/hooks/use-features";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { usePanelBack } from "@/hooks/use-panel-back";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import PanelBackButton from "../panel-back-button";
@@ -53,6 +54,12 @@ export default function SongDetailPanel() {
   // 이 겹에 없는 곡이면 고스트별로 띄운 상태다 — 이동 안내를 함께 보여준다 (MAP-12)
   const elsewhere = useMapStore((s) => s.selectedMusicId === musicId && s.ghostMusicId === musicId);
   const bodyRef = useRef<HTMLDivElement>(null);
+  /**
+   * 돌아갈 자리가 있으면 **패널 제목이 그 이름이 된다** (S15P21A405-384) — `곡 상세` 는 어느
+   * 곡을 보든 같은 말이라 자리를 내줘도 잃을 게 없고, 화살표 옆에 이름이 서야 어디로 가는지
+   * 눌러 보기 전에 안다.
+   */
+  const back = usePanelBack();
 
   /**
    * 곡이 바뀌면 **맨 위로 되돌린다** (S15P21A405-384). 패널은 곡이 바뀌어도 같은 상자를 쓰므로
@@ -68,7 +75,7 @@ export default function SongDetailPanel() {
 
   return (
     <Box
-      title="곡 상세"
+      title={back?.label ?? "곡 상세"}
       lead={<PanelBackButton />}
       // 기능 코드(SONG-02) 자리를 신고 버튼에 내줬다 (S15P21A405-384) — 코드는 개발자만 읽는다
       actions={

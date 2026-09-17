@@ -115,8 +115,17 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         자주 쓸 것이 아니라고 본 판단은 맞았지만 약하게 둔 정도가 과했다. 아이콘을 붙여 버튼으로
         올리되, 재생·여정보다는 한 단계 낮은 무게로 둔다.
       */}
-      <Button size="sm" className="self-start" onClick={() => setReportOpen(true)}>
-        <FlagIcon size={12} /> 이 곡 신고
+      {/*
+        빨간 바탕으로 세운다 (S15P21A405-402) — 눌러야 할 것이 아니라 **눈에 띄어야** 하는 버튼이다.
+        글자색을 안쪽 span 에 주는 이유: `globals.css` 의 레이어 밖 `button { color: inherit }` 가
+        버튼에 직접 건 유틸리티를 이겨서, 버튼에 걸면 바탕만 바뀌고 글자는 밝은 채로 남는다.
+        바탕에 `!` 를 붙인 이유는 또 다르다 — `danger` 변형이 `bg-transparent` 를 들고 있어서,
+        같은 속성끼리는 붙인 순서가 아니라 CSS 순서로 이긴다.
+      */}
+      <Button variant="danger" size="sm" className="self-start border-bad! bg-bad! hover:brightness-110" onClick={() => setReportOpen(true)}>
+        <span className="flex items-center gap-[7px] font-semibold text-text-on-primary">
+          <FlagIcon size={12} /> 이 곡 신고
+        </span>
       </Button>
       {reportOpen && <SongReportDialog musicId={music.id} title={music.title} unplayable={blocked === PLAYBACK_BLOCKED.noVideo} onClose={() => setReportOpen(false)} />}
       {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}

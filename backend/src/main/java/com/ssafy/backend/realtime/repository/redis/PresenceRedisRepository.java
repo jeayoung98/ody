@@ -166,10 +166,11 @@ public class PresenceRedisRepository {
 	 * old 값(musicId·layer·cell)은 호출 전 {@link #snapshot(String)} 으로 읽어 넘긴다(정지였으면 old* = null).
 	 * 곡·좌표·셀은 Java(MusicPositionCalculator)에서 계산. 같은 레이어·같은 곡이면 좌표만 갱신(idempotent).
 	 *
-	 * @return true = 배치 성공, false = presence 없음/old 불일치(STALE, Sweep·재접속 경쟁).
+	 * @param expectedEpoch 요청을 보낸 소켓의 접속 번호
+	 * @return true = 배치 성공, false = 현재 접속 아님/presence 없음/old 불일치
 	 */
 	@SuppressWarnings("unchecked")
-	public boolean join(String email,
+	public boolean join(String email, long expectedEpoch,
 			Long oldMusicId, Integer oldLayer, Integer oldCellX, Integer oldCellY,
 			long newMusicId, int newLayer, double x, double y, int newCellX, int newCellY) {
 
@@ -180,7 +181,7 @@ public class PresenceRedisRepository {
 		String newCellField = newCellX + ":" + newCellY;
 
 		List<String> result = redis.execute(presenceJoinScript, List.of(PRESENCE_USER_PREFIX + email),
-				email, oldM, oldL, oldCellField,
+				email, Long.toString(expectedEpoch), oldM, oldL, oldCellField,
 				Long.toString(newMusicId), Integer.toString(newLayer), newCellField,
 				Double.toString(x), Double.toString(y), Integer.toString(newCellX), Integer.toString(newCellY),
 				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);

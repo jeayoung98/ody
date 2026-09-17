@@ -93,7 +93,7 @@ class PresenceRedisIntegrationTests {
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		connect(data.email(), 1L);
 
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
 		PresenceSnapshot snapshot = repository.snapshot(data.email());
@@ -114,10 +114,10 @@ class PresenceRedisIntegrationTests {
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		trackJoinKeys(data.email(), data.music1(), data.layer2(), "7:8");
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
-		assertThat(repository.join(data.email(), data.music1(), data.layer1(), 3, 4,
+		assertThat(repository.join(data.email(), 1L, data.music1(), data.layer1(), 3, 4,
 				data.music1(), data.layer2(), 0.7, 0.8, 7, 8)).isTrue();
 
 		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isTrue();
@@ -140,12 +140,12 @@ class PresenceRedisIntegrationTests {
 		trackJoinKeys(data.email(), data.music1(), data.layer2(), "7:8");
 		connect(data.email(), 1L);
 		connect(remainingEmail, 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
-		assertThat(repository.join(remainingEmail, null, null, null, null,
+		assertThat(repository.join(remainingEmail, 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
-		assertThat(repository.join(data.email(), data.music1(), data.layer1(), 3, 4,
+		assertThat(repository.join(data.email(), 1L, data.music1(), data.layer1(), 3, 4,
 				data.music1(), data.layer2(), 0.7, 0.8, 7, 8)).isTrue();
 
 		assertThat(redis.opsForSet().isMember(
@@ -163,10 +163,10 @@ class PresenceRedisIntegrationTests {
 		TestData data = testData();
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
-		assertThat(repository.join(data.email(), data.music1(), data.layer1(), 3, 4,
+		assertThat(repository.join(data.email(), 1L, data.music1(), data.layer1(), 3, 4,
 				data.music1(), data.layer1(), 0.31, 0.41, 3, 4)).isTrue();
 
 		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
@@ -181,10 +181,10 @@ class PresenceRedisIntegrationTests {
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		trackJoinKeys(data.email(), data.music2(), data.layer2(), "7:8");
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
-		assertThat(repository.join(data.email(), data.music2(), data.layer1(), 3, 4,
+		assertThat(repository.join(data.email(), 1L, data.music2(), data.layer1(), 3, 4,
 				data.music2(), data.layer2(), 0.7, 0.8, 7, 8)).isFalse();
 
 		assertThat(repository.snapshot(data.email())).isEqualTo(
@@ -194,12 +194,27 @@ class PresenceRedisIntegrationTests {
 	}
 
 	@Test
+	@DisplayName("이전 소켓의 입장 요청은 현재 위치를 바꾸지 않는다")
+	void staleConnectionJoinKeepsCurrentState() {
+		TestData data = testData();
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		connect(data.email(), 2L);
+
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isFalse();
+
+		assertThat(repository.snapshot(data.email()))
+				.isEqualTo(new PresenceSnapshot(null, null, null, null, 2L));
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isFalse();
+	}
+
+	@Test
 	@DisplayName("접속 상태가 없으면 배치 자료를 만들지 않는다")
 	void missingPresenceRejectsJoin() {
 		TestData data = testData();
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isFalse();
 
 		assertThat(redis.hasKey("presence:user:" + data.email())).isFalse();
@@ -218,9 +233,9 @@ class PresenceRedisIntegrationTests {
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		connect(data.email(), 1L);
 		connect(remainingEmail, 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
-		assertThat(repository.join(remainingEmail, null, null, null, null,
+		assertThat(repository.join(remainingEmail, 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
 		assertThat(repository.applyLeave(data.email(), 1L)).containsExactly(
@@ -242,7 +257,7 @@ class PresenceRedisIntegrationTests {
 		TestData data = testData();
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
 		RealtimeEventService eventService = mock(RealtimeEventService.class);

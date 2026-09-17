@@ -17,12 +17,15 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorService;
+import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.dto.presence.ViewportRequest;
 import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
+import com.ssafy.backend.realtime.dto.presence.JoinRequest;
+import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
@@ -50,6 +53,67 @@ class PresenceWebSocketControllerTests {
 	void setUp() {
 		controller = new PresenceWebSocketController(
 				presenceService, webSocketSessionService, webSocketErrorService, viewportService, realtimeMessageService);
+	}
+
+	@Test
+	@DisplayName("입장이 끝나면 적용된 곡과 레이어를 개인 큐로 보낸다")
+	void sendsJoinAcknowledgement() {
+		JoinRequest request = new JoinRequest(3L, 2, 20L);
+		PresenceJoined joined = new PresenceJoined(3L, 2, 20L);
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(presenceService.join(EMAIL, 7L, request)).thenReturn(joined);
+
+		controller.join(request, PRINCIPAL, SESSION_ID);
+
+		verify(realtimeMessageService).sendToUser(
+				EMAIL, WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.PRESENCE_JOINED, joined);
+		verifyNoInteractions(webSocketErrorService);
+	}
+
+	@Test
+	@DisplayName("입장 실패는 요청 순번과 원인을 개인 오류 큐로 보낸다")
+	void sendsJoinFailure() {
+		JoinRequest request = new JoinRequest(4L, 2, 20L);
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(presenceService.join(EMAIL, 7L, request)).thenThrow(
+				new WebSocketRequestException(WebSocketErrorCode.PRESENCE_STALE, "이전 요청이다"));
+
+		controller.join(request, PRINCIPAL, SESSION_ID);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_STALE, "이전 요청이다", 4L);
+		verifyNoInteractions(realtimeMessageService);
+	}
+
+	@Test
+	@DisplayName("잘못된 입장값은 서비스에서 검사해 개인 오류 큐로 보낸다")
+	void sendsInvalidJoinFailure() {
+		JoinRequest request = new JoinRequest(0L, 2, 20L);
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(presenceService.join(EMAIL, 7L, request)).thenThrow(
+				new IllegalArgumentException("입장 요청 순번은 1 이상이어야 한다"));
+
+		controller.join(request, PRINCIPAL, SESSION_ID);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_JOIN_INVALID,
+				"입장 요청 순번은 1 이상이어야 한다", 0L);
+		verifyNoInteractions(realtimeMessageService);
+	}
+
+	@Test
+	@DisplayName("현재 소켓을 찾지 못하면 입장을 시작하지 않는다")
+	void rejectsJoinWithoutSession() {
+		JoinRequest request = new JoinRequest(5L, 2, 20L);
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.empty());
+
+		controller.join(request, PRINCIPAL, SESSION_ID);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_NOT_CONNECTED,
+				"현재 소켓 연결을 찾을 수 없다", 5L);
+		verifyNoInteractions(presenceService, realtimeMessageService);
 	}
 
 	@Test

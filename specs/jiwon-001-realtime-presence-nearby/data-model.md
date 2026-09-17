@@ -52,6 +52,8 @@ Redis 키 조립은 `*RedisRepository`에만 존재한다. 식별자는 서버 �
 
 ### 1.4 캐시 (프로세스 내, 상한형)
 
+만남 중복 방지에는 `meeting-cd:{user1}:{user2}` String 키를 사용한다. 값은 `1`, TTL은 기본 180초다. email 사전순으로 키를 만들어 같은 쌍은 언제나 같은 키를 사용한다.
+
 | 캐시 | 키 → 값 | 무효화 |
 | --- | --- | --- |
 | 곡 좌표 | musicId → double[16] (또는 null = location NULL) | 데이터셋 버전 승격 시 전체 플러시. 크기 상한(초기 100k) |
@@ -97,7 +99,7 @@ ERD 실물 대조는 B-2. 아래는 정본(Notion)과 기존 `UserMapper.xml`에
 | `cnt` | NOT NULL DEFAULT 0 | UPSERT +1 |
 | `(user1, user2)` | **UNIQUE 필요** — ON CONFLICT 절의 전제 | B-2 확인. 없으면 BE1에 추가 요청 |
 
-- `last_met_at` 없음(dedup 없음 — FR-083).
+- `last_met_at` 컬럼은 쓰지 않는다. 3분 중복 방지는 Redis `meeting-cd:*` TTL 키가 맡는다(FR-083).
 - UPSERT: `INSERT INTO meeting(user1,user2,cnt) VALUES (...),(...) ON CONFLICT (user1,user2) DO UPDATE SET cnt = meeting.cnt + 1`.
 
 ### 2.4 `music` (BE2/BE4 소유 — 포트 경유 읽기만)

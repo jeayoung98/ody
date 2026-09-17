@@ -3,9 +3,23 @@ package com.ssafy.backend.realtime.dto.presence;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * C→S /app/presence/join — 배치·복원(Q1 확정: "음악을 플레이해야 그 음악으로 위치가 이동").
- * 마지막 재생곡을 보내면 서버가 그 곡 좌표로 노출. play_history INSERT·만남 없음.
- * 서버는 musicId 를 play_history 최신 1건과 대조(불일치면 서버 값 — FE2 확인). 계약: FR-006.
+ * C→S /app/presence/join — 처음에는 요청 곡으로 입장하고, 이후에는 서버의 현재 곡으로 레이어만 옮긴다.
  */
-public record JoinRequest(@NotNull Integer layer, @NotNull Long musicId) {
+public record JoinRequest(
+		@NotNull Long requestSeq,
+		@NotNull Integer layer,
+		@NotNull Long musicId) {
+
+	/** 요청값을 검사한다. */
+	public void validate() {
+		if (requestSeq == null || requestSeq < 1) {
+			throw new IllegalArgumentException("입장 요청 순번은 1 이상이어야 한다");
+		}
+		if (layer == null || layer < 1) {
+			throw new IllegalArgumentException("레이어는 1 이상이어야 한다");
+		}
+		if (musicId == null || musicId < 1) {
+			throw new IllegalArgumentException("곡 ID는 1 이상이어야 한다");
+		}
+	}
 }

@@ -87,8 +87,9 @@ sequenceDiagram
     WS->>RT: presence 생성(epoch 발급)
     FE->>WS: SUBSCRIBE /user/queue/presence
     FE->>WS: SUBSCRIBE /user/queue/errors
-    FE->>WS: SEND /app/presence/join {layer, musicId}
+    FE->>WS: SEND /app/presence/join requestSeq + layer + musicId
     RT->>Redis: 현재 곡·레이어·셀 등록
+    RT-->>FE: PRESENCE_JOINED requestSeq + layer + musicId
 
     loop 15초마다
         FE->>WS: SEND /app/presence/heartbeat
@@ -186,6 +187,7 @@ REST의 `ApiResponse`와 WebSocket 형식은 다르다.
 
 ```ts
 type RealtimeEventType =
+  | "PRESENCE_JOINED"
   | "NEARBY_SNAPSHOT"
   | "NEARBY_ENTER"
   | "NEARBY_MOVE"
@@ -281,6 +283,7 @@ CONNECT만으로는 다른 사용자에게 노출되지 않는다. 반드시 joi
 
 ```json
 {
+  "requestSeq": 1,
   "layer": 1,
   "musicId": 12345
 }
@@ -288,25 +291,39 @@ CONNECT만으로는 다른 사용자에게 노출되지 않는다. 반드시 joi
 
 | 필드 | 타입 | 필수 | 규칙 |
 | --- | --- | --- | --- |
+| `requestSeq` | long | O | join마다 1부터 증가. ACK·오류를 요청과 연결할 값 |
 | `layer` | integer | O | 현재 구현 기준 `1~8` |
-| `musicId` | long | O | 실제 존재하고 16차원 좌표가 있는 곡 |
+| `musicId` | long | O | 최초 입장에 사용할 곡. 레이어 이동은 서버의 현재 곡이 우선 |
 
 동작:
 
-- 서버가 `musicId`의 좌표를 조회해 해당 layer의 2축 좌표와 셀을 계산한다.
+- 최초 join은 요청 `musicId`의 좌표를 사용한다.
+- 현재 곡이 있으면 요청 `musicId` 대신 서버의 현재 곡으로 새 layer 위치를 계산한다.
 - 클라이언트가 좌표를 보내지 않는다.
 - join은 재생 기록을 만들지 않는다.
 - join은 만남 횟수를 올리지 않는다.
 - 첫 join은 주변사람을 보고 있는 다른 사용자에게 `NEARBY_ENTER`를 발생시킬 수 있다.
-- 레이어를 바꿀 때는 같은 `musicId`와 새 `layer`로 join을 다시 보낸다.
-
-현재 코드상 join의 `musicId`를 서버의 최신 play history와 대조하지 않는다. 프론트는 `ody:my-music-id` 등 자신이 저장한 실제 마지막 재생곡만 보내야 한다.
+- 레이어와 곡을 함께 바꿀 때는 새 layer join의 성공을 확인한 뒤 `/api/music/play`로 새 곡을 재생한다.
 
 응답:
 
-- 별도 ACK payload가 없다.
-- join 처리 오류를 `/user/queue/errors`로 일관되게 보내는 배선도 아직 없다.
-- 따라서 프론트가 null, 범위 밖 layer, 임의 musicId를 보내지 않도록 먼저 검증해야 한다.
+- 성공은 `/user/queue/presence`의 `PRESENCE_JOINED`로 온다.
+
+```json
+{
+  "type": "PRESENCE_JOINED",
+  "seq": 3,
+  "ts": 1789520000000,
+  "payload": {
+    "requestSeq": 1,
+    "layer": 1,
+    "musicId": 12345
+  }
+}
+```
+
+- 실패는 `/user/queue/errors`의 `PRESENCE_ERROR`로 오며 join 오류에는 같은 `requestSeq`가 포함된다.
+- 프론트는 현재 대기 중인 requestSeq와 같은 성공 메시지를 받은 뒤 viewport나 `/music/play`을 진행한다.
 
 ### 6.3 heartbeat: `/app/presence/heartbeat`
 
@@ -344,9 +361,10 @@ const heartbeatTimer = window.setInterval(() => {
 1. 기존 STOMP 연결 해제
 2. 새 STOMP 연결
 3. 개인 큐 재구독
-4. `/app/presence/join` 재전송
-5. `requestSeq`를 1부터 시작해 `/app/presence/viewport` 재전송
-6. 주변사람 패널이 열려 있었다면 `POST /api/realtime/nearby` 재호출
+4. join requestSeq를 1부터 시작해 `/app/presence/join` 재전송
+5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
+6. viewport requestSeq도 1부터 시작해 `/app/presence/viewport` 재전송
+7. 주변사람 패널이 열려 있었다면 `POST /api/realtime/nearby` 재호출
 
 ### 6.4 명시적 종료: `/app/presence/leave`
 
@@ -752,7 +770,8 @@ flowchart TD
     PAGE[실시간 지도 화면 진입]
     CONNECT[STOMP CONNECT]
     SUB[개인 큐 2개 구독]
-    JOIN[presence/join<br/>layer + 마지막 musicId]
+    JOIN[presence/join<br/>requestSeq + layer + 마지막 musicId]
+    JOINED[PRESENCE_JOINED 확인]
     HEART[15초 heartbeat 시작]
     READY[재생·주변사람 사용 가능]
     OPEN[주변사람 버튼]
@@ -760,7 +779,7 @@ flowchart TD
     DELTA[소켓 델타 적용]
     EXIT[화면 종료]
 
-    LOGIN --> PAGE --> CONNECT --> SUB --> JOIN --> HEART --> READY
+    LOGIN --> PAGE --> CONNECT --> SUB --> JOIN --> JOINED --> HEART --> READY
     READY --> OPEN --> SNAP --> DELTA
     DELTA --> EXIT
     READY --> EXIT
@@ -776,8 +795,9 @@ flowchart TD
 2. STOMP 연결
 3. `/user/queue/presence`, `/user/queue/errors` 구독
 4. 마지막 musicId와 현재 layer로 `/app/presence/join`
-5. 애플리케이션 heartbeat 시작
-6. 그 뒤에 재생 선언과 주변사람 버튼 활성화
+5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
+6. 애플리케이션 heartbeat 시작
+7. 그 뒤에 재생 선언과 주변사람 버튼 활성화
 
 재연결의 `onConnect`에서도 3~5를 다시 수행해야 한다.
 
@@ -788,6 +808,7 @@ flowchart TD
 - [ ] realtime 프로파일 서버가 실행된다.
 - [ ] 유효한 access token으로 `/ws` CONNECT가 성공한다.
 - [ ] 개인 큐 2개를 구독한다.
+- [ ] join 후 같은 requestSeq의 `PRESENCE_JOINED`를 받는다.
 - [ ] join 후 `/api/music/play`이 200을 반환한다.
 - [ ] 응답에 `playHistoryId`, 좌표, 셀이 있다.
 - [ ] `/api/music/play/end`가 `data: null`로 성공한다.

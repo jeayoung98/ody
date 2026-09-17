@@ -8,7 +8,7 @@
 
 "곡 = 위치"를 원칙으로, `POST /music/play`가 유일한 위치 이동 원본이 되어 Redis의 곡 청취자 Set·레이어별 셀 인덱스·셀 인원수를
 Lua 한 번으로 원자 갱신하고, 변경 이벤트를 두 종류의 구독 인덱스(뷰포트 셀·근처 곡)에 정방향 조회로 fanout한다.
-클라이언트는 원시 pc값만 보내고 정규화·셀 변환·좌표 계산은 서버만 한다. 만남은 진입 순간 기존 청취자 전원과 UPSERT(dedup 없음).
+클라이언트는 원시 pc값만 보내고 정규화·셀 변환·좌표 계산은 서버만 한다. 만남은 같은 레이어·같은 곡의 기존 청취자와 비동기로 기록하며 동일 쌍은 3분 안에 한 번만 센다.
 기존 스캐폴딩의 config/common/session 계층은 재사용하고 presence/nearby는 정본 모델로 재작성한다(R-01). 반응·따라가기는 범위 밖.
 
 ## Technical Context
@@ -134,7 +134,7 @@ contracts/websocket/                         # [교체 예정] destinations.md �
 1. `StompAuthChannelInterceptor`가 Bearer 검증 → Principal = email. 실패 시 예외로 연결 거부(재시도 없음은 FE 몫).
 2. `SessionConnectedEvent` → `WebSocketSessionRegistry.register(sessionId, email)` + `sessionEpoch` 증가.
 3. `PresenceLifecycleService.connect(email, epoch)` → `presence:user:{email}` HSET(epoch, playingMusicId=null) + `presence:expiry` ZADD(now+45s). **비노출 상태**.
-4. `/app/presence/join {layer, musicId}` → `PlayHistoryMapper.findLatestMusicId(email)`와 대조(불일치면 서버 값, 기록 없으면 no-op·비노출) → 곡 존재·`location` 검증 → 좌표 계산 → `presence-play.lua`(old=null) 실행 — **play_history INSERT·만남 판정 없음**(재생이 아니라 배치).
+4. `/app/presence/join {requestSeq, layer, musicId}` → 현재 소켓 epoch 확인 → 최초 join이면 요청 곡, 현재 곡이 있으면 서버 현재 곡 선택 → 좌표 계산 → `presence-join.lua` 실행 → `PRESENCE_JOINED` 전송. 실패는 요청 순번과 함께 개인 오류 큐로 전송한다. **play_history INSERT·만남 판정 없음**.
 5. 클라이언트가 이어서 `viewport`·`nearby/open`을 보내면 F3·F4.
 
 ### F2. `POST /music/play` (RT-02 · RT-50)

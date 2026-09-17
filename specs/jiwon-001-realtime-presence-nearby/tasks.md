@@ -88,7 +88,7 @@
 
 - [ ] T033 [P] [US1] `RT/play/dto/PlayRequest.java`(`@NotNull musicId`, `@Pattern MAP|JOURNEY|PLAYLIST|FOLLOW source`), `PlayResponse.java`, `PlayEndRequest.java`(`@NotNull playHistoryId`, `@Min(0) playedMs`)
 - [ ] T034 [P] [US1] `RT/play/repository/PlayHistoryMapper.java` + `RES/mapper/realtime/PlayHistoryMapper.xml` — `insert(email, musicId, source)` → generated id, `updatePlayedMs(id, email, ms)` → affected rows, `findLatestMusicId(email)`. **[BLOCKED: B-2]** 실컬럼 확인 전 XML은 ERD 추정 컬럼으로 작성 + TODO
-- [ ] T035 [US1] `RT/presence/service/PresenceLifecycleService.java` — `connect(email)`(epoch++, presence 생성, expiry ZADD), `heartbeat(email)`(ZADD XX), `join(email, layer, musicId)`(Q1 확정 — 배치·복원: `findLatestMusicId`와 대조 → 곡·location 검증 → `applyPlay(old=null)`, **INSERT·만남 없음**; 대조 방어는 FE2 확인 후 상수 토글), `leave(email, epoch)`(applyLeave → 메타 2종으로 구독 4종 해제 → `PositionChanged(old만)` 발행)
+- [x] T035 [US1] `PresenceService.java` — connect·heartbeat·leave와 `join(email, epoch, request)` 구현. 최초 join은 요청 곡, 이후 join은 서버 현재 곡으로 레이어만 이동하고 `PRESENCE_JOINED` 또는 요청 순번이 포함된 개인 오류를 보낸다. **INSERT·만남 없음**
 - [ ] T036 [US1] `RT/presence/service/PlayDeclarationService.java` — plan F2 순서 a~h. no-op 분기, `PRESENCE_STALE`, `MeetingRecorder` 호출은 US4 전까지 no-op 인터페이스(`MeetingRecorder`는 T060)
 - [ ] T037 [US1] `RT/play/controller/MusicPlayController.java` — `POST /music/play`, `PATCH /music/play/end`(affected==0 → `FORBIDDEN`). `ApiResponse` 봉투. 경로 확정(Q2 해소) — `/play/end` 네이밍만 BE1 확인 후 상수 1곳 수정 여지
 - [ ] T038 [US1] `RT/presence/controller/PresenceStompController.java` 재작성 — `join`·`heartbeat`·`leave`·`resync`(viewport/nearby 재발급은 US2/US3 후 연결). 검증 실패 → `RealtimeErrorSender`. 구버전 `MoveRequest`·`HeartbeatRequest(x,y)` 삭제
@@ -160,14 +160,14 @@
 ### Tests
 
 - [ ] T070 [P] [US4] `RT-TEST/meeting/MeetingPairTests.java` — 사전순·자기 제외(A50·FR-081)
-- [ ] T071 [P] [US4] `RT-TEST/meeting/MeetingRecorderTests.java` — 배치 1문 호출, 빈 목록 no-op, no-op 재선언 시 미호출(A51), 1,000명 fixture 배치 크기 지표(A54)
-- [ ] T072 [P] [US4] `RT-TEST/e2e/MeetingE2ETests.java` — A50·A52·A53 DB 단언(H2 `MODE=PostgreSQL` — `ON CONFLICT` 호환 확인, 안 되면 Postgres 조건부)
+- [x] T071 [P] [US4] `MeetingServiceTest.java` — 빈 목록 no-op, 자기 제외, email 사전순, 동일 쌍 3분 쿨다운 검증
+- [x] T072 [P] [US4] Redis 통합 테스트 — 같은 레이어·같은 곡 청취자만 후보가 되고 다른 레이어는 제외되는지 검증
 
 ### Implementation
 
 - [ ] T073 [P] [US4] `RT/meeting/MeetingPair.java` — `of(a, b): Optional<(user1, user2)>` 사전순, 동일이면 empty
 - [ ] T074 [P] [US4] `RT/meeting/repository/MeetingMapper.java` + `RES/mapper/realtime/MeetingMapper.xml` — `upsertAll(List<MeetingPair>)`: `INSERT ... VALUES (...) ON CONFLICT (user1, user2) DO UPDATE SET cnt = meeting.cnt + 1`. **[BLOCKED: B-2]** UNIQUE 확인 전 TODO
-- [ ] T075 [US4] `RT/meeting/service/MeetingRecorder.java` — **별도 빈** `@Async recordAsync(email, listenersBefore)`: 쌍 생성 → `upsertAll` 1문 → `realtime.meeting.batch.size` 지표. `PlayDeclarationService`(T036)의 no-op 인터페이스를 이 빈으로 교체
+- [x] T075 [US4] `MeetingService.java` — 별도 `@Async` 서비스에서 동일 쌍 Redis 180초 TTL 키를 먼저 만들고 새 쌍만 DB UPSERT
 - [ ] T076 [US4] `RT/config/RealtimeAsyncConfig.java`에 실시간 전용 `Executor` 빈(큐 상한·거부 정책 로그) — 만남 폭발 시 브로드캐스트 스레드 보호
 
 **Checkpoint**: A50~A54 통과. `/music/play` 지연이 만남 건수와 무관함을 지표로 확인.

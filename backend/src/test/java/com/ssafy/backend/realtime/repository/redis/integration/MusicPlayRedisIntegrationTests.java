@@ -89,7 +89,7 @@ class MusicPlayRedisIntegrationTests {
 		trackPlace(data.music2(), data.layer(), "7:8");
 		key("layer-listeners:" + data.otherLayer() + ":" + data.music2());
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
 		seedListener(sameLayerListener, data.music2(), data.layer(), "7:8");
 		redis.opsForSet().add(
@@ -121,7 +121,7 @@ class MusicPlayRedisIntegrationTests {
 		String listener = "same-calculate-" + UUID.randomUUID() + "@test.local";
 		trackPlace(data.music1(), data.layer(), "3:4");
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
 		redis.opsForSet().add(
 				"layer-listeners:" + data.layer() + ":" + data.music1(), listener);
@@ -145,9 +145,9 @@ class MusicPlayRedisIntegrationTests {
 		trackPlace(data.music2(), data.layer(), "7:8");
 		connect(data.email(), 1L);
 		connect(remainingEmail, 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
-		assertThat(repository.join(remainingEmail, null, null, null, null,
+		assertThat(repository.join(remainingEmail, 1L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
 
 		assertThat(repository.applyPlay(
@@ -171,7 +171,7 @@ class MusicPlayRedisIntegrationTests {
 		trackPlace(data.music1(), data.layer(), "3:4");
 		trackPlace(data.music2(), data.layer(), "7:8");
 		connect(data.email(), 1L);
-		assertThat(repository.join(data.email(), null, null, null, null,
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
 
 		List<String> meeting = repository.applyPlay(

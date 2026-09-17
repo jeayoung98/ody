@@ -35,10 +35,10 @@ RT-xx ID가 아직 없다 — 기존 ID와의 대응은 §대응표 참조. 대�
 - Q2 [계약] 재생 REST 경로 → A: Notion대로 `POST /music/play` + `PATCH /music/play/end` 2경로. BACKEND-NOTES A-7(`POST /api/music/{id}/play`)은 구버전으로 처리 — BACKEND-NOTES 갱신 필요(T082). 잔여: `/music/play/end` **네이밍**만 Notion 자체가 BE1 확인 대기로 둠(남은 협의 #4).
 - Q3 [보안·개인정보] 비공개 계정 → A: Notion RT-90대로 **MVP 전원 공개 간주**, `filterVisible` 필터 지점만 확보(FR-030). 요구사항 §6 "비공개 좌표 어떤 경로로도 미조회"는 MVP 이후 단계 요건으로 재해석 — 요구사항 문서 쪽에 "MVP 제외" 표기 필요(기획).
 - Q1 [동작] `/app/presence/join`과 `POST /music/play`의 관계 → A: **둘 다 맞다. "음악을 플레이해야 그 음악으로 위치가 이동한다."** (사용자 확정)
-  - `join {layer, musicId}` = **배치·복원**. 클라이언트가 마지막 재생곡(`play_history` 최신 1건)을 보내고, 서버는 그 곡의 좌표로 presence를 만들고 청취자 Set에 등재해 **노출**시킨다. 재생이 아니므로 `play_history` INSERT **없음**, 만남 판정 **없음**(RT-50 "POST /play로 진입하는 순간"과 정합).
+  - `join {requestSeq, layer, musicId}` = **배치·복원**. 첫 join은 요청 곡으로 노출하고, 이미 현재 곡이 있으면 요청 `musicId` 대신 서버 presence의 현재 곡을 유지한 채 레이어만 옮긴다. 재생이 아니므로 `play_history` INSERT **없음**, 만남 판정 **없음**.
   - `POST /music/play` = **위치 "이동"의 유일한 원본**. 재생 시에만 곡이 바뀌고, 이때만 `play_history` INSERT와 만남 판정이 일어난다.
   - 둘의 차이는 "재생했는가"다. join은 재생 없이 마지막 위치에 서 있는 것(RT-01 "정지 상태지만 위치는 마지막 곡에 노출").
-  - 검토 항목(구현 시): join의 `musicId`를 클라이언트 값 그대로 믿으면 재생 없이 임의 곡으로 배치할 수 있다(좌표 조작을 막은 취지와 같은 구멍). 서버가 `play_history` 최신 1건과 대조해 불일치면 서버 값으로 덮는 방어를 권장 — FE2와 확인(Assumptions).
+  - join 성공은 `PRESENCE_JOINED {requestSeq, layer, musicId}`로 확인한다. 프론트는 이 메시지를 받은 뒤 새 곡 `/music/play`을 호출한다. 실패는 같은 `requestSeq`를 담아 `/user/queue/errors`로 보낸다.
 
 ### 정본이 정하지 않아 이 명세가 채운 것
 
@@ -82,7 +82,7 @@ RT-xx ID가 아직 없다 — 기존 ID와의 대응은 §대응표 참조. 대�
 11. **A11** **Given** 재생 중 사용자가 하트비트를 보내지 않음, **When** TTL(45s) 경과 후 Sweep(5s 주기)이 돌면, **Then** A10과 같은 정리가 일어난다. 하트비트 1회 유실(15s)만으로는 제거되지 않는다. (FR-022, FR-023)
 12. **A12** **Given** Sweep이 만료 사용자를 정리하는 동시에 그 사용자가 곡을 바꿈, **When** 두 경로가 경쟁, **Then** 새 곡의 청취자가 지워지지 않는다 — 정리는 스크립트 안에서 읽은 `playingMusicId` 기준으로만 제거한다. (FR-024)
 13. **A13** **Given** 재접속(같은 사용자의 새 CONNECT), **When** `/app/presence/resync`, **Then** 전체 스냅샷을 다시 받고 `sessionEpoch`가 증가한다. (FR-004, FR-005)
-14. **A14** **Given** 마지막 재생곡이 X인 사용자가 CONNECT 후 `/app/presence/join {layer, X}`, **When** 처리, **Then** X의 좌표로 노출되고 X 청취자 Set에 들어가지만 `play_history` 행은 늘지 않고 만남도 증가하지 않는다. `play_history`가 없는 신규 사용자는 비노출 유지. (FR-006)
+14. **A14** **Given** CONNECT 직후 사용자가 `/app/presence/join {requestSeq, layer, musicId:X}`, **When** 처리, **Then** X의 좌표로 노출되고 `PRESENCE_JOINED`를 받지만 `play_history`와 만남은 늘지 않는다. 이미 곡 Y에 있는 사용자의 레이어 이동이면 요청 곡과 무관하게 Y를 유지한다. (FR-006)
 
 ---
 
@@ -147,8 +147,8 @@ C가 이웃이 아닌 곡 Z로 이동하면 A에게 LEAVE가 온다. 이웃곡 �
 
 1. **A50** **Given** X 청취자 {A, C}, **When** B가 `POST /music/play X`, **Then** `meeting(A,B)`, `meeting(B,C)`가 각각 +1(없으면 1로 INSERT). `user1/user2`는 email 사전순. (FR-080, FR-081)
 2. **A51** **Given** B가 X를 재선언(no-op), **When** 호출, **Then** 만남이 증가하지 않는다. (FR-082)
-3. **A52** **Given** B가 X → Z → X, **When** 두 번째 X 진입, **Then** 만남이 다시 증가한다 — 중복 방지 없음. (FR-083)
-4. **A53** **Given** A(layer 1)와 B(layer 5)가 같은 곡 X, **When** B 진입, **Then** 레이어와 무관하게 만남으로 집계된다. (FR-084)
+3. **A52** **Given** 같은 레이어·같은 곡에서 만난 A와 B, **When** 3분 안에 다시 같은 조건이 됨, **Then** 만남은 중복 증가하지 않는다. 3분 뒤 다시 만나면 증가한다. (FR-083)
+4. **A53** **Given** A(layer 1)와 B(layer 5)가 같은 곡 X, **When** B가 X를 재생, **Then** 레이어가 달라 만남으로 집계하지 않는다. (FR-084)
 5. **A54** **Given** X 청취자 1,000명, **When** B 진입, **Then** 1,000건의 증가가 브로드캐스트 경로 밖(비동기)에서 처리되고, 델타 전달 지연에 영향을 주지 않는다. (FR-085)
 
 ---
@@ -175,7 +175,7 @@ C가 이웃이 아닌 곡 Z로 이동하면 A에게 LEAVE가 온다. 이웃곡 �
 - **FR-003**: CONNECT 직후 presence는 `playingMusicId = null` 상태로 존재하며, 이 상태의 사용자는 화면 사용자·근처 사람·셀 인원수 어느 조회에도 나타나지 않아야 한다.
 - **FR-004**: `/app/presence/resync` 수신 시 현재 뷰포트·근처 패널 상태 기준 전체 스냅샷을 재발급해야 한다.
 - **FR-005**: 재접속마다 `sessionEpoch`를 증가시키고, 만료 판정과 이전 세션 정리가 최신 세션의 상태를 지우지 않도록 epoch를 비교해야 한다.
-- **FR-006**: `/app/presence/join {layer, musicId}`는 **배치·복원**이다 — 곡 존재·`location` NOT NULL 검증 후 presence를 그 곡의 좌표로 만들고 청취자 Set·셀 인덱스·셀 인원수에 등재해 노출시킨다. `play_history` INSERT와 만남 판정은 하지 않는다. `musicId`는 `play_history` 최신 1건과 대조하며, 기록이 없으면 비노출을 유지한다(Q1).
+- **FR-006**: `/app/presence/join {requestSeq, layer, musicId}`는 **배치·복원**이다. 최초 join은 요청 `musicId`로 노출하고, 이후 join은 서버 presence의 현재 곡을 유지한 채 `layer`만 옮긴다. 현재 소켓의 epoch가 아니면 거부한다. 성공 시 `PRESENCE_JOINED {requestSeq, layer, musicId}`를 보내고, 실패 시 `/user/queue/errors`로 같은 요청 순번과 원인 코드를 보낸다. `play_history` INSERT와 만남 판정은 하지 않는다.
 
 **재생 선언 = 위치 (RT-02, `/music/play`, `/music/play/end`)**
 
@@ -210,7 +210,7 @@ C가 이웃이 아닌 곡 Z로 이동하면 A에게 LEAVE가 온다. 이웃곡 �
 
 - **FR-040**: CONNECT 헤더의 Authorization 값과 email을 로그·지표에 남기지 않아야 한다.
 - **FR-041**: 모든 S→C 프레임은 `{type, seq, ts, payload}` 봉투를 쓰고, `seq`는 한 세션에 전달되는 프레임 기준 단조 증가여야 한다. 스냅샷에 실린 `seq` 이하의 델타는 클라이언트가 버린다.
-- **FR-042**: 검증 실패는 `PRESENCE_ERROR {code, message}`로 해당 사용자에게만 회신해야 한다.
+- **FR-042**: 검증 실패는 `PRESENCE_ERROR {code, message, requestSeq?}`로 해당 사용자에게만 회신해야 한다. join 오류에는 요청 순번을 포함한다.
 
 **화면 사용자 (RT-20~23)**
 
@@ -246,8 +246,8 @@ C가 이웃이 아닌 곡 Z로 이동하면 A에게 LEAVE가 온다. 이웃곡 �
 - **FR-080**: 곡 청취자 Set에 진입하는 순간, 진입 직전 그 곡의 기존 청취자 각각과 쌍을 만들어 `meeting(user1, user2, cnt)`를 UPSERT(있으면 +1, 없으면 1)해야 한다.
 - **FR-081**: `user1/user2`는 email 사전순으로 정규화해야 하며 자기 자신과의 쌍은 만들지 않는다.
 - **FR-082**: 같은 곡 재선언(no-op)에서는 만남을 집계하지 않아야 한다.
-- **FR-083**: 중복 방지(dedup·`last_met_at`)를 두지 않아야 한다 — 나갔다 재진입하면 다시 집계한다.
-- **FR-084**: 판정은 곡 기준이며 레이어와 무관해야 한다.
+- **FR-083**: 동일 사용자 쌍은 3분 안에 한 번만 집계해야 한다. 3분이 지나 같은 레이어·같은 곡에서 다시 만나면 다시 증가한다.
+- **FR-084**: 만남은 같은 레이어에서 같은 곡을 듣던 사용자끼리만 집계해야 한다.
 - **FR-085**: 만남 증가는 브로드캐스트 경로 밖에서 비동기로 처리해야 하며, 델타 전달 지연에 영향을 주지 않아야 한다.
 
 **관측 (헌법 VIII)**
@@ -284,7 +284,7 @@ C가 이웃이 아닌 곡 Z로 이동하면 A에게 LEAVE가 온다. 이웃곡 �
 
 - **범위**: 반응하기·따라가기(SOCIAL-02~04, 06~12)는 이번 범위 밖이다 — Notion 페이지 헤더 "반응·따라가기는 이후 단계". 기존 스캐폴딩의 `reaction/`·`follow/` 패키지는 이 명세의 대상이 아니다.
 - **비공개 계정**: Q3 확정 — RT-90대로 MVP 전원 공개 간주. FR-030 필터 지점은 의무.
-- **join `musicId` 신뢰 범위**: Q1 확정으로 클라이언트가 `musicId`를 보낸다. 서버는 존재·`location` NOT NULL 검증(RT-01)에 더해 `play_history` 최신 1건과 대조해 불일치면 서버 값을 쓰는 것으로 가정한다(재생 없이 임의 위치 배치 방지). 기록이 없는 신규 사용자의 join은 비노출 유지. FE2 확인 필요.
+- **join `musicId` 사용 범위**: 최초 join은 클라이언트가 보낸 곡을 사용한다. 이후 레이어 이동은 요청 곡이 아니라 서버 presence의 현재 곡을 사용한다. 새 곡 이동은 `PRESENCE_JOINED`를 받은 뒤 `/music/play`로 처리한다.
 - **인덱싱 레이어**: 사용자는 **현재 보고 있는 한 레이어**의 셀에만 인덱싱된다(`/music/play` 응답이 단일 `layer`를 돌려주고, RT-22가 "layer 바뀌면 내 셀 전체 재계산"이라 하므로). 다른 레이어를 보는 사용자는 화면 사용자에 나오지 않는다. 만남(곡 기준)은 이와 무관하다. 정본이 명시하지 않아 가정으로 둔다.
 - **레이어–축 배정**: 레이어 l은 PC(2l−1)·PC(2l)을 표시 축으로 쓴다(저장소 CLAUDE.md §4 "PC 16·레이어 8", BACKEND-NOTES E-2, spec 001 Q1 확정). 축별 전역 min/max 초기값은 임의값이며 BE2·BE4 실측 후 교체(Notion 남은 협의 #2).
 - **seq 범위**: `seq`는 세션(연결) 단위 단조 증가로 해석한다. 정본은 "스냅샷 seq 이하 델타는 버린다"만 정하므로, 스냅샷과 델타가 같은 수열이면 충분하다.

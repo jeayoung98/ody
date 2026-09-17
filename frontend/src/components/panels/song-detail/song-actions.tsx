@@ -4,8 +4,8 @@ import { useState } from "react";
 import Button from "@/components/common/button";
 import { ArriveIcon, DepartIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
-import { FEATURES } from "@/constants";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
+import { useFeatures } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import type { MusicDetail } from "@/types";
@@ -16,8 +16,12 @@ import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
  *
  * **재생 버튼은 여기 없다** (S15P21A405-384). 제목 줄 옆의 동그란 버튼 하나로 합쳤다 —
  * 같은 동작이 한 화면에 두 번 있을 이유가 없다. 못 트는 곡 안내(`Note`)는 여기 남는다.
+ *
+ * **신고 버튼도 여기 없다** (S15P21A405-384). 패널 헤더의 경광등으로 옮겼다
+ * (`song-report-button.tsx`) — 402 에서 본문에 세운 빨간 버튼을 대신한다.
  */
 export default function SongActions({ music }: { music: MusicDetail }) {
+  const features = useFeatures();
   const [menuOpen, setMenuOpen] = useState(false);
   const setStart = useJourneyStore((s) => s.setStart);
   const setEnd = useJourneyStore((s) => s.setEnd);
@@ -27,8 +31,8 @@ export default function SongActions({ music }: { music: MusicDetail }) {
 
   return (
     <div className="relative flex flex-col gap-2">
-      {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) */}
-      {FEATURES.playlist && (
+      {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
+      {features.playlist && (
         <Button className="self-start" onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
           ＋ 플리
         </Button>
@@ -64,7 +68,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
           {blocked.detail} {blocked.ref && <span className="text-ink-4">{blocked.ref}</span>}
         </Note>
       )}
-      {FEATURES.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
+      {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

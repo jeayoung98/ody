@@ -4,7 +4,6 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useBlockingStore } from "@/stores/use-blocking-store";
 import { useConfirmStore } from "@/stores/use-confirm-store";
-import { useSurveyStore } from "@/stores/use-survey-store";
 import { subscribePlayback } from "@/lib/playback-events";
 import { analyticsId, setAnalyticsContext, track } from "./client";
 import { endPlayback, playbackMeter, reportActualPlayback, requestPlayback } from "./playback";
@@ -62,18 +61,12 @@ export function observeAnalytics(): void {
   subscribePlayback((event) => reportActualPlayback(event.musicId, event.state));
   const updateBlocking = () => {
     const busy = useBlockingStore.getState().busy;
-    setAnalyticsContext({ blocked: busy || !!useConfirmStore.getState().pending, survey_open: busy && !!useSurveyStore.getState().prompt });
+    setAnalyticsContext({ blocked: busy || !!useConfirmStore.getState().pending });
   };
   useBlockingStore.subscribe(updateBlocking);
   useConfirmStore.subscribe((s, p) => {
     updateBlocking();
     if (s.pending && s.pending !== p.pending) track("activity_switch_prompted");
-  });
-  useSurveyStore.subscribe((s, p) => {
-    if (s.prompt && s.prompt !== p.prompt) {
-      const t = s.prompt.target;
-      track("survey_shown", { feedback_session_id: t.sessionId, survey_mode: t.mode, music_id: t.musicId, rank: t.rank });
-    }
   });
   window.addEventListener("pagehide", () => endPlayback("pagehide"));
 }

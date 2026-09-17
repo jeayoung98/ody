@@ -11,15 +11,43 @@
 export const REPORT_REASONS = [
   { value: "spoken", label: "말소리", detail: "노래가 아니라 말소리·나레이션이에요" },
   { value: "noise", label: "잡음", detail: "잡음이나 소음만 들려요" },
+  /**
+   * 제목이 실제 곡과 다른 경우 (S15P21A405-403). 예전에는 전부 `기타` 로 들어와서 상세를
+   * 읽어야 분류됐다 — 662만 곡은 메타데이터가 고르지 않아 따로 셀 만큼 자주 나온다.
+   */
+  { value: "mistitled", label: "제목 다름", detail: "제목이 실제 곡과 달라요" },
+  /** **기타는 늘 마지막이다** — 나머지를 받는 자리라 다른 사유 사이에 끼면 먼저 눌린다 */
   { value: "other", label: "기타", detail: "그 밖의 이유예요" },
+  /**
+   * 음원을 못 찾아 **재생 자체가 안 되는** 곡 (S15P21A405-397).
+   *
+   * 나머지 셋과 축이 다르다 — 저건 "이건 곡이 아니다" 라는 사람의 판단이고 이건 "들을 수가
+   * 없다" 는 사실이다. 그래서 **재생 불가일 때만 보여 준다** (`unplayableOnly`). 들리는 곡에
+   * 이 항목이 떠 있으면 잘못 누르게 되고, 그렇게 들어온 신고는 걸러낼 방법이 없다.
+   */
+  { value: "unplayable", label: "재생 불가", detail: "음원을 찾을 수 없어 재생되지 않아요", unplayableOnly: true },
 ] as const;
+
+/**
+ * 지금 화면에서 고를 수 있는 사유.
+ *
+ * @param unplayable 그 곡이 **찾아봤는데 없는** 상태인가 (`PLAYBACK_BLOCKED.noVideo`).
+ *   아직 안 찾아봤거나(`notSearched`) 조회가 실패한(`lookupFailed`) 것은 **없는 게 아니라
+ *   모르는 것**이라 여기서 false 다.
+ */
+export const reportReasonsFor = (unplayable: boolean) => REPORT_REASONS.filter((r) => unplayable || !("unplayableOnly" in r));
 
 export type ReportReason = (typeof REPORT_REASONS)[number]["value"];
 
+/** 상세 사유를 적어야 하는 사유. 무엇이 문제인지 목록만으로는 알 수 없는 것 하나뿐이다 */
+export const REPORT_NEEDS_DETAIL: ReportReason = "other";
+
+/** 상세 사유 길이 상한. **백엔드 제약과 같은 값이다** (`MusicReportRequest.detailReason` maxLength) */
+export const REPORT_DETAIL_MAX = 2000;
+
+export const REPORT_DETAIL_PLACEHOLDER = "무엇이 문제인지 한 줄로 적어주세요";
+
 /** 신고를 보낸 뒤. 무엇을 했는지 알려 주되 화면을 막지 않는다 */
 export const REPORT_SENT_NOTICE = "신고를 보냈어요. 검토에 참고할게요";
-/**
- * 전송이 실패했을 때. **백엔드가 아직 없어서** 목 라우트가 받고 있으므로 지금은 보기 어렵지만,
- * 실연동이 붙은 뒤를 위해 문구를 미리 둔다 (BACKEND-NOTES A-23).
- */
+/** 전송이 실패했을 때. 실연동이라 진짜로 실패할 수 있다 (2026-09-17, BACKEND-NOTES A-28) */
 export const REPORT_FAILED_NOTICE = "신고를 보내지 못했어요. 잠시 후 다시 시도해 주세요";

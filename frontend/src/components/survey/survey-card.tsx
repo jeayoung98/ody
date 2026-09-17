@@ -11,7 +11,6 @@ import { buildSubmission } from "@/hooks/survey/submission";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useSurveyStore } from "@/stores/use-survey-store";
 import { questionKey, type SurveyReason, type SurveySong } from "@/types/survey";
-import { track } from "@/lib/analytics/client";
 
 /** 고른 것이 눌린 티가 나게 — 테두리 발광만으로는 어두운 배경에서 안 보인다 */
 const SELECTED_CLASS = "bg-violet/25! border-violet! text-white! shadow-glow-violet";
@@ -169,7 +168,6 @@ export default function SurveyCard() {
   const send = (verdict: boolean, reason: SurveyReason | null) => {
     const row = submission ?? buildSubmission({ target, verdict, reason, listenedMs: stintMs(target.musicId), skipped: false, durationSec: prompt.subject.durationSec });
     if (!useSurveyStore.getState().beginSubmission(row)) return;
-    if (!submission) track("survey_answer_selected", { feedback_session_id: target.sessionId, rank: target.rank, verdict, reason });
     setState((s) => ({ ...s, verdict: row.verdict, reason: row.reason }));
     submit.mutate(row);
   };
@@ -206,7 +204,7 @@ export default function SurveyCard() {
                 disabled={submission != null}
                 aria-pressed={askingReason}
                 className={askingReason ? SELECTED_CLASS : ""}
-                onClick={() => { track("survey_answer_selected", { feedback_session_id: target.sessionId, rank: target.rank, verdict: false }); setState((s) => ({ ...s, verdict: false })); }}
+                onClick={() => setState((s) => ({ ...s, verdict: false }))}
               >
                 {askingReason && <CheckIcon />}
                 아니요
@@ -225,7 +223,7 @@ export default function SurveyCard() {
                     disabled={submission != null}
                     aria-pressed={state.reason === r.value}
                     className={state.reason === r.value ? SELECTED_CLASS : ""}
-                    onClick={() => { track("survey_answer_selected", { feedback_session_id: target.sessionId, rank: target.rank, reason: r.value }); setState((s) => ({ ...s, reason: r.value })); }}
+                    onClick={() => setState((s) => ({ ...s, reason: r.value }))}
                   >
                     {state.reason === r.value && <CheckIcon />}
                     {r.label}

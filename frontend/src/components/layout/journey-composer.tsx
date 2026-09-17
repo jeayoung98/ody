@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { CloseIcon } from "@/components/common/icons";
-import { useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
+import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -20,9 +20,10 @@ import { track } from "@/lib/analytics/client";
  */
 export default function JourneyComposer() {
   const [keyword, setKeyword] = useState("");
-  const { data, isPending } = useMusicSearchQuery(keyword);
+  // 여정 만들기는 **통합 검색만** 쓴다 — 칩 UI 없이 조건 하나만 넘긴다 (S15P21A405-399)
+  const { data, isPending } = useMusicSearchQuery({ mode: "all", query: keyword });
   // 여기는 무한 스크롤을 안 붙였다 — 받아 둔 페이지만 편다 (첫 페이지 10곡, S15P21A405-267 범위 밖)
-  const results = data?.pages.flatMap((p) => p.items) ?? [];
+  const results = flattenSearch(data?.pages);
   const startMusicId = useJourneyStore((s) => s.startMusicId);
   const endMusicId = useJourneyStore((s) => s.endMusicId);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
@@ -114,7 +115,7 @@ export default function JourneyComposer() {
       {searching && (
         <div className="max-h-[42vh] overflow-y-auto border-t border-line px-1.5 py-1.5">
           {isPending && <p className="lbl px-2 py-4 text-center">검색 중</p>}
-          {!isPending && results.length === 0 && <p className="lbl px-2 py-4 text-center">일치하는 곡이 없습니다</p>}
+          {!isPending && results.length === 0 && <p className="lbl px-2 py-4 text-center">일치하는 음악이 없습니다</p>}
           {results.map((r) => (
             <JourneyComposerResult
               key={r.id}

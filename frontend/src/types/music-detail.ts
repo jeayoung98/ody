@@ -49,3 +49,18 @@ export interface MusicSearchPage {
   page: number;
   hasNext: boolean;
 }
+
+/**
+ * 검색 조건 (SEARCH-01 확장, S15P21A405-399).
+ *
+ * 검색바는 **하나**지만 경로가 셋이다. 두 조건을 **둘 다 칩으로 굳히는 상태는 만들지 않는다** —
+ * 첫 조건만 칩으로 고정하고 두 번째는 입력값으로 두면 세 경로가 전부 표현된다.
+ *
+ * - `all` 입력 하나를 제목·아티스트 양쪽에서 찾는다
+ * - `artist` 아티스트를 고정한다. `music` 은 그 안에서 더 좁히는 선택 조건이라 비어도 된다
+ * - `music` 음악을 고정한다. `artist` 가 비면 제목만 찾고, 값이 생기면 그 아티스트로 좁힌다
+ */
+export type SearchCondition =
+  | { mode: "all"; query: string }
+  | { mode: "artist"; artist: string; music: string }
+  | { mode: "music"; music: string; artist: string };

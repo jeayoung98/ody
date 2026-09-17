@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { PanelType } from "@/constants";
+import { useJourneyStore } from "./use-journey-store";
 import { useMapStore } from "./use-map-store";
 
 /**
@@ -34,9 +35,24 @@ function syncMapView(next: PanelType) {
   if (next !== "song" && next !== "journey" && next !== "playlist") map.hideConstellationView();
 }
 
+/**
+ * 여정 확장 검색창을 내린다 (S15P21A405-390).
+ *
+ * **검색창과 사이드 패널은 함께 뜨지 않는다** (JOURNEY-01). 반대 방향은 이미 막혀 있었는데
+ * (`use-open-journey-composer` 가 패널을 먼저 닫는다) 이쪽만 빠져 있었다 — 검색창을 열어 둔 채
+ * 레일에서 차트를 누르면 둘이 겹쳐 떴다.
+ *
+ * 레일에서만 막지 않는 이유는 패널을 여는 길이 레일 말고도 있기 때문이다 — 지도에서 별을
+ * 누르거나 플레이어바에서 들어와도 같은 규칙을 따라야 한다.
+ */
+function hideComposer() {
+  if (useJourneyStore.getState().isComposerOpen) useJourneyStore.getState().closeComposer();
+}
+
 /** 패널을 여는 모든 길이 거쳐 간다 — 한 군데라도 빠지면 지도 뷰가 어긋난 채 남는다 */
 const open = (panel: PanelType, patch: object = {}) => {
   syncMapView(panel);
+  hideComposer();
   return { activePanel: panel, back: null, collapsed: false, ...patch } as const;
 };
 
@@ -81,6 +97,11 @@ interface PanelState {
   close: () => void;
   /** 패널을 접었다 폈다 (S15P21A405-318). 별자리·패널 종류는 건드리지 않는다 */
   toggleCollapsed: () => void;
+  /**
+   * 자리를 비켜 준다 (S15P21A405-404). 지도를 움직이는 동안 불린다.
+   * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
+   */
+  collapse: () => void;
 }
 
 export const usePanelStore = create<PanelState>()(
@@ -132,6 +153,13 @@ export const usePanelStore = create<PanelState>()(
 
       /** 접기는 닫기가 아니다 — 별자리도 열린 패널도 그대로 두고 자리만 비켜 준다 */
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed }), false, "toggleCollapsed"),
+
+      /**
+       * 드래그 중에 매 프레임 불릴 수 있다. **바뀔 때만 set 한다** — 같은 값을 계속 넣으면
+       * 구독자가 매번 깨어나고, 그 끝에 지도 가림폭 계산이 달려 있어 드래그가 무거워진다.
+       */
+      collapse: () =>
+        set((s) => (s.activePanel && !s.collapsed ? { collapsed: true } : {}), false, "collapse"),
     }),
     { name: "panel-store" },
   ),

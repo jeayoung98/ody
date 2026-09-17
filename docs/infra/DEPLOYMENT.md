@@ -42,6 +42,11 @@ Frontend는 Backend container와 분리해 `/var/www/ody`에 배포한다.
 `/api/hello`, 외부 Actuator 차단을 확인한다. 실패하면 기존 `current`/`previous` symlink를 복원한다.
 최신 release 외에도 current, previous와 추가 과거 release를 보존한다.
 
+Next.js 런타임 환경변수는 app-node의 `/etc/ody/frontend.env`에서 관리한다. `frontend/deploy.sh`는 배포와
+rollback 전에 파일을 preflight하고 `ody-frontend.service`의 systemd drop-in에 `EnvironmentFile`로 연결한 뒤
+서비스를 재시작한다. 환경변수 값은 출력하지 않는다. `NEXT_PUBLIC_*`는 런타임 값이 아니라 build 결과에
+포함되므로 Jenkins build 시점에 별도로 주입해야 한다.
+
 app-node Nginx의 기존 TLS server block에는
 `docs/infra/examples/frontend-nginx.locations.conf`를 기준으로 static location을 반영한다. 기존 `/api/` proxy,
 `/actuator/` 접근 제어, upstream, Certbot block은 그대로 둔다. 변경 전후 `sudo nginx -t`를 통과한 경우에만

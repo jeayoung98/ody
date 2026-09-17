@@ -237,13 +237,19 @@ export class MapEngine {
    */
   private centerAfterMorph: number | null = null;
   /**
-   * '나'를 화면 가운데 붙들어 둔다.
+   * 곡 하나를 화면 가운데 붙들어 둔다. 어느 곡인지는 {@link centerHoldId} 가 정한다.
    *
-   * 재생하거나 "내 위치로 가기" 로 가운데에 맞춘 순간 켜지고, **사용자가 직접 밀거나 확대하면 꺼진다.**
+   * 재생하거나 "내 위치로 가기" 로 가운데에 맞춘 순간, 그리고 지도에서 별을 누른 순간 켜지고,
+   * **사용자가 직접 밀거나 확대하면 꺼진다.**
    * 켜져 있는 동안은 우측 패널이 열리고 닫혀 **지도가 보이는 영역이 달라져도** 그 가운데를 따라간다 —
    * 상세가 열리면 왼쪽으로 치우친 가운데, 닫으면 화면 가운데로 부드럽게 돌아온다.
    */
   private centerLock = false;
+  /**
+   * 가운데 고정이 **붙드는 곡**. `null` 이면 재생 중인 곡(없으면 '나')이다 — 지금까지의 동작.
+   * 지도에서 별을 누르면 그 별이 들어온다 ({@link viewSong}, S15P21A405-409).
+   */
+  private centerHoldId: number | null = null;
   /** 겹 전환 중에 "내 위치로 가기" 를 누르면 전환이 끝난 뒤 처리한다 */
   private pendingHome = false;
 
@@ -788,6 +794,8 @@ export class MapEngine {
     if (!this.probe || this.probe.exitingAt) return;
     this.probe.exitingAt = performance.now();
     this.nearby = null;
+    // 진입 전 카메라로 돌아가는 중이다 — 붙들어 둔 별이 남아 있으면 도착하자마자 다시 끌어당긴다
+    this.centerHoldId = null;
     if (!this.follow) this.camTarget = { ...this.probe.back };
   }
 
@@ -1494,6 +1502,8 @@ export class MapEngine {
     this.pressure = 0;
     this.prefetch = null;
     this.camTarget = null;
+    // 겹이 바뀌면 붙들어 둔 별도 놓는다 — 새 겹에서 그 별은 상주가 아닐 수 있다
+    this.centerHoldId = null;
     this.morphT = 0;
     this.anim = { t0: performance.now(), layer: newLayer, cam: newCam, subset: newSubset, big, dir, entryS, mode };
   }
@@ -1609,16 +1619,16 @@ export class MapEngine {
     this.pending = null;
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
     this.boxes = want;
+    // 전환 연출 중에 읽힐 숫자가 아니다 — 겹 이름만 남긴다 (S15P21A405-402).
+    // 집합을 어디서 가져왔든 사용자에게는 같은 일이라 두 갈래 문구를 하나로 뒀다
+    const big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중`;
     let ns: Uint8Array<ArrayBufferLike>;
-    let big: string;
     if (ready) {
       ns = this.maskFor(nl, ready);
-      big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 상주 ${ready.length.toLocaleString()}곡`;
     } else {
       // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
       ns = this.residentMask(nl);
       for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
-      big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${p.inView.toLocaleString()}곡 기준`;
     }
     this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big);
   }
@@ -1728,6 +1738,7 @@ export class MapEngine {
     if (this.anim || this.pending || this.follow) return "blocked";
     // 확대·축소도 "내가 화면을 움직인" 것이다 — 가운데 고정을 푼다
     this.centerLock = false;
+    this.centerHoldId = null;
     const zoomIn = deltaY < 0;
     const canDig = zoomIn && this.gateOpen();
     // 파고든 겹에서는 진입 배율이 곧 축소 한계다 — 거기서 더 줄이려 하면 바로 떠오르기다
@@ -1766,6 +1777,7 @@ export class MapEngine {
     this.prefetch = null;
     this.touched = true;
     this.centerLock = false;
+    this.centerHoldId = null;
     this.cam.cx -= dx / this.cam.s;
     this.cam.cy += dy / this.cam.s;
     this.clampCam();
@@ -1777,26 +1789,36 @@ export class MapEngine {
     this.camTarget = { ...this.cam, cx: x, cy: y };
   }
 
+  /**
+   * 그 세계 좌표를 **남은 화면**(패널을 뺀 영역) 한복판에 놓는 카메라.
+   * 영역은 패널이 열리고 닫히는 동안 계속 변하므로, 굳혀 두지 말고 필요할 때마다 다시 잰다.
+   */
+  private camCentering(w: { x: number; y: number }, s: number): MapCamera {
+    const f = this.freeRect();
+    return { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
+  }
+
   /** 곡을 남은 화면 중앙으로. scaleMul 이 있으면 그만큼 확대 */
   focus(id: number, scaleMul?: number) {
     const w = this.worldOf(id);
     if (!w || !this.isAlive(id) || this.follow) return;
     this.touched = true;
-    const f = this.freeRect();
-    const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
-    this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
+    this.camTarget = this.camCentering(w, scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s);
   }
 
   /**
    * 곡을 **보기만** 한다 — 카메라만 그리로 가고 '나'는 제자리다 (S15P21A405-277).
    * 지도에서 별을 눌렀을 때의 동작이다. 재생은 여기서 하지 않는다.
    *
-   * 가운데 고정을 반드시 푼다. 안 풀면 `frame` 이 매 프레임 카메라를 재생 중인 곡으로
-   * 되돌려서, 옮겨 간 뷰가 곧바로 튕겨 돌아온다.
+   * **가운데 고정을 끄지 않고 누른 별로 옮긴다** (S15P21A405-409). 끄면 재생 중인 곡으로
+   * 튕겨 돌아가던 것이 문제였는데, 붙드는 곳을 바꾸면 그 일은 안 일어나면서 고정이 하던 일
+   * — 패널이 열리고 접히며 보이는 영역이 변해도 한복판을 따라가는 것 — 은 그대로 얻는다.
+   * 누르면 상세 패널이 열리므로 영역은 **누른 직후부터** 변한다. 한 번 잰 목표로는 못 맞춘다.
    */
   viewSong(id: number) {
     if (this.follow || this.constellationActive()) return;
-    this.centerLock = false;
+    this.centerHoldId = id;
+    this.centerLock = true;
     this.focus(id);
   }
 
@@ -1807,6 +1829,7 @@ export class MapEngine {
    */
   focusSong(id: number, targetLayer?: number | null) {
     this.centerLock = false;
+    this.centerHoldId = null;
     if (this.follow || this.anim || !this.index.has(id)) return;
     this.selectedId = id;
     const s = this.songs[this.index.get(id)!];
@@ -2019,6 +2042,7 @@ export class MapEngine {
     }
     this.travelToId = id;
     this.centerLock = true;
+    this.centerHoldId = null;
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
     const dx = to.x - this.me.x;
@@ -2055,10 +2079,9 @@ export class MapEngine {
     const w = this.worldOf(id);
     if (!w) return;
     this.touched = true;
-    const f = this.freeRect();
-    const s = scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s;
-    this.camTarget = { s, cx: w.x - (f.cx - this.W / 2) / s, cy: w.y + (f.cy - this.H / 2) / s };
+    this.camTarget = this.camCentering(w, scaleMul ? Math.max(this.cam.s, this.entryS * scaleMul) : this.cam.s);
     this.centerLock = true;
+    this.centerHoldId = null;
   }
 
   /**
@@ -2362,12 +2385,10 @@ export class MapEngine {
      */
     const viewBusy = (!!this.probe && !this.probe.exitingAt) || this.constellationActive();
     if (this.centerLock && !this.camTarget && !this.anim && !this.follow && !viewBusy) {
-      const id = this.playingId ?? this.myId;
+      const id = this.centerHoldId ?? this.playingId ?? this.myId;
       const w = id != null ? this.worldOf(id) : null;
       if (w) {
-        const f = this.freeRect();
-        const cx = w.x - (f.cx - this.W / 2) / this.cam.s;
-        const cy = w.y + (f.cy - this.H / 2) / this.cam.s;
+        const { cx, cy } = this.camCentering(w, this.cam.s);
         if (Math.abs(cx - this.cam.cx) * this.cam.s > 0.4 || Math.abs(cy - this.cam.cy) * this.cam.s > 0.4) {
           this.cam.cx = lerp(this.cam.cx, cx, OCCLUSION_EASE);
           this.cam.cy = lerp(this.cam.cy, cy, OCCLUSION_EASE);
@@ -2464,6 +2485,12 @@ export class MapEngine {
       }
       // 카메라 목표 추적
       if (this.camTarget) {
+        // 붙들어 둔 별이 있으면 목표를 매 프레임 다시 잰다 — 날아가는 사이에 패널이 열려
+        // 보이는 영역이 좁아지고 있다. 한 번 잰 목표로 가면 도착해서 한복판을 벗어나 있다
+        if (this.centerLock && this.centerHoldId != null) {
+          const hw = this.worldOf(this.centerHoldId);
+          if (hw) this.camTarget = this.camCentering(hw, this.camTarget.s);
+        }
         const k = 1 - Math.pow(0.001, 16 / 1000) * 0.85;
         this.cam.cx = lerp(this.cam.cx, this.camTarget.cx, k);
         this.cam.cy = lerp(this.cam.cy, this.camTarget.cy, k);

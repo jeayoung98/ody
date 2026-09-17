@@ -3,6 +3,8 @@
 import { useState } from "react";
 import IconButton from "@/components/common/icon-button";
 import { SirenIcon } from "@/components/common/icons";
+import { PLAYBACK_BLOCKED } from "@/constants";
+import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import SongReportDialog from "./song-report-dialog";
 
 /**
@@ -13,16 +15,21 @@ import SongReportDialog from "./song-report-dialog";
  *
  * **아이콘만 남으므로 라벨을 반드시 붙인다** — 378 에서 약하게 뒀다가 아무도 못 찾은 적이 있다.
  * `IconButton` 이 `aria-label` 과 `title`(마우스 올리면 뜨는 말풍선)을 함께 단다.
+ *
+ * 팝업에 넘기는 `unplayable` 은 **여기서 이미 들고 있는 판정**이다 (S15P21A405-397) —
+ * 팝업이 같은 조회를 따로 하면 답이 갈릴 수 있다. `usePlayability` 는 쿼리 캐시를 쓰므로
+ * 본문(`song-actions`)이 읽는 값과 같다.
  */
 export default function SongReportButton({ musicId, title }: { musicId: number; title: string }) {
   /** 신고 팝업이 떠 있나 (S15P21A405-378). 고르면 보내고 닫힌다 */
   const [open, setOpen] = useState(false);
+  const { blocked } = usePlayability(musicId);
   return (
     <>
       <IconButton label="이 곡 신고" onClick={() => setOpen(true)} active={open}>
         <SirenIcon />
       </IconButton>
-      {open && <SongReportDialog musicId={musicId} title={title} onClose={() => setOpen(false)} />}
+      {open && <SongReportDialog musicId={musicId} title={title} unplayable={blocked === PLAYBACK_BLOCKED.noVideo} onClose={() => setOpen(false)} />}
     </>
   );
 }

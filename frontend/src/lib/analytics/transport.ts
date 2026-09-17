@@ -4,6 +4,7 @@ import type { AnalyticsConfig, AnalyticsEvent } from "@/types/analytics";
 import { connectAnalytics } from "./client";
 import { allowsPostHog, sanitizeProperties } from "./policy";
 import { getAnonymousId } from "@/lib/anonymous-id";
+import { analyticsDebugEnabled, analyticsEnabled, analyticsEnvironment, analyticsRuntimePolicy } from "./mode";
 
 declare global {
   interface Window {
@@ -17,16 +18,37 @@ let posthog: PostHog | undefined;
 let initialized = false;
 let gaId = "";
 
+/** Google 공식 gtag 스니펫과 동일하게 Arguments 객체를 dataLayer에 적재한다. */
+export function enqueueGtag(): void {
+  // Google 태그가 일반 배열과 구분하므로 공식 스니펫처럼 Arguments를 사용해야 한다.
+  // eslint-disable-next-line prefer-rest-params
+  window.dataLayer!.push(arguments);
+}
+
+function recordLocal(event: AnalyticsEvent, properties: AnalyticsEvent["properties"]): void {
+  const entries = window.__odyAnalytics ??= [];
+  entries.push({ ...event, properties });
+  if (entries.length > 500) entries.shift();
+  console.debug("[analytics]", event.name, properties);
+}
+
+function commonProperties(next: AnalyticsConfig): Record<string, string> {
+  return {
+    release: next.release,
+    test_phase: next.testPhase,
+    ph_policy: next.posthogMode,
+    data_source: next.dataSource,
+    environment: analyticsEnvironment(location.hostname),
+  };
+}
+
 function deliver(event: AnalyticsEvent): void {
-  if (!config || config.mode === "off") return;
-  const properties = sanitizeProperties({ ...event.properties, release: config.release, test_phase: config.testPhase, ph_policy: config.posthogMode });
-  if (config.mode === "debug") {
-    const entries = window.__odyAnalytics ??= [];
-    entries.push({ ...event, properties });
-    if (entries.length > 500) entries.shift();
-    console.debug("[analytics]", event.name, properties);
-    return;
-  }
+  if (!config) return;
+  const runtime = analyticsRuntimePolicy(location.hostname, config.dataSource, analyticsEnabled());
+  if (!runtime.logLocal && !runtime.sendExternal) return;
+  const properties = sanitizeProperties({ ...event.properties, ...commonProperties(config) });
+  if (runtime.logLocal) recordLocal(event, properties);
+  if (!runtime.sendExternal) return;
   // 각각 독립적으로 전송한다. 한 SDK의 차단/오류가 다른 쪽 수집을 중단하지 않는다.
   try { if (gaId) window.gtag?.("event", event.name, { ...properties, send_to: gaId }); } catch { /* SDK 차단 */ }
   try {
@@ -38,10 +60,9 @@ function deliver(event: AnalyticsEvent): void {
 }
 
 async function applyConfig(next: AnalyticsConfig): Promise<void> {
-  // 개발 서버/로컬 빌드에서 실제 프로젝트 한도를 소비하지 않는다.
-  if (["localhost", "127.0.0.1", "[::1]"].includes(location.hostname) && next.mode === "live") next = { ...next, mode: "debug" };
   config = next;
-  if (next.mode !== "live") {
+  // 브라우저 OFF와 목데이터는 SDK 자체를 시작하지 않는다.
+  if (!analyticsRuntimePolicy(location.hostname, next.dataSource, analyticsEnabled()).sendExternal) {
     gaId = "";
     posthog?.stopSessionRecording();
     posthog?.set_config({ autocapture: false });
@@ -50,14 +71,16 @@ async function applyConfig(next: AnalyticsConfig): Promise<void> {
   if (next.gaId && gaId !== next.gaId) {
     gaId = next.gaId;
     window.dataLayer ??= [];
-    window.gtag ??= (...args: unknown[]) => { window.dataLayer!.push(args); };
+    window.gtag ??= enqueueGtag;
     window.gtag("js", new Date());
+    window.gtag("set", commonProperties(next));
     window.gtag("config", gaId, {
       send_page_view: false,
       allow_google_signals: false,
       allow_ad_personalization_signals: false,
       page_location: location.origin + location.pathname,
       page_referrer: document.referrer ? new URL(document.referrer).origin : "",
+      ...(analyticsDebugEnabled() ? { debug_mode: true } : {}),
     });
     if (!document.getElementById("ody-ga4")) {
       const script = document.createElement("script");
@@ -95,7 +118,7 @@ async function applyConfig(next: AnalyticsConfig): Promise<void> {
           recordBody: false,
         },
         before_send: (event) => {
-          if (!event || config?.mode !== "live" || config.posthogMode === "off") return null;
+          if (!event || config?.dataSource !== "live" || config.posthogMode === "off" || !analyticsEnabled()) return null;
           if (event.event === "$snapshot") return config.replay ? event : null;
           const semantic = event.event === "$pageview" ? "page_view" : event.event === "$pageleave" ? "page_leave" : event.event;
           if (!allowsPostHog(semantic, config.posthogMode)) return null;
@@ -113,6 +136,7 @@ async function applyConfig(next: AnalyticsConfig): Promise<void> {
     } catch { /* 패키지 청크/수집 서버 장애 시 GA 수집은 유지한다. */ }
   }
   if (posthog) {
+    posthog.register(commonProperties(next));
     posthog.set_config({ autocapture: next.posthogMode === "all" ? { dom_event_allowlist: ["click", "submit"], css_selector_ignorelist: ["[data-analytics-manual]", "[data-analytics-manual] *", "canvas"] } : false });
     if (next.replay && next.posthogMode !== "off") posthog.startSessionRecording();
     else posthog.stopSessionRecording();

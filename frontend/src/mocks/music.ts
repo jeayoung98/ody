@@ -61,11 +61,28 @@ export function mockNearby(musicId: number): NearbyResponse {
   return { center, neighbors: nearestSongs(center, NEARBY_COUNT) };
 }
 
-export function mockSearch(keyword: string): MusicSearchResult[] {
-  const q = keyword.trim().toLowerCase();
-  if (!q) return [];
+/**
+ * 목 검색 (S15P21A405-399). **실제 계약과 같이 대소문자 무시 앞일치다.**
+ *
+ * 예전에는 부분일치였는데, 그러면 목에서만 나오는 결과가 있어서 실연동 뒤에 "왜 안 나오지" 가
+ * 된다 (백엔드는 S15P21A405-298 에서 앞일치로 바꿨다).
+ *
+ * 조건 셋을 실서버와 같은 규칙으로 가른다 — 통합은 제목 또는 아티스트, 나머지는 각 칸에 앞일치.
+ */
+export function mockSearch({ q, artist, music }: { q: string; artist: string; music: string }): MusicSearchResult[] {
+  const starts = (value: string | null, prefix: string) => (value ?? "").toLowerCase().startsWith(prefix.toLowerCase());
+  const all = q.trim();
+  const byArtist = artist.trim();
+  const byMusic = music.trim();
+  if (!all && !byArtist && !byMusic) return [];
   return allSongs()
-    .filter((p) => p.title.toLowerCase().includes(q) || (p.artist ?? "").toLowerCase().includes(q))
+    .filter((p) =>
+      all
+        ? starts(p.title, all) || starts(p.artist, all)
+        : byArtist
+          ? starts(p.artist, byArtist) && (!byMusic || starts(p.title, byMusic))
+          : starts(p.title, byMusic),
+    )
     .slice(0, 48)
     .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));
 }

@@ -1,7 +1,8 @@
 "use client";
 
 import { FriendsIcon, JourneyIcon, RankIcon, UserIcon } from "@/components/common/icons";
-import { NAV_ITEMS, PANEL_ENABLED, type PanelType } from "@/constants";
+import { NAV_ITEMS, type PanelType } from "@/constants";
+import { usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -17,6 +18,12 @@ const ICONS: Record<(typeof NAV_ITEMS)[number]["key"], React.ReactNode> = {
 /**
  * #rail — 우측 세로 글래스 레일: 주변 사람 · 여정 · 차트 · 내 프로필.
  *
+ * **오른쪽 세로 가운데**다. 왼쪽으로 옮겨 봤다가 되돌렸다 (S15P21A405-406) — 왼쪽 아래를
+ * 계기판이 쓰고 있어서(1024x768 에서 342~750) 브랜드 아래에 붙여도 4칸일 때 겹쳤다.
+ *
+ * 접힌 패널이 몸통을 남기면서 이 자리와 겹치는데, 레일이 `z-[21]` 로 패널(`z-20`)보다
+ * 위에 있어서 레일이 가려지지 않는다. 남은 몸통은 레일 위아래로 보인다.
+ *
  * 유저 테스트 동안 감춘 기능의 항목은 빠진다 (S15P21A405-333, `constants/features.ts`).
  * 지금은 여정만 남는다.
  */
@@ -30,7 +37,8 @@ export default function Rail() {
    */
   const hasJourney = useJourneyStore((s) => s.isRouteRequested);
   const openComposer = useOpenJourneyComposer();
-  const items = NAV_ITEMS.filter((item) => PANEL_ENABLED[item.key]);
+  const panelEnabled = usePanelEnabled();
+  const items = NAV_ITEMS.filter((item) => panelEnabled[item.key]);
   // 하나도 없으면 빈 알약만 떠 있게 된다 — 그럴 바에는 레일 자체를 안 그린다
   if (!items.length) return null;
 

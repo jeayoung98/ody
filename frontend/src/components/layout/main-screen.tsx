@@ -24,7 +24,12 @@ import PlayHint from "@/components/discovery/play-hint";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
 /** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
-const RAIL_OCCLUSION = 76;
+/**
+ * 패널이 접혀 있을 때 오른쪽이 가려지는 폭 (S15P21A405-406).
+ * 핸들(22) + 레일과의 틈(6) + 레일폭(54) + 화면 여백(18) = 100.
+ * 접힌 패널 몸통은 이 안쪽으로 들어가 레일 뒤에 숨으므로 따로 더하지 않는다.
+ */
+const PEEK_OCCLUSION = 22 + 6 + 54 + 18;
 const PANEL_OCCLUSION = 376 + 74 + 16;
 
 interface MainScreenProps {
@@ -48,7 +53,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
   // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
-  const occludedRight = panelOpen && !panelCollapsed ? PANEL_OCCLUSION : RAIL_OCCLUSION;
+  const occludedRight = panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
 
   return (
     <div className="fixed inset-0 overflow-hidden bg-void text-ink">

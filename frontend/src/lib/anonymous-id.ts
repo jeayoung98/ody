@@ -13,6 +13,7 @@
  * **최종 배포 때 걷어낼 기능이다.**
  */
 import { SURVEY_ANON_KEY } from "@/constants/survey";
+import { createUuid } from "@/lib/uuid";
 let memoryId: string | undefined;
 
 /**
@@ -21,15 +22,15 @@ let memoryId: string | undefined;
  * 저장소가 막히면 문서가 살아 있는 동안 메모리 ID를 공유한다.
  */
 export function getAnonymousId(): string {
-  if (typeof window === "undefined") return crypto.randomUUID();
+  if (typeof window === "undefined") return createUuid();
 
   try {
     const saved = localStorage.getItem(SURVEY_ANON_KEY);
     if (saved) return saved;
-    const created = memoryId ??= crypto.randomUUID();
+    const created = memoryId ??= createUuid();
     localStorage.setItem(SURVEY_ANON_KEY, created);
     return created;
   } catch {
-    return memoryId ??= crypto.randomUUID();
+    return memoryId ??= createUuid();
   }
 }

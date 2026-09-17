@@ -2,7 +2,7 @@ export type AnalyticsValue = string | number | boolean | null | undefined;
 export type AnalyticsProps = Record<string, AnalyticsValue>;
 export type PostHogMode = "all" | "core" | "off";
 export interface AnalyticsConfig {
-  mode: "off" | "debug" | "live";
+  dataSource: "live" | "mock";
   gaId: string;
   posthogKey: string;
   posthogHost: string;
@@ -17,14 +17,13 @@ export type AnalyticsEventName =
   /** 발견 힌트 (S15P21A405-393). 튜토리얼과 별개로, 문맥마다 한 번 짚어 주는 자리 */
   | "play_hint_shown" | "play_hint_done"
   | "map_ready" | "map_pan_completed" | "map_zoom_completed" | "map_layer_changed" | "map_locate_used"
-  | "music_hovered" | "music_clicked" | "music_detail_viewed"
+  | "music_clicked" | "music_detail_viewed"
   | "search_opened" | "search_executed" | "search_results_viewed" | "search_result_selected" | "search_more_requested" | "search_closed"
   | "nearby_opened" | "nearby_center_changed" | "nearby_results_viewed" | "nearby_closed"
   | "journey_composer_opened" | "journey_composer_closed" | "journey_endpoint_changed" | "journey_endpoints_swapped"
   | "journey_create_requested" | "journey_create_result" | "journey_results_viewed" | "journey_cleared"
   | "queue_play_requested" | "play_requested" | "play_started" | "play_paused" | "play_resumed" | "play_seeked"
   | "play_next_requested" | "play_prev_requested" | "play_qualified" | "play_ended" | "playback_issue"
-  | "survey_shown" | "survey_answer_selected" | "survey_submit_requested" | "survey_submit_result" | "survey_unanswered_requested"
   | "panel_changed" | "panel_collapsed_changed" | "view_mode_changed" | "help_opened" | "help_closed"
   | "activity_switch_prompted" | "activity_switch_decided" | "action_blocked" | "feature_request_failed";
 

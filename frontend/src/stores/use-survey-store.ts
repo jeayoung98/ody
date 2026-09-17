@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { createUuid } from "@/lib/uuid";
 import { hearSong, type Exploration, type ListeningFlow } from "@/hooks/survey/listening-flow";
 import { questionKey, type SurveyEdge, type SurveySubmission, type SurveyTarget } from "@/types/survey";
 
@@ -62,7 +63,7 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
     const s = get();
     const unplayable = new Set(s.unplayable);
     unplayable.delete(musicId);
-    const { flow, edge } = hearSong(source, musicId, s.flow, s.lastAudible, unplayable, () => crypto.randomUUID());
+    const { flow, edge } = hearSong(source, musicId, s.flow, s.lastAudible, unplayable, createUuid);
     // First unanswered question wins. Every requested transition should be
     // gated, but transport events can still arrive late/out of order. Never
     // let a later PLAYING report silently erase or replace the question owed.
@@ -123,7 +124,7 @@ export const useSurveyStore = create<SurveyState>()((set, get) => ({
     const s = get();
     if (!s.unansweredSent) return;
     // On bfcache restoration, a delayed beacon must not overwrite a new answer.
-    const sessionId = crypto.randomUUID();
+    const sessionId = createUuid();
     const renew = (edge: SurveyEdge | null) => edge ? { ...edge, target: { ...edge.target, sessionId } } : null;
     set({ pending: renew(s.pending), prompt: renew(s.prompt),
       flow: s.flow ? { ...s.flow, sessionId, slots: new Map() } : null });

@@ -1,7 +1,6 @@
 import { getAnonymousId } from "@/lib/anonymous-id";
 import { SURVEY_API } from "@/constants/survey";
 import type { SurveySubmission, SurveyTarget, SurveyReason } from "@/types/survey";
-import { track } from "@/lib/analytics/client";
 
 interface SubmitInput {
   target: SurveyTarget;
@@ -24,11 +23,11 @@ export function buildSubmission(input: SubmitInput): SurveySubmission {
 
 /** Best effort only: browsers do not guarantee delivery or receipt on pagehide. */
 export function sendUnanswered(input: Omit<SubmitInput, "verdict" | "reason">): void {
-  track("survey_unanswered_requested", { feedback_session_id: input.target.sessionId, survey_mode: input.target.mode,
-    music_id: input.target.musicId, rank: input.target.rank, listened_ms: Math.round(input.listenedMs), skipped: input.skipped });
   const body = JSON.stringify(buildSubmission({ ...input, verdict: null, reason: null }));
   try {
     if (navigator.sendBeacon?.(SURVEY_API.feedback, new Blob([body], { type: "application/json" }))) return;
   } catch { /* Fall back to keepalive. Neither path implies stored successfully. */ }
-  void fetch(SURVEY_API.feedback, { method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true }).catch(() => {});
+  void fetch(SURVEY_API.feedback, {
+    method: "POST", headers: { "Content-Type": "application/json" }, body, keepalive: true,
+  }).catch(() => {});
 }

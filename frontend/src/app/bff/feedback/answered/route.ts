@@ -1,5 +1,6 @@
 import { ok, okLive, failLive } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled } from "@/lib/backend";
+import { isLoopbackBackend, shouldPersistSurvey } from "@/lib/survey-persistence";
 
 /**
  * GET /bff/feedback/answered — 이미 답한 설문 문항 (S15P21A405-346).
@@ -17,13 +18,19 @@ import { backendGet, BackendError, isBackendEnabled } from "@/lib/backend";
  * **최종 배포 때 걷어낼 기능이다.** survey 관련 파일과 함께 삭제된다.
  */
 export async function GET(req: Request) {
-  const anonymousId = new URL(req.url).searchParams.get("anonymousId");
+  const requestUrl = new URL(req.url);
+  const anonymousId = requestUrl.searchParams.get("anonymousId");
   if (!anonymousId) return ok([]);
 
   const upstream = `/api/feedback/answered?anonymousId=${encodeURIComponent(anonymousId)}`;
 
-  // 목 모드에서는 답한 것이 없다고 답한다 — 쓰기(`POST /bff/feedback`)도 목에서는 안 나간다
-  if (!isBackendEnabled()) return ok([]);
+  // 저장하지 않는 테스트 세션은 운영 DB의 기존 응답도 읽지 않는다.
+  if (!shouldPersistSurvey({
+    backendEnabled: isBackendEnabled(),
+    hostname: requestUrl.hostname,
+    localTestDatabase: process.env.SURVEY_TEST_DATABASE === "local"
+      && isLoopbackBackend(process.env.BACKEND_ORIGIN),
+  })) return ok([]);
 
   try {
     return okLive(await backendGet<unknown[]>(upstream), upstream);

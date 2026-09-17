@@ -183,6 +183,14 @@ flowchart TB
 5. 늦은 major 응답으로 화면이 바뀌면 더 큰 requestSeq로 viewport를 다시 보낸다.
 6. 화면을 닫으면 `/app/presence/viewport/close`를 보낸다.
 
+사용자 노출 상태는 아래 순서로 유지한다.
+
+1. connect는 접속 정보만 만들고 아직 노출하지 않는다.
+2. 최초 join은 직전 곡 위치에 배치하고 ENTER를 만든다.
+3. 레이어 이동 join과 곡 재생은 새 위치로 옮기고 MOVE를 만든다.
+4. playEnd는 재생 시간만 저장하고 마지막 위치의 노출은 유지한다.
+5. leave·disconnect·TTL 만료에서 위치를 제거하고 LEAVE를 만든다.
+
 ### F3. INDIVIDUAL 최초 스냅샷
 
 1. layer 1은 빈 ancestorBounds, layer N은 이전 N-1개 LayerBound인지 검증한 뒤 현재 raw PC 사각형을 정규화해 걸치는 기본 셀을 계산한다.
@@ -203,7 +211,7 @@ flowchart TB
 
 ### F5. 실시간 델타
 
-1. play·join·leave가 이전/새 상태를 담은 `PositionChanged`를 발행한다.
+1. 최초 join·레이어 이동 join·play·leave가 이전/새 상태를 담은 `PositionChanged`를 발행한다. playEnd는 위치를 바꾸지 않으므로 발행하지 않는다.
 2. 이전 셀 구독자와 새 셀 구독자의 합집합을 수신 후보로 구한다.
 3. 후보의 viewport 메타를 한 번에 읽고 INDIVIDUAL + 최신 epoch인 사용자만 남긴다.
 4. 변경 주체의 좌표·표시 정보·동승자 수는 이벤트 1건당 한 번만 구한다.

@@ -22,6 +22,7 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.dto.presence.ViewportRequest;
+import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
@@ -137,6 +138,62 @@ class PresenceWebSocketControllerTests {
 				EMAIL, WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.VIEWPORT_SNAPSHOT, snapshot);
 		verifyNoInteractions(webSocketErrorService);
+	}
+
+	@Test
+	@DisplayName("현재 화면의 마지막 요청 순번으로 구독을 닫는다")
+	void closesCurrentViewport() {
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+
+		controller.closeViewport(new ViewportCloseRequest(9L), PRINCIPAL, SESSION_ID);
+
+		verify(viewportService).closeCurrentScreen(EMAIL, 7L, 9L);
+		verifyNoInteractions(webSocketErrorService, realtimeMessageService);
+	}
+
+	@Test
+	@DisplayName("잘못된 화면 닫기 순번은 개인 오류 큐로 알린다")
+	void rejectsInvalidCloseRequestSequence() {
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+
+		controller.closeViewport(new ViewportCloseRequest(0L), PRINCIPAL, SESSION_ID);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, "화면 요청 순번은 1 이상이어야 한다");
+		verifyNoInteractions(viewportService, realtimeMessageService);
+	}
+
+	@Test
+	@DisplayName("화면을 닫을 때 현재 소켓을 찾지 못하면 서비스를 호출하지 않는다")
+	void rejectsCloseWithoutSession() {
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.empty());
+
+		controller.closeViewport(new ViewportCloseRequest(9L), PRINCIPAL, SESSION_ID);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_NOT_CONNECTED, "현재 소켓 연결을 찾을 수 없다");
+		verifyNoInteractions(viewportService, realtimeMessageService);
+	}
+
+	@Test
+	@DisplayName("만료된 접속의 하트비트는 다시 연결하도록 알린다")
+	void expiredHeartbeatRequestsReconnect() {
+		when(presenceService.heartbeat(EMAIL)).thenReturn(false);
+
+		controller.heartbeat(PRINCIPAL);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_STALE, "접속이 만료됐다. 다시 연결해야 한다");
+	}
+
+	@Test
+	@DisplayName("재동기화 요청은 새 연결에서 상태를 다시 보내도록 알린다")
+	void resyncRequestsExplicitReconnect() {
+		controller.resync(PRINCIPAL);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_STALE, "새 연결 후 입장과 화면 요청을 다시 보내야 한다");
+		verifyNoInteractions(viewportService, realtimeMessageService);
 	}
 
 	/** 첫 레이어의 정상 화면 요청을 만든다. */

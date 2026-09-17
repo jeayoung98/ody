@@ -1,8 +1,9 @@
--- 사용자가 나갈 때 재생 상태와 주변사람 구독하는 자료구조를 모두 지운다.
+-- 사용자가 나갈 때 재생 상태와 실시간 구독을 함께 지운다.
 
 -- KEYS[1] 사용자 상태
 -- KEYS[2] 접속 만료 목록
 -- KEYS[3] 주변사람 구독 정보
+-- KEYS[4] 현재 화면 정보
 --
 -- ARGV[1] 사용자 이메일
 -- ARGV[2] 접속 버전
@@ -13,6 +14,8 @@
 -- ARGV[7] 사용 중인 셀 키
 -- ARGV[8] 셀별 사용자 수 키
 -- ARGV[9] 곡별 주변사람 구독 키
+-- ARGV[10] 셀별 화면 구독 키
+-- ARGV[11] 셀별 인원수 화면 구독 키
 --
 -- 반환: 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록.
 
@@ -28,10 +31,28 @@ local function removeNearbySubscriptions()
   redis.call('DEL', KEYS[3])
 end
 
+local function removeViewportSubscriptions(expectedMetaEpoch)
+  local viewportEpoch = redis.call('HGET', KEYS[4], 'epoch')
+  if expectedMetaEpoch and viewportEpoch and viewportEpoch ~= expectedMetaEpoch then
+    return
+  end
+
+  local viewportLayer = redis.call('HGET', KEYS[4], 'layer')
+  local cellKeys = redis.call('HGET', KEYS[4], 'cellKeys') or ''
+  if viewportLayer then
+    for cellKey in string.gmatch(cellKeys, '[^,]+') do
+      redis.call('SREM', ARGV[10] .. viewportLayer .. ':' .. cellKey, email)
+    end
+    redis.call('SREM', ARGV[11] .. viewportLayer, email)
+  end
+  redis.call('DEL', KEYS[4])
+end
+
 -- 사용자 상태가 없으면 남은 정보만 지운다.
 if redis.call('EXISTS', KEYS[1]) == 0 then
   redis.call('ZREM', KEYS[2], email)
   removeNearbySubscriptions()
+  removeViewportSubscriptions(nil)
   return {}
 end
 
@@ -79,8 +100,9 @@ if musicId then
   removed = {musicId, layer, cellX, cellY, storedEpoch}
 end
 
--- 주변사람 구독과 사용자 상태를 지운다.
+-- 실시간 구독과 사용자 상태를 지운다.
 removeNearbySubscriptions()
+removeViewportSubscriptions(storedEpoch)
 redis.call('DEL', KEYS[1])
 redis.call('ZREM', KEYS[2], email)
 return removed

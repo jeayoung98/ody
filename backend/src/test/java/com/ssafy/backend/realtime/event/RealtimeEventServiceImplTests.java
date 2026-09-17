@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 class RealtimeEventServiceImplTests {
 
 	private static final PositionChanged EVENT = new PositionChanged(
-			"actor@x.com", 1L, 1, 100L, 200L, "1:1", "2:2", 0.2, 0.3);
+			"actor@x.com", 1L, 1, 1, 100L, 200L, "1:1", "2:2", 0.2, 0.3);
 
 	@Test
 	@DisplayName("등록한 구독자에게 순서대로 위치 변경 이벤트를 전달한다")

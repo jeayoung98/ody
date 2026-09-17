@@ -182,7 +182,9 @@ class NearbyChangeServiceTests {
 	}
 
 	private PositionChanged change(Long oldMusicId, Long newMusicId) {
-		return new PositionChanged(ACTOR, 1L, 1, oldMusicId, newMusicId,
+		return new PositionChanged(ACTOR, 1L,
+				oldMusicId == null ? null : 1, newMusicId == null ? null : 1,
+				oldMusicId, newMusicId,
 				oldMusicId == null ? null : "1:1", newMusicId == null ? null : "2:2", 0.2, 0.3);
 	}
 }

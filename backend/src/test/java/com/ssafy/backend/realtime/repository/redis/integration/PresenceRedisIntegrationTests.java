@@ -229,6 +229,65 @@ class PresenceRedisIntegrationTests {
 	}
 
 	@Test
+	@DisplayName("직접 종료하면 화면 셀 구독과 화면 정보를 함께 지운다")
+	void leaveRemovesViewportSubscriptions() {
+		TestData data = testData();
+		String metaKey = key("viewport:meta:" + data.email());
+		String firstCellKey = key("viewport:cell:" + data.layer1() + ":1:2");
+		String secondCellKey = key("viewport:cell:" + data.layer1() + ":3:4");
+		connect(data.email(), 7L);
+		redis.opsForHash().putAll(metaKey, java.util.Map.of(
+				"epoch", "7", "requestSeq", "18", "layer", Integer.toString(data.layer1()),
+				"mode", "INDIVIDUAL", "cellKeys", "1:2,3:4"));
+		redis.opsForSet().add(firstCellKey, data.email());
+		redis.opsForSet().add(secondCellKey, data.email());
+
+		repository.applyLeave(data.email(), 7L);
+
+		assertThat(redis.opsForSet().isMember(firstCellKey, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(secondCellKey, data.email())).isFalse();
+		assertThat(redis.hasKey(metaKey)).isFalse();
+	}
+
+	@Test
+	@DisplayName("접속이 만료되면 셀별 인원수 화면 구독도 지운다")
+	void expiredLeaveRemovesClusteredViewportSubscription() {
+		TestData data = testData();
+		String metaKey = key("viewport:meta:" + data.email());
+		String clusteredKey = key("viewport:clustered:" + data.layer1());
+		long sweepTime = System.currentTimeMillis();
+		connect(data.email(), 7L);
+		redis.opsForZSet().add("presence:expiry", data.email(), sweepTime - 1);
+		redis.opsForHash().putAll(metaKey, java.util.Map.of(
+				"epoch", "7", "requestSeq", "20", "layer", Integer.toString(data.layer1()),
+				"mode", "CLUSTERED", "cellKeys", ""));
+		redis.opsForSet().add(clusteredKey, data.email());
+
+		repository.applyLeaveExpired(data.email(), sweepTime);
+
+		assertThat(redis.opsForSet().isMember(clusteredKey, data.email())).isFalse();
+		assertThat(redis.hasKey(metaKey)).isFalse();
+	}
+
+	@Test
+	@DisplayName("이전 접속의 종료 요청은 현재 화면 구독을 유지한다")
+	void staleLeaveKeepsViewportSubscriptions() {
+		TestData data = testData();
+		String metaKey = key("viewport:meta:" + data.email());
+		String cellKey = key("viewport:cell:" + data.layer1() + ":5:6");
+		connect(data.email(), 2L);
+		redis.opsForHash().putAll(metaKey, java.util.Map.of(
+				"epoch", "2", "requestSeq", "22", "layer", Integer.toString(data.layer1()),
+				"mode", "INDIVIDUAL", "cellKeys", "5:6"));
+		redis.opsForSet().add(cellKey, data.email());
+
+		repository.applyLeave(data.email(), 1L);
+
+		assertThat(redis.opsForSet().isMember(cellKey, data.email())).isTrue();
+		assertThat(redis.hasKey(metaKey)).isTrue();
+	}
+
+	@Test
 	@DisplayName("하트비트는 만료 시각을 갱신한다")
 	void heartbeatUpdatesExpiry() {
 		TestData data = testData();

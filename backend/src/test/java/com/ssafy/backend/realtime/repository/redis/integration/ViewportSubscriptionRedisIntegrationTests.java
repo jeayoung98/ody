@@ -24,6 +24,7 @@ import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.CloseResult;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 
 /** 실제 Redis에서 화면 셀 구독 교체를 검증한다. */
@@ -59,7 +60,10 @@ class ViewportSubscriptionRedisIntegrationTests {
 		assertThat(connectionFactory.getConnection().ping()).isEqualTo("PONG");
 
 		RedisScriptConfig scripts = new RedisScriptConfig();
-		repository = new ViewportRedisRepository(redis, scripts.viewportSubscriptionReplaceScript());
+		repository = new ViewportRedisRepository(
+				redis,
+				scripts.viewportSubscriptionReplaceScript(),
+				scripts.viewportSubscriptionCloseScript());
 	}
 
 	@AfterEach
@@ -213,6 +217,84 @@ class ViewportSubscriptionRedisIntegrationTests {
 			assertThat(meta.mode()).isEqualTo(ViewportMode.INDIVIDUAL);
 			assertThat(meta.cells()).containsExactly(second);
 		});
+	}
+
+	@Test
+	@DisplayName("개별 사용자 화면을 닫으면 셀 구독과 화면 정보를 지운다")
+	void closesIndividualSubscriptionsAndMeta() {
+		TestData data = testData();
+		connect(data.email(), 7L);
+		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		Cell first = new Cell(1, 1);
+		Cell second = new Cell(2, 2);
+		trackCell(1, first);
+		trackCell(1, second);
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 18L, viewport, ViewportMode.INDIVIDUAL, Set.of(first, second)))
+				.isEqualTo(ReplaceResult.APPLIED);
+
+		assertThat(repository.closeCurrentScreen(data.email(), 7L, 18L))
+				.isEqualTo(CloseResult.CLOSED);
+
+		assertThat(isSubscribed(data.email(), 1, first)).isFalse();
+		assertThat(isSubscribed(data.email(), 1, second)).isFalse();
+		assertThat(repository.findMeta(data.email())).isEmpty();
+	}
+
+	@Test
+	@DisplayName("셀별 인원수 화면을 닫으면 화면 사용자 목록과 화면 정보를 지운다")
+	void closesClusteredSubscriptionAndMeta() {
+		TestData data = testData();
+		connect(data.email(), 7L);
+		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		trackClustered(1);
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 20L, viewport, ViewportMode.CLUSTERED, Set.of()))
+				.isEqualTo(ReplaceResult.APPLIED);
+
+		assertThat(repository.closeCurrentScreen(data.email(), 7L, 20L))
+				.isEqualTo(CloseResult.CLOSED);
+
+		assertThat(isClustered(data.email(), 1)).isFalse();
+		assertThat(repository.findMeta(data.email())).isEmpty();
+	}
+
+	@Test
+	@DisplayName("이전 화면의 늦은 닫기는 현재 화면을 유지한다")
+	void oldCloseKeepsCurrentScreen() {
+		TestData data = testData();
+		connect(data.email(), 7L);
+		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		Cell cell = new Cell(3, 3);
+		trackCell(1, cell);
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 22L, viewport, ViewportMode.INDIVIDUAL, Set.of(cell)))
+				.isEqualTo(ReplaceResult.APPLIED);
+
+		assertThat(repository.closeCurrentScreen(data.email(), 7L, 21L))
+				.isEqualTo(CloseResult.OLD_REQUEST);
+
+		assertThat(isSubscribed(data.email(), 1, cell)).isTrue();
+		assertThat(repository.findMeta(data.email())).isPresent();
+	}
+
+	@Test
+	@DisplayName("이전 접속의 늦은 닫기는 현재 화면을 유지한다")
+	void staleCloseKeepsCurrentScreen() {
+		TestData data = testData();
+		connect(data.email(), 7L);
+		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		Cell cell = new Cell(4, 4);
+		trackCell(1, cell);
+		assertThat(repository.replaceSubscriptions(
+				data.email(), 7L, 24L, viewport, ViewportMode.INDIVIDUAL, Set.of(cell)))
+				.isEqualTo(ReplaceResult.APPLIED);
+
+		assertThat(repository.closeCurrentScreen(data.email(), 6L, 24L))
+				.isEqualTo(CloseResult.STALE_CONNECTION);
+
+		assertThat(isSubscribed(data.email(), 1, cell)).isTrue();
+		assertThat(repository.findMeta(data.email())).isPresent();
 	}
 
 	private void connect(String email, long epoch) {

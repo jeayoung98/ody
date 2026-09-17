@@ -3,6 +3,7 @@ package com.ssafy.backend.realtime.service.viewport;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -37,7 +38,9 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.dto.viewport.ViewportCellCount;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.CloseResult;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 import com.ssafy.backend.realtime.service.viewport.ViewportService.OpenResult;
@@ -54,6 +57,7 @@ class ViewportServiceTests {
 	@Mock MusicLocationService musicLocationService;
 	@Mock UserDisplayService userDisplayService;
 	@Mock RiderCountService riderCountService;
+	@Mock ViewportMetrics viewportMetrics; // 처리 시간·후보 수 기록
 
 	private ViewportService service;
 
@@ -62,7 +66,8 @@ class ViewportServiceTests {
 		RealtimeProperties properties = properties();
 		service = new ViewportService(
 				new MusicPositionCalculator(properties), properties, viewportRepository,
-				presenceRepository, musicLocationService, userDisplayService, riderCountService);
+				presenceRepository, musicLocationService, userDisplayService, riderCountService,
+				viewportMetrics);
 	}
 
 	@Test
@@ -116,6 +121,9 @@ class ViewportServiceTests {
 		verify(presenceRepository).findListenersByMusic(2, List.of(101L, 104L));
 		verify(userDisplayService).find("same@example.com");
 		verify(riderCountService).count("same@example.com");
+		verify(viewportMetrics).recordSnapshot(
+				eq("SNAPSHOT"), eq("INDIVIDUAL"),
+				org.mockito.ArgumentMatchers.anyInt(), eq(4), eq(3), anyLong());
 	}
 
 	@Test
@@ -278,6 +286,9 @@ class ViewportServiceTests {
 
 		assertThat(result.status()).isEqualTo(OpenStatus.STALE_CONNECTION);
 		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
+		verify(viewportMetrics).recordSnapshot(
+				eq("STALE_CONNECTION"), eq("NONE"),
+				org.mockito.ArgumentMatchers.anyInt(), eq(0), eq(0), anyLong());
 	}
 
 	@Test
@@ -290,6 +301,18 @@ class ViewportServiceTests {
 		verify(viewportRepository, never())
 				.replaceSubscriptions(
 						eq(ME), eq(7L), eq(14L), eq(invalid), eq(ViewportMode.INDIVIDUAL), anySet());
+		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
+	}
+
+	@Test
+	@DisplayName("화면 닫기를 Redis 저장소에 전달한다")
+	void closesCurrentScreen() {
+		when(viewportRepository.closeCurrentScreen(ME, 7L, 18L)).thenReturn(CloseResult.CLOSED);
+
+		service.closeCurrentScreen(ME, 7L, 18L);
+
+		verify(viewportRepository).closeCurrentScreen(ME, 7L, 18L);
+		verify(viewportMetrics).recordClose("CLOSED");
 		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
 	}
 

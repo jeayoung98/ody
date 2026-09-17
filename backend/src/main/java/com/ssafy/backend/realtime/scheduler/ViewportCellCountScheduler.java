@@ -15,6 +15,7 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
@@ -33,13 +34,18 @@ public class ViewportCellCountScheduler {
 	private final ViewportRedisRepository viewportRepository; // 갱신 대상과 화면 정보 조회
 	private final ViewportService viewportService; // 최신 셀별 사용자 수 계산
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐 발송
+	private final ViewportMetrics viewportMetrics; // 갱신 대상 수와 처리 시간 기록
 
 	/** 5초마다 셀별 인원수 화면을 다시 보낸다. */
 	@Scheduled(fixedDelayString = "${realtime.viewport.cell-counts-interval-ms:5000}")
 	public void sendLatestCellCounts() {
+		long startedAt = System.nanoTime();
+		int targetCount = 0;
+		int sentCount = 0;
 		try {
 			Map<Integer, Set<String>> usersByLayer = viewportRepository
 					.findCellCountUsersByLayer(musicPositionCalculator.maxLayer());
+			targetCount = usersByLayer.values().stream().mapToInt(Set::size).sum();
 			Set<String> emails = new LinkedHashSet<>();
 			usersByLayer.values().forEach(emails::addAll);
 			Map<String, ViewportMeta> metaByEmail = viewportRepository.findMetaByEmails(emails);
@@ -51,11 +57,16 @@ public class ViewportCellCountScheduler {
 					if (!isCurrentCellCountScreen(meta, layer)) {
 						continue;
 					}
-					send(email, meta);
+					if (send(email, meta)) {
+						sentCount++;
+					}
 				}
 			}
 		} catch (Exception e) {
 			log.warn("셀별 인원수 갱신 실패", e);
+		} finally {
+			viewportMetrics.recordCellCounts(
+					targetCount, sentCount, System.nanoTime() - startedAt);
 		}
 	}
 
@@ -66,8 +77,14 @@ public class ViewportCellCountScheduler {
 				&& meta.viewport().layer() == layer;
 	}
 
-	/** 한 사용자에게 최신 셀별 인원수를 보낸다. */
-	private void send(String email, ViewportMeta meta) {
+	/**
+	 * 한 사용자에게 최신 셀별 인원수를 보낸다.
+	 *
+	 * @param email 받을 사용자 이메일
+	 * @param meta 사용자의 현재 화면 정보
+	 * @return 전송에 성공하면 true
+	 */
+	private boolean send(String email, ViewportMeta meta) {
 		try {
 			ViewportSnapshot snapshot = viewportService.createCellCountSnapshot(
 					email, meta.requestSeq(), meta.viewport());
@@ -79,8 +96,10 @@ public class ViewportCellCountScheduler {
 					WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.VIEWPORT_CELL_COUNTS,
 					payload);
+			return true;
 		} catch (Exception e) {
 			log.warn("한 사용자의 셀별 인원수 갱신 실패", e);
+			return false;
 		}
 	}
 }

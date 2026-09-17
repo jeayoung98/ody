@@ -334,18 +334,19 @@ const heartbeatTimer = window.setInterval(() => {
   "ts": 1789520000000,
   "payload": {
     "code": "PRESENCE_STALE",
-    "message": "presence expired, resync required"
+    "message": "접속이 만료됐다. 다시 연결해야 한다"
   }
 }
 ```
 
-현재 `/app/presence/resync`는 구현되지 않은 빈 핸들러다. `PRESENCE_STALE`을 받으면 다음 순서로 복구한다.
+`/app/presence/resync`는 이전 화면을 자동으로 복원하지 않는다. 호출하면 `PRESENCE_STALE`을 보내 새 연결에서 상태를 다시 보내도록 알린다. `PRESENCE_STALE`을 받으면 다음 순서로 복구한다.
 
 1. 기존 STOMP 연결 해제
 2. 새 STOMP 연결
 3. 개인 큐 재구독
 4. `/app/presence/join` 재전송
-5. 주변사람 패널이 열려 있었다면 `POST /api/realtime/nearby` 재호출
+5. `requestSeq`를 1부터 시작해 `/app/presence/viewport` 재전송
+6. 주변사람 패널이 열려 있었다면 `POST /api/realtime/nearby` 재호출
 
 ### 6.4 명시적 종료: `/app/presence/leave`
 
@@ -822,7 +823,7 @@ flowchart TD
 | 기능 | 현재 상태 | 프론트 처리 |
 | --- | --- | --- |
 | `/app/presence/viewport` | 빈 핸들러 | 호출하지 않음 |
-| `/app/presence/resync` | 빈 핸들러 | 재연결 + join + nearby REST로 대체 |
+| `/app/presence/resync` | `PRESENCE_STALE` 전송 | 재연결 + join + viewport + nearby REST로 복구 |
 | `VIEWPORT_*` 이벤트 | 발행 서비스 없음 | 기다리지 않음 |
 | 따라가기/동승자 계산 | 어댑터 대기 | `riderCount`는 항상 0 |
 | 다중 서버 실시간 브리지 | 없음 | 현재 단일 서버 전제 |
@@ -837,13 +838,13 @@ flowchart TD
 - [ ] CONNECT 직후 개인 큐를 먼저 구독한다.
 - [ ] join 완료 흐름 전에는 play/nearby 버튼을 비활성화한다.
 - [ ] STOMP heartbeat와 별개로 15초 애플리케이션 heartbeat를 보낸다.
-- [ ] 재연결할 때 구독, join, heartbeat를 다시 만든다.
+- [ ] 재연결할 때 구독, join, viewport, heartbeat와 열린 nearby 패널을 다시 만든다.
 - [ ] 재생별 `playHistoryId`와 `playedMs`를 관리한다.
 - [ ] nearby REST 요청 중 들어온 델타를 buffer하고 `snapshotSeq` 기준으로 정리한다.
 - [ ] nearby 목록을 email key로 멱등 갱신한다.
 - [ ] `NEARBY_SNAPSHOT`은 전체 교체한다.
 - [ ] 패널 닫기와 화면 종료 메시지를 보낸다.
-- [ ] viewport와 resync 미구현 기능에 의존하지 않는다.
+- [ ] `/presence/resync`가 화면을 자동 복원한다고 가정하지 않는다.
 - [ ] nearby 델타 곡 메타 처리 방식을 백엔드와 확정한다.
 
 ## 15. 백엔드 코드 기준 위치

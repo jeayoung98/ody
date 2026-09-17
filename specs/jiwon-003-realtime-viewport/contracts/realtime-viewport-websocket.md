@@ -232,6 +232,8 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 6. 주변사람 패널이 열려 있으면 nearby open REST 호출
 7. heartbeat 시작
 
+최초 join이 끝나면 직전 곡 위치에 배치되어 다른 사용자에게 노출된다. 이후 playEnd는 재생 시간만 끝내고 마지막 위치의 노출은 유지한다. 노출 제거는 leave·disconnect·TTL 만료에서 수행한다.
+
 ### 재연결
 
 새 연결은 새 epoch이므로 최초 연결과 같은 순서를 다시 수행한다. 끊기기 전 requestSeq를 이어 쓸 필요는 없으며 새 연결에서는 1부터 시작할 수 있다.

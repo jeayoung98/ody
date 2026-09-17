@@ -23,7 +23,7 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_returnsExisting_withoutCallingLookupOrWriter() {
-		String result = enricher.resolve(1L, "a", "t", "existing1234");
+		String result = enricher.resolve(1L, "a", "t", "existing1234", 200);
 
 		assertEquals("existing1234", result);
 		verifyNoInteractions(lookupPort, writerPort);
@@ -31,9 +31,9 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_looksUpAndSaves_whenMissing() {
-		when(lookupPort.lookup("a", "t")).thenReturn(Optional.of("xyz12345678"));
+		when(lookupPort.lookup("a", "t", 200)).thenReturn(Optional.of("xyz12345678"));
 
-		String result = enricher.resolve(1L, "a", "t", null);
+		String result = enricher.resolve(1L, "a", "t", null, 200);
 
 		assertEquals("xyz12345678", result);
 		verify(writerPort).save(1L, "xyz12345678");
@@ -41,11 +41,21 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_returnsNull_andDoesNotSave_whenLookupFindsNothing() {
-		when(lookupPort.lookup("a", "t")).thenReturn(Optional.empty());
+		when(lookupPort.lookup("a", "t", null)).thenReturn(Optional.empty());
 
-		String result = enricher.resolve(1L, "a", "t", null);
+		String result = enricher.resolve(1L, "a", "t", null, null);
 
 		assertNull(result);
 		verifyNoInteractions(writerPort);
+	}
+
+	/** S15P21A405-401 — duration 을 모르면 null 로 그대로 lookupPort 에 넘긴다(생략하지 않는다). */
+	@Test
+	void resolve_passesNullDuration_whenUnknown() {
+		when(lookupPort.lookup("a", "t", null)).thenReturn(Optional.of("xyz12345678"));
+
+		enricher.resolve(1L, "a", "t", null, null);
+
+		verify(lookupPort).lookup("a", "t", null);
 	}
 }

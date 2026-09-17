@@ -36,13 +36,18 @@ public class VideoIdApiClient implements VideoIdLookupPort {
 	}
 
 	@Override
-	public Optional<String> lookup(String artist, String title) {
+	public Optional<String> lookup(String artist, String title, Integer durationSeconds) {
 		try {
 			VideoIdApiResponse response = restClient.get()
-					.uri(uriBuilder -> uriBuilder.path("/videoid")
-							.queryParam("artist", artist)
-							.queryParam("title", title)
-							.build())
+					.uri(uriBuilder -> {
+						uriBuilder.path("/videoid")
+								.queryParam("artist", artist)
+								.queryParam("title", title);
+						if (durationSeconds != null) {
+							uriBuilder.queryParam("duration", durationSeconds);
+						}
+						return uriBuilder.build();
+					})
 					.retrieve()
 					.body(VideoIdApiResponse.class);
 

@@ -104,7 +104,8 @@ public class MusicService {
 		NearbyService.NeighborResult result = nearbyService.neighborsOf(detail);
 
 		MusicDetail enrichedDetail = withVideoId(detail,
-				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId()));
+				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId(),
+						detail.duration()));
 
 		log.info("[Music] 상세 조회 완료 id={} neighbors={}", id, result.neighbors().size());
 		return new MusicDetailResponse(enrichedDetail, result.neighbors(), result.lowSimilarity());
@@ -126,9 +127,11 @@ public class MusicService {
 				() -> new UnsupportedOperationException("music/videoid: BE4 조회 어댑터 대기 중 (B-D)"));
 		List<MusicSummary> summaries = reader.findSummariesByIds(musicIds);
 
+		// MusicSummary 에는 duration 이 없다(API 응답 계약 변경 없이는 못 채운다, S15P21A405-401) — null 로 조회.
 		List<VideoIdItem> items = summaries.stream()
 				.map(summary -> new VideoIdItem(summary.id(),
-						videoIdEnricher.resolve(summary.id(), summary.artist(), summary.title(), summary.videoId())))
+						videoIdEnricher.resolve(summary.id(), summary.artist(), summary.title(), summary.videoId(),
+								null)))
 				.toList();
 
 		log.info("[VideoId] 일괄 조회 완료 요청={} 응답={}", musicIds.size(), items.size());

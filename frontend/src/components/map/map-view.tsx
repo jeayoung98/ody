@@ -115,6 +115,19 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (p.activePanel === "song" && p.musicId === nearbyCenterMusicId) return;
     p.openSong(nearbyCenterMusicId);
   }, [nearbyCenterMusicId]);
+  /**
+   * 겹이 바뀌면 패널을 접는다 (S15P21A405-404). 파고들기·떠오르기·레이어 스테퍼가 모두
+   * 이 값을 거치므로 들어오는 길마다 따로 박지 않아도 된다.
+   *
+   * 붙자마자는 접지 않는다 — 처음 그리는 것은 "겹을 옮겼다" 가 아니다.
+   */
+  const lastLayer = useRef(layer);
+  useEffect(() => {
+    if (lastLayer.current === layer) return;
+    lastLayer.current = layer;
+    usePanelStore.getState().collapse();
+  }, [layer]);
+
   // 목: 지도 위 사용자들이 스스로 반응을 쏜다 (실서비스에서는 소켓 수신)
   useMockFriendReactions(friends);
 
@@ -356,7 +369,16 @@ export default function MapView({ occludedRight }: MapViewProps) {
         drag.current.x = e.clientX;
         drag.current.y = e.clientY;
         // 움직였으면 누르기가 아니라 드래그다
-        if (drag.current.moved > HOLD.moveTol) cancelHold();
+        if (drag.current.moved > HOLD.moveTol) {
+          cancelHold();
+          /**
+           * 지도를 움직인다는 것은 **지금 지도를 보고 있다**는 뜻이다 (S15P21A405-404).
+           * 열린 패널이 지도를 376px 가리고 있으므로 자리를 비켜 준다. 누르기와 드래그를
+           * 가르는 이 기준을 그대로 쓰는 이유는, 별을 누르려다 손이 떨린 정도로 접히면
+           * 안 되기 때문이다. 닫지는 않는다 — 별자리도 목록도 그대로 살아 있다.
+           */
+          usePanelStore.getState().collapse();
+        }
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
         if (mode === "constellation") engine.overlayPan(dx, dy);

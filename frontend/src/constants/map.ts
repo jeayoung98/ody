@@ -18,12 +18,14 @@ export const NO_GENRE_ID = GENRE_NAMES.length - 1;
 
 /**
  * 레이어별 이름 (깊이 = 천체 축척 메타포). 인덱스 = 레이어 번호.
- * 천문 용어 대신 누구나 아는 단어로 간다 — "초은하단"은 우주 좋아하는 사람만 안다.
- * L2는 여정·플리 오버레이가 이미 "별자리"라 겹치지 않게 **별무리**로 둔다.
+ *
+ * **척도가 작아지는 순서로 읽혀야 한다** — 겹을 내려가는 것이 "더 좁게 들어간다" 로 읽히는 게
+ * 이 이름들이 하는 일의 전부다. 별자리 오버레이(여정·플리)와 겹치는 말은 피한다.
  */
-export const LAYER_NAMES = ["우주", "은하", "별무리", "태양계", "행성", "궤도", "위성", "착륙지"] as const;
+export const LAYER_NAMES = ["우주", "은하단", "우리은하", "성운", "성단", "태양계", "행성", "저궤도"] as const;
 
-export const LAYER_NAMES_EN = ["UNIVERSE", "GALAXY", "STAR CLUSTER", "SOLAR SYSTEM", "PLANET", "ORBIT", "MOON", "LANDING"] as const;
+/** 한글 이름과 짝이다 — 같은 자리에 나란히 뜨므로 하나만 바꾸면 서로 다른 척도를 가리키게 된다 */
+export const LAYER_NAMES_EN = ["UNIVERSE", "GALAXY CLUSTER", "MILKY WAY", "NEBULA", "STAR CLUSTER", "SOLAR SYSTEM", "PLANET", "LOW ORBIT"] as const;
 
 /**
  * 이 겹이 **무엇을 기준으로 곡을 나눴는지** 한 줄 요약 (LAYER_AXES 네 단어를 사람 말로 압축).

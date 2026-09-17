@@ -97,6 +97,11 @@ interface PanelState {
   close: () => void;
   /** 패널을 접었다 폈다 (S15P21A405-318). 별자리·패널 종류는 건드리지 않는다 */
   toggleCollapsed: () => void;
+  /**
+   * 자리를 비켜 준다 (S15P21A405-404). 지도를 움직이는 동안 불린다.
+   * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
+   */
+  collapse: () => void;
 }
 
 export const usePanelStore = create<PanelState>()(
@@ -148,6 +153,13 @@ export const usePanelStore = create<PanelState>()(
 
       /** 접기는 닫기가 아니다 — 별자리도 열린 패널도 그대로 두고 자리만 비켜 준다 */
       toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed }), false, "toggleCollapsed"),
+
+      /**
+       * 드래그 중에 매 프레임 불릴 수 있다. **바뀔 때만 set 한다** — 같은 값을 계속 넣으면
+       * 구독자가 매번 깨어나고, 그 끝에 지도 가림폭 계산이 달려 있어 드래그가 무거워진다.
+       */
+      collapse: () =>
+        set((s) => (s.activePanel && !s.collapsed ? { collapsed: true } : {}), false, "collapse"),
     }),
     { name: "panel-store" },
   ),

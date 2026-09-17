@@ -1609,16 +1609,16 @@ export class MapEngine {
     this.pending = null;
     this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
     this.boxes = want;
+    // 전환 연출 중에 읽힐 숫자가 아니다 — 겹 이름만 남긴다 (S15P21A405-402).
+    // 집합을 어디서 가져왔든 사용자에게는 같은 일이라 두 갈래 문구를 하나로 뒀다
+    const big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중`;
     let ns: Uint8Array<ArrayBufferLike>;
-    let big: string;
     if (ready) {
       ns = this.maskFor(nl, ready);
-      big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 상주 ${ready.length.toLocaleString()}곡`;
     } else {
       // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
       ns = this.residentMask(nl);
       for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
-      big = `${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중 — 화면 안 ${p.inView.toLocaleString()}곡 기준`;
     }
     this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big);
   }

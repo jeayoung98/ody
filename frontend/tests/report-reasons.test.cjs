@@ -11,16 +11,21 @@ const { REPORT_REASONS, reportReasonsFor, REPORT_NEEDS_DETAIL, REPORT_DETAIL_MAX
 
 const values = (list) => list.map((r) => r.value);
 
-test("백엔드가 받는 값 넷을 그대로 쓴다", () => {
-  assert.deepEqual(values(REPORT_REASONS), ["spoken", "noise", "other", "unplayable"]);
+test("백엔드에 보내는 값 목록", () => {
+  assert.deepEqual(values(REPORT_REASONS), ["spoken", "noise", "mistitled", "other", "unplayable"]);
+});
+
+test("기타는 늘 마지막 일반 사유다 — 나머지를 받는 자리라 사이에 끼면 먼저 눌린다", () => {
+  const general = values(reportReasonsFor(false));
+  assert.equal(general[general.length - 1], "other");
 });
 
 test("재생되는 곡에는 재생 불가를 안 보여준다 — 잘못 누르면 걸러낼 방법이 없다", () => {
-  assert.deepEqual(values(reportReasonsFor(false)), ["spoken", "noise", "other"]);
+  assert.deepEqual(values(reportReasonsFor(false)), ["spoken", "noise", "mistitled", "other"]);
 });
 
 test("재생 불가인 곡에서만 그 사유가 붙는다", () => {
-  assert.deepEqual(values(reportReasonsFor(true)), ["spoken", "noise", "other", "unplayable"]);
+  assert.deepEqual(values(reportReasonsFor(true)), ["spoken", "noise", "mistitled", "other", "unplayable"]);
 });
 
 test("상세를 받아야 하는 사유는 기타 하나뿐이다", () => {

@@ -1,0 +1,233 @@
+package com.ssafy.backend.realtime.service.viewport;
+
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+
+import org.springframework.context.annotation.Profile;
+import org.springframework.stereotype.Service;
+
+import com.ssafy.backend.realtime.dto.presence.UserDisplay;
+import com.ssafy.backend.realtime.dto.viewport.ViewportDelta;
+import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
+import com.ssafy.backend.realtime.event.PositionChanged;
+import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
+import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
+import com.ssafy.backend.realtime.geometry.ViewportRange;
+import com.ssafy.backend.realtime.message.RealtimeMessageService;
+import com.ssafy.backend.realtime.message.RealtimeMessageType;
+import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
+import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.nearby.RiderCountService;
+import com.ssafy.backend.realtime.service.user.UserDisplayService;
+
+import jakarta.annotation.PostConstruct;
+import lombok.RequiredArgsConstructor;
+
+/** 위치 변경을 화면별 ENTER·MOVE·LEAVE로 나눠 보낸다. */
+@Service
+@Profile("realtime")
+@RequiredArgsConstructor
+public class ViewportDeltaService {
+
+	private final ViewportRedisRepository viewportRepository; // 셀을 지켜보는 사용자와 화면 정보
+	private final MusicLocationService musicLocationService; // 곡의 실제 좌표
+	private final MusicPositionCalculator musicPositionCalculator; // 화면에 표시할 위치
+	private final UserDisplayService userDisplayService; // 닉네임과 사진
+	private final RiderCountService riderCountService; // 따라오는 사용자 수
+	private final RealtimeMessageService realtimeMessageService; // 개인 큐 발송
+	private final RealtimeEventService realtimeEventService; // 위치 변경 알림
+
+	/**
+	 * 서비스가 시작되면 위치 변경 알림을 받는다.
+	 */
+	@PostConstruct
+	void subscribeToChanges() {
+		realtimeEventService.listen(this::handlePositionChanged);
+	}
+
+	/**
+	 * 위치 변경을 각 사용자의 현재 화면에 맞는 알림으로 바꾼다.
+	 *
+	 * @param event 바뀌기 전 위치와 바뀐 후 위치
+	 */
+	void handlePositionChanged(PositionChanged event) {
+		// 1. 이전 셀이나 새 셀을 보고 있는 사용자를 찾는다.
+		Set<String> receivers = new LinkedHashSet<>(viewportRepository.findUsersWatchingCells(
+				event.oldLayer(), event.oldCell(), event.newLayer(), event.newCell()));
+		receivers.remove(event.email());
+		if (receivers.isEmpty()) {
+			return;
+		}
+
+		// 2. 개별 사용자 방식인 화면만 남긴다.
+		Map<String, ViewportMeta> metas = new LinkedHashMap<>(
+				viewportRepository.findMetaByEmails(receivers));
+		metas.entrySet().removeIf(entry -> entry.getValue().mode() != ViewportMode.INDIVIDUAL);
+		if (metas.isEmpty()) {
+			return;
+		}
+
+		// 3. 이전 곡과 새 곡의 실제 좌표를 한 번에 읽는다.
+		Map<Long, double[]> locations = findLocations(event);
+		double[] oldLocation = event.oldMusicId() == null ? null : locations.get(event.oldMusicId());
+		double[] newLocation = event.newMusicId() == null ? null : locations.get(event.newMusicId());
+
+		// 4. 각 화면에서 이전·새 위치가 보이는지 확인해 알림 종류를 정한다.
+		Map<String, RealtimeMessageType> types = new LinkedHashMap<>();
+		for (Map.Entry<String, ViewportMeta> entry : metas.entrySet()) {
+			ViewportMeta meta = entry.getValue();
+			boolean sawOld = isVisible(meta, event.oldLayer(), oldLocation)
+					|| oldLocation == null && watchesCell(meta, event.oldLayer(), event.oldCell());
+			boolean seesNew = isVisible(meta, event.newLayer(), newLocation);
+			RealtimeMessageType type = changeType(sawOld, seesNew);
+			if (type != null) {
+				types.put(entry.getKey(), type);
+			}
+		}
+		if (types.isEmpty()) {
+			return;
+		}
+
+		// 5. ENTER·MOVE에 필요한 사용자 정보는 한 번만 읽는다.
+		boolean needsCurrent = types.containsValue(RealtimeMessageType.VIEWPORT_ENTER)
+				|| types.containsValue(RealtimeMessageType.VIEWPORT_MOVE);
+		UserDisplay display = needsCurrent ? userDisplayService.find(event.email()) : null;
+		Integer riderCount = needsCurrent ? riderCountService.count(event.email()) : null;
+		Placement placement = needsCurrent
+				? musicPositionCalculator.calculate(newLocation, event.newLayer())
+				: null;
+
+		// 6. 수신자의 현재 화면 요청 순번을 넣어 개인 큐로 보낸다.
+		for (Map.Entry<String, RealtimeMessageType> entry : types.entrySet()) {
+			String receiver = entry.getKey();
+			RealtimeMessageType type = entry.getValue();
+			ViewportDelta payload = type == RealtimeMessageType.VIEWPORT_LEAVE
+					? leavePayload(metas.get(receiver).requestSeq(), event.email())
+					: currentPayload(
+							metas.get(receiver).requestSeq(), event, display, riderCount, placement);
+			realtimeMessageService.sendToUser(
+					receiver, WebSocketDestination.QUEUE_PRESENCE, type, payload);
+		}
+	}
+
+	/**
+	 * 이전 곡과 새 곡의 좌표를 한 번에 읽는다.
+	 *
+	 * @param event 이전 곡과 새 곡
+	 * @return 곡 ID별 실제 좌표
+	 */
+	private Map<Long, double[]> findLocations(PositionChanged event) {
+		Set<Long> musicIds = new LinkedHashSet<>();
+		if (event.oldMusicId() != null) {
+			musicIds.add(event.oldMusicId());
+		}
+		if (event.newMusicId() != null) {
+			musicIds.add(event.newMusicId());
+		}
+		return musicIds.isEmpty()
+				? Map.of()
+				: musicLocationService.findLocations(List.copyOf(musicIds));
+	}
+
+	/**
+	 * 저장된 화면에서 곡 위치가 실제로 보이는지 확인한다.
+	 *
+	 * @param meta 사용자가 보고 있는 화면
+	 * @param layer 곡이 있는 레이어
+	 * @param location 곡의 실제 좌표
+	 * @return 화면에 보이면 true
+	 */
+	private boolean isVisible(ViewportMeta meta, Integer layer, double[] location) {
+		if (layer == null || location == null || meta.viewport().layer() != layer) {
+			return false;
+		}
+		int[] axes = musicPositionCalculator.findAxes(layer);
+		if (location.length < axes[1]) {
+			return false;
+		}
+		ViewportRange viewport = meta.viewport();
+		return viewport.contains(location[axes[0] - 1], location[axes[1] - 1])
+				&& viewport.satisfiesBounds(location);
+	}
+
+	/**
+	 * 이전 곡 좌표가 없을 때 저장된 셀을 보고 있었는지 확인한다.
+	 *
+	 * @param meta 사용자가 보고 있는 화면
+	 * @param layer 이전 레이어
+	 * @param cellKey 이전 셀
+	 * @return 이전 셀을 보고 있었으면 true
+	 */
+	private boolean watchesCell(ViewportMeta meta, Integer layer, String cellKey) {
+		if (layer == null || cellKey == null || meta.viewport().layer() != layer) {
+			return false;
+		}
+		for (Cell cell : meta.cells()) {
+			if ((cell.cellX() + ":" + cell.cellY()).equals(cellKey)) {
+				return true;
+			}
+		}
+		return false;
+	}
+
+	/**
+	 * 이전·현재 표시 상태를 알림 종류로 바꾼다.
+	 *
+	 * @param sawOld 이전 위치가 보였는지
+	 * @param seesNew 새 위치가 보이는지
+	 * @return ENTER·MOVE·LEAVE. 변화가 없으면 null
+
+	| 이전에 보임 | 지금 보임 | 결과 |
+	|------------|---------|----|
+	|    아니오   |   예    |ENTER|
+	|      예    |  예      |MOVE|
+	|      예    |   아니오 |LEAVE|
+	|    아니오   | 아니오   |발송 안 함|
+	 */
+	private static RealtimeMessageType changeType(boolean sawOld, boolean seesNew) {
+		if (sawOld && seesNew) {
+			return RealtimeMessageType.VIEWPORT_MOVE;
+		}
+		if (seesNew) {
+			return RealtimeMessageType.VIEWPORT_ENTER;
+		}
+		if (sawOld) {
+			return RealtimeMessageType.VIEWPORT_LEAVE;
+		}
+		return null;
+	}
+
+	/**x
+	 * LEAVE로 보낼 화면 요청 순번과 사용자 이메일을 만든다.
+	 * @param requestSeq 수신자의 화면 요청 순번
+	 * @param email 화면에서 지울 사용자 이메일
+	 * @return LEAVE 내용
+	 */
+	private static ViewportDelta leavePayload(long requestSeq, String email) {
+		return new ViewportDelta(requestSeq, email, null, null, null, null, null, null);
+	}
+
+	/**
+	 * LEAVE로 보낼 화면 요청 순번과 사용자 이메일을 만든다.
+	 * @param requestSeq 수신자의 화면 요청 순번
+	 * @param event 위치를 바꾼 사용자와 새 곡
+	 * @param display 닉네임과 사진
+	 * @param riderCount 따라오는 사용자 수
+	 * @param placement 새 화면 위치
+	 * @return ENTER 또는 MOVE 내용
+	 */
+	private static ViewportDelta currentPayload(
+			long requestSeq, PositionChanged event, UserDisplay display,
+			int riderCount, Placement placement) {
+		return new ViewportDelta(
+				requestSeq, event.email(), display.nickname(), display.imageUrl(),
+				event.newMusicId(), placement.xNorm(), placement.yNorm(), riderCount);
+	}
+}

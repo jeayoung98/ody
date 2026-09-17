@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.service.play;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -83,21 +84,26 @@ public class MusicPlayService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 5. 화면과 주변사람 목록에 위치 변경을 알린다.
-		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
-		realtimeEventService.send(new PositionChanged(
-				email, before.epoch(), before.musicId() == null ? null : before.layer(), layer,
-				before.musicId(), musicId,
-				oldCell, p.cellKey(),
-				p.xNorm(), p.yNorm()));
-
-		// 6. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
+		// 5. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
 		PlayHistoryRow history = new PlayHistoryRow();
 		history.setMusicId(musicId);
 		history.setEmail(email);
 		history.setSource(source);
 		history.setPlayedMs(0L);
 		playHistoryMapper.insert(history);
+
+		// 6. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
+		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
+		if (before.musicId() == null
+				|| !Objects.equals(before.musicId(), musicId)
+				|| !Objects.equals(before.layer(), layer)
+				|| !Objects.equals(oldCell, p.cellKey())) {
+			realtimeEventService.send(new PositionChanged(
+					email, before.epoch(), before.musicId() == null ? null : before.layer(), layer,
+					before.musicId(), musicId,
+					oldCell, p.cellKey(),
+					p.xNorm(), p.yNorm()));
+		}
 
 		// 7. 같은 곡에서 만난 사용자들을 기록한다.
 		meetingService.recordMeetings(email, meeting);

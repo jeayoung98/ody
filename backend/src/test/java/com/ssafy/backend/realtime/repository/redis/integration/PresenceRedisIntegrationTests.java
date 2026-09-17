@@ -1,6 +1,8 @@
 package com.ssafy.backend.realtime.repository.redis.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;
@@ -17,10 +19,16 @@ import org.springframework.data.redis.connection.RedisStandaloneConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceClientConfiguration;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ssafy.backend.realtime.config.RedisScriptConfig;
+import com.ssafy.backend.realtime.event.PositionChanged;
+import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.presence.PresenceService;
 
 /** 실제 Redis에서 사용자 배치와 상태 관리를 검증한다. */
 @EnabledIfEnvironmentVariable(named = "RUN_REDIS_INTEGRATION", matches = "true")
@@ -226,6 +234,38 @@ class PresenceRedisIntegrationTests {
 				"active-song:cell:" + data.layer1() + ":3:4", Long.toString(data.music1()))).isTrue();
 		assertThat(redis.opsForSet().isMember("active-song:cells:" + data.layer1(), "3:4")).isTrue();
 		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
+	}
+
+	@Test
+	@DisplayName("다시 연결하면 이전 위치와 구독을 지우고 비노출 상태로 시작한다")
+	void reconnectRemovesOldPositionBeforeCreatingNewPresence() {
+		TestData data = testData();
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		connect(data.email(), 1L);
+		assertThat(repository.join(data.email(), null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+
+		RealtimeEventService eventService = mock(RealtimeEventService.class);
+		PresenceService service = new PresenceService(
+				repository,
+				mock(MusicLocationService.class),
+				mock(MusicPositionCalculator.class),
+				eventService);
+		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
+
+		service.connect(data.email(), 2L);
+
+		assertThat(repository.snapshot(data.email()))
+				.isEqualTo(new PresenceSnapshot(null, null, null, null, 2L));
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(
+				"layer-listeners:" + data.layer1() + ":" + data.music1(), data.email())).isFalse();
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isNull();
+		verify(eventService).send(new PositionChanged(
+				data.email(), 1L, data.layer1(), null,
+				data.music1(), null,
+				"3:4", null,
+				null, null));
 	}
 
 	@Test

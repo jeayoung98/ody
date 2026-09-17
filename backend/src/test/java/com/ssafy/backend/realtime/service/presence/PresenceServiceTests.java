@@ -7,12 +7,14 @@ import static org.mockito.Mockito.when;
 import java.util.List;
 import java.util.Optional;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.test.util.ReflectionTestUtils;
 
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
@@ -34,6 +36,41 @@ class PresenceServiceTests {
 	@Mock MusicPositionCalculator musicPositionCalculator;
 	@Mock RealtimeEventService realtimeEventService;
 	@InjectMocks PresenceService service;
+
+	@BeforeEach
+	void setUp() {
+		ReflectionTestUtils.setField(service, "ttlMs", 45_000L);
+	}
+
+	@Test
+	@DisplayName("다시 연결하면 이전 위치를 지우고 퇴장을 알린 뒤 새 접속을 만든다")
+	void reconnectRemovesPreviousPositionBeforeConnecting() {
+		when(presenceRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(20L, 2, 3, 4, 7L));
+		when(presenceRepository.applyLeave(EMAIL, 7L))
+				.thenReturn(List.of("20", "2", "3", "4", "7"));
+
+		service.connect(EMAIL, 8L);
+
+		verify(presenceRepository).applyLeave(EMAIL, 7L);
+		verify(presenceRepository).connect(EMAIL, 8L, 45_000L);
+		verify(realtimeEventService).send(new PositionChanged(
+				EMAIL, 7L, 2, null,
+				20L, null,
+				"3:4", null,
+				null, null));
+	}
+
+	@Test
+	@DisplayName("첫 연결은 정리 없이 새 접속만 만든다")
+	void firstConnectCreatesPresenceWithoutLeave() {
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(null);
+
+		service.connect(EMAIL, 1L);
+
+		verify(presenceRepository).connect(EMAIL, 1L, 45_000L);
+		verifyNoInteractions(realtimeEventService);
+	}
 
 	@Test
 	@DisplayName("첫 곡 배치가 끝나면 진입을 알린다")

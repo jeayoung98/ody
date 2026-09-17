@@ -40,8 +40,18 @@ public class PresenceService {
 	@Value("${realtime.presence.ttl-ms:45000}")
 	private long ttlMs;
 
-	/** 소켓이 연결되면 접속 정보를 만든다. */
+	/**
+	 * 소켓이 연결되면 이전 접속 상태를 지우고 새 접속 정보를 만든다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param epoch 새 접속 번호
+	 */
 	public void connect(String email, long epoch) {
+		PresenceSnapshot previous = presenceRedisRepository.snapshot(email);
+		if (previous != null && previous.epoch() != null) {
+			List<String> removed = presenceRedisRepository.applyLeave(email, previous.epoch());
+			sendLeave(email, removed);
+		}
 		presenceRedisRepository.connect(email, epoch, ttlMs);
 		log.info("[Presence] 접속 생성 완료 epoch={}", epoch);
 	}

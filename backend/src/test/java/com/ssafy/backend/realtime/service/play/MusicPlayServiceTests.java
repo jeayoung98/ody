@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.service.play;
 
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
@@ -10,7 +11,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
+import org.mockito.InOrder;
 import org.mockito.Mock;
+import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
@@ -53,12 +56,38 @@ class MusicPlayServiceTests {
 
 		service.play(EMAIL, 20L, "MAP");
 
-		verify(realtimeEventService).send(new PositionChanged(
+		PositionChanged event = new PositionChanged(
 				EMAIL, 7L, 2, 2,
 				10L, 20L,
 				"1:1", "2:7",
-				0.2, 0.7));
+				0.2, 0.7);
+		InOrder order = Mockito.inOrder(
+				presenceRedisRepository, playHistoryMapper, realtimeEventService, meetingService);
+		order.verify(presenceRedisRepository).applyPlay(
+				EMAIL, 10L, 2, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7);
+		order.verify(playHistoryMapper).insert(org.mockito.ArgumentMatchers.any(PlayHistoryRow.class));
+		order.verify(realtimeEventService).send(event);
+		order.verify(meetingService).recordMeetings(EMAIL, List.of());
+	}
+
+	@Test
+	@DisplayName("같은 곡을 다시 재생하면 기록만 만들고 위치 변경은 알리지 않는다")
+	void replayingSameMusicDoesNotPublishMove() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(20L, 2, 2, 7, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, 20L, 2, 2, 7,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(List.of());
+
+		service.play(EMAIL, 20L, "MAP");
+
 		verify(playHistoryMapper).insert(org.mockito.ArgumentMatchers.any(PlayHistoryRow.class));
 		verify(meetingService).recordMeetings(EMAIL, List.of());
+		verifyNoInteractions(realtimeEventService);
 	}
 }

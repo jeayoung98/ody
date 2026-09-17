@@ -13,7 +13,7 @@ import org.springframework.stereotype.Component;
  * epoch = 그 연결이 최신인지 확인하는 버전. 재접속할 때 올려서 옛 연결이 새 상태를 지우지 못하게 한다.
  * seq = 메시지 순번. 보낼 때 올려서 클라이언트가 메시지 순서를 확인하게 한다.
  * 흐름: CONNECT → register, 발송 → nextMessageSeq, LEAVE → findEpoch, DISCONNECT → unregister.
- * TODO(정책): 같은 email 두 번째 CONNECT 시 기존 활성 세션을 강제로 끊을지는 별도로 확정한다.
+ * 같은 email로 다시 연결하면 새 연결이 최신 상태를 맡고, 이전 연결 요청은 epoch 비교로 무시한다.
  */
 @Component
 public class WebSocketSessionService {

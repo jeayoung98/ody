@@ -125,13 +125,16 @@ public class MusicService {
 	public VideoIdBatchResponse getVideoIds(List<Long> musicIds) {
 		MusicDetailReader reader = detailReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/videoid: BE4 조회 어댑터 대기 중 (B-D)"));
-		List<MusicSummary> summaries = reader.findSummariesByIds(musicIds);
+		// findSummariesByIds(MusicSummary) 대신 findDetailsByIds(MusicDetail) 를 쓴다 — duration 이
+		// 필요해서다(S15P21A405-407). MusicSummary 에 duration 을 추가하면 docs/api-spec.md §0.6 계약과
+		// 어긋나고 search/상세-이웃/경로탐색 응답에도 새 필드가 생기지만, 이 응답(VideoIdItem)은
+		// musicId/videoId 만 내보내므로 내부 조회 타입만 바꿔도 API 계약은 그대로다.
+		List<MusicDetail> details = reader.findDetailsByIds(musicIds);
 
-		// MusicSummary 에는 duration 이 없다(API 응답 계약 변경 없이는 못 채운다, S15P21A405-401) — null 로 조회.
-		List<VideoIdItem> items = summaries.stream()
-				.map(summary -> new VideoIdItem(summary.id(),
-						videoIdEnricher.resolve(summary.id(), summary.artist(), summary.title(), summary.videoId(),
-								null)))
+		List<VideoIdItem> items = details.stream()
+				.map(detail -> new VideoIdItem(detail.id(),
+						videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId(),
+								detail.duration())))
 				.toList();
 
 		log.info("[VideoId] 일괄 조회 완료 요청={} 응답={}", musicIds.size(), items.size());

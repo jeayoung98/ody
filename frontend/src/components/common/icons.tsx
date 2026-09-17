@@ -81,6 +81,18 @@ export const PauseIcon = ({ size = 14, ...p }: P) => (
     <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
   </svg>
 );
+/**
+ * 목록 재생 — 줄 세 개 + 삼각형 (S15P21A405-384).
+ *
+ * 홑 삼각형(`PlayIcon`)과 **일부러 다르게** 생겼다. 곡 상세의 순차 재생은 한 곡이 아니라
+ * **10곡을 줄 세워 듣는 것**인데, 같은 ▶ 를 쓰면 제목 줄의 "이 곡 재생" 과 구분이 안 됐다.
+ */
+export const ListPlayIcon = ({ size = 15, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2}>
+    <path d="M4 7h12M4 12h9M4 17h6" />
+    <path d="M15.6 13.4v7.2l6-3.6z" fill="currentColor" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" />
+  </svg>
+);
 export const PrevIcon = ({ size = 14, ...p }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...p}>
     <path d="M7 5h2v14H7zM20 5v14l-10-7z" />

@@ -70,7 +70,7 @@ export default function SongPcList({ items }: SongPcListProps) {
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle tone="sentence" aside={`치우친 순 ${open ? rows.length : top.length}/${rows.length}`}>
-        이 곡을 설명하는 축
+        이 곡은 이런 소리예요!
       </SectionTitle>
       <SongPcChart rows={top} />
       {rest.length > 0 && (

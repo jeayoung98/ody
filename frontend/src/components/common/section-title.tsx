@@ -16,7 +16,7 @@ interface SectionTitleProps {
 export default function SectionTitle({ children, aside, tone = "label" }: SectionTitleProps) {
   return (
     <div className="flex items-baseline justify-between gap-2.5">
-      <h3 className={tone === "sentence" ? "text-md font-medium text-ink" : "lbl"}>{children}</h3>
+      <h3 className={tone === "sentence" ? "text-md font-medium text-ink-2" : "lbl"}>{children}</h3>
       {aside && <div className="text-xs text-ink-3">{aside}</div>}
     </div>
   );

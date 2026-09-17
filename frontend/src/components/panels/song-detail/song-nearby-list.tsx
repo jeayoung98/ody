@@ -2,7 +2,7 @@
 
 import { useRef, useState } from "react";
 import Button from "@/components/common/button";
-import { ChevronLeftIcon, CoronaIcon, PlayIcon } from "@/components/common/icons";
+import { ChevronLeftIcon, CoronaIcon, ListPlayIcon } from "@/components/common/icons";
 import TransportButton from "@/components/common/transport-button";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
@@ -151,9 +151,13 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
             <b>유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요! 카드를 누르면 그 곡으로 옮겨가요.
           </Note>
         </div>
-        {/* 재생은 앱 어디서나 같은 동그란 버튼이다 (플레이어바·제목 줄과 같은 물건) */}
+        {/*
+          **한 곡 재생과 다르게 생겨야 한다** (S15P21A405-384). 자리도 크기도 제목 줄의 재생
+          버튼과 같아서, 같은 ▶ 를 달면 "이 곡 재생" 으로 읽힌다. 줄 세 개가 붙은 아이콘이
+          **목록을 듣는 버튼**임을 말한다 — 껍데기는 앱의 그 동그란 재생 버튼 그대로다.
+        */}
         <TransportButton label={`${NEARBY_COUNT}곡 순차 재생`} primary disabled={items.length === 0} onClick={handlePlayAll}>
-          <PlayIcon size={15} />
+          <ListPlayIcon size={15} />
         </TransportButton>
       </div>
       {/*

@@ -21,11 +21,17 @@ interface TransportButtonProps {
    * 맞추되** 색으로만 무게를 가른다. 플레이어바의 이전/다음은 `sm` 그대로다.
    */
   size?: "sm" | "md";
+  /**
+   * 아이콘을 제일 밝은 색으로. 기본(`ink-2`)은 플레이어바의 이전/다음처럼 **주인공 옆에서
+   * 거드는 버튼** 기준이라, 곡 상세 제목 줄의 플리 추가처럼 혼자 서 있는 버튼은 흐려 보인다
+   * (S15P21A405-384).
+   */
+  bright?: boolean;
   children: ReactNode;
 }
 
 /** .tBtn / #tPlay — 하단 플레이어바와 곡 상세 제목 줄이 함께 쓴다 */
-export default function TransportButton({ label, onClick, disabled, dimmed, primary, size = "sm", children }: TransportButtonProps) {
+export default function TransportButton({ label, onClick, disabled, dimmed, primary, size = "sm", bright = false, children }: TransportButtonProps) {
   const wide = primary || size === "md";
   return (
     <button
@@ -37,7 +43,7 @@ export default function TransportButton({ label, onClick, disabled, dimmed, prim
       aria-disabled={dimmed || undefined}
       className={`grid shrink-0 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-35 ${dimmed ? "opacity-35" : ""} ${
         wide ? "h-9 w-9" : "h-8 w-8"
-      } ${primary ? "bg-white/10 text-ink hover:grad-bg hover:text-void" : "text-ink-2 hover:bg-white/[.08] hover:text-ink"}`}
+      } ${primary ? "bg-white/10 text-ink hover:grad-bg hover:text-void" : `hover:bg-white/[.08] hover:text-ink ${bright ? "text-ink" : "text-ink-2"}`}`}
     >
       {children}
     </button>

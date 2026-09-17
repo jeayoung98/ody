@@ -16,7 +16,7 @@ export default function FriendsPanel() {
   const { data, isPending, isError } = useNearbyUsersQuery(layer);
 
   return (
-    <Box title="주변 사람" code="SOCIAL-01" actions={<PanelCloseButton />}>
+    <Box title="주변 사람" actions={<PanelCloseButton />}>
       <Note>
         지금 화면에 잡히는 구역의 <b>공개 계정</b> 사용자입니다. 여기서의 거리는 실제 위치가 아니라 음악 지도상의 좌표 거리예요.
       </Note>

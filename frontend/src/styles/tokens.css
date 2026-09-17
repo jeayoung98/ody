@@ -60,9 +60,9 @@
   --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
 
   /* ---------- 박스 ---------- */
-  --radius-box: 14px;
-  --radius-box-sm: 10px;
-  --radius-box-xs: 8px;
+  --radius-box: 18px;
+  --radius-box-sm: 13px;
+  --radius-box-xs: 10px;
   --radius-pill: 999px;
   --shadow-box: 0 18px 48px -22px rgb(0 0 0 / 0.9), inset 0 1px 0 rgb(255 255 255 / 0.055);
   --shadow-glow-azure: 0 0 24px -6px rgb(92 157 255 / 0.8);
@@ -76,6 +76,7 @@
   --spacing-instrument: 230px;
 
   /* ---------- 타이포 ---------- */
+  --text-3xs: 8.5px;
   --text-2xs: 9.5px;
   --text-xs: 10.5px;
   --text-sm: 12px;
@@ -83,6 +84,9 @@
   --text-lg: 15px;
   --text-xl: 18px;
   --text-2xl: 20px;
+  /* 본문 기본 크기. 설문 카드의 질문처럼 '한 줄로 말을 거는' 자리에 쓴다 */
+  --text-base: 16px;
+  --text-3xl: 25px;
 
   /* ---------- 모션 ---------- */
   --duration-fast: 140ms;

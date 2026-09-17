@@ -25,6 +25,7 @@
 | [011](011-ascend-lands-at-max-zoom-empty-screen.md) | 겹을 떠오르면 화면에 별이 하나도 없음 | 게이트를 미느라 7.7배까지 확대된 배율을 그대로 복원 — [006](006-layer-entry-scale-lost-on-ascend.md) 이 반만 고친 자리 | S15P21A405-327 |
 | [012](012-survey-playback-lifecycle.md) | 설문이 사라지거나 다음 곡이 멈춤·튜토리얼 완료 복원 누락 | 재생 의도와 실제 청취를 혼동하고 뷰·제출 수명주기를 결합, 로컬 완료값 미복원 | S15P21A405-369 |
 | [013](013-analytics-uuid-on-http.md) | HTTP 테스트 주소에서 분석 이벤트가 전부 멈춤 | 보안 컨텍스트 전용 `crypto.randomUUID()` 호출이 첫 이벤트 생성을 중단 | S15P21A405-295 |
+| [014](014-button-font-size-utilities-ignored.md) | 버튼 글씨 크기 클래스가 전부 무시됨 | 레이어 밖의 `button { font: inherit }` 가 `@layer utilities` 의 `.text-*` 를 항상 이김 | S15P21A405-384 |
 
 ---
 

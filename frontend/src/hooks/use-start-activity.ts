@@ -27,6 +27,10 @@ function currentActivity(): CurrentActivity | null {
  * 배타 활동 시작 (ACT-01).
  * 다른 활동이 진행 중이면 "멈추고 시작할까요?" 팝업을 띄우고, 확인 시 이전 활동을 종료한 뒤 begin 을 실행한다.
  * 같은 대상을 다시 시작하는 경우는 팝업 없이 바로 실행한다.
+ *
+ * **주변 탐색 → 주변 탐색은 묻지 않는다** (S15P21A405-384). 중심곡만 옮기는 것이라 "주변 탐색을
+ * 멈추고 주변 탐색을 시작할까요" 가 되어 버린다 — 이웃을 타고 걸어 들어가는 동안 매번 뜬다.
+ * 여정·플리·따라가기에서 넘어올 때는 그대로 묻는다. 그건 정말로 다른 것을 버리는 일이다.
  */
 export function useStartActivity() {
   const ask = useConfirmStore((s) => s.ask);
@@ -54,7 +58,7 @@ export function useStartActivity() {
   return useCallback(
     (next: ActivityKind, targetKey: string, begin: () => void) => {
       const cur = currentActivity();
-      if (!cur || (cur.kind === next && cur.targetKey === targetKey)) {
+      if (!cur || (cur.kind === next && (cur.targetKey === targetKey || next === "nearby"))) {
         runPlaybackTransition(begin);
         return;
       }

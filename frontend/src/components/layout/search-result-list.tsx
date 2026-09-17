@@ -85,7 +85,7 @@ export default function SearchResultList({
       onScroll={checkBottom}
       // 스크롤바를 잡아도 검색창이 포커스를 잃지 않게 (잃으면 목록이 닫힌다)
       onMouseDown={(e) => e.preventDefault()}
-      className="glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[12px]!"
+      className="glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[15px]!"
     >
       {/* 통합 검색에서 입력값을 제목 또는 아티스트 조건으로 굳힌다. */}
       {canPromote && (

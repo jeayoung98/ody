@@ -57,10 +57,13 @@ const open = (panel: PanelType, patch: object = {}) => {
 };
 
 /**
- * 곡 상세에서 **돌아갈 자리**. 여정·플리 목록에서 곡을 눌러 들어왔을 때만 잡힌다 —
- * 지도에서 바로 연 곡 상세에는 돌아갈 자리가 없다.
+ * 곡 상세에서 **돌아갈 자리**. 여정·플리 목록에서 곡을 눌러 들어왔거나, 주변 음악 카드로
+ * 이웃에 들어왔을 때 잡힌다 (S15P21A405-384) — 지도에서 바로 연 곡 상세에는 돌아갈 자리가 없다.
+ *
+ * **한 겹만 기억한다.** 카드를 타고 계속 들어가도 쌓지 않는다 — 돌아가는 곳은 늘 "직전 곡" 이고,
+ * 더 거슬러 올라가는 길은 지도가 대신한다.
  */
-export type PanelReturn = { panel: "journey" } | { panel: "playlist"; playlistId: number };
+export type PanelReturn = { panel: "journey" } | { panel: "playlist"; playlistId: number } | { panel: "song"; musicId: number };
 
 interface PanelState {
   /** 열려 있는 우측 패널. null이면 닫힘 */
@@ -85,6 +88,8 @@ interface PanelState {
   openSong: (musicId: number) => void;
   /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
   openSongFromList: (musicId: number) => void;
+  /** 주변 음악 카드로 이웃 곡에 들어간다 — 직전 곡을 돌아갈 자리로 기억한다 (S15P21A405-384) */
+  openNeighborSong: (musicId: number, fromMusicId: number) => void;
   /** 기억해 둔 자리로 돌아간다 */
   goBack: () => void;
   openPlaylist: (playlistId: number) => void;
@@ -123,10 +128,14 @@ export const usePanelStore = create<PanelState>()(
         set(open("song", { musicId, back }), false, "openSongFromList");
       },
 
+      openNeighborSong: (musicId, fromMusicId) =>
+        set(open("song", { musicId, back: { panel: "song", musicId: fromMusicId } }), false, "openNeighborSong"),
+
       goBack: () => {
         const back = get().back;
         if (!back) return;
         if (back.panel === "journey") set({ activePanel: "journey", back: null, collapsed: false }, false, "goBack/journey");
+        else if (back.panel === "song") set({ activePanel: "song", musicId: back.musicId, back: null, collapsed: false }, false, "goBack/song");
         else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, collapsed: false }, false, "goBack/playlist");
       },
 

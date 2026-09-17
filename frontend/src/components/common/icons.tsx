@@ -81,6 +81,18 @@ export const PauseIcon = ({ size = 14, ...p }: P) => (
     <path d="M7 5h3.5v14H7zM13.5 5H17v14h-3.5z" />
   </svg>
 );
+/**
+ * 목록 재생 — 줄 세 개 + 삼각형 (S15P21A405-384).
+ *
+ * 홑 삼각형(`PlayIcon`)과 **일부러 다르게** 생겼다. 곡 상세의 순차 재생은 한 곡이 아니라
+ * **10곡을 줄 세워 듣는 것**인데, 같은 ▶ 를 쓰면 제목 줄의 "이 곡 재생" 과 구분이 안 됐다.
+ */
+export const ListPlayIcon = ({ size = 15, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2}>
+    <path d="M4 7h12M4 12h9M4 17h6" />
+    <path d="M15.6 13.4v7.2l6-3.6z" fill="currentColor" stroke="currentColor" strokeWidth={1.4} strokeLinejoin="round" />
+  </svg>
+);
 export const PrevIcon = ({ size = 14, ...p }: P) => (
   <svg width={size} height={size} viewBox="0 0 24 24" fill="currentColor" {...p}>
     <path d="M7 5h2v14H7zM20 5v14l-10-7z" />
@@ -91,11 +103,21 @@ export const NextIcon = ({ size = 14, ...p }: P) => (
     <path d="M15 5h2v14h-2zM4 5l10 7-10 7z" />
   </svg>
 );
-export const RadarIcon = ({ size = 15, ...p }: P) => (
-  <svg {...base(size, p)}>
-    <circle cx="12" cy="12" r="9" />
-    <circle cx="12" cy="12" r="4.5" />
-    <path d="M12 3v4.5M12 12l5.5-5.5" />
+/**
+ * 주변 탐색 — **한 별에서 이웃들로 뻗는 코로나** (S15P21A405-384).
+ *
+ * 예전 레이더(동심원 + 대각선)는 "훑어본다" 는 뜻이라 이 기능과 어긋났다. 여기서 하는 일은
+ * **한 곡을 가운데 두고 가까운 곡들을 불러 세우는 것**이다 — 가운데 별에서 짧은 선이 방사로
+ * 뻗고 끝마다 이웃 별이 붙는 그림이 그 뜻이다. 곡 상세 카드 줄과 하단 바가 같은 것을 쓴다.
+ */
+export const CoronaIcon = ({ size = 15, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={1.7}>
+    <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+    <path d="M12 6.4V4M12 20v-2.4M6.4 12H4M20 12h-2.4M8.1 8.1 6.4 6.4M15.9 15.9l1.7 1.7M15.9 8.1l1.7-1.7M8.1 15.9l-1.7 1.7" />
+    <circle cx="12" cy="2.9" r="1.05" />
+    <circle cx="12" cy="21.1" r="1.05" />
+    <circle cx="2.9" cy="12" r="1.05" />
+    <circle cx="21.1" cy="12" r="1.05" />
   </svg>
 );
 export const SmileIcon = ({ size = 19, ...p }: P) => (
@@ -124,5 +146,79 @@ export const FlagIcon = ({ size = 14, ...p }: P) => (
   <svg {...base(size, p)}>
     <path d="M5 21V4" />
     <path d="M5 4h11l-2.2 3.6L16 11H5" />
+  </svg>
+);
+/** 왼쪽 홑화살. 오른쪽은 `rotate-180` 으로 돌려 쓴다 (`ChevronDownIcon` 과 같은 이유) */
+export const ChevronLeftIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2.1}>
+    <path d="M14.5 6l-6 6 6 6" />
+  </svg>
+);
+/**
+ * 아래로 향하는 홑화살 — 접힌 것을 편다. **펴진 상태는 뒤집어서 쓴다**(`rotate-180`):
+ * 아이콘을 둘로 나누면 바뀌는 순간 튀어서, 한 아이콘을 돌려야 애니메이션이 이어진다.
+ */
+export const ChevronDownIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2.1}>
+    <path d="M6 9.5l6 6 6-6" />
+  </svg>
+);
+/** 곡 길이 — 시계. 칩이 값만 적으므로 그 값이 무엇인지 아이콘이 먼저 말한다 (S15P21A405-384) */
+export const ClockIcon = ({ size = 11, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="12" cy="12" r="8.6" />
+    <path d="M12 7.4V12l3.2 2" />
+  </svg>
+);
+/** 발매년도 — 달력 */
+export const CalendarIcon = ({ size = 11, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <rect x="3.6" y="5.4" width="16.8" height="15" rx="2.6" />
+    <path d="M3.6 10.2h16.8M8.4 3.4v3.4M15.6 3.4v3.4" />
+  </svg>
+);
+/**
+ * 플레이리스트에 추가 (SONG-05) — 목록 세 줄 + 더하기.
+ * 하트를 쓰지 않았다. 하트는 "좋아요"(PATH-07)의 자리라 같은 화면에서 뜻이 갈린다.
+ */
+export const PlaylistAddIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4 7h12M4 12h12M4 17h6.5" />
+    <path d="M17 14.2v6M14 17.2h6" />
+  </svg>
+);
+/**
+ * 여정 출발 — 별에서 떠나는 화살. 도착(`ArriveIcon`)과 짝이고, 색은 여정 패널과 같게
+ * 출발 teal · 도착 violet 로 쓴다 (`journey-endpoints.tsx`).
+ */
+export const DepartIcon = ({ size = 13, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="6.4" cy="17.6" r="3.1" />
+    <path d="M9.9 14.1 18 6" />
+    <path d="M12.6 6H18v5.4" />
+  </svg>
+);
+/** 여정 도착 — 별로 들어오는 화살 */
+export const ArriveIcon = ({ size = 13, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="17.6" cy="17.6" r="3.1" />
+    <path d="M6 6l7.4 7.4" />
+    <path d="M8.8 13.4h4.6V8.8" />
+  </svg>
+);
+/**
+ * 신고 — 경광등(삐용삐용). 깃발보다 "무슨 일이 있었다" 는 뜻이 바로 읽힌다 (S15P21A405-384).
+ * 받침 · 돔 · 위로 뻗는 빛 두 줄.
+ *
+ * 색은 쓰는 쪽에서 준다(`currentColor`). 헤더 신고 버튼은 빨강이다 — 402 가 본문에 빨간 버튼을
+ * 세운 뜻("눌러야 할 것이 아니라 **눈에 띄어야** 하는 버튼")을 색으로 가져왔다.
+ * 다른 아이콘보다 큰 기본값(18)을 쓴다. 작으면 돔·빛줄기가 뭉쳐 그냥 점으로 보인다.
+ */
+export const SirenIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M7.6 18.6v-3.4a4.4 4.4 0 0 1 8.8 0v3.4" />
+    <path d="M5.2 18.6h13.6" />
+    <path d="M12 8.6V6.4" />
+    <path d="M6.3 11.5 4.2 10.3M17.7 11.5l2.1-1.2" />
   </svg>
 );

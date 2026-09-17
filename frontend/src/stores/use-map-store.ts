@@ -89,8 +89,15 @@ interface MapState extends EngineSnapshot {
   setViewMode: (mode: MapViewMode) => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
-  enterNearby: (musicId: number) => void;
+  /**
+   * 주변 탐색을 켠다. `panelHandled` 는 **부른 쪽이 패널을 직접 정했다**는 뜻이다
+   * (S15P21A405-384) — `map-view` 의 "중심곡 상세도 같이 연다" 효과(348)가 이 값을 보고
+   * 비켜난다. 이웃 카드를 고를 때처럼 중심곡이 아니라 **고른 곡**의 상세를 띄워야 할 때 쓴다.
+   */
+  enterNearby: (musicId: number, panelHandled?: boolean) => void;
   exitNearby: () => void;
+  /** {@link enterNearby} 참고. 효과가 읽고 나면 다음 enterNearby 가 다시 정한다 */
+  nearbyPanelHandled: boolean;
   /** 목록을 넣고 별자리 뷰를 바로 켠다. 주변 탐색이 켜져 있으면 닫힌다 (PATH-01-1) */
   showConstellation: (musicIds: number[], points: MapPoint[] | undefined, source: PlayContext) => void;
   /** 목록만 갈아끼운다 (뷰는 건드리지 않음) — 패널을 열었을 때 택만 뜨게 */
@@ -148,6 +155,7 @@ export const useMapStore = create<MapState>()(
       canGoHome: false,
 
       viewMode: "default",
+      nearbyPanelHandled: false,
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
@@ -162,14 +170,22 @@ export const useMapStore = create<MapState>()(
       },
 
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
-      enterNearby: (musicId) => {
+      enterNearby: (musicId, panelHandled = false) => {
         set(
-          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS, constellationSource: null },
+          {
+            viewMode: "nearby",
+            nearbyCenterMusicId: musicId,
+            selectedMusicId: musicId,
+            nearbyPanelHandled: panelHandled,
+            constellationMusicIds: EMPTY_IDS,
+            constellationPoints: EMPTY_POINTS,
+            constellationSource: null,
+          },
           false,
           "enterNearby",
         );
       },
-      exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null }, false, "exitNearby"),
+      exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null, nearbyPanelHandled: false }, false, "exitNearby"),
 
       showConstellation: (constellationMusicIds, points = EMPTY_POINTS, constellationSource) =>
         set(

@@ -41,7 +41,7 @@ export default function PlaylistPanel() {
   }, [items, playlistId, setConstellationList]);
 
   return (
-    <Box title="플레이리스트" code="PATH-06" actions={<PanelCloseButton />}>
+    <Box title="플레이리스트" actions={<PanelCloseButton />}>
       {isPending && <Loading />}
       {isError && <ErrorMessage />}
       {data && (

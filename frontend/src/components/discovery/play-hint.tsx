@@ -183,8 +183,10 @@ export default function PlayHint() {
           <span className="text-center text-[12.5px] text-ink">{LABEL[context]}</span>
           {/*
             안내가 주인이다 — 건너뛰기를 같은 무게로 두면 둘 중 무엇을 보라는 건지 안 읽힌다.
-            크기·색을 **안쪽 span 에** 준다: `globals.css` 의 레이어 밖 `button { font: inherit; color: inherit }`
-            가 버튼에 직접 건 유틸리티를 이긴다 (레이어 없는 규칙이 `@layer utilities` 보다 세다).
+            크기·색은 안쪽 span 에 준다. 예전에는 **그래야만** 했다 — `globals.css` 의 기본 블록이
+            레이어 밖에 있어 `button { font: inherit; color: inherit }` 가 버튼에 직접 건 유틸리티를
+            이겼다. 그 원인은 `@layer base` 로 감싸 고쳤으므로(S15P21A405-384,
+            docs/troubleshooting/014) **이제 버튼에 직접 걸어도 먹는다.** 여기는 굳이 바꾸지 않았다.
           */}
           <button type="button" onClick={skip} className="pointer-events-auto cursor-pointer">
             <span className="text-[11.5px] text-ink-3 transition-colors hover:text-ink">건너뛰기</span>

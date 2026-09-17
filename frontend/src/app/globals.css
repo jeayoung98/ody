@@ -2,29 +2,37 @@
 @import "../styles/tokens.css";
 
 /* ---------- 기본 ---------- */
-html,
-body {
-  height: 100%;
-  background: var(--color-void);
-  color: var(--color-ink);
-  font-family: var(--font-body);
-  font-weight: 400;
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-}
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-input {
-  font: inherit;
-  color: inherit;
-}
-:focus-visible {
-  outline: 2px solid var(--color-teal);
-  outline-offset: 2px;
-  border-radius: 6px;
+/*
+ * **반드시 `@layer base` 안에 둔다.** 레이어 밖의 규칙은 레이어 안의 것을 **언제나** 이긴다 —
+ * 우선순위(specificity)와 무관하다. 예전에 이 블록이 레이어 밖에 있어서 `button { font: inherit }`
+ * 이 Tailwind 유틸리티(`.text-xs` 등, `@layer utilities`)를 눌러 버렸고, **버튼 글씨 크기 클래스가
+ * 전부 무시된 채** 상속값(16px)으로 그려졌다 (S15P21A405-384 에서 발견).
+ */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  input {
+    font: inherit;
+    color: inherit;
+  }
+  :focus-visible {
+    outline: 2px solid var(--color-teal);
+    outline-offset: 2px;
+    border-radius: 8px;
+  }
 }
 ::-webkit-scrollbar {
   width: 8px;
@@ -76,6 +84,85 @@ input {
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
+}
+
+/* ---------- 가로로 미는 줄 (곡 상세 주변 음악 카드) ---------- */
+/*
+ * 스크롤바를 숨긴다. 카드가 패널 좌우 끝까지 흘러 나가는 줄이라, 8px 짜리 가로 막대가
+ * 카드 밑에 걸리면 줄이 끊겨 보인다. 스크롤은 그대로 된다 (휠·트랙패드·드래그).
+ */
+.rail {
+  scrollbar-width: none;
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- 불러오는 동안의 자리 (skeleton.tsx) ---------- */
+/*
+ * 빛이 왼쪽에서 오른쪽으로 한 번 훑고 지나간다 — "멈춘 게 아니라 오는 중" 을 말하는 최소한의
+ * 움직임이다 (S15P21A405-384). 깜빡임(opacity)보다 눈이 덜 피로하고, 여러 줄이 같이 깜빡일 때
+ * 생기는 "화면이 뛰는" 느낌이 없다.
+ */
+.skel {
+  background-color: rgb(255 255 255 / 0.055);
+  background-image: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.055) 40%, transparent 60%);
+  background-size: 260% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
+@keyframes skel {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -30% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
+}
+
+/* ---------- 넘치는 한 줄 흘리기 (marquee-text.tsx) ---------- */
+/*
+ * 기본값은 **꺼짐**이다. 넘치는지는 브라우저에서 재야 알 수 있으므로 JS 가 재고 data-run 을 켠다
+ * (`marquee-text.tsx`). 서버 렌더에서는 사본이 숨겨진 채로 나가 같은 글자가 두 번 보이지 않는다.
+ */
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marquee-track {
+  display: inline-flex;
+  min-width: 100%;
+}
+.marquee[data-run="off"] .marquee-copy {
+  display: none;
+}
+.marquee[data-run="on"] {
+  -webkit-mask-image: linear-gradient(to right, #000 86%, transparent);
+  mask-image: linear-gradient(to right, #000 86%, transparent);
+}
+.marquee[data-run="on"] .marquee-track {
+  animation: marquee var(--marquee-dur) linear infinite;
+}
+/* 글자가 흐르면 읽던 자리를 놓친다 — 얹으면 멈춘다 */
+.marquee[data-run="on"]:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--marquee-shift)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee[data-run="on"] .marquee-track {
+    animation: none;
+  }
 }
 
 /* ---------- 스테이지 배경 (지도 뒤) ---------- */

@@ -18,7 +18,7 @@ export default function ChartPanel() {
   const current = CHART_TYPES.find((c) => c.key === type)!;
 
   return (
-    <Box title="차트" code="SOCIAL-12" actions={<PanelCloseButton />}>
+    <Box title="차트" actions={<PanelCloseButton />}>
       <Tabs items={TAB_ITEMS} value={type} onChange={setType} />
       <SectionTitle>{current.label}</SectionTitle>
       <div className="-mx-1.5 flex flex-col gap-0.5">{type === "topPlaylist" ? <PlaylistRankingList /> : <UserRankingList type={type} />}</div>

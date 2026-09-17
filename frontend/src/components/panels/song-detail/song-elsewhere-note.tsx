@@ -10,7 +10,7 @@ export default function SongElsewhereNote({ musicId }: { musicId: number }) {
   const surfaceToMusic = useMapStore((s) => s.surfaceToMusic);
 
   return (
-    <div className="flex items-center justify-between gap-2 rounded-[10px] border border-dashed border-violet/35 bg-violet/[.06] px-2.5 py-1.5">
+    <div className="flex items-center justify-between gap-2 rounded-[13px] border border-dashed border-violet/35 bg-violet/[.06] px-2.5 py-1.5">
       <span className="text-[11px] leading-[1.4] text-ink-2">이 겹에 없는 곡이에요</span>
       <button
         type="button"

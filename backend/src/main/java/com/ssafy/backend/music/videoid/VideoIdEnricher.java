@@ -35,7 +35,7 @@ public class VideoIdEnricher {
 		Optional<String> videoId = lookupPort.lookup(artist, title, durationSeconds);
 		videoId.ifPresent(id -> {
 			writerPort.save(musicId, id);
-			log.info("[VideoId] 실시간 매핑 완료 musicId={}", musicId);
+			log.info("[VideoId] 실시간 매핑 완료 musicId={}, videoId={}", musicId, videoId);
 		});
 		return videoId.orElse(null);
 	}

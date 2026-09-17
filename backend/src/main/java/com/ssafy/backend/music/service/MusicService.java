@@ -107,7 +107,7 @@ public class MusicService {
 				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId(),
 						detail.duration()));
 
-		log.info("[Music] 상세 조회 완료 id={} neighbors={}", id, result.neighbors().size());
+		log.info("[Music] 상세 조회 완료 title={}, artist={}, musicId={}, videoId={}, neighbors={}", enrichedDetail.title(), enrichedDetail.artist(), id, enrichedDetail.videoId(), result.neighbors().size());
 		return new MusicDetailResponse(enrichedDetail, result.neighbors(), result.lowSimilarity());
 	}
 

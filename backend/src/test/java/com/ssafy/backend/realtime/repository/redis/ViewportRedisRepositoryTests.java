@@ -6,17 +6,20 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
+import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 
 import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.geometry.ViewportRange.LayerBound;
+import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 
 /** 화면 구독 스크립트에 전달하는 값과 결과를 검증한다. */
@@ -45,11 +48,11 @@ class ViewportRedisRepositoryTests {
 				"user@x.com", "7", "11", "3",
 				"-1.0", "1.0", "-2.0", "2.0",
 				"1|-3.0|3.0|-4.0|4.0;2|-5.0|5.0|-6.0|6.0",
-				"1:2,3:4", "viewport:cell:"))
+				"INDIVIDUAL", "1:2,3:4", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(1L);
 
 		ReplaceResult result = repository.replaceSubscriptions(
-				"user@x.com", 7L, 11L, viewport, cells);
+				"user@x.com", 7L, 11L, viewport, ViewportMode.INDIVIDUAL, cells);
 
 		assertThat(result).isEqualTo(ReplaceResult.APPLIED);
 		verify(redis).execute(replaceScript,
@@ -57,7 +60,7 @@ class ViewportRedisRepositoryTests {
 				"user@x.com", "7", "11", "3",
 				"-1.0", "1.0", "-2.0", "2.0",
 				"1|-3.0|3.0|-4.0|4.0;2|-5.0|5.0|-6.0|6.0",
-				"1:2,3:4", "viewport:cell:");
+				"INDIVIDUAL", "1:2,3:4", "viewport:cell:", "viewport:clustered:");
 	}
 
 	@Test
@@ -67,15 +70,35 @@ class ViewportRedisRepositoryTests {
 		List<String> keys = List.of("presence:user:user@x.com", "viewport:meta:user@x.com");
 		Object[] args = {
 				"user@x.com", "7", "2", "1",
-				"-1.0", "1.0", "-1.0", "1.0", "", "0:0", "viewport:cell:"
+				"-1.0", "1.0", "-1.0", "1.0", "",
+				"INDIVIDUAL", "0:0", "viewport:cell:", "viewport:clustered:"
 		};
 		when(redis.execute(replaceScript, keys, args)).thenReturn(0L, -1L);
 
 		assertThat(repository.replaceSubscriptions(
-				"user@x.com", 7L, 2L, viewport, Set.of(new Cell(0, 0))))
+				"user@x.com", 7L, 2L, viewport,
+				ViewportMode.INDIVIDUAL, Set.of(new Cell(0, 0))))
 				.isEqualTo(ReplaceResult.OLD_REQUEST);
 		assertThat(repository.replaceSubscriptions(
-				"user@x.com", 7L, 2L, viewport, Set.of(new Cell(0, 0))))
+				"user@x.com", 7L, 2L, viewport,
+				ViewportMode.INDIVIDUAL, Set.of(new Cell(0, 0))))
 				.isEqualTo(ReplaceResult.STALE_CONNECTION);
+	}
+
+	@Test
+	@DisplayName("여러 기본 셀의 사용자 수를 한 번에 읽고 빈 셀은 뺀다")
+	void readsUserCountsByCellAtOnce() {
+		HashOperations<String, Object, Object> hash = mock(HashOperations.class);
+		when(redis.opsForHash()).thenReturn(hash);
+		List<Cell> cells = List.of(new Cell(1, 2), new Cell(3, 4), new Cell(5, 6));
+		when(hash.multiGet("cell:usercount:2", List.of("1:2", "3:4", "5:6")))
+				.thenReturn(java.util.Arrays.asList("3", null, "1"));
+
+		Map<Cell, Integer> result = repository.findUserCountsByCell(2, cells);
+
+		assertThat(result)
+				.containsEntry(new Cell(1, 2), 3)
+				.containsEntry(new Cell(5, 6), 1)
+				.doesNotContainKey(new Cell(3, 4));
 	}
 }

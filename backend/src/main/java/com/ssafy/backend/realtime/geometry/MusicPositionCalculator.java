@@ -69,6 +69,15 @@ public class MusicPositionCalculator {
 	}
 
 	/**
+	 * 화면에 인원수로 표시할 셀의 위치.
+	 *
+	 * @param x 지도에서 곡과 같은 기준으로 쓰는 가로 위치
+	 * @param y 지도에서 곡과 같은 기준으로 쓰는 세로 위치
+	 */
+	public record CellCenter(double x, double y) {
+	}
+
+	/**
 	 * 곡 좌표 pc[] 를 해당 레이어의 격자 셀로 배치한다.
 	 *
 	 * @param pc    곡의 PC 성분 배열(pc[0]=PC1 … 길이 >= 2*maxLayer)
@@ -98,13 +107,36 @@ public class MusicPositionCalculator {
 						"레이어 범위 밖: " + layer + " (1.." + maxLayer + ")"));
 	}
 
-	/** 한 축의 원시 좌표를 셀 번호로 바꾼다. */
+	/** 곡의 한 축 위치를 셀 번호로 바꾼다. */
 	public int findCell(double rawPc, int axis) {
 		if (axis < 1 || axis >= axisMin.length) {
 			throw new IllegalArgumentException("축 범위 밖: " + axis);
 		}
 		double normalized = CoordinateNormalizer.normalize(rawPc, axisMin[axis], axisMax[axis]);
 		return CoordinateNormalizer.cell(normalized, grid);
+	}
+
+	/**
+	 * 합친 셀의 가운데를 지도에서 사용하는 위치로 계산한다.
+	 *
+	 * @param layer 현재 레이어
+	 * @param cellX 가로 셀 번호
+	 * @param cellY 세로 셀 번호
+	 * @param cellsPerRow 한 줄에 표시할 셀 수
+	 * @return 지도에서 바로 사용할 셀의 가운데 위치
+	 */
+	public CellCenter findCellCenter(int layer, int cellX, int cellY, int cellsPerRow) {
+		int[] axes = findAxes(layer);
+		if (cellsPerRow < 1
+				|| cellX < 0 || cellX >= cellsPerRow
+				|| cellY < 0 || cellY >= cellsPerRow) {
+			throw new IllegalArgumentException("셀 번호가 격자 범위를 벗어났다");
+		}
+		double x = axisMin[axes[0]]
+				+ (cellX + 0.5) * (axisMax[axes[0]] - axisMin[axes[0]]) / cellsPerRow;
+		double y = axisMin[axes[1]]
+				+ (cellY + 0.5) * (axisMax[axes[1]] - axisMin[axes[1]]) / cellsPerRow;
+		return new CellCenter(x, y);
 	}
 
 	public int maxLayer() {

@@ -72,6 +72,20 @@ class PresenceRedisRepositoryTests {
 	}
 
 	@Test
+	@DisplayName("여러 곡의 현재 레이어 청취자 수를 한 번에 읽는다")
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	void readsListenerCountsByMusicAtOnce() {
+		when(redis.getStringSerializer()).thenReturn(RedisSerializer.string());
+		when(redis.executePipelined(any(RedisCallback.class)))
+				.thenReturn((List) List.of(3L, 0L));
+
+		Map<Long, Integer> result = repository.findListenerCountsByMusic(3, List.of(10L, 20L));
+
+		assertThat(result).containsEntry(10L, 3).containsEntry(20L, 0);
+		verify(redis).executePipelined(any(RedisCallback.class));
+	}
+
+	@Test
 	@DisplayName("직접 종료는 접속 버전과 주변사람 구독 키를 전달한다")
 	void leavePassesEpochAndNearbyKeys() {
 		List<String> removed = List.of("20", "2", "3", "4", "7");

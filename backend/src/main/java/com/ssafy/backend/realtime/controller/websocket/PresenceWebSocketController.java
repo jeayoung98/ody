@@ -89,10 +89,10 @@ public class PresenceWebSocketController {
 				throw new IllegalArgumentException("화면 요청이 비어 있다");
 			}
 			ViewportRange viewport = request.toViewport();
-			OpenResult result = viewportService.open(
+			OpenResult result = viewportService.updateCurrentScreen(
 					email, epoch, request.requestSeq(), viewport);
 
-			// 3. 개별 사용자 목록이 완성되면 개인 큐로 보낸다.
+			// 3. 현재 화면 정보가 완성되면 개인 큐로 보낸다.
 			if (result.status() == OpenStatus.SNAPSHOT) {
 				realtimeMessageService.sendToUser(email, WebSocketDestination.QUEUE_PRESENCE,
 						RealtimeMessageType.VIEWPORT_SNAPSHOT, result.snapshot());
@@ -101,7 +101,7 @@ public class PresenceWebSocketController {
 			if (result.status() == OpenStatus.STALE_CONNECTION) {
 				webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_STALE, "이전 소켓에서 보낸 화면 요청이다");
 			}
-			// 오래된 화면 요청은 무시한다. CLUSTERED 응답은 S15P21A405-141에서 연결한다.
+			// 오래된 화면 요청은 무시한다.
 		} catch (IllegalArgumentException e) {
 			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, e.getMessage());
 		}

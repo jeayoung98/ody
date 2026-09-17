@@ -18,6 +18,7 @@ import org.springframework.stereotype.Repository;
 import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.geometry.ViewportRange.LayerBound;
+import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 
 /** 뷰포트 셀 구독과 현재 화면 정보를 Redis에 저장한다. */
 @Repository
@@ -27,6 +28,8 @@ public class ViewportRedisRepository {
 	private static final String PRESENCE_USER_PREFIX = "presence:user:"; // 현재 접속 정보
 	private static final String CELL_SUBSCRIBERS_PREFIX = "viewport:cell:"; // 셀별 변경 수신자
 	private static final String META_PREFIX = "viewport:meta:"; // 사용자별 현재 화면 정보
+	private static final String CLUSTERED_SUBSCRIBERS_PREFIX = "viewport:clustered:"; // 셀별 인원수 화면 사용자
+	private static final String USERCOUNT_PREFIX = "cell:usercount:"; // 기본 셀별 사용자 수
 
 	private static final Comparator<Cell> CELL_ORDER = Comparator
 			.comparingInt(Cell::cellX)
@@ -53,13 +56,15 @@ public class ViewportRedisRepository {
 	 * @param epoch 현재 접속 번호
 	 * @param requestSeq 화면 요청 순번
 	 * @param viewport 현재 화면 범위
-	 * @param cells 새로 구독할 셀
+	 * @param mode 새 화면 표시 방식
+	 * @param cells 개별 사용자 방식에서 지켜볼 셀
 	 * @return 변경 여부와 거부 이유
 	 */
 	public ReplaceResult replaceSubscriptions(
-			String email, long epoch, long requestSeq, ViewportRange viewport, Set<Cell> cells) {
+			String email, long epoch, long requestSeq, ViewportRange viewport,
+			ViewportMode mode, Set<Cell> cells) {
 		String ancestorBounds = serializeBounds(viewport.ancestorBounds());
-		String cellKeys = serializeCells(cells);
+		String cellKeys = mode == ViewportMode.INDIVIDUAL ? serializeCells(cells) : "";
 		Long result = redis.execute(replaceScript,
 				List.of(PRESENCE_USER_PREFIX + email, META_PREFIX + email),
 				email,
@@ -71,8 +76,10 @@ public class ViewportRedisRepository {
 				Double.toString(viewport.minY()),
 				Double.toString(viewport.maxY()),
 				ancestorBounds,
+				mode.name(),
 				cellKeys,
-				CELL_SUBSCRIBERS_PREFIX);
+				CELL_SUBSCRIBERS_PREFIX,
+				CLUSTERED_SUBSCRIBERS_PREFIX);
 		return ReplaceResult.from(result);
 	}
 
@@ -88,6 +95,7 @@ public class ViewportRedisRepository {
 		}
 		try {
 			int layer = Integer.parseInt(value(values, "layer"));
+			ViewportMode mode = ViewportMode.valueOf(value(values, "mode"));
 			ViewportRange viewport = new ViewportRange(
 					layer,
 					Double.parseDouble(value(values, "minX")),
@@ -99,11 +107,38 @@ public class ViewportRedisRepository {
 			return Optional.of(new ViewportMeta(
 					Long.parseLong(value(values, "epoch")),
 					Long.parseLong(value(values, "requestSeq")),
+					mode,
 					viewport,
 					deserializeCells(value(values, "cellKeys"))));
 		} catch (RuntimeException e) {
 			throw new IllegalStateException("저장된 화면 정보가 올바르지 않다", e);
 		}
+	}
+
+	/**
+	 * 기본 셀의 사용자 수를 한 번에 읽는다.
+	 * @param layer 현재 레이어
+	 * @param cells 확인할 기본 셀
+	 * @return 사용자가 있는 셀과 인원수
+	 */
+	public Map<Cell, Integer> findUserCountsByCell(int layer, List<Cell> cells) {
+		if (cells.isEmpty()) {
+			return Map.of();
+		}
+		List<Object> fields = cells.stream()
+				.map(cell -> (Object) (cell.cellX() + ":" + cell.cellY()))
+				.toList();
+		List<Object> values = redis.opsForHash().multiGet(USERCOUNT_PREFIX + layer, fields);
+
+		Map<Cell, Integer> result = new java.util.LinkedHashMap<>();
+		for (int i = 0; i < cells.size(); i++) {
+			Object value = values == null ? null : values.get(i);
+			int count = value == null ? 0 : Integer.parseInt(value.toString());
+			if (count > 0) {
+				result.put(cells.get(i), count);
+			}
+		}
+		return result;
 	}
 
 	/**
@@ -216,9 +251,11 @@ public class ViewportRedisRepository {
 	 *
 	 * @param epoch 접속 번호
 	 * @param requestSeq 마지막 화면 요청 순번
+	 * @param mode 화면 표시 방식
 	 * @param viewport 현재 화면 범위
 	 * @param cells 구독 중인 셀
 	 */
-	public record ViewportMeta(long epoch, long requestSeq, ViewportRange viewport, Set<Cell> cells) {
+	public record ViewportMeta(
+			long epoch, long requestSeq, ViewportMode mode, ViewportRange viewport, Set<Cell> cells) {
 	}
 }

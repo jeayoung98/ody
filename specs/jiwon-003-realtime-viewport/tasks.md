@@ -72,7 +72,7 @@
 
 - [ ] T060 [141] `ViewportRedisRepository.java`에 layer 1 셀 인원수 read와 clustered 사용자/meta batch read를 추가한다.
 - [ ] T061 [141] `ViewportService.java`에 CLUSTERED 최초 스냅샷을 추가한다: layer 1 fast path, layer 2+ bounds exact path.
-- [ ] T062 [141] `viewport-subscription-replace.lua`에 INDIVIDUAL↔CLUSTERED 인덱스 전환을 추가한다.
+- [x] T062 [141] `viewport-subscription-replace.lua`에 INDIVIDUAL↔CLUSTERED 인덱스 전환을 추가한다.
 - [ ] T063 [P] [141] `ViewportServiceTests.java`에 V7·V20~V24, 사용자 20명 초과 CLUSTERED 전환, 다른 ancestor branch 제외 테스트를 추가한다.
 - [ ] T064 [141] `ViewportSubscriptionRedisIntegrationTests.java`에 두 모드 전환 후 잔여 인덱스 0을 검증한다.
 

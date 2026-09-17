@@ -36,7 +36,9 @@ import com.ssafy.backend.realtime.dto.presence.UserDisplay;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
+import com.ssafy.backend.realtime.dto.viewport.ViewportCellCount;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 import com.ssafy.backend.realtime.service.viewport.ViewportService.OpenResult;
 import com.ssafy.backend.realtime.service.viewport.ViewportService.OpenStatus;
@@ -67,7 +69,8 @@ class ViewportServiceTests {
 	@DisplayName("셀 구독을 먼저 바꾸고 실제 화면 안 사용자만 곡 위치별로 묶는다")
 	void createsExactSnapshotAfterSubscription() {
 		ViewportRange viewport = layerTwoViewport();
-		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(11L), eq(viewport), anySet()))
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(11L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet()))
 				.thenReturn(ReplaceResult.APPLIED);
 		when(presenceRepository.findActiveMusicIdsByCell(eq(2), anyList()))
 				.thenReturn(Map.of(new Cell(4, 4), Set.of(101L, 102L, 103L, 104L)));
@@ -85,7 +88,7 @@ class ViewportServiceTests {
 		when(riderCountService.count(anyString()))
 				.thenAnswer(invocation -> invocation.getArgument(0).equals("same@example.com") ? 2 : 0);
 
-		OpenResult result = service.open(ME, 7L, 11L, viewport);
+		OpenResult result = service.updateCurrentScreen(ME, 7L, 11L, viewport);
 
 		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
 		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.INDIVIDUAL);
@@ -106,7 +109,8 @@ class ViewportServiceTests {
 
 		InOrder order = inOrder(viewportRepository, presenceRepository);
 		order.verify(viewportRepository)
-				.replaceSubscriptions(eq(ME), eq(7L), eq(11L), eq(viewport), anySet());
+				.replaceSubscriptions(
+						eq(ME), eq(7L), eq(11L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet());
 		order.verify(presenceRepository).findActiveMusicIdsByCell(eq(2), anyList());
 		verify(musicLocationService).findLocations(List.of(101L, 102L, 103L, 104L));
 		verify(presenceRepository).findListenersByMusic(2, List.of(101L, 104L));
@@ -115,29 +119,33 @@ class ViewportServiceTests {
 	}
 
 	@Test
-	@DisplayName("기본 셀이 36개를 넘으면 구독하거나 사용자를 조회하지 않는다")
+	@DisplayName("기본 셀이 36개를 넘으면 셀별 인원수 화면으로 바꾼다")
 	void tooManyCellsRequiresClusteredMode() {
 		ViewportRange wide = new ViewportRange(1, 0, 6, 0, 6, List.of());
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(12L), eq(wide), eq(ViewportMode.CLUSTERED), eq(Set.of())))
+				.thenReturn(ReplaceResult.APPLIED);
+		when(viewportRepository.findUserCountsByCell(eq(1), anyList())).thenReturn(Map.of());
 
-		OpenResult result = service.open(ME, 7L, 12L, wide);
+		OpenResult result = service.updateCurrentScreen(ME, 7L, 12L, wide);
 
-		assertThat(result.status()).isEqualTo(OpenStatus.CLUSTERED_REQUIRED);
-		assertThat(result.snapshot()).isNull();
-		verifyNoInteractions(viewportRepository, presenceRepository, musicLocationService,
-				userDisplayService, riderCountService);
+		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
+		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.CLUSTERED);
+		verifyNoInteractions(musicLocationService, userDisplayService, riderCountService);
 	}
 
 	@Test
 	@DisplayName("기본 셀이 정확히 36개면 개별 사용자 방식으로 처리한다")
 	void thirtySixCellsUsesIndividualMode() {
 		ViewportRange viewport = new ViewportRange(1, 0, 5, 0, 5, List.of());
-		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(13L), eq(viewport), anySet()))
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(13L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet()))
 				.thenReturn(ReplaceResult.APPLIED);
 		when(presenceRepository.findActiveMusicIdsByCell(eq(1), anyList())).thenReturn(Map.of());
 		when(musicLocationService.findLocations(List.of())).thenReturn(Map.of());
 		when(presenceRepository.findListenersByMusic(1, List.of())).thenReturn(Map.of());
 
-		OpenResult result = service.open(ME, 7L, 13L, viewport);
+		OpenResult result = service.updateCurrentScreen(ME, 7L, 13L, viewport);
 
 		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
 		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.INDIVIDUAL);
@@ -150,18 +158,23 @@ class ViewportServiceTests {
 		List<String> emails = IntStream.rangeClosed(1, 21)
 				.mapToObj(i -> "user" + i + "@example.com")
 				.toList();
-		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(13L), eq(viewport), anySet()))
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(13L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet()))
 				.thenReturn(ReplaceResult.APPLIED);
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(13L), eq(viewport), eq(ViewportMode.CLUSTERED), eq(Set.of())))
+				.thenReturn(ReplaceResult.APPLIED);
+		when(viewportRepository.findUserCountsByCell(eq(1), anyList())).thenReturn(Map.of());
 		when(presenceRepository.findActiveMusicIdsByCell(eq(1), anyList()))
 				.thenReturn(Map.of(new Cell(1, 1), Set.of(101L)));
 		when(musicLocationService.findLocations(List.of(101L))).thenReturn(Map.of(101L, pc(1, 1, 0, 0)));
 		when(presenceRepository.findListenersByMusic(1, List.of(101L)))
 				.thenReturn(Map.of(101L, Set.copyOf(emails)));
 
-		OpenResult result = service.open(ME, 7L, 13L, viewport);
+		OpenResult result = service.updateCurrentScreen(ME, 7L, 13L, viewport);
 
-		assertThat(result.status()).isEqualTo(OpenStatus.CLUSTERED_REQUIRED);
-		assertThat(result.snapshot()).isNull();
+		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
+		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.CLUSTERED);
 		verifyNoInteractions(userDisplayService, riderCountService);
 	}
 
@@ -172,7 +185,8 @@ class ViewportServiceTests {
 		List<String> emails = IntStream.rangeClosed(1, 20)
 				.mapToObj(i -> "user" + i + "@example.com")
 				.toList();
-		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(14L), eq(viewport), anySet()))
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(14L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet()))
 				.thenReturn(ReplaceResult.APPLIED);
 		when(presenceRepository.findActiveMusicIdsByCell(eq(1), anyList()))
 				.thenReturn(Map.of(new Cell(1, 1), Set.of(101L)));
@@ -183,7 +197,7 @@ class ViewportServiceTests {
 				.thenAnswer(invocation -> new UserDisplay(invocation.getArgument(0), null));
 		when(riderCountService.count(anyString())).thenReturn(0);
 
-		OpenResult result = service.open(ME, 7L, 14L, viewport);
+		OpenResult result = service.updateCurrentScreen(ME, 7L, 14L, viewport);
 
 		assertThat(result.status()).isEqualTo(OpenStatus.SNAPSHOT);
 		assertThat(result.snapshot().mode()).isEqualTo(ViewportMode.INDIVIDUAL);
@@ -193,13 +207,60 @@ class ViewportServiceTests {
 	}
 
 	@Test
+	@DisplayName("첫 레이어는 저장된 셀 인원수를 사용하고 요청자 본인을 뺀다")
+	void createsLayerOneClusteredSnapshotFromStoredCounts() {
+		ViewportRange viewport = layerOneViewport();
+		List<Cell> cells = List.of(new Cell(1, 1), new Cell(2, 2));
+		when(viewportRepository.findUserCountsByCell(1, cells)).thenReturn(Map.of(
+				new Cell(1, 1), 3,
+				new Cell(2, 2), 1));
+		when(presenceRepository.snapshot(ME))
+				.thenReturn(new PresenceSnapshot(101L, 1, 1, 1, 7L));
+
+		var snapshot = service.createCellCountSnapshot(ME, 15L, viewport, cells);
+
+		assertThat(snapshot.mode()).isEqualTo(ViewportMode.CLUSTERED);
+		assertThat(snapshot.resolution()).isEqualTo(16);
+		assertThat(snapshot.groups()).isEmpty();
+		assertThat(snapshot.cells()).containsExactly(
+				new ViewportCellCount(1, 1, 1.5, 1.5, 2),
+				new ViewportCellCount(2, 2, 2.0, 2.0, 1));
+		verifyNoInteractions(musicLocationService);
+	}
+
+	@Test
+	@DisplayName("깊은 레이어는 이전 화면 범위를 통과한 곡의 청취자만 센다")
+	void createsExactClusteredSnapshotForDeepLayer() {
+		ViewportRange viewport = layerTwoViewport();
+		List<Cell> cells = List.of(new Cell(4, 4));
+		when(presenceRepository.findActiveMusicIdsByCell(2, cells))
+				.thenReturn(Map.of(new Cell(4, 4), Set.of(101L, 102L, 103L)));
+		when(musicLocationService.findLocations(List.of(101L, 102L, 103L))).thenReturn(Map.of(
+				101L, pc(2, 2, 5, 6),
+				102L, pc(8, 2, 5, 6),
+				103L, pc(2, 2, 10, 6)));
+		when(presenceRepository.findListenerCountsByMusic(2, List.of(101L)))
+				.thenReturn(Map.of(101L, 4));
+		when(presenceRepository.snapshot(ME))
+				.thenReturn(new PresenceSnapshot(101L, 2, 5, 6, 7L));
+
+		var snapshot = service.createCellCountSnapshot(ME, 16L, viewport, cells);
+
+		assertThat(snapshot.mode()).isEqualTo(ViewportMode.CLUSTERED);
+		assertThat(snapshot.cells()).containsExactly(
+				new ViewportCellCount(5, 6, 5.5, 6.5, 3));
+		verify(presenceRepository).findListenerCountsByMusic(2, List.of(101L));
+	}
+
+	@Test
 	@DisplayName("더 새 화면 요청이 저장돼 있으면 사용자 조회를 멈춘다")
 	void oldRequestStopsSnapshotRead() {
 		ViewportRange viewport = layerOneViewport();
-		when(viewportRepository.replaceSubscriptions(eq(ME), eq(7L), eq(3L), eq(viewport), anySet()))
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(7L), eq(3L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet()))
 				.thenReturn(ReplaceResult.OLD_REQUEST);
 
-		OpenResult result = service.open(ME, 7L, 3L, viewport);
+		OpenResult result = service.updateCurrentScreen(ME, 7L, 3L, viewport);
 
 		assertThat(result.status()).isEqualTo(OpenStatus.OLD_REQUEST);
 		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
@@ -209,10 +270,11 @@ class ViewportServiceTests {
 	@DisplayName("이전 소켓의 요청이면 사용자 조회를 멈춘다")
 	void staleConnectionStopsSnapshotRead() {
 		ViewportRange viewport = layerOneViewport();
-		when(viewportRepository.replaceSubscriptions(eq(ME), eq(6L), eq(1L), eq(viewport), anySet()))
+		when(viewportRepository.replaceSubscriptions(
+				eq(ME), eq(6L), eq(1L), eq(viewport), eq(ViewportMode.INDIVIDUAL), anySet()))
 				.thenReturn(ReplaceResult.STALE_CONNECTION);
 
-		OpenResult result = service.open(ME, 6L, 1L, viewport);
+		OpenResult result = service.updateCurrentScreen(ME, 6L, 1L, viewport);
 
 		assertThat(result.status()).isEqualTo(OpenStatus.STALE_CONNECTION);
 		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
@@ -223,10 +285,11 @@ class ViewportServiceTests {
 	void invalidViewportStopsBeforeSubscription() {
 		ViewportRange invalid = new ViewportRange(2, 4, 8, 4, 8, List.of());
 
-		assertThatThrownBy(() -> service.open(ME, 7L, 14L, invalid))
+		assertThatThrownBy(() -> service.updateCurrentScreen(ME, 7L, 14L, invalid))
 				.isInstanceOf(IllegalArgumentException.class);
 		verify(viewportRepository, never())
-				.replaceSubscriptions(eq(ME), eq(7L), eq(14L), eq(invalid), anySet());
+				.replaceSubscriptions(
+						eq(ME), eq(7L), eq(14L), eq(invalid), eq(ViewportMode.INDIVIDUAL), anySet());
 		verifyNoInteractions(presenceRepository, musicLocationService, userDisplayService, riderCountService);
 	}
 

@@ -4,7 +4,6 @@ import { useEffect, useRef } from "react";
 import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
-import Loading from "@/components/common/loading";
 import { useFeatures } from "@/hooks/use-features";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -16,6 +15,7 @@ import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import SongActions from "./song-actions";
 import SongCoverBackdrop from "./song-cover-backdrop";
+import SongDetailSkeleton from "./song-detail-skeleton";
 import SongElsewhereNote from "./song-elsewhere-note";
 import SongHeader from "./song-header";
 import SongNearbyList from "./song-nearby-list";
@@ -108,7 +108,7 @@ export default function SongDetailPanel() {
         <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
         <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />
 
-        {isPending && <Loading />}
+        {isPending && <SongDetailSkeleton />}
         {isError && <ErrorMessage />}
         {data && (
           <>

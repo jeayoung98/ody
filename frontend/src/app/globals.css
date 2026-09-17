@@ -98,6 +98,32 @@
   display: none;
 }
 
+/* ---------- 불러오는 동안의 자리 (skeleton.tsx) ---------- */
+/*
+ * 빛이 왼쪽에서 오른쪽으로 한 번 훑고 지나간다 — "멈춘 게 아니라 오는 중" 을 말하는 최소한의
+ * 움직임이다 (S15P21A405-384). 깜빡임(opacity)보다 눈이 덜 피로하고, 여러 줄이 같이 깜빡일 때
+ * 생기는 "화면이 뛰는" 느낌이 없다.
+ */
+.skel {
+  background-color: rgb(255 255 255 / 0.055);
+  background-image: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.055) 40%, transparent 60%);
+  background-size: 260% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
+@keyframes skel {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -30% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
+}
+
 /* ---------- 넘치는 한 줄 흘리기 (marquee-text.tsx) ---------- */
 /*
  * 기본값은 **꺼짐**이다. 넘치는지는 브라우저에서 재야 알 수 있으므로 JS 가 재고 data-run 을 켠다

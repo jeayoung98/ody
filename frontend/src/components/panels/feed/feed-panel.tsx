@@ -23,7 +23,7 @@ export default function FeedPanel() {
   const { data, isPending, isError } = useUserProfileQuery(targetEmail);
 
   return (
-    <Box title={isMe ? "마이페이지" : "프로필"} code={isMe ? "USER-02" : "USER-04"} actions={<PanelCloseButton />}>
+    <Box title={isMe ? "마이페이지" : "프로필"} actions={<PanelCloseButton />}>
       {isPending && <Loading />}
       {isError && <ErrorMessage />}
       {data && (

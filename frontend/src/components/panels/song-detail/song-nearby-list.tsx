@@ -139,7 +139,9 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
       <div className="flex items-center gap-2.5">
         <div className="min-w-0 flex-1">
           <Note>
-            <b>유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요! 카드를 누르면 그 곡으로 옮겨가요.
+            <b>유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요!
+            <br />
+            카드를 누르면 그 곡으로 옮겨가요.
           </Note>
         </div>
         {/*

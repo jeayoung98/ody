@@ -61,7 +61,6 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
       <div onClick={(e) => e.stopPropagation()} className="w-full max-w-md animate-tin">
         <Box
           title="ODY 사용법"
-          code="help"
           actions={
             <IconButton label="닫기" onClick={onClose}>
               <CloseIcon />

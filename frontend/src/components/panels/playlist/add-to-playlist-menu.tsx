@@ -23,7 +23,7 @@ export default function AddToPlaylistMenu({ musicId, onDone }: AddToPlaylistMenu
 
   return (
     <div className="absolute top-full left-0 z-20 mt-2 w-full">
-      <Box title="플레이리스트에 추가" code="SONG-05" flush className="shadow-[0_24px_60px_-20px_#000]">
+      <Box title="플레이리스트에 추가" flush className="shadow-[0_24px_60px_-20px_#000]">
         <div className="max-h-56 overflow-y-auto p-1.5">
           {isPending && <Loading />}
           {data && data.length === 0 && <EmptyState message="아직 플레이리스트가 없어요." />}

@@ -3,8 +3,6 @@ import type { ReactNode, RefObject } from "react";
 interface BoxProps {
   /** 헤더 제목. 없으면 헤더를 그리지 않는다 */
   title?: ReactNode;
-  /** 제목 옆 소문자 모노 코드 (기능 ID 등) */
-  code?: string;
   /** 헤더 좌측(제목 앞) 영역 (뒤로가기 버튼 등) */
   lead?: ReactNode;
   /** 헤더 우측 액션 영역 (닫기 버튼 등) */
@@ -25,10 +23,15 @@ interface BoxProps {
 }
 
 /**
- * 기본 박스 = 글래스 패널. 패널/카드/모달 등 모든 "박스 형태" UI의 공통 틀.
+ * 기본 박스 = 글래스 패널.
+ *
+ * **기능 ID(`SONG-02` 등)를 머리에 달지 않는다** (S15P21A405-384). 개발자만 읽는 코드라
+ * 사용자에게는 뜻 없는 글자다 — 실제로 화면에서 보고 "이게 뭐냐" 는 질문이 나왔다.
+ * 어느 명세 항목인지는 각 컴포넌트 주석에 적어 둔다.
+ * 패널/카드/모달 등 모든 "박스 형태" UI의 공통 틀.
  * 프로토타입 .glass + #pHead/#pBody 구조를 그대로 따른다.
  */
-export default function Box({ title, code, lead, actions, footer, children, className = "", flush = false, bg, bodyRef }: BoxProps) {
+export default function Box({ title, lead, actions, footer, children, className = "", flush = false, bg, bodyRef }: BoxProps) {
   return (
     <section className={`glass relative flex min-h-0 flex-col overflow-hidden text-ink ${className}`}>
       {bg}
@@ -36,7 +39,6 @@ export default function Box({ title, code, lead, actions, footer, children, clas
         <header className={`relative z-10 flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-3 ${bg ? "" : "border-b border-line"}`}>
           {lead && <div className="-ml-1 flex shrink-0 items-center">{lead}</div>}
           <h2 className="flex-1 truncate font-display text-lg font-semibold tracking-[0.01em]">{title}</h2>
-          {code && <span className="lbl shrink-0">{code}</span>}
           {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
         </header>
       )}

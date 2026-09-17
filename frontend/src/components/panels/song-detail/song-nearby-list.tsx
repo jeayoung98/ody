@@ -3,6 +3,7 @@
 import { useRef, useState } from "react";
 import Button from "@/components/common/button";
 import { ChevronLeftIcon, CoronaIcon, PlayIcon } from "@/components/common/icons";
+import TransportButton from "@/components/common/transport-button";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import { NEARBY_COUNT } from "@/constants";
@@ -54,6 +55,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
+  const exitNearby = useMapStore((s) => s.exitNearby);
   const selectMusic = useMapStore((s) => s.selectMusic);
   const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
@@ -78,7 +80,13 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   // 주변 탐색 중인데 이 상세가 중심이 아닌 곡이면(이웃을 선택해 보는 중) 버튼은 건너가기다
   const canHop = inNearby && centerMusicId !== nearbyCenterMusicId;
 
+  /** 이 곡이 중심인 채로 켜져 있으면 끈다. 다른 곡이 중심이면 이리로 건너간다 */
+  const isOnHere = inNearby && !canHop;
   const handleEnter = () => {
+    if (isOnHere) {
+      exitNearby();
+      return;
+    }
     enterNearby(centerMusicId);
     useTutorialStore.getState().complete("nearby");
   };
@@ -131,13 +139,14 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
         왼쪽 버튼은 상황에 따라 `주변 탐색 켜기` ↔ `이 곡 주변으로 건너가기` 로 글자가 바뀌므로
         **아이콘만 두지 않는다** — 아이콘 하나로 두 뜻을 말할 수 없다.
       */}
-      <div className="flex gap-1.5">
-        <Button variant={inNearby && !canHop ? "secondary" : "primary"} className="min-w-0 flex-1" onClick={handleEnter}>
-          <CoronaIcon size={13} /> {canHop ? "이 곡 주변으로" : "주변 탐색 켜기"}
+      <div className="flex items-center gap-1.5">
+        <Button variant={isOnHere ? "secondary" : "primary"} className="h-9 min-w-0 flex-1 py-0!" onClick={handleEnter}>
+          <CoronaIcon size={13} /> {isOnHere ? "주변 탐색 닫기" : canHop ? "이 곡 주변으로" : "주변 탐색 켜기"}
         </Button>
-        <Button className="shrink-0" onClick={handlePlayAll} disabled={items.length === 0}>
-          <PlayIcon size={12} /> 순차 재생
-        </Button>
+        {/* 재생은 앱 어디서나 같은 동그란 버튼이다 (플레이어바·제목 줄과 같은 물건) */}
+        <TransportButton label={`${NEARBY_COUNT}곡 순차 재생`} primary disabled={items.length === 0} onClick={handlePlayAll}>
+          <PlayIcon size={15} />
+        </TransportButton>
       </div>
       {/*
         카드 줄. 좌우 패딩만큼 음수 마진을 줘서 **패널 가장자리 밑으로 흘러 나간다** — 줄이

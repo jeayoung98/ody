@@ -25,6 +25,8 @@ interface SongNearbyCardProps {
  *
  * 순위는 좌상단에 작게. 왼→오 순서만으로는 "몇 번째로 가까운 곡" 이 안 나온다.
  *
+ * 커버가 정사각이라 카드도 정사각이다 — 늘이면 원본에 없는 여백이 생긴다.
+ *
  * 제목·가수가 카드 폭을 넘치면 **옆으로 흐른다**(`MarqueeText`) — 말줄임으로 자르면 긴 제목은
  * 뒷부분을 영영 못 본다. 안 넘치면 아무 일도 안 한다.
  */
@@ -44,7 +46,7 @@ export default function SongNearbyCard({ musicId, title, artist, rank, playing, 
       type="button"
       onClick={onClick}
       title={`${title}${artist ? ` · ${artist}` : ""}`}
-      className={`group relative h-[140px] w-[112px] shrink-0 snap-start overflow-hidden rounded-box-sm border text-left transition-colors duration-fast ${
+      className={`group relative aspect-square w-[112px] shrink-0 snap-start overflow-hidden rounded-box-sm border text-left transition-colors duration-fast ${
         playing ? "border-teal/70" : "border-line hover:border-line-2"
       }`}
     >

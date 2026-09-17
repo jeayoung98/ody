@@ -72,7 +72,8 @@ export default function SongDetailPanel() {
     >
       {/* 커버를 드러내는 창 */}
       <div aria-hidden style={{ height: COVER_WINDOW }} />
-      <div className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]">
+      {/* 바닥 여백을 넉넉히 — 마지막 카드 줄이 패널 밑변에 붙으면 잘린 것처럼 보인다 */}
+      <div className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-7">
         {/* 시트 바닥 — 윗머리는 커버가 비치도록 투명에서 시작한다 */}
         <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
         <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />

@@ -152,6 +152,23 @@ public class ViewportService {
 	}
 
 	/**
+	 * 저장된 화면 범위로 최신 셀별 사용자 수를 만든다.
+	 *
+	 * @param email 받을 사용자 이메일
+	 * @param requestSeq 화면 요청 순번
+	 * @param viewport 저장된 화면 범위
+	 * @return 셀별 사용자 수 응답
+	 */
+	public ViewportSnapshot createCellCountSnapshot(
+			String email, long requestSeq, ViewportRange viewport) {
+		List<Cell> cells = ViewportCellCalculator
+				.findCellsInCurrentScreen(viewport, musicPositionCalculator)
+				.stream()
+				.toList();
+		return createCellCountSnapshot(email, requestSeq, viewport, cells);
+	}
+
+	/**
 	 * 첫 레이어의 셀별 사용자 수를 가져오고 요청자를 뺀다.
 	 *
 	 * @param email 요청한 사용자 이메일

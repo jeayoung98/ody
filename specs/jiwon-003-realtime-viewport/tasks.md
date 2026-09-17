@@ -59,29 +59,29 @@
 
 ### Phase 5 — 서베이 (코드 변경 없음)
 
-- [ ] T049 [141] `PresenceRedisRepository.java`, `CellGrid.java`, 프론트 셀 마커 타입을 읽어 `cell:usercount` 재사용 범위·기본 셀 수·응답 좌표 형식을 확인한다.
+- [x] T049 [141] `PresenceRedisRepository.java`, `CellGrid.java`, 프론트 셀 마커 타입을 읽어 `cell:usercount` 재사용 범위·기본 셀 수·응답 좌표 형식을 확인한다.
 
 ### Phase 6 — 뭉침 계산
 
-- [ ] T050 [P] [141] `backend/src/main/java/com/ssafy/backend/realtime/geometry/CellGrid.java`의 foldUntil을 구현한다.
-- [ ] T051 [P] [141] `backend/src/test/java/com/ssafy/backend/realtime/viewport/geometry/CellGridTests.java`에 16→8→4 합계 보존·마커 상한 테스트를 추가한다.
-- [ ] T052 [P] [141] `backend/src/main/java/com/ssafy/backend/realtime/viewport/dto/ViewportCellCounts.java`를 추가한다.
-- [ ] T053 [P] [141] `RealtimeProperties.java`와 `application-realtime.yml`에 `individual-user-cap=20`을 추가하고 grid·셀 임계값·사용자 상한·마커 상한·주기 값의 시작 시 검증을 추가한다.
+- [x] T050 [P] [141] `backend/src/main/java/com/ssafy/backend/realtime/geometry/CellGrid.java`의 foldUntil을 구현한다.
+- [x] T051 [P] [141] `backend/src/test/java/com/ssafy/backend/realtime/viewport/geometry/CellGridTests.java`에 16→8→4 합계 보존·마커 상한 테스트를 추가한다.
+- [x] T052 [P] [141] `backend/src/main/java/com/ssafy/backend/realtime/viewport/dto/ViewportCellCounts.java`를 추가한다.
+- [x] T053 [P] [141] `RealtimeProperties.java`와 `application-realtime.yml`에 `individual-user-cap=20`을 추가하고 grid·셀 임계값·사용자 상한·마커 상한·주기 값의 시작 시 검증을 추가한다.
 
 ### Phase 7 — 정확 인원수
 
-- [ ] T060 [141] `ViewportRedisRepository.java`에 layer 1 셀 인원수 read와 clustered 사용자/meta batch read를 추가한다.
-- [ ] T061 [141] `ViewportService.java`에 CLUSTERED 최초 스냅샷을 추가한다: layer 1 fast path, layer 2+ bounds exact path.
+- [x] T060 [141] `ViewportRedisRepository.java`에 layer 1 셀 인원수 read와 clustered 사용자/meta batch read를 추가한다.
+- [x] T061 [141] `ViewportService.java`에 CLUSTERED 최초 스냅샷을 추가한다: layer 1 fast path, layer 2+ bounds exact path.
 - [x] T062 [141] `viewport-subscription-replace.lua`에 INDIVIDUAL↔CLUSTERED 인덱스 전환을 추가한다.
-- [ ] T063 [P] [141] `ViewportServiceTests.java`에 V7·V20~V24, 사용자 20명 초과 CLUSTERED 전환, 다른 ancestor branch 제외 테스트를 추가한다.
-- [ ] T064 [141] `ViewportSubscriptionRedisIntegrationTests.java`에 두 모드 전환 후 잔여 인덱스 0을 검증한다.
+- [x] T063 [P] [141] `ViewportServiceTests.java`에 V7·V20~V24, 사용자 20명 초과 CLUSTERED 전환, 다른 ancestor branch 제외 테스트를 추가한다.
+- [x] T064 [141] `ViewportSubscriptionRedisIntegrationTests.java`에 두 모드 전환 후 잔여 인덱스 0을 검증한다.
 
 ### Phase 8 — 주기 갱신
 
-- [ ] T070 [141] `backend/src/main/java/com/ssafy/backend/realtime/viewport/scheduler/ViewportCellCountsScheduler.java`를 추가해 5초마다 clustered 화면을 갱신한다.
-- [ ] T071 [141] `RealtimeEventType.java`에 `VIEWPORT_CELL_COUNTS`를 추가한다.
-- [ ] T072 [P] [141] `backend/src/test/java/com/ssafy/backend/realtime/viewport/scheduler/ViewportCellCountsSchedulerTests.java`에서 grouped read, stale meta 제외, 0셀 제외를 검증한다.
-- [ ] T073 [141] `application-realtime.yml`과 `RealtimeProperties`의 `cell-counts-interval-ms=5000`, `debounce-ms=250`, `individual-user-cap=20` 연결을 확인한다.
+- [x] T070 [141] `backend/src/main/java/com/ssafy/backend/realtime/viewport/scheduler/ViewportCellCountsScheduler.java`를 추가해 5초마다 clustered 화면을 갱신한다.
+- [x] T071 [141] `RealtimeEventType.java`에 `VIEWPORT_CELL_COUNTS`를 추가한다.
+- [x] T072 [P] [141] `backend/src/test/java/com/ssafy/backend/realtime/viewport/scheduler/ViewportCellCountsSchedulerTests.java`에서 grouped read, stale meta 제외, 0셀 제외를 검증한다.
+- [x] T073 [141] `application-realtime.yml`과 `RealtimeProperties`의 `cell-counts-interval-ms=5000`, `debounce-ms=250`, `individual-user-cap=20` 연결을 확인한다.
 
 **Checkpoint 141**: V20~V26, 실제 Redis 모드 전환, scheduler 단위 테스트, realtime context 부팅을 보고한다. 사용자 확인과 커밋 후에만 77로 이동한다.
 

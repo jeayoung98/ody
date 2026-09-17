@@ -197,6 +197,10 @@ class ViewportSubscriptionRedisIntegrationTests {
 			assertThat(meta.mode()).isEqualTo(ViewportMode.CLUSTERED);
 			assertThat(meta.cells()).isEmpty();
 		});
+		assertThat(repository.findCellCountUsersByLayer(1))
+				.containsEntry(1, Set.of(data.email()));
+		assertThat(repository.findMetaByEmails(Set.of(data.email())))
+				.containsKey(data.email());
 
 		assertThat(repository.replaceSubscriptions(
 				data.email(), 7L, 2L, viewport, ViewportMode.INDIVIDUAL, Set.of(second)))
@@ -204,6 +208,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 
 		assertThat(isClustered(data.email(), 1)).isFalse();
 		assertThat(isSubscribed(data.email(), 1, second)).isTrue();
+		assertThat(repository.findCellCountUsersByLayer(1)).isEmpty();
 		assertThat(repository.findMeta(data.email())).hasValueSatisfying(meta -> {
 			assertThat(meta.mode()).isEqualTo(ViewportMode.INDIVIDUAL);
 			assertThat(meta.cells()).containsExactly(second);

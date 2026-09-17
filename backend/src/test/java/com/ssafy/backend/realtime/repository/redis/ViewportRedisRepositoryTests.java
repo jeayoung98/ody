@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.repository.redis;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -14,7 +15,9 @@ import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.HashOperations;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.data.redis.serializer.RedisSerializer;
 
 import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
@@ -100,5 +103,51 @@ class ViewportRedisRepositoryTests {
 				.containsEntry(new Cell(1, 2), 3)
 				.containsEntry(new Cell(5, 6), 1)
 				.doesNotContainKey(new Cell(3, 4));
+	}
+
+	@Test
+	@DisplayName("모든 레이어의 셀별 인원수 화면 사용자를 한 번에 읽는다")
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	void readsCellCountUsersByLayerAtOnce() {
+		when(redis.getStringSerializer()).thenReturn(RedisSerializer.string());
+		when(redis.executePipelined(any(RedisCallback.class)))
+				.thenReturn((List) List.of(
+						Set.of("a@test.local"), Set.of(), Set.of("b@test.local")));
+
+		Map<Integer, Set<String>> result = repository.findCellCountUsersByLayer(3);
+
+		assertThat(result)
+				.containsEntry(1, Set.of("a@test.local"))
+				.containsEntry(3, Set.of("b@test.local"))
+				.doesNotContainKey(2);
+		verify(redis).executePipelined(any(RedisCallback.class));
+	}
+
+	@Test
+	@DisplayName("여러 사용자의 화면 정보를 한 번에 읽고 없는 정보는 뺀다")
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	void readsViewportMetaByEmailsAtOnce() {
+		when(redis.getStringSerializer()).thenReturn(RedisSerializer.string());
+		Map<String, String> fields = Map.of(
+				"epoch", "7",
+				"requestSeq", "11",
+				"mode", "CLUSTERED",
+				"layer", "1",
+				"minX", "0.0",
+				"maxX", "2.0",
+				"minY", "0.0",
+				"maxY", "2.0",
+				"ancestorBounds", "",
+				"cellKeys", "");
+		when(redis.executePipelined(any(RedisCallback.class)))
+				.thenReturn((List) List.of(fields, Map.of()));
+
+		Map<String, ViewportRedisRepository.ViewportMeta> result = repository.findMetaByEmails(
+				Set.of("b@test.local", "a@test.local"));
+
+		assertThat(result).containsOnlyKeys("a@test.local");
+		assertThat(result.get("a@test.local").mode()).isEqualTo(ViewportMode.CLUSTERED);
+		assertThat(result.get("a@test.local").requestSeq()).isEqualTo(11L);
+		verify(redis).executePipelined(any(RedisCallback.class));
 	}
 }

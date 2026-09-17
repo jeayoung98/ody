@@ -21,6 +21,7 @@ import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
@@ -43,6 +44,7 @@ public class ViewportDeltaService {
 	private final RiderCountService riderCountService; // 따라오는 사용자 수
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐 발송
 	private final RealtimeEventService realtimeEventService; // 위치 변경 알림
+	private final ViewportMetrics viewportMetrics; // 수신자 수와 발송 시간 기록
 
 	/**
 	 * 서비스가 시작되면 위치 변경 알림을 받는다.
@@ -58,11 +60,14 @@ public class ViewportDeltaService {
 	 * @param event 바뀌기 전 위치와 바뀐 후 위치
 	 */
 	void handlePositionChanged(PositionChanged event) {
+		long startedAt = System.nanoTime();
 		// 1. 이전 셀이나 새 셀을 보고 있는 사용자를 찾는다.
 		Set<String> receivers = new LinkedHashSet<>(viewportRepository.findUsersWatchingCells(
 				event.oldLayer(), event.oldCell(), event.newLayer(), event.newCell()));
 		receivers.remove(event.email());
+		int candidateCount = receivers.size();
 		if (receivers.isEmpty()) {
+			recordDelta(startedAt, candidateCount, 0, 0);
 			return;
 		}
 
@@ -71,8 +76,10 @@ public class ViewportDeltaService {
 				viewportRepository.findMetaByEmails(receivers));
 		metas.entrySet().removeIf(entry -> entry.getValue().mode() != ViewportMode.INDIVIDUAL);
 		if (metas.isEmpty()) {
+			recordDelta(startedAt, candidateCount, 0, 0);
 			return;
 		}
+		int receiverCount = metas.size();
 
 		// 3. 이전 곡과 새 곡의 실제 좌표를 한 번에 읽는다.
 		Map<Long, double[]> locations = findLocations(event);
@@ -92,6 +99,7 @@ public class ViewportDeltaService {
 			}
 		}
 		if (types.isEmpty()) {
+			recordDelta(startedAt, candidateCount, receiverCount, 0);
 			return;
 		}
 
@@ -115,6 +123,21 @@ public class ViewportDeltaService {
 			realtimeMessageService.sendToUser(
 					receiver, WebSocketDestination.QUEUE_PRESENCE, type, payload);
 		}
+		recordDelta(startedAt, candidateCount, receiverCount, types.size());
+	}
+
+	/**
+	 * 위치 변경 알림 처리 결과를 기록한다.
+	 *
+	 * @param startedAt 시작 시각
+	 * @param candidateCount 처음 찾은 수신자 수
+	 * @param receiverCount 실제 화면을 확인한 수신자 수
+	 * @param sentCount 보낸 메시지 수
+	 */
+	private void recordDelta(
+			long startedAt, int candidateCount, int receiverCount, int sentCount) {
+		viewportMetrics.recordDelta(
+				candidateCount, receiverCount, sentCount, System.nanoTime() - startedAt);
 	}
 
 	/**
@@ -204,8 +227,9 @@ public class ViewportDeltaService {
 		return null;
 	}
 
-	/**x
+	/**
 	 * LEAVE로 보낼 화면 요청 순번과 사용자 이메일을 만든다.
+	 *
 	 * @param requestSeq 수신자의 화면 요청 순번
 	 * @param email 화면에서 지울 사용자 이메일
 	 * @return LEAVE 내용
@@ -215,7 +239,8 @@ public class ViewportDeltaService {
 	}
 
 	/**
-	 * LEAVE로 보낼 화면 요청 순번과 사용자 이메일을 만든다.
+	 * ENTER·MOVE로 보낼 현재 사용자 정보를 만든다.
+	 *
 	 * @param requestSeq 수신자의 화면 요청 순번
 	 * @param event 위치를 바꾼 사용자와 새 곡
 	 * @param display 닉네임과 사진

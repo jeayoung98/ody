@@ -37,6 +37,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.dto.viewport.ViewportCellCount;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
@@ -54,6 +55,7 @@ class ViewportServiceTests {
 	@Mock MusicLocationService musicLocationService;
 	@Mock UserDisplayService userDisplayService;
 	@Mock RiderCountService riderCountService;
+	@Mock ViewportMetrics viewportMetrics; // 처리 시간·후보 수 기록
 
 	private ViewportService service;
 
@@ -62,7 +64,8 @@ class ViewportServiceTests {
 		RealtimeProperties properties = properties();
 		service = new ViewportService(
 				new MusicPositionCalculator(properties), properties, viewportRepository,
-				presenceRepository, musicLocationService, userDisplayService, riderCountService);
+				presenceRepository, musicLocationService, userDisplayService, riderCountService,
+				viewportMetrics);
 	}
 
 	@Test

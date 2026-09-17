@@ -31,6 +31,7 @@ import com.ssafy.backend.realtime.geometry.ViewportRange.LayerBound;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
@@ -49,6 +50,7 @@ class ViewportDeltaServiceTests {
 	@Mock RiderCountService riderCountService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock RealtimeEventService realtimeEventService;
+	@Mock ViewportMetrics viewportMetrics; // 처리 시간·수신자 수 기록
 
 	private ViewportDeltaService service;
 
@@ -58,7 +60,7 @@ class ViewportDeltaServiceTests {
 				viewportRepository, musicLocationService,
 				new MusicPositionCalculator(properties()),
 				userDisplayService, riderCountService,
-				realtimeMessageService, realtimeEventService);
+				realtimeMessageService, realtimeEventService, viewportMetrics);
 	}
 
 	@Test

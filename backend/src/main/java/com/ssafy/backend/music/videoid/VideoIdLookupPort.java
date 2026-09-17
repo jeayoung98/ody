@@ -11,7 +11,9 @@ import java.util.Optional;
 public interface VideoIdLookupPort {
 
 	/**
+	 * @param durationSeconds 원곡 길이(초). 알면 videoid_api.py 매칭 정확도가 크게 오른다(duration
+	 *                        가중치 0.25). 모르면 {@code null} — duration 없이 조회한다.
 	 * @return 가장 유력한 후보의 videoId. 후보가 없거나 외부 API 호출이 실패하면 빈 값
 	 */
-	Optional<String> lookup(String artist, String title);
+	Optional<String> lookup(String artist, String title, Integer durationSeconds);
 }

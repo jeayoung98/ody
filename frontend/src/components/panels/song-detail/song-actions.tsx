@@ -1,28 +1,30 @@
 "use client";
 
-import { useState } from "react";
-import Button from "@/components/common/button";
 import { ArriveIcon, DepartIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
-import { useFeatures } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import type { MusicDetail } from "@/types";
-import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
+
+/** 세그먼트 한 칸 — 둘이 한 덩어리라 `Button` 을 쓰지 않는다 (테두리가 두 겹이 된다) */
+const HALF = "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-base transition-colors duration-fast hover:bg-white/[.07]";
 
 /**
- * 플리에 추가 · 여정 출발/도착으로 지정.
+ * 이 곡을 여정의 **출발점 / 도착점**으로 지정 (JOURNEY-01).
  *
- * **재생 버튼은 여기 없다** (S15P21A405-384). 제목 줄 옆의 동그란 버튼 하나로 합쳤다 —
- * 같은 동작이 한 화면에 두 번 있을 이유가 없다. 못 트는 곡 안내(`Note`)는 여기 남는다.
+ * 둘을 **테두리 하나로 묶었다** (S15P21A405-384). 떨어뜨려 두면 남남으로 읽히는데 실제로는
+ * 한 쌍이다. `여정` 을 위에 라벨로 빼서 버튼마다 두 번 적지 않는다 — 글자가 짧아진 만큼
+ * 16px 로도 한 줄에 여유롭게 들어간다. 눈에 보이는 글자는 짧고, 화면 낭독기에는
+ * `aria-label` 로 온전한 문장을 준다.
  *
- * **신고 버튼도 여기 없다** (S15P21A405-384). 패널 헤더의 경광등으로 옮겼다
- * (`song-report-button.tsx`) — 402 에서 본문에 세운 빨간 버튼을 대신한다.
+ * 아이콘 색은 여정 패널과 같다 (`journey-endpoints.tsx`): 출발 teal · 도착 violet.
+ *
+ * **재생·플리는 여기 없다.** 이 곡 하나에 대한 행동은 제목 줄로 모았다 (`song-header`).
+ * 여기는 두 곡을 잇는 일만 남는다. 못 트는 곡 안내(`Note`)는 여기 남는다 — 여정에도 걸리는
+ * 사정이라 행동 줄 가까이 있어야 한다.
  */
 export default function SongActions({ music }: { music: MusicDetail }) {
-  const features = useFeatures();
-  const [menuOpen, setMenuOpen] = useState(false);
   const setStart = useJourneyStore((s) => s.setStart);
   const setEnd = useJourneyStore((s) => s.setEnd);
   const openComposer = useOpenJourneyComposer();
@@ -30,45 +32,41 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   const { blocked } = usePlayability(music.id);
 
   return (
-    <div className="relative flex flex-col gap-2">
-      {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
-      {features.playlist && (
-        <Button className="self-start" onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
-          ＋ 플리
-        </Button>
-      )}
-      {/*
-        지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 (JOURNEY-01).
-        아이콘 색은 여정 패널과 같다 (`journey-endpoints.tsx`): 출발 teal · 도착 violet.
-      */}
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="flex-1 text-base!"
-          onClick={() => {
-            setStart(music.id);
-            openComposer("end");
-          }}
-        >
-          <DepartIcon className="text-teal" /> 여정 출발점으로
-        </Button>
-        <Button
-          size="sm"
-          className="flex-1 text-base!"
-          onClick={() => {
-            setEnd(music.id);
-            openComposer("start");
-          }}
-        >
-          <ArriveIcon className="text-violet" /> 여정 도착점으로
-        </Button>
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-1.5">
+        <span className="lbl">여정</span>
+        {/* 지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 */}
+        <div className="flex overflow-hidden rounded-box-sm border border-line bg-white/[.04]">
+          <button
+            type="button"
+            aria-label="이 곡을 여정 출발점으로 지정"
+            className={HALF}
+            onClick={() => {
+              setStart(music.id);
+              openComposer("end");
+            }}
+          >
+            <DepartIcon className="text-teal" /> 출발점으로
+          </button>
+          <span aria-hidden className="w-px shrink-0 bg-line" />
+          <button
+            type="button"
+            aria-label="이 곡을 여정 도착점으로 지정"
+            className={HALF}
+            onClick={() => {
+              setEnd(music.id);
+              openComposer("start");
+            }}
+          >
+            <ArriveIcon className="text-violet" /> 도착점으로
+          </button>
+        </div>
       </div>
       {blocked && (
         <Note>
           {blocked.detail} {blocked.ref && <span className="text-ink-4">{blocked.ref}</span>}
         </Note>
       )}
-      {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

@@ -127,6 +127,16 @@ export const FlagIcon = ({ size = 14, ...p }: P) => (
   </svg>
 );
 /**
+ * 플레이리스트에 추가 (SONG-05) — 목록 세 줄 + 더하기.
+ * 하트를 쓰지 않았다. 하트는 "좋아요"(PATH-07)의 자리라 같은 화면에서 뜻이 갈린다.
+ */
+export const PlaylistAddIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4 7h12M4 12h12M4 17h6.5" />
+    <path d="M17 14.2v6M14 17.2h6" />
+  </svg>
+);
+/**
  * 여정 출발 — 별에서 떠나는 화살. 도착(`ArriveIcon`)과 짝이고, 색은 여정 패널과 같게
  * 출발 teal · 도착 violet 로 쓴다 (`journey-endpoints.tsx`).
  */

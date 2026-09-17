@@ -39,6 +39,9 @@ public class PresenceRedisRepository {
 	private static final String USERCOUNT_PREFIX = "cell:usercount:"; // 레이어와 셀별 사용자 수
 	private static final String NEARBY_SUBSCRIBERS_PREFIX = "nearby:subscribers:"; // 곡별 주변사람 변경 수신자
 	private static final String NEARBY_META_PREFIX = "nearby:meta:"; // 사용자별 주변사람 구독 곡
+	private static final String VIEWPORT_CELL_PREFIX = "viewport:cell:"; // 셀별 화면 변경 수신자
+	private static final String VIEWPORT_CLUSTERED_PREFIX = "viewport:clustered:"; // 셀별 인원수 화면 사용자
+	private static final String VIEWPORT_META_PREFIX = "viewport:meta:"; // 사용자별 현재 화면 정보
 
 	/** 하트비트 = ZADD XX(존재할 때만 갱신). ZAddArgs 자바 API 대신 이식성 높은 인라인 Lua. */
 	private static final DefaultRedisScript<Long> TOUCH_SCRIPT = new DefaultRedisScript<>(
@@ -219,7 +222,7 @@ public class PresenceRedisRepository {
 
 	/**
 	 * 사용자가 직접 나가거나 소켓이 끊기면 호출한다.
-	 * 종료 요청과 현재 접속의 버전이 같을 때만 상태와 주변사람 구독을 지운다.
+	 * 종료 요청과 현재 접속의 버전이 같을 때만 상태와 실시간 구독을 지운다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param epoch 종료할 접속 버전
@@ -231,7 +234,7 @@ public class PresenceRedisRepository {
 
 	/**
 	 * 접속이 만료되면 호출한다.
-	 * 다시 연결되지 않았을 때만 상태와 주변사람 구독을 지운다.
+	 * 다시 연결되지 않았을 때만 상태와 실시간 구독을 지운다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param sweepTimeMs 만료 확인 시각
@@ -250,11 +253,15 @@ public class PresenceRedisRepository {
 	 */
 	@SuppressWarnings("unchecked")
 	private List<String> doLeave(String email, String epoch, String sweepTime) {
-		List<String> keys = List.of(PRESENCE_USER_PREFIX + email, EXPIRY_KEY, NEARBY_META_PREFIX + email);
+		List<String> keys = List.of(
+				PRESENCE_USER_PREFIX + email,
+				EXPIRY_KEY,
+				NEARBY_META_PREFIX + email,
+				VIEWPORT_META_PREFIX + email);
 		List<String> result = redis.execute(presenceLeaveScript, keys,
 				email, epoch, sweepTime,
 				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX,
-				NEARBY_SUBSCRIBERS_PREFIX);
+				NEARBY_SUBSCRIBERS_PREFIX, VIEWPORT_CELL_PREFIX, VIEWPORT_CLUSTERED_PREFIX);
 		return result != null ? result : List.of();
 	}
 

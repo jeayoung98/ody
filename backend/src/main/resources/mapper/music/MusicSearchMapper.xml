@@ -121,6 +121,64 @@
 		LIMIT #{size} OFFSET #{offset}
 	</select>
 
+	<!--
+		아티스트 필터 검색. music 이 없으면 아티스트 완전/앞일치 2단계,
+		있으면 음악·아티스트 완전일치 조합 4단계다. 단계는 상호 배타적이라
+		UNION ALL 결과와 페이지 사이에 같은 곡이 중복되지 않는다.
+
+		기존 lower(title), coalesce(lower(artist), '') 함수 인덱스 표현식을 그대로 쓴다.
+		전체 통합 검색 findPage 는 실행계획 회귀를 피하려고 변경하지 않는다.
+	-->
+	<select id="findFilteredPage" timeout="2" resultType="com.ssafy.backend.music.dto.MusicSearchRow">
+		SELECT m.id, m.title, m.artist, m.album, m.video_id,
+		<include refid="locationColumns"/>
+		FROM (
+			<choose>
+				<when test="music != null">
+					(SELECT m.id, 0 AS tier FROM music m
+					 WHERE lower(m.title) = #{music} AND <include refid="artistLower"/> = #{artist}
+					   AND <include refid="videoIdNotNone"/>
+					 ORDER BY m.id LIMIT #{cap})
+					UNION ALL
+					(SELECT m.id, 1 AS tier FROM music m
+					 WHERE lower(m.title) LIKE #{musicPrefix} ESCAPE '\' AND lower(m.title) &lt;&gt; #{music}
+					   AND <include refid="artistLower"/> = #{artist}
+					   AND <include refid="videoIdNotNone"/>
+					 ORDER BY m.id LIMIT #{cap})
+					UNION ALL
+					(SELECT m.id, 2 AS tier FROM music m
+					 WHERE lower(m.title) = #{music}
+					   AND <include refid="artistLower"/> LIKE #{artistPrefix} ESCAPE '\'
+					   AND <include refid="artistLower"/> &lt;&gt; #{artist}
+					   AND <include refid="videoIdNotNone"/>
+					 ORDER BY m.id LIMIT #{cap})
+					UNION ALL
+					(SELECT m.id, 3 AS tier FROM music m
+					 WHERE lower(m.title) LIKE #{musicPrefix} ESCAPE '\' AND lower(m.title) &lt;&gt; #{music}
+					   AND <include refid="artistLower"/> LIKE #{artistPrefix} ESCAPE '\'
+					   AND <include refid="artistLower"/> &lt;&gt; #{artist}
+					   AND <include refid="videoIdNotNone"/>
+					 ORDER BY m.id LIMIT #{cap})
+				</when>
+				<otherwise>
+					(SELECT m.id, 0 AS tier FROM music m
+					 WHERE <include refid="artistLower"/> = #{artist}
+					   AND <include refid="videoIdNotNone"/>
+					 ORDER BY m.id LIMIT #{cap})
+					UNION ALL
+					(SELECT m.id, 1 AS tier FROM music m
+					 WHERE <include refid="artistLower"/> LIKE #{artistPrefix} ESCAPE '\'
+					   AND <include refid="artistLower"/> &lt;&gt; #{artist}
+					   AND <include refid="videoIdNotNone"/>
+					 ORDER BY m.id LIMIT #{cap})
+				</otherwise>
+			</choose>
+		) t
+		JOIN music m ON m.id = t.id
+		ORDER BY t.tier ASC, t.id ASC
+		LIMIT #{size} OFFSET #{offset}
+	</select>
+
 	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">
 		SELECT mg.music_id, g.name
 		FROM music_genre mg

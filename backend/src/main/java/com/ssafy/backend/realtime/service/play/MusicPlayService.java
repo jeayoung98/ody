@@ -5,6 +5,7 @@ import java.util.Objects;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
@@ -50,6 +51,7 @@ public class MusicPlayService {
 	 * @return 재생 기록 ID와 새 위치
 	 * @throws CustomException 접속 정보나 곡 위치를 찾을 수 없는 경우
 	 */
+	@Transactional
 	public PlayResponse play(String email, long musicId, String source) {
 		// 1. 사용자의 현재 곡과 레이어를 읽는다.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
@@ -91,6 +93,8 @@ public class MusicPlayService {
 		history.setSource(source);
 		history.setPlayedMs(0L);
 		playHistoryMapper.insert(history);
+		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
+		playHistoryMapper.incrementPlayCnt(musicId);
 
 		// 6. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();

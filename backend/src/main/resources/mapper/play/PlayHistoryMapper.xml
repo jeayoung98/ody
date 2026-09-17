@@ -21,4 +21,10 @@
 		WHERE id = #{id} AND email = #{email}
 	</update>
 
+	<update id="incrementPlayCnt">
+		UPDATE music
+		SET play_cnt = play_cnt + 1
+		WHERE id = #{musicId}
+	</update>
+
 </mapper>

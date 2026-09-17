@@ -87,6 +87,7 @@ class MusicPlayServiceTests {
 		service.play(EMAIL, 20L, "MAP");
 
 		verify(playHistoryMapper).insert(org.mockito.ArgumentMatchers.any(PlayHistoryRow.class));
+		verify(playHistoryMapper).incrementPlayCnt(20L);
 		verify(meetingService).recordMeetings(EMAIL, List.of());
 		verifyNoInteractions(realtimeEventService);
 	}

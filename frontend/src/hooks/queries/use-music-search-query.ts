@@ -18,14 +18,14 @@ function normalize(c: SearchCondition): SearchCondition {
 /**
  * 조건을 물어볼 수 있는가.
  *
- * `music` 모드에서 아티스트가 비어 있으면 **요청하지 않는다** — 백엔드가 `music` 단독을
- * 400 으로 막기 때문이다. 화면에서는 "아티스트를 입력하세요" 안내가 뜨는 대기 상태다.
+ * 제목만 선택해도 검색한다. BFF 가 통합 검색 결과에서 제목 앞일치만 남기고,
+ * 아티스트가 더해지면 백엔드의 `music` + `artist` 조건 검색으로 전환한다.
  */
 export function canSearch(c: SearchCondition): boolean {
   const n = normalize(c);
   if (n.mode === "all") return n.query.length > 0;
   if (n.mode === "artist") return n.artist.length > 0;
-  return n.music.length > 0 && n.artist.length > 0;
+  return n.music.length > 0;
 }
 
 /**
@@ -43,7 +43,7 @@ export function searchRequestPath(c: SearchCondition, page: number): string {
     if (n.music) p.set("music", n.music); // 빈 선택 입력은 아예 생략한다
   } else {
     p.set("music", n.music);
-    p.set("artist", n.artist);
+    if (n.artist) p.set("artist", n.artist);
   }
   p.set("page", String(page));
   return `${API_ENDPOINTS.music.search}?${p.toString()}`;

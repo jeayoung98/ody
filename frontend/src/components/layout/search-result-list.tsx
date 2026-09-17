@@ -37,7 +37,7 @@ interface SearchResultListProps {
 function heading(c: SearchCondition): string {
   if (c.mode === "all") return "음악 또는 아티스트 검색 결과";
   if (c.mode === "artist") return c.music ? `${c.artist}의 “${c.music}” 음악` : `${c.artist}의 음악`;
-  return `“${c.music}” 제목의 아티스트 결과`;
+  return c.artist ? `“${c.music}” 제목의 ${c.artist} 음악` : `“${c.music}” 제목의 음악`;
 }
 
 /** #results .res — 바닥에 닿으면 다음 페이지를 이어 붙인다 (SEARCH-01) */
@@ -79,9 +79,6 @@ export default function SearchResultList({
 
   /** 통합 검색 상태에서만 조건을 굳힐 수 있다. 이미 칩이 있으면 두 번째 칩은 만들지 않는다 */
   const canPromote = condition.mode === "all" && input.length > 0;
-  /** 제목 칩만 세우고 아티스트를 아직 안 친 대기 상태 — 여기서는 요청 자체가 없다 */
-  const awaitingArtist = condition.mode === "music" && !condition.artist;
-
   return (
     <div
       ref={boxRef}
@@ -90,11 +87,7 @@ export default function SearchResultList({
       onMouseDown={(e) => e.preventDefault()}
       className="glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[12px]!"
     >
-      {/*
-        두 조건을 **대칭으로** 보여 준다. 다만 하는 일은 같지 않다 — 아티스트는 그것만으로 바로
-        조회되지만, 제목은 백엔드가 `music` 단독을 400 으로 막아서 아티스트를 받을 때까지
-        기다린다. 그 차이는 아래 "아티스트를 입력하세요." 안내가 말해 준다.
-      */}
+      {/* 통합 검색에서 입력값을 제목 또는 아티스트 조건으로 굳힌다. */}
       {canPromote && (
         <div className="border-b border-white/[.08]">
           <button type="button" onMouseDown={(e) => e.preventDefault()} onClick={() => onPromote("artist")} className={ACTION_CLASS}>
@@ -110,9 +103,7 @@ export default function SearchResultList({
 
       <p className="px-[13px] pt-[9px] pb-1 text-[10.5px] text-ink-4">{heading(condition)}</p>
 
-      {awaitingArtist ? (
-        <p className="px-[13px] py-[9px] text-xs text-ink-3">아티스트를 입력하세요.</p>
-      ) : isError ? (
+      {isError ? (
         /* 빈 결과와 실패를 같은 화면으로 처리하지 않는다 — 다시 눌러 볼 수 있어야 한다 */
         <div className="flex items-center justify-between gap-2 px-[13px] py-[9px]">
           <span className="text-xs text-ink-3">검색하지 못했습니다. 다시 시도해 주세요.</span>

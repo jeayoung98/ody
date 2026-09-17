@@ -1,8 +1,7 @@
 "use client";
 
 import { useRef, useState } from "react";
-import Button from "@/components/common/button";
-import { ChevronLeftIcon, CoronaIcon, ListPlayIcon } from "@/components/common/icons";
+import { ChevronLeftIcon, ListPlayIcon } from "@/components/common/icons";
 import TransportButton from "@/components/common/transport-button";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
@@ -57,7 +56,6 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
-  const exitNearby = useMapStore((s) => s.exitNearby);
   const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const openSong = usePanelStore((s) => s.openSong);
@@ -78,17 +76,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   };
   /** 카드 한 장 + 사이 간격만큼 민다 — 스냅이 다음 카드 머리에 맞춰 세운다 */
   const nudge = (dir: 1 | -1) => railRef.current?.scrollBy({ left: dir * (CARD_W + CARD_GAP) * 2, behavior: "smooth" });
-  /** 이 곡을 중심으로 고리가 서 있나 */
-  const isOnHere = inNearby && nearbyCenterMusicId === centerMusicId;
 
-  const handleEnter = () => {
-    if (isOnHere) {
-      exitNearby();
-      return;
-    }
-    enterNearby(centerMusicId);
-    useTutorialStore.getState().complete("nearby");
-  };
 
   /**
    * 10곡을 순서대로 듣는다 (S15P21A405-359). 열 번 눌러야 다 듣던 것을 한 번으로 줄인다 —
@@ -161,13 +149,10 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
         </TransportButton>
       </div>
       {/*
-        **건너가기 버튼은 없앴다** (S15P21A405-384) — 카드를 고르면 고리가 그 곡 기준으로 다시
-        서므로 따로 건너갈 일이 없다. 남은 것은 켜기/끄기 한 쌍이고 하단 바 버튼도 토글이다
-        (예전 주석의 "여는 버튼만 둔다"(339)는 그 짝이 생기면서 이미 깨져 있었다).
+        **주변 탐색 켜는 버튼은 없다** (S15P21A405-384). 카드를 고르든 순차 재생을 누르든
+        주변 탐색이 같이 켜지므로 따로 켤 일이 없다 — 하나의 일에 입구를 둘 두지 않는다.
+        끄는 길은 그대로 넷이다: 좌상단 칩의 ✕, 하단 바 버튼, 패널 닫기, 줌아웃.
       */}
-      <Button variant={isOnHere ? "secondary" : "primary"} className="h-9 py-0!" onClick={handleEnter}>
-        <CoronaIcon size={13} /> {isOnHere ? "주변 탐색 닫기" : "주변 탐색 켜기"}
-      </Button>
       {/*
         카드 줄. 좌우 패딩만큼 음수 마진을 줘서 **패널 가장자리 밑으로 흘러 나간다** — 줄이
         화면 밖으로 이어진다는 신호다. 카드 폭 112 + 사이 8 이라 두 장 반이 보인다.

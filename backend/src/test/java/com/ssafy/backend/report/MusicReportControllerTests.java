@@ -78,10 +78,23 @@ class MusicReportControllerTests {
                 .andExpect(jsonPath("$.error.code").value("MUSIC_NOT_FOUND"));
     }
 
+    /** S15P21A405-398 — reason @Pattern 제약 제거로 spoken|noise|other 외 값도 허용된다. */
     @Test
-    void report_badReason_returns400() throws Exception {
+    void report_arbitraryReason_accepted() throws Exception {
+        when(musicReportService.report(any(), isNull())).thenReturn(new MusicReportResponse(9));
+
         mockMvc.perform(post("/api/music/report").contentType(MediaType.APPLICATION_JSON)
                         .content(BODY.replace("\"noise\"", "\"random\"")))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.reportId").value(9));
+    }
+
+    @Test
+    void report_missingReason_returns400() throws Exception {
+        mockMvc.perform(post("/api/music/report").contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"musicId":10234}
+                                """))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
     }

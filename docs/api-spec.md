@@ -120,7 +120,8 @@
 - `videoId` 가 없으면 기존대로 `youtubeUrl` 로 폴백한다
 - **적재 전까지 전 곡 `null` 이다.** 저장소·적재 배치는 미정이며, 매핑률 실측은 66%다(S15P21A405-40 코멘트)
 
-**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `videoId`(string(11)\|null, 확인된 영상 — 위 `videoId` 규약 참고), `playable`(boolean, `youtubeUrl != null`).
+**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-17 A-31·A-32 반영, Notion 미반영): `musicId`(int), `pc`(소수점 이하 **최대 3자리**로 반올림한 float 16개 배열), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `videoId`(string(11)\|null, 확인된 영상 — 위 `videoId` 규약 참고), `playable`(boolean, 기존 재생 가능 의미 유지).
+`youtubeUrl`은 지도 응답에서 보내지 않는다. 곡 상세(`/api/music/detail`)과 다른 음악 DTO에서는 기존 계약을 유지한다.
 좌표를 `Location` 객체가 아니라 배열로 싣는 유일한 DTO다 — 클라이언트가 레이어 축 `pc(2n-1)`·`pc(2n)` 으로 재투영하기 때문.
 
 **PlaylistTrack**: `id`(int, 곡 ID), `title`, `artist`, `duration`(int, 초), `youtubeUrl`(string\|null).
@@ -362,25 +363,32 @@ body: `idToken`(String, required).
 
 `GET /api/music/major` · 인증 필요. 지도 레이어(`level`)와 이전 겹들에서 좁힌 누적 범위로 그 레이어에 **상주하는 곡 집합**을 반환. 레이어 n 은 평면 `pc(2n-1)`·`pc(2n)` 을 축으로 씀.
 
-param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, 레이어 1..level-1 각각의 min·max 쌍).
+param: `level`(int, required, 1~8), `size`(int, optional, 1~10,000), 누적 축 범위(level ≥ 2 에서 required, 레이어 1..level-1 각각의 min·max 쌍).
 ```json
 { "success": true, "data": { "content": [ {
   "musicId": 10234,
-  "pc": [-0.4213, 1.0872, "...", -0.123],
+  "pc": [-0.421, 1.087, "...", -0.123],
   "genreId": 0, "weight": 0,
-  "title": "Love wins all", "artist": "IU", "playable": false
+  "title": "Love wins all", "artist": "IU", "videoId": null, "playable": true
 } ] }, "error": null }
 ```
-- `level = 1`(최상위)은 범위 없이 호출. 서버가 미리 계산한 정적 결과를 반환.
+- `level = 1`(최상위)은 범위 없이 호출. 서버가 미리 계산한 정적 결과를 반환. `level`이 1~8 밖이거나 비정수면 400 `INVALID_INPUT`.
 - 누적 범위는 **클라이언트가 캐싱해 전부 전달**. 서버는 탐색 상태를 보관하지 않으며 요청 하나로 완결됨. 레이어를 올라가면 클라이언트가 해당 범위를 폐기.
 - **선정 책임 분리**: 서버는 상주 집합을 공간적으로 고르게 뽑음. 인기순 대표 선별은 클라이언트가 화면 픽셀 격자에서 수행 — 격자가 줌에 따라 변해 서버가 적용할 수 없음.
-- 반환 개수는 1,000 **규모**. 정확한 수는 강제하지 않음.
+- `size`는 레이어별 상주 곡 수를 측정하기 위한 임시 파라미터다. 지정하면 모든 레이어에 반환 상한으로 적용하며, 후보가 충분하면 요청 수만큼, 부족하면 후보 수만큼 반환한다. 허용 범위는 1~10,000이고 범위 밖 또는 비정수면 400 `INVALID_INPUT`.
+- 1레이어에서도 `size`를 상한으로 적용한다. 요청값이 정적 표본보다 작으면 요청 수만큼, 크면 가용 정적 표본 전체를 반환한다.
+- `size`를 생략하면 현행 약 1,000곡 동작을 유지한다. 특히 1레이어는 기존 정적 표본 전체를 반환하므로 정확히 1,000개를 강제하지 않는다.
+- `pc` 16개는 원본 좌표를 변경하거나 재학습하지 않고 **응답 직렬화 값만** `HALF_UP`으로 소수점 이하 최대 3자리로 반올림한다. 범위 판정과 내부 계산은 원본 정밀도를 유지한다.
+- `MapPoint`에서 `youtubeUrl`을 보내지 않는다. `playable`의 의미와 곡 상세의 `youtubeUrl`은 바뀌지 않는다.
+- 후보가 없으면 오류가 아니라 200과 빈 `content`를 반환한다.
 - 상세 필드(`bpm`·`duration`·`album`·`genres`·`mbid`·`playCnt`·`youtubeCnt`)는 담지 않음 — §3.2 담당.
-- 에러: `VALIDATION_ERROR`.
+- 에러: `INVALID_INPUT`(`level`·`size`·누적 범위 검증 실패).
 
 **미정**: 범위 파라미터의 이름·표기는 FE 구현 시 확정(후보 `pc{n}min`·`pc{n}max`). `genreId` 의 무장르 인덱스 번호와 멜론 코드 29종 → 색 인덱스 매핑은 FE 통보 대기.
 
-**현재 데이터 상태**(계약이 아니라 사실): `weight` 는 인기 지표 부재로 균일값, `playable` 은 `youtube_url` 미수집이라 전부 false.
+**현재 데이터 상태**(계약이 아니라 사실): `weight` 는 인기 지표 부재로 균일값이다. `playable`은 저장된 `youtube_url`이 아니라 제목·아티스트로 검색 링크를 만들 수 있는지에 따라 계산한다.
+
+**1레이어 측정 선행 조건**: 현재 정적 표본은 약 1천 건뿐이므로 `size=3000`·`size=10000`을 실제로 검증하려면 공간 균등 성질을 유지한 더 큰 1레이어 표본이 먼저 필요하다. 기존 약 1천 건 표본에서 단순 `LIMIT`만 바꾸어 더 많은 곡을 만들 수는 없다.
 
 #### 변경 이력 — 2026-09-11 (D15~D19, 이슈 S15P21A405-50)
 

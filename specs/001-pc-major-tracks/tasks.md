@@ -26,6 +26,18 @@
 > 아래 Notes 의 "master 통합 재검증(M 항목)" 참조.
 > (plan.md 에는 해당 절이 없다 — M 번호는 S15P21A405-115 작업 메모에서 왔다)
 
+> ✅ **2026-09-17 A-30~A-32 후속(S15P21A405-391)**: optional `size`를 모든 레이어의 반환 상한으로 적용하고,
+> 지도 `MapPoint.youtubeUrl`을 제거하며 PC16 응답값을 HALF_UP 3자리로 반올림한다.
+> `size` 생략 시 1레이어는 기존 정적 표본 전체, 2레이어 이상은 기존 1000곡 상한을 유지한다.
+
+## Phase 0: A-30~A-32 후속
+
+- [X] T037 [US1] `size` 1~10,000 입력과 생략 시 기존 동작을 컨트롤러·서비스 계약에 반영
+- [X] T038 [US1] 1레이어 정적 표본과 2레이어 이상 조회에 `size` 상한 적용
+- [X] T039 [P] [US1] 지도 `MapPoint`와 SQL projection에서 `youtubeUrl` 제거, 상세 응답 계약 유지
+- [X] T040 [P] [US1] 지도 PC16을 응답 경계에서 HALF_UP 3자리로 반올림
+- [X] T041 [US1] 기본값·경계값·1레이어 상한·필드 제거·반올림 계약 테스트
+
 ---
 
 ## Phase 1: Setup
@@ -64,7 +76,7 @@
 - [X] T009 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) 대표곡 선정 순수 로직 `MajorSelection.topByYoutubeCnt`. D16 으로 서버는 인기순 선별을 하지 않고(클라이언트가 화면 픽셀 격자에서 한다), `youtube_cnt` 는 662만 행 전부 0 이다(data 스펙 18)
 - [X] T010 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) 선정 단위테스트 A14
 - [X] T011 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `major_successItem_carriesPc16AndBaselineCoordinates` + `major_itemOmitsDetailFields` / 원래 항목은 `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T012 (2026-09-12 **D18 로 교체** → **S15P21A405-249 로 되돌림**: D18 당시엔 `MapPoint` 에 `youtubeUrl` 이 없었으나, FE 요청으로 2026-09-12 다시 **추가됐다**. `playable` 은 `youtubeUrl != null` 로 파생된다. 검증 테스트도 `youtubeUrl_isBuiltFromTitleAndArtist_notTheNullColumn` · `playable_isFalse_whenTitleAndArtistAreBothBlank` 로 교체됐다) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [X] T012 (2026-09-17 **A-31로 재교체**: 지도 `MapPoint.youtubeUrl` 제거, `playable` 유지. 상세 응답의 `youtubeUrl`은 유지) [US1] MVC 슬라이스 테스트 A3
 
 ### 게이트 대기
 
@@ -85,7 +97,7 @@
 **Independent Test**: `GET /api/api/music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
 
 - [X] T018 (2026-09-10 완료: `major_level1_returnsSuccessEnvelope`) [US2] MVC 슬라이스 테스트 A5: `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T019 (2026-09-12 완료, S15P21A405-236) [US2] level=1 은 범위 파라미터 없이 `map_sample` 정적 결과를 돌려준다. 중심을 (0,0)/전체 영역으로 대체하지 않는다 — 애초에 받지 않는다. level=1 은 `limit` 을 적용하지 않는다 — `map_sample` 1레이어는 이미 화면 크기로 계산된 정적 집합(실측 1,094칸)이라 1000 으로 자르면 별 94개가 사라진다. port javadoc 에 예외로 명시했다(D18: 정확한 수는 강제하지 않는다)
+- [X] T019 (2026-09-17 **A-30으로 개정**) [US2] level=1은 범위 없이 `map_sample` 정적 결과를 읽는다. `size` 명시 시 상한을 적용하고, 생략 시 기존 정적 표본 전체를 반환한다
 
 **Checkpoint**: A5 계약은 T018로 유지. 최상위 실제 반환은 B2 후.
 

@@ -25,6 +25,7 @@ import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
@@ -53,12 +54,13 @@ public class MusicController {
 	 *
 	 * 범위 파라미터 표기는 {@link #rangeParam} 한 곳에서만 만든다. FE1 통보가 오면 거기만 바꾼다.
 	 */
-	@Operation(summary = "레이어 상주 집합 조회", description = "level=1은 파라미터 없이, level>=2는 이전 겹들의 사각 범위를 모두 받아 대표곡 집합을 조회한다.")
+	@Operation(summary = "레이어 상주 집합 조회", description = "level=1은 범위 없이, level>=2는 이전 겹들의 사각 범위를 모두 받는다. size는 1~10000곡의 반환 상한이다.")
 	@GetMapping("/major")
 	public ApiResponse<MajorResponse> major(
-			@RequestParam(defaultValue = "1") @Min(1) int level,
+			@RequestParam(defaultValue = "1") @Min(1) @Max(8) int level,
+			@RequestParam(required = false) @Min(1) @Max(10000) Integer size,
 			@RequestParam Map<String, String> params) {
-		return ApiResponse.success(musicService.getMajor(level, accumulatedBoxes(level, params)));
+		return ApiResponse.success(musicService.getMajor(level, accumulatedBoxes(level, params), size));
 	}
 
 	/**

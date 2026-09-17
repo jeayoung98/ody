@@ -3,9 +3,11 @@ package com.ssafy.backend.realtime.repository.redis;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -13,6 +15,9 @@ import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.data.redis.connection.RedisConnection;
+import org.springframework.data.redis.connection.RedisSetCommands;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.HashOperations;
 import org.springframework.data.redis.core.RedisCallback;
@@ -149,5 +154,61 @@ class ViewportRedisRepositoryTests {
 		assertThat(result.get("a@test.local").mode()).isEqualTo(ViewportMode.CLUSTERED);
 		assertThat(result.get("a@test.local").requestSeq()).isEqualTo(11L);
 		verify(redis).executePipelined(any(RedisCallback.class));
+	}
+
+	@Test
+	@DisplayName("이전 셀과 새 셀을 지켜보는 사용자를 한 번에 읽는다")
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	void readsOldAndNewCellSubscribersAtOnce() {
+		RedisConnection connection = mock(RedisConnection.class);
+		RedisSetCommands setCommands = mock(RedisSetCommands.class);
+		when(connection.setCommands()).thenReturn(setCommands);
+		when(redis.getStringSerializer()).thenReturn(RedisSerializer.string());
+		when(redis.executePipelined(any(RedisCallback.class))).thenAnswer(invocation -> {
+			RedisCallback callback = invocation.getArgument(0);
+			callback.doInRedis(connection);
+			return List.of(
+					Set.of("old@test.local", "both@test.local"),
+					Set.of("new@test.local", "both@test.local"));
+		});
+
+		Set<String> result = repository.findUsersWatchingCells(1, "2:3", 2, "4:5");
+
+		assertThat(result).containsExactlyInAnyOrder(
+				"old@test.local", "new@test.local", "both@test.local");
+		ArgumentCaptor<byte[]> keyCaptor = ArgumentCaptor.forClass(byte[].class);
+		verify(setCommands, org.mockito.Mockito.times(2)).sMembers(keyCaptor.capture());
+		List<String> keys = keyCaptor.getAllValues().stream()
+				.map(value -> new String(value, StandardCharsets.UTF_8))
+				.toList();
+		assertThat(keys).containsExactly("viewport:cell:1:2:3", "viewport:cell:2:4:5");
+	}
+
+	@Test
+	@DisplayName("이전 셀과 새 셀이 같으면 한 번만 읽는다")
+	@SuppressWarnings({"rawtypes", "unchecked"})
+	void readsSameCellOnce() {
+		RedisConnection connection = mock(RedisConnection.class);
+		RedisSetCommands setCommands = mock(RedisSetCommands.class);
+		when(connection.setCommands()).thenReturn(setCommands);
+		when(redis.getStringSerializer()).thenReturn(RedisSerializer.string());
+		when(redis.executePipelined(any(RedisCallback.class))).thenAnswer(invocation -> {
+			RedisCallback callback = invocation.getArgument(0);
+			callback.doInRedis(connection);
+			return List.of(Set.of("viewer@test.local"));
+		});
+
+		Set<String> result = repository.findUsersWatchingCells(2, "4:5", 2, "4:5");
+
+		assertThat(result).containsExactly("viewer@test.local");
+		verify(setCommands).sMembers(any(byte[].class));
+	}
+
+	@Test
+	@DisplayName("이전 셀과 새 셀이 없으면 Redis를 읽지 않는다")
+	void skipsReadWithoutCells() {
+		assertThat(repository.findUsersWatchingCells(null, null, null, null)).isEmpty();
+
+		verify(redis, never()).executePipelined(any(RedisCallback.class));
 	}
 }

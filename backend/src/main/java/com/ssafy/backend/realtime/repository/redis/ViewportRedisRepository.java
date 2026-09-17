@@ -103,6 +103,33 @@ public class ViewportRedisRepository {
 	}
 
 	/**
+	 * 이전 셀과 새 셀을 지켜보는 사용자를 한 번에 읽는다.
+	 * 같은 셀이면 한 번만 읽는다.
+	 *
+	 * @param oldLayer 이전 레이어
+	 * @param oldCell 이전 셀
+	 * @param newLayer 새 레이어
+	 * @param newCell 새 셀
+	 * @return 두 셀을 지켜보는 사용자
+	 */
+	public Set<String> findUsersWatchingCells(
+			Integer oldLayer, String oldCell,
+			Integer newLayer, String newCell) {
+		Set<String> keys = new LinkedHashSet<>();
+		addCellKey(keys, oldLayer, oldCell);
+		addCellKey(keys, newLayer, newCell);
+		if (keys.isEmpty()) {
+			return Set.of();
+		}
+
+		Set<String> subscribers = new LinkedHashSet<>();
+		for (Object value : readSetsAtOnce(List.copyOf(keys))) {
+			subscribers.addAll(toStringSet(value));
+		}
+		return Set.copyOf(subscribers);
+	}
+
+	/**
 	 * 레이어별 셀 인원수 화면 사용자를 한 번에 읽는다.
 	 *
 	 * @param maxLayer 마지막 레이어 번호
@@ -247,6 +274,13 @@ public class ViewportRedisRepository {
 			cells.add(new Cell(Integer.parseInt(fields[0]), Integer.parseInt(fields[1])));
 		}
 		return Set.copyOf(cells);
+	}
+
+	/** 레이어와 셀이 모두 있을 때만 조회할 키를 만든다. */
+	private static void addCellKey(Set<String> keys, Integer layer, String cell) {
+		if (layer != null && cell != null) {
+			keys.add(CELL_SUBSCRIBERS_PREFIX + layer + ":" + cell);
+		}
 	}
 
 	/** 여러 Redis Set을 한 번에 읽는다. */

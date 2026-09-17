@@ -59,6 +59,7 @@ class MusicPlayServiceTests {
 				"1:1", "2:7",
 				0.2, 0.7));
 		verify(playHistoryMapper).insert(org.mockito.ArgumentMatchers.any(PlayHistoryRow.class));
+		verify(playHistoryMapper).incrementPlayCnt(20L);
 		verify(meetingService).recordMeetings(EMAIL, List.of());
 	}
 }

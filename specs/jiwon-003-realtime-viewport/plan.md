@@ -177,9 +177,9 @@ flowchart TB
 ### F2. 프론트 실시간 요청 순서
 
 1. STOMP 연결 후 `/user/queue/presence`, `/user/queue/errors`를 먼저 구독한다.
-2. `/app/presence/join`으로 현재 곡과 레이어를 복원한다.
-3. 팬·줌 종료 후 250ms debounce하여 `/app/presence/viewport`를 보낸다.
-4. 레이어 이동은 실제 layer·boxes 변경 → 화면 안정화 → join → 새 레이어 viewport 순서로 처리한다.
+2. `/app/presence/join`으로 현재 곡과 레이어를 복원하고 같은 requestSeq의 `PRESENCE_JOINED`를 기다린다.
+3. ACK 뒤 팬·줌 종료 후 250ms debounce하여 `/app/presence/viewport`를 보낸다.
+4. 레이어 이동은 실제 layer·boxes 변경 → 화면 안정화 → join → ACK → 새 레이어 viewport 순서로 처리한다.
 5. 늦은 major 응답으로 화면이 바뀌면 더 큰 requestSeq로 viewport를 다시 보낸다.
 6. 화면을 닫으면 `/app/presence/viewport/close`를 보낸다.
 

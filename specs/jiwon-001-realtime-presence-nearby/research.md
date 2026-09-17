@@ -9,14 +9,14 @@
 
 **Decision**: 스캐폴딩의 `config/`·`common/`·`session/`(13파일)은 **재사용**, `presence/`·`nearby/`는 **정본 기준으로 재작성**, `reaction/`·`follow/`(29파일)은 **이번 범위 밖으로 격리**(삭제하지 않되 컴포넌트 스캔에서 제외하거나 그대로 두고 손대지 않음).
 
-**Rationale**: 스캐폴딩은 09-07 설계개요(좌표를 클라이언트가 보내는 모델, heartbeat 25s/TTL 60s, 24h dedup 만남, 레이어 SET presence) 기준이다. 정본은 "곡 = 위치", 15/45/5s, dedup 없음, 곡 청취자 Set + 셀 인덱스로 바뀌었다. 아래 표의 차이는 리팩터가 아니라 모델 교체 수준이다.
+**Rationale**: 스캐폴딩은 09-07 설계개요(좌표를 클라이언트가 보내는 모델, heartbeat 25s/TTL 60s, 24h 중복 방지, 레이어 SET presence) 기준이다. 현재 정책은 "곡 = 위치", 15/45/5s, 3분 만남 쿨다운, 곡 청취자 Set + 셀 인덱스로 바뀌었다. 아래 표의 차이는 리팩터가 아니라 모델 교체 수준이다.
 
 | 항목 | 스캐폴딩 (09-07 설계) | 정본 (09-10 Notion) |
 | --- | --- | --- |
 | 위치 원본 | 클라이언트가 `x, y` 전송 (`MoveRequest`) | 서버가 `music.location`으로 계산, 클라이언트 좌표 금지 |
 | presence 인덱스 | `presence:layer:{layerId}` SET | 곡 청취자 Set + `active-song:cell:{layer}:{x}:{y}` + `cell:usercount:{layer}` |
 | 하트비트/TTL/Sweep | 25s / 60s / 30s | 15s / 45s / 5s |
-| 만남 | `encounter-dedup.lua` SETNX 24h | dedup 없음, 진입 순간 기존 청취자 전원과 +1 |
+| 만남 | `encounter-dedup.lua` SETNX 24h | 같은 레이어·같은 곡, 동일 쌍 3분 쿨다운 |
 | 사용자 노출 | `userId`(=email) 그대로 payload | `nickname` + `imageUrl`만, email 금지 |
 | 델타 범위 | 레이어 토픽 브로드캐스트 | 셀/곡 구독 인덱스 정방향 조회 → 개인 큐 |
 | 반응·따라가기 | 포함 | 이후 단계 |
@@ -111,11 +111,11 @@
 
 ## R-10. 만남 집계 — 비동기 경로와 DB 부하
 
-**Decision**: `presence-play.lua`가 돌려준 "진입 직전 청취자 목록"을 `@Async` 별도 빈(`MeetingRecorder`)에 넘겨 `meeting` UPSERT를 **배치 1문**(`INSERT ... ON CONFLICT (user1, user2) DO UPDATE SET cnt = meeting.cnt + 1`, VALUES 다건)으로 처리한다. 곡별 상한은 두지 않되 목록 크기를 지표로 기록한다.
+**Decision**: `presence-play.lua`가 돌려준 같은 레이어·같은 곡의 청취자 목록을 별도 `@Async` 서비스에 넘긴다. email 사전순으로 쌍을 만든 뒤 `meeting-cd:{user1}:{user2}` Redis 키를 180초 TTL로 `SET NX`하고, 새 키가 만들어진 쌍만 `meeting`을 +1 한다.
 
 **Rationale**: 정본 RT-50 "인기 곡 진입 시 기존 청취자 수만큼 한꺼번에", "브로드캐스트 경로 밖 비동기 필수". 기존 스캐폴딩 `ReactionService.recordAsync`가 self-invocation으로 `@Async`가 안 타는 문제가 있었으므로 **별도 빈**으로 둔다. `meeting(user1, user2)`에 UNIQUE가 있어야 ON CONFLICT가 성립 — ERD 확인 항목(B-2).
 
-**Alternatives**: Redis INCR 후 주기 배치 영속화(스캐폴딩 방식) — 정본이 DB 직접 UPSERT를 명시하고, "중복 방지 없음"이라 Redis 중간 단계의 이점(dedup)이 사라짐. 기각.
+**Alternatives**: 레이어를 무시하거나 재진입마다 모두 증가시키는 방식은 실제 화면에서 짧은 재접속·곡 전환으로 횟수가 부풀어 제외했다.
 
 ## R-11. 에러 코드 — `PRESENCE_ERROR`의 자리
 
@@ -131,17 +131,17 @@
 
 ## R-13. 로그인 직후 위치 복원 (Q1 — 2026-09-10 확정)
 
-**Decision**: 사용자 확정 "음악을 플레이해야 그 음악으로 위치가 이동한다. RT-01·RT-02 둘 다 맞다." → `/app/presence/join {layer, musicId}`는 **배치·복원**(클라이언트가 마지막 재생곡을 보냄, 서버가 그 좌표로 노출, `play_history` INSERT·만남 없음), `POST /music/play`는 **이동의 유일한 원본**(이때만 INSERT·만남). 기록이 없으면 비노출 유지.
+**Decision**: `/app/presence/join {requestSeq, layer, musicId}`는 **배치·복원**이다. 첫 join은 요청 곡을 사용하고, 이후 join은 서버 presence의 현재 곡으로 레이어만 옮긴다. 성공 ACK 뒤 `POST /music/play`를 호출할 때만 새 곡으로 이동한다.
 
 **Rationale**: RT-01 "정지 상태지만 위치는 마지막 곡에 노출"과 RT-50 "POST /play로 진입하는 순간"이 동시에 성립한다. join과 play를 구분하는 기준은 "재생했는가" 하나다.
 
-**방어 (구현 시 검토)**: join의 `musicId`를 그대로 믿으면 재생 없이 임의 곡에 배치할 수 있다 — 클라이언트 좌표를 거부한 취지(위치 조작 방지)와 같은 구멍. 서버가 `play_history` 최신 1건과 대조해 불일치면 서버 값으로 덮는 것을 제안. FE2 확인 후 `PresenceLifecycleService.join`에 반영. **[협의 필요: FE2]**
+**방어**: 현재 소켓 epoch와 Redis의 현재 곡을 함께 비교한다. 이전 소켓이나 위치 조회 뒤 곡이 바뀐 요청은 `PRESENCE_STALE`로 거부한다.
 
 ## 보류 항목 (Blocked — 착수 금지, 표시만)
 
 | ID | 미결정 / 필요한 확인 | 상대 | 막히는 구간 |
 | --- | --- | --- | --- |
-| B-1 | ~~Q1~Q3~~ 전부 해소(2026-09-10). 잔여: join `musicId` 대조 방어 수용 여부 | FE2 | `PresenceLifecycleService.join` 대조 분기 1곳 — 착수 막지 않음 |
+| B-1 | ~~Q1~Q3와 join 곡 선택·ACK 순서 확정~~ | FE2 | 프론트가 `PRESENCE_JOINED` 뒤 viewport·play를 호출하도록 반영 필요 |
 | B-2 | ERD 실물: `play_history`(컬럼·PK·email FK), `meeting(user1, user2, cnt)` UNIQUE 유무, `"user".is_public` | BE1 | MyBatis XML, ON CONFLICT 절 |
 | B-3 | `MusicDetailReader.findNeighbors` 어댑터 구현 시점, `NeighborTrack.distance` 유무, 경량 좌표 포트(R-03) | BE2·BE4 | 근처 스냅샷(US3), `/music/play` 좌표 계산(US1) |
 | B-4 | 레이어별 표시 축 배정 확정 + 축별 전역 min/max 초기값 | BE2·BE4 | 셀 계산 전부 — 임의값으로 개발은 가능, 실측 전 시연 불가 |

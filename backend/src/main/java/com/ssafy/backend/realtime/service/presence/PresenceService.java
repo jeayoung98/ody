@@ -7,15 +7,15 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
-import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
+import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
+import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 
@@ -69,35 +69,46 @@ public class PresenceService {
 	 * 처음 들어오거나 위치가 바뀌면 변경을 알린다.
 	 *
 	 * @param email 사용자 이메일
-	 * @param request 곡과 레이어
-	 * @throws CustomException 곡 위치나 접속 정보를 찾을 수 없는 경우
+	 * @param expectedEpoch 요청을 보낸 소켓의 접속 번호
+	 * @param request 요청 순번, 곡, 레이어
+	 * @return 실제로 적용한 곡과 레이어
 	 */
-	public void join(String email, JoinRequest request) {
-		long musicId = request.musicId();
+	public PresenceJoined join(String email, long expectedEpoch, JoinRequest request) {
+		request.validate();
 		int layer = request.layer();
 
-		// 1. 곡 좌표로 현재 레이어의 위치를 계산한다.
-		double[] pc = musicLocationService.findLocation(musicId)
-				.orElseThrow(() -> {
-					log.warn("join 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL, musicId);
-					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
-				});
-		Placement p = musicPositionCalculator.calculate(pc, layer);
-
-		// 2. 옮기기 전 위치를 읽는다.
+		// 1. 현재 접속과 곡을 확인한다.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null) {
-			log.warn("join 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_NOT_CONNECTED, musicId);
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			throw joinError(WebSocketErrorCode.PRESENCE_NOT_CONNECTED, "먼저 소켓에 연결해야 한다");
+		}
+		if (!Objects.equals(before.epoch(), expectedEpoch)) {
+			throw joinError(WebSocketErrorCode.PRESENCE_STALE, "이전 소켓에서 보낸 입장 요청이다");
 		}
 
-		// 3. 이전 위치에서 새 위치로 옮긴다.
-		boolean ok = presenceRedisRepository.join(email,
+		// 2. 첫 입장은 요청 곡, 레이어 이동은 서버의 현재 곡을 쓴다.
+		long musicId = before.musicId() == null ? request.musicId() : before.musicId();
+		try {
+			musicPositionCalculator.findAxes(layer);
+		} catch (IllegalArgumentException e) {
+			throw joinError(WebSocketErrorCode.PRESENCE_LAYER_INVALID, e.getMessage());
+		}
+		double[] pc = musicLocationService.findLocation(musicId)
+				.orElseThrow(() -> joinError(
+						WebSocketErrorCode.PRESENCE_LOCATION_NULL, "곡 위치를 찾을 수 없다"));
+		Placement p;
+		try {
+			p = musicPositionCalculator.calculate(pc, layer);
+		} catch (IllegalArgumentException e) {
+			throw joinError(WebSocketErrorCode.PRESENCE_LOCATION_NULL, "곡 위치를 계산할 수 없다");
+		}
+
+		// 3. 현재 소켓일 때만 이전 위치에서 새 위치로 옮긴다.
+		boolean ok = presenceRedisRepository.join(email, expectedEpoch,
 				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 		if (!ok) {
-			log.warn("join STALE reason={} musicId={}", WebSocketErrorCode.PRESENCE_STALE, musicId);
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			throw joinError(WebSocketErrorCode.PRESENCE_STALE, "입장 처리 중 접속이나 현재 곡이 바뀌었다");
 		}
 
 		// 처음 자리를 잡거나 곡·레이어·셀이 바뀌면 새 위치를 알린다.
@@ -114,6 +125,13 @@ public class PresenceService {
 					p.xNorm(), p.yNorm()));
 		}
 		log.info("[Presence] join 완료 musicId={} layer={}", musicId, layer);
+		return new PresenceJoined(request.requestSeq(), layer, musicId);
+	}
+
+	/** 입장 실패 원인만 남기고 사용자 정보는 로그에 쓰지 않는다. */
+	private WebSocketRequestException joinError(WebSocketErrorCode code, String message) {
+		log.warn("join 거부 reason={}", code);
+		return new WebSocketRequestException(code, message);
 	}
 
 	/**

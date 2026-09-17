@@ -264,7 +264,7 @@ class NearbyRedisIntegrationTests {
 		expiryEmail = data.email();
 
 		presenceRepository.connect(data.email(), 7L, 60_000L);
-		assertThat(presenceRepository.join(data.email(), null, null, null, null,
+		assertThat(presenceRepository.join(data.email(), 7L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
 		assertThat(nearbyRepository.replaceSubscriptions(
 				data.email(), 7L, List.of(data.music1(), data.music2()))).isTrue();

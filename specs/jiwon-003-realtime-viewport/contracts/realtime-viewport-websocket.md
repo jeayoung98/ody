@@ -214,9 +214,11 @@
 prefetch 시작이 아니라 실제 layer·boxes가 변경되고 전환 화면이 안정된 뒤 아래 순서를 지킨다.
 
 1. 현재 `MapEngine.boxes`를 서버 1-based ancestorBounds로 변환
-2. `SEND /app/presence/join { "layer": newLayer, "musicId": currentMusicId }`
-3. 새 layer, 새 현재 화면, 같은 ancestorBounds로 `SEND /app/presence/viewport`
-4. 늦은 major 응답으로 화면 범위가 바뀌면 더 큰 requestSeq로 viewport 갱신
+2. `SEND /app/presence/join { "requestSeq": nextJoinSeq, "layer": newLayer, "musicId": currentMusicId }`
+3. 같은 join requestSeq의 `PRESENCE_JOINED` 확인
+4. 새 layer, 새 현재 화면, 같은 ancestorBounds로 `SEND /app/presence/viewport`
+5. 새 곡도 함께 바꾸는 경우에만 join ACK 뒤 `POST /api/music/play`
+6. 늦은 major 응답으로 화면 범위가 바뀌면 더 큰 viewport requestSeq로 갱신
 
 viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다.
 
@@ -228,9 +230,10 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 2. STOMP CONNECT
 3. `/user/queue/presence`, `/user/queue/errors` SUBSCRIBE 완료
 4. `/app/presence/join`
-5. 현재 layer·화면·boxes에서 만든 ancestorBounds로 `/app/presence/viewport`
-6. 주변사람 패널이 열려 있으면 nearby open REST 호출
-7. heartbeat 시작
+5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
+6. 현재 layer·화면·boxes에서 만든 ancestorBounds로 `/app/presence/viewport`
+7. 주변사람 패널이 열려 있으면 nearby open REST 호출
+8. heartbeat 시작
 
 최초 join이 끝나면 직전 곡 위치에 배치되어 다른 사용자에게 노출된다. 이후 playEnd는 재생 시간만 끝내고 마지막 위치의 노출은 유지한다. 노출 제거는 leave·disconnect·TTL 만료에서 수행한다.
 

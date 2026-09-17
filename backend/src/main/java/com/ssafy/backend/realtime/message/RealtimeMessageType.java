@@ -5,6 +5,7 @@ package com.ssafy.backend.realtime.message;
  * (반응·따라가기는 이번 범위 밖 — 추가 시 이 enum 확장)
  */
 public enum RealtimeMessageType {
+	PRESENCE_JOINED,
 	VIEWPORT_SNAPSHOT,
 	VIEWPORT_ENTER,
 	VIEWPORT_MOVE,

@@ -4,9 +4,9 @@ import { useState } from "react";
 import Button from "@/components/common/button";
 import { FlagIcon, PauseIcon, PlayIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
-import { FEATURES } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
+import { useFeatures } from "@/hooks/use-features";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
@@ -18,6 +18,7 @@ import SongReportDialog from "./song-report-dialog";
 
 /** 재생 · 플리에 추가 · 여정 출발/도착으로 지정 */
 export default function SongActions({ music }: { music: MusicDetail }) {
+  const features = useFeatures();
   const [menuOpen, setMenuOpen] = useState(false);
   /** 신고 팝업이 떠 있나 (S15P21A405-378). 고르면 보내고 닫힌다 */
   const [reportOpen, setReportOpen] = useState(false);
@@ -73,8 +74,8 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay}>
           {isThisPlaying ? <PauseIcon size={13} /> : <PlayIcon size={13} />} {isThisPlaying ? "정지" : blocked ? blocked.badge : "재생"}
         </Button>
-        {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) */}
-        {FEATURES.playlist && (
+        {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
+        {features.playlist && (
           <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
             ＋ 플리
           </Button>
@@ -117,7 +118,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         <FlagIcon size={12} /> 이 곡 신고
       </Button>
       {reportOpen && <SongReportDialog musicId={music.id} title={music.title} onClose={() => setReportOpen(false)} />}
-      {FEATURES.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
+      {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

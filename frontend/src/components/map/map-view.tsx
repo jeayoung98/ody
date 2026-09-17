@@ -1,13 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
-import { FEATURES, HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
+import { HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
+import { useFeatures } from "@/hooks/use-features";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { usePlaySong } from "@/hooks/use-play-song";
@@ -43,6 +44,7 @@ interface MapViewProps {
  */
 export default function MapView({ occludedRight }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
+  const features = useFeatures();
   const { ref, size } = useViewport();
   const [hover, setHover] = useState(false);
   /** 호버 카드에 띄울 곡. 카드가 DOM 이라 곡 자체를 들고 있어야 한다 */
@@ -513,7 +515,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
-      {FEATURES.social && <FloatingReactions />}
+      {features.social && <FloatingReactions />}
       <HoverCard engine={engine} song={hoverSong} on={cardOn} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>

@@ -1,7 +1,8 @@
 "use client";
 
 import { FriendsIcon, JourneyIcon, RankIcon, UserIcon } from "@/components/common/icons";
-import { NAV_ITEMS, PANEL_ENABLED, type PanelType } from "@/constants";
+import { NAV_ITEMS, type PanelType } from "@/constants";
+import { usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -30,7 +31,8 @@ export default function Rail() {
    */
   const hasJourney = useJourneyStore((s) => s.isRouteRequested);
   const openComposer = useOpenJourneyComposer();
-  const items = NAV_ITEMS.filter((item) => PANEL_ENABLED[item.key]);
+  const panelEnabled = usePanelEnabled();
+  const items = NAV_ITEMS.filter((item) => panelEnabled[item.key]);
   // 하나도 없으면 빈 알약만 떠 있게 된다 — 그럴 바에는 레일 자체를 안 그린다
   if (!items.length) return null;
 

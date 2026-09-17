@@ -175,6 +175,27 @@ class PresenceWebSocketControllerTests {
 		verifyNoInteractions(viewportService, realtimeMessageService);
 	}
 
+	@Test
+	@DisplayName("만료된 접속의 하트비트는 다시 연결하도록 알린다")
+	void expiredHeartbeatRequestsReconnect() {
+		when(presenceService.heartbeat(EMAIL)).thenReturn(false);
+
+		controller.heartbeat(PRINCIPAL);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_STALE, "접속이 만료됐다. 다시 연결해야 한다");
+	}
+
+	@Test
+	@DisplayName("재동기화 요청은 새 연결에서 상태를 다시 보내도록 알린다")
+	void resyncRequestsExplicitReconnect() {
+		controller.resync(PRINCIPAL);
+
+		verify(webSocketErrorService).send(
+				EMAIL, WebSocketErrorCode.PRESENCE_STALE, "새 연결 후 입장과 화면 요청을 다시 보내야 한다");
+		verifyNoInteractions(viewportService, realtimeMessageService);
+	}
+
 	/** 첫 레이어의 정상 화면 요청을 만든다. */
 	private static ViewportRequest request(long requestSeq) {
 		return new ViewportRequest(requestSeq, 1, 0.0, 2.0, 0.0, 2.0, List.of());

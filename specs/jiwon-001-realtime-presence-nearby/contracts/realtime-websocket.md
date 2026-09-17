@@ -26,7 +26,7 @@
 | `/app/presence/heartbeat` | — (빈 body) | FR-022 | 15s 주기. `presence:expiry` 갱신만 |
 | `/app/presence/leave` | — | FR-020 | 즉시 전체 정리. onClose와 같은 경로 |
 | `/app/presence/viewport` | `ViewportRequest` (§1.1) | FR-050~056 | debounce 250ms 후 전송. `layer` 변경 = 레이어 이동 |
-| `/app/presence/resync` | — | FR-004 | 재연결 후 현재 viewport·nearby 상태 기준 스냅샷 재발급 |
+| `/app/presence/resync` | — | FR-004 | 자동 복원하지 않고 `PRESENCE_STALE`로 재연결 안내 |
 | `/app/nearby/open` | — | FR-070~072 | 스냅샷 + 구독 등록 한 번에 |
 | `/app/nearby/close` | — | FR-077 | 저장된 목록으로 해제 |
 
@@ -54,10 +54,10 @@
 
 | type | payload | 관련 FR | 발생 |
 | --- | --- | --- | --- |
-| `VIEWPORT_SNAPSHOT` | §2.1 | FR-051, 055, 060 | viewport 수신·resync |
+| `VIEWPORT_SNAPSHOT` | §2.1 | FR-051, 055, 060 | viewport 수신 |
 | `VIEWPORT_ENTER` / `VIEWPORT_MOVE` / `VIEWPORT_LEAVE` | §2.2 | FR-057, 058 | INDIVIDUAL 구독자에게만 |
 | `VIEWPORT_CELL_COUNTS` | `{ layer, resolution, cells[{cellX, cellY, count}] }` | FR-061 | CLUSTERED 사용자에게 주기(초기 5s) |
-| `NEARBY_SNAPSHOT` | §2.3 | FR-070, 071 | nearby/open·앵커 변경·resync |
+| `NEARBY_SNAPSHOT` | §2.3 | FR-070, 071 | nearby/open·앵커 변경 |
 | `NEARBY_ENTER` / `NEARBY_MOVE` / `NEARBY_LEAVE` | §2.4 | FR-074 | 패널 열린 동안만 |
 | `PRESENCE_ERROR` | `{ code, message }` | FR-042 | `/user/queue/errors` |
 
@@ -140,8 +140,8 @@
 
 ## 4. 복구 규칙
 
-1. **재연결**: CONNECT부터. 서버는 `sessionEpoch` 증가, 이전 세션 정리는 epoch 비교로 새 상태를 지우지 않는다. 클라이언트는 `join` → (필요 시) `viewport` · `nearby/open` 또는 `resync`.
-2. **seq gap**: 스냅샷 `seq` 이하 델타 폐기. gap을 감지해도 재요청은 **필요 없다** — presence 델타는 "해당 사용자의 전체 상태"이고 다음 viewport/heartbeat 주기에 자연 치유된다. 명시적 재동기화는 `resync`.
+1. **재연결**: CONNECT부터. 서버는 `sessionEpoch`를 올리고 이전 세션 정리는 epoch 비교로 새 상태를 지우지 않는다. 클라이언트는 개인 큐 구독 후 `join` → `viewport` → 필요 시 `nearby/open`을 다시 보낸다.
+2. **seq gap**: 복구가 필요하면 새로 연결한 뒤 위 순서로 상태를 다시 보낸다. `/app/presence/resync`는 과거 화면을 복원하지 않는다.
 3. **debounce**: viewport는 250ms debounce 후 전송. 매 프레임 전송 금지.
 
 ## 5. 기존 `contracts/websocket/`와의 차이 (교체 근거)

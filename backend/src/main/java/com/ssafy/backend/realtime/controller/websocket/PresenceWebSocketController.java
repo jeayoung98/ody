@@ -50,9 +50,8 @@ public class PresenceWebSocketController {
 	public void heartbeat(Principal principal) {
 		boolean alive = presenceService.heartbeat(principal.getName());
 		if (!alive) {
-			// 이미 sweep 돼 만료큐에서 빠짐 → 클라는 살아있다 오해. STALE 회신해 resync 유도(P3-f).
 			webSocketErrorService.send(principal.getName(), WebSocketErrorCode.PRESENCE_STALE,
-					"presence expired, resync required");
+					"접속이 만료됐다. 다시 연결해야 한다");
 		}
 	}
 
@@ -137,9 +136,14 @@ public class PresenceWebSocketController {
 		}
 	}
 
-	/** 재동기화 — 현재 viewport·nearby 기준 스냅샷 재발급(FR-004, RT-22). 이번 범위 밖. */
+	/**
+	 * 자동 복원 대신 새 소켓에서 상태를 다시 보내도록 알린다.
+	 *
+	 * @param principal 로그인한 사용자
+	 */
 	@MessageMapping("/presence/resync")
 	public void resync(Principal principal) {
-		// TODO(RT-22): 스냅샷 재발급
+		webSocketErrorService.send(principal.getName(), WebSocketErrorCode.PRESENCE_STALE,
+				"새 연결 후 입장과 화면 요청을 다시 보내야 한다");
 	}
 }

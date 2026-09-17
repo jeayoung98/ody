@@ -59,11 +59,12 @@ export default function SongActions({ music }: { music: MusicDetail }) {
           <ArriveIcon className="text-violet" /> 도착점으로
         </button>
       </div>
-      {blocked && (
-        <Note>
-          {blocked.detail} {blocked.ref && <span className="text-ink-4">{blocked.ref}</span>}
-        </Note>
-      )}
+      {/*
+        기능 ID(`SONG-04`)는 **화면에 적지 않는다** (S15P21A405-384). 개발자만 읽는 코드라
+        사용자에게는 뜻 없는 글자다 — 패널 헤더의 `SONG-02` 를 뺀 것과 같은 이유다.
+        값 자체는 남겨 둔다: 플레이어바가 분석 이벤트의 `reason` 으로 보낸다 (`player-bar`).
+      */}
+      {blocked && <Note>{blocked.detail}</Note>}
     </div>
   );
 }

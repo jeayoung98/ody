@@ -6,6 +6,7 @@ import MarqueeText from "@/components/common/marquee-text";
 import Tag from "@/components/common/tag";
 import TransportButton from "@/components/common/transport-button";
 import { genreColor } from "@/constants/design-tokens";
+import { PLAYBACK_BLOCKED } from "@/constants";
 import { useFeatures } from "@/hooks/use-features";
 import { useSongPlayToggle } from "@/hooks/use-song-play-toggle";
 import { formatCount, formatDuration } from "@/lib/format";
@@ -30,6 +31,12 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const color = genreColor(music.genres[0]?.id ?? 0);
   const { blocked, isThisPlaying, toggle } = useSongPlayToggle(music.id);
+  /**
+   * **찾아봤는데 음원이 없는 곡** (S15P21A405-384). 다시 눌러도 답이 같으므로 재생도 플리 추가도
+   * 아예 잠근다 — 흐리기만 하고 눌리게 두면 "될 것 같은데 안 되는" 버튼이 된다.
+   * 아직 안 찾아봤거나 조회가 실패한 곡은 **모르는 것**이지 없는 게 아니라 그대로 눌린다.
+   */
+  const dead = blocked === PLAYBACK_BLOCKED.noVideo;
   return (
     <div className="relative flex flex-col gap-2">
       <div className="flex items-center gap-1.5">
@@ -44,11 +51,11 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         </div>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
         {features.playlist && (
-          <TransportButton label="플레이리스트에 추가" size="md" bright onClick={() => setMenuOpen((v) => !v)}>
+          <TransportButton label={dead ? "재생할 수 없는 곡은 담을 수 없어요" : "플레이리스트에 추가"} size="md" bright disabled={dead} onClick={() => setMenuOpen((v) => !v)}>
             <PlaylistAddIcon size={17} />
           </TransportButton>
         )}
-        <TransportButton label={isThisPlaying ? "정지" : "재생"} primary dimmed={!!blocked} onClick={toggle}>
+        <TransportButton label={isThisPlaying ? "정지" : "재생"} primary disabled={dead} dimmed={!dead && !!blocked} onClick={toggle}>
           {isThisPlaying ? <PauseIcon size={17} /> : <PlayIcon size={17} />}
         </TransportButton>
       </div>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef } from "react";
+import { useEffect, useRef } from "react";
 import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
@@ -53,6 +53,18 @@ export default function SongDetailPanel() {
   // 이 겹에 없는 곡이면 고스트별로 띄운 상태다 — 이동 안내를 함께 보여준다 (MAP-12)
   const elsewhere = useMapStore((s) => s.selectedMusicId === musicId && s.ghostMusicId === musicId);
   const bodyRef = useRef<HTMLDivElement>(null);
+
+  /**
+   * 곡이 바뀌면 **맨 위로 되돌린다** (S15P21A405-384). 패널은 곡이 바뀌어도 같은 상자를 쓰므로
+   * 스크롤이 그대로 남는다 — 주변 음악 카드로 옮겨 다니면 새 곡의 제목·커버는 위에 있는데
+   * 화면은 계속 아래에 머물러서 무엇이 열렸는지 안 보인다.
+   *
+   * DOM 에 직접 쓴다. 상태로 들고 있을 값이 아니고, 이 한 줄이면 커버 덮개도 스크롤 이벤트를
+   * 받아 제자리로 돌아간다 (`song-cover-backdrop`).
+   */
+  useEffect(() => {
+    bodyRef.current?.scrollTo({ top: 0 });
+  }, [musicId]);
 
   return (
     <Box

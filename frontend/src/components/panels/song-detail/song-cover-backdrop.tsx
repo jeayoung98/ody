@@ -86,7 +86,14 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
   }, [scrollerRef, reveal, musicId]);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute top-0 right-2 left-0 aspect-square">
+    /*
+      아래끝을 마스크로 흐린다 — 정사각형이 그대로 끝나면 시트가 덜 덮은 자리에서 밑변이
+      가로선으로 보인다 (S15P21A405-384). 시트 윗머리 그라데이션과 양쪽에서 만나 녹는다.
+    */
+    <div
+      aria-hidden
+      className="pointer-events-none absolute top-0 right-2 left-0 aspect-square [-webkit-mask-image:linear-gradient(to_bottom,#000_62%,transparent)] [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]"
+    >
       {/* 1. 커버 */}
       <div ref={coverRef} className="absolute inset-0 scale-[1.02] bg-cover bg-center blur-[1px]" />
       {/* 2. 우리 색이 스민다 */}

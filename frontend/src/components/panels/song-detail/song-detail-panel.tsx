@@ -15,7 +15,6 @@ import SongActions from "./song-actions";
 import SongCoverBackdrop from "./song-cover-backdrop";
 import SongElsewhereNote from "./song-elsewhere-note";
 import SongHeader from "./song-header";
-import SongInfoGrid from "./song-info-grid";
 import SongNearbyList from "./song-nearby-list";
 import SongPcList from "./song-pc-list";
 import SongRelatedPlaylists from "./song-related-playlists";
@@ -29,13 +28,22 @@ import SongReportButton from "./song-report-button";
 const COVER_WINDOW = 188;
 
 /**
+ * 시트 윗머리에서 커버가 녹아드는 길이(px).
+ *
+ * 88px 로 뒀다가 **잘린 것처럼 보였다** (S15P21A405-384) — 짧으면 그라데이션이 끝나는 자리가
+ * 선이 되고, 그 위로 커버가 갑자기 나타난다. 커버(정사각 ≈ 366px)의 절반을 넘게 써서 끝을
+ * 흐린다. 커버 아래끝도 함께 흐려야 완성된다 (`song-cover-backdrop` 의 mask).
+ */
+const SHEET_FADE = 200;
+
+/**
  * 곡 상세 (SONG-02).
  *
  * 두 겹이다 (S15P21A405-384).
  * - **뒤: 커버** — 패널 상단에 정사각형으로 고정. 스크롤해도 움직이지 않는다
  * - **앞: 시트** — 제목부터 주변 곡까지 전부. 위로 스크롤하면 이 시트가 커버를 덮으며 올라간다
  *
- * 시트 윗머리 88px 는 투명 → 배경색 그라데이션이라 커버가 시트로 녹아든다. 끝까지 올리면
+ * 시트 윗머리는 투명 → 배경색 그라데이션이라 커버가 시트로 녹아든다. 끝까지 올리면
  * 헤더 뒤의 커버까지 덮개가 지워서 패널이 한 색이 된다(`song-cover-backdrop`).
  */
 export default function SongDetailPanel() {
@@ -66,8 +74,8 @@ export default function SongDetailPanel() {
       <div aria-hidden style={{ height: COVER_WINDOW }} />
       <div className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]">
         {/* 시트 바닥 — 윗머리는 커버가 비치도록 투명에서 시작한다 */}
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-0 -z-10 h-[88px] bg-gradient-to-b from-transparent to-void-3" />
-        <div aria-hidden className="pointer-events-none absolute inset-x-0 top-[88px] bottom-0 -z-10 bg-void-3" />
+        <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
+        <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />
 
         {isPending && <Loading />}
         {isError && <ErrorMessage />}
@@ -77,7 +85,12 @@ export default function SongDetailPanel() {
             {elsewhere && <SongElsewhereNote musicId={data.id} />}
             <SongActions music={data} />
             <Divider />
-            <SongInfoGrid music={data} />
+            {/*
+              정보 표(발매 국가·작곡가·곡 길이·장르·누적 재생 …)는 걷어냈다 (S15P21A405-384).
+              올 값은 넷뿐이었고 그중 셋은 제목 아래 칩이 이미 말한다 — 같은 값을 두 번 보여
+              주려고 표를 세울 이유가 없다. 안 오는 다섯 줄은 `-` 만 찍혀 고장처럼 보였다.
+              BPM 은 칩에도 없어 이 화면에서 사라진 유일한 값이다.
+            */}
             <SongPcList items={data.principalComponents} />
             <Divider />
             <SongNearbyList items={data.nearby} centerMusicId={data.id} />

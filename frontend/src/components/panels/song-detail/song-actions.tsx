@@ -14,9 +14,9 @@ const HALF = "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text
  * 이 곡을 여정의 **출발점 / 도착점**으로 지정 (JOURNEY-01).
  *
  * 둘을 **테두리 하나로 묶었다** (S15P21A405-384). 떨어뜨려 두면 남남으로 읽히는데 실제로는
- * 한 쌍이다. `여정` 을 위에 라벨로 빼서 버튼마다 두 번 적지 않는다 — 글자가 짧아진 만큼
- * 16px 로도 한 줄에 여유롭게 들어간다. 눈에 보이는 글자는 짧고, 화면 낭독기에는
- * `aria-label` 로 온전한 문장을 준다.
+ * 한 쌍이다. 버튼 글자에서 `여정` 을 뺐다 — 아이콘 색(출발 teal · 도착 violet)이 이미 한 쌍임을
+ * 말하고, 글자가 짧아진 만큼 16px 로도 한 줄에 여유롭다. 눈에 보이는 글자는 짧게 두고,
+ * 화면 낭독기에는 `aria-label` 로 온전한 문장을 준다.
  *
  * 아이콘 색은 여정 패널과 같다 (`journey-endpoints.tsx`): 출발 teal · 도착 violet.
  *
@@ -33,34 +33,31 @@ export default function SongActions({ music }: { music: MusicDetail }) {
 
   return (
     <div className="flex flex-col gap-2">
-      <div className="flex flex-col gap-1.5">
-        <span className="lbl">여정</span>
-        {/* 지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 */}
-        <div className="flex overflow-hidden rounded-box-sm border border-line bg-white/[.04]">
-          <button
-            type="button"
-            aria-label="이 곡을 여정 출발점으로 지정"
-            className={HALF}
-            onClick={() => {
-              setStart(music.id);
-              openComposer("end");
-            }}
-          >
-            <DepartIcon className="text-teal" /> 출발점으로
-          </button>
-          <span aria-hidden className="w-px shrink-0 bg-line" />
-          <button
-            type="button"
-            aria-label="이 곡을 여정 도착점으로 지정"
-            className={HALF}
-            onClick={() => {
-              setEnd(music.id);
-              openComposer("start");
-            }}
-          >
-            <ArriveIcon className="text-violet" /> 도착점으로
-          </button>
-        </div>
+      {/* 지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 */}
+      <div className="flex overflow-hidden rounded-box-sm border border-line bg-white/[.04]">
+        <button
+          type="button"
+          aria-label="이 곡을 여정 출발점으로 지정"
+          className={HALF}
+          onClick={() => {
+            setStart(music.id);
+            openComposer("end");
+          }}
+        >
+          <DepartIcon className="text-teal" /> 출발점으로
+        </button>
+        <span aria-hidden className="w-px shrink-0 bg-line" />
+        <button
+          type="button"
+          aria-label="이 곡을 여정 도착점으로 지정"
+          className={HALF}
+          onClick={() => {
+            setEnd(music.id);
+            openComposer("start");
+          }}
+        >
+          <ArriveIcon className="text-violet" /> 도착점으로
+        </button>
       </div>
       {blocked && (
         <Note>

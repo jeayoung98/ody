@@ -14,11 +14,19 @@ interface TransportButtonProps {
    */
   dimmed?: boolean;
   primary?: boolean;
+  /**
+   * 지름. 기본 `sm`(32px), `md` 는 36px 이고 `primary` 는 항상 `md` 다.
+   *
+   * 곡 상세 제목 줄에서 쓴다 (S15P21A405-384) — 플리 추가와 재생이 나란히 서므로 **크기를
+   * 맞추되** 색으로만 무게를 가른다. 플레이어바의 이전/다음은 `sm` 그대로다.
+   */
+  size?: "sm" | "md";
   children: ReactNode;
 }
 
-/** .tBtn / #tPlay */
-export default function TransportButton({ label, onClick, disabled, dimmed, primary, children }: TransportButtonProps) {
+/** .tBtn / #tPlay — 하단 플레이어바와 곡 상세 제목 줄이 함께 쓴다 */
+export default function TransportButton({ label, onClick, disabled, dimmed, primary, size = "sm", children }: TransportButtonProps) {
+  const wide = primary || size === "md";
   return (
     <button
       type="button"
@@ -28,10 +36,8 @@ export default function TransportButton({ label, onClick, disabled, dimmed, prim
       disabled={disabled}
       aria-disabled={dimmed || undefined}
       className={`grid shrink-0 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-35 ${dimmed ? "opacity-35" : ""} ${
-        primary
-          ? "h-9 w-9 bg-white/10 text-ink hover:grad-bg hover:text-void"
-          : "h-8 w-8 text-ink-2 hover:bg-white/[.08] hover:text-ink"
-      }`}
+        wide ? "h-9 w-9" : "h-8 w-8"
+      } ${primary ? "bg-white/10 text-ink hover:grad-bg hover:text-void" : "text-ink-2 hover:bg-white/[.08] hover:text-ink"}`}
     >
       {children}
     </button>

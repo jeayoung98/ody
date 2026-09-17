@@ -44,8 +44,8 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         </div>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
         {features.playlist && (
-          <TransportButton label="플레이리스트에 추가" onClick={() => setMenuOpen((v) => !v)}>
-            <PlaylistAddIcon />
+          <TransportButton label="플레이리스트에 추가" size="md" onClick={() => setMenuOpen((v) => !v)}>
+            <PlaylistAddIcon size={17} />
           </TransportButton>
         )}
         <TransportButton label={isThisPlaying ? "정지" : "재생"} primary dimmed={!!blocked} onClick={toggle}>

@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { ChevronDownIcon } from "@/components/common/icons";
 import ProgressBar from "@/components/common/progress-bar";
 import SectionTitle from "@/components/common/section-title";
 import { pcAxisLabel } from "@/constants";
@@ -28,6 +29,11 @@ const FULL_SD = 3;
  * 치우침은 원값 크기가 아니라 **축별 표준편차로 나눈 값**으로 잰다. 축마다 흩어진 폭이
  * 달라서(PC1 은 ±20 대, PC8 은 ±1 대) 원값끼리 견주면 폭이 큰 축이 늘 이긴다. 잣대는
  * 지도가 들고 있는 이 겹 상주 집합이다 (`pcStats`).
+ *
+ * 펼치기는 **가운데 홑화살 하나**다 (S15P21A405-384). `더보기 (11)` 같은 글자를 쓰지 않는다 —
+ * 남은 개수는 제목 옆 `3/11` 이 이미 말한다. 펴면 화살이 돌아 위를 보고, 나머지 줄은
+ * `grid-template-rows: 0fr → 1fr` 로 자라난다. 높이를 재지 않아도 되는 유일한 방법이라
+ * (`max-height` 는 어림값을 박아야 하고 넘치면 잘린다) 줄 수가 몇이든 정확히 맞는다.
  */
 export default function SongPcList({ items }: SongPcListProps) {
   const [open, setOpen] = useState(false);
@@ -45,26 +51,47 @@ export default function SongPcList({ items }: SongPcListProps) {
     .sort((a, b) => Math.abs(b.sd) - Math.abs(a.sd));
 
   if (!rows.length) return null;
-  const shown = open ? rows : rows.slice(0, TOP);
-  const hidden = rows.length - TOP;
+  const top = rows.slice(0, TOP);
+  const rest = rows.slice(TOP);
+
+  const bar = (pc: (typeof rows)[number]) => (
+    <ProgressBar
+      key={pc.axis}
+      label={pc.label}
+      code={`PC${pc.axis + 1}`}
+      percent={((Math.max(-FULL_SD, Math.min(FULL_SD, pc.sd)) / FULL_SD + 1) / 2) * 100}
+      valueText={`${pc.sd > 0 ? "+" : ""}${pc.sd.toFixed(1)}σ`}
+    />
+  );
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionTitle aside={`치우친 순 ${shown.length}/${rows.length}`}>고정 주성분</SectionTitle>
-      <div className="flex flex-col gap-[7px]">
-        {shown.map((pc) => (
-          <ProgressBar
-            key={pc.axis}
-            label={pc.label}
-            code={`PC${pc.axis + 1}`}
-            percent={((Math.max(-FULL_SD, Math.min(FULL_SD, pc.sd)) / FULL_SD + 1) / 2) * 100}
-            valueText={`${pc.sd > 0 ? "+" : ""}${pc.sd.toFixed(1)}σ`}
-          />
-        ))}
+      <SectionTitle aside={`치우친 순 ${open ? rows.length : top.length}/${rows.length}`}>고정 주성분</SectionTitle>
+      {/*
+        위 셋과 펼친 나머지는 **한 줄 간격(7px)으로 이어져야 한다** — 사이를 벌리면 다른 목록
+        둘로 보인다. 그래서 바깥 `gap-2` 가 둘 사이에 끼지 않게 한 겹으로 묶고, 간격은 안쪽
+        `pt-[7px]` 하나로만 준다 (접히면 그 패딩째로 0 이 된다).
+      */}
+      <div>
+        <div className="flex flex-col gap-[7px]">{top.map(bar)}</div>
+        {rest.length > 0 && (
+          <div className={`grid transition-[grid-template-rows] duration-normal ease-spring ${open ? "grid-rows-[1fr]" : "grid-rows-[0fr]"}`}>
+            {/* 0fr 일 때 안쪽이 삐져나오지 않게 — 자라는 동안 잘리는 쪽이 이 칸이다 */}
+            <div className="overflow-hidden">
+              <div className="flex flex-col gap-[7px] pt-[7px]">{rest.map(bar)}</div>
+            </div>
+          </div>
+        )}
       </div>
-      {hidden > 0 && (
-        <button type="button" onClick={() => setOpen((v) => !v)} className="self-start text-[11px] text-ink-3 transition-colors hover:text-ink">
-          {open ? "접기" : `더보기 (${hidden})`}
+      {rest.length > 0 && (
+        <button
+          type="button"
+          onClick={() => setOpen((v) => !v)}
+          aria-expanded={open}
+          aria-label={open ? "고정 주성분 접기" : "고정 주성분 더보기"}
+          className="grid h-7 w-full place-items-center rounded-box-xs text-ink-3 transition-colors duration-fast hover:bg-white/[.05] hover:text-ink"
+        >
+          <ChevronDownIcon className={`transition-transform duration-normal ease-spring ${open ? "rotate-180" : ""}`} />
         </button>
       )}
     </div>

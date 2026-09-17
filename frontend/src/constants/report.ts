@@ -12,7 +12,24 @@ export const REPORT_REASONS = [
   { value: "spoken", label: "말소리", detail: "노래가 아니라 말소리·나레이션이에요" },
   { value: "noise", label: "잡음", detail: "잡음이나 소음만 들려요" },
   { value: "other", label: "기타", detail: "그 밖의 이유예요" },
+  /**
+   * 음원을 못 찾아 **재생 자체가 안 되는** 곡 (S15P21A405-397).
+   *
+   * 나머지 셋과 축이 다르다 — 저건 "이건 곡이 아니다" 라는 사람의 판단이고 이건 "들을 수가
+   * 없다" 는 사실이다. 그래서 **재생 불가일 때만 보여 준다** (`unplayableOnly`). 들리는 곡에
+   * 이 항목이 떠 있으면 잘못 누르게 되고, 그렇게 들어온 신고는 걸러낼 방법이 없다.
+   */
+  { value: "unplayable", label: "재생 불가", detail: "음원을 찾을 수 없어 재생되지 않아요", unplayableOnly: true },
 ] as const;
+
+/**
+ * 지금 화면에서 고를 수 있는 사유.
+ *
+ * @param unplayable 그 곡이 **찾아봤는데 없는** 상태인가 (`PLAYBACK_BLOCKED.noVideo`).
+ *   아직 안 찾아봤거나(`notSearched`) 조회가 실패한(`lookupFailed`) 것은 **없는 게 아니라
+ *   모르는 것**이라 여기서 false 다.
+ */
+export const reportReasonsFor = (unplayable: boolean) => REPORT_REASONS.filter((r) => unplayable || !("unplayableOnly" in r));
 
 export type ReportReason = (typeof REPORT_REASONS)[number]["value"];
 

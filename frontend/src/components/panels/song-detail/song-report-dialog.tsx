@@ -10,7 +10,7 @@ import {
   REPORT_DETAIL_PLACEHOLDER,
   REPORT_FAILED_NOTICE,
   REPORT_NEEDS_DETAIL,
-  REPORT_REASONS,
+  reportReasonsFor,
   REPORT_SENT_NOTICE,
   type ReportReason,
 } from "@/constants";
@@ -19,6 +19,11 @@ import { useToastStore } from "@/stores/use-toast-store";
 
 interface SongReportDialogProps {
   musicId: number;
+  /**
+   * 그 곡이 **찾아봤는데 없는** 상태인가 (S15P21A405-397). 여는 쪽이 이미 `usePlayability` 로
+   * 들고 있는 판정을 넘겨받는다 — 팝업이 같은 조회를 다시 하면 답이 갈릴 수 있다.
+   */
+  unplayable?: boolean;
   /** 곡 제목 — 어느 곡을 신고하는지 보여줘야 잘못 누른 것을 알아챈다 */
   title: string;
   onClose: () => void;
@@ -45,7 +50,7 @@ interface SongReportDialogProps {
  * 때문이다. 실제로 그래서 팝업이 패널 폭 안에 뜨고 바깥 클릭도 안 먹었다. 설문 카드가 멀쩡한 것은
  * 그쪽이 패널이 아니라 화면 루트(`main-screen`)에 붙어 있어서다.
  */
-export default function SongReportDialog({ musicId, title, onClose }: SongReportDialogProps) {
+export default function SongReportDialog({ musicId, title, unplayable = false, onClose }: SongReportDialogProps) {
   const report = useReportMusicMutation();
   const showToast = useToastStore((s) => s.show);
   /** 상세를 받아야 하는 사유를 고른 상태. null 이면 아직 목록을 보고 있다 */
@@ -72,6 +77,7 @@ export default function SongReportDialog({ musicId, title, onClose }: SongReport
   const pick = (reason: ReportReason) => (reason === REPORT_NEEDS_DETAIL ? setDetailFor(reason) : send(reason));
 
   const trimmed = detail.trim();
+  const reasons = reportReasonsFor(unplayable);
 
   return createPortal(
     <div className="fixed inset-0 z-[80] flex items-center justify-center bg-overlay backdrop-blur-sm" onClick={onClose}>
@@ -113,7 +119,7 @@ export default function SongReportDialog({ musicId, title, onClose }: SongReport
           ) : (
             <>
               <div className="flex flex-col gap-1.5">
-                {REPORT_REASONS.map((r) => (
+                {reasons.map((r) => (
                   <Button key={r.value} className="justify-start! text-left" onClick={() => pick(r.value)}>
                     <span className="font-medium">{r.label}</span>
                     <span className="ml-1.5 text-[11.5px] text-ink-3">{r.detail}</span>

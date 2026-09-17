@@ -1,6 +1,7 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { API_ENDPOINTS, FEATURES, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { useFeatures } from "@/hooks/use-features";
 import type { NearbyUser } from "@/types";
 
 /**
@@ -10,10 +11,11 @@ import type { NearbyUser } from "@/types";
  * 대상·목 반응이 한꺼번에 사라지고 15초 폴링도 멈춘다 — 화면마다 따로 막을 필요가 없다.
  */
 export function useNearbyUsersQuery(layer: number) {
+  const features = useFeatures();
   return useQuery({
     queryKey: QUERY_KEYS.user.nearby(layer),
     queryFn: () => api<NearbyUser[]>(API_ENDPOINTS.user.nearby(layer)),
-    enabled: FEATURES.social,
+    enabled: features.social,
     staleTime: 10 * 1000,
     refetchInterval: 15 * 1000,
   });

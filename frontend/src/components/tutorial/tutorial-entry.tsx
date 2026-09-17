@@ -1,7 +1,8 @@
 "use client";
 
 import { useState, useSyncExternalStore } from "react";
-import { STORAGE_KEYS, TEST_MODE } from "@/constants";
+import { STORAGE_KEYS } from "@/constants";
+import { useSurveyMode } from "@/hooks/use-survey-mode";
 import { readStorage, writeStorage } from "@/lib/storage";
 import TestGuide from "./test-guide";
 import TutorialOverlay from "./tutorial-overlay";
@@ -18,12 +19,14 @@ import { track } from "@/lib/analytics/client";
  */
 export default function TutorialEntry() {
   const hydrated = useSyncExternalStore(() => () => {}, () => true, () => false);
+  // 설문 모드를 끈 브라우저에서는 안내 화면도 건너뛴다 (S15P21A405-383)
+  const surveyMode = useSurveyMode();
   const [started, setStarted] = useState(false);
 
   // getServerSnapshot=false라 서버와 첫 클라이언트 렌더는 둘 다 비어 있다.
   // hydration 뒤에만 storage를 읽어 오버레이 트리가 먼저 생기는 오류를 막는다.
   const seen = hydrated
-    ? started || !TEST_MODE || readStorage<boolean>(STORAGE_KEYS.testGuideSeen) === true
+    ? started || !surveyMode || readStorage<boolean>(STORAGE_KEYS.testGuideSeen) === true
     : null;
 
   if (seen === null) return null;

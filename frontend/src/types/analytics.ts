@@ -14,6 +14,8 @@ export interface AnalyticsConfig {
 export type AnalyticsEventName =
   | "page_view" | "page_leave" | "free_explore_started" | "engagement_recorded"
   | "test_guide_viewed" | "test_guide_accepted" | "tutorial_started" | "tutorial_step_viewed" | "tutorial_step_completed" | "tutorial_finished"
+  /** 발견 힌트 (S15P21A405-393). 튜토리얼과 별개로, 문맥마다 한 번 짚어 주는 자리 */
+  | "play_hint_shown" | "play_hint_done"
   | "map_ready" | "map_pan_completed" | "map_zoom_completed" | "map_layer_changed" | "map_locate_used"
   | "music_hovered" | "music_clicked" | "music_detail_viewed"
   | "search_opened" | "search_executed" | "search_results_viewed" | "search_result_selected" | "search_more_requested" | "search_closed"

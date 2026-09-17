@@ -1,7 +1,7 @@
 "use client";
 
 import type { ReactNode } from "react";
-import { FEATURES, PANEL_ENABLED } from "@/constants";
+import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
@@ -20,6 +20,7 @@ import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
+import PlayHint from "@/components/discovery/play-hint";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
 /** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
@@ -43,7 +44,9 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 감춘 기능의 패널은 열려 있어도 화면에 없다 (S15P21A405-333). 여기서도 같은 판정을 써야
    * **안 보이는 패널 몫으로 지도가 좁아지는** 일이 없다.
    */
-  const panelOpen = activePanel != null && PANEL_ENABLED[activePanel];
+  const features = useFeatures();
+  const panelEnabled = usePanelEnabled();
+  const panelOpen = activePanel != null && panelEnabled[activePanel];
   // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
   const occludedRight = panelOpen && !panelCollapsed ? PANEL_OCCLUSION : RAIL_OCCLUSION;
 
@@ -57,17 +60,19 @@ export default function MainScreen({ overlay }: MainScreenProps) {
           검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}
       {composerOpen ? <JourneyComposer /> : panelOpen ? <SearchOpenButton /> : <SearchBar />}
       <HelpButton />
-      {FEATURES.social && <FollowBanner />}
+      {features.social && <FollowBanner />}
       <GhostBanner />
       <Rail />
       {panelOpen && <RightPanel />}
       <MinimapPanel />
       <BottomBar />
-      {FEATURES.social && <ReactionButton />}
+      {features.social && <ReactionButton />}
       {overlay}
+      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다 */}
+      <PlayHint />
       <Toast />
       <ConfirmDialog />
-      {/* 설문 — NEXT_PUBLIC_TEST_TOOLS 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
+      {/* 설문 — NEXT_PUBLIC_TEST_TOOLS(빌드) + ody:survey-mode(브라우저) 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
       <SurveyGate />{/* REMOVE-WITH-SURVEY */}
     </div>
   );

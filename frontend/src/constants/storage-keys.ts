@@ -19,4 +19,14 @@ export const STORAGE_KEYS = {
   tutorialDone: "ody:tutorial-done",
   /** 테스트 안내 화면을 봤는가 (S15P21A405-343). 한 번 보면 다시 띄우지 않는다 */
   testGuideSeen: "ody:test-guide-seen",
+  /**
+   * 설문 모드 스위치 (S15P21A405-383). 없거나 `true` 면 설문 모드(기본), `false` 면 개발 모드.
+   * 읽는 쪽은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나다.
+   */
+  surveyMode: "ody:survey-mode",
+  /**
+   * 발견 힌트를 이미 본 문맥들 (S15P21A405-393). `["map","nearby","journey"]` 꼴의 배열.
+   * 문맥마다 키를 따로 두지 않는 이유는 힌트가 늘어날 때 키가 문맥 수만큼 곱해지기 때문이다.
+   */
+  playHintSeen: "ody:hint-play-seen",
 } as const;

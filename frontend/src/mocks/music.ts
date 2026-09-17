@@ -74,12 +74,14 @@ export function mockSearch({ q, artist, music }: { q: string; artist: string; mu
   const all = q.trim();
   const byArtist = artist.trim();
   const byMusic = music.trim();
-  if (!all && !byArtist) return [];
+  if (!all && !byArtist && !byMusic) return [];
   return allSongs()
     .filter((p) =>
       all
         ? starts(p.title, all) || starts(p.artist, all)
-        : starts(p.artist, byArtist) && (!byMusic || starts(p.title, byMusic)),
+        : byArtist
+          ? starts(p.artist, byArtist) && (!byMusic || starts(p.title, byMusic))
+          : starts(p.title, byMusic),
     )
     .slice(0, 48)
     .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));

@@ -1,6 +1,6 @@
 import { failLive, fail, ok, okLive } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, type BackendMusicDetail } from "@/lib/backend";
-import { SEARCH_PAGE_SIZE } from "@/constants";
+import { SEARCH_PAGE_SIZE, TITLE_SEARCH_MAX_UPSTREAM_PAGES } from "@/constants";
 import { mockSearch } from "@/mocks/music";
 import type { MusicSearchPage } from "@/types";
 
@@ -25,16 +25,14 @@ interface BackendSearchResponse {
  * | `?q=Love` | `?query=Love` |
  * | `?artist=Radiohead` | `?artist=Radiohead` |
  * | `?artist=Radiohead&music=Creep` | 그대로 |
+ * | `?music=Love` | `?query=Love` 결과를 제목 앞일치로 거름 |
  * | `?music=Love&artist=Lana Del Rey` | 그대로 |
  *
  * 통합 검색만 이름이 다르다(`q` → `query`). 그 변환이 이 라우트가 있는 이유고, 화면은
  * 백엔드 파라미터 이름을 몰라도 된다.
  *
- * **`query` 와 `music`/`artist` 를 섞지 않는다.** `music` 단독도 안 된다 — 백엔드가 400 이다.
- * 화면 쪽에서 이미 막지만, 여기서 한 번 더 본다. 여기서 걸리면 무엇이 잘못됐는지 남는다.
- *
- * ⚠️ **배포 백엔드는 아직 `query`·`page` 만 받는다** (2026-09-17 스웨거 확인, S15P21A405-365 미배포).
- * 그때까지 `artist`/`music` 경로는 목에서만 동작하고, 실백엔드로는 400 이 올라온다.
+ * **`query` 와 `music`/`artist` 를 섞지 않는다.** 제목 단독은 백엔드가 아직 받지 않으므로
+ * 통합 검색을 제한된 페이지만 조회해 제목 앞일치 결과로 바꾼다.
  */
 export async function GET(req: Request) {
   const sp = new URL(req.url).searchParams;
@@ -45,10 +43,23 @@ export async function GET(req: Request) {
   const empty: MusicSearchPage = { items: [], page, hasNext: false };
 
   if (q && (artist || music)) return fail("INVALID_INPUT", "통합 검색과 조건 검색을 함께 쓸 수 없습니다.", 400);
-  if (music && !artist) return fail("INVALID_INPUT", "음악 조건만으로는 검색할 수 없습니다. 아티스트를 함께 지정하세요.", 400);
-  if (!q && !artist) return ok(empty);
+  if (!q && !artist && !music) return ok(empty);
 
   if (!isBackendEnabled()) return ok(mockSearchPage({ q, artist, music }, page));
+
+  if (music && !artist) {
+    let upstream = titleFallbackPath(music, 0);
+    try {
+      const body = await searchTitleOnlyPage(music, page, (upstreamPage) => {
+        upstream = titleFallbackPath(music, upstreamPage);
+        return backendGet<BackendSearchResponse>(upstream);
+      });
+      return okLive(body, upstream);
+    } catch (e) {
+      const err = e as BackendError;
+      return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);
+    }
+  }
 
   const upstream = `/api/music/search?${backendQuery({ q, artist, music, page })}`;
   try {
@@ -63,6 +74,38 @@ export async function GET(req: Request) {
     const err = e as BackendError;
     return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);
   }
+}
+
+/**
+ * 제목 단독 검색 임시 경로. 통합 검색의 순서를 유지하며 제목 앞일치만 모은다.
+ * 필요한 결과를 채우거나 상한에 닿으면 멈춰, 빈 결과에서도 무한 호출하지 않는다.
+ */
+export async function searchTitleOnlyPage(
+  music: string,
+  page: number,
+  readPage: (page: number) => Promise<BackendSearchResponse>,
+): Promise<MusicSearchPage> {
+  const prefix = music.toLowerCase();
+  const needed = (page + 1) * SEARCH_PAGE_SIZE + 1;
+  const matches: BackendMusicDetail[] = [];
+
+  for (let upstreamPage = 0; upstreamPage < TITLE_SEARCH_MAX_UPSTREAM_PAGES && matches.length < needed; upstreamPage += 1) {
+    const res = await readPage(upstreamPage);
+    matches.push(...res.content.filter((item) => item.title.toLowerCase().startsWith(prefix)));
+    if (!res.hasNext) break;
+  }
+
+  const from = page * SEARCH_PAGE_SIZE;
+  return {
+    items: matches.slice(from, from + SEARCH_PAGE_SIZE).map((item) => ({ id: item.id, title: item.title, artist: item.artist })),
+    page,
+    hasNext: matches.length > from + SEARCH_PAGE_SIZE,
+  };
+}
+
+function titleFallbackPath(music: string, page: number): string {
+  const p = new URLSearchParams({ query: music, page: String(page) });
+  return `/api/music/search?${p.toString()}`;
 }
 
 /** 백엔드 파라미터 이름으로 바꾼다 — 통합 검색만 `q` → `query` 다 */

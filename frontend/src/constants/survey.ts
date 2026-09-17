@@ -37,6 +37,9 @@ export const SURVEY_TARGET_LABEL = "방금 들은 곡";
  * - `mood` 소리 자체가 다름 → `tau_far` 하향·hub 벌점. 가까운 거리에서도 많으면 좌표 문제
  * - `tempo` 분위기는 비슷한데 빠르기 차이 → bpm 차이 벌점
  * - `spoken` 말·낭독·효과음 → 정제 규칙에서 제외
+ * - `compare` **비교 상대가 문제다** → 이 응답은 연결 품질 지표에서 빼고, 그 곡을 따로 본다
+ *   (S15P21A405-380). 넷은 모두 "방금 들은 곡" 에 대한 판단인데 이것만 반대쪽을 가리킨다.
+ *   이 자리가 없으면 사용자가 엉뚱한 이유를 골라, 알고리즘이 고른 연결이 나쁘다고 읽히게 된다
  *
  * **문구는 모드마다 다르다.** 주변 탐색은 두 곡을 나란히 놓고 비교하니 `다름` 이고,
  * 여정은 흐름이 끊긴 것을 묻는 것이라 `튐` 이다. 저장되는 코드는 같아서 분석은 한 표에서 본다.
@@ -46,6 +49,8 @@ const NEARBY_REASONS = [
   { value: "tempo", label: "템포 다름" },
   { value: "dup", label: "같은 곡 반복" },
   { value: "spoken", label: "음악 아님" },
+  // 이상한 쪽이 방금 들은 곡이 아니라 기준곡일 때 (S15P21A405-380)
+  { value: "compare", label: "기준곡이 이상함" },
 ] as const;
 
 const JOURNEY_REASONS = [
@@ -53,6 +58,8 @@ const JOURNEY_REASONS = [
   { value: "tempo", label: "템포 튐" },
   { value: "dup", label: "같은 곡 반복" },
   { value: "spoken", label: "음악 아님" },
+  // 같은 코드, 다른 말 — 여정에서 비교 상대는 앞 곡이다 (S15P21A405-380)
+  { value: "compare", label: "앞 곡이 이상함" },
 ] as const;
 
 /**

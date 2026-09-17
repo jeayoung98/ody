@@ -5,6 +5,7 @@ import { STORAGE_KEYS, TEST_MODE } from "@/constants";
 import { readStorage, writeStorage } from "@/lib/storage";
 import TestGuide from "./test-guide";
 import TutorialOverlay from "./tutorial-overlay";
+import { track } from "@/lib/analytics/client";
 
 /**
  * 튜토리얼 입구 (S15P21A405-343).
@@ -30,6 +31,7 @@ export default function TutorialEntry() {
     return (
       <TestGuide
         onStart={() => {
+          track("test_guide_accepted");
           writeStorage(STORAGE_KEYS.testGuideSeen, true);
           setStarted(true);
         }}

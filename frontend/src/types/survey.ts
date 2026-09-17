@@ -12,8 +12,14 @@ import type { Id } from "./common";
 /** 어떤 탐색을 평가하는가 */
 export type SurveyMode = "nearby" | "journey";
 
-/** 부정 응답의 이유. 백엔드 CHECK 제약과 같은 값이어야 한다 */
-export type SurveyReason = "dup" | "mood" | "tempo" | "spoken";
+/**
+ * 부정 응답의 이유. **백엔드 CHECK 제약과 같은 값이어야 한다.**
+ *
+ * `compare` 는 S15P21A405-380 에서 더했다 — **백엔드가 아직 이 값을 모른다.** 값을 늘려 주기
+ * 전까지 이 이유로 낸 응답은 저장에서 거부된다 (BACKEND-NOTES A-29). 조용히 사라지지는 않는다:
+ * 저장 실패는 카드에 재시도·포기로 드러난다 (S15P21A405-369).
+ */
+export type SurveyReason = "dup" | "mood" | "tempo" | "spoken" | "compare";
 
 export interface SurveyReasonOption {
   value: SurveyReason;

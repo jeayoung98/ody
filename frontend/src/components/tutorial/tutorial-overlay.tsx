@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ROUTES, STORAGE_KEYS, TUTORIAL_STEPS } from "@/constants";
 import { useCompleteTutorialMutation } from "@/hooks/mutations/use-complete-tutorial-mutation";
@@ -13,6 +13,7 @@ import { StarHint, WheelHint } from "./tutorial-hint";
 import TutorialSpotlight from "./tutorial-spotlight";
 import TutorialOutro from "./tutorial-outro";
 import TutorialStepCard from "./tutorial-step-card";
+import { analyticsId, setAnalyticsContext, trackOnce } from "@/lib/analytics/client";
 
 /** 안내 카드가 차지하는 세로 끝(px). 짚어 줄 별을 이보다 아래에서 고른다 */
 const CARD_BOTTOM = 330;
@@ -44,8 +45,13 @@ export default function TutorialOverlay() {
   const { mutate: completeTutorial } = useCompleteTutorialMutation();
   /** 이 단계가 짚어 준 별. 단계가 바뀔 때마다 새로 고른다 */
   const [starId, setStarId] = useState<number | null>(null);
+  const analyticsRun = useRef<string | null>(null);
 
   useEffect(() => {
+    analyticsRun.current ??= analyticsId();
+    setAnalyticsContext({ phase: "tutorial" });
+    trackOnce(`tutorial:${analyticsRun.current}`, "tutorial_started", { tutorial_id: analyticsRun.current });
+    trackOnce(`tutorial-step:${analyticsRun.current}`, "tutorial_step_viewed", { step: 0, task: TUTORIAL_STEPS[0].task });
     reset();
   }, [reset]);
 

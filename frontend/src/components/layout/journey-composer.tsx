@@ -8,6 +8,9 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import JourneyComposerResult from "./journey-composer-result";
 import JourneyComposerSlot from "./journey-composer-slot";
+import { useSearchAnalytics } from "@/hooks/use-search-analytics";
+import { requestJourney } from "@/lib/analytics/flows";
+import { track } from "@/lib/analytics/client";
 
 /**
  * 여정 만들기 확장 검색창 (JOURNEY-01).
@@ -33,6 +36,7 @@ export default function JourneyComposer() {
 
   const ready = startMusicId != null && endMusicId != null && startMusicId !== endMusicId;
   const searching = keyword.trim().length > 0;
+  const analytics = useSearchAnalytics({ keyword, visible: searching, pending: isPending, count: results.length, pages: data?.pages.length ?? 0, source: `journey_${pickTarget ?? "start"}` });
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -49,6 +53,8 @@ export default function JourneyComposer() {
 
   /** 경로 만들기 = 유일한 확정 지점. 확정하면 결과 패널이 열리고 지도에 새 별자리가 그려진다 */
   const handleCreate = () => {
+    if (!ready) return;
+    requestJourney(startMusicId, endMusicId);
     requestRoute();
     openJourneyPanel();
     // 튜토리얼의 여정 단계는 **경로를 만든 순간** 끝난다 (S15P21A405-343)
@@ -56,13 +62,14 @@ export default function JourneyComposer() {
   };
 
   const pick = (musicId: number, target: "start" | "end") => {
+    analytics.select(musicId, results.findIndex((r) => r.id === musicId) + 1);
     if (target === "start") setStart(musicId);
     else setEnd(musicId);
     setKeyword("");
   };
 
   return (
-    <div data-hud data-tutorial="journey-composer" className="glass animate-tin absolute top-4 left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[18px]! p-0!">
+    <div data-analytics-manual data-hud data-tutorial="journey-composer" className="glass animate-tin absolute top-4 left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[18px]! p-0!">
       <header className="flex items-center gap-2 px-4 pt-3">
         <span className="lbl">여정 만들기</span>
         <span className="flex-1" />
@@ -94,7 +101,7 @@ export default function JourneyComposer() {
         </div>
         <button
           type="button"
-          onClick={swap}
+          onClick={() => { track("journey_endpoints_swapped"); swap(); }}
           aria-label="출발·도착 바꾸기"
           title="출발·도착 바꾸기"
           className="shrink-0 rounded-pill px-2 py-1.5 text-[13px] text-ink-3 transition-colors hover:bg-white/[.07] hover:text-ink"

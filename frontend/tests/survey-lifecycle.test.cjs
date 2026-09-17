@@ -363,3 +363,24 @@ test("replaying a song from the card does not move the queue", async () => {
   assert.deepEqual(p().context, context);
   assert.ok(s().prompt, "다시 듣는다고 질문이 닫히면 안 된다");
 });
+
+/* 이유 보기 — 비교 상대 곡 문제 (S15P21A405-380) */
+const { SURVEYS } = require("../src/constants/survey.ts");
+
+test("both modes offer the compare-song reason under one stored code", () => {
+  const nearby = SURVEYS.nearby.reasons.find((r) => r.value === "compare");
+  const journey = SURVEYS.journey.reasons.find((r) => r.value === "compare");
+  assert.ok(nearby, "주변 탐색에 비교 상대 보기가 있어야 한다");
+  assert.ok(journey, "여정에 비교 상대 보기가 있어야 한다");
+  // 문구는 모드마다 다르다 — 주변은 기준곡, 여정은 앞 곡이 비교 상대다
+  assert.notEqual(nearby.label, journey.label);
+  assert.match(nearby.label, /기준곡/);
+  assert.match(journey.label, /앞 곡/);
+});
+
+test("reason codes stay unique per mode", () => {
+  for (const mode of ["nearby", "journey"]) {
+    const codes = SURVEYS[mode].reasons.map((r) => r.value);
+    assert.equal(new Set(codes).size, codes.length, `${mode} 이유 코드가 중복된다`);
+  }
+});

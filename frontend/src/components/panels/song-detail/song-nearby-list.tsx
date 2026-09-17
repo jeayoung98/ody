@@ -7,6 +7,7 @@ import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
+import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useMapStore } from "@/stores/use-map-store";
@@ -66,6 +67,13 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const inNearby = viewMode === "nearby";
   /** 이 상세의 곡을 중심으로 고리가 서 있나 */
   const isOnHere = inNearby && nearbyCenterMusicId === centerMusicId;
+  /**
+   * **한 걸음 나와 있다** — 고리는 다른 곡 기준인데 이 곡의 상세를 보는 중 (S15P21A405-384).
+   * 이 상태에서는 카드를 누르면 지도가 움직이므로, 화면이 그 사실을 미리 말해 줘야 한다.
+   */
+  const away = inNearby && !isOnHere;
+  // 지도 중심에 선 곡. 방금까지 상세를 보던 곡이라 캐시에 있다
+  const { data: centerSong } = useMusicDetailQuery(away ? nearbyCenterMusicId : null);
   const railRef = useRef<HTMLDivElement>(null);
   /**
    * 줄 끝에 닿았나 — 닿은 쪽 화살표는 감춘다. **마우스로는 가로 스크롤이 거의 안 된다**
@@ -129,7 +137,23 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionTitle tone="sentence" aside={inNearby ? <span className="text-teal">주변 탐색 중</span> : undefined}>
+      {/*
+        **지도 중심이 누구인지 여기서 말한다** (S15P21A405-384). 한 걸음 나와 있으면 같은 카드
+        클릭이 "제자리에서 보기" 가 아니라 "옮겨가기" 가 되는데, 오른쪽 패널만 보고 있으면
+        자기가 어느 상태인지 알 길이 없었다.
+      */}
+      <SectionTitle
+        tone="sentence"
+        aside={
+          away ? (
+            <span className="block max-w-[130px] truncate text-teal" title={`지도는 ${centerSong?.title ?? "다른 곡"} 주변이에요`}>
+              {centerSong?.title ?? "다른 곡"} 주변
+            </span>
+          ) : inNearby ? (
+            <span className="text-teal">주변 탐색 중</span>
+          ) : undefined
+        }
+      >
         이 곡과 가장 비슷해요!
       </SectionTitle>
       {/*
@@ -141,7 +165,8 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
           <Note>
             <b>유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요!
             <br />
-            카드를 누르면 그 곡으로 옮겨가요.
+            {/* 다음 클릭이 지도를 움직일지 **누르기 전에** 알려 주는 유일한 자리다 */}
+            {away ? "카드를 누르면 이 곡 주변으로 옮겨가요." : "카드를 누르면 그 곡으로 옮겨가요."}
           </Note>
         </div>
         {/*

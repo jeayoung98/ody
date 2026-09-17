@@ -1,46 +1,34 @@
-# Data Model: 음악 검색 (2026-09-09 master 기준)
+# Data Model: 음악·아티스트 조건 검색
 
-논리 모델. 물리 스키마·컬럼은 B-D(BE4) 확정 후.
+## 검색 조건 (신규 영속 엔티티 아님)
 
-## 검색 요청
+MusicSearchCondition(query, music, artist): nullable String 3개를 가진 record.
+누락은 null, 전달된 빈 문자열/공백은 INVALID_INPUT이다. 유효한 문자열은 앞뒤 공백을 제거한다.
 
-| 필드 | 타입 | 제약 |
-| --- | --- | --- |
-| query | String | required, 공백만/빈값 거절(@NotBlank), 앞뒤 trim |
-| page | int | required, 0-based, @Min(0) |
-| size | int | 서버 고정 10 (요청 파라미터 아님) |
+| 조합 | 허용 |
+| --- | --- |
+| query만 | 통합 검색 |
+| artist만 | 아티스트 검색 |
+| music+artist | 두 조건 AND |
+| 전부 없음, music만, query와 필터 혼합 | 400 INVALID_INPUT |
 
-## MusicSummary (검색 결과 항목, §0.6)
+page는 별도 필수 int ≥ 0. 크기 10, offset 계산은 long. 소문자 변환은 Locale.ROOT, LIKE의 역슬래시·%·_ 이스케이프는 기존 adapter에서 수행한다.
 
-| 필드 | 타입 | 비고 |
-| --- | --- | --- |
-| id | Long | 곡 ID |
-| title / artist | String | 매칭 대상 |
-| album | String \| null | |
-| genres | List<String> \| null | 다형 표현은 B-Field |
-| youtubeUrl | String \| null | null이면 재생 불가, 제외 안 함 |
-| location | Location(pc1~pc16 float) | baseline v2.1-pca16 고정 |
+## 기존 데이터
 
-`music/dto/Location.java`, `MusicSummary.java`, `PageResponse.java` — 이미 backend/src로 이전됨.
+music의 id(PK), title, nullable artist, album, video_id, location을 재사용한다. 아티스트 이름은 식별자가 아니므로 동명이인/공동 표기/별칭을 분리하지 않는다. NULL 아티스트는 필터와 일치하지 않는다. video_id='none'은 모든 경로에서 제외하고 NULL은 포함한다.
 
-## PageResponse<T> (§0.3)
+music_genre/genre 관계와 장르 일괄 조회를 유지한다. 테이블, 컬럼, 제약, 인덱스 추가 및 백필은 계획하지 않는다.
 
-content, page, size(=10), hasNext.
+## 응답
 
-`totalElements`·`totalPages` 는 2026-09-13 에 제거했다 (S15P21A405-255). 총 개수를 세려면 매 요청마다 대상 테이블을 끝까지 세어야 하고, 검색에서는 그것만으로 응답의 ~7초를 차지했다. FE 가 쓰지 않는다고 확인했다. `hasNext` 는 `size+1` 건을 떠서 초과분 유무로 판단한다.
+기존 MusicSummary: id, title, artist, album, genres(List<String>), youtubeUrl, videoId, location(pc1..pc16).
+PageResponse: content, page, size=10, hasNext. 총 개수 없음.
+좌표·재생 정보 조립은 기존 구현 재사용.
 
-## 공통 응답/에러 (master 실물)
+## UI 상태
 
-- 성공: `ApiResponse.success(data)` → `{success:true, data, error:null}`.
-- 실패: `ApiResponse.fail(errorCode)` → `{success:false, data:null, error:{code,message}}` (`ErrorResponse`).
-- 에러코드: `GlobalErrorCode` — `INVALID_INPUT`(400), `INTERNAL_SERVER_ERROR`(500). 401은 B-A 후 추가.
-- `ErrorCode`는 인터페이스 → 필요 시 도메인 enum이 구현(현재 검색은 GlobalErrorCode로 충분).
-
-## MyBatis 매핑 (어댑터, B-D 후)
-
-- 매퍼 `MusicSearchMapper` (port `MusicSearchReader` 어댑터). `@MapperScan` 범위에 포함되게 배치.
-- 쿼리: `WHERE title ILIKE #{q} OR artist ILIKE #{q}` (q = `%query%`), `ORDER BY youtube_cnt DESC, id ASC`, `LIMIT 10 OFFSET #{page}*10`, 별도 count.
-- 컬럼명·pc 저장 형태·youtube_cnt는 BE4 스키마 확정 후 매핑.
-
-## 데이터 계보 (B-D)
-- youtube_cnt 출처·갱신, pc1~pc16 baseline 버전, 곡 ID 매핑 — BE4 스키마 확정 시 기록.
+all(input) → artist(고정 이름, 음악 입력) 또는 music(고정 제목, 아티스트 입력).
+artist의 빈 입력은 아티스트 단독 요청, music의 빈 입력은 요청 없는 입력 대기.
+칩 제거는 남은 input으로 all 복귀. 남은 값이 없으면 요청하지 않는다.
+조건 변경은 page=0 및 이전 결과 누적 초기화. 결과 선택은 기존 지도 동작과 전체 검색 초기화.

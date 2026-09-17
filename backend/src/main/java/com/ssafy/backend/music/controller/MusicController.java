@@ -23,11 +23,11 @@ import com.ssafy.backend.music.dto.VideoIdBatchRequest;
 import com.ssafy.backend.music.dto.VideoIdBatchResponse;
 import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
+import com.ssafy.backend.music.search.MusicSearchCondition;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.NearbyResponse;
 
@@ -107,14 +107,16 @@ public class MusicController {
 	}
 
 	/**
-	 * 노래 검색 (정본 §3.1). query 부분일치, page 0-based. 결과 없음은 빈 content + 200.
+	 * 음악 검색 (정본 §3.1). query 통합 검색 또는 artist(+music) 앞일치 필터, page 0-based.
 	 */
-	@Operation(summary = "노래 검색", description = "query 부분일치로 노래를 검색한다. page는 0-based이며, 결과가 없으면 빈 content와 200을 반환한다.")
+	@Operation(summary = "음악 검색", description = "query 통합 검색 또는 artist(+music) 앞일치 조건으로 음악을 검색한다. page는 0-based다.")
 	@GetMapping("/search")
 	public ApiResponse<PageResponse<MusicSummary>> search(
-			@RequestParam @NotBlank String query,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String music,
+			@RequestParam(required = false) String artist,
 			@RequestParam @Min(0) int page) {
-		return ApiResponse.success(musicService.search(query, page));
+		return ApiResponse.success(musicService.search(new MusicSearchCondition(query, music, artist), page));
 	}
 
 	/**

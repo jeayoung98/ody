@@ -12,6 +12,7 @@ import com.ssafy.backend.music.retrieval.MajorTrackReader;
 import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.PageResponse;
 import com.ssafy.backend.music.search.MusicSearchReader;
+import com.ssafy.backend.music.search.MusicSearchCondition;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
@@ -73,14 +74,14 @@ public class MusicService {
 	}
 
 	/**
-	 * 노래 검색 (정본 §3.1). query 부분일치(대소문자 무시), 관련성 순, 페이지 크기 10 고정.
+	 * 음악 검색 (정본 §3.1). 통합 또는 아티스트 필터 앞일치, 관련성 순, 페이지 크기 10 고정.
 	 * 매칭·정렬 실행은 BE4 조회 port에 위임하고, 여기서는 조건 전달과 응답 조립만 한다.
 	 */
-	public PageResponse<MusicSummary> search(String query, int page) {
+	public PageResponse<MusicSummary> search(MusicSearchCondition condition, int page) {
 		MusicSearchReader reader = searchReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/search: BE4 검색 어댑터 대기 중 (B-D)"));
-		MusicSearchReader.PageResult result = reader.search(query.trim(), page, PAGE_SIZE);
-		log.info("[Music] 검색 완료 query={} page={} count={}", query, page, result.content().size());
+		MusicSearchReader.PageResult result = reader.search(condition, page, PAGE_SIZE);
+		log.info("[Music] 검색 완료 mode={} page={} count={}", condition.mode(), page, result.content().size());
 		return new PageResponse<>(result.content(), page, PAGE_SIZE, result.hasNext());
 	}
 

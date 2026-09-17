@@ -51,12 +51,49 @@ class MusicSearchMapperVideoIdFilterTests {
 		BoundSql boundSql = statement.getBoundSql(params);
 
 		String sql = boundSql.getSql().replaceAll("\\s+", " ");
+		assertFilterCount(sql, 4);
+	}
+
+	@Test
+	void findFilteredPage_excludesVideoIdNone_inArtistTiers() {
+		Map<String, Object> params = filteredParams();
+		params.put("music", null);
+		params.put("musicPrefix", null);
+
+		String sql = configuration.getMappedStatement(NS + ".findFilteredPage")
+				.getBoundSql(params).getSql().replaceAll("\\s+", " ");
+
+		assertFilterCount(sql, 2);
+	}
+
+	@Test
+	void findFilteredPage_excludesVideoIdNone_inCombinedTiers() {
+		Map<String, Object> params = filteredParams();
+		params.put("music", "love");
+		params.put("musicPrefix", "love%");
+
+		String sql = configuration.getMappedStatement(NS + ".findFilteredPage")
+				.getBoundSql(params).getSql().replaceAll("\\s+", " ");
+
+		assertFilterCount(sql, 4);
+	}
+
+	private static Map<String, Object> filteredParams() {
+		Map<String, Object> params = new HashMap<>();
+		params.put("artist", "lana del rey");
+		params.put("artistPrefix", "lana del rey%");
+		params.put("cap", 30L);
+		params.put("size", 10);
+		params.put("offset", 0L);
+		return params;
+	}
+
+	private static void assertFilterCount(String sql, int expected) {
 		Matcher matches = Pattern.compile("video_id\\s+IS\\s+DISTINCT\\s+FROM\\s+'none'").matcher(sql);
 		int count = 0;
 		while (matches.find()) {
 			count++;
 		}
-		// tier 0(제목 완전일치)·1(아티스트 완전일치)·2(제목 앞일치)·3(아티스트 앞일치) 각각 한 번씩.
-		assertEquals(4, count, "UNION ALL 4단계 각각에 video_id='none' 제외 조건이 있어야 한다: " + sql);
+		assertEquals(expected, count, "각 검색 tier에 video_id='none' 제외 조건이 있어야 한다: " + sql);
 	}
 }

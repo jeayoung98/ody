@@ -296,8 +296,13 @@ body: `idToken`(String, required).
 
 > 경로는 `/api/music/*` (S15P21A405-213). 이 저장소의 `/api/auth/*`·`/api/users/*` 컨벤션과 프론트 `api-endpoints.ts` 에 맞춘 것으로, 정본 v1.0 의 `/music/*` 표기를 대체한다.
 
-### 3.1 노래 검색
-`GET /api/music/search` · 인증 필요. param: `query`(String, required), `page`(int, required, 0).
+### 3.1 음악 검색
+`GET /api/music/search` · 인증 필요. param: `page`(int, required, 0)와 아래 조건 중 하나.
+
+- 통합 검색: `query`(String, required)
+- 아티스트 검색: `artist`(String, required)
+- 음악+아티스트 검색: `music`(String, required), `artist`(String, required)
+- `query`와 필터 조건 혼합, `music` 단독, 빈 문자열은 400 `INVALID_INPUT`
 ```json
 { "success": true, "data": { "content": [ {
   "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
@@ -305,9 +310,13 @@ body: `idToken`(String, required).
   "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }
 } ], "page": 0, "size": 10, "hasNext": true }, "error": null }
 ```
-- 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
-- **정렬은 관련성 순**: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 → 나머지 부분일치. 같은 순위 안에서는 `id` 오름차순. 대소문자 구분 없음 (2026-09-12 변경, S15P21A405-234 — 이전은 `youtubeCnt` 내림차순이었으나 값이 전 행 0 이라 무작위였다).
+- 결과 없음은 빈 content+200. 검증 에러: `INVALID_INPUT`.
+- 모든 검색은 대소문자를 구분하지 않는 **앞일치**다. `%`, `_`, `\`는 와일드카드가 아닌 문자로 검색한다.
+- 통합 검색 정렬: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치.
+- 아티스트 검색 정렬: 아티스트 완전일치 → 아티스트 앞일치.
+- 음악+아티스트 검색 정렬: 모두 완전일치 → 아티스트만 완전일치 → 음악만 완전일치 → 모두 앞일치. 같은 순위는 `id` 오름차순이다.
 - **총 개수(`totalElements`·`totalPages`)는 내려주지 않는다** (2026-09-13, S15P21A405-255). §0.3 참고. 페이지 이동은 `hasNext`로 판단한다.
+- **2026-09-17 확장 (S15P21A405-365)**: 기존 `query+page` 요청은 유지하고 `artist`, `music+artist` 조건을 추가했다. 현재 전역 보안은 임시 `permitAll` 상태이므로 미인증 401은 Core 정책 복구 후 다시 검증한다.
 
 ### 3.2 노래 상세 조회
 `GET /api/music/detail` · 인증 필요. param: `id`(int, required).

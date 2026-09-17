@@ -91,11 +91,21 @@ export const NextIcon = ({ size = 14, ...p }: P) => (
     <path d="M15 5h2v14h-2zM4 5l10 7-10 7z" />
   </svg>
 );
-export const RadarIcon = ({ size = 15, ...p }: P) => (
-  <svg {...base(size, p)}>
-    <circle cx="12" cy="12" r="9" />
-    <circle cx="12" cy="12" r="4.5" />
-    <path d="M12 3v4.5M12 12l5.5-5.5" />
+/**
+ * 주변 탐색 — **한 별에서 이웃들로 뻗는 코로나** (S15P21A405-384).
+ *
+ * 예전 레이더(동심원 + 대각선)는 "훑어본다" 는 뜻이라 이 기능과 어긋났다. 여기서 하는 일은
+ * **한 곡을 가운데 두고 가까운 곡들을 불러 세우는 것**이다 — 가운데 별에서 짧은 선이 방사로
+ * 뻗고 끝마다 이웃 별이 붙는 그림이 그 뜻이다. 곡 상세 카드 줄과 하단 바가 같은 것을 쓴다.
+ */
+export const CoronaIcon = ({ size = 15, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={1.7}>
+    <circle cx="12" cy="12" r="2.6" fill="currentColor" stroke="none" />
+    <path d="M12 6.4V4M12 20v-2.4M6.4 12H4M20 12h-2.4M8.1 8.1 6.4 6.4M15.9 15.9l1.7 1.7M15.9 8.1l1.7-1.7M8.1 15.9l-1.7 1.7" />
+    <circle cx="12" cy="2.9" r="1.05" />
+    <circle cx="12" cy="21.1" r="1.05" />
+    <circle cx="2.9" cy="12" r="1.05" />
+    <circle cx="21.1" cy="12" r="1.05" />
   </svg>
 );
 export const SmileIcon = ({ size = 19, ...p }: P) => (
@@ -124,6 +134,12 @@ export const FlagIcon = ({ size = 14, ...p }: P) => (
   <svg {...base(size, p)}>
     <path d="M5 21V4" />
     <path d="M5 4h11l-2.2 3.6L16 11H5" />
+  </svg>
+);
+/** 왼쪽 홑화살. 오른쪽은 `rotate-180` 으로 돌려 쓴다 (`ChevronDownIcon` 과 같은 이유) */
+export const ChevronLeftIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2.1}>
+    <path d="M14.5 6l-6 6 6 6" />
   </svg>
 );
 /**

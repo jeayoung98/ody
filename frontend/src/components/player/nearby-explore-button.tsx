@@ -1,6 +1,6 @@
 "use client";
 
-import { RadarIcon } from "@/components/common/icons";
+import { CoronaIcon } from "@/components/common/icons";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -41,7 +41,7 @@ export default function NearbyExploreButton() {
         active ? "border-violet/50! text-white shadow-glow-violet" : ""
       }`}
     >
-      <RadarIcon className="opacity-70" />
+      <CoronaIcon className="opacity-70" />
       <span>주변 탐색</span>
     </button>
   );

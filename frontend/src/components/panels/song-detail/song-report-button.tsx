@@ -26,7 +26,12 @@ export default function SongReportButton({ musicId, title }: { musicId: number; 
   const { blocked } = usePlayability(musicId);
   return (
     <>
-      <IconButton label="이 곡 신고" onClick={() => setOpen(true)} active={open}>
+      {/*
+        빨강이다 (S15P21A405-402 · 384). 색 유틸리티에 `!` 를 붙이는 이유는 `IconButton` 이
+        기본값 `text-ink-3` 를 이미 들고 있어서다 — 같은 속성끼리는 붙인 순서가 아니라 CSS
+        순서로 이긴다. 그 바람에 hover 색도 눌리므로 밝기로 대신 답한다.
+      */}
+      <IconButton label="이 곡 신고" onClick={() => setOpen(true)} active={open} className="text-bad! hover:brightness-125">
         <SirenIcon />
       </IconButton>
       {open && <SongReportDialog musicId={musicId} title={title} unplayable={blocked === PLAYBACK_BLOCKED.noVideo} onClose={() => setOpen(false)} />}

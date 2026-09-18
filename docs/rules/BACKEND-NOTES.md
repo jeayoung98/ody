@@ -223,6 +223,10 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | B-3 | **축 라벨**: 레이어별 두 축의 일상어 라벨을 데이터 확정 후 내려줄 것 (MAP-06) | 지금은 프론트 임시값(`LAYER_AXES`) | 협의 전 |
 | B-4 | **레이어 수 8개 / 대표곡 1000개** 전제 확인 | 프론트 상수(`LAYER_COUNT`, `REPRESENTATIVES_PER_LAYER`)가 이 값에 묶여 있다 | 협의 전 |
 | B-5 | **재생 로그 호출 빈도 증가**: 지도에서 별을 클릭하면 그 곡이 곧바로 재생되므로 (MAP-08 합치기, S15P21A405-225) 클릭 한 번마다 `POST /music/{id}/play` 가 나간다. 탐색 중 연속 클릭이면 짧은 간격의 로그가 연달아 쌓인다 | 쓰기 부하와 통계(탐험왕·재생수) 해석에 영향. 서버 쪽에서 디바운스·최소 재생시간 필터가 필요한지 확인 필요 | 협의 전 |
+| B-6 | **[DATA→BE] videoid 조회 서비스가 저장소로 들어왔다** — `data/videoid/api.py` 가 `GET /videoid?artist=&title=` 계약을 그대로 구현한다(스펙 19, S15P21A405-441). `ody.videoid.base-url` 을 이 서비스로 돌리면 개인 EC2 의 `videoid_api.py` 를 대체한다. 응답에 `best.confidence` 가 `verified` / `best_guess` 로 들어간다 | 지금 EC2 판정은 퍼지매칭 결과를 그대로 저장해 임베드 불가·다른 곡이 `music.video_id` 에 들어간다. 새 판정은 `playable_in_embed`·`availability`·`is_live`·`age_limit` 을 실제로 조회해 확인한다 | 협의 전 |
+| B-7 | **[DATA→BE] `duration` 을 videoid 조회에 실어 보내달라** — `GET /videoid?...&duration=<초>`. `VideoIdApiClient.lookup(artist, title)` 에 길이 인자를 하나 추가하는 변경이다 | 길이 대조 없이는 공식 음원으로 **확정할 수 없다**(`confidence` 가 `verified` 로 올라가지 못하고 전부 `best_guess` 가 된다). 같은 곡이 duration 있으면 0.98, 없으면 0.83 으로 떨어지는 것을 실측했다. S15P21A405-407 이 이미 `findDetailsByIds` 로 duration 을 끌어오므로 그 값을 그대로 넘기면 된다 | 협의 전 |
+| B-8 | **[DATA→BE] `best.confidence` 저장 정책 결정 필요** — 추측(`best_guess`)값을 `music.video_id` 에 영구 저장할지, 아니면 응답에만 쓰고 저장은 `verified` 만 할지 | 유사도 추측은 `data/specs/15_playability/spec.md:38` "추측 금지" 와 충돌한다. data 파트는 판정 근거를 다 내려보내고 저장 여부는 호출자가 결정하도록 남겨 뒀다. 기획 확인이 필요하다 | 협의 전 |
+| B-9 | **[DATA→BE] 캐시 미스 시 3초 읽기 타임아웃을 못 지킬 수 있다** — 첫 조회는 검색 2회 + 영상 확인 최대 3회다. 두 번째 호출부터는 sqlite 캐시에서 즉시 나온다 | `VideoIdApiClient:30` 이 읽기를 3초에서 끊는다. 타임아웃이면 백엔드는 `Optional.empty()` 로 받고 저장하지 않으므로 다음 호출에 다시 시도한다 — 동작은 안전하지만 첫 조회가 자주 빈다. 선적재 배치가 필요한지 판단 필요 | 협의 전 |
 
 ---
 

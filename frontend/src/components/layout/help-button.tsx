@@ -8,7 +8,7 @@ import { setAnalyticsContext, track } from "@/lib/analytics/client";
 
 /**
  * 도움말 — 지도가 뭔지, 별이 뭔지 설명. **좌하단 계기판의 자식**으로 그 오른쪽에 선다 (S15P21A405-434) —
- * 계기판이 접히면 같이 따라 들어간다. 68 = 접기 핸들 22 + 틈 8 + 버튼 38.
+ * 계기판이 접히면 같이 따라 들어간다. 64 = 접기 핸들 22 + 틈 4 + 버튼 38.
  *
  * 다이얼로그는 `document.body` 로 빼서 그린다. 계기판에 `transform` 이 걸려 있어서 안에 두면
  * `fixed inset-0` 이 화면이 아니라 계기판 안에 갇힌다 (신고 팝업과 같은 문제, S15P21A405-378).
@@ -27,7 +27,7 @@ export default function HelpButton() {
         aria-label="도움말"
         title="도움말"
         onClick={() => { track("help_opened"); setAnalyticsContext({ help_open: true }); setOpen(true); }}
-        className="glass absolute -right-[68px] bottom-0 z-[22] grid h-[38px] w-[38px] place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink"
+        className="glass absolute -right-[64px] bottom-0 z-[22] grid h-[38px] w-[38px] place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink"
       >
         <HelpIcon />
       </button>

@@ -7,9 +7,7 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
-import ReactionButton from "@/components/player/reaction-button";
 import Brand from "./brand";
-import HelpButton from "./help-button";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
@@ -38,7 +36,7 @@ interface MainScreenProps {
 
 /**
  * 기본 화면 = 풀스크린 별지도 위에 떠 있는 글래스 HUD.
- * 상단(브랜드·레이어 스테퍼 / 검색 / 네비·도움말) · 우측(패널) · 좌하단(계기판) · 우하단(플레이어, 그 위 반응)
+ * 상단(브랜드·레이어 스테퍼 / 검색 / 네비·프사) · 우측(패널) · 좌하단(계기판·도움말) · 우하단(플레이어)
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
@@ -63,14 +61,12 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}
       {composerOpen ? <JourneyComposer /> : panelOpen ? <SearchOpenButton /> : <SearchBar />}
-      <HelpButton />
       {features.social && <FollowBanner />}
       <GhostBanner />
       <Rail />
       {panelOpen && <RightPanel />}
       <MinimapPanel />
       <BottomBar />
-      {features.social && <ReactionButton />}
       {overlay}
       {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다 */}
       <PlayHint />

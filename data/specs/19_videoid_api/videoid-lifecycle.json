@@ -1,0 +1,281 @@
+{
+  "schema_version": 1,
+  "diagram_type": "lifecycle",
+  "meta": {
+    "title": "ODY videoid 판정 상태 흐름",
+    "output": "videoid-lifecycle.html",
+    "quality_profile": "showcase",
+    "viewBox": [
+      1080,
+      632
+    ],
+    "views": [
+      {
+        "id": "verified-path",
+        "label": "확정 경로",
+        "focus": [
+          "request",
+          "cache",
+          "search",
+          "strict",
+          "verified"
+        ],
+        "note": "엄격 검증만으로 videoId 를 확정하는 주 경로."
+      },
+      {
+        "id": "guess-path",
+        "label": "추측 경로",
+        "focus": [
+          "strict",
+          "scoring",
+          "embed",
+          "bestGuess"
+        ],
+        "note": "확정 실패 후 0.6 이상 점수와 임베드 확인을 거치는 경로."
+      },
+      {
+        "id": "not-playable",
+        "label": "재시도와 재생불가",
+        "focus": [
+          "search",
+          "retry",
+          "scoring",
+          "embed",
+          "unplayable"
+        ],
+        "note": "재시도 가능한 검색 실패와 최종 재생불가를 구분한다."
+      }
+    ]
+  },
+  "lanes": [
+    {
+      "id": "main",
+      "label": "판정 단계"
+    },
+    {
+      "id": "guess",
+      "label": "추측 경로"
+    },
+    {
+      "id": "terminal",
+      "label": "종착 상태"
+    }
+  ],
+  "states": [
+    {
+      "id": "request",
+      "type": "start",
+      "label": "요청 진입",
+      "sublabel": "artist·title 필수",
+      "lane": "main",
+      "col": 0,
+      "step": "01",
+      "tag": "GET /videoid"
+    },
+    {
+      "id": "cache",
+      "type": "decision",
+      "label": "캐시 조회",
+      "sublabel": "sqlite TTL 확인",
+      "lane": "main",
+      "col": 1,
+      "step": "02",
+      "tag": "단축 경로"
+    },
+    {
+      "id": "search",
+      "type": "active",
+      "label": "YouTube 검색",
+      "sublabel": "ytsearch12 쿼리 1~2건",
+      "lane": "main",
+      "col": 2,
+      "step": "03",
+      "tag": "yt-dlp"
+    },
+    {
+      "id": "strict",
+      "type": "decision",
+      "label": "엄격 검증",
+      "sublabel": "공식 채널·완전일치·임베드",
+      "lane": "main",
+      "col": 3,
+      "step": "04",
+      "tag": "확정 판정"
+    },
+    {
+      "id": "verified",
+      "type": "success",
+      "label": "verified",
+      "sublabel": "videoId 확정",
+      "lane": "main",
+      "col": 4,
+      "step": "05",
+      "tag": "30일 캐시"
+    },
+    {
+      "id": "scoring",
+      "type": "decision",
+      "label": "후보 점수화",
+      "sublabel": "점수 가중합",
+      "lane": "guess",
+      "col": 1,
+      "tag": "임계 0.6",
+      "width": 114
+    },
+    {
+      "id": "embed",
+      "type": "decision",
+      "label": "임베드 확인",
+      "sublabel": "상위 3건까지",
+      "lane": "guess",
+      "col": 2,
+      "tag": "실측",
+      "width": 114
+    },
+    {
+      "id": "retry",
+      "type": "failure",
+      "label": "retry_pending",
+      "sublabel": "검색 실패, 재시도 대상",
+      "lane": "terminal",
+      "col": 0,
+      "tag": "10분 캐시"
+    },
+    {
+      "id": "unplayable",
+      "type": "failure",
+      "label": "unplayable",
+      "sublabel": "best 가 null",
+      "lane": "terminal",
+      "col": 1,
+      "tag": "1일 캐시"
+    },
+    {
+      "id": "bestGuess",
+      "type": "success",
+      "label": "best_guess",
+      "sublabel": "0.6 이상·임베드 확인됨",
+      "lane": "terminal",
+      "col": 2,
+      "tag": "1일 캐시"
+    }
+  ],
+  "transitions": [
+    {
+      "id": "enter-cache",
+      "from": "request",
+      "to": "cache",
+      "label": "캐시 키 계산",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "straight",
+      "labelDy": -26
+    },
+    {
+      "id": "cache-miss",
+      "from": "cache",
+      "to": "search",
+      "label": "미스·TTL 만료",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "straight",
+      "labelDy": -26
+    },
+    {
+      "id": "to-strict",
+      "from": "search",
+      "to": "strict",
+      "label": "필터 통과 후보",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "straight",
+      "labelDy": -26
+    },
+    {
+      "id": "search-failed",
+      "from": "search",
+      "to": "retry",
+      "label": "검색 예외",
+      "variant": "security",
+      "labelDx": -62,
+      "labelDy": 30
+    },
+    {
+      "id": "retry-back",
+      "from": "retry",
+      "to": "search",
+      "label": "10분 후 재조회",
+      "variant": "emphasis",
+      "labelDx": 62
+    },
+    {
+      "id": "strict-pass",
+      "from": "strict",
+      "to": "verified",
+      "label": "공식 음원 1건",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "straight",
+      "labelDy": -26
+    },
+    {
+      "id": "strict-fail",
+      "from": "strict",
+      "to": "scoring",
+      "label": "미확정·중복 후보",
+      "labelDy": 34
+    },
+    {
+      "id": "score-pass",
+      "from": "scoring",
+      "to": "embed",
+      "label": "0.6 이상 점수순",
+      "fromSide": "right",
+      "toSide": "left",
+      "route": "straight",
+      "labelDy": -26
+    },
+    {
+      "id": "score-fail",
+      "from": "scoring",
+      "to": "unplayable",
+      "label": "0.6 미만",
+      "variant": "security",
+      "labelDy": 30
+    },
+    {
+      "id": "embed-pass",
+      "from": "embed",
+      "to": "bestGuess",
+      "label": "임베드 통과분 채택",
+      "labelDy": 30
+    },
+    {
+      "id": "embed-fail",
+      "from": "embed",
+      "to": "unplayable",
+      "label": "예산 소진·임베드 불가",
+      "variant": "security"
+    }
+  ],
+  "cards": [
+    {
+      "dot": "emerald",
+      "title": "임베드 확인은 양쪽 경로에 다 걸린다",
+      "items": [
+        "확정·추측 둘 다 임베드 가능·public·비라이브·age_limit 0 을 요구한다",
+        "추측 후보도 영상을 열어 같은 조건을 확인한 뒤 채택한다",
+        "verified 는 길이 ±2초 대조가 필요해 duration 없이는 안 나온다"
+      ]
+    },
+    {
+      "dot": "rose",
+      "title": "retry_pending 과 unplayable 은 다른 종착점",
+      "items": [
+        "retry_pending 은 검색이 실패한 상태이고 10분 뒤 재조회한다",
+        "unplayable 은 후보를 다 보고 내린 판정이며 best 가 null 이다",
+        "임베드 예산 3건을 다 쓰면 채택이 아니라 거절로 끝난다"
+      ]
+    }
+  ]
+}

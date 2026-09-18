@@ -3,4 +3,5 @@ pandas==3.0.5
 pyarrow==25.0.1
 scikit-learn==1.9.0
 pytest==9.1.1
+yt-dlp==2026.8.19  # videoid 판정 (스펙 19). 검색·영상 메타만 조회, 음원 다운로드 안 함
 # faiss-cpu  # ANN 인덱스 — 컷 후보, 필요 시 활성화

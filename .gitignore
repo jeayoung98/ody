@@ -67,4 +67,6 @@ data/serving/*/map_tree/*.npz
 data/output/*
 !data/output/*.json
 !data/output/*.md
+data/videoid/cache.sqlite*
+data/specs/*/*.visual-check.*
 *.npy

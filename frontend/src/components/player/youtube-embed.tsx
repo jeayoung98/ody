@@ -377,7 +377,7 @@ export default function YoutubeEmbed() {
      */
     <div
       aria-hidden
-      className="pointer-events-none absolute right-[28px] bottom-[202px] -z-10 w-[356px] overflow-hidden"
+      className="pointer-events-none absolute right-[28px] bottom-[192px] -z-10 w-[356px] overflow-hidden"
     >
       <div className="aspect-video w-full min-h-[200px]">
         <div ref={hostRef} className="h-full w-full" />

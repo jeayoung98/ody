@@ -91,8 +91,10 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   };
 
   return (
-    <div className="flex flex-col gap-1">
-      <div className="relative h-8 rounded-box-xs has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-teal/60">
+    <div className="flex items-center gap-2.5">
+      {/* 못 트는 곡이어도 길이는 알려 준다 — 바만 잠근다 */}
+      <span className="num w-8 shrink-0 text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
+      <div className="relative h-8 min-w-0 flex-1 rounded-box-xs has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-teal/60">
         <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
         <input
           data-analytics-manual
@@ -117,11 +119,7 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
           className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"
         />
       </div>
-      {/* 못 트는 곡이어도 길이는 알려 준다 — 바만 잠근다 */}
-      <div className="num flex justify-between text-[9.5px] text-ink-4 tabular-nums">
-        <span>{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
-        <span>{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
-      </div>
+      <span className="num w-8 shrink-0 text-right text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
     </div>
   );
 }

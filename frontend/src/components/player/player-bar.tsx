@@ -120,12 +120,12 @@ export default function PlayerBar() {
       <div className="relative flex items-center justify-between">
         {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
         <LocateButton />
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-3">
           <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={queue.length === 0}>
             <PrevIcon />
           </TransportButton>
-          <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} dimmed={!canPlay}>
-            {isPlaying ? <PauseIcon /> : <PlayIcon />}
+          <TransportButton label={isPlaying ? "정지" : "재생"} primary size="lg" onClick={handleToggle} dimmed={!canPlay}>
+            {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
           </TransportButton>
           <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={queue.length === 0}>
             <NextIcon />

@@ -14,7 +14,7 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
  * #panel — 우측에 떠 있는 글래스 패널. activePanel 에 따라 하위 패널 하나만 렌더.
  *
  * 오른쪽 여백은 좌하단 계기판과 같은 18px 다 (S15P21A405-427) — 레일이 우상단으로 올라가 옆자리가 비었다.
- * 아래로는 우하단 플레이어바(172px, 세로 3단 — S15P21A405-428) 위에서 끝난다: 68(위) + 18 + 172 + 12(틈) = 270.
+ * 아래로는 우하단 플레이어바(162px, 세로 3단 — S15P21A405-428) 위에서 끝난다: 68(위) + 18 + 162 + 12(틈) = 260.
  *
  * 왼쪽 가장자리 핸들로 접을 수 있다 (S15P21A405-318). 접으면 오른쪽으로 미끄러져 나가고
  * 핸들만 남는다 — **별자리는 그대로 켜져 있다.** 지도를 넓게 보려고 잠깐 치우는 동작이라
@@ -33,7 +33,7 @@ export default function RightPanel() {
     <aside
       data-hud
       data-tutorial={`panel-${activePanel}`}
-      className={`animate-tin absolute top-[68px] right-[18px] z-20 flex max-h-[calc(100vh-270px)] w-right-panel flex-col transition-[transform,opacity] duration-500 ease-out ${
+      className={`animate-tin absolute top-[68px] right-[18px] z-20 flex max-h-[calc(100vh-260px)] w-right-panel flex-col transition-[transform,opacity] duration-500 ease-out ${
         /*
           접으면 **몸통 18px 만 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이
           있었는지가 안 읽힌다 — 좌하단 계기판이 몸통을 조금 남기는 것(`COLLAPSED_PEEK_PX`)과 같은 이유다.

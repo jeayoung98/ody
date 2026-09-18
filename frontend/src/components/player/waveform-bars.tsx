@@ -2,14 +2,14 @@
 
 import { useMemo } from "react";
 
-/** 바 개수. 376px 폭에서 3px 바 + 2px 틈이면 이만큼 들어간다 */
-const BARS = 56;
+/** 바 개수. 양옆 시간 표시를 뺀 약 270px 에 2px 바가 2px 남짓 틈으로 이만큼 들어간다 */
+const BARS = 64;
 /** 재생 헤드 앞뒤로 이만큼의 바가 흔들린다 */
 const LIVE_SPAN = 3;
 
 /**
  * `musicId` 로 고정된 **가짜 파형**. 곡마다 모양이 다르고 같은 곡은 늘 같다 — 새로고침해도 안 바뀐다.
- * 높이는 0.15~0.65 사이다. 흔들릴 때 1.5배까지 커지므로 그래야 상자를 넘지 않는다.
+ * 높이는 15~65% 사이다. 흔들릴 때 1.5배까지 커지므로 그래야 상자를 넘지 않는다.
  */
 function shapeFor(seed: number) {
   let s = (seed * 2654435761) >>> 0 || 1;
@@ -19,7 +19,8 @@ function shapeFor(seed: number) {
     const noise = s / 2 ** 32;
     // 느린 봉우리 두어 개 위에 잡음을 얹는다 — 진짜 파형처럼 뭉쳤다 풀렸다 한다
     const envelope = 0.55 + 0.45 * Math.sin((i / BARS) * Math.PI * 2.3 + (seed % 7));
-    out.push(0.15 + 0.5 * Math.min(1, noise * 0.6 + envelope * 0.5));
+    // 정수 % 로 반올림한다 — 소수가 길면 서버가 그린 style 과 브라우저가 정규화한 값이 달라 하이드레이션 경고가 난다
+    out.push(Math.round(100 * (0.15 + 0.5 * Math.min(1, noise * 0.6 + envelope * 0.5))));
   }
   return out;
 }
@@ -48,15 +49,15 @@ export default function WaveformBars({ musicId, ratio, playing, live }: Waveform
   const head = Math.round(ratio * BARS);
 
   return (
-    <div aria-hidden className={`flex h-full items-center gap-[2px] ${live ? "" : "opacity-45"}`}>
+    <div aria-hidden className={`flex h-full items-center justify-between ${live ? "" : "opacity-45"}`}>
       {shape.map((h, i) => {
         const passed = i < head;
         const near = playing && Math.abs(i - head) <= LIVE_SPAN;
         return (
           <i
             key={i}
-            className={`block min-w-0 flex-1 rounded-pill ${passed ? "bg-teal" : "bg-white/[.16]"} ${near ? "animate-wave" : ""}`}
-            style={{ height: `${h * 100}%`, animationDelay: near ? `${(i % 4) * 110}ms` : undefined }}
+            className={`block w-[2px] shrink-0 rounded-pill ${passed ? "bg-teal" : "bg-white/[.16]"} ${near ? "animate-wave" : ""}`}
+            style={{ height: `${h}%`, animationDelay: near ? `${(i % 4) * 110}ms` : undefined }}
           />
         );
       })}

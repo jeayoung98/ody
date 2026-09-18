@@ -78,12 +78,15 @@ async function reissueAccessToken(): Promise<boolean> {
 
 function request(path: string, init?: RequestInit): Promise<Response> {
   const token = readStorage<string>(STORAGE_KEYS.accessToken);
+  // 파일을 보낼 때는 `Content-Type` 을 우리가 정하지 않는다 — multipart 는 헤더에 경계
+  // 문자열이 들어가야 하고 그 값은 `fetch` 가 `FormData` 를 보고 만든다 (S15P21A405-474)
+  const isForm = init?.body instanceof FormData;
   return fetch(`${BASE_URL}${path}`, {
     ...init,
     // refresh token 이 httpOnly 쿠키로 심겨 있어서 쿠키를 실어 보내야 한다
     credentials: "include",
     headers: {
-      "Content-Type": "application/json; charset=UTF-8",
+      ...(isForm ? {} : { "Content-Type": "application/json; charset=UTF-8" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },

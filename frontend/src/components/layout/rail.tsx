@@ -16,7 +16,7 @@ import RailButton from "./rail-button";
  *
  * 전부 아이콘만이고 이름은 툴팁이다. 탭과 동작을 두 알약으로 갈랐던 것(S15P21A405-427)을 합쳤다 —
  * 도움말까지 세 덩어리가 나란히 서니 번잡했다. 도움말(?)은 좌하단 계기판 옆으로 갔다.
- * 높이는 38px: 안쪽 버튼 34 + 알약 패딩 2·2. 프사 버튼도 38 이다.
+ * 높이는 44px: 안쪽 버튼 40 + 알약 패딩 1·1 + 테두리 1·1. 프사 버튼도, 가운데 검색 알약도 44 다 (S15P21A405-440).
  *
  * 유저 테스트 동안 감춘 기능은 빠진다 (S15P21A405-333, `constants/features.ts`).
  * 지금은 주변 탐색·여정만 남는다.
@@ -45,7 +45,7 @@ export default function Rail() {
 
   return (
     <div data-hud className="absolute top-4 right-[18px] z-[22] flex items-center gap-2">
-      <nav aria-label="네비" className="glass flex gap-0.5 rounded-pill! p-0.5">
+      <nav aria-label="네비" className="glass flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
             <FriendsIcon />

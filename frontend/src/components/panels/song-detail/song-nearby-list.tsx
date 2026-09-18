@@ -150,7 +150,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
         클릭이 "제자리에서 보기" 가 아니라 "옮겨가기" 가 된다. 유사도 설명은 제목 옆 ⓘ 툴팁이다.
       */}
       <div className="flex items-center gap-2.5">
-        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <div className="flex min-w-0 flex-1 flex-col gap-px">
           <SectionTitle
             tone="sentence"
             aside={
@@ -165,8 +165,9 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
           >
             이 곡과 가장 비슷해요! <SimilarityHint />
           </SectionTitle>
-          {/* 다음 클릭이 무엇을 하는지 **누르기 전에** 알려 주는 유일한 자리다 */}
-          <Note>{away ? "카드를 누르면 이 곡 주변으로 옮겨가요." : "카드를 누르면 그 곡의 상세로 가요."}</Note>
+          {/* 오른쪽 목록 재생 버튼이 무엇을 하는지 말하는 유일한 자리다 — 카드 클릭은
+          눌러 보면 알지만 줄 세 개짜리 아이콘은 안 그렇다 */}
+          <Note>{away ? "카드를 누르면 이 곡 주변으로 옮겨가요." : "오른쪽 버튼을 누르면 주변곡을 이어서 들어요."}</Note>
         </div>
         {/*
           **한 곡 재생과 다르게 생겨야 한다** (S15P21A405-384). 자리도 크기도 제목 줄의 재생

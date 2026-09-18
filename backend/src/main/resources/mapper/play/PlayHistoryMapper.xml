@@ -21,4 +21,22 @@
 		WHERE id = #{id} AND email = #{email}
 	</update>
 
+	<!--
+		곡별 최초 청취 기록 (S15P21A405-448). music_discovery 는 music_id 가 PK 라 곡당 한 줄뿐이고,
+		그 줄을 만든 사람이 발견자다. 두 번째부터는 ON CONFLICT 로 조용히 무시된다 —
+		동시에 두 사람이 같은 곡을 처음 재생해도 한 명만 남는다.
+		재생 기록 INSERT 와 같은 트랜잭션이라 재생은 남고 발견만 빠지는 일은 없다.
+	-->
+	<insert id="insertDiscovery">
+		INSERT INTO music_discovery (music_id, email)
+		VALUES (#{musicId}, #{email})
+		ON CONFLICT (music_id) DO NOTHING
+	</insert>
+
+	<update id="incrementPlayCnt">
+		UPDATE music
+		SET play_cnt = play_cnt + 1
+		WHERE id = #{musicId}
+	</update>
+
 </mapper>

@@ -20,6 +20,7 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.CellCenter;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.UserDisplay;
@@ -31,6 +32,7 @@ import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
 import com.ssafy.backend.realtime.dto.viewport.ViewportUser;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.CloseResult;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ReplaceResult;
 
@@ -49,6 +51,7 @@ public class ViewportService {
 	private final MusicLocationService musicLocationService; // 곡 좌표 묶음 조회
 	private final UserDisplayService userDisplayService; // 닉네임과 사진 조회
 	private final RiderCountService riderCountService; // 따라오는 사용자 수 조회
+	private final ViewportMetrics viewportMetrics; // 화면 처리 크기와 시간 기록
 
 	/**
 	 * 현재 화면의 셀 구독과 사용자 목록을 갱신한다.
@@ -60,11 +63,14 @@ public class ViewportService {
 	 * @return 화면 갱신 결과
 	 */
 	public OpenResult updateCurrentScreen(String email, long epoch, long requestSeq, ViewportRange viewport) {
+		long startedAt = System.nanoTime();
 		// 1. 화면 범위를 검사하고 화면에 걸친 셀을 찾는다.
 		viewport.validate();
 		List<Cell> cells = ViewportCellCalculator.findCellsInCurrentScreen(viewport, musicPositionCalculator).stream().toList();
 		if (cells.size() > properties.viewport().clusterThresholdCells()) {
-			return replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells);
+			return recordCurrentScreenResult(startedAt,
+					replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells),
+					cells.size(), 0, 0);
 		}
 
 		// 2. 새 셀을 먼저 구독하고 오래된 요청은 멈춘다.
@@ -72,10 +78,10 @@ public class ViewportService {
 				email, epoch, requestSeq, viewport,
 				ViewportMode.INDIVIDUAL, new LinkedHashSet<>(cells));
 		if (replaceResult == ReplaceResult.OLD_REQUEST) {
-			return OpenResult.oldRequest();
+			return recordCurrentScreenResult(startedAt, OpenResult.oldRequest(), cells.size(), 0, 0);
 		}
 		if (replaceResult == ReplaceResult.STALE_CONNECTION) {
-			return OpenResult.staleConnection();
+			return recordCurrentScreenResult(startedAt, OpenResult.staleConnection(), cells.size(), 0, 0);
 		}
 
 		// 3. 셀의 곡을 찾고 실제 화면 안에 있는 곡만 남긴다.
@@ -98,12 +104,48 @@ public class ViewportService {
 				email, visibleMusicIds, listenersByMusic);
 		int userCount = visibleListeners.values().stream().mapToInt(List::size).sum();
 		if (userCount > properties.viewport().individualUserCap()) {
-			return replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells);
+			return recordCurrentScreenResult(startedAt,
+					replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells),
+					cells.size(), candidateMusicIds.size(), userCount);
 		}
 
 		// 5. 곡 위치별 사용자 목록을 만들어 돌려준다.
 		List<ViewportMusicGroup> groups = createGroups(visibleMusic, visibleListeners);
-		return OpenResult.snapshot(ViewportSnapshot.individual(requestSeq, viewport.layer(), groups));
+		return recordCurrentScreenResult(startedAt,
+				OpenResult.snapshot(ViewportSnapshot.individual(requestSeq, viewport.layer(), groups)),
+				cells.size(), candidateMusicIds.size(), userCount);
+	}
+
+	/**
+	 * 화면 목록 처리 결과를 기록하고 그대로 돌려준다.
+	 *
+	 * @param startedAt 시작 시각
+	 * @param result 화면 갱신 결과
+	 * @param cellCount 확인한 셀 수
+	 * @param candidateCount 확인한 곡 수
+	 * @param userCount 확인한 사용자 수
+	 * @return 화면 갱신 결과
+	 */
+	private OpenResult recordCurrentScreenResult(
+			long startedAt, OpenResult result,
+			int cellCount, int candidateCount, int userCount) {
+		String mode = result.snapshot() == null ? "NONE" : result.snapshot().mode().name();
+		viewportMetrics.recordSnapshot(
+				result.status().name(), mode, cellCount, candidateCount, userCount,
+				System.nanoTime() - startedAt);
+		return result;
+	}
+
+	/**
+	 * 현재 접속에서 마지막으로 연 화면의 구독을 닫는다.
+	 *
+	 * @param email 요청한 사용자 이메일
+	 * @param epoch 현재 접속 번호
+	 * @param requestSeq 마지막 화면 요청 순번
+	 */
+	public void closeCurrentScreen(String email, long epoch, long requestSeq) {
+		CloseResult result = viewportRepository.closeCurrentScreen(email, epoch, requestSeq);
+		viewportMetrics.recordClose(result.name());
 	}
 
 	/**

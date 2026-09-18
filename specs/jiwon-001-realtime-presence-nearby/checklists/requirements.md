@@ -37,6 +37,6 @@
   1. Notion `/music/play` + `/music/play/end` ↔ BACKEND-NOTES A-7 — **Notion 우선 확정**, BACKEND-NOTES 갱신 필요(T082)
   2. Notion RT-90 "비공개 MVP 제외" ↔ 요구사항 §6 — **Notion 우선 확정**, 요구사항 쪽에 MVP 제외 표기 필요(기획)
   3. Notion WS 기반 화면 사용자·근처 사람 ↔ BACKEND-NOTES A-3 `GET /api/users/nearby?layer=`·A-4 `viewingMusicId` (FE가 REST를 기대) — FE2·FE1에 알려야 함
-  4. Notion RT-50 "중복 방지 없음" ↔ 기존 스캐폴딩 `encounter-dedup.lua`(24h dedup) — 스캐폴딩이 구버전 설계
+  4. 만남 정책은 같은 레이어·같은 곡, 동일 쌍 3분 쿨다운으로 최종 확정. Redis `meeting-cd:*` TTL 키와 현재 구현이 일치함
   5. Notion Heartbeat/TTL/Sweep 15/45/5s ↔ 기존 `application-realtime.yml` 25/60/30s — 스캐폴딩이 구버전 설계
   6. FEATURES.md에 RT-xx ID 부재 — 기획 확인 후 추가 필요 (spec §대응표 참조)

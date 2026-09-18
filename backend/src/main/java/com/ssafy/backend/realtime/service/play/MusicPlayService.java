@@ -1,9 +1,11 @@
 package com.ssafy.backend.realtime.service.play;
 
 import java.util.List;
+import java.util.Objects;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
@@ -24,13 +26,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 재생 선언 = 유일하게 위치를 이동시킴 (RT-02, /api/music/play). plan §F2.
- * 순서: presence 스냅샷(앵커·old·epoch) → 곡좌표 조회(서버 권위) → MusicPositionCalculator 배치 →
- *       applyPlay → play_history 저장 → 위치 변경 전달 → 만남 기록.
- *
- * realtime 프로파일에서만 활성. 클라이언트 좌표는 신뢰하지 않고 musicId 로 서버가 좌표를 계산한다.
- * REST 응답이 처리 결과이므로 여기서는 소켓 메시지를 직접 보내지 않는다.
- * 화면과 주변사람 갱신은 위치 변경을 받는 서비스가 담당한다.
+ * 곡 재생과 종료를 처리한다.
+ * 재생하면 곡 위치로 옮기고, 재생 기록과 만남을 저장한다.
  */
 @Slf4j
 @Service
@@ -46,17 +43,17 @@ public class MusicPlayService {
 	private final MeetingService meetingService;
 
 	/**
-	 * 재생 선언. 현재 레이어에서 musicId 의 서버 좌표를 계산해 위치를 이동시킨다.
+	 * 곡을 재생하고 현재 레이어의 곡 위치로 사용자를 옮긴다.
 	 *
-	 * @param email   행위자(토큰 subject)
-	 * @param musicId 재생 곡 id — 좌표 계산의 유일한 입력
-	 * @param source  진입 경로(MAP/JOURNEY/PLAYLIST/FOLLOW) — play_history 기록용(③)
-	 * @return {playHistoryId, musicId, layer, x, y, cellX, cellY}
-	 * @throws CustomException PRESENCE_ERROR — 미연결/앵커없음/좌표없음/STALE(로그에 WebSocketErrorCode 사유)
+	 * @param email 사용자 이메일
+	 * @param musicId 재생할 곡 ID
+	 * @param source 곡을 재생한 화면
+	 * @return 재생 기록 ID와 새 위치
+	 * @throws CustomException 접속 정보나 곡 위치를 찾을 수 없는 경우
 	 */
+	@Transactional
 	public PlayResponse play(String email, long musicId, String source) {
-		// 1) 이 사람이 지금 접속해서 어느 레이어를 보고 있는지 가져온다(재생은 지금 보는 레이어에서 일어남).
-		//    접속 안 했으면 NOT_CONNECTED, 레이어가 없으면(아직 자리 안 잡음) NO_ANCHOR 로 거부.
+		// 1. 사용자의 현재 곡과 레이어를 읽는다.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null || before.epoch() == null) {
 			log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_NOT_CONNECTED, musicId);
@@ -68,54 +65,66 @@ public class MusicPlayService {
 		}
 		int layer = before.layer();
 
-		// 2) 곡 좌표는 서버가 musicId 로 직접 찾는다(클라가 보낸 좌표는 안 믿음). 없으면 거부.
+		// 2. 재생할 곡의 좌표를 찾는다.
 		double[] pc = musicLocationService.findLocation(musicId)
 				.orElseThrow(() -> {
 					log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL, musicId);
 					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 				});
 
-		// 3) 그 곡 좌표를 지금 레이어의 격자 칸(셀)으로 바꾼다.
+		// 3. 곡 좌표를 현재 레이어의 위치와 셀로 바꾼다.
 		Placement p = musicPositionCalculator.calculate(pc, layer);
 
-		// 4) 레디스에 "이제 이 곡을 튼다"를 반영한다 — 이전 곡에서 빼고 새 곡에 넣기.
-		//    여러 명령이 중간에 안 끼어들게 한 번에 처리한다. 돌아오는 값은 '같은 레이어에서 같은 곡을 듣던 사람들'(마주침 후보).
+		// 4. 이전 곡에서 빼고 새 곡에 넣는다.
 		List<String> meeting = presenceRedisRepository.applyPlay(
 				email,
 				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 		if (meeting == null) {
-			// 그 사이 이 사람 상태가 딴 데서 바뀜(예: 재접속) → 이번 재생은 무시(STALE).
+			// 처리 중 접속 상태가 바뀌면 이번 재생을 거부한다.
 			log.warn("play STALE reason={} musicId={}", WebSocketErrorCode.PRESENCE_STALE, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 5) "위치 바뀜" 알림을 하나 쏜다 — 이걸 받아서 화면 속 사람들·주변 사람 표시를 갱신한다.
-		//    처음 트는 거면(이전 곡 없음) '새로 들어옴'으로 해석된다.
-		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
-		realtimeEventService.send(new PositionChanged(
-				email, before.epoch(), layer,
-				before.musicId(), musicId,
-				oldCell, p.cellKey(),
-				p.xNorm(), p.yNorm()));
-
-		// 6) 재생 기록(play_history)을 한 줄 남긴다. id 는 자동으로 채워진다.
-		//    재생 시간(played_ms)은 지금은 시작이라 0, 곡이 끝날 때(playEnd) 실제 시간으로 바꾼다.
+		// 5. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
 		PlayHistoryRow history = new PlayHistoryRow();
 		history.setMusicId(musicId);
 		history.setEmail(email);
 		history.setSource(source);
 		history.setPlayedMs(0L);
 		playHistoryMapper.insert(history);
+		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
+		playHistoryMapper.incrementPlayCnt(musicId);
+		// 아무도 들은 적 없는 곡이면 이 사람이 발견자로 기록된다 (주간 발견왕 랭킹, S15P21A405-448).
+		// 이미 기록이 있으면 아무 일도 일어나지 않는다.
+		playHistoryMapper.insertDiscovery(musicId, email);
 
-		// 7) 마주침 기록 — 위 후보들과의 만남을 뒤에서(비동기) 세어 준다(3분 쿨다운, 응답 안 막음).
+		// 6. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
+		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
+		if (before.musicId() == null
+				|| !Objects.equals(before.musicId(), musicId)
+				|| !Objects.equals(before.layer(), layer)
+				|| !Objects.equals(oldCell, p.cellKey())) {
+			realtimeEventService.send(new PositionChanged(
+					email, before.epoch(), before.musicId() == null ? null : before.layer(), layer,
+					before.musicId(), musicId,
+					oldCell, p.cellKey(),
+					p.xNorm(), p.yNorm()));
+		}
+
+		// 7. 같은 곡에서 만난 사용자들을 기록한다.
 		meetingService.recordMeetings(email, meeting);
 
 		log.info("[Play] 재생 선언 완료 musicId={} layer={} playHistoryId={}", musicId, layer, history.getId());
 		return new PlayResponse(history.getId(), musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
 	}
 
-	/** 재생 종료 — played_ms 갱신(멱등, 소유자 검증). 위치 불변. 대상 없음/비소유면 PRESENCE_ERROR. */
+	/**
+	 * 재생 시간을 저장한다. 지도 위치와 노출은 그대로 둔다.
+	 * @param email 사용자 이메일
+	 * @param playHistoryId 재생 기록 ID
+	 * @param playedMs 재생한 시간
+	 */
 	public void playEnd(String email, long playHistoryId, long playedMs) {
 		int updated = playHistoryMapper.updatePlayedMs(playHistoryId, email, playedMs);
 		if (updated == 0) {

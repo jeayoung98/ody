@@ -13,7 +13,12 @@ import org.springframework.stereotype.Component;
  * epoch = 그 연결이 최신인지 확인하는 버전. 재접속할 때 올려서 옛 연결이 새 상태를 지우지 못하게 한다.
  * seq = 메시지 순번. 보낼 때 올려서 클라이언트가 메시지 순서를 확인하게 한다.
  * 흐름: CONNECT → register, 발송 → nextMessageSeq, LEAVE → findEpoch, DISCONNECT → unregister.
- * TODO(정책): 같은 email 두 번째 CONNECT 시 기존 활성 세션을 강제로 끊을지는 별도로 확정한다.
+ * 같은 email로 다시 연결하면 새 연결이 최신 상태를 맡고, 이전 연결 요청은 epoch 비교로 무시한다.
+ *
+ * 멀티탭: 여러 탭이 한 위치를 공유하고 조종권은 마지막에 연결한 탭이 갖는다.
+ * 그래서 CONNECT 때 {@link #hasOtherSession}으로 다른 탭이 남았는지 보고,
+ * 남아 있으면 이전 위치를 지우지 않는다(지우면 지도에서 잠깐 사라지고 듣던 곡을 잃는다).
+ * 정리 여부는 세션 수가 아니라 epoch 비교로 판정하므로, 옛 탭이 끊겨도 최신 위치는 지워지지 않는다.
  */
 @Component
 public class WebSocketSessionService {

@@ -1,6 +1,8 @@
 package com.ssafy.backend.realtime.scheduler;
 
 import static org.mockito.ArgumentMatchers.anySet;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -26,6 +28,7 @@ import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
@@ -43,13 +46,15 @@ class ViewportCellCountSchedulerTests {
 	@Mock ViewportRedisRepository viewportRepository;
 	@Mock ViewportService viewportService;
 	@Mock RealtimeMessageService realtimeMessageService;
+	@Mock ViewportMetrics viewportMetrics;
 
 	private ViewportCellCountScheduler scheduler;
 
 	@BeforeEach
 	void setUp() {
 		scheduler = new ViewportCellCountScheduler(
-				musicPositionCalculator, viewportRepository, viewportService, realtimeMessageService);
+				musicPositionCalculator, viewportRepository, viewportService,
+				realtimeMessageService, viewportMetrics);
 	}
 
 	@Test
@@ -89,6 +94,8 @@ class ViewportCellCountSchedulerTests {
 		org.assertj.core.api.Assertions.assertThat(counts.requestSeq()).isEqualTo(8L);
 		org.assertj.core.api.Assertions.assertThat(counts.cells())
 				.containsExactly(new ViewportCellCount(1, 1, 1.5, 1.5, 3));
+		verify(viewportMetrics).recordCellCounts(
+				eq(4), eq(1), anyLong());
 	}
 
 	@Test
@@ -105,6 +112,26 @@ class ViewportCellCountSchedulerTests {
 				org.mockito.ArgumentMatchers.anyString(),
 				org.mockito.ArgumentMatchers.any(),
 				org.mockito.ArgumentMatchers.any());
+		verify(viewportMetrics).recordCellCounts(
+				eq(0), eq(0), anyLong());
+	}
+
+	@Test
+	@DisplayName("한 사용자 갱신이 실패해도 대상 수와 성공 수를 기록한다")
+	void recordsFailedCellCountUpdate() {
+		ViewportRange viewport = new ViewportRange(1, 0, 2, 0, 2, List.of());
+		when(musicPositionCalculator.maxLayer()).thenReturn(1);
+		when(viewportRepository.findCellCountUsersByLayer(1))
+				.thenReturn(Map.of(1, Set.of(ACTIVE)));
+		when(viewportRepository.findMetaByEmails(Set.of(ACTIVE)))
+				.thenReturn(Map.of(ACTIVE, meta(ViewportMode.CLUSTERED, 8L, viewport)));
+		when(viewportService.createCellCountSnapshot(ACTIVE, 8L, viewport))
+				.thenThrow(new IllegalStateException("test"));
+
+		scheduler.sendLatestCellCounts();
+
+		verify(viewportMetrics).recordCellCounts(
+				eq(1), eq(0), anyLong());
 	}
 
 	/** 테스트용 화면 정보를 만든다. */

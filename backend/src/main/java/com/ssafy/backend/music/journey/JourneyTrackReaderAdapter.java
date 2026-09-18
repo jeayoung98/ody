@@ -69,6 +69,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 						row.getBpm(),
 						row.getDuration(),
 						row.getAlbum(),
+						row.getReleaseYear(),
 						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 						row.getVideoId(),

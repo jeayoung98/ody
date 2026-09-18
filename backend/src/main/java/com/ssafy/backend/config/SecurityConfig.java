@@ -50,6 +50,7 @@ public class SecurityConfig {
 								"/api/auth/signup", "/api/auth/login", "/api/auth/login/google",
 								"/api/auth/exchange", "/api/auth/reissue",
 								"/api/users/nickname-available",
+								"/api/user/images/**",   // 업로드된 프로필 이미지 정적 서빙 [S15P21A405-426]
 								"/api/feedback",   // 탐색 설문은 비로그인도 보낸다 [S15P21A405-289]
 								"/oauth2/authorization/**", "/login/oauth2/code/**",
 								"/actuator/health", "/actuator/prometheus",

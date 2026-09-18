@@ -1,6 +1,6 @@
 # Quickstart: 실시간 뷰포트 검증
 
-이 문서는 구현 후 검증 순서를 정의한다. 현재는 실행 결과가 아니라 예정된 검증 절차다.
+이 문서는 구현 후 검증 순서와 2026-09-17 로컬 실행 결과를 기록한다.
 
 ## 0. 전제
 
@@ -24,7 +24,10 @@ cd C:\Users\SSAFY\Desktop\특화프로젝트\S15P21A405\backend
 ```powershell
 docker run --rm -d --name ody-viewport-test-redis -p 127.0.0.1:6380:6379 redis:7.4.11-alpine
 cd C:\Users\SSAFY\Desktop\특화프로젝트\S15P21A405\backend
-.\gradlew.bat test --tests "com.ssafy.backend.realtime.viewport.integration.*"
+$env:RUN_REDIS_INTEGRATION="true"
+$env:REDIS_TEST_HOST="127.0.0.1"
+$env:REDIS_TEST_PORT="6380"
+.\gradlew.bat test --tests "com.ssafy.backend.realtime.repository.redis.integration.*RedisIntegrationTests"
 docker stop ody-viewport-test-redis
 ```
 
@@ -95,17 +98,20 @@ realtime 프로파일 없이 기존 데모 설정으로 서버를 부팅한다.
 - viewport 요청 로그/metric에 처리 시간, 모드, 후보 셀·곡·사용자 수가 있는지 확인한다.
 - delta 로그/metric에 수신 후보 수와 실제 발송 수가 있는지 확인한다.
 - stale epoch/requestSeq 요청에서 거부 수가 증가하는지 확인한다.
+- 5초 셀별 인원수 갱신에서 대상 수·성공 발송 수·처리 시간이 기록되는지 확인한다.
+- viewport close의 `CLOSED`·`OLD_REQUEST`·`STALE_CONNECTION` 결과가 기록되는지 확인한다.
 - email·토큰·원시 16차원 좌표가 로그 본문과 metric tag에 없는지 확인한다.
 
 ## 7. 결과 기록 표
 
 | 검증 | 상태 | 증거/메모 |
 | --- | --- | --- |
-| compileJava | 미실행 | 구현 후 기록 |
-| viewport unit tests | 미실행 | 구현 후 기록 |
-| Redis integration | 미실행 | 구현 후 기록 |
-| two-session STOMP | 미실행 | 구현 후 기록 |
-| full test | 미실행 | 구현 후 기록 |
-| full build | 미실행 | 구현 후 기록 |
-| realtime profile boot | 미실행 | 구현 후 기록 |
-| demo profile boot | 미실행 | 구현 후 기록 |
+| compileJava | 성공 | 전체 test·build 과정에서 확인 |
+| viewport unit tests | 성공 | snapshot·delta·scheduler·metrics 테스트 통과 |
+| Redis integration | 성공 | 실제 Redis에서 구독 교체·닫기·이탈 정리 통과 |
+| two-session event scenario | 성공 | ENTER→MOVE→LEAVE→close→reconnect 통과 |
+| full test | 성공 | `BUILD SUCCESSFUL` (1m 29s) |
+| full build | 성공 | `BUILD SUCCESSFUL` (3s) |
+| realtime profile boot | 성공 | `ViewportContextTests` 통과 |
+| demo profile boot | 성공 | realtime 프로파일 없는 전체 테스트 컨텍스트 통과 |
+| metric privacy | 성공 | 허용 태그 키와 email·token·좌표 태그 제외 검증 통과 |

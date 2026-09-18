@@ -9,11 +9,14 @@ import org.springframework.context.annotation.Profile;
 
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorService;
+import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
+import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
+import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.dto.presence.ViewportRequest;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
@@ -38,10 +41,40 @@ public class PresenceWebSocketController {
 	private final ViewportService viewportService; // 현재 화면의 사용자 목록 생성
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐로 목록 전송
 
-	/** 입장(배치·복원). 활성 진입 아님 — 만남·이동은 /music/play 에서. */
+	/**
+	 * 처음에는 요청 곡으로 입장하고, 이후에는 현재 곡을 유지한 채 레이어만 옮긴다.
+	 *
+	 * @param request 입장 요청 순번, 레이어, 첫 입장 곡
+	 * @param principal 로그인한 사용자
+	 * @param sessionId 현재 소켓 세션 ID
+	 */
 	@MessageMapping("/presence/join")
-	public void join(JoinRequest request, Principal principal) {
-		presenceService.join(principal.getName(), request);
+	public void join(
+			JoinRequest request,
+			Principal principal,
+			@Header("simpSessionId") String sessionId) {
+		String email = principal.getName();
+		Long requestSeq = request == null ? null : request.requestSeq();
+		Long epoch = webSocketSessionService.findEpoch(sessionId).orElse(null);
+		if (epoch == null) {
+			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_NOT_CONNECTED,
+					"현재 소켓 연결을 찾을 수 없다", requestSeq);
+			return;
+		}
+
+		try {
+			if (request == null) {
+				throw new IllegalArgumentException("입장 요청이 비어 있다");
+			}
+			PresenceJoined joined = presenceService.join(email, epoch, request);
+			realtimeMessageService.sendToUser(email, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.PRESENCE_JOINED, joined);
+		} catch (WebSocketRequestException e) {
+			webSocketErrorService.send(email, e.getCode(), e.getMessage(), requestSeq);
+		} catch (IllegalArgumentException e) {
+			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_JOIN_INVALID,
+					e.getMessage(), requestSeq);
+		}
 	}
 
 	/** 아직 접속 중임 증명 — 만료 시각 갱신. */
@@ -49,9 +82,8 @@ public class PresenceWebSocketController {
 	public void heartbeat(Principal principal) {
 		boolean alive = presenceService.heartbeat(principal.getName());
 		if (!alive) {
-			// 이미 sweep 돼 만료큐에서 빠짐 → 클라는 살아있다 오해. STALE 회신해 resync 유도(P3-f).
 			webSocketErrorService.send(principal.getName(), WebSocketErrorCode.PRESENCE_STALE,
-					"presence expired, resync required");
+					"접속이 만료됐다. 다시 연결해야 한다");
 		}
 	}
 
@@ -107,9 +139,43 @@ public class PresenceWebSocketController {
 		}
 	}
 
-	/** 재동기화 — 현재 viewport·nearby 기준 스냅샷 재발급(FR-004, RT-22). 이번 범위 밖. */
+	/**
+	 * 현재 소켓에서 마지막으로 연 화면의 구독을 닫는다.
+	 *
+	 * @param request 마지막 화면 요청 순번
+	 * @param principal 로그인한 사용자
+	 * @param sessionId 현재 소켓 세션 ID
+	 */
+	@MessageMapping("/presence/viewport/close")
+	public void closeViewport(
+			ViewportCloseRequest request,
+			Principal principal,
+			@Header("simpSessionId") String sessionId) {
+		String email = principal.getName();
+		Long epoch = webSocketSessionService.findEpoch(sessionId).orElse(null);
+		if (epoch == null) {
+			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_NOT_CONNECTED, "현재 소켓 연결을 찾을 수 없다");
+			return;
+		}
+
+		try {
+			if (request == null) {
+				throw new IllegalArgumentException("화면 닫기 요청이 비어 있다");
+			}
+			viewportService.closeCurrentScreen(email, epoch, request.validatedRequestSeq());
+		} catch (IllegalArgumentException e) {
+			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, e.getMessage());
+		}
+	}
+
+	/**
+	 * 자동 복원 대신 새 소켓에서 상태를 다시 보내도록 알린다.
+	 *
+	 * @param principal 로그인한 사용자
+	 */
 	@MessageMapping("/presence/resync")
 	public void resync(Principal principal) {
-		// TODO(RT-22): 스냅샷 재발급
+		webSocketErrorService.send(principal.getName(), WebSocketErrorCode.PRESENCE_STALE,
+				"새 연결 후 입장과 화면 요청을 다시 보내야 한다");
 	}
 }

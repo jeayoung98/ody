@@ -23,25 +23,23 @@ public class WebSocketConnectionListener {
 	private final PresenceService presenceService; // 사용자 실시간 상태 관리
 
 	@EventListener
-	public void onConnected(SessionConnectedEvent event) {
+	public synchronized void onConnected(SessionConnectedEvent event) {
 		StompHeaderAccessor accessor = StompHeaderAccessor.wrap(event.getMessage());
 		String sessionId = accessor.getSessionId();
 		if (sessionId != null && event.getUser() != null) {
 			String email = event.getUser().getName();
 			long epoch = webSocketSessionService.register(sessionId, email);
-			presenceService.connect(email, epoch);
+			// 등록한 뒤에 확인해야 자기 자신이 빠진다. 다른 탭이 있으면 그 위치를 그대로 둔다.
+			boolean hasOtherSession = webSocketSessionService.hasOtherSession(email, sessionId);
+			presenceService.connect(email, epoch, hasOtherSession);
 		}
 	}
 
 	@EventListener
-	public void onDisconnect(SessionDisconnectEvent event) {
+	public synchronized void onDisconnect(SessionDisconnectEvent event) {
 		String sessionId = event.getSessionId();
-		webSocketSessionService.unregister(sessionId).ifPresent(info -> {
-			// 멀티탭: 다른 세션이 남아 있으면 정리하지 않는다
-			if (webSocketSessionService.hasOtherSession(info.email(), sessionId)) {
-				return;
-			}
-			presenceService.leave(info.email(), info.epoch());
-		});
+		// 종료된 접속 번호만 정리한다. 이전 접속이면 Redis에서 자동으로 무시한다.
+		webSocketSessionService.unregister(sessionId)
+				.ifPresent(info -> presenceService.leave(info.email(), info.epoch()));
 	}
 }

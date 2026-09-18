@@ -177,11 +177,19 @@ flowchart TB
 ### F2. 프론트 실시간 요청 순서
 
 1. STOMP 연결 후 `/user/queue/presence`, `/user/queue/errors`를 먼저 구독한다.
-2. `/app/presence/join`으로 현재 곡과 레이어를 복원한다.
-3. 팬·줌 종료 후 250ms debounce하여 `/app/presence/viewport`를 보낸다.
-4. 레이어 이동은 실제 layer·boxes 변경 → 화면 안정화 → join → 새 레이어 viewport 순서로 처리한다.
+2. `/app/presence/join`으로 현재 곡과 레이어를 복원하고 같은 requestSeq의 `PRESENCE_JOINED`를 기다린다.
+3. ACK 뒤 팬·줌 종료 후 250ms debounce하여 `/app/presence/viewport`를 보낸다.
+4. 레이어 이동은 실제 layer·boxes 변경 → 화면 안정화 → join → ACK → 새 레이어 viewport 순서로 처리한다.
 5. 늦은 major 응답으로 화면이 바뀌면 더 큰 requestSeq로 viewport를 다시 보낸다.
 6. 화면을 닫으면 `/app/presence/viewport/close`를 보낸다.
+
+사용자 노출 상태는 아래 순서로 유지한다.
+
+1. connect는 접속 정보만 만들고 아직 노출하지 않는다.
+2. 최초 join은 직전 곡 위치에 배치하고 ENTER를 만든다.
+3. 레이어 이동 join과 곡 재생은 새 위치로 옮기고 MOVE를 만든다.
+4. playEnd는 재생 시간만 저장하고 마지막 위치의 노출은 유지한다.
+5. leave·disconnect·TTL 만료에서 위치를 제거하고 LEAVE를 만든다.
 
 ### F3. INDIVIDUAL 최초 스냅샷
 
@@ -203,7 +211,7 @@ flowchart TB
 
 ### F5. 실시간 델타
 
-1. play·join·leave가 이전/새 상태를 담은 `PositionChanged`를 발행한다.
+1. 최초 join·레이어 이동 join·play·leave가 이전/새 상태를 담은 `PositionChanged`를 발행한다. playEnd는 위치를 바꾸지 않으므로 발행하지 않는다.
 2. 이전 셀 구독자와 새 셀 구독자의 합집합을 수신 후보로 구한다.
 3. 후보의 viewport 메타를 한 번에 읽고 INDIVIDUAL + 최신 epoch인 사용자만 남긴다.
 4. 변경 주체의 좌표·표시 정보·동승자 수는 이벤트 1건당 한 번만 구한다.

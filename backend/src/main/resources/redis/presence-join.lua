@@ -5,45 +5,53 @@
 -- KEYS[1] presence:user:{email}   -- 내 접속 상태(위치)
 --
 -- ARGV[1]  email          내 식별자
--- ARGV[2]  oldMusicId     이전 곡 ("" = 정지였음/첫 배치)
--- ARGV[3]  oldLayer       이전 레이어 ("" = 없음)
--- ARGV[4]  oldCellField   "ox:oy" 이전 셀 ("" = 없음)
--- ARGV[5]  newMusicId     배치할 곡
--- ARGV[6]  newLayer       배치할 레이어
--- ARGV[7]  newCellField   "nx:ny" 새 셀
--- ARGV[8]  x              정규화 x (0~1)
--- ARGV[9]  y              정규화 y (0~1)
--- ARGV[10] newCellX       새 셀 X
--- ARGV[11] newCellY       새 셀 Y
--- ARGV[12] listenersPrefix        "listeners:"          (+ musicId)      전역 청취자(Nearby)
--- ARGV[13] layerListenersPrefix   "layer-listeners:"    (+ "L:m")        레이어별 청취자(뷰포트·만남)
--- ARGV[14] activeCellPrefix       "active-song:cell:"   (+ "L:x:y")      셀-곡 집합
--- ARGV[15] activeCellsPrefix      "active-song:cells:"  (+ "L")          점유 셀 목록
--- ARGV[16] usercountPrefix        "cell:usercount:"     (+ "L")          셀 인원수 해시
+-- ARGV[2]  expectedEpoch 현재 소켓의 접속 번호
+-- ARGV[3]  oldMusicId     이전 곡 ("" = 첫 배치)
+-- ARGV[4]  oldLayer       이전 레이어 ("" = 없음)
+-- ARGV[5]  oldCellField   "ox:oy" 이전 셀 ("" = 없음)
+-- ARGV[6]  newMusicId     배치할 곡
+-- ARGV[7]  newLayer       배치할 레이어
+-- ARGV[8]  newCellField   "nx:ny" 새 셀
+-- ARGV[9]  x              화면 가로 위치
+-- ARGV[10] y              화면 세로 위치
+-- ARGV[11] newCellX       새 셀 X
+-- ARGV[12] newCellY       새 셀 Y
+-- ARGV[13] listenersPrefix        "listeners:"
+-- ARGV[14] layerListenersPrefix   "layer-listeners:"
+-- ARGV[15] activeCellPrefix       "active-song:cell:"
+-- ARGV[16] activeCellsPrefix      "active-song:cells:"
+-- ARGV[17] usercountPrefix        "cell:usercount:"
 --
 -- 반환: {'OK'} 성공, {'STALE'} 현재 상태가 없거나 이전 값이 다른 경우.
 
 local email = ARGV[1]
-local oldM, oldL, oldCellF = ARGV[2], ARGV[3], ARGV[4]
-local newM, newL, newCellF = ARGV[5], ARGV[6], ARGV[7]
+local expectedEpoch = ARGV[2]
+local oldM, oldL, oldCellF = ARGV[3], ARGV[4], ARGV[5]
+local newM, newL, newCellF = ARGV[6], ARGV[7], ARGV[8]
 
 -- 0) presence 존재 (정지 상태로 connect 되어 있어야 함)
 if redis.call('EXISTS', KEYS[1]) == 0 then
   return {'STALE'}
 end
 
--- 1) 가드: 저장된 현재 곡이 넘어온 old 와 같은가 (다르면 그 사이 play 가 끼어든 것)
+-- 1) 이전 소켓이 새 접속 상태를 바꾸지 못하게 막는다.
+local currentEpoch = redis.call('HGET', KEYS[1], 'epoch')
+if currentEpoch ~= expectedEpoch then
+  return {'STALE'}
+end
+
+-- 2) 읽은 뒤 곡이 바뀌었으면 늦은 요청이므로 막는다.
 local cur = redis.call('HGET', KEYS[1], 'musicId')
 local curStr = cur or ''
 if curStr ~= oldM then
   return {'STALE'}
 end
 
-local P_lis  = ARGV[12]
-local P_ll   = ARGV[13]
-local P_cell = ARGV[14]
-local P_cells= ARGV[15]
-local P_uc   = ARGV[16]
+local P_lis  = ARGV[13]
+local P_ll   = ARGV[14]
+local P_cell = ARGV[15]
+local P_cells= ARGV[16]
+local P_uc   = ARGV[17]
 
 -- 같은 레이어·같은 곡이면 활성 구조는 그대로(좌표만 아래서 갱신)
 local samePlace = (oldM == newM) and (oldL == newL)
@@ -82,9 +90,9 @@ end
 redis.call('HSET', KEYS[1],
   'musicId', newM,
   'layer',   newL,
-  'x',       ARGV[8],
-  'y',       ARGV[9],
-  'cellX',   ARGV[10],
-  'cellY',   ARGV[11])
+  'x',       ARGV[9],
+  'y',       ARGV[10],
+  'cellX',   ARGV[11],
+  'cellY',   ARGV[12])
 
 return {'OK'}

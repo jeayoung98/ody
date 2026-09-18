@@ -86,40 +86,64 @@ class PresenceRedisRepositoryTests {
 	}
 
 	@Test
-	@DisplayName("직접 종료는 접속 버전과 주변사람 구독 키를 전달한다")
-	void leavePassesEpochAndNearbyKeys() {
+	@DisplayName("입장은 현재 소켓의 접속 번호를 Redis에 함께 전달한다")
+	void joinPassesExpectedEpoch() {
+		when(redis.execute(joinScript, List.of("presence:user:user@x.com"),
+				"user@x.com", "7", "", "", "",
+				"20", "2", "3:4", "0.3", "0.4", "3", "4",
+				"listeners:", "layer-listeners:", "active-song:cell:",
+				"active-song:cells:", "cell:usercount:"))
+				.thenReturn(List.of("OK"));
+
+		assertThat(repository.join("user@x.com", 7L, null, null, null, null,
+				20L, 2, 0.3, 0.4, 3, 4)).isTrue();
+
+		verify(redis).execute(joinScript, List.of("presence:user:user@x.com"),
+				"user@x.com", "7", "", "", "",
+				"20", "2", "3:4", "0.3", "0.4", "3", "4",
+				"listeners:", "layer-listeners:", "active-song:cell:",
+				"active-song:cells:", "cell:usercount:");
+	}
+
+	@Test
+	@DisplayName("직접 종료는 접속 버전과 실시간 구독 키를 전달한다")
+	void leavePassesEpochAndRealtimeKeys() {
 		List<String> removed = List.of("20", "2", "3", "4", "7");
 		when(redis.execute(leaveScript,
-				List.of("presence:user:user@x.com", "presence:expiry", "nearby:meta:user@x.com"),
+				List.of("presence:user:user@x.com", "presence:expiry",
+						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "7", "",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:"))
+				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(removed);
 
 		assertThat(repository.applyLeave("user@x.com", 7L)).isEqualTo(removed);
 		verify(redis).execute(leaveScript,
-				List.of("presence:user:user@x.com", "presence:expiry", "nearby:meta:user@x.com"),
+				List.of("presence:user:user@x.com", "presence:expiry",
+						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "7", "",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:");
+				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:");
 	}
 
 	@Test
-	@DisplayName("만료 종료는 확인 시각과 주변사람 구독 키를 전달한다")
-	void expiredLeavePassesTimeAndNearbyKeys() {
+	@DisplayName("만료 종료는 확인 시각과 실시간 구독 키를 전달한다")
+	void expiredLeavePassesTimeAndRealtimeKeys() {
 		List<String> removed = List.of("20", "2", "3", "4", "7");
 		when(redis.execute(leaveScript,
-				List.of("presence:user:user@x.com", "presence:expiry", "nearby:meta:user@x.com"),
+				List.of("presence:user:user@x.com", "presence:expiry",
+						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "", "1000",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:"))
+				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(removed);
 
 		assertThat(repository.applyLeaveExpired("user@x.com", 1000L)).isEqualTo(removed);
 		verify(redis).execute(leaveScript,
-				List.of("presence:user:user@x.com", "presence:expiry", "nearby:meta:user@x.com"),
+				List.of("presence:user:user@x.com", "presence:expiry",
+						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "", "1000",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:");
+				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:");
 	}
 }

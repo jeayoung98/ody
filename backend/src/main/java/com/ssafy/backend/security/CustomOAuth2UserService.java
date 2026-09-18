@@ -40,7 +40,10 @@ public class CustomOAuth2UserService extends DefaultOAuth2UserService {
 			log.info("[OAuth2] 신규 회원가입 완료 email={}", email);
 		} else {
 			authMapper.touchLogin(email, imageUrl);
-			user.setImageUrl(imageUrl);
+			// 사용자가 올린 사진이 있으면 구글 사진으로 덮지 않는다 [S15P21A405-426].
+			if (user.getImageUrl() == null) {
+				user.setImageUrl(imageUrl);
+			}
 			log.info("[OAuth2] 기존 회원 로그인 email={}", email);
 		}
 

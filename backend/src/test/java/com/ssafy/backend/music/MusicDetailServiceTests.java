@@ -33,7 +33,7 @@ class MusicDetailServiceTests {
 			new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
 
 	private static MusicDetail detail() {
-		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning",
+		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", 2024,
 				List.of("K-Pop"), "https://youtu.be/x", null, LOC, 1428, 3);
 	}
 

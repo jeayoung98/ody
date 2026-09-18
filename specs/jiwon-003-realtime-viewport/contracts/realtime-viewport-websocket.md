@@ -13,11 +13,14 @@
 {
   "type": "VIEWPORT_SNAPSHOT",
   "seq": 42,
-  "data": {}
+  "ts": 1789673255299,
+  "payload": {}
 }
 ```
 
-`seq`는 서버가 이 연결에 보낸 메시지 순서다. 아래 `requestSeq`는 프론트가 보낸 화면 요청 순서이므로 서로 바꿔 쓰지 않는다.
+아래 문서의 모든 응답 예시는 이 봉투의 `payload` 안에 들어간다.
+
+`seq`는 서버가 이 연결에 보낸 메시지 순서다. 아래 `requestSeq`는 프론트가 보낸 화면 요청 순서이므로 서로 바꿔 쓰지 않는다. `ts`는 서버가 보낸 시각(epoch milliseconds)이다.
 
 기존 레이어별 곡 조회와 `MapEngine.boxes`는 [frontend-layer-navigation.md](frontend-layer-navigation.md)를 따른다. 여기의 `ancestorBounds`는 major 요청을 만든 boxes와 값이 반드시 같아야 한다.
 
@@ -97,11 +100,13 @@
   "groups": [],
   "resolution": 8,
   "cells": [
-    { "cellX": 2, "cellY": 4, "count": 31 },
-    { "cellX": 3, "cellY": 4, "count": 12 }
+    { "cellX": 2, "cellY": 4, "x": 0.31, "y": 0.58, "count": 31 },
+    { "cellX": 3, "cellY": 4, "x": 0.44, "y": 0.58, "count": 12 }
   ]
 }
 ```
+
+`x`·`y`는 합친 셀의 가운데를 곡 마커와 같은 기준으로 계산한 표시 위치다. 현재 화면 범위 안으로 잘라서 내려주므로 프론트는 그대로 찍으면 된다. `cellX`·`cellY`는 `resolution` 기준 격자 번호이며, 마커 위치 계산에 다시 쓰지 않는다.
 
 프론트는 응답의 `requestSeq`가 현재 화면 요청보다 작으면 렌더링하지 않는다.
 
@@ -124,11 +129,13 @@
   "layer": 3,
   "resolution": 8,
   "cells": [
-    { "cellX": 2, "cellY": 4, "count": 29 },
-    { "cellX": 3, "cellY": 4, "count": 14 }
+    { "cellX": 2, "cellY": 4, "x": 0.31, "y": 0.58, "count": 29 },
+    { "cellX": 3, "cellY": 4, "x": 0.44, "y": 0.58, "count": 14 }
   ]
 }
 ```
+
+`cells[]` 항목의 형태는 §1 Response B와 같다. 인원수가 0인 셀은 보내지 않는다.
 
 현재 mode가 INDIVIDUAL이거나 requestSeq가 다르면 무시한다.
 
@@ -214,9 +221,11 @@
 prefetch 시작이 아니라 실제 layer·boxes가 변경되고 전환 화면이 안정된 뒤 아래 순서를 지킨다.
 
 1. 현재 `MapEngine.boxes`를 서버 1-based ancestorBounds로 변환
-2. `SEND /app/presence/join { "layer": newLayer, "musicId": currentMusicId }`
-3. 새 layer, 새 현재 화면, 같은 ancestorBounds로 `SEND /app/presence/viewport`
-4. 늦은 major 응답으로 화면 범위가 바뀌면 더 큰 requestSeq로 viewport 갱신
+2. `SEND /app/presence/join { "requestSeq": nextJoinSeq, "layer": newLayer, "musicId": currentMusicId }`
+3. 같은 join requestSeq의 `PRESENCE_JOINED` 확인
+4. 새 layer, 새 현재 화면, 같은 ancestorBounds로 `SEND /app/presence/viewport`
+5. 새 곡도 함께 바꾸는 경우에만 join ACK 뒤 `POST /api/music/play`
+6. 늦은 major 응답으로 화면 범위가 바뀌면 더 큰 viewport requestSeq로 갱신
 
 viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다.
 
@@ -228,9 +237,12 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 2. STOMP CONNECT
 3. `/user/queue/presence`, `/user/queue/errors` SUBSCRIBE 완료
 4. `/app/presence/join`
-5. 현재 layer·화면·boxes에서 만든 ancestorBounds로 `/app/presence/viewport`
-6. 주변사람 패널이 열려 있으면 nearby open REST 호출
-7. heartbeat 시작
+5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
+6. 현재 layer·화면·boxes에서 만든 ancestorBounds로 `/app/presence/viewport`
+7. 주변사람 패널이 열려 있으면 nearby open REST 호출
+8. heartbeat 시작
+
+최초 join이 끝나면 직전 곡 위치에 배치되어 다른 사용자에게 노출된다. 이후 playEnd는 재생 시간만 끝내고 마지막 위치의 노출은 유지한다. 노출 제거는 leave·disconnect·TTL 만료에서 수행한다.
 
 ### 재연결
 

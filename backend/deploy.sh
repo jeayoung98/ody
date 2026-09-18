@@ -39,6 +39,28 @@ if [ ! -f "$ENV_FILE" ]; then
 fi
 
 # --------------------------------------------------
+# 0. 프로필 이미지 업로드 디렉터리 (S15P21A405-426)
+# --------------------------------------------------
+# Blue/Green 두 슬롯이 같은 호스트 디렉터리를 컨테이너 안에서도 같은 경로로 본다. 컨테이너는 비루트
+# (Dockerfile 의 spring, uid 10001)로 돌기 때문에 디렉터리 소유자를 그 uid 로 맞춘다.
+# 슬롯을 건드리기 전에 확인해서, 설정 누락이 배포 중간이 아니라 여기서 드러나게 한다.
+
+PROFILE_IMAGE_DIR=/home/ubuntu/profileImages
+CONTAINER_UID=10001
+
+if ! grep -q '^PROFILE_IMAGE_BASE_URL=' "$ENV_FILE"; then
+    echo "ERROR: PROFILE_IMAGE_BASE_URL is missing in $ENV_FILE."
+    echo "       e.g. PROFILE_IMAGE_BASE_URL=https://j15a405a.p.ssafy.io/api/user/images"
+    exit 1
+fi
+
+sudo mkdir -p "$PROFILE_IMAGE_DIR"
+sudo chown "${CONTAINER_UID}:${CONTAINER_UID}" "$PROFILE_IMAGE_DIR"
+sudo chmod 755 "$PROFILE_IMAGE_DIR"
+
+echo "Profile image dir : $PROFILE_IMAGE_DIR"
+
+# --------------------------------------------------
 # 1. 현재 활성 포트 확인
 # --------------------------------------------------
 
@@ -93,6 +115,8 @@ docker run -d \
     --restart unless-stopped \
     -p "127.0.0.1:${TARGET_PORT}:8080" \
     --env-file "$ENV_FILE" \
+    -e PROFILE_IMAGE_DIR="$PROFILE_IMAGE_DIR" \
+    -v "${PROFILE_IMAGE_DIR}:${PROFILE_IMAGE_DIR}" \
     "$IMAGE_NAME"
 
 # --------------------------------------------------

@@ -12,10 +12,10 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.boot.security.oauth2.client.autoconfigure.OAuth2ClientAutoConfiguration;
 import org.springframework.boot.security.oauth2.client.autoconfigure.servlet.OAuth2ClientWebSecurityAutoConfiguration;
+import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
+import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
@@ -28,21 +28,20 @@ import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
-import com.ssafy.backend.user.controller.UserProfileController;
-import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
-import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
+import com.ssafy.backend.user.controller.UserNicknameController;
+import com.ssafy.backend.user.dto.NicknameUpdateRequest;
+import com.ssafy.backend.user.dto.NicknameUpdateResponse;
 import com.ssafy.backend.user.service.UserService;
 
 /**
- * 프로필(닉네임/이미지) 수정 컨트롤러 슬라이스 테스트 (S15P21A405-216). mapper mock 이유는
- * MusicSearchControllerTests 참조. SecurityConfig를 슬라이스에서 빼는 대신 토큰 주체를 MockMvc principal로
- * 직접 주입한다(UserOnboardingControllerTests와 동일).
+ * 닉네임 수정 컨트롤러 슬라이스 (S15P21A405-426). 토큰 주체를 MockMvc principal 로 직접 주입한다
+ * (UserOnboardingControllerTests 와 동일).
  */
-@WebMvcTest(controllers = UserProfileController.class, excludeFilters = @ComponentScan.Filter(
+@WebMvcTest(controllers = UserNicknameController.class, excludeFilters = @ComponentScan.Filter(
 		type = FilterType.ASSIGNABLE_TYPE, classes = { SecurityConfig.class, JwtAuthenticationFilter.class }),
 		excludeAutoConfiguration = { OAuth2ClientAutoConfiguration.class, OAuth2ClientWebSecurityAutoConfiguration.class })
 @AutoConfigureMockMvc(addFilters = false)
-class UserProfileControllerTests {
+class UserNicknameControllerTests {
 
 	@Autowired
 	private MockMvc mockMvc;
@@ -50,21 +49,17 @@ class UserProfileControllerTests {
 	@MockitoBean
 	private UserService userService;
 
-
-
-
-
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(
 				email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
 	}
 
 	@Test
-	void updateProfile_nicknameOnly_delegatesTokenSubjectAndReturnsResult() throws Exception {
-		when(userService.updateProfile(eq("me@gmail.com"), any(UserProfileUpdateRequest.class)))
-				.thenReturn(new UserProfileUpdateResponse("새닉네임", null));
+	void updateNickname_delegatesTokenSubjectAndReturnsResult() throws Exception {
+		when(userService.updateNickname(eq("me@gmail.com"), any(NicknameUpdateRequest.class)))
+				.thenReturn(new NicknameUpdateResponse("새닉네임"));
 
-		mockMvc.perform(patch("/api/user/profile")
+		mockMvc.perform(patch("/api/user/nickname")
 						.principal(principal("me@gmail.com"))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"nickname\":\"새닉네임\"}"))
@@ -72,15 +67,15 @@ class UserProfileControllerTests {
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.data.nickname").value("새닉네임"));
 
-		verify(userService).updateProfile(eq("me@gmail.com"), any(UserProfileUpdateRequest.class));
+		verify(userService).updateNickname(eq("me@gmail.com"), any(NicknameUpdateRequest.class));
 	}
 
 	@Test
-	void updateProfile_duplicateNickname_returns409NicknameAlreadyExists() throws Exception {
-		when(userService.updateProfile(eq("me@gmail.com"), any(UserProfileUpdateRequest.class)))
+	void updateNickname_duplicate_returns409NicknameAlreadyExists() throws Exception {
+		when(userService.updateNickname(eq("me@gmail.com"), any(NicknameUpdateRequest.class)))
 				.thenThrow(new CustomException(AuthErrorCode.NICKNAME_ALREADY_EXISTS));
 
-		mockMvc.perform(patch("/api/user/profile")
+		mockMvc.perform(patch("/api/user/nickname")
 						.principal(principal("me@gmail.com"))
 						.contentType(MediaType.APPLICATION_JSON)
 						.content("{\"nickname\":\"중복닉네임\"}"))

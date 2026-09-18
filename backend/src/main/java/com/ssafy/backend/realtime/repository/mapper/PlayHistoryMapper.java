@@ -21,4 +21,10 @@ public interface PlayHistoryMapper {
 	 * @return 영향 행 수 — 0 이면 해당 곡 없음(호출 전 findLocation 에서 이미 거른다).
 	 */
 	int incrementPlayCnt(@Param("musicId") long musicId);
+
+	/**
+	 * 곡별 최초 청취자를 기록한다 (S15P21A405-448). 이미 누가 들은 곡이면 아무것도 하지 않는다.
+	 * 실제로 넣었으면 1 — 그 사람이 이 곡의 "발견자"다.
+	 */
+	int insertDiscovery(@Param("musicId") long musicId, @Param("email") String email);
 }

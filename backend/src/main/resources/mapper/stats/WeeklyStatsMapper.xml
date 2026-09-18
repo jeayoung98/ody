@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.stats.mapper.WeeklyStatsMapper">
+
+	<!--
+		주간 랭킹 (S15P21A405-448). 구간은 항상 start 이상 end 미만이다.
+
+		세 쿼리의 모양이 같다 — 기록 테이블에서 email 로 묶어 세고, 표시용 정보를 "user" 에서 붙인다.
+		JOIN 이라 탈퇴해서 "user" 에 없는 email 은 순위에서 빠진다.
+		정렬은 건수 역순, 같으면 email 순으로 고정한다. 동점일 때 순서가 흔들리면 같은 주에 두 번
+		조회했을 때 순위가 뒤바뀌어 보인다.
+
+		"user" 는 Postgres 예약어라 반드시 큰따옴표로 감싼다.
+	-->
+
+	<resultMap id="rankedUserRowMap" type="com.ssafy.backend.stats.dto.RankedUserRow">
+		<result property="email" column="email"/>
+		<result property="nickname" column="nickname"/>
+		<result property="imageUrl" column="image_url"/>
+		<result property="count" column="cnt"/>
+	</resultMap>
+
+	<!--
+		발견왕. music_discovery 는 곡당 한 줄(music_id PK)이고 그 줄의 email 이 최초 청취자다.
+		그래서 여기서는 "그 주에 생긴 줄"을 세면 된다 — 두 번째로 들은 사람은 애초에 줄을 만들지 못한다.
+	-->
+	<select id="findTopDiscoverers" resultMap="rankedUserRowMap">
+		SELECT d.email        AS email,
+		       u.nickname     AS nickname,
+		       u.image_url    AS image_url,
+		       COUNT(*)       AS cnt
+		FROM music_discovery d
+		JOIN "user" u ON u.email = d.email
+		WHERE d.discovered_at &gt;= #{start}
+		  AND d.discovered_at &lt; #{end}
+		GROUP BY d.email, u.nickname, u.image_url
+		ORDER BY cnt DESC, d.email
+		LIMIT #{limit}
+	</select>
+
+	<!--
+		탐험왕. play_history 는 재생할 때마다 한 줄이라 중복 재생이 그대로 횟수가 된다.
+		email 이 NULL 인 줄(FK 없는 테이블이라 가능)은 사람을 특정할 수 없어 제외한다.
+	-->
+	<select id="findTopExplorers" resultMap="rankedUserRowMap">
+		SELECT p.email        AS email,
+		       u.nickname     AS nickname,
+		       u.image_url    AS image_url,
+		       COUNT(*)       AS cnt
+		FROM play_history p
+		JOIN "user" u ON u.email = p.email
+		WHERE p.played_at &gt;= #{start}
+		  AND p.played_at &lt; #{end}
+		  AND p.email IS NOT NULL
+		GROUP BY p.email, u.nickname, u.image_url
+		ORDER BY cnt DESC, p.email
+		LIMIT #{limit}
+	</select>
+
+	<!--
+		기여도. music_report.user_email 은 비로그인 신고에서 NULL 이라 제외한다.
+		JOIN 만으로도 NULL 은 빠지지만, 의도를 조건으로 남겨둔다.
+	-->
+	<select id="findTopContributors" resultMap="rankedUserRowMap">
+		SELECT r.user_email   AS email,
+		       u.nickname     AS nickname,
+		       u.image_url    AS image_url,
+		       COUNT(*)       AS cnt
+		FROM music_report r
+		JOIN "user" u ON u.email = r.user_email
+		WHERE r.created_at &gt;= #{start}
+		  AND r.created_at &lt; #{end}
+		  AND r.user_email IS NOT NULL
+		GROUP BY r.user_email, u.nickname, u.image_url
+		ORDER BY cnt DESC, r.user_email
+		LIMIT #{limit}
+	</select>
+
+</mapper>

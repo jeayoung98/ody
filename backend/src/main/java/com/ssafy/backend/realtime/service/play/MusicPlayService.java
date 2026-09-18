@@ -95,6 +95,9 @@ public class MusicPlayService {
 		playHistoryMapper.insert(history);
 		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
 		playHistoryMapper.incrementPlayCnt(musicId);
+		// 아무도 들은 적 없는 곡이면 이 사람이 발견자로 기록된다 (주간 발견왕 랭킹, S15P21A405-448).
+		// 이미 기록이 있으면 아무 일도 일어나지 않는다.
+		playHistoryMapper.insertDiscovery(musicId, email);
 
 		// 6. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();

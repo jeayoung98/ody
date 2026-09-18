@@ -12,7 +12,7 @@ interface RailButtonProps {
   "data-tutorial"?: string;
 }
 
-/** .railBtn — 활성 시 그라데이션 원 */
+/** .railBtn — 활성 시 그라데이션 원. 34px 는 우상단 알약(38px)에 맞춘 값이다 (S15P21A405-427) */
 export default function RailButton({ label, active, onClick, children, badge, "data-tutorial": dataTutorial }: RailButtonProps) {
   return (
     <button
@@ -22,7 +22,7 @@ export default function RailButton({ label, active, onClick, children, badge, "d
       aria-label={label}
       aria-pressed={active}
       onClick={onClick}
-      className={`relative grid h-10 w-10 place-items-center rounded-pill transition-all duration-fast ${
+      className={`relative grid h-[34px] w-[34px] place-items-center rounded-pill transition-all duration-fast ${
         active ? "grad-bg text-void shadow-glow-azure" : "text-ink-3 hover:bg-white/[.07] hover:text-ink"
       }`}
     >

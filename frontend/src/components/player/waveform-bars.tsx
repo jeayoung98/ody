@@ -6,12 +6,23 @@ import { useMemo } from "react";
 const BARS = 64;
 /** 재생 헤드 앞뒤로 이만큼의 바가 흔들린다. 전체를 흔들어 봤더니 징그럽다는 평 — 헤드 근처만 (S15P21A405-431) */
 const LIVE_SPAN = 3;
+/** 바 높이의 바닥과 상한(비율). 상한은 흔들림 1.5배를 곱해도 상자를 안 넘는 값이다 */
+export const MIN_H = 0.08;
+export const MAX_H = 0.65;
+/**
+ * 1 보다 크면 가운데 값이 아래로 내려간다 — 클수록 높은 바와 낮은 바의 대비가 커진다
+ * (S15P21A405-456). 1 이면 예전처럼 다 비슷한 높이가 된다.
+ */
+const CONTRAST = 1.6;
 
 /**
  * `musicId` 로 고정된 **가짜 파형**. 곡마다 모양이 다르고 같은 곡은 늘 같다 — 새로고침해도 안 바뀐다.
- * 높이는 15~65% 사이다. 흔들릴 때 1.5배까지 커지므로 그래야 상자를 넘지 않는다.
+ *
+ * 높이는 8~65% 다. 상한은 흔들림(1.5배) 때문에 고정이고, 바닥은 15% 였던 것을 내렸다
+ * (S15P21A405-456) — 두 난수를 더하면 값이 가운데로 모여서 64개가 다 40% 근처였다.
+ * 지수 `CONTRAST` 가 그 가운데 덩어리를 아래로 끌어내려 높은 바와 낮은 바를 갈라 놓는다.
  */
-function shapeFor(seed: number) {
+export function shapeFor(seed: number) {
   let s = (seed * 2654435761) >>> 0 || 1;
   const out: number[] = [];
   for (let i = 0; i < BARS; i++) {
@@ -20,7 +31,8 @@ function shapeFor(seed: number) {
     // 느린 봉우리 두어 개 위에 잡음을 얹는다 — 진짜 파형처럼 뭉쳤다 풀렸다 한다
     const envelope = 0.55 + 0.45 * Math.sin((i / BARS) * Math.PI * 2.3 + (seed % 7));
     // 정수 % 로 반올림한다 — 소수가 길면 서버가 그린 style 과 브라우저가 정규화한 값이 달라 하이드레이션 경고가 난다
-    out.push(Math.round(100 * (0.15 + 0.5 * Math.min(1, noise * 0.6 + envelope * 0.5))));
+    const level = Math.pow(Math.min(1, noise * 0.6 + envelope * 0.5), CONTRAST);
+    out.push(Math.round(100 * (MIN_H + (MAX_H - MIN_H) * level)));
   }
   return out;
 }

@@ -5,7 +5,7 @@ set -e
 IMAGE_NAME=${1:-backend:1.0}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/.env"
+ENV_FILE="${SCRIPT_DIR}/.env" 
 
 # Fail before changing a slot when an image has not been transferred yet.
 docker image inspect "$IMAGE_NAME" >/dev/null

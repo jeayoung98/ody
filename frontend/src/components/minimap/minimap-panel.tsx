@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import HelpButton from "@/components/layout/help-button";
 import { useMapStore } from "@/stores/use-map-store";
 import AxisCompass from "./axis-compass";
 import LayerGauge from "./layer-gauge";
@@ -43,6 +44,8 @@ export default function MinimapPanel() {
         {/* 접혀 있을 때도 지금 겹은 보이게 */}
         <span className="num text-[8.5px] tracking-[0.04em] text-teal">L{layer}</span>
       </button>
+      {/* 도움말 — 계기판 오른쪽에 붙어 같이 접힌다 (S15P21A405-434) */}
+      <HelpButton />
       <MinimapCanvas />
       <LayerGauge />
       <LayerName />

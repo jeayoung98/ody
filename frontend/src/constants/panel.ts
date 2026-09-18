@@ -8,16 +8,6 @@ export const MAP_VIEW_MODES = ["default", "nearby", "constellation"] as const;
 export type MapViewMode = (typeof MAP_VIEW_MODES)[number];
 
 /**
- * 네비 **탭** 항목 (순서대로 표시) — 패널을 여는 것들.
- * 여정은 여기 없다. 지도 뷰를 바꾸는 동작이라 주변 탐색과 함께 동작 알약에 따로 그린다 (`rail.tsx`, S15P21A405-427).
- */
-export const NAV_ITEMS = [
-  { key: "friends", label: "주변 사람" },
-  { key: "chart", label: "차트" },
-  { key: "feed", label: "내 프로필" },
-] as const satisfies ReadonlyArray<{ key: PanelType; label: string }>;
-
-/**
  * 접혀 있을 때 화면에 남겨 두는 몸통 폭(px) — **좌하단 계기판이 쓴다** (S15P21A405-406).
  *
  * 완전히 밀어 넣으면 화살표 핸들만 남아서, 거기에 무엇이 있었는지가 안 읽힌다.

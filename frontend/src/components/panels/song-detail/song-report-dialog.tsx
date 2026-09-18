@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
+import IconButton from "@/components/common/icon-button";
+import { CloseIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
 import {
   REPORT_DETAIL_MAX,
@@ -89,7 +91,15 @@ export default function SongReportDialog({ musicId, title, unplayable = false, o
         aria-label="곡 신고"
         onClick={(e) => e.stopPropagation()}
       >
-        <Box title="이 곡을 신고할까요">
+        {/* 닫기는 헤더 우상단 X 하나 — 다른 상자들과 같은 자리다. 목록 아래 텍스트 버튼은 상자를 무겁게 했다 */}
+        <Box
+          title="이 곡을 신고할까요"
+          actions={
+            <IconButton label="닫기" onClick={onClose} className="text-ink-2!">
+              <CloseIcon />
+            </IconButton>
+          }
+        >
           <p className="truncate text-[13px] text-ink-2">{title}</p>
           {detailFor ? (
             <>
@@ -127,9 +137,6 @@ export default function SongReportDialog({ musicId, title, unplayable = false, o
                 ))}
               </div>
               <Note>보낸 신고는 이 곡의 데이터를 고치는 데만 씁니다.</Note>
-              <Button size="sm" onClick={onClose}>
-                닫기
-              </Button>
             </>
           )}
         </Box>

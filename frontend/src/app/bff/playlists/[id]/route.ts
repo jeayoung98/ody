@@ -1,12 +1,5 @@
-import { fail, failLive, ok, okLive } from "@/lib/api-response";
-import {
-  backendGet,
-  BackendError,
-  isBackendEnabled,
-  toMusic,
-  type BackendPlaylistDetailResponse,
-} from "@/lib/backend";
-import { mockPlaylists } from "@/mocks/playlist";
+import { fail, failLive, okLive } from "@/lib/api-response";
+import { backendDelete, backendGet, BackendError, callerAuth, toMusic, type BackendPlaylistDetailResponse } from "@/lib/backend";
 import type { PlaylistDetail } from "@/types";
 
 type Ctx = { params: Promise<{ id: string }> };
@@ -37,25 +30,19 @@ function toPlaylistDetail(res: BackendPlaylistDetailResponse): PlaylistDetail {
 }
 
 /**
- * GET /bff/playlists/{id} — 플리 상세 (PATH-06).
- * `BACKEND_ACCESS_TOKEN` 이 있으면 배포 백엔드의 `GET /api/playlist/detail?playlistId=` 를 대신 호출한다 (S15P21A405-214).
+ * GET /bff/playlists/{id} — 플리 상세 (PATH-06). **배포 백엔드 실연동** (S15P21A405-214 · 468).
+ * `GET /api/playlist/detail?playlistId=` 를 호출자 자격으로 부른다 — 목 대체는 없다.
  * 곡마다 `location`(pc1~pc16) 이 함께 오므로 별자리 좌표를 따로 구하지 않는다.
  * 없는 id 에 백엔드가 404 가 아니라 500 을 준다 (B-24) — 상태를 그대로 넘기되 코드는 PLAYLIST_NOT_FOUND 로 둔다
  */
-export async function GET(_req: Request, { params }: Ctx) {
+export async function GET(req: Request, { params }: Ctx) {
   const { id } = await params;
   const playlistId = Number(id);
   if (!playlistId) return fail("VALIDATION_ERROR", "플레이리스트 ID 가 올바르지 않습니다.", 400);
 
-  if (!isBackendEnabled()) {
-    const p = mockPlaylists.get(playlistId);
-    if (!p) return fail("PLAYLIST_NOT_FOUND", "존재하지 않는 플레이리스트입니다.", 404);
-    return ok(p);
-  }
-
   const upstream = `/api/playlist/detail?playlistId=${playlistId}`;
   try {
-    const res = await backendGet<BackendPlaylistDetailResponse>(upstream);
+    const res = await backendGet<BackendPlaylistDetailResponse>(upstream, { headers: callerAuth(req) });
     return okLive(toPlaylistDetail(res), upstream);
   } catch (e) {
     const err = e as BackendError;
@@ -63,9 +50,18 @@ export async function GET(_req: Request, { params }: Ctx) {
   }
 }
 
-/** DELETE — 아직 목이다. 백엔드는 `DELETE /api/playlist/delete/{id}` (모양 대조 뒤 연결) */
-export async function DELETE(_req: Request, { params }: Ctx) {
+/** DELETE /bff/playlists/{id} — 플리 삭제. **배포 백엔드 실연동** (S15P21A405-468). 주인만 지울 수 있으므로 호출자 자격으로 부른다 */
+export async function DELETE(req: Request, { params }: Ctx) {
   const { id } = await params;
-  mockPlaylists.remove(Number(id));
-  return ok({ ok: true });
+  const playlistId = Number(id);
+  if (!playlistId) return fail("VALIDATION_ERROR", "플레이리스트 ID 가 올바르지 않습니다.", 400);
+
+  const upstream = `/api/playlist/delete/${playlistId}`;
+  try {
+    await backendDelete(upstream, { headers: callerAuth(req) });
+    return okLive({ ok: true }, upstream);
+  } catch (e) {
+    const err = e as BackendError;
+    return failLive("PLAYLIST_NOT_FOUND", err.message, err.status || 502, upstream);
+  }
 }

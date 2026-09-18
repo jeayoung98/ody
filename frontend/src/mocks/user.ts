@@ -1,23 +1,10 @@
 import { LAYER_COUNT } from "@/constants";
-import type { NearbyUser, PlaylistRankingItem, User, UserProfile, UserRankingItem } from "@/types";
+import type { NearbyUser, PlaylistRankingItem, UserRankingItem } from "@/types";
 import { seeded } from "./seed";
-import { allSongs, MOODS, nearestSongs } from "./songs";
+import { allSongs, nearestSongs } from "./songs";
 
+/** 목 플레이리스트의 주인. 인증이 실연동이 된 뒤에도 플리 목은 남아 있다 (S15P21A405-462) */
 export const MOCK_ME_EMAIL = "me@ody.app";
-
-export function mockMe(): User {
-  return {
-    email: MOCK_ME_EMAIL,
-    name: "오디",
-    nickname: "우주탐험가",
-    isPublic: true,
-    tutorialCompleted: false,
-    lastActiveAt: new Date().toISOString(),
-    createdAt: "2026-08-20T00:00:00.000Z",
-    updatedAt: new Date().toISOString(),
-    imageUrl: null,
-  };
-}
 
 const KNAMES = ["연희", "도현", "수아", "지훈", "하람", "세영", "준", "서윤", "민재", "다온", "해린", "우진", "가온", "예린", "시우", "도경", "윤슬", "한결", "보람", "태오"];
 const HANDLES = ["minor_chord", "tape_hiss", "nocturne_9", "vinyl_dust", "low_pass", "blue_note", "echo_room", "dust_grain", "slow_verb", "night_bus", "reverb_kid", "tape_loop", "sub_bass", "half_step", "white_room", "dry_signal", "room_tone", "off_beat"];
@@ -72,31 +59,6 @@ function everyone(): NearbyUser[] {
   const out: NearbyUser[] = [];
   for (let l = 0; l < LAYER_COUNT; l++) out.push(...mockNearbyUsers(l));
   return out;
-}
-
-export function mockProfile(email: string): UserProfile {
-  const isMe = email === MOCK_ME_EMAIL;
-  const all = everyone();
-  const idx = Math.max(0, all.findIndex((x) => x.email === email));
-  const f = all[idx]?.email === email ? all[idx] : undefined;
-  const base = isMe || !f ? mockMe() : { ...mockMe(), email, name: f.nickname, nickname: f.nickname, isPublic: f.isPublic };
-  const song = allSongs()[f ? f.musicId - 1 : 41];
-  return {
-    ...base,
-    isOnline: isMe || (f?.isOnline ?? false),
-    followerCount: 12 + (idx % 24) * 7,
-    followingCount: 8 + (idx % 24) * 3,
-    daysSinceJoined: 19 + (idx % 40),
-    nowPlaying: { id: song.musicId, title: song.title, artist: song.artist },
-    meetingCount: isMe ? null : f?.meetingCount ?? 0,
-    isFollowing: false,
-    followingTarget: f?.followingNickname ? { email: "", nickname: f.followingNickname } : null,
-    dashboard: {
-      exploredCount: 128 + (idx % 24) * 10,
-      discoveredCount: 37 + (idx % 24) * 4,
-      moodPreference: MOODS.slice(0, 4).map((mood, i) => ({ mood, percent: [40, 30, 20, 10][i] })),
-    },
-  };
 }
 
 export function mockUserRanking(type: string): UserRankingItem[] {

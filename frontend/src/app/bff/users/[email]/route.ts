@@ -1,12 +1,21 @@
-import { ok } from "@/lib/api-response";
-import { findAccount } from "@/mocks/auth";
-import { mockProfile } from "@/mocks/user";
+import { failLive, okLive } from "@/lib/api-response";
+import { backendGet, BackendError, callerAuth, toUserProfile, type BackendUserDetail } from "@/lib/backend";
 
-export async function GET(_req: Request, { params }: { params: Promise<{ email: string }> }) {
+/**
+ * 마이페이지 · 남의 프로필 (USER-02/04) — **배포 백엔드 실연동** (S15P21A405-462).
+ *
+ * `isFollowing` 처럼 **보는 사람에 따라 답이 달라지는 필드**가 있어서 호출자 자격으로 부른다.
+ * 백엔드에 없는 값(지금 듣는 곡 · 만남 횟수 · 대시보드 통계 · 따라가는 대상)은 빈 값으로 온다 —
+ * 자세한 것은 `toUserProfile` 과 BACKEND-NOTES A-35.
+ */
+export async function GET(req: Request, { params }: { params: Promise<{ email: string }> }) {
   const { email } = await params;
-  const decoded = decodeURIComponent(email);
-  const profile = mockProfile(decoded);
-  // 목으로 가입한 계정이면 그 계정의 닉네임을 보여준다 (기본 목 사용자 닉네임이 뜨지 않게)
-  const acc = findAccount(decoded);
-  return ok(acc ? { ...profile, email: acc.email, name: null, nickname: acc.nickname } : profile);
+  const upstream = `/api/user/detail?email=${encodeURIComponent(decodeURIComponent(email))}`;
+  try {
+    const data = await backendGet<BackendUserDetail>(upstream, { headers: callerAuth(req) });
+    return okLive(toUserProfile(data), upstream);
+  } catch (e) {
+    const err = e as BackendError;
+    return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);
+  }
 }

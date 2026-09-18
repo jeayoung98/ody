@@ -16,8 +16,8 @@ export interface User {
   lastActiveAt: ISODateString | null;
   /** 가입 시각 */
   createdAt: ISODateString;
-  /** 수정 시각 */
-  updatedAt: ISODateString;
+  /** 수정 시각. **배포 백엔드는 내려주지 않는다** (`UserDetailResponse` 에 없다) */
+  updatedAt: ISODateString | null;
   /** 프로필 이미지 URL */
   imageUrl: string | null;
 }

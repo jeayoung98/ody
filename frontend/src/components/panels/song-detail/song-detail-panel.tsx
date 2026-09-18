@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import Box from "@/components/common/box";
-import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
+import UnderlineTabs from "@/components/common/underline-tabs";
 import { useFeatures } from "@/hooks/use-features";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -39,6 +39,9 @@ const COVER_WINDOW = 188;
  */
 const SHEET_FADE = 200;
 
+/** 시트 아래쪽 탭. 관련 플리는 있을 때만 탭이 생긴다 (S15P21A405-435) */
+type DetailTab = "nearby" | "info" | "playlists";
+
 /**
  * 곡 상세 (SONG-02).
  *
@@ -48,6 +51,9 @@ const SHEET_FADE = 200;
  *
  * 시트 윗머리는 투명 → 배경색 그라데이션이라 커버가 시트로 녹아든다. 끝까지 올리면
  * 헤더 뒤의 커버까지 덮개가 지워서 패널이 한 색이 된다(`song-cover-backdrop`).
+ *
+ * 제목·행동 줄 아래는 **탭**이다 (S15P21A405-435): 주변곡 · 정보 · 관련 플리. 세로로 죽 이어
+ * 붙이니 길었다. 탭은 곡을 옮겨 다녀도 유지된다 — 주변 곡을 타고 다니는 사람은 계속 주변곡을 본다.
  */
 export default function SongDetailPanel() {
   const musicId = usePanelStore((s) => s.musicId);
@@ -71,6 +77,17 @@ export default function SongDetailPanel() {
    */
   const { blocked } = usePlayability(musicId);
   const dead = blocked === PLAYBACK_BLOCKED.noVideo;
+
+  const [tab, setTab] = useState<DetailTab>("nearby");
+  // 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다
+  const hasPlaylists = features.playlist && (data?.relatedPlaylists.length ?? 0) > 0;
+  const tabs: { key: DetailTab; label: string }[] = [
+    { key: "nearby", label: "주변곡" },
+    { key: "info", label: "정보" },
+    ...(hasPlaylists ? [{ key: "playlists" as const, label: "관련 플리" }] : []),
+  ];
+  // 관련 플리 탭을 보다가 플리 없는 곡으로 옮기면 탭이 사라진다 — 주변곡으로 돌아간다
+  const activeTab: DetailTab = tab === "playlists" && !hasPlaylists ? "nearby" : tab;
 
   /**
    * 곡이 바뀌면 **맨 위로 되돌린다** (S15P21A405-384). 패널은 곡이 바뀌어도 같은 상자를 쓰므로
@@ -122,12 +139,10 @@ export default function SongDetailPanel() {
             */}
             {!dead && (
               <>
-                <Divider />
-                <SongPcList items={data.principalComponents} />
-                <Divider />
-                <SongNearbyList items={data.nearby} centerMusicId={data.id} />
-                {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다 */}
-                {features.playlist && <SongRelatedPlaylists items={data.relatedPlaylists} />}
+                <UnderlineTabs items={tabs} value={activeTab} onChange={setTab} />
+                {activeTab === "nearby" && <SongNearbyList items={data.nearby} centerMusicId={data.id} />}
+                {activeTab === "info" && <SongPcList items={data.principalComponents} />}
+                {activeTab === "playlists" && <SongRelatedPlaylists items={data.relatedPlaylists} />}
               </>
             )}
           </>

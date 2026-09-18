@@ -43,27 +43,34 @@ public class MusicPlayService {
 	private final MeetingService meetingService;
 
 	/**
-	 * 곡을 재생하고 현재 레이어의 곡 위치로 사용자를 옮긴다.
+	 * 곡을 재생하고 그 곡 위치로 사용자를 옮긴다.
+	 *
+	 * 레이어는 서버에 있는 값을 우선한다 — 재생으로 레이어가 바뀌지 않는다.
+	 * 아직 지도에 서 있지 않은 사용자(첫 재생)만 요청의 layer 로 자리를 잡는다.
+	 * 둘 다 없으면 어느 레이어에 놓을지 알 수 없어 거부한다.
 	 *
 	 * @param email 사용자 이메일
 	 * @param musicId 재생할 곡 ID
 	 * @param source 곡을 재생한 화면
+	 * @param requestedLayer 첫 배치일 때 놓을 레이어. 이미 서 있으면 무시된다
 	 * @return 재생 기록 ID와 새 위치
 	 * @throws CustomException 접속 정보나 곡 위치를 찾을 수 없는 경우
 	 */
 	@Transactional
-	public PlayResponse play(String email, long musicId, String source) {
+	public PlayResponse play(String email, long musicId, String source, Integer requestedLayer) {
 		// 1. 사용자의 현재 곡과 레이어를 읽는다.
 		PresenceSnapshot before = presenceRedisRepository.snapshot(email);
 		if (before == null || before.epoch() == null) {
 			log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_NOT_CONNECTED, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
-		if (before.layer() == null) {
-			log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_NO_ANCHOR, musicId);
+		// 서 있는 레이어가 있으면 그대로, 없으면(첫 재생) 요청 값으로 자리를 잡는다.
+		Integer resolvedLayer = before.layer() != null ? before.layer() : requestedLayer;
+		if (resolvedLayer == null) {
+			log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LAYER_INVALID, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
-		int layer = before.layer();
+		int layer = resolvedLayer;
 
 		// 2. 재생할 곡의 좌표를 찾는다.
 		double[] pc = musicLocationService.findLocation(musicId)

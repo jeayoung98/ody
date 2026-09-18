@@ -39,4 +39,13 @@
 		WHERE id = #{musicId}
 	</update>
 
+	<!-- 마지막 재생곡. played_at 이 같은 행(동시 재생)은 id 로 순서를 굳힌다. 기록 없으면 결과 없음 → null. -->
+	<select id="findLatestMusicId" resultType="long">
+		SELECT music_id
+		  FROM play_history
+		 WHERE email = #{email}
+		 ORDER BY played_at DESC, id DESC
+		 LIMIT 1
+	</select>
+
 </mapper>

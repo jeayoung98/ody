@@ -37,12 +37,17 @@ public class MusicPlayRestController {
 
 	private final MusicPlayService musicPlayService;
 
-	/** 재생 선언 = 위치 이동의 유일한 원본. musicId 로 서버가 좌표를 계산한다. */
-	@Operation(summary = "재생 선언", description = "재생할 musicId를 선언해 위치를 이동시킨다. 위치 이동의 유일한 원본이다.")
+	/**
+	 * 재생 선언 = 위치 이동의 유일한 원본. musicId 로 서버가 좌표를 계산한다.
+	 * layer 는 처음 자리를 잡을 때만 쓰이고, 이미 서 있으면 서버 레이어를 유지한다.
+	 */
+	@Operation(summary = "재생 선언",
+			description = "재생할 musicId를 선언해 위치를 이동시킨다. 위치 이동의 유일한 원본이다. "
+					+ "아직 지도에 없는 사용자는 layer로 첫 자리를 잡는다.")
 	@PostMapping("/play")
 	public ApiResponse<PlayResponse> play(@Valid @RequestBody PlayRequest request, Principal principal) {
 		PlayResponse res = musicPlayService.play(
-				principal.getName(), request.musicId(), request.source().name());
+				principal.getName(), request.musicId(), request.source().name(), request.layer());
 		return ApiResponse.success(res);
 	}
 

@@ -5,6 +5,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.verifyNoMoreInteractions;
 import static org.mockito.Mockito.when;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,6 +31,7 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
+import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 
@@ -43,6 +45,7 @@ class PresenceServiceTests {
 	@Mock MusicLocationService musicLocationService;
 	@Mock MusicPositionCalculator musicPositionCalculator;
 	@Mock RealtimeEventService realtimeEventService;
+	@Mock PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡
 	@InjectMocks PresenceService service;
 
 	@BeforeEach
@@ -92,10 +95,11 @@ class PresenceServiceTests {
 	}
 
 	@Test
-	@DisplayName("첫 곡 배치가 끝나면 진입을 알린다")
+	@DisplayName("첫 입장은 마지막 재생 기록의 곡에 놓고 진입을 알린다")
 	void firstJoinPublishesEnter() {
 		double[] location = new double[16];
 		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(playHistoryMapper.findLatestMusicId(EMAIL)).thenReturn(20L);
 		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
 		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(null, null, null, null, 7L));
@@ -113,6 +117,42 @@ class PresenceServiceTests {
 	}
 
 	@Test
+	@DisplayName("첫 입장에서 요청 곡이 기록과 다르면 기록의 곡을 쓴다")
+	void firstJoinIgnoresRequestedMusicWhenHistoryDiffers() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(playHistoryMapper.findLatestMusicId(EMAIL)).thenReturn(20L);
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(null, null, null, null, 7L));
+		when(presenceRepository.join(EMAIL, 7L, null, null, null, null,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(true);
+
+		// 클라가 99번 곡을 주장해도 기록(20)이 이긴다.
+		PresenceJoined result = service.join(EMAIL, 7L, new JoinRequest(1L, 2, 99L));
+
+		assertThat(result.musicId()).isEqualTo(20L);
+		verify(musicLocationService).findLocation(20L);
+		verify(musicLocationService, never()).findLocation(99L);
+	}
+
+	@Test
+	@DisplayName("재생 기록이 없으면 첫 입장을 거부한다")
+	void firstJoinWithoutHistoryIsRejected() {
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(null, null, null, null, 7L));
+		when(playHistoryMapper.findLatestMusicId(EMAIL)).thenReturn(null);
+
+		assertThatThrownBy(() -> service.join(EMAIL, 7L, new JoinRequest(1L, 2, 20L)))
+				.isInstanceOfSatisfying(WebSocketRequestException.class,
+						e -> assertThat(e.getCode()).isEqualTo(WebSocketErrorCode.PRESENCE_NO_ANCHOR));
+
+		verifyNoInteractions(musicLocationService, musicPositionCalculator, realtimeEventService);
+		// 접속 확인(snapshot)만 하고 Redis 위치는 건드리지 않는다.
+		verify(presenceRepository).snapshot(EMAIL);
+		verifyNoMoreInteractions(presenceRepository);
+	}
+
+	@Test
 	@DisplayName("레이어를 옮길 때 요청 곡이 달라도 서버의 현재 곡을 유지한다")
 	void layerChangePublishesMove() {
 		double[] location = new double[16];
@@ -127,6 +167,8 @@ class PresenceServiceTests {
 
 		assertThat(result).isEqualTo(new PresenceJoined(2L, 2, 20L));
 		verify(musicLocationService).findLocation(20L);
+		// 이미 서 있으면 재생 기록을 찾아볼 필요가 없다.
+		verifyNoInteractions(playHistoryMapper);
 		verify(realtimeEventService).send(new PositionChanged(
 				EMAIL, 7L, 1, 2,
 				20L, 20L,

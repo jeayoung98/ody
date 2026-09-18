@@ -39,7 +39,7 @@ const COVER_WINDOW = 188;
  */
 const SHEET_FADE = 200;
 
-/** 시트 아래쪽 탭. 관련 플리는 있을 때만 탭이 생긴다 (S15P21A405-435) */
+/** 시트 아래쪽 탭. 관련 플리 탭은 플리 기능이 열려 있으면 늘 있다 — 비어 있으면 만들기가 뜬다 (S15P21A405-435) */
 type DetailTab = "nearby" | "info" | "playlists";
 
 /**
@@ -80,13 +80,13 @@ export default function SongDetailPanel() {
 
   const [tab, setTab] = useState<DetailTab>("nearby");
   // 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다
-  const hasPlaylists = features.playlist && (data?.relatedPlaylists.length ?? 0) > 0;
+  const hasPlaylists = features.playlist;
   const tabs: { key: DetailTab; label: string }[] = [
     { key: "nearby", label: "주변곡" },
     { key: "info", label: "정보" },
     ...(hasPlaylists ? [{ key: "playlists" as const, label: "관련 플리" }] : []),
   ];
-  // 관련 플리 탭을 보다가 플리 없는 곡으로 옮기면 탭이 사라진다 — 주변곡으로 돌아간다
+  // 플리 기능이 꺼진 빌드에서 저장된 탭이 남아 있으면 주변곡으로
   const activeTab: DetailTab = tab === "playlists" && !hasPlaylists ? "nearby" : tab;
 
   /**
@@ -142,7 +142,7 @@ export default function SongDetailPanel() {
                 <UnderlineTabs items={tabs} value={activeTab} onChange={setTab} />
                 {activeTab === "nearby" && <SongNearbyList items={data.nearby} centerMusicId={data.id} />}
                 {activeTab === "info" && <SongPcList items={data.principalComponents} />}
-                {activeTab === "playlists" && <SongRelatedPlaylists items={data.relatedPlaylists} />}
+                {activeTab === "playlists" && <SongRelatedPlaylists items={data.relatedPlaylists} musicId={data.id} />}
               </>
             )}
           </>

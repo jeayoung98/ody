@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -Eeuo pipefail 
+set -Eeuo pipefail
 
 readonly DEPLOY_ROOT="/var/www/ody"
 readonly RELEASES_DIR="${DEPLOY_ROOT}/releases"

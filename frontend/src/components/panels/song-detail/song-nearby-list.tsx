@@ -143,30 +143,30 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
         클릭이 "제자리에서 보기" 가 아니라 "옮겨가기" 가 되는데, 오른쪽 패널만 보고 있으면
         자기가 어느 상태인지 알 길이 없었다.
       */}
-      <SectionTitle
-        tone="sentence"
-        aside={
-          away ? (
-            <span className="block max-w-[130px] truncate text-teal" title={`지도는 ${centerSong?.title ?? "다른 곡"} 주변이에요`}>
-              {centerSong?.title ?? "다른 곡"} 주변
-            </span>
-          ) : inNearby ? (
-            <span className="text-teal">주변 탐색 중</span>
-          ) : undefined
-        }
-      >
-        이 곡과 가장 비슷해요! <SimilarityHint />
-      </SectionTitle>
       {/*
-        안내문과 순차 재생을 한 줄에 둔다 (S15P21A405-384). 유사도 설명은 제목 옆 ⓘ 툴팁으로
-        옮겼다 (S15P21A405-435) — 여기는 다음 클릭이 무엇을 하는지만 남는다.
+        머리줄은 두 칸이다 (S15P21A405-446): 왼쪽에 제목과 안내를 붙이고, 오른쪽에 목록 재생.
+        제목 줄 따로, 안내 상자 + 버튼 따로였을 때는 세 덩어리가 따로 놀았다.
+        지도 중심이 누구인지도 여기서 말한다 (S15P21A405-384) — 한 걸음 나와 있으면 같은 카드
+        클릭이 "제자리에서 보기" 가 아니라 "옮겨가기" 가 된다. 유사도 설명은 제목 옆 ⓘ 툴팁이다.
       */}
       <div className="flex items-center gap-2.5">
-        <div className="min-w-0 flex-1">
-          <Note>
-            {/* 다음 클릭이 지도를 움직일지 **누르기 전에** 알려 주는 유일한 자리다 */}
-            {away ? "카드를 누르면 이 곡 주변으로 옮겨가요." : "카드를 누르면 그 곡으로 옮겨가요."}
-          </Note>
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <SectionTitle
+            tone="sentence"
+            aside={
+              away ? (
+                <span className="block max-w-[110px] truncate text-teal" title={`지도는 ${centerSong?.title ?? "다른 곡"} 주변이에요`}>
+                  {centerSong?.title ?? "다른 곡"} 주변
+                </span>
+              ) : inNearby ? (
+                <span className="text-teal">주변 탐색 중</span>
+              ) : undefined
+            }
+          >
+            이 곡과 가장 비슷해요! <SimilarityHint />
+          </SectionTitle>
+          {/* 다음 클릭이 무엇을 하는지 **누르기 전에** 알려 주는 유일한 자리다 */}
+          <Note>{away ? "카드를 누르면 이 곡 주변으로 옮겨가요." : "카드를 누르면 그 곡의 상세로 가요."}</Note>
         </div>
         {/*
           **한 곡 재생과 다르게 생겨야 한다** (S15P21A405-384). 자리도 크기도 제목 줄의 재생

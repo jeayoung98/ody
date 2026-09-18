@@ -123,6 +123,17 @@ export function backendDelete(path: string, init?: RequestInit): Promise<unknown
   return backendFetch<unknown>(path, { ...init, method: "DELETE" }, { allowNullData: true });
 }
 
+/**
+ * 배포 백엔드 PATCH 호출 — **파일**을 보낸다 (`multipart/form-data`, S15P21A405-474).
+ *
+ * `Content-Type` 을 **직접 넣지 않는다.** multipart 는 헤더에 경계 문자열(`boundary=...`)이
+ * 들어가야 하는데 그 값은 `fetch` 가 `FormData` 를 보고 만든다. 우리가 손으로 적으면
+ * 경계가 본문과 어긋나 백엔드가 파트를 하나도 못 읽는다.
+ */
+export function backendPatchForm<T>(path: string, form: FormData, init?: RequestInit): Promise<T> {
+  return backendFetch<T>(path, { ...init, method: "PATCH", body: form });
+}
+
 /** 배포 백엔드 PATCH 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다 */
 export function backendPatch<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
   return backendFetch<T>(path, {

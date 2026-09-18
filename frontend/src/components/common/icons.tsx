@@ -128,6 +128,15 @@ export const SmileIcon = ({ size = 19, ...p }: P) => (
     <circle cx="15" cy="9.6" r="1.1" fill="currentColor" stroke="none" />
   </svg>
 );
+/** ⓘ — 눌러서 설명을 여는 자리 (S15P21A405-435) */
+export const InfoIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <circle cx="12" cy="12" r="9" />
+    <path d="M12 11v5.5" />
+    <circle cx="12" cy="7.6" r=".9" fill="currentColor" stroke="none" />
+  </svg>
+);
+
 export const HelpIcon = ({ size = 17, ...p }: P) => (
   <svg {...base(size, p)}>
     <circle cx="12" cy="12" r="9" />

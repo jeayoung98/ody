@@ -5,6 +5,7 @@ import { ChevronLeftIcon, ListPlayIcon } from "@/components/common/icons";
 import TransportButton from "@/components/common/transport-button";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
+import SimilarityHint from "./similarity-hint";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -154,17 +155,15 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
           ) : undefined
         }
       >
-        이 곡과 가장 비슷해요!
+        이 곡과 가장 비슷해요! <SimilarityHint />
       </SectionTitle>
       {/*
-        안내문과 순차 재생을 한 줄에 둔다 (S15P21A405-384). 글이 두 줄로 앉아 버튼 높이(36px)와
-        맞물린다. 유사도 기준은 이번 유저 테스트가 묻는 것이라 문장은 남긴다.
+        안내문과 순차 재생을 한 줄에 둔다 (S15P21A405-384). 유사도 설명은 제목 옆 ⓘ 툴팁으로
+        옮겼다 (S15P21A405-435) — 여기는 다음 클릭이 무엇을 하는지만 남는다.
       */}
       <div className="flex items-center gap-2.5">
         <div className="min-w-0 flex-1">
           <Note>
-            <b>유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요!
-            <br />
             {/* 다음 클릭이 지도를 움직일지 **누르기 전에** 알려 주는 유일한 자리다 */}
             {away ? "카드를 누르면 이 곡 주변으로 옮겨가요." : "카드를 누르면 그 곡으로 옮겨가요."}
           </Note>

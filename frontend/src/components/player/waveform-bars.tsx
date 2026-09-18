@@ -14,6 +14,14 @@ export const MAX_H = 0.65;
  * (S15P21A405-456). 1 이면 예전처럼 다 비슷한 높이가 된다.
  */
 const CONTRAST = 1.6;
+/**
+ * 흔들리지 않는 바는 제 높이의 이만큼으로 낮아진다 (S15P21A405-460). 헤드 근처 몇 개만 솟아 있어서
+ * "지금 소리 나는 자리" 가 한눈에 보이고, 나머지는 얇은 띠로 물러난다.
+ *
+ * **멈춰 있을 때는 낮추지 않는다.** 그때는 흔들리는 바가 하나도 없어서, 낮추면 파형이 통째로
+ * 납작한 선이 되어 곡 모양을 잃는다.
+ */
+const IDLE_SCALE = 0.35;
 
 /**
  * `musicId` 로 고정된 **가짜 파형**. 곡마다 모양이 다르고 같은 곡은 늘 같다 — 새로고침해도 안 바뀐다.
@@ -65,11 +73,13 @@ export default function WaveformBars({ musicId, ratio, playing, live }: Waveform
       {shape.map((h, i) => {
         const passed = i < head;
         const near = playing && Math.abs(i - head) <= LIVE_SPAN;
+        // 정수 % 를 지킨다 — 소수가 길면 서버가 그린 style 과 브라우저가 정규화한 값이 달라 하이드레이션 경고가 난다
+        const shown = !playing || near ? h : Math.round(h * IDLE_SCALE);
         return (
           <i
             key={i}
-            className={`block w-[2px] shrink-0 rounded-pill ${passed ? "bg-teal" : "bg-white/[.16]"} ${near ? "animate-wave" : ""}`}
-            style={{ height: `${h}%`, animationDelay: near ? `${(i % 4) * 110}ms` : undefined }}
+            className={`block w-[2px] shrink-0 rounded-pill transition-[height] duration-300 ${passed ? "bg-teal" : "bg-white/[.16]"} ${near ? "animate-wave" : ""}`}
+            style={{ height: `${shown}%`, animationDelay: near ? `${(i % 4) * 110}ms` : undefined }}
           />
         );
       })}

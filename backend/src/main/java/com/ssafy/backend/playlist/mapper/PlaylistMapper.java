@@ -36,4 +36,19 @@ public interface PlaylistMapper {
 	int deletePlaylistMusic(@Param("playlistId") long playlistId, @Param("musicIdList") List<Long> musicIdList);
 
 	void deleteAllPlaylistMusic(@Param("playlistId") long playlistId);
+
+	// 좋아요 (S15P21A405-442)
+
+	/** 이미 눌러둔 좋아요면 아무것도 하지 않는다(ON CONFLICT DO NOTHING). 실제로 넣었으면 1. */
+	int insertLike(@Param("playlistId") long playlistId, @Param("email") String email);
+
+	/** 누른 적 없으면 0. 실제로 지웠으면 1. */
+	int deleteLike(@Param("playlistId") long playlistId, @Param("email") String email);
+
+	/** like_cnt 를 delta 만큼 더한다. 0 밑으로는 내려가지 않는다. */
+	void addLikeCnt(@Param("playlistId") long playlistId, @Param("delta") int delta);
+
+	int findLikeCnt(@Param("playlistId") long playlistId);
+
+	boolean existsLike(@Param("playlistId") long playlistId, @Param("email") String email);
 }

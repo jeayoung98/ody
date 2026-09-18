@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
@@ -19,6 +20,8 @@ import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
+import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
+import com.ssafy.backend.playlist.dto.PlaylistLikeResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicDeleteResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertItem;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertResponse;
@@ -189,6 +192,44 @@ public class PlaylistService {
 		requireOwnedPlaylist(playlistId, requesterEmail);
 		playlistMapper.deleteById(playlistId);
 		log.info("[Playlist] 삭제 완료 playlistId={}", playlistId);
+	}
+
+	/**
+	 * 플레이리스트 좋아요 변경 (S15P21A405-442). 남의 플레이리스트에도 누를 수 있으므로 소유자 검사는 없다.
+	 *
+	 * liked 는 토글이 아니라 목표 상태다. 이미 그 상태면 like_cnt 를 건드리지 않고 현재 값을 그대로 돌려준다
+	 * — 연타나 재전송으로 숫자가 부풀지 않게 하려는 것이고, 그래서 이 API 는 몇 번 불러도 결과가 같다.
+	 *
+	 * like_cnt 는 playlist_like 기록의 집계 사본이라 기록이 실제로 바뀐 경우에만 함께 바꾼다.
+	 * 둘이 어긋나면 화면 숫자가 틀리므로 한 트랜잭션으로 묶는다.
+	 */
+	@Transactional
+	public PlaylistLikeResponse changeLike(PlaylistLikeRequest request, String requesterEmail) {
+		if (request == null || request.playlistId() == null || request.liked() == null) {
+			throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+		}
+
+		long playlistId = request.playlistId();
+		boolean liked = request.liked();
+
+		if (playlistMapper.findById(playlistId) == null) {
+			throw new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND);
+		}
+
+		// 동시에 두 번 눌려도 기록 테이블의 PK 와 ON CONFLICT 가 한 번만 통과시킨다.
+		// 그 "실제로 바뀌었는지"(changed)가 like_cnt 를 움직일지 판단하는 유일한 근거다.
+		int changed = liked
+				? playlistMapper.insertLike(playlistId, requesterEmail)
+				: playlistMapper.deleteLike(playlistId, requesterEmail);
+
+		if (changed > 0) {
+			playlistMapper.addLikeCnt(playlistId, liked ? 1 : -1);
+		}
+
+		int likeCnt = playlistMapper.findLikeCnt(playlistId);
+		log.info("[Playlist] 좋아요 변경 완료 playlistId={} liked={} changed={} likeCnt={}",
+				playlistId, liked, changed > 0, likeCnt);
+		return new PlaylistLikeResponse(playlistId, liked, likeCnt);
 	}
 
 	private PlaylistRow requireOwnedPlaylist(long playlistId, String requesterEmail) {

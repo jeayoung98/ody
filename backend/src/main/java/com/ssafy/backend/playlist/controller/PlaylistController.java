@@ -18,6 +18,8 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.playlist.dto.PlaylistCreateRequest;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
+import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
+import com.ssafy.backend.playlist.dto.PlaylistLikeResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicDeleteRequest;
 import com.ssafy.backend.playlist.dto.PlaylistMusicDeleteResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertRequest;
@@ -108,6 +110,18 @@ public class PlaylistController {
 			@RequestBody @Valid PlaylistUpdateRequest request, Authentication authentication) {
 		return ApiResponse.success(playlistService.update(
 				request.playlistId(), request.playlistName(), authentication.getName()));
+	}
+
+	/**
+	 * 플레이리스트 좋아요 변경 (S15P21A405-442). liked=true 면 좋아요, false 면 해제.
+	 * 토글이 아니라 목표 상태를 받으므로 같은 요청을 여러 번 보내도 결과가 같다.
+	 */
+	@Operation(summary = "플레이리스트 좋아요 변경",
+			description = "liked=true 면 좋아요를 누르고 false 면 해제한다. 같은 요청을 반복해도 결과가 같다.")
+	@PostMapping("/like")
+	public ApiResponse<PlaylistLikeResponse> changeLike(
+			@RequestBody @Valid PlaylistLikeRequest request, Authentication authentication) {
+		return ApiResponse.success(playlistService.changeLike(request, authentication.getName()));
 	}
 
 	/** 플레이리스트 삭제 (정본 §4.7). */

@@ -1,5 +1,6 @@
 package com.ssafy.backend.playlist;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +36,8 @@ import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.playlist.controller.PlaylistController;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
+import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
+import com.ssafy.backend.playlist.dto.PlaylistLikeResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicDeleteResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicReorderResponse;
@@ -66,6 +69,33 @@ class PlaylistControllerTests {
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(
 				email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+	}
+
+	@Test
+	void changeLike_delegatesTokenSubjectAndReturnsNewCount() throws Exception {
+		when(playlistService.changeLike(any(PlaylistLikeRequest.class), eq("me@gmail.com")))
+				.thenReturn(new PlaylistLikeResponse(7, true, 4));
+
+		mockMvc.perform(post("/api/playlist/like")
+						.principal(principal("me@gmail.com"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"playlistId\":7,\"liked\":true}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.liked").value(true))
+				.andExpect(jsonPath("$.data.likeCnt").value(4));
+
+		verify(playlistService).changeLike(any(PlaylistLikeRequest.class), eq("me@gmail.com"));
+	}
+
+	@Test
+	void changeLike_missingLiked_returns400InvalidInput() throws Exception {
+		mockMvc.perform(post("/api/playlist/like")
+						.principal(principal("me@gmail.com"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"playlistId\":7}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test

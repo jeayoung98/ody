@@ -7,6 +7,7 @@ import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
+import com.ssafy.backend.follow.service.FollowService;
 import com.ssafy.backend.user.NicknamePolicy;
 import com.ssafy.backend.user.dto.NicknameUpdateRequest;
 import com.ssafy.backend.user.dto.NicknameUpdateResponse;
@@ -26,13 +27,15 @@ public class UserService {
 
 	private final UserMapper userMapper;
 	private final AuthMapper authMapper;
+	private final FollowService followService;
 
 	/**
 	 * 사용자 상세 조회 (정본 §2.1). 본인 조회도 이 API(email == 토큰 주체 → isMe:true).
 	 * 비공개 사용자 + 본인 아님 → USER_PRIVATE. 없는 사용자 → USER_NOT_FOUND.
 	 *
-	 * ponytail: followerCnt/followingCnt/isFollowing은 팔로우 MVP 범위 확정(E1) 전까지
-	 * 0/false 고정. 팔로우 기능 착수 시 실제 집계로 교체한다(S15P21A405-70 이슈 설명).
+	 * followerCnt/followingCnt/isFollowing 은 팔로우 구현(S15P21A405-433)과 함께 실제 집계로
+	 * 교체됐다 — 이전의 0/false 고정 placeholder(S15P21A405-70)는 더 없다.
+	 * isFollowing 은 요청자가 조회 대상을 팔로우 중인지다(본인 조회면 항상 false).
 	 */
 	public UserDetailResponse getDetail(String targetEmail, String requesterEmail) {
 		UserProfileRow row = userMapper.findProfileByEmail(targetEmail);
@@ -48,6 +51,10 @@ public class UserService {
 		// 비공개 판정 뒤에 센다 — 볼 수 없는 사용자의 기록은 읽지 않는다 (S15P21A405-430).
 		int playedMusicCnt = userMapper.countDistinctPlayedMusic(targetEmail);
 
+		int followerCnt = followService.countFollowers(targetEmail);
+		int followingCnt = followService.countFollowings(targetEmail);
+		boolean isFollowing = !isMe && followService.isFollowing(requesterEmail, targetEmail);
+
 		log.info("[User] 상세 조회 완료 targetEmail={} isMe={}", targetEmail, isMe);
 		return new UserDetailResponse(
 				row.getEmail(),
@@ -58,9 +65,9 @@ public class UserService {
 				row.getLastActiveAt(),
 				row.getCreatedAt(),
 				row.getImageUrl(),
-				0,
-				0,
-				false,
+				followerCnt,
+				followingCnt,
+				isFollowing,
 				isMe,
 				playedMusicCnt);
 	}

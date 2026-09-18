@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.follow.mapper.FollowMapper">
+
+	<!--
+		실제 테이블: public.follow(id, follower_email, followee_email, created_at) [S15P21A405-433].
+		id 는 auto increment 로 바꾼 뒤를 전제로 INSERT 에서 생략한다
+		(db/follow_001_identity_and_indexes.sql 을 먼저 적용해야 한다).
+
+		"user" 는 Postgres 예약어라 반드시 큰따옴표로 감싼다.
+	-->
+
+	<resultMap id="followUserRowMap" type="com.ssafy.backend.follow.dto.FollowUserRow">
+		<result property="email" column="email"/>
+		<result property="name" column="name"/>
+		<result property="nickname" column="nickname"/>
+		<result property="imageUrl" column="image_url"/>
+		<result property="isPublic" column="is_public"/>
+		<result property="lastActiveAt" column="last_active_at"/>
+		<result property="meetingCnt" column="meeting_cnt"/>
+		<result property="following" column="following"/>
+	</resultMap>
+
+	<insert id="insert">
+		INSERT INTO follow (follower_email, followee_email)
+		VALUES (#{followerEmail}, #{followeeEmail})
+	</insert>
+
+	<delete id="delete">
+		DELETE FROM follow
+		WHERE follower_email = #{followerEmail}
+		  AND followee_email = #{followeeEmail}
+	</delete>
+
+	<select id="exists" resultType="boolean">
+		SELECT EXISTS(
+			SELECT 1 FROM follow
+			WHERE follower_email = #{followerEmail}
+			  AND followee_email = #{followeeEmail})
+	</select>
+
+	<select id="countFollowers" resultType="int">
+		SELECT COUNT(*) FROM follow WHERE followee_email = #{email}
+	</select>
+
+	<select id="countFollowings" resultType="int">
+		SELECT COUNT(*) FROM follow WHERE follower_email = #{email}
+	</select>
+
+	<!--
+		목록 공통 SELECT. 대상 사용자(#{email})와 이어진 상대의 프로필을 "user" 에서 읽고,
+		요청자(#{requesterEmail}) 기준으로 두 값을 덧붙인다.
+
+		meeting_cnt — meeting 은 (user1, user2) 를 사전순으로 넣지만, 그 "사전순" 은 자바의
+		String.compareTo(MeetingService) 기준이라 Postgres 콜레이션과 다를 수 있다. 대소문자가 섞인
+		이메일에서 LEAST/GREATEST 로 짝을 만들면 자바가 넣은 순서와 어긋나 행을 놓친다.
+		그래서 순서를 계산하지 않고 양방향 등호로 찾는다 — 콜레이션과 무관하다.
+		마주친 적이 없으면 행이 없어 COALESCE 로 0 이 된다.
+
+		following — 요청자가 그 상대를 팔로우 중인지. 목록 소유자 기준이 아니다(api-spec §2.8).
+
+		정렬은 created_at DESC(최근 팔로우 먼저), 같은 시각이면 email 로 고정한다 —
+		정렬이 흔들리면 페이지 사이에서 같은 사람이 두 번 나오거나 빠진다.
+	-->
+	<sql id="listColumns">
+		u.email,
+		u.name,
+		u.nickname,
+		u.image_url,
+		u.is_public,
+		u.last_active_at,
+		COALESCE(m.cnt, 0) AS meeting_cnt,
+		EXISTS(
+			SELECT 1 FROM follow rf
+			WHERE rf.follower_email = #{requesterEmail}
+			  AND rf.followee_email = u.email) AS following
+	</sql>
+
+	<sql id="meetingJoin">
+		LEFT JOIN meeting m
+		       ON (m.user1 = #{requesterEmail} AND m.user2 = u.email)
+		       OR (m.user2 = #{requesterEmail} AND m.user1 = u.email)
+	</sql>
+
+	<select id="findFollowers" resultMap="followUserRowMap">
+		SELECT
+		<include refid="listColumns"/>
+		FROM follow f
+		JOIN "user" u ON u.email = f.follower_email
+		<include refid="meetingJoin"/>
+		WHERE f.followee_email = #{email}
+		ORDER BY f.created_at DESC, u.email
+		LIMIT #{limit} OFFSET #{offset}
+	</select>
+
+	<select id="findFollowings" resultMap="followUserRowMap">
+		SELECT
+		<include refid="listColumns"/>
+		FROM follow f
+		JOIN "user" u ON u.email = f.followee_email
+		<include refid="meetingJoin"/>
+		WHERE f.follower_email = #{email}
+		ORDER BY f.created_at DESC, u.email
+		LIMIT #{limit} OFFSET #{offset}
+	</select>
+
+</mapper>

@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import com.ssafy.backend.auth.mapper.AuthMapper;
+import com.ssafy.backend.follow.service.FollowService;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.user.dto.UserDetailResponse;
@@ -19,7 +20,8 @@ import com.ssafy.backend.user.service.UserService;
 
 /**
  * 사용자 상세 서비스 유닛 (mock mapper). 조립·본인/타인 분기·404/403 전환을 검증한다.
- * followerCnt/followingCnt/isFollowing은 팔로우 MVP 전까지 0/0/false 고정(계약).
+ * followerCnt/followingCnt/isFollowing 은 FollowService 집계다 (S15P21A405-433) —
+ * 이전의 0/0/false 고정 placeholder 는 없어졌다.
  */
 class UserDetailServiceTests {
 
@@ -40,7 +42,7 @@ class UserDetailServiceTests {
 	void getDetail_otherPublicUser_returnsDetailWithIsMeFalse() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -48,9 +50,36 @@ class UserDetailServiceTests {
 		assertThat(result.tutorialCompleted()).isTrue();
 		assertThat(result.isPublic()).isTrue();
 		assertThat(result.isMe()).isFalse();
-		assertThat(result.followerCnt()).isZero();
-		assertThat(result.followingCnt()).isZero();
+	}
+
+	@Test
+	void getDetail_usesRealFollowCounts() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		FollowService followService = Mockito.mock(FollowService.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(followService.countFollowers("you@gmail.com")).thenReturn(12);
+		when(followService.countFollowings("you@gmail.com")).thenReturn(8);
+		when(followService.isFollowing("me@gmail.com", "you@gmail.com")).thenReturn(true);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), followService);
+
+		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
+
+		assertThat(result.followerCnt()).isEqualTo(12);
+		assertThat(result.followingCnt()).isEqualTo(8);
+		assertThat(result.isFollowing()).isTrue();
+	}
+
+	@Test
+	void getDetail_self_isFollowingIsAlwaysFalse() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		FollowService followService = Mockito.mock(FollowService.class);
+		when(mapper.findProfileByEmail("me@gmail.com")).thenReturn(row(true));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), followService);
+
+		UserDetailResponse result = service.getDetail("me@gmail.com", "me@gmail.com");
+
 		assertThat(result.isFollowing()).isFalse();
+		Mockito.verify(followService, Mockito.never()).isFollowing(Mockito.anyString(), Mockito.anyString());
 	}
 
 	@Test
@@ -58,7 +87,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(42);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -70,7 +99,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(0);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").playedMusicCnt()).isZero();
 	}
@@ -79,7 +108,7 @@ class UserDetailServiceTests {
 	void getDetail_privateOtherUser_doesNotCountPlayHistory() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		assertThatThrownBy(() -> service.getDetail("you@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class);
@@ -91,7 +120,7 @@ class UserDetailServiceTests {
 	void getDetail_selfPrivateUser_returnsDetailWithIsMeTrue() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "you@gmail.com");
 
@@ -103,7 +132,7 @@ class UserDetailServiceTests {
 	void getDetail_otherPrivateUser_throwsUserPrivate() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		assertThatThrownBy(() -> service.getDetail("you@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class)
@@ -115,7 +144,7 @@ class UserDetailServiceTests {
 	void getDetail_notFound_throwsUserNotFound() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("nobody@gmail.com")).thenReturn(null);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class));
 
 		assertThatThrownBy(() -> service.getDetail("nobody@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class)

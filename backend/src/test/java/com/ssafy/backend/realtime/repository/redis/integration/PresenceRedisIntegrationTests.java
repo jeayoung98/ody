@@ -26,6 +26,7 @@ import com.ssafy.backend.realtime.config.RedisScriptConfig;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
+import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
@@ -266,7 +267,8 @@ class PresenceRedisIntegrationTests {
 				repository,
 				mock(MusicLocationService.class),
 				mock(MusicPositionCalculator.class),
-				eventService);
+				eventService,
+				mock(PlayHistoryMapper.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 다른 탭이 남아 있지 않은 재연결이므로 이전 위치를 지운다.
@@ -299,7 +301,8 @@ class PresenceRedisIntegrationTests {
 				repository,
 				mock(MusicLocationService.class),
 				mock(MusicPositionCalculator.class),
-				eventService);
+				eventService,
+				mock(PlayHistoryMapper.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 다른 탭이 살아 있으므로 접속 번호만 올리고 위치는 건드리지 않는다.

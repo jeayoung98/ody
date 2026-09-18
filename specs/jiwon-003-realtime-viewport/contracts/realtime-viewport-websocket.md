@@ -229,6 +229,24 @@ prefetch 시작이 아니라 실제 layer·boxes가 변경되고 전환 화면�
 
 viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다.
 
+### 입장 응답 — PRESENCE_JOINED
+
+`type = PRESENCE_JOINED`
+
+```json
+{
+  "requestSeq": 4,
+  "layer": 3,
+  "musicId": 101
+}
+```
+
+`requestSeq`는 방금 보낸 join 요청의 순번이므로, 프론트는 이 값으로 자기 요청의 응답인지 가린다. 다른 값이면 버린다.
+
+`layer`·`musicId`는 **서버가 실제로 적용한 값**이다. 요청의 `musicId`가 그대로 오지 않을 수 있다 — 첫 입장은 서버가 재생 기록으로 검증한 곡을 쓰고, 이후 입장은 레이어만 옮기면서 서버에 남아 있는 현재 곡을 유지한다. 프론트는 요청값이 아니라 이 응답값을 화면 상태로 삼는다.
+
+입장 요청 자체가 거부되면 `PRESENCE_JOINED` 대신 `/user/queue/errors`로 오류가 오며, 그 오류 payload에도 같은 `requestSeq`가 실린다(§7).
+
 ## 6. 연결과 재연결
 
 ### 최초 연결
@@ -236,13 +254,15 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 1. 기존 `useMapSongsQuery([])`로 level 1 곡 상태 준비
 2. STOMP CONNECT
 3. `/user/queue/presence`, `/user/queue/errors` SUBSCRIBE 완료
-4. `/app/presence/join`
-5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
+4. `/app/presence/join { requestSeq, layer, musicId: 마지막 재생곡 }`
+5. 같은 requestSeq의 `PRESENCE_JOINED` 확인 — **또는** `PRESENCE_NO_ANCHOR` 오류(아래 참조)
 6. 현재 layer·화면·boxes에서 만든 ancestorBounds로 `/app/presence/viewport`
 7. 주변사람 패널이 열려 있으면 nearby open REST 호출
 8. heartbeat 시작
 
-최초 join이 끝나면 직전 곡 위치에 배치되어 다른 사용자에게 노출된다. 이후 playEnd는 재생 시간만 끝내고 마지막 위치의 노출은 유지한다. 노출 제거는 leave·disconnect·TTL 만료에서 수행한다.
+**재생 기록이 없는 사용자**(처음 온 사용자)는 4번 join이 `PRESENCE_NO_ANCHOR`로 거부된다. 입장할 곡이 없기 때문이다. 이 경우 프론트는 오류를 "아직 지도에 없음"으로 받아들이고 6번부터 계속 진행한다 — 위치 없이도 남을 보는 것은 정상이다. 이 사용자가 처음 지도에 나타나는 순간은 첫 `POST /api/music/play`이며, 그 요청의 `layer`로 자리를 잡는다. 프론트는 play 요청에 **항상 현재 보고 있는 레이어를 `layer`로 넣어** 보낸다(이미 서 있는 사용자면 서버가 무시한다).
+
+기록이 있는 사용자는 join이 끝나면 마지막 재생곡 위치에 배치되어 다른 사용자에게 노출된다. 이후 playEnd는 재생 시간만 끝내고 마지막 위치의 노출은 유지한다. 노출 제거는 leave·disconnect·TTL 만료에서 수행한다.
 
 ### 재연결
 
@@ -254,17 +274,33 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 
 ## 7. 오류
 
-`/user/queue/errors`의 기존 실시간 오류 봉투를 사용한다.
+`/user/queue/errors`의 기존 실시간 오류 봉투를 사용한다. `payload`는 다음과 같고, 요청 순번을 아는 오류에만 `requestSeq`가 붙는다(모르면 생략).
+
+```json
+{
+  "code": "PRESENCE_JOIN_INVALID",
+  "message": "입장 요청 순번은 1 이상이어야 한다",
+  "requestSeq": 4
+}
+```
+
+`code`는 `PRESENCE_NO_ANCHOR`, `PRESENCE_LOCATION_NULL`, `PRESENCE_LAYER_INVALID`, `PRESENCE_JOIN_INVALID`, `PRESENCE_VIEWPORT_INVALID`, `PRESENCE_STALE`, `PRESENCE_NOT_CONNECTED` 중 하나다.
 
 | 상황 | 처리 |
 | --- | --- |
 | presence 없음 또는 만료 | `PRESENCE_STALE`, 프론트 재연결 흐름 수행 |
-| layer·현재 범위·ancestorBounds 오류 | viewport validation 오류, 현재 화면 유지 |
+| 재생 기록 없는 사용자의 join | `PRESENCE_NO_ANCHOR`, 오류 아님 — "아직 지도에 없음"으로 처리하고 viewport 계속 (§6) |
+| layer·현재 범위·ancestorBounds 오류 | `PRESENCE_VIEWPORT_INVALID`, 현재 화면 유지 |
+| join 요청값 오류(순번·레이어·곡 ID) | `PRESENCE_JOIN_INVALID`, 같은 `requestSeq`로 회신 |
 | stale epoch/requestSeq | 서버 무시, 필요 시 debug metric만 증가 |
 | 내부 조회 실패 | 기존 realtime internal 오류, 프론트는 직전 화면 유지 후 재시도 |
 
 ## 8. Frontend Verification Checklist
 
+- [ ] 모든 S→C 메시지를 `payload`에서 읽는다(`data` 아님).
+- [ ] `PRESENCE_JOINED`의 `layer`·`musicId`를 요청값 대신 화면 상태로 삼는다.
+- [ ] join이 `PRESENCE_NO_ANCHOR`로 거부돼도 viewport·heartbeat는 계속한다.
+- [ ] `POST /api/music/play`에 항상 현재 레이어를 `layer`로 넣는다.
 - [ ] 소켓 queue 구독 전에 join/viewport를 보내지 않는다.
 - [ ] 팬·줌은 250ms debounce한다.
 - [ ] requestSeq를 요청마다 증가시킨다.

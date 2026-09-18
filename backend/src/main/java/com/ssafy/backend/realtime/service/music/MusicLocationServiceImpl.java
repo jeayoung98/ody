@@ -38,6 +38,15 @@ public class MusicLocationServiceImpl implements MusicLocationService {
 	}
 
 	/**
+	 * 곡 존재 여부를 BE2 상세 조회로 확인한다.
+	 * 좌표 조회가 비었을 때만 부르는 오류 경로라 상세 한 건을 읽는 비용은 문제가 안 된다.
+	 */
+	@Override
+	public boolean exists(long musicId) {
+		return musicDetailReader.findDetail(musicId).isPresent();
+	}
+
+	/**
 	 * 여러 곡의 좌표를 30개씩 나눠 읽는다.
 	 * @param musicIds 곡 ID 목록
 	 * @return 곡 ID별 16차원 좌표

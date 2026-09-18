@@ -29,7 +29,7 @@ description: "Task list for 재생 불가 판정을 백엔드가 직접 기록�
 
 **Purpose**: 코드가 배포되기 전에 저장 계층의 판정 표시를 일치시킨다
 
-- [ ] T001 운영 DB 백필 실행 — `UPDATE music SET is_unplayable = true WHERE video_id = 'none'` (560행). **사람이 직접 실행한다** (운영 쓰기). 실행 전후 `SELECT count(*) FILTER (WHERE is_unplayable), count(*) FILTER (WHERE video_id = 'none') FROM music` 가 `0 | 560` → `560 | 560`
+- [X] T001 운영 DB 백필 실행 — `UPDATE music SET is_unplayable = true WHERE video_id = 'none'` (560행). **사람이 직접 실행한다** (운영 쓰기). 실행 전후 `SELECT count(*) FILTER (WHERE is_unplayable), count(*) FILTER (WHERE video_id = 'none') FROM music` 가 `0 | 560` → `560 | 560`
 
 **⚠️ T001 없이 T014·T015 가 배포되면 560곡이 검색·지도에 되살아난다 (spec SC-004 위반)**
 

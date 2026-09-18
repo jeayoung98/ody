@@ -293,6 +293,8 @@ let coverLayer = -1;
  * 그래서 **있던 커버를 먼저 지키고**, 화면 밖으로 나갔거나 상주가 아니게 된 자리만 새로 채운다.
  */
 function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
+  // 그린 것만 집힌다 (S15P21A405-452). 안 그리고 나가는 길에도 비워야 지난 프레임 자리가 안 남는다
+  e.coverHits = [];
   if (e.anim) return;
   const f = e.freeRect();
   const M = 42;
@@ -349,9 +351,13 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.font = `500 9.5px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
-    if (e.hoverId === it.s.musicId || e.selectedId === it.s.musicId) continue;
     const mag = starMag(it.s);
     const S = (19 + Math.pow(mag, 1.4) * 14) * grow;
+    // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
+    // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
+    // 집을 자리가 사라져 깜빡인다
+    e.coverHits.push({ i, px: it.px, py: it.py, r: S / 2 });
+    if (e.hoverId === it.s.musicId || e.selectedId === it.s.musicId) continue;
     const x = it.px - S / 2;
     const y = it.py - S / 2;
     g.save();

@@ -13,6 +13,7 @@ import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
+import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
@@ -36,6 +37,7 @@ public class PresenceService {
 	private final MusicLocationService musicLocationService;
 	private final MusicPositionCalculator musicPositionCalculator;
 	private final RealtimeEventService realtimeEventService; // 위치 변경 전달
+	private final PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡 확인
 
 	@Value("${realtime.presence.ttl-ms:45000}")
 	private long ttlMs;
@@ -77,6 +79,11 @@ public class PresenceService {
 	 * 사용자를 곡 위치에 놓는다.
 	 * 처음 들어오거나 위치가 바뀌면 변경을 알린다.
 	 *
+	 * 곡은 어느 경우에도 클라이언트 값을 믿지 않는다.
+	 * 첫 입장은 이 사용자의 마지막 재생 기록으로 정하고, 기록이 없으면 거부한다(재생 전엔 지도에 안 보임).
+	 * 이후 입장(레이어 이동)은 서버에 남아 있는 현재 곡을 유지한다.
+	 * 요청의 musicId 는 참고값이며, 다르면 서버 값을 쓰고 PresenceJoined 로 알려준다.
+	 *
 	 * @param email 사용자 이메일
 	 * @param expectedEpoch 요청을 보낸 소켓의 접속 번호
 	 * @param request 요청 순번, 곡, 레이어
@@ -95,8 +102,8 @@ public class PresenceService {
 			throw joinError(WebSocketErrorCode.PRESENCE_STALE, "이전 소켓에서 보낸 입장 요청이다");
 		}
 
-		// 2. 첫 입장은 요청 곡, 레이어 이동은 서버의 현재 곡을 쓴다.
-		long musicId = before.musicId() == null ? request.musicId() : before.musicId();
+		// 2. 놓을 곡을 정한다. 첫 입장은 마지막 재생 기록, 레이어 이동은 서버의 현재 곡.
+		long musicId = before.musicId() != null ? before.musicId() : resolveFirstJoinMusic(email, request);
 		try {
 			musicPositionCalculator.findAxes(layer);
 		} catch (IllegalArgumentException e) {
@@ -135,6 +142,29 @@ public class PresenceService {
 		}
 		log.info("[Presence] join 완료 musicId={} layer={}", musicId, layer);
 		return new PresenceJoined(request.requestSeq(), layer, musicId);
+	}
+
+	/**
+	 * 첫 입장에서 놓을 곡을 마지막 재생 기록으로 정한다.
+	 * 클라이언트가 보낸 곡을 그대로 믿으면 재생하지 않은 곡 자리에 설 수 있어(좌표 조작),
+	 * 서버가 가진 기록만 인정한다. 기록이 없으면 아직 지도에 나올 수 없다 — 첫 재생이 첫 배치다.
+	 *
+	 * @param email 사용자 이메일
+	 * @param request 클라이언트가 보낸 입장 요청(musicId 는 참고값)
+	 * @return 실제로 놓을 곡 ID
+	 * @throws WebSocketRequestException 재생 기록이 없는 경우
+	 */
+	private long resolveFirstJoinMusic(String email, JoinRequest request) {
+		Long latest = playHistoryMapper.findLatestMusicId(email);
+		if (latest == null) {
+			throw joinError(WebSocketErrorCode.PRESENCE_NO_ANCHOR,
+					"재생 기록이 없어 입장할 수 없다. 먼저 곡을 재생해야 한다");
+		}
+		if (!latest.equals(request.musicId())) {
+			// 요청과 다르면 서버 기록을 쓴다. 어떤 곡으로 바뀌었는지는 응답(PresenceJoined)이 알린다.
+			log.debug("join 곡 보정 requested={} latest={}", request.musicId(), latest);
+		}
+		return latest;
 	}
 
 	/** 입장 실패 원인만 남기고 사용자 정보는 로그에 쓰지 않는다. */

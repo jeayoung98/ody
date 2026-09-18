@@ -3,7 +3,9 @@ package com.ssafy.backend.realtime.dto.presence;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * C→S /app/presence/join — 처음에는 요청 곡으로 입장하고, 이후에는 서버의 현재 곡으로 레이어만 옮긴다.
+ * C→S /app/presence/join — 서 있던 자리로 돌아오거나 레이어를 옮긴다.
+ * musicId 는 참고값이다. 서버는 첫 입장이면 마지막 재생 기록, 이후엔 현재 곡을 쓰고,
+ * 실제로 적용한 곡은 PresenceJoined 로 돌려준다. 재생 기록이 없으면 입장이 거부된다.
  */
 public record JoinRequest(
 		@NotNull Long requestSeq,

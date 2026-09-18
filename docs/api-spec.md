@@ -112,7 +112,7 @@
 
 **Location**: `pc1`~`pc16` (각 float).
 
-**MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `playCnt`(int), `youtubeCnt`(int).
+**MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `releaseYear`(int\|null, 발매 연도), `playCnt`(int), `youtubeCnt`(int).
 
 **`videoId` 규약** (2026-09-13, S15P21A405-57 · spec 006): 유튜브 영상 식별자 11자다. `youtubeUrl` 이 **검색** URL 이라 그 곡이라는 보장이 없는 반면, `videoId` 는 **확인된 영상**이다 — 곡 길이 ±3초(공식 채널 `- Topic`·VEVO 는 ±30초) 일치와 `embeddable` 을 확인한 것만 담는다. 조건을 못 넘기면 담지 않는다.
 - **키는 항상 있고 값이 `null` 일 수 있다.** 키 자체가 빠지지 않는다 (`"videoId":null`)
@@ -323,7 +323,7 @@ body: `idToken`(String, required).
 ```json
 { "success": true, "data": {
   "id": 10234, "mbid": "b1a9c0e9-d987-4042-ae91-78d6a3267d69", "title": "Love wins all", "artist": "IU",
-  "bpm": 128.4, "duration": 275, "album": "The Winning", "genres": ["K-Pop"],
+  "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"],
   "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
   "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 },
   "playCnt": 1428, "youtubeCnt": 3,
@@ -351,7 +351,7 @@ body: `idToken`(String, required).
   "musicCnt": 14, "totalDuration": 3480,
   "path": [ {
     "step": 0, "id": 10234, "mbid": "b1a9c0e9-...", "title": "Love wins all", "artist": "IU",
-    "bpm": 128.4, "duration": 275, "album": "The Winning", "genres": ["K-Pop"],
+    "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"],
     "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
     "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3
   } ]
@@ -406,7 +406,7 @@ param: `level`(int, required, 1~8), `size`(int, optional, 1~10,000), 누적 축 
 | 요청 | `level` + 중심좌표 `pc1`~`pc16` | `level` + **누적 축 범위**(1레이어는 파라미터 없음) |
 | 조회 구역 | 서버가 레벨별 **반경**으로 정하는 **원형** | **격자**. 구역 선택·이동은 **클라이언트 뷰포트** |
 | 선정 | 서버가 `youtubeCnt` **내림차순 상위 k** | 서버는 **공간 균등 상주 집합**, 인기순은 **클라이언트** |
-| 응답 | `MusicDetail` (13필드, `location` 객체) | **`MapPoint`** (9필드, `pc` 배열) |
+| 응답 | `MusicDetail` (14필드, `location` 객체) | **`MapPoint`** (9필드, `pc` 배열) |
 | 1레이어 | 다른 레벨과 동일 처리 | **정적 사전 계산** |
 
 **왜**: FE 가 이 모델로 이미 구현했고(`map-engine.ts`), data 가 거기 맞춰 인프라를 만들었으며(스펙 16 `map_sample`·GiST),
@@ -522,7 +522,7 @@ param: `level`(int, required, 1~8), `size`(int, optional, 1~10,000), 누적 축 
 ```json
 { "success": true, "data": {
   "playlistId": 42, "playlistName": "새벽 드라이브", "musicCnt": 2, "totalDuration": 512,
-  "musics": [ { "id": 10234, "mbid": "...", "title": "Love wins all", "artist": "IU", "bpm": 128.4, "duration": 275, "album": "The Winning", "genres": ["K-Pop"], "youtubeUrl": "https://...", "location": { "pc1": -0.4213, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3 } ]
+  "musics": [ { "id": 10234, "mbid": "...", "title": "Love wins all", "artist": "IU", "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"], "youtubeUrl": "https://...", "location": { "pc1": -0.4213, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3 } ]
 }, "error": null }
 ```
 - `youtubeUrl`이 null인 곡은 클라이언트에서 재생 불가로 표시. 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`.

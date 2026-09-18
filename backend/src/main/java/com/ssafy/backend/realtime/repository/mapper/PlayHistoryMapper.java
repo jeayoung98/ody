@@ -27,4 +27,10 @@ public interface PlayHistoryMapper {
 	 * @return 마지막 재생곡 ID. 재생 기록이 없으면 null → 입장 거부(비노출 유지).
 	 */
 	Long findLatestMusicId(@Param("email") String email);
+
+	/**
+	 * 곡별 최초 청취자를 기록한다 (S15P21A405-448). 이미 누가 들은 곡이면 아무것도 하지 않는다.
+	 * 실제로 넣었으면 1 — 그 사람이 이 곡의 "발견자"다.
+	 */
+	int insertDiscovery(@Param("musicId") long musicId, @Param("email") String email);
 }

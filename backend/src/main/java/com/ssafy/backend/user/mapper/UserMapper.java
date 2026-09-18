@@ -15,4 +15,6 @@ public interface UserMapper {
 	void updateImageUrl(@Param("email") String email, @Param("imageUrl") String imageUrl);
 
 	void updateIsPublic(@Param("email") String email, @Param("isPublic") boolean isPublic);
+
+	int countDistinctPlayedMusic(@Param("email") String email);
 }

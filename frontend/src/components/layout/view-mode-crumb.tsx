@@ -13,8 +13,10 @@ import { usePlayerStore } from "@/stores/use-player-store";
  * | 상태 | 칩 |
  * | --- | --- |
  * | 기본 | 회색 `기본 뷰`. 볼 목록이 있으면 눌러서 별자리를 켠다 |
- * | 주변 탐색 | 청록 `주변 탐색 뷰` + ✕ |
- * | 별자리 | 보라 `별자리 뷰 n/m` + ✕ |
+ * | 주변 탐색 | 청록 `주변 탐색 뷰` + ✕. 칩을 누르면 끈다 |
+ * | 별자리 | 보라 `별자리 뷰 n/m` + ✕. 칩을 누르면 끈다 |
+ *
+ * 세 상태 모두 **칩 전체가 버튼**이다 (S15P21A405-457) — ✕ 는 표식일 뿐이다.
  *
  * 별자리를 켜면 **그 목록의 패널도 같이 연다.** 별자리는 패널에 딸린 화면이라 혼자 뜨면
  * 지도만 가린 채 남는다 (패널을 닫으면 별자리도 꺼진다 — `use-panel-store`).
@@ -52,29 +54,37 @@ export default function ViewModeCrumb() {
 
   const turnOff = nearby ? exitNearby : toggleConstellation;
 
+  /**
+   * **칩 전체가 버튼이다** (S15P21A405-457). 켜져 있으면 끄고, 꺼져 있고 켤 목록이 있으면 켠다.
+   * 예전에는 켜져 있을 때 안의 ✕ 만 먹었다 — 칩은 누를 만한 크기인데 그 안의 10px 만 눌리는
+   * 게 이유가 없다. 눌 데가 없으면 `null` 이고, 그때는 칩이 그냥 표시가 된다.
+   */
+  const press = on ? turnOff : canOpen ? openConstellation : null;
+  const hint = on ? `${label} 끄기` : press ? "별자리 뷰 켜기" : undefined;
+
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-1">
       <span
-        className={`glass inline-flex items-center gap-1.5 rounded-pill! px-2.5 py-[5px] text-[11.5px] transition-colors duration-fast ${tone} ${
-          !on && canOpen ? "cursor-pointer hover:border-line-2 hover:text-ink" : ""
+        className={`glass group inline-flex items-center gap-1.5 rounded-pill! px-2.5 py-[5px] text-[11.5px] transition-colors duration-fast ${tone} ${
+          press ? "cursor-pointer hover:border-line-2 hover:text-ink" : ""
         }`}
-        // 꺼져 있고 켤 목록이 있을 때만 칩 전체가 버튼이 된다
-        onClick={!on && canOpen ? openConstellation : undefined}
-        role={!on && canOpen ? "button" : undefined}
-        tabIndex={!on && canOpen ? 0 : undefined}
-        onKeyDown={!on && canOpen ? (e) => (e.key === "Enter" || e.key === " ") && openConstellation() : undefined}
-        title={!on && canOpen ? "별자리 뷰 켜기" : undefined}
+        onClick={press ?? undefined}
+        role={press ? "button" : undefined}
+        tabIndex={press ? 0 : undefined}
+        onKeyDown={press ? (e) => (e.key === "Enter" || e.key === " ") && press() : undefined}
+        title={hint}
+        aria-label={hint}
       >
         <span className={`h-1 w-1 rounded-pill ${dot}`} />
         {label}
         {constellation && <span className="num text-ink-3">{count}</span>}
         {/* 꺼져 있어도 볼 목록이 있으면 몇 곡인지는 알려 준다 */}
         {!on && canOpen && <span className="num text-ink-3">{count}</span>}
-        {on && (
-          <button type="button" onClick={turnOff} className="ml-0.5 text-ink-3 transition-colors hover:text-ink" aria-label={`${label} 끄기`}>
-            ✕
-          </button>
-        )}
+        {/*
+          닫는 길임을 보이는 **표식**이다 — 버튼이 아니다. 칩 안에 또 버튼을 두면 클릭이 위로
+          번져 핸들러가 두 번 돌고, 별자리 뷰는 토글이라 껐다가 그 자리에서 다시 켜진다.
+        */}
+        {on && <span aria-hidden className="ml-0.5 text-ink-3 transition-colors group-hover:text-ink">✕</span>}
       </span>
     </div>
   );

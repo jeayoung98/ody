@@ -23,14 +23,13 @@ import RightPanel from "@/components/panels/right-panel";
 import PlayHint from "@/components/discovery/play-hint";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
-/** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
 /**
- * 패널이 접혀 있을 때 오른쪽이 가려지는 폭 (S15P21A405-406).
- * 핸들(22) + 레일과의 틈(6) + 레일폭(54) + 화면 여백(18) = 100.
- * 접힌 패널 몸통은 이 안쪽으로 들어가 레일 뒤에 숨으므로 따로 더하지 않는다.
+ * 우측 패널이 가리는 폭(px). `right-panel.tsx` 의 자리와 맞춘다 (S15P21A405-427).
+ * 접힘: 화면 여백(18) + 남긴 몸통(18) + 핸들(22) + 틈(6) = 64.
+ * 펼침: 패널폭(376, tokens.css 의 --spacing-right-panel) + 여백(18) + 틈(16) = 410.
  */
-const PEEK_OCCLUSION = 22 + 6 + 54 + 18;
-const PANEL_OCCLUSION = 376 + 74 + 16;
+const PEEK_OCCLUSION = 18 + 18 + 22 + 6;
+const PANEL_OCCLUSION = 376 + 18 + 16;
 
 interface MainScreenProps {
   /** 지도 위에 얹을 오버레이 (튜토리얼 등) */
@@ -39,7 +38,7 @@ interface MainScreenProps {
 
 /**
  * 기본 화면 = 풀스크린 별지도 위에 떠 있는 글래스 HUD.
- * 상단(브랜드·레이어 스테퍼 / 검색 / 도움말) · 우측(패널 + 레일) · 좌하단(계기판) · 하단(플레이어·주변 탐색) · 우하단(반응)
+ * 상단(브랜드·레이어 스테퍼 / 검색 / 네비·도움말) · 우측(패널) · 좌하단(계기판) · 우하단(플레이어, 그 위 반응)
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);

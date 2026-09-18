@@ -16,25 +16,18 @@ import { track } from "@/lib/analytics/client";
  */
 export default function LocateButton() {
   const canGoHome = useMapStore((s) => s.canGoHome);
-  const viewMode = useMapStore((s) => s.viewMode);
-  /**
-   * 임시 뷰(주변 탐색·별자리)가 떠 있으면 지도를 옮겨도 보이지 않는다.
-   * 그래서 **눌리기는 하되** 흐리게 두고, 왜 안 되는지 토스트로 알린다 — 눌렀는데 아무 일도
-   * 안 나는 게 제일 나쁘다.
-   */
-  const overlayOpen = viewMode !== "default";
 
   /**
    * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
    * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
-   * 거부된 경우(오버레이·따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
+   * 거부된 경우(따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
+   * 임시 뷰는 스토어의 `goHome` 이 닫고 가므로 여기서 막지 않는다 (S15P21A405-445).
    */
   const handleClick = () => {
     const showToast = useToastStore.getState().show;
     const r = useMapStore.getState().goHome();
     track("map_locate_used", { outcome: r });
-    if (r === "overlay") showToast("주변 탐색·별자리 뷰를 닫고 눌러주세요");
-    else if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+    if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
     else if (r !== "none") {
       const musicId = usePlayerStore.getState().currentMusicId;
       if (musicId != null) usePanelStore.getState().openSong(musicId);
@@ -47,12 +40,9 @@ export default function LocateButton() {
       type="button"
       onClick={handleClick}
       disabled={!canGoHome}
-      aria-disabled={overlayOpen}
       aria-label="내 위치로 가기"
-      title={overlayOpen ? "뷰를 닫고 누르세요" : "내 위치로 가기"}
-      className={`grid h-8 w-8 shrink-0 place-items-center rounded-full transition-colors disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent ${
-        overlayOpen ? "text-ink-4 hover:bg-transparent" : "text-ink-2 hover:bg-white/10 hover:text-teal"
-      }`}
+      title="내 위치로 가기"
+      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent"
     >
       <LocateIcon />
     </button>

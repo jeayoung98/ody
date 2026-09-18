@@ -285,3 +285,13 @@
     display: flex;
   }
 }
+
+/* 플레이어바 파형 — 재생 헤드 근처 바만 숨 쉰다 (S15P21A405-428, waveform-bars.tsx) */
+@keyframes wave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.5); }
+}
+.animate-wave {
+  animation: wave 0.9s ease-in-out infinite;
+  transform-origin: center;
+}

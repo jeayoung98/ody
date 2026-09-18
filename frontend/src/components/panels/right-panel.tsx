@@ -33,7 +33,7 @@ export default function RightPanel() {
     <aside
       data-hud
       data-tutorial={`panel-${activePanel}`}
-      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100vh-264px)] w-right-panel flex-col transition-[transform,opacity] duration-500 ease-out ${
+      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100vh-264px)] w-right-panel flex-col transition-[translate,opacity] duration-500 ease-out ${
         /*
           접으면 **몸통 18px 만 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이
           있었는지가 안 읽힌다 — 좌하단 계기판이 몸통을 조금 남기는 것(`COLLAPSED_PEEK_PX`)과 같은 이유다.
@@ -53,6 +53,12 @@ export default function RightPanel() {
 
           **클래스를 런타임에 조합하지 않는다** — Tailwind 는 소스를 훑어 유틸리티를 만들어서
           문자열로 짜 넣으면 CSS 가 생기지 않는다. 그래서 계산 결과를 직접 적는다.
+
+          transition 대상이 `transform` 이 아니라 **`translate`** 인 것도 그냥 둔다 (S15P21A405-463).
+          Tailwind v4 의 `translate-x-*` 는 transform 이 아니라 translate 프로퍼티에 값을 넣는다 —
+          `transition-[transform,opacity]` 로 적으면 흐려지기만 하고 자리는 순간이동했다.
+          계기판(`minimap-panel.tsx`)이 멀쩡했던 건 `transition-transform` 이 v4 에서
+          transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
         collapsed ? "translate-x-[376px] opacity-60" : "opacity-100"
       }`}

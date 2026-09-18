@@ -1,8 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useRef } from "react";
-import { SEARCH_LOAD_MORE_MARGIN_PX } from "@/constants";
 import { genreColor } from "@/constants/design-tokens";
+import { useLoadMoreOnBottom } from "@/hooks/use-load-more-on-bottom";
 import type { MusicSearchResult, SearchCondition } from "@/types";
 
 interface SearchResultListProps {
@@ -54,35 +53,14 @@ export default function SearchResultList({
   isLoadingMore,
   onLoadMore,
 }: SearchResultListProps) {
-  const boxRef = useRef<HTMLDivElement>(null);
-  /** 콜백이 매 렌더 바뀌어도 검사 함수를 다시 만들지 않게 최신 것만 들고 있는다 */
-  const loadMoreRef = useRef(onLoadMore);
-  useEffect(() => {
-    loadMoreRef.current = onLoadMore;
-  }, [onLoadMore]);
-
-  /**
-   * 바닥에 닿았는지 **스크롤 위치로** 잰다.
-   *
-   * IntersectionObserver 로 하면 관찰을 거는 순간 한 번 콜백이 오는데, 그때 목록이 아직 안 그려져 있어
-   * **스크롤도 안 했는데 다음 페이지가 당겨졌다** (실측: 첫 페이지만 떠 있어야 할 때 이미 20건). 한 페이지가
-   * 20초짜리 호출이라 그냥 낭비다. 위치 비교는 그런 일이 없다.
-   */
-  const checkBottom = useCallback(() => {
-    const box = boxRef.current;
-    if (!box || !hasMore || isLoadingMore) return;
-    if (box.scrollTop + box.clientHeight >= box.scrollHeight - SEARCH_LOAD_MORE_MARGIN_PX) loadMoreRef.current();
-  }, [hasMore, isLoadingMore]);
-
-  // 결과가 목록 높이를 못 채우면 스크롤이 안 생겨 영영 안 불린다 — 목록이 바뀔 때마다 한 번 본다
-  useEffect(() => checkBottom(), [checkBottom, results.length]);
+  const { boxRef, onScroll } = useLoadMoreOnBottom({ hasMore, isLoadingMore, count: results.length, onLoadMore });
 
   /** 통합 검색 상태에서만 조건을 굳힐 수 있다. 이미 칩이 있으면 두 번째 칩은 만들지 않는다 */
   const canPromote = condition.mode === "all" && input.length > 0;
   return (
     <div
       ref={boxRef}
-      onScroll={checkBottom}
+      onScroll={onScroll}
       // 스크롤바를 잡아도 검색창이 포커스를 잃지 않게 (잃으면 목록이 닫힌다)
       onMouseDown={(e) => e.preventDefault()}
       className="glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[15px]!"

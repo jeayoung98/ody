@@ -7,6 +7,28 @@ export type StorageScope = "local" | "session";
 const pick = (scope: StorageScope) => (scope === "session" ? window.sessionStorage : window.localStorage);
 const SCOPES: StorageScope[] = ["local", "session"];
 
+/**
+ * 저장소가 바뀌었다고 **같은 탭에** 알린다 (S15P21A405-473).
+ *
+ * 브라우저의 `storage` 이벤트는 **다른 탭**이 바꿨을 때만 온다 — 바꾼 탭 자신은 못 듣는다.
+ * 그런데 토큰을 지우는 쪽(재발급 실패, `lib/api.ts`)과 그걸 보고 로그인으로 보내는 쪽
+ * (`AuthGuard` 의 `useHasToken`)이 같은 탭이라, 그 이벤트만 기다리면 영영 못 듣는다.
+ * 그래서 지우거나 쓰는 자리에서 직접 알린다.
+ */
+const listeners = new Set<() => void>();
+
+/** `useSyncExternalStore` 에 그대로 넘기는 구독 함수 */
+export function subscribeStorage(listener: () => void): () => void {
+  listeners.add(listener);
+  return () => {
+    listeners.delete(listener);
+  };
+}
+
+function notify(): void {
+  for (const listener of listeners) listener();
+}
+
 /** 두 저장소를 모두 본다 — 어디에 넣었는지 읽는 쪽이 신경 쓰지 않게 */
 export function readStorage<T>(key: string): T | null {
   if (typeof window === "undefined") return null;
@@ -43,6 +65,7 @@ export function writeStorage<T>(key: string, value: T, scope: StorageScope = "lo
   } catch {
     /* ignore */
   }
+  notify();
 }
 
 export function removeStorage(key: string): void {
@@ -54,4 +77,5 @@ export function removeStorage(key: string): void {
       /* ignore */
     }
   }
+  notify();
 }

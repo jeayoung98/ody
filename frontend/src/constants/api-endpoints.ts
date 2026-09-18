@@ -39,8 +39,6 @@ export const API_ENDPOINTS = {
     signup: "/bff/auth/signup",
     /** 실연동 → `POST /api/auth/login`. 본문 `{email, password}` */
     login: "/bff/auth/login",
-    /** 실연동 → `PATCH /api/user/profile`. 백엔드에 닉네임 전용 경로는 없다 (A-13) */
-    nickname: "/bff/auth/nickname",
     /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 — OAuth 리다이렉트 흐름을 쓸 때 붙인다 */
     exchange: "/api/auth/exchange",
     /** 실연동 → `PATCH /api/user/tutorial-completed` */
@@ -57,6 +55,13 @@ export const API_ENDPOINTS = {
     detail: (email: string) => `/bff/users/${encodeURIComponent(email)}`,
     /** 실연동 → `GET /api/users/nickname-available` */
     nicknameAvailable: (nickname: string) => `/bff/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
+    /**
+     * 실연동 → `PATCH /api/user/profile`. 닉네임·프로필 이미지를 **부분 수정**한다 (A-13).
+     * 가입 직후 닉네임 화면과 프로필 수정 화면이 같이 쓴다 — 백엔드에 닉네임 전용 경로가 없다.
+     */
+    profile: "/bff/user/profile",
+    /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
+    publicVisibility: "/bff/user/public",
     nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
     follow: (email: string) => `/bff/users/${encodeURIComponent(email)}/follow`,
     reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,

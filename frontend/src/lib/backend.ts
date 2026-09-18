@@ -133,6 +133,8 @@ export interface BackendMusicDetail extends BackendMusicSummary {
   mbid: string;
   bpm: number | null;
   duration: number | null;
+  /** 발매 연도. 없으면 null (S15P21A405-439 로 백엔드가 내려주기 시작했다) */
+  releaseYear: number | null;
   playCnt: number | null;
   youtubeCnt: number | null;
 }
@@ -222,7 +224,8 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
  * 실데이터는 662만 곡 중 1.0%만 장르가 붙어 있어 그 오해가 화면 거의 전부를 덮는다.
  */
 /**
- * 백엔드 MusicDetail → ERD `Music`. 백엔드에 없는 값은 **지어내지 않고 비운다** — `releaseYear` 는 응답에 없다.
+ * 백엔드 MusicDetail → ERD `Music`. 백엔드에 없는 값은 **지어내지 않고 비운다**.
+ * `releaseYear` 는 S15P21A405-439 로 응답에 추가됐다 — 백엔드 배포 전에는 undefined 라 null 로 떨어진다.
  * 곡 상세·플리 상세가 같은 변환을 쓴다
  */
 export function toMusic(res: BackendMusicDetail): Music {
@@ -231,7 +234,7 @@ export function toMusic(res: BackendMusicDetail): Music {
     mbid: res.mbid,
     title: res.title,
     artist: res.artist,
-    releaseYear: null,
+    releaseYear: res.releaseYear ?? null,
     bpm: res.bpm,
     duration: res.duration,
     album: res.album,

@@ -25,6 +25,13 @@ ody:
   videoid:
     # 개인 EC2 배포 videoid_api.py (S15P21A405-312, 프로토타입). 실제 주소로 덮어써야 한다.
     base-url: ${VIDEOID_API_BASE_URL}
+  profile-image:
+    # 업로드 파일이 실제로 쌓이는 디렉터리. 배포에서는 호스트 디렉터리를 컨테이너에 같은 경로로
+    # 마운트한다(backend/deploy.sh). Blue-Green 두 슬롯이 같은 디렉터리를 본다.
+    dir: ${PROFILE_IMAGE_DIR}
+    # 저장된 파일의 공개 주소 접두. DB image_url 에 이 값 + / + 파일명이 절대 URL 로 들어간다.
+    # nginx 가 직접 서빙하게 되면 이 값만 바꾸면 된다 (S15P21A405-426).
+    base-url: ${PROFILE_IMAGE_BASE_URL}
   serving:
     bundle: v2.1-pca16
     tau-dup: 1.6624            # 미만은 같은 녹음으로 접는다
@@ -62,6 +69,11 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: email, profile
+  servlet:
+    # 업로드는 프로필 이미지뿐이다. ProfileImageStorage.MAX_BYTES 와 같은 값을 유지한다 [S15P21A405-426].
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
@@ -118,6 +130,9 @@ ody:
     # 테스트는 컨텍스트 로딩만 하고 실제로 호출하지 않는다 — 값은 플레이스홀더가
     # 풀리기만 하면 된다(S15P21A405-317).
     base-url: http://localhost:8001
+  profile-image:
+    dir: ${java.io.tmpdir}/ody-profile-images-test
+    base-url: http://localhost:8080/api/user/images
 
 app:
   cors:

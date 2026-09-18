@@ -113,9 +113,13 @@ public class AuthService {
 			log.info("[Auth] 구글 idToken 로그인 완료 email={}", identity.email());
 		}
 
+		// 사용자가 올린 사진이 있으면 그것이 정본이다. touchLogin 은 image_url 이 비어 있을 때만 채운다
+		// [S15P21A405-426].
+		String imageUrl = user.getImageUrl() != null ? user.getImageUrl() : identity.imageUrl();
+
 		TokenPair tokenPair = issueTokenPair(identity.email());
 		GoogleLoginResult.UserInfo userInfo =
-				new GoogleLoginResult.UserInfo(user.getEmail(), user.getName(), user.getNickname(), identity.imageUrl());
+				new GoogleLoginResult.UserInfo(user.getEmail(), user.getName(), user.getNickname(), imageUrl);
 
 		return new GoogleLoginResult(tokenPair, userInfo);
 	}

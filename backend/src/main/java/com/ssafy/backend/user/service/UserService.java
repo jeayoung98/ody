@@ -8,12 +8,12 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.user.NicknamePolicy;
+import com.ssafy.backend.user.dto.NicknameUpdateRequest;
+import com.ssafy.backend.user.dto.NicknameUpdateResponse;
 import com.ssafy.backend.user.dto.PublicVisibilityUpdateRequest;
 import com.ssafy.backend.user.dto.PublicVisibilityUpdateResponse;
 import com.ssafy.backend.user.dto.UserDetailResponse;
 import com.ssafy.backend.user.dto.UserProfileRow;
-import com.ssafy.backend.user.dto.UserProfileUpdateRequest;
-import com.ssafy.backend.user.dto.UserProfileUpdateResponse;
 import com.ssafy.backend.user.mapper.UserMapper;
 
 import lombok.RequiredArgsConstructor;
@@ -70,37 +70,31 @@ public class UserService {
 	}
 
 	/**
-	 * 프로필(닉네임, 프로필 이미지) 부분 수정 (S15P21A405-216). 토큰 주체 본인만 대상, email 파라미터 없음.
-	 * 요청에 포함된 필드만 갱신하고 나머지는 기존 값을 유지한다. 닉네임 변경 시 signup과 같은 길이 규칙·중복 검사를
-	 * 적용하되, 기존과 동일한 닉네임으로의 "변경"은 중복으로 취급하지 않는다.
+	 * 닉네임 수정 (S15P21A405-426, 이전 PATCH /api/user/profile 에서 분리). 토큰 주체 본인만 대상이라
+	 * email 파라미터를 받지 않는다. signup 과 같은 길이 규칙·중복 검사를 적용하되, 기존과 동일한 닉네임으로의
+	 * "변경"은 중복으로 취급하지 않는다. 프로필 이미지는 ProfileImageService 가 따로 다룬다.
 	 */
-	public UserProfileUpdateResponse updateProfile(String email, UserProfileUpdateRequest request) {
-		String nickname = request.nickname();
-		String imageUrl = request.imageUrl();
+	public NicknameUpdateResponse updateNickname(String email, NicknameUpdateRequest request) {
+		String nickname = request == null ? null : request.nickname();
 
-		if (nickname == null && imageUrl == null) {
+		if (nickname == null || nickname.isBlank()) {
 			throw new CustomException(GlobalErrorCode.INVALID_INPUT);
 		}
-
-		if (nickname != null) {
-			if (!NicknamePolicy.isValidLength(nickname)) {
-				throw new CustomException(AuthErrorCode.INVALID_NICKNAME_LENGTH);
-			}
-
-			UserProfileRow current = userMapper.findProfileByEmail(email);
-			if (current == null) {
-				throw new CustomException(UserErrorCode.USER_NOT_FOUND);
-			}
-			if (!nickname.equals(current.getNickname()) && authMapper.existsByNickname(nickname)) {
-				throw new CustomException(AuthErrorCode.NICKNAME_ALREADY_EXISTS);
-			}
+		if (!NicknamePolicy.isValidLength(nickname)) {
+			throw new CustomException(AuthErrorCode.INVALID_NICKNAME_LENGTH);
 		}
 
-		userMapper.updateProfile(email, nickname, imageUrl);
+		UserProfileRow current = userMapper.findProfileByEmail(email);
+		if (current == null) {
+			throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+		}
+		if (!nickname.equals(current.getNickname()) && authMapper.existsByNickname(nickname)) {
+			throw new CustomException(AuthErrorCode.NICKNAME_ALREADY_EXISTS);
+		}
 
-		UserProfileRow updated = userMapper.findProfileByEmail(email);
-		log.info("[User] 프로필 수정 완료 email={}", email);
-		return new UserProfileUpdateResponse(updated.getNickname(), updated.getImageUrl());
+		userMapper.updateNickname(email, nickname);
+		log.info("[User] 닉네임 수정 완료 email={}, nickname={}", email, nickname);
+		return new NicknameUpdateResponse(nickname);
 	}
 
 	/**

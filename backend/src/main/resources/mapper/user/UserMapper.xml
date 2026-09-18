@@ -28,13 +28,17 @@
 		WHERE email = #{email}
 	</update>
 
-	<update id="updateProfile">
+	<update id="updateNickname">
 		UPDATE "user"
-		<set>
-			<if test="nickname != null">nickname = #{nickname},</if>
-			<if test="imageUrl != null">image_url = #{imageUrl},</if>
-			updated_at = now()
-		</set>
+		SET nickname = #{nickname},
+		    updated_at = now()
+		WHERE email = #{email}
+	</update>
+
+	<update id="updateImageUrl">
+		UPDATE "user"
+		SET image_url = #{imageUrl},
+		    updated_at = now()
 		WHERE email = #{email}
 	</update>
 

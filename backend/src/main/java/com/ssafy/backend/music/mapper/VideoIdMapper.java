@@ -10,4 +10,7 @@ import org.apache.ibatis.annotations.Param;
 public interface VideoIdMapper {
 
 	int updateVideoId(@Param("musicId") long musicId, @Param("videoId") String videoId);
+
+	/** 재생 불가 확정. {@code video_id} 는 건드리지 않는다 — 판정의 정본은 플래그다(S15P21A405-454). */
+	int markUnplayable(@Param("musicId") long musicId);
 }

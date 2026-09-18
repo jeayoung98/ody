@@ -26,6 +26,12 @@ public class MusicDetailRow {
 	private Integer playCnt;
 	private Integer youtubeCnt;
 	private String videoId;
+	/**
+	 * music.is_unplayable — "찾아봤지만 쓸 만한 영상이 없다" 판정의 정본 (S15P21A405-454).
+	 * 질의에서 {@code AS unplayable} 로 받는다. 응답으로 나갈 때
+	 * {@link com.ssafy.backend.music.videoid.VideoIds#of} 가 값으로 번역한다.
+	 */
+	private boolean unplayable;
 
 	/** 주변곡 질의에서만 채워진다(상세 1건 조회에서는 null). */
 	private Double distance;

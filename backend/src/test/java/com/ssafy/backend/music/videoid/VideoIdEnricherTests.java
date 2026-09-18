@@ -2,7 +2,10 @@ package com.ssafy.backend.music.videoid;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -47,6 +50,30 @@ class VideoIdEnricherTests {
 
 		assertNull(result);
 		verifyNoInteractions(writerPort);
+	}
+
+	/**
+	 * S15P21A405-454 — 재생 불가 판정은 video_id 가 아니라 is_unplayable 에 남긴다.
+	 * 예전에는 외부 API 가 video_id 자리에 "none" 을 넣어 줘 그대로 저장됐다.
+	 */
+	@Test
+	void resolve_marksUnplayable_andDoesNotWriteVideoId_whenLookupSaysUnplayable() {
+		when(lookupPort.lookup("a", "t", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
+
+		String result = enricher.resolve(1L, "a", "t", null, 200);
+
+		assertEquals(VideoIds.UNPLAYABLE, result);
+		verify(writerPort).markUnplayable(1L);
+		verify(writerPort, never()).save(anyLong(), anyString());
+	}
+
+	/** 판정이 끝난 곡은 다시 묻지 않는다 — "없음" 과 "아직 모름" 을 가르는 이유가 이것이다. */
+	@Test
+	void resolve_returnsUnplayable_withoutLookup_whenAlreadyJudged() {
+		String result = enricher.resolve(1L, "a", "t", VideoIds.UNPLAYABLE, 200);
+
+		assertEquals(VideoIds.UNPLAYABLE, result);
+		verifyNoInteractions(lookupPort, writerPort);
 	}
 
 	/** S15P21A405-401 — duration 을 모르면 null 로 그대로 lookupPort 에 넘긴다(생략하지 않는다). */

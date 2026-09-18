@@ -23,7 +23,9 @@ public class VideoIdEnricher {
 	private final VideoIdWriterPort writerPort;
 
 	/**
-	 * @param existingVideoId DB 에 이미 저장된 값. {@code null} 이 아니면 그대로 반환하고 호출하지 않는다
+	 * @param existingVideoId DB 에 이미 저장된 값. {@code null} 이 아니면 그대로 반환하고 호출하지 않는다.
+	 *                        {@link VideoIds#UNPLAYABLE} 도 확정된 판정이므로 다시 묻지 않는다 —
+	 *                        읽기 어댑터가 {@code is_unplayable} 을 이 값으로 번역해 넘긴다
 	 * @param durationSeconds 원곡 길이(초). 알면 매칭 정확도가 오른다. 모르면 {@code null}
 	 * @return 확정된 videoId. 후보를 못 찾았거나 외부 API 가 실패하면 {@code null}
 	 */
@@ -34,8 +36,13 @@ public class VideoIdEnricher {
 
 		Optional<String> videoId = lookupPort.lookup(artist, title, durationSeconds);
 		videoId.ifPresent(id -> {
-			writerPort.save(musicId, id);
-			log.info("[VideoId] 실시간 매핑 완료 musicId={}, videoId={}", musicId, videoId);
+			if (VideoIds.UNPLAYABLE.equals(id)) {
+				writerPort.markUnplayable(musicId);
+				log.info("[VideoId] 재생 불가 확정 musicId={}", musicId);
+			} else {
+				writerPort.save(musicId, id);
+				log.info("[VideoId] 실시간 매핑 완료 musicId={}, videoId={}", musicId, id);
+			}
 		});
 		return videoId.orElse(null);
 	}

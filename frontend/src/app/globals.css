@@ -285,6 +285,18 @@
     display: flex;
   }
 }
+/*
+ * 개발 버전(`?dev=1`)에서는 게이트를 넘는다 (S15P21A405-421).
+ *
+ * 폰에서는 콘솔을 못 열어 이 게이트를 끌 방법이 없고, 못 넘으면 모바일 화면을 실기기에서
+ * 아예 볼 수가 없다. 클래스는 `constants/dev-mode.ts` 의 인라인 스크립트가 첫 페인트 전에 붙인다.
+ *
+ * **특이도로 이긴다.** `html.ody-dev .small-screen-gate` 가 위 미디어 쿼리 규칙보다 높아
+ * 순서와 무관하게 이긴다 — 이 파일 맨 위 주석이 말하는 그 함정을 여기서도 피한다.
+ */
+html.ody-dev .small-screen-gate {
+  display: none;
+}
 
 /* 플레이어바 파형 — 재생 헤드 근처 바만 숨 쉰다 (S15P21A405-428, waveform-bars.tsx) */
 @keyframes wave {

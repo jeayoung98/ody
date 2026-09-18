@@ -19,6 +19,8 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.MusicErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
 import com.ssafy.backend.realtime.dto.play.PlayResponse;
 import com.ssafy.backend.realtime.event.PositionChanged;
@@ -135,5 +137,35 @@ class MusicPlayServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(musicLocationService, playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("존재하지 않는 곡은 404 MUSIC_NOT_FOUND 로 거부한다")
+	void missingMusicIsNotFound() {
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(999L)).thenReturn(Optional.empty());
+		when(musicLocationService.exists(999L)).thenReturn(false);
+
+		assertThatThrownBy(() -> service.play(EMAIL, 999L, "MAP", null))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND));
+
+		verifyNoInteractions(playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("곡은 있지만 좌표가 없으면 422 PRESENCE_ERROR 로 거부한다")
+	void musicWithoutLocationIsPresenceError() {
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.empty());
+		when(musicLocationService.exists(20L)).thenReturn(true);
+
+		assertThatThrownBy(() -> service.play(EMAIL, 20L, "MAP", null))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.PRESENCE_ERROR));
+
+		verifyNoInteractions(playHistoryMapper, realtimeEventService, meetingService);
 	}
 }

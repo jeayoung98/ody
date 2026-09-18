@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
@@ -73,8 +74,13 @@ public class MusicPlayService {
 		int layer = resolvedLayer;
 
 		// 2. 재생할 곡의 좌표를 찾는다.
+		//    좌표가 없으면 곡 자체가 없는지(404) 곡은 있는데 지도에 못 놓는지(422) 갈라서 알린다.
 		double[] pc = musicLocationService.findLocation(musicId)
 				.orElseThrow(() -> {
+					if (!musicLocationService.exists(musicId)) {
+						log.warn("play 거부 reason=MUSIC_NOT_FOUND musicId={}", musicId);
+						return new CustomException(MusicErrorCode.MUSIC_NOT_FOUND);
+					}
 					log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL, musicId);
 					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 				});

@@ -48,7 +48,7 @@ class MusicLocationServiceImplTests {
 	@DisplayName("곡 존재 여부는 상세 조회 결과가 있는지로 판단한다")
 	void existsDelegatesToDetailLookup() {
 		MusicDetail detail = new MusicDetail(
-				42L, null, "t", "a", null, null, null, null, List.of(), null, null, null, null, null);
+				42L, null, "t", "a", null, null, null, null, null, null, null, null, null);
 		when(reader.findDetail(42L)).thenReturn(java.util.Optional.of(detail));
 		when(reader.findDetail(999L)).thenReturn(java.util.Optional.empty());
 

@@ -1,12 +1,8 @@
 package com.ssafy.backend.music.dto;
 
-import java.util.List;
-
 /**
  * 검색 결과 / 주변곡 / 경로 노드 (정본 §0.6).
  * MusicDetail = MusicSummary + mbid/bpm/duration/playCnt/youtubeCnt.
- * genres는 원문상 list|string|null 다형이나, 현재 코드(MusicDetail)와 동일하게 List<String>으로 둔다.
- * (다형 표현 확정은 B-Field 대기.)
  *
  * @param youtubeUrl 유튜브 <b>검색</b> URL. 그 곡이라는 보장은 없다
  * @param videoId    유튜브 영상 식별자 11자. 확인된 영상이며, 없으면 {@code null} (S15P21A405-57, spec 006 FR-001).
@@ -17,7 +13,6 @@ public record MusicSummary(
 		String title,
 		String artist,
 		String album,
-		List<String> genres,
 		String youtubeUrl,
 		String videoId,
 		Location location) {

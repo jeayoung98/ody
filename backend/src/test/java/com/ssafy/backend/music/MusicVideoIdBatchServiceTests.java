@@ -27,7 +27,7 @@ class MusicVideoIdBatchServiceTests {
 
     private static MusicDetail detail(long id, String artist, String title, Integer duration, String videoId) {
         return new MusicDetail(id, "mbid", title, artist, 120.0, duration, "album", 2003,
-                List.of("K-Pop"), "https://youtu.be/x", videoId, LOC, 0, 0);
+                "https://youtu.be/x", videoId, LOC, 0, 0);
     }
 
     private static MusicService serviceWith(MusicDetailReader reader, VideoIdEnricher enricher) {

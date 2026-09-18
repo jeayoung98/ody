@@ -78,7 +78,7 @@ class PlaylistServiceTests {
 	private static MusicDetail music(long id, int duration) {
 		// 곡마다 다른 좌표. 상세 응답이 좌표를 그대로 실어 보내는지 확인하려면 값이 구별돼야 한다.
 		Location loc = new Location(id * 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id * -0.25);
-		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", 2006, List.of("K-Pop"),
+		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", 2006,
 				"https://youtu.be/x", null, loc, 10, 1);
 	}
 

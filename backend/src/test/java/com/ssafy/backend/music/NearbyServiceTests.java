@@ -55,7 +55,7 @@ class NearbyServiceTests {
 
 	private static MusicDetail detail(long id) {
 		return new MusicDetail(id, "mbid-" + id, "Query", "QueryArtist", 120.0, 200,
-				"Album", 2004, List.of(), "https://y/x", null, loc(), 0, 0);
+				"Album", 2004, "https://y/x", null, loc(), 0, 0);
 	}
 
 	private static TrackCandidate cand(long id, double dist) {
@@ -63,7 +63,7 @@ class NearbyServiceTests {
 	}
 
 	private static MusicSummary summary(long id) {
-		return new MusicSummary(id, "T" + id, "Artist" + id, null, List.of(), "https://y/" + id, null, loc());
+		return new MusicSummary(id, "T" + id, "Artist" + id, null, "https://y/" + id, null, loc());
 	}
 
 	private void given(long centerId, List<TrackCandidate> candidates) {

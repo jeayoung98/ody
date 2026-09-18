@@ -63,7 +63,7 @@ class MusicSearchControllerTests {
 	}
 
 	private static MusicSummary song(long id, String title, String artist, String youtubeUrl, String videoId) {
-		return new MusicSummary(id, title, artist, "The Winning", List.of("K-Pop"), youtubeUrl, videoId,
+		return new MusicSummary(id, title, artist, "The Winning", youtubeUrl, videoId,
 				new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123));
 	}
 

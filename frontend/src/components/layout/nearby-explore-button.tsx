@@ -4,7 +4,7 @@ import { CoronaIcon } from "@/components/common/icons";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
-import NavActionButton from "./nav-action-button";
+import RailButton from "./rail-button";
 
 /**
  * 주변 탐색 모드 토글. 켜지면 줌인되며 기준 곡 주변의 모든 곡(대표곡 아니어도)을 보여준다.
@@ -36,7 +36,7 @@ export default function NearbyExploreButton() {
   };
 
   return (
-    <NavActionButton
+    <RailButton
       label="주변 탐색"
       active={active}
       disabled={disabled}
@@ -45,7 +45,7 @@ export default function NearbyExploreButton() {
       onClick={handleClick}
       data-tutorial="nearby"
     >
-      <CoronaIcon className="opacity-80" />
-    </NavActionButton>
+      <CoronaIcon size={16} />
+    </RailButton>
   );
 }

@@ -1,7 +1,6 @@
 package com.ssafy.backend.music;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 
 import java.io.InputStream;
 
@@ -45,12 +44,5 @@ class MusicSearchMapperTimeoutTests {
 	@Test
 	void findFilteredPage_hasQueryTimeout() {
 		assertEquals(TIMEOUT_SECONDS, configuration.getMappedStatement(NS + ".findFilteredPage").getTimeout());
-	}
-
-	@Test
-	void findGenresByMusicIds_hasNoTimeout() {
-		// 타임아웃은 느린 질의에만 건다. 이건 PK IN 조회라 페이지에 실린 10곡만 본다 —
-		// 여기에 2초를 걸면 막을 것은 없고 DB 가 잠깐 느릴 때 정상 응답만 깨진다.
-		assertNull(configuration.getMappedStatement(NS + ".findGenresByMusicIds").getTimeout());
 	}
 }

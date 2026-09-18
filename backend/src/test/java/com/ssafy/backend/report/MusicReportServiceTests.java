@@ -30,7 +30,7 @@ class MusicReportServiceTests {
 
     private static MusicDetail detail(long id) {
         return new MusicDetail(id, "mbid", "title", "artist", 120.0, 200, "album", 2007,
-                List.of("K-Pop"), "https://youtu.be/x", null, LOC, 0, 0);
+                "https://youtu.be/x", null, LOC, 0, 0);
     }
 
     private static MusicReportService serviceWith(MusicReportMapper mapper, MusicDetailReader reader) {

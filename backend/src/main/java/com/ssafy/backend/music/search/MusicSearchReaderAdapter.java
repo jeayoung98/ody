@@ -1,16 +1,10 @@
 package com.ssafy.backend.music.search;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.toList;
-
 import java.util.List;
 import java.util.Locale;
-import java.util.Map;
 
 import org.springframework.stereotype.Repository;
 
-import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.dto.MusicSearchRow;
 import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MusicSummary;
@@ -19,7 +13,7 @@ import com.ssafy.backend.music.mapper.MusicSearchMapper;
 /**
  * {@link MusicSearchReader} 의 MyBatis 어댑터 (정본 §3.1, 헌법 X: BE2 계약 / 실행 분리).
  *
- * 매칭·정렬·페이징은 SQL 이 하고, 여기서는 앞일치 패턴 조립과 장르 합치기만 한다.
+ * 매칭·정렬·페이징은 SQL 이 하고, 여기서는 앞일치 패턴 조립만 한다.
  * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-006).
  *
  * videoId 는 DB 에 있는 값만 그대로 내려준다. 외부 videoid API 실시간 조회(S15P21A405-312) 는
@@ -65,19 +59,12 @@ public class MusicSearchReaderAdapter implements MusicSearchReader {
 			return new PageResult(List.of(), false);
 		}
 
-		// 페이지에 실린 곡들의 장르를 한 번에 읽어 곡별로 묶는다(N+1 회피).
-		Map<Long, List<String>> genres =
-				mapper.findGenresByMusicIds(rows.stream().map(MusicSearchRow::getId).toList()).stream()
-						.collect(groupingBy(MusicGenreRow::getMusicId,
-								mapping(MusicGenreRow::getName, toList())));
-
 		return new PageResult(rows.stream()
 				.map(row -> new MusicSummary(
 						row.getId(),
 						row.getTitle(),
 						row.getArtist(),
 						row.getAlbum(),
-						genres.getOrDefault(row.getId(), List.of()),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 						row.getVideoId(),
 						row.toLocation()))

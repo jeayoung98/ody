@@ -13,11 +13,14 @@
 {
   "type": "VIEWPORT_SNAPSHOT",
   "seq": 42,
-  "data": {}
+  "ts": 1789673255299,
+  "payload": {}
 }
 ```
 
-`seq`는 서버가 이 연결에 보낸 메시지 순서다. 아래 `requestSeq`는 프론트가 보낸 화면 요청 순서이므로 서로 바꿔 쓰지 않는다.
+아래 문서의 모든 응답 예시는 이 봉투의 `payload` 안에 들어간다.
+
+`seq`는 서버가 이 연결에 보낸 메시지 순서다. 아래 `requestSeq`는 프론트가 보낸 화면 요청 순서이므로 서로 바꿔 쓰지 않는다. `ts`는 서버가 보낸 시각(epoch milliseconds)이다.
 
 기존 레이어별 곡 조회와 `MapEngine.boxes`는 [frontend-layer-navigation.md](frontend-layer-navigation.md)를 따른다. 여기의 `ancestorBounds`는 major 요청을 만든 boxes와 값이 반드시 같아야 한다.
 
@@ -97,11 +100,13 @@
   "groups": [],
   "resolution": 8,
   "cells": [
-    { "cellX": 2, "cellY": 4, "count": 31 },
-    { "cellX": 3, "cellY": 4, "count": 12 }
+    { "cellX": 2, "cellY": 4, "x": 0.31, "y": 0.58, "count": 31 },
+    { "cellX": 3, "cellY": 4, "x": 0.44, "y": 0.58, "count": 12 }
   ]
 }
 ```
+
+`x`·`y`는 합친 셀의 가운데를 곡 마커와 같은 기준으로 계산한 표시 위치다. 현재 화면 범위 안으로 잘라서 내려주므로 프론트는 그대로 찍으면 된다. `cellX`·`cellY`는 `resolution` 기준 격자 번호이며, 마커 위치 계산에 다시 쓰지 않는다.
 
 프론트는 응답의 `requestSeq`가 현재 화면 요청보다 작으면 렌더링하지 않는다.
 
@@ -124,11 +129,13 @@
   "layer": 3,
   "resolution": 8,
   "cells": [
-    { "cellX": 2, "cellY": 4, "count": 29 },
-    { "cellX": 3, "cellY": 4, "count": 14 }
+    { "cellX": 2, "cellY": 4, "x": 0.31, "y": 0.58, "count": 29 },
+    { "cellX": 3, "cellY": 4, "x": 0.44, "y": 0.58, "count": 14 }
   ]
 }
 ```
+
+`cells[]` 항목의 형태는 §1 Response B와 같다. 인원수가 0인 셀은 보내지 않는다.
 
 현재 mode가 INDIVIDUAL이거나 requestSeq가 다르면 무시한다.
 

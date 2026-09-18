@@ -18,8 +18,7 @@ const CONTRAST = 1.6;
  * 흔들리지 않는 바는 제 높이의 이만큼으로 낮아진다 (S15P21A405-460). 헤드 근처 몇 개만 솟아 있어서
  * "지금 소리 나는 자리" 가 한눈에 보이고, 나머지는 얇은 띠로 물러난다.
  *
- * **멈춰 있을 때는 낮추지 않는다.** 그때는 흔들리는 바가 하나도 없어서, 낮추면 파형이 통째로
- * 납작한 선이 되어 곡 모양을 잃는다.
+ * 멈춰 있으면 흔들리는 바가 없으니 **전체가 낮다.** 소리가 나는 구간만 솟는다.
  */
 const IDLE_SCALE = 0.35;
 
@@ -74,7 +73,7 @@ export default function WaveformBars({ musicId, ratio, playing, live }: Waveform
         const passed = i < head;
         const near = playing && Math.abs(i - head) <= LIVE_SPAN;
         // 정수 % 를 지킨다 — 소수가 길면 서버가 그린 style 과 브라우저가 정규화한 값이 달라 하이드레이션 경고가 난다
-        const shown = !playing || near ? h : Math.round(h * IDLE_SCALE);
+        const shown = near ? h : Math.round(h * IDLE_SCALE);
         return (
           <i
             key={i}

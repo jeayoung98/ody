@@ -304,6 +304,19 @@ export class MapEngine {
   onLeaderViewingChange: ((musicId: number) => void) | null = null;
 
   visible: VisibleStar[] = [];
+  /**
+   * 이번 프레임에 **앨범 커버로 그린** 곡의 히트 상자 (S15P21A405-452).
+   *
+   * 커버는 `repIds`(백엔드 대표곡)에서 뽑는데 {@link visible} 은 86px 격자 승자만 담는다.
+   * 두 집합이 따로 계산되니, 격자 칸을 다른 곡에 내준 대표곡은 큰 커버로 떠 있으면서도
+   * 집힐 자리가 없었다. 격자 칸은 배율에 반비례해서(`gw = 86 / cam.s`) 줌에 따라 승자가
+   * 바뀐다 — 그래서 같은 곡이 눌리다 안 눌리다 했다.
+   *
+   * **그렸을 때만, 그린 크기로** 넣는다. `repIds` 를 통째로 넣으면 커버가 안 그려진 작은
+   * 배경 별까지 집히게 되어 배경 별과 클릭 가능한 별의 구분이 무너진다 (S15P21A405-246).
+   * 그리는 쪽(`draw-map` 의 `drawCovers`)이 매 프레임 다시 쓴다.
+   */
+  coverHits: VisibleStar[] = [];
   chosen = new Set<number>();
   time = 0;
   private lastSnap: Partial<EngineSnapshot> = {};
@@ -497,7 +510,9 @@ export class MapEngine {
    */
   hoverAnchor(): { px: number; py: number } | null {
     if (this.hoverId == null) return null;
-    const v = this.visible.find((x) => this.songs[x.i].musicId === this.hoverId);
+    // 커버로만 떠 있는 곡도 집히므로(S15P21A405-452) 카드가 붙을 자리도 거기서 찾는다
+    const has = (x: VisibleStar) => this.songs[x.i].musicId === this.hoverId;
+    const v = this.visible.find(has) ?? this.coverHits.find(has);
     return v ? { px: v.px, py: v.py } : null;
   }
 
@@ -1960,12 +1975,16 @@ export class MapEngine {
     // 오버레이(별자리·주변 탐색)가 떠 있으면 그 안의 곡만 잡힌다 — 어둡게 덮인 뒷별이 호버·클릭에
     // 걸리면 카드가 엉뚱한 곡으로 뜬다 (S15P21A405-288). 클릭 게이트와 같은 집합을 쓴다
     const gate = this.clickableOverlayIds();
-    for (const v of this.visible) {
-      if (gate && !gate.has(this.songs[v.i].musicId)) continue;
-      const d = (v.px - mx) ** 2 + (v.py - my) ** 2;
-      if (d < v.r * v.r && d < bd) {
-        bd = d;
-        best = v;
+    // 커버로 그린 곡도 같이 본다 — {@link coverHits} 쪽이 그림 크기만큼 넓어서
+    // 가장자리도 집힌다. 가장 가까운 것이 이기니 이웃 별의 클릭을 밀지는 않는다
+    for (const list of [this.visible, this.coverHits]) {
+      for (const v of list) {
+        if (gate && !gate.has(this.songs[v.i].musicId)) continue;
+        const d = (v.px - mx) ** 2 + (v.py - my) ** 2;
+        if (d < v.r * v.r && d < bd) {
+          bd = d;
+          best = v;
+        }
       }
     }
     return best;

@@ -15,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.common.ApiResponse;
+import com.ssafy.backend.playlist.dto.LikedPlaylistSearchResponse;
 import com.ssafy.backend.playlist.dto.PlaylistCreateRequest;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
@@ -56,6 +57,19 @@ public class PlaylistController {
 			@RequestParam @NotBlank String email, Authentication authentication) {
 		return ApiResponse.success(
 				new PlaylistSearchResponse(playlistService.search(email, authentication.getName())));
+	}
+
+	/**
+	 * 좋아요한 플레이리스트 목록 조회 (S15P21A405-447). 본인 목록도 이 API(email 에 본인 email).
+	 * 공개 범위는 /search 와 같다.
+	 */
+	@Operation(summary = "좋아요한 플레이리스트 목록 조회",
+			description = "email 사용자가 좋아요한 플레이리스트를 최근 누른 순으로 조회한다. 본인 목록 조회도 이 API를 사용한다.")
+	@GetMapping("/liked")
+	public ApiResponse<LikedPlaylistSearchResponse> searchLiked(
+			@RequestParam @NotBlank String email, Authentication authentication) {
+		return ApiResponse.success(
+				new LikedPlaylistSearchResponse(playlistService.searchLiked(email, authentication.getName())));
 	}
 
 	/** 플레이리스트 상세 조회 (정본 §4.2). 소유자만 접근 가능. */

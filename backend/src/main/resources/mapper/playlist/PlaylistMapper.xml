@@ -126,4 +126,27 @@
 			WHERE playlist_id = #{playlistId} AND email = #{email})
 	</select>
 
+	<!--
+		좋아요한 플레이리스트 목록 (S15P21A405-447). 남의 플레이리스트가 섞이므로 소유자 정보를 함께 읽는다.
+		곡 수는 playlist_item 조인 집계라 GROUP BY 가 필요하고, 곡이 하나도 없는 플레이리스트도
+		목록에서 빠지면 안 되므로 LEFT JOIN 이다(findSummariesByOwnerEmail 과 같은 형태).
+		정렬은 좋아요를 누른 시각 역순 — 같은 시각이면 id 로 고정한다.
+	-->
+	<select id="findLikedSummariesByEmail" resultType="com.ssafy.backend.playlist.dto.LikedPlaylistRow">
+		SELECT p.id                        AS id,
+		       p.playlist_name             AS name,
+		       COUNT(pi.music_id)          AS music_cnt,
+		       COALESCE(p.like_cnt, 0)     AS like_cnt,
+		       p.email                     AS owner_email,
+		       u.nickname                  AS owner_nickname,
+		       l.created_at                AS liked_at
+		FROM playlist_like l
+		JOIN playlist p ON p.id = l.playlist_id
+		JOIN "user" u ON u.email = p.email
+		LEFT JOIN playlist_item pi ON pi.playlist_id = p.id
+		WHERE l.email = #{email}
+		GROUP BY p.id, p.playlist_name, p.like_cnt, p.email, u.nickname, l.created_at
+		ORDER BY l.created_at DESC, p.id
+	</select>
+
 </mapper>

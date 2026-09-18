@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -35,6 +36,7 @@ import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.playlist.controller.PlaylistController;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
+import com.ssafy.backend.playlist.dto.LikedPlaylistSummary;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
 import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
 import com.ssafy.backend.playlist.dto.PlaylistLikeResponse;
@@ -69,6 +71,24 @@ class PlaylistControllerTests {
 	private static UsernamePasswordAuthenticationToken principal(String email) {
 		return new UsernamePasswordAuthenticationToken(
 				email, null, List.of(new SimpleGrantedAuthority("ROLE_USER")));
+	}
+
+	@Test
+	void searchLiked_returnsContentWithOwnerInfo() throws Exception {
+		when(playlistService.searchLiked(eq("me@gmail.com"), eq("me@gmail.com")))
+				.thenReturn(List.of(new LikedPlaylistSummary(
+						42, "새벽 드라이브", 18, 4, "owner@gmail.com", "철수형",
+						OffsetDateTime.parse("2026-09-07T13:41:02+09:00"))));
+
+		mockMvc.perform(get("/api/playlist/liked")
+						.param("email", "me@gmail.com")
+						.principal(principal("me@gmail.com")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].playlistId").value(42))
+				.andExpect(jsonPath("$.data.content[0].likeCnt").value(4))
+				.andExpect(jsonPath("$.data.content[0].ownerEmail").value("owner@gmail.com"))
+				.andExpect(jsonPath("$.data.content[0].ownerNickname").value("철수형"))
+				.andExpect(jsonPath("$.data.content[0].likedAt").exists());
 	}
 
 	@Test
@@ -125,11 +145,13 @@ class PlaylistControllerTests {
 		MusicDetail track = new MusicDetail(1L, "mbid", "제목", "가수", 120.0, 200, "앨범",
 				List.of("K-Pop"), "https://youtu.be/x", null, loc, 10, 1);
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
-				.thenReturn(new PlaylistDetailResponse(42, "드라이브", 1, 200, List.of(track)));
+				.thenReturn(new PlaylistDetailResponse(42, "드라이브", 1, 200, 9, true, List.of(track)));
 
 		mockMvc.perform(get("/api/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.musicCnt").value(1))
+				.andExpect(jsonPath("$.data.likeCnt").value(9))
+				.andExpect(jsonPath("$.data.isLiked").value(true))
 				.andExpect(jsonPath("$.data.musics[0].id").value(1));
 	}
 

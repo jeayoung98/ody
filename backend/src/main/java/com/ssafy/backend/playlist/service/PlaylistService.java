@@ -18,6 +18,7 @@ import com.ssafy.backend.common.PlaylistErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
+import com.ssafy.backend.playlist.dto.LikedPlaylistSummary;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
 import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
@@ -73,6 +74,35 @@ public class PlaylistService {
 	}
 
 	/**
+	 * 좋아요한 플레이리스트 목록 조회 (S15P21A405-447). 본인 목록도 이 API(email 에 본인 email).
+	 * 공개 범위 기준은 /playlist/search 와 같다 — 비공개 사용자의 목록은 본인만 볼 수 있다.
+	 *
+	 * 남이 만든 플레이리스트가 섞이는 목록이라 소유자 정보를 함께 내려준다.
+	 */
+	public List<LikedPlaylistSummary> searchLiked(String targetEmail, String requesterEmail) {
+		UserProfileRow user = userMapper.findProfileByEmail(targetEmail);
+		if (user == null) {
+			throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+		}
+		if (!user.isPublic() && !targetEmail.equals(requesterEmail)) {
+			throw new CustomException(UserErrorCode.USER_PRIVATE);
+		}
+
+		List<LikedPlaylistSummary> summaries = playlistMapper.findLikedSummariesByEmail(targetEmail).stream()
+				.map(row -> new LikedPlaylistSummary(
+						row.getId(),
+						row.getName(),
+						row.getMusicCnt(),
+						row.getLikeCnt(),
+						row.getOwnerEmail(),
+						row.getOwnerNickname(),
+						row.getLikedAt()))
+				.toList();
+		log.info("[Playlist] 좋아요한 목록 조회 완료 targetEmail={} count={}", targetEmail, summaries.size());
+		return summaries;
+	}
+
+	/**
 	 * 플레이리스트 상세 조회 (정본 §4.2). 소유자만 접근 가능(§0.7).
 	 * 곡 정보 조회는 music 어댑터 필요 — 빈 플레이리스트는 어댑터 없어도 동작한다.
 	 */
@@ -83,8 +113,12 @@ public class PlaylistService {
 		List<MusicDetail> musics = musicIds.isEmpty() ? List.of() : loadMusicDetails(musicIds);
 		int totalDuration = musics.stream().mapToInt(m -> m.duration() == null ? 0 : m.duration()).sum();
 
-		log.info("[Playlist] 상세 조회 완료 playlistId={} musicCnt={}", playlistId, musics.size());
-		return new PlaylistDetailResponse(playlist.getId(), playlist.getName(), musics.size(), totalDuration, musics);
+		int likeCnt = playlistMapper.findLikeCnt(playlistId);
+		boolean isLiked = playlistMapper.existsLike(playlistId, requesterEmail);
+
+		log.info("[Playlist] 상세 조회 완료 playlistId={} musicCnt={} likeCnt={}", playlistId, musics.size(), likeCnt);
+		return new PlaylistDetailResponse(
+				playlist.getId(), playlist.getName(), musics.size(), totalDuration, likeCnt, isLiked, musics);
 	}
 
 	/**

@@ -4,6 +4,7 @@ import java.util.List;
 
 import org.apache.ibatis.annotations.Param;
 
+import com.ssafy.backend.playlist.dto.LikedPlaylistRow;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertItem;
 import com.ssafy.backend.playlist.dto.PlaylistRow;
 import com.ssafy.backend.playlist.dto.PlaylistSummaryRow;
@@ -51,4 +52,7 @@ public interface PlaylistMapper {
 	int findLikeCnt(@Param("playlistId") long playlistId);
 
 	boolean existsLike(@Param("playlistId") long playlistId, @Param("email") String email);
+
+	/** 그 사용자가 좋아요한 플레이리스트. 최근 누른 순 (S15P21A405-447). */
+	List<LikedPlaylistRow> findLikedSummariesByEmail(@Param("email") String email);
 }

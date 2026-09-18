@@ -29,7 +29,9 @@ public class WebSocketConnectionListener {
 		if (sessionId != null && event.getUser() != null) {
 			String email = event.getUser().getName();
 			long epoch = webSocketSessionService.register(sessionId, email);
-			presenceService.connect(email, epoch);
+			// 등록한 뒤에 확인해야 자기 자신이 빠진다. 다른 탭이 있으면 그 위치를 그대로 둔다.
+			boolean hasOtherSession = webSocketSessionService.hasOtherSession(email, sessionId);
+			presenceService.connect(email, epoch, hasOtherSession);
 		}
 	}
 

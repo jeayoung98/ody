@@ -3,6 +3,7 @@ package com.ssafy.backend.realtime.repository.redis.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;
@@ -268,7 +269,8 @@ class PresenceRedisIntegrationTests {
 				eventService);
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
-		service.connect(data.email(), 2L);
+		// 다른 탭이 남아 있지 않은 재연결이므로 이전 위치를 지운다.
+		service.connect(data.email(), 2L, false);
 
 		assertThat(repository.snapshot(data.email()))
 				.isEqualTo(new PresenceSnapshot(null, null, null, null, 2L));
@@ -281,6 +283,40 @@ class PresenceRedisIntegrationTests {
 				data.music1(), null,
 				"3:4", null,
 				null, null));
+	}
+
+	@Test
+	@DisplayName("다른 탭이 남아 있으면 이전 위치와 곡 인덱스를 그대로 둔다")
+	void connectKeepsPositionWhenOtherTabRemains() {
+		TestData data = testData();
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		connect(data.email(), 1L);
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+
+		RealtimeEventService eventService = mock(RealtimeEventService.class);
+		PresenceService service = new PresenceService(
+				repository,
+				mock(MusicLocationService.class),
+				mock(MusicPositionCalculator.class),
+				eventService);
+		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
+
+		// 다른 탭이 살아 있으므로 접속 번호만 올리고 위치는 건드리지 않는다.
+		service.connect(data.email(), 2L, true);
+
+		// 곡과 셀이 남아 있어야 새 탭이 듣던 곡을 그대로 물려받는다.
+		assertThat(repository.snapshot(data.email()))
+				.isEqualTo(new PresenceSnapshot(data.music1(), data.layer1(), 3, 4, 2L));
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isTrue();
+		assertThat(redis.opsForSet().isMember(
+				"layer-listeners:" + data.layer1() + ":" + data.music1(), data.email())).isTrue();
+		assertThat(redis.opsForSet().isMember(
+				"active-song:cell:" + data.layer1() + ":3:4", Long.toString(data.music1()))).isTrue();
+		assertThat(redis.opsForSet().isMember("active-song:cells:" + data.layer1(), "3:4")).isTrue();
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
+		// 사라지지 않았으므로 퇴장 알림도 나가지 않는다.
+		verifyNoInteractions(eventService);
 	}
 
 	@Test

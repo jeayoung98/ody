@@ -41,19 +41,28 @@ public class PresenceService {
 	private long ttlMs;
 
 	/**
-	 * 소켓이 연결되면 이전 접속 상태를 지우고 새 접속 정보를 만든다.
+	 * 소켓이 연결되면 새 접속 정보를 만든다.
+	 *
+	 * 같은 사용자의 다른 탭이 남아 있지 않을 때만 이전 위치를 지운다.
+	 * 다른 탭이 열려 있는데 지우면 지도에서 잠깐 사라졌다가 다시 나타나고,
+	 * 새 탭의 입장이 "첫 입장"이 되어 듣던 곡을 잃는다.
+	 * 지우지 않으면 새 탭이 서버에 남은 곡을 그대로 물려받는다.
+	 * 어느 쪽이든 조종권은 마지막에 연결한 탭에 있다(접속 번호 비교).
 	 *
 	 * @param email 사용자 이메일
 	 * @param epoch 새 접속 번호
+	 * @param hasOtherSession 같은 사용자의 다른 소켓이 남아 있으면 true
 	 */
-	public void connect(String email, long epoch) {
-		PresenceSnapshot previous = presenceRedisRepository.snapshot(email);
-		if (previous != null && previous.epoch() != null) {
-			List<String> removed = presenceRedisRepository.applyLeave(email, previous.epoch());
-			sendLeave(email, removed);
+	public void connect(String email, long epoch, boolean hasOtherSession) {
+		if (!hasOtherSession) {
+			PresenceSnapshot previous = presenceRedisRepository.snapshot(email);
+			if (previous != null && previous.epoch() != null) {
+				List<String> removed = presenceRedisRepository.applyLeave(email, previous.epoch());
+				sendLeave(email, removed);
+			}
 		}
 		presenceRedisRepository.connect(email, epoch, ttlMs);
-		log.info("[Presence] 접속 생성 완료 epoch={}", epoch);
+		log.info("[Presence] 접속 생성 완료 epoch={} 다른탭={}", epoch, hasOtherSession);
 	}
 
 	/**

@@ -56,6 +56,11 @@ GET /videoid?artist=<필수>&title=<필수>[&duration=<초>][&album=][&isrc=][&r
 | `best_guess` | 유사도 0.6 이상 추측 | 곡명 유사도·채널 유사도·길이 근접 가중합 + 임베드 가능 (실측) |
 | `unplayable` | 재생 불가 | 후보 없음, 또는 최고점이 0.6 미만, 또는 상위 후보가 임베드 불가 |
 
+## 상태 흐름 그림
+
+`videoid-lifecycle.html` (원본 `videoid-lifecycle.json`). 상태 11개와 전이 11개를 담는다.
+다시 만들려면 `node bin/archify.mjs deliver lifecycle videoid-lifecycle.json videoid-lifecycle.html --quality showcase`.
+
 ## 판정 규칙
 
 1. `artist`·`title` 은 필수다. 없으면 400.

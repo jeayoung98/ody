@@ -10,8 +10,9 @@
 | 6 | 백엔드 계약 `GET /videoid` 구현 | `::test_backend_contract_shape_for_verified` · `::test_backend_contract_best_is_null_when_unplayable` | ✅ |
 | 7 | 검색 실패와 재생 불가 구분 | `::test_search_failure_is_retryable_not_unplayable` · `::test_backend_contract_marks_search_failure_retryable` | ✅ |
 | 8 | `requirements.txt` 에 `yt-dlp` 추가 | `data/.venv/Scripts/pip install -r data/requirements.txt` 후 `python -c "import yt_dlp"` | ✅ |
-| 9 | 0.6 임계값 게이트 등록 (규칙 1) | `gates/videoid_threshold_v1.json` + 한글·영문 표본 오탐률 측정 | ⬜ |
-| 10 | 한국 곡 추측 정책 결정 (규칙 8) | `specs/DECISIONS.md` 새 번호 | ⬜ |
-| 11 | 추측값 DB 저장 여부 결정 | 백엔드·기획 합의 기록 | ⬜ |
+| 9 | 판정 상태 흐름 다이어그램 (archify lifecycle) | `videoid-lifecycle.html` — validate 9/9 · composition 0 error 0 warning · visual-check 4뷰포트 통과 | ✅ |
+| 10 | 0.6 임계값 게이트 등록 (규칙 1) | `gates/videoid_threshold_v1.json` + 한글·영문 표본 오탐률 측정 | ⬜ |
+| 11 | 한국 곡 추측 정책 결정 (규칙 8) | `specs/DECISIONS.md` 새 번호 | ⬜ |
+| 12 | 추측값 DB 저장 여부 결정 | 백엔드·기획 합의 기록 | ⬜ |
 
-9~11 은 팀 결정이 필요해 이 이슈 범위 밖이다.
+10~12 는 팀 결정이 필요해 이 이슈 범위 밖이다.

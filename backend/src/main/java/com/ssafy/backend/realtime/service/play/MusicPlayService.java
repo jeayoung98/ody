@@ -8,6 +8,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
@@ -131,15 +132,20 @@ public class MusicPlayService {
 
 	/**
 	 * 재생 시간을 저장한다. 지도 위치와 노출은 그대로 둔다.
+	 *
+	 * 내 기록이 아니거나 없는 기록이면 403 으로 거부한다. 둘을 구분하지 않는다 —
+	 * 구분하면 남의 기록 ID 가 존재하는지 알아낼 수 있어서(존재 유무 비노출, 계약 §2).
+	 *
 	 * @param email 사용자 이메일
 	 * @param playHistoryId 재생 기록 ID
 	 * @param playedMs 재생한 시간
+	 * @throws CustomException 내 기록이 아니거나 없는 기록이면 FORBIDDEN
 	 */
 	public void playEnd(String email, long playHistoryId, long playedMs) {
 		int updated = playHistoryMapper.updatePlayedMs(playHistoryId, email, playedMs);
 		if (updated == 0) {
-			log.warn("playEnd 대상 없음/비소유 playHistoryId={}", playHistoryId);
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			log.warn("playEnd 거부 reason=FORBIDDEN playHistoryId={}", playHistoryId);
+			throw new CustomException(GlobalErrorCode.FORBIDDEN);
 		}
 		log.info("[Play] 재생 종료 완료 playHistoryId={} playedMs={}", playHistoryId, playedMs);
 	}

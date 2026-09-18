@@ -19,6 +19,7 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
@@ -167,5 +168,26 @@ class MusicPlayServiceTests {
 						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.PRESENCE_ERROR));
 
 		verifyNoInteractions(playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("재생 종료는 내 기록이면 재생 시간을 갱신한다")
+	void playEndUpdatesOwnHistory() {
+		when(playHistoryMapper.updatePlayedMs(88L, EMAIL, 123_000L)).thenReturn(1);
+
+		service.playEnd(EMAIL, 88L, 123_000L);
+
+		verify(playHistoryMapper).updatePlayedMs(88L, EMAIL, 123_000L);
+	}
+
+	@Test
+	@DisplayName("남의 기록이거나 없는 기록이면 403 FORBIDDEN 으로 거부한다")
+	void playEndOnForeignOrMissingHistoryIsForbidden() {
+		// 소유자 불일치와 미존재 모두 갱신 행 0 — 존재 유무를 드러내지 않기 위해 같은 코드로 거부한다.
+		when(playHistoryMapper.updatePlayedMs(88L, EMAIL, 123_000L)).thenReturn(0);
+
+		assertThatThrownBy(() -> service.playEnd(EMAIL, 88L, 123_000L))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(GlobalErrorCode.FORBIDDEN));
 	}
 }

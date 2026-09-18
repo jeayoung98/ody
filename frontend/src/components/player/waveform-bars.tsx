@@ -15,10 +15,13 @@ export const MAX_H = 0.65;
  */
 const CONTRAST = 1.6;
 /**
- * 흔들리지 않는 바는 제 높이의 이만큼으로 낮아진다 (S15P21A405-460). 헤드 근처 몇 개만 솟아 있어서
- * "지금 소리 나는 자리" 가 한눈에 보이고, 나머지는 얇은 띠로 물러난다.
+ * **아직 안 지나간** 바는 제 높이의 이만큼으로 낮아진다 (S15P21A405-460 · 464).
  *
- * 멈춰 있으면 흔들리는 바가 없으니 **전체가 낮다.** 소리가 나는 구간만 솟는다.
+ * 처음엔 헤드 근처를 뺀 전부를 눕혔는데, 그러면 지나온 구간도 같이 누워서 어디까지 들었는지가
+ * 얇은 틸색 줄 하나로만 남았다. 지금은 **지나온 바가 제 높이로 선 채 남는다** — 헤드가 지나가며
+ * 파형을 일으켜 세우고 가는, 자취가 쌓이는 모양이다 (`transition-[height]` 이 그 300ms 를 맡는다).
+ *
+ * 헤드는 여전히 읽힌다: 솟은 틸색과 누운 회색의 경계가 그 자리다. 멈춰 있어도 지나온 구간은 서 있다.
  */
 const IDLE_SCALE = 0.35;
 
@@ -42,6 +45,20 @@ export function shapeFor(seed: number) {
     out.push(Math.round(100 * (MIN_H + (MAX_H - MIN_H) * level)));
   }
   return out;
+}
+
+/**
+ * 바 하나가 실제로 그려질 높이(%). 지나온 바와 헤드 근처 바는 제 높이, 나머지는 `IDLE_SCALE` 로 눕는다.
+ *
+ * 컴포넌트 밖에 둔 건 이 한 줄이 곧 "자취가 남는다" 의 전부라서다 — 460 때 한 번 눕혔다가 464 에서
+ * 되세운 자리라, 테스트가 지키고 있지 않으면 또 눕는다.
+ *
+ * 정수 % 를 지킨다 — 소수가 길면 서버가 그린 style 과 브라우저가 정규화한 값이 달라 하이드레이션 경고가 난다.
+ */
+export function barHeight(h: number, i: number, head: number, playing: boolean) {
+  const passed = i < head;
+  const near = playing && Math.abs(i - head) <= LIVE_SPAN;
+  return passed || near ? h : Math.round(h * IDLE_SCALE);
 }
 
 interface WaveformBarsProps {
@@ -72,8 +89,7 @@ export default function WaveformBars({ musicId, ratio, playing, live }: Waveform
       {shape.map((h, i) => {
         const passed = i < head;
         const near = playing && Math.abs(i - head) <= LIVE_SPAN;
-        // 정수 % 를 지킨다 — 소수가 길면 서버가 그린 style 과 브라우저가 정규화한 값이 달라 하이드레이션 경고가 난다
-        const shown = near ? h : Math.round(h * IDLE_SCALE);
+        const shown = barHeight(h, i, head, playing);
         return (
           <i
             key={i}

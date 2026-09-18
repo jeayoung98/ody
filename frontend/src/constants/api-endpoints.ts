@@ -17,49 +17,51 @@ const round = (v: number) => v.toFixed(4);
  * 프로덕션에서 아예 닿지 않는다** — 실제로 그래서 모든 데이터 화면이 500 이었다 (S15P21A405-273).
  * 그래서 우리 것은 전부 `/bff/` 다.
  *
- * 지금 `/api/` 로 남아 있는 건 **목이 없어서 백엔드를 직접 부를 수밖에 없는 것**뿐이다
- * (`googleLogin` · `exchange` · `reissue`). 로컬에서 쓰려면 `live-api-paths.ts` 에 넣어야 한다.
- *
- * 로그인·온보딩은 **의도적으로 목이다.** 유저 테스트가 주변 탐색·경로 탐색만 보기 때문에
- * 실계정 가입 절차를 태우지 않는다. 백엔드에는 `/api/auth/*` 가 전부 있으므로
- * 나중에 `live-api-paths.ts` 에 다시 넣기만 하면 실연동으로 돌아온다.
+ * 인증·마이페이지는 **실연동이다** (S15P21A405-462). 다만 경로는 `/bff/` 로 둔다 —
+ * `/api/` 로 직접 부르면 로컬에서 rewrite 가 브라우저의 `Origin` 을 실어 보내 403 이 된다
+ * (S15P21A405-303). BFF 라우트가 호출자의 Bearer 토큰과 refresh 쿠키를 그대로 중계한다.
  */
 export const API_ENDPOINTS = {
   health: "/bff/health",
 
   auth: {
-    /** 목. 본인 조회는 백엔드에 아직 없다 (BACKEND-NOTES A-15) */
+    /** 실연동. **본인 조회 API 가 없어서** 토큰의 `sub` 로 `GET /api/user/detail` 을 대신 부른다 (A-15) */
     me: "/bff/auth/me",
-    /** 목. 백엔드 `POST /api/auth/logout` 이 있다 */
+    /** 실연동 → `POST /api/auth/logout`. 토큰 무효화 + refresh 쿠키 삭제 */
     logout: "/bff/auth/logout",
     /**
-     * 구글 idToken 로그인 (S15P21A405-129). `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
-     * 목이 없는 유일한 인증 경로라 실제로 쓰려면 `live-api-paths.ts` 에 이 경로를 넣어야 한다.
+     * 구글 idToken 로그인 (S15P21A405-129) → `POST /api/auth/login/google`.
+     * `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
      * 백엔드의 리다이렉트 진입점 `/oauth2/authorization/google` 은 그 흐름을 쓰지 않으므로 여기 두지 않는다.
      */
-    googleLogin: "/api/auth/login/google",
-    /** 목. 백엔드 `POST /api/auth/signup` 이 있다 — 본문 `{email, password, nickname}` */
+    googleLogin: "/bff/auth/google",
+    /** 실연동 → `POST /api/auth/signup`. 본문 `{email, password, nickname}` */
     signup: "/bff/auth/signup",
-    /** 목. 백엔드 `POST /api/auth/login` 이 있다 — 본문 `{email, password}` */
+    /** 실연동 → `POST /api/auth/login`. 본문 `{email, password}` */
     login: "/bff/auth/login",
-    /** 목. 백엔드에서는 `PATCH /api/user/profile` 이 이 역할을 한다 (A-13) */
-    nickname: "/bff/auth/nickname",
-    /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 */
+    /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 — OAuth 리다이렉트 흐름을 쓸 때 붙인다 */
     exchange: "/api/auth/exchange",
-    /** 목. 백엔드 `PATCH /api/user/tutorial-completed` 가 이 역할을 한다 */
+    /** 실연동 → `PATCH /api/user/tutorial-completed` */
     completeTutorial: "/bff/auth/tutorial/complete",
-    /** 백엔드 전용 — refresh 쿠키로 재발급. 실연동으로 돌아갈 때 쓴다 (B-8) */
-    reissue: "/api/auth/reissue",
+    /** 실연동 → `POST /api/auth/reissue`. refresh 쿠키로 재발급 (B-8) */
+    reissue: "/bff/auth/reissue",
   },
 
   user: {
     /**
-     * 목. 백엔드는 `GET /api/user/detail?email=` 이고 **도달은 된다** (B-16 해소).
-     * 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe` 가 더 오고 `updatedAt` 은 없다 (0-2 필드 대조).
+     * 실연동 → `GET /api/user/detail?email=`. 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe`
+     * 가 더 오고 `updatedAt` 은 없다. **지금 듣는 곡·만남 횟수·대시보드 통계는 백엔드에 아예 없다** (A-35).
      */
     detail: (email: string) => `/bff/users/${encodeURIComponent(email)}`,
-    /** 목. 백엔드 `GET /api/users/nickname-available` 이 있다 */
+    /** 실연동 → `GET /api/users/nickname-available` */
     nicknameAvailable: (nickname: string) => `/bff/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
+    /**
+     * 실연동 → `PATCH /api/user/profile`. 닉네임·프로필 이미지를 **부분 수정**한다 (A-13).
+     * 가입 직후 닉네임 화면과 프로필 수정 화면이 같이 쓴다 — 백엔드에 닉네임 전용 경로가 없다.
+     */
+    profile: "/bff/user/profile",
+    /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
+    publicVisibility: "/bff/user/public",
     nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
     follow: (email: string) => `/bff/users/${encodeURIComponent(email)}/follow`,
     reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,

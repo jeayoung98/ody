@@ -45,7 +45,15 @@ export type SpecErrorCode =
   | "FILE_TOO_LARGE"
   | "INTERNAL_ERROR";
 
-export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode;
+/**
+ * BFF 라우트만 내는 코드. 백엔드 목록에는 없다.
+ *
+ * `NOT_IMPLEMENTED` 는 **배포 API 에 그 기능이 아예 없다**는 뜻이다 (S15P21A405-468). 목으로
+ * 성공한 척하면 새로고침 때 사라져서 "저장이 가끔 안 된다" 로 보이므로, 실패를 드러낸다.
+ */
+export type BffErrorCode = "NOT_IMPLEMENTED";
+
+export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | BffErrorCode;
 
 export interface ApiErrorBody {
   code: ApiErrorCode;

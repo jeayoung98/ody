@@ -338,8 +338,11 @@ export class MapEngine {
     this.H = Math.max(1, H);
     if (!this.inited || this.anim) return;
     if ((wasUnsized || !this.touched) && this.myId != null) {
-      this.cam = this.fitCam(this.layer, this.subset, this.fitAnchor(this.subset, this.layer));
+      const anchor = this.fitAnchor(this.subset, this.layer);
+      this.cam = this.fitCam(this.layer, this.subset, anchor);
       this.entryS = this.cam.s;
+      // 0겹은 첫 화면 규칙을 그대로 지킨다 — entryS 는 전역 맞춤, 카메라만 조임 (S15P21A405-469)
+      if (this.layer === 0) this.cam = this.startCam0(this.subset, anchor);
     }
     this.project();
   }
@@ -409,8 +412,9 @@ export class MapEngine {
       const m = this.songs[this.index.get(this.myId)!];
       this.me = { x: m.pc[0], y: m.pc[1] };
     }
-    this.cam = this.fitCam(0, this.subset, anchor);
-    this.entryS = this.cam.s;
+    // entryS 는 전역 맞춤이고 첫 화면만 조인다 (S15P21A405-469, `startCam0`)
+    this.entryS = this.fitCam(0, this.subset, anchor).s;
+    this.cam = this.startCam0(this.subset, anchor);
     this.inited = true;
     this.rebuildAliveIdx();
     this.project();
@@ -1460,6 +1464,26 @@ export class MapEngine {
     return this.saneCam({ cx: b.cx - (f.cx - this.W / 2) / b.s, cy: b.cy + (f.cy - this.H / 2) / b.s, s: b.s });
   }
 
+  /**
+   * 0겹 **첫 화면**의 카메라 (S15P21A405-469). 기준 곡은 `fitCam` 과 같고 배율만 조인다.
+   *
+   * `fitCam` 의 0겹 맞춤은 구름이 다 들어오게 맞춘다. 그런데 상주 집합의 분위수 상자는 거의
+   * 정사각인데 화면은 2배 넘게 가로로 길어서, 실측상 첫 화면이 **가로 30% · 세로 62%** 만 차고
+   * 좌우가 통째로 비었다 — 지도가 줌아웃된 채로 열린 것처럼 보인다. 그래서 첫 화면만
+   * **긴 쪽을 채우는 배율**로 연다. 짧은 쪽으로는 넘쳐서 상주 집합의 절반가량이 화면 밖이다.
+   *
+   * **`entryS` 는 건드리지 않는다.** 줌 한계(`zoomRange`)·파고들기 임계(`gateMinZoom`)·
+   * 떠오르기 압력(`riseScaleRatio`)·곡 맞춤(`FOCUS.zoomMul`)이 전부 `entryS` 대비라, 그걸 같이
+   * 조이면 "줌아웃해서 전체를 본다" 가 막히고 파고들기 임계까지 그만큼 깊어진다.
+   * 조이는 건 첫 프레임의 카메라뿐이고, 휠을 뒤로 굴리면 예전처럼 전역이 들어온다.
+   */
+  private startCam0(mask: Uint8Array<ArrayBufferLike>, centerId: number): MapCamera {
+    const s = this.fitBox(0, 1, mask).sCover;
+    const c = this.songs[this.index.get(centerId)!];
+    const f = this.freeRect();
+    return this.saneCam({ cx: c.pc[0] - (f.cx - this.W / 2) / s, cy: c.pc[1] + (f.cy - this.H / 2) / s, s });
+  }
+
   /** 배율이 0·무한대·NaN 이면 카메라가 통째로 깨져 모든 좌표가 NaN 이 된다 — 그럴 땐 지금 카메라를 그대로 쓴다 */
   private saneCam(c: MapCamera): MapCamera {
     return Number.isFinite(c.s) && c.s > 0 && Number.isFinite(c.cx) && Number.isFinite(c.cy) ? c : { ...this.cam };
@@ -1487,7 +1511,7 @@ export class MapEngine {
       xs.push(this.songs[i].pc[dx]);
       ys.push(this.songs[i].pc[dy]);
     }
-    if (!xs.length) return { s: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
+    if (!xs.length) return { s: this.cam.s, sCover: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
     xs.sort((a, b) => a - b);
     ys.sort((a, b) => a - b);
     const lo = Math.floor((xs.length - 1) * DRILL.deepFit.trim);
@@ -1495,8 +1519,10 @@ export class MapEngine {
     const w = Math.max(1e-6, xs[hi] - xs[lo]);
     const h = Math.max(1e-6, ys[hi] - ys[lo]);
     const f = this.freeRect();
-    const s = Math.min(((f.x1 - f.x0) * DRILL.deepFit.fill) / w, ((f.y1 - f.y0) * DRILL.deepFit.fill) / h);
-    return { s, cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
+    const byW = ((f.x1 - f.x0) * DRILL.deepFit.fill) / w;
+    const byH = ((f.y1 - f.y0) * DRILL.deepFit.fill) / h;
+    // `s` 는 상자가 다 들어오는 배율(contain), `sCover` 는 짧은 쪽이 넘치더라도 긴 쪽을 채우는 배율
+    return { s: Math.min(byW, byH), sCover: Math.max(byW, byH), cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
   }
 
   // ------------------------------------------------------------------ layer transitions

@@ -5,18 +5,19 @@ import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { ROUTES, STORAGE_KEYS } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useSurveyMode } from "@/hooks/use-survey-mode";
-import { readStorage } from "@/lib/storage";
-
-/** 저장소는 이 세션 안에서 바뀌지 않는다 (바뀌면 어차피 페이지가 이동한다) */
-const noopSubscribe = () => () => {};
+import { readStorage, subscribeStorage } from "@/lib/storage";
 
 /**
  * 액세스 토큰 유무. 저장소는 브라우저에만 있으므로 서버 스냅샷은 항상 null 이다 —
  * useSyncExternalStore 를 쓰면 그 차이를 React 가 하이드레이션에서 알아서 맞춘다.
+ *
+ * **세션 도중에도 바뀐다** (S15P21A405-473). 재발급이 실패하면 `lib/api.ts` 가 죽은 토큰을
+ * 지우는데, 예전에는 구독이 noop 이라 여기가 그걸 못 들었다 — 토큰은 없어졌는데 화면은
+ * 로그인된 홈 그대로였고, 그 화면의 모든 요청이 401 을 받았다. 이제 지워지는 순간 듣는다.
  */
 function useHasToken() {
   return useSyncExternalStore(
-    noopSubscribe,
+    subscribeStorage,
     () => !!readStorage<string>(STORAGE_KEYS.accessToken),
     () => false,
   );

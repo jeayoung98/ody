@@ -50,6 +50,8 @@ export const QUERY_KEYS = {
   },
 
   user: {
+    /** 프로필을 고치면 내 것이든 남이 보는 것이든 전부 다시 읽어야 한다 */
+    all: ["user"] as const,
     profile: (email: string) => ["user", "profile", email] as const,
     nearby: (layer: number) => ["user", "nearby", layer] as const,
   },

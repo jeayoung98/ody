@@ -1,6 +1,6 @@
 import { API_ENDPOINTS, STORAGE_KEYS } from "@/constants";
 import type { ApiErrorCode, ApiResponse } from "@/types";
-import { readStorage, readStorageScope, writeStorage } from "./storage";
+import { readStorage, readStorageScope, removeStorage, writeStorage } from "./storage";
 import { logLiveResponse } from "./live-log";
 
 /**
@@ -51,11 +51,19 @@ async function reissueAccessToken(): Promise<boolean> {
         headers: { "Content-Type": "application/json; charset=UTF-8" },
       });
       const body = (await res.json().catch(() => null)) as ApiResponse<{ accessToken: string }> | null;
-      if (!res.ok || !body?.success || !body.data?.accessToken) return false;
+      if (!res.ok || !body?.success || !body.data?.accessToken) {
+        // 답을 받았는데 새 토큰이 없다 = 이 세션은 되살아나지 않는다. 죽은 토큰을 남겨 두면
+        // AuthGuard 가 계속 "로그인됨" 으로 읽어서, 로그아웃을 직접 누르기 전까지 401 만
+        // 받는 홈에 머문다 (S15P21A405-473). 지우면 그 자리에서 로그인으로 간다
+        removeStorage(STORAGE_KEYS.accessToken);
+        return false;
+      }
 
       writeStorage(STORAGE_KEYS.accessToken, body.data.accessToken, readStorageScope(STORAGE_KEYS.accessToken) ?? "local");
       return true;
     } catch {
+      // 네트워크가 끊겨 답 자체를 못 받은 경우다. 토큰은 그대로 둔다 —
+      // 와이파이가 끊겼다고 로그아웃시키면 돌아왔을 때 다시 로그인해야 한다
       return false;
     } finally {
       // 다음 401 때 다시 시도할 수 있도록 비운다

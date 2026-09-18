@@ -12,6 +12,8 @@ const { canSearch, searchRequestPath, flattenSearch } = require("../src/hooks/qu
 const { QUERY_KEYS } = require("../src/constants/index.ts");
 const { TITLE_SEARCH_MAX_UPSTREAM_PAGES } = require("../src/constants/search.ts");
 const { searchTitleOnlyPage } = require("../src/app/bff/music/search/route.ts");
+const { atBottom } = require("../src/hooks/use-load-more-on-bottom.ts");
+const { SEARCH_LOAD_MORE_MARGIN_PX } = require("../src/constants/index.ts");
 
 const params = (path) => Object.fromEntries(new URL(path, "http://x").searchParams);
 
@@ -160,4 +162,24 @@ test("음악 조건만 있으면 제목 앞일치 결과를 준다", () => {
 
 test("조건이 하나도 없으면 아무것도 안 준다", () => {
   assert.deepEqual(mockSearch({ q: "", artist: "", music: "" }), []);
+});
+
+/**
+ * 다음 페이지를 당기는 바닥 판정 (S15P21A405-455). 지도 상단 검색창과 여정 만들기가 같은
+ * 훅을 쓰므로 한쪽만 고장나는 일이 없어야 한다. 위치로 재기 때문에 **스크롤하지 않았으면
+ * 안 불려야** 한다 — IntersectionObserver 로 하다가 첫 렌더에 20건을 당긴 적이 있다.
+ */
+const box = (scrollTop, clientHeight = 200, scrollHeight = 1000) => ({ scrollTop, clientHeight, scrollHeight });
+
+test("스크롤을 안 했으면 바닥이 아니다 — 첫 렌더에 다음 페이지를 당기지 않는다", () => {
+  assert.equal(atBottom(box(0)), false);
+});
+
+test("바닥 여유 안에 들어오면 바닥으로 센다", () => {
+  assert.equal(atBottom(box(1000 - 200 - SEARCH_LOAD_MORE_MARGIN_PX)), true);
+  assert.equal(atBottom(box(1000 - 200 - SEARCH_LOAD_MORE_MARGIN_PX - 1)), false);
+});
+
+test("내용이 상자보다 짧으면(스크롤이 안 생기면) 처음부터 바닥이다", () => {
+  assert.equal(atBottom(box(0, 200, 120)), true);
 });

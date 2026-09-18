@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CloseIcon } from "@/components/common/icons";
 import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
+import { useLoadMoreOnBottom } from "@/hooks/use-load-more-on-bottom";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -21,9 +22,19 @@ import { track } from "@/lib/analytics/client";
 export default function JourneyComposer() {
   const [keyword, setKeyword] = useState("");
   // 여정 만들기는 **통합 검색만** 쓴다 — 칩 UI 없이 조건 하나만 넘긴다 (S15P21A405-399)
-  const { data, isPending } = useMusicSearchQuery({ mode: "all", query: keyword });
-  // 여기는 무한 스크롤을 안 붙였다 — 받아 둔 페이지만 편다 (첫 페이지 10곡, S15P21A405-267 범위 밖)
+  const { data, isPending, hasNextPage, isFetchingNextPage, fetchNextPage } = useMusicSearchQuery({ mode: "all", query: keyword });
   const results = flattenSearch(data?.pages);
+  /**
+   * 결과를 끝까지 내리면 다음 10곡이 이어 붙는다 (S15P21A405-455). 전에는 첫 페이지에서
+   * 끝나서, 17만 건 중 앞 10곡에 원하는 곡이 없으면 여정을 만들 수 없었다. 판정은 지도
+   * 상단 검색창과 같은 훅이다 — 상자만 다르다.
+   */
+  const { boxRef, onScroll } = useLoadMoreOnBottom({
+    hasMore: hasNextPage,
+    isLoadingMore: isFetchingNextPage,
+    count: results.length,
+    onLoadMore: () => void fetchNextPage(),
+  });
   const startMusicId = useJourneyStore((s) => s.startMusicId);
   const endMusicId = useJourneyStore((s) => s.endMusicId);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
@@ -113,7 +124,7 @@ export default function JourneyComposer() {
 
       {/* 입력했을 때만 결과가 펼쳐진다 */}
       {searching && (
-        <div className="max-h-[42vh] overflow-y-auto border-t border-line px-1.5 py-1.5">
+        <div ref={boxRef} onScroll={onScroll} className="max-h-[42vh] overflow-y-auto border-t border-line px-1.5 py-1.5">
           {isPending && <p className="lbl px-2 py-4 text-center">검색 중</p>}
           {!isPending && results.length === 0 && <p className="lbl px-2 py-4 text-center">일치하는 음악이 없습니다</p>}
           {results.map((r) => (
@@ -125,6 +136,9 @@ export default function JourneyComposer() {
               onPick={() => pick(r.id, pickTarget === "end" ? "end" : "start")}
             />
           ))}
+          {/* 한 페이지에 20초 가까이 걸린다 — 멈춘 것처럼 보이지 않게 바닥에 상태를 남긴다 */}
+          {isFetchingNextPage && <p className="lbl px-2 py-2 text-center">다음 10곡 불러오는 중...</p>}
+          {results.length > 0 && !hasNextPage && !isFetchingNextPage && <p className="lbl px-2 py-2 text-center">결과 끝</p>}
         </div>
       )}
 

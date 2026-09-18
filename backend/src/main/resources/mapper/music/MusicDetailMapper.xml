@@ -40,21 +40,6 @@
 	</select>
 
 	<!--
-		여정 정거장 조립용. mbid 는 UNIQUE 라 인덱스를 탄다.
-		곡당 왕복은 3초 예산을 넘기므로(SC-002) 반드시 한 번에 읽는다. 최대 20건이다.
-	-->
-	<select id="findByMbids" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt, m.video_id,
-		<include refid="locationColumns"/>
-		FROM music m
-		WHERE m.mbid IN
-		<foreach item="mbid" collection="mbidList" open="(" separator="," close=")">
-			#{mbid}
-		</foreach>
-	</select>
-
-	<!--
 		별자리 배치용 좌표 일괄 조회 (A-9). 좌표 말고는 읽지 않는다 — 배치는 좌표만 있으면 된다.
 
 		⚠️ location IS NOT NULL 을 뺄 수 없다.

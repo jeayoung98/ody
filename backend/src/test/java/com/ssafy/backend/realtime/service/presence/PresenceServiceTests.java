@@ -1,5 +1,8 @@
 package com.ssafy.backend.realtime.service.presence;
 
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -48,14 +51,14 @@ class PresenceServiceTests {
 	}
 
 	@Test
-	@DisplayName("다시 연결하면 이전 위치를 지우고 퇴장을 알린 뒤 새 접속을 만든다")
+	@DisplayName("다른 탭 없이 다시 연결하면 이전 위치를 지우고 퇴장을 알린 뒤 새 접속을 만든다")
 	void reconnectRemovesPreviousPositionBeforeConnecting() {
 		when(presenceRepository.snapshot(EMAIL))
 				.thenReturn(new PresenceSnapshot(20L, 2, 3, 4, 7L));
 		when(presenceRepository.applyLeave(EMAIL, 7L))
 				.thenReturn(List.of("20", "2", "3", "4", "7"));
 
-		service.connect(EMAIL, 8L);
+		service.connect(EMAIL, 8L, false);
 
 		verify(presenceRepository).applyLeave(EMAIL, 7L);
 		verify(presenceRepository).connect(EMAIL, 8L, 45_000L);
@@ -71,9 +74,20 @@ class PresenceServiceTests {
 	void firstConnectCreatesPresenceWithoutLeave() {
 		when(presenceRepository.snapshot(EMAIL)).thenReturn(null);
 
-		service.connect(EMAIL, 1L);
+		service.connect(EMAIL, 1L, false);
 
 		verify(presenceRepository).connect(EMAIL, 1L, 45_000L);
+		verifyNoInteractions(realtimeEventService);
+	}
+
+	@Test
+	@DisplayName("다른 탭이 남아 있으면 이전 위치를 읽지도 지우지도 않는다")
+	void connectKeepsPositionWhenOtherTabRemains() {
+		service.connect(EMAIL, 9L, true);
+
+		verify(presenceRepository).connect(EMAIL, 9L, 45_000L);
+		verify(presenceRepository, never()).snapshot(EMAIL);
+		verify(presenceRepository, never()).applyLeave(anyString(), anyLong());
 		verifyNoInteractions(realtimeEventService);
 	}
 

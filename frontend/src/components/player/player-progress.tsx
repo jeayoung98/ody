@@ -36,7 +36,7 @@ interface PlayerProgressProps {
  *
  * **조작은 여전히 네이티브 `input[type=range]` 다.** 파형 위에 투명하게 얹었다 — 끌기·클릭·키보드
  * 화살표·스크린리더가 전부 공짜로 따라온다. div 로 만들면 그걸 전부 다시 짜야 한다.
- * 키보드 포커스는 상자 테두리로 보인다 (`has-[:focus-visible]`) — 손잡이가 안 보이니 그게 유일한 표시다.
+ * 포커스 테두리는 두지 않는다 — 마우스로 눌러도 떠서 거슬렸다. 위치는 색이 찬 구간이 말해 준다.
  *
  * 끄는 동안에는 플레이어가 보고하는 시간을 무시한다 (`scrub`). 안 그러면 손가락이 끄는 값과 아직
  * 안 옮겨진 재생 위치가 매 틱 서로를 덮어써서 손잡이가 튄다.
@@ -110,7 +110,7 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
     <div className="flex items-center gap-2.5">
       {/* 못 트는 곡이어도 길이는 알려 준다 — 바만 잠근다 */}
       <span className="num w-8 shrink-0 text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
-      <div className="relative h-8 min-w-0 flex-1 rounded-box-xs has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-teal/60">
+      <div className="relative h-8 min-w-0 flex-1">
         <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
         <input
           data-analytics-manual

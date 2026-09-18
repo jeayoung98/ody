@@ -44,7 +44,7 @@ export default function Rail() {
   const panelEnabled = usePanelEnabled();
 
   return (
-    <div data-hud className="absolute top-4 right-[18px] z-[22] flex items-center gap-2">
+    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2">
       <nav aria-label="네비" className="glass flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">

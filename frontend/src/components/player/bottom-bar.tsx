@@ -12,7 +12,7 @@ export default function BottomBar() {
   return (
     <>
       <YoutubeEmbed />
-      <footer data-hud className="absolute right-[18px] bottom-[18px] z-[21] flex w-right-panel items-stretch">
+      <footer data-hud className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch">
         <PlayerBar />
       </footer>
     </>

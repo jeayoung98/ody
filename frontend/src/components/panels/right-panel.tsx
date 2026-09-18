@@ -33,7 +33,7 @@ export default function RightPanel() {
     <aside
       data-hud
       data-tutorial={`panel-${activePanel}`}
-      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100vh-264px)] w-right-panel flex-col transition-[translate,opacity] duration-500 ease-out ${
+      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100dvh-264px)] w-right-panel flex-col transition-[translate,opacity] duration-500 ease-out ${
         /*
           접으면 **몸통 18px 만 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이
           있었는지가 안 읽힌다 — 좌하단 계기판이 몸통을 조금 남기는 것(`COLLAPSED_PEEK_PX`)과 같은 이유다.

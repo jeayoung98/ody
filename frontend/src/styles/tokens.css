@@ -106,6 +106,36 @@
    */
   --spacing-touch: 44px;
 
+  /* ---------- 안전 영역 (S15P21A405-420) ---------- */
+  /*
+   * **화면이긴 한데 내 자리가 아닌 구역.** 아이폰 아래쪽 홈 인디케이터(34px)와 위쪽 노치가
+   * 그렇다. 아래는 스와이프를 OS 가 먼저 채가서 **버튼이 보여도 안 눌리고**, 위는 그냥 가려진다.
+   *
+   * **`viewport-fit=cover` 가 없으면 `env()` 가 전부 0 을 돌려준다.** 그 설정은 `app/layout.tsx`
+   * 의 `viewport` export 에 있다 — 둘은 세트다.
+   *
+   * 데스크톱과 브라우저 에뮬레이터에서는 **항상 0** 이다. 그래서 아래 `hud-b` 같은 합성 값이
+   * 데스크톱에서는 원래 값 그대로 나온다 — 이 토큰을 써도 넓은 화면은 한 픽셀도 안 바뀐다.
+   * 뒤집어 말하면 **값이 맞는지는 실기기에서만 확인된다.**
+   *
+   * 기본값 `0px` 를 반드시 준다. `env()` 를 모르는 브라우저에서 빠지면 `calc()` 전체가 무효가 된다.
+   */
+  --spacing-safe-t: env(safe-area-inset-top, 0px);
+  --spacing-safe-b: env(safe-area-inset-bottom, 0px);
+  --spacing-safe-l: env(safe-area-inset-left, 0px);
+  --spacing-safe-r: env(safe-area-inset-right, 0px);
+  /*
+   * 화면 끝에 붙는 HUD 가 쓰는 여백 = **원래 값 그대로 + 안전 영역.**
+   *
+   * 원래 값을 손대지 않는 것이 요점이다. 데스크톱에서는 `env()` 가 0 이라 `hud-b` 는 18px,
+   * `hud-t` 는 16px 로 지금과 **완전히 같은 수**가 나온다. 아이폰에서만 각각 34px·47px 쯤 늘어난다.
+   *
+   * `hud-t` 가 `--spacing-hud`(18px) 가 아니라 1rem 인 이유: 상단 HUD 는 원래 `top-4`(16px) 라
+   * 18px 를 쓰면 데스크톱이 2px 움직인다. **바꾸는 건 안전 영역뿐이다.**
+   */
+  --spacing-hud-b: calc(var(--spacing-hud) + env(safe-area-inset-bottom, 0px));
+  --spacing-hud-t: calc(1rem + env(safe-area-inset-top, 0px));
+
   /* ---------- 타이포 ---------- */
   --text-3xs: 8.5px;
   --text-2xs: 9.5px;

@@ -31,12 +31,23 @@ function conditionOf(chip: Chip, input: string): SearchCondition {
   return { mode: "music", music: chip.value, artist: input };
 }
 
-/** #searchWrap — 상단 중앙 글래스 검색. 결과 클릭 시 지도상 위치로 이동 (SEARCH-01) */
+/**
+ * #searchWrap — 상단 중앙 글래스 검색. 결과 클릭 시 지도상 위치로 이동 (SEARCH-01).
+ *
+ * **접혀 있는 게 기본이다** (S15P21A405-440). 포커스가 없으면 아이콘 + SEARCH 만 있는 작은 알약이고,
+ * 누르면 같은 높이로 **옆으로 늘어나며** 입력이 열린다. 포커스가 상자 밖으로 나가면 다시 줄어든다.
+ * 예전에는 패널이 열릴 때만 작은 버튼(`search-open-button`)으로 **교체**됐는데, 두 컴포넌트가
+ * 자리를 바꿔 끼는 거라 움직임이 없었다. 이제 하나가 폭만 바꾼다 — 폭은 CSS transition 이 맡는다.
+ *
+ * 펼 때 우측 패널은 닫는다. 검색창과 사이드 패널은 동시에 뜨지 않는다는 규칙은 그대로다.
+ */
 export default function SearchBar() {
   const [input, setInput] = useState("");
   const [chip, setChip] = useState<Chip>(null);
   const [open, setOpen] = useState(false);
+  const [expanded, setExpanded] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const wrapRef = useRef<HTMLDivElement>(null);
 
   /** 한 글자마다 묻지 않는다 — 닉네임 검사와 같은 길이로 맞춘다 */
   const [debounced, setDebounced] = useState("");
@@ -58,6 +69,7 @@ export default function SearchBar() {
   });
   const focusMusic = useMapStore((s) => s.focusMusic);
   const openSong = usePanelStore((s) => s.openSong);
+  const closePanel = usePanelStore((s) => s.close);
 
   const reset = () => {
     setInput("");
@@ -65,9 +77,31 @@ export default function SearchBar() {
     setChip(null);
   };
 
+  /** 펴면서 입력에 포커스. 패널은 닫는다 */
+  const expand = () => {
+    closePanel();
+    setExpanded(true);
+    setOpen(true);
+    // 입력은 접혀 있어도 DOM 에 있다 — 바로 포커스해도 된다
+    requestAnimationFrame(() => inputRef.current?.focus());
+  };
+  const collapse = () => {
+    setExpanded(false);
+    setOpen(false);
+  };
+  /**
+   * 포커스가 상자 **밖으로** 나갈 때만 접는다. 결과 목록 버튼으로 옮겨 가는 것은 밖이 아니다.
+   * 한 박자 뒤에 재는 이유: 클릭으로 포커스가 옮겨 가는 사이에 activeElement 가 잠깐 body 다.
+   */
+  const handleBlur = () => {
+    setTimeout(() => {
+      if (!wrapRef.current?.contains(document.activeElement)) collapse();
+    }, 120);
+  };
+
   const handleSelect = (r: MusicSearchResult) => {
     analytics.select(r.id, results.findIndex((item) => item.id === r.id) + 1);
-    setOpen(false);
+    collapse();
     reset();
     openSong(r.id);
     // 이 겹에 있으면 확대해 가고, 없으면 고스트별로 띄운다 — 레이어를 자동으로 옮기지 않는다 (SEARCH-01, MAP-12)
@@ -91,10 +125,25 @@ export default function SearchBar() {
   };
 
   return (
-    <div data-analytics-manual className="absolute top-4 left-1/2 z-[22] w-[min(380px,32vw)] -translate-x-1/2" data-hud>
-      <div className="glass flex items-center gap-[9px] rounded-pill! px-[13px] py-[9px]">
+    <div
+      ref={wrapRef}
+      data-analytics-manual
+      data-hud
+      onBlur={handleBlur}
+      // 폭만 바뀐다. 가운데 정렬(-translate-x-1/2)이라 양쪽으로 같이 늘어난다
+      className={`absolute top-4 left-1/2 z-[22] -translate-x-1/2 transition-[width] duration-300 ease-out ${expanded ? "w-[min(420px,34vw)]" : "w-[104px]"}`}
+    >
+      {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
+      <div
+        className={`glass flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! px-[15px] ${expanded ? "" : "cursor-pointer hover:border-line-2"}`}
+        onMouseDown={(e) => {
+          if (expanded) return;
+          e.preventDefault(); // 포커스가 상자로 갔다가 입력으로 옮겨 가며 깜빡이지 않게
+          expand();
+        }}
+      >
         <SearchIcon className="shrink-0 opacity-50" />
-        {chip && (
+        {expanded && chip && (
           <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[11.5px] whitespace-nowrap text-ink-2">
             {CHIP_LABEL[chip.kind]}: {chip.value}
             <button
@@ -108,9 +157,12 @@ export default function SearchBar() {
             </button>
           </span>
         )}
+        {/* 접혀 있으면 폭 0 — 자리를 안 차지하면서도 포커스는 받을 수 있게 남긴다 */}
         <input
           ref={inputRef}
-          className="min-w-0 flex-1 bg-transparent text-[13px] outline-none placeholder:text-ink-3"
+          tabIndex={expanded ? 0 : -1}
+          aria-hidden={!expanded}
+          className={`min-w-0 bg-transparent text-[13px] outline-none placeholder:text-ink-3 ${expanded ? "flex-1" : "w-0 flex-none"}`}
           placeholder={chip ? (chip.kind === "artist" ? "제목 검색..." : "아티스트 검색...") : "음악 · 아티스트 검색"}
           autoComplete="off"
           spellCheck={false}
@@ -119,13 +171,16 @@ export default function SearchBar() {
             setInput(e.target.value);
             setOpen(true);
           }}
-          onFocus={() => setOpen(true)}
-          onBlur={() => setTimeout(() => setOpen(false), 150)}
+          onFocus={() => {
+            setExpanded(true);
+            setOpen(true);
+          }}
           onKeyDown={(e) => {
-            // Escape 는 입력과 칩을 **모두** 지운다 (전달 문서 §2.1)
+            // Escape 는 입력과 칩을 **모두** 지우고 접는다 (전달 문서 §2.1)
             if (e.key === "Escape") {
               reset();
-              setOpen(false);
+              inputRef.current?.blur();
+              collapse();
               return;
             }
             /**
@@ -139,9 +194,9 @@ export default function SearchBar() {
             }
           }}
         />
-        <span className="lbl">search</span>
+        <span className="lbl shrink-0">search</span>
       </div>
-      {open && (chip || input.trim()) && (
+      {expanded && open && (chip || input.trim()) && (
         <SearchResultList
           condition={condition}
           input={input.trim()}

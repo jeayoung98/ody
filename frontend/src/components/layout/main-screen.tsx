@@ -11,7 +11,6 @@ import Brand from "./brand";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
-import SearchOpenButton from "./search-open-button";
 import FollowBanner from "@/components/map/follow-banner";
 import GhostBanner from "@/components/map/ghost-banner";
 import MapAxisLabels from "@/components/map/map-axis-labels";
@@ -59,8 +58,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       <MapAxisLabels occludedRight={occludedRight} />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
-          검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}
-      {composerOpen ? <JourneyComposer /> : panelOpen ? <SearchOpenButton /> : <SearchBar />}
+          검색창은 스스로 접혔다 펴진다 — 펴질 때 우측 패널을 닫는다 (S15P21A405-440) */}
+      {composerOpen ? <JourneyComposer /> : <SearchBar />}
       {features.social && <FollowBanner />}
       <GhostBanner />
       <Rail />

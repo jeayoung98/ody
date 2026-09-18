@@ -18,7 +18,7 @@ interface RailButtonProps {
 
 /**
  * .railBtn — 우상단 알약 안의 아이콘 버튼. 활성 시 그라데이션 원.
- * 34px 는 알약(38px)에 맞춘 값이다 (S15P21A405-427). 글자는 없고 이름은 툴팁·aria-label 로만 (S15P21A405-434).
+ * 40px 는 알약(44px)에 맞춘 값이다 (S15P21A405-440). 글자는 없고 이름은 툴팁·aria-label 로만 (S15P21A405-434).
  */
 export default function RailButton({ label, active, onClick, children, badge, disabled = false, title, "data-tutorial": dataTutorial }: RailButtonProps) {
   return (
@@ -30,7 +30,7 @@ export default function RailButton({ label, active, onClick, children, badge, di
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`relative grid h-[34px] w-[34px] place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-40 ${
+      className={`relative grid h-10 w-10 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-40 ${
         active ? "grad-bg text-void shadow-glow-azure" : disabled ? "text-ink-3" : "text-ink-3 hover:bg-white/[.07] hover:text-ink"
       }`}
     >

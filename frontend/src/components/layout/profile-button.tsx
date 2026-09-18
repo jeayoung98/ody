@@ -21,9 +21,9 @@ export default function ProfileButton() {
       aria-pressed={active}
       data-tutorial="feed"
       onClick={() => toggle("feed")}
-      className={`glass grid h-[38px] w-[38px] place-items-center rounded-pill! transition-colors duration-fast hover:border-line-2 ${active ? "border-teal/60! shadow-glow-azure" : ""}`}
+      className={`glass grid h-11 w-11 place-items-center rounded-pill! transition-colors duration-fast hover:border-line-2 ${active ? "border-teal/60! shadow-glow-azure" : ""}`}
     >
-      <Avatar src={me?.imageUrl} name={me?.nickname ?? me?.name} size={28} />
+      <Avatar src={me?.imageUrl} name={me?.nickname ?? me?.name} size={32} />
     </button>
   );
 }

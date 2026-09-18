@@ -83,7 +83,7 @@ export default function SongDetailPanel() {
   const hasPlaylists = features.playlist;
   const tabs: { key: DetailTab; label: string }[] = [
     { key: "nearby", label: "주변곡" },
-    { key: "info", label: "정보" },
+    { key: "info", label: "소리" },
     ...(hasPlaylists ? [{ key: "playlists" as const, label: "관련 플리" }] : []),
   ];
   // 플리 기능이 꺼진 빌드에서 저장된 탭이 남아 있으면 주변곡으로

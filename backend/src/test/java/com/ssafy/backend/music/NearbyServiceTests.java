@@ -55,7 +55,7 @@ class NearbyServiceTests {
 
 	private static MusicDetail detail(long id) {
 		return new MusicDetail(id, "mbid-" + id, "Query", "QueryArtist", 120.0, 200,
-				"Album", List.of(), "https://y/x", null, loc(), 0, 0);
+				"Album", 2004, List.of(), "https://y/x", null, loc(), 0, 0);
 	}
 
 	private static TrackCandidate cand(long id, double dist) {

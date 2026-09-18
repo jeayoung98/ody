@@ -64,7 +64,7 @@ class MusicDetailControllerTests {
 	}
 
 	private static MusicDetail detail(String youtubeUrl) {
-		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning",
+		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", 2024,
 				List.of("K-Pop"), youtubeUrl, null, loc(), 1428, 3);
 	}
 
@@ -89,6 +89,7 @@ class MusicDetailControllerTests {
 				.andExpect(jsonPath("$.data.id").value(10234))
 				.andExpect(jsonPath("$.data.mbid").value("b1a9c0e9"))
 				.andExpect(jsonPath("$.data.bpm").value(128.4))
+				.andExpect(jsonPath("$.data.releaseYear").value(2024))
 				.andExpect(jsonPath("$.data.location.pc1").value(-0.4213))
 				.andExpect(jsonPath("$.data.playCnt").value(1428))
 				// neighbors: MusicSummary 필드 flat + distance

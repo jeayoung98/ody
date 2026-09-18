@@ -1,14 +1,18 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { getPlayer } from "./player-registry";
 import WaveformBars from "./waveform-bars";
 import { track } from "@/lib/analytics/client";
 
-/** 재생 시계를 물어보는 주기(ms). 바 56개짜리 파형에서는 이보다 촘촘해도 눈에 안 보인다 */
+/** 재생 시계를 물어보는 주기(ms). 바 64개짜리 파형에서는 이보다 촘촘해도 눈에 안 보인다 */
 const TICK_MS = 250;
+/** 옮긴 뒤 플레이어가 새 자리를 말해 줄 때까지 예전 시간을 무시하는 한도(ms) — 그래도 안 오면 플레이어를 믿는다 */
+const SEEK_SETTLE_MS = 1500;
+/** 플레이어 시간이 옮긴 자리에서 이만큼(초) 안이면 "도착" 으로 친다 */
+const SEEK_TOLERANCE_S = 1.5;
 
 interface PlayerProgressProps {
   musicId: number | null;
@@ -36,12 +40,18 @@ interface PlayerProgressProps {
  *
  * 끄는 동안에는 플레이어가 보고하는 시간을 무시한다 (`scrub`). 안 그러면 손가락이 끄는 값과 아직
  * 안 옮겨진 재생 위치가 매 틱 서로를 덮어써서 손잡이가 튄다.
+ *
+ * **옮긴 직후에도 잠깐 무시한다** (`pendingSeek`, S15P21A405-431). `seekTo` 는 비동기라 다음 틱에
+ * 플레이어가 아직 예전 시간을 돌려주는데, 그걸 그대로 받으면 바가 예전 자리로 튀었다가 다시 온다.
+ * 플레이어 시간이 목표 근처에 닿거나 한도를 넘길 때까지 우리가 놓은 값을 지킨다 — 낙관적 반영이다.
  */
 export default function PlayerProgress({ musicId, durationSec, canPlay = false }: PlayerProgressProps) {
   const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [clock, setClock] = useState({ musicId, t: 0, duration: 0 });
   /** 끄는 중인 값(초). null 이면 플레이어 시계를 따른다 */
   const [scrub, setScrub] = useState<number | null>(null);
+  /** 방금 옮긴 자리. 플레이어가 따라올 때까지 시계를 여기에 붙들어 둔다 */
+  const pendingSeek = useRef<{ t: number; until: number } | null>(null);
 
   // 곡이 바뀌면 렌더 중에 0으로 맞춘다 (effect 안 setState 대신 "adjusting state during render")
   if (clock.musicId !== musicId) {
@@ -56,8 +66,13 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
       if (!p) return;
       const t = p.getCurrentTime();
       const duration = p.getDuration();
+      const pending = pendingSeek.current;
+      if (pending) {
+        // 도착했거나 너무 오래 기다렸으면 다시 플레이어를 따른다
+        if (Math.abs(t - pending.t) <= SEEK_TOLERANCE_S || Date.now() > pending.until) pendingSeek.current = null;
+      }
       setClock((c) => {
-        const nt = Number.isFinite(t) ? t : c.t;
+        const nt = pendingSeek.current ? c.t : Number.isFinite(t) ? t : c.t;
         const nd = Number.isFinite(duration) && duration > 0 ? duration : c.duration;
         /**
          * 값이 그대로면 **같은 객체를 돌려준다.** 매 틱 새 객체를 만들면 멈춰 있을 때도, 아예 플레이어가
@@ -86,6 +101,7 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
     if (!seekable || scrub == null) return;
     track("play_seeked", { music_id: musicId, from_sec: Math.round(clock.t), to_sec: Math.round(next) });
     getPlayer()?.seekTo(next, true);
+    pendingSeek.current = { t: next, until: Date.now() + SEEK_SETTLE_MS };
     setClock((c) => ({ ...c, t: next }));
     setScrub(null);
   };

@@ -28,9 +28,19 @@ export default function Rail() {
    * 만든 여정이 없으면 여정 버튼은 **만들기 상자를 바로 연다** (S15P21A405-352).
    * 그 상태의 여정 패널은 "여정 만들기" 버튼 하나가 전부라, 한 번 더 누르게 하는 빈 화면이었다.
    * (그 통로가 우측 패널을 닫으므로 주변 탐색 뷰도 같이 내려간다 — `use-open-journey-composer`)
+   *
+   * **한 번 더 누르면 닫힌다** (S15P21A405-434) — 만들기 상자가 떠 있으면 상자를, 패널이면 패널을.
+   * 예전에는 상자가 떠 있는 채로 다시 눌러도 상자를 또 열 뿐이라 닫을 길이 X 하나였다.
    */
   const hasJourney = useJourneyStore((s) => s.isRouteRequested);
+  const composerOpen = useJourneyStore((s) => s.isComposerOpen);
+  const closeComposer = useJourneyStore((s) => s.closeComposer);
   const openComposer = useOpenJourneyComposer();
+  const pressJourney = () => {
+    if (composerOpen) closeComposer();
+    else if (hasJourney) toggle("journey");
+    else openComposer("start");
+  };
   const panelEnabled = usePanelEnabled();
 
   return (
@@ -48,7 +58,7 @@ export default function Rail() {
         )}
         <NearbyExploreButton />
         {panelEnabled.journey && (
-          <RailButton label="여정" active={activePanel === "journey"} onClick={() => (hasJourney ? toggle("journey") : openComposer("start"))} data-tutorial="journey">
+          <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
             <JourneyIcon size={16} />
           </RailButton>
         )}

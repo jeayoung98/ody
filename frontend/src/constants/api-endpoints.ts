@@ -56,10 +56,14 @@ export const API_ENDPOINTS = {
     /** 실연동 → `GET /api/users/nickname-available` */
     nicknameAvailable: (nickname: string) => `/bff/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
     /**
-     * 실연동 → `PATCH /api/user/profile`. 닉네임·프로필 이미지를 **부분 수정**한다 (A-13).
-     * 가입 직후 닉네임 화면과 프로필 수정 화면이 같이 쓴다 — 백엔드에 닉네임 전용 경로가 없다.
+     * 실연동 → `PATCH /api/user/nickname`. 가입 직후 닉네임 화면과 프로필 수정 화면이 같이 쓴다.
+     *
+     * 예전에는 이미지와 함께 `PATCH /api/user/profile` 하나로 보냈는데(A-13), 백엔드가 둘을
+     * 갈라 놓으면서 그 경로가 없어졌다 (S15P21A405-426 · 474).
      */
-    profile: "/bff/user/profile",
+    nickname: "/bff/user/nickname",
+    /** 실연동 → `PATCH /api/user/image`. **파일**을 올린다 — 주소 문자열은 받지 않는다 */
+    image: "/bff/user/image",
     /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
     publicVisibility: "/bff/user/public",
     nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,

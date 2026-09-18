@@ -4,7 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useState } from "react";
 import { ROUTES } from "@/constants";
 import { nicknameError } from "@/lib/auth-rules";
-import { useUpdateProfileMutation } from "@/hooks/mutations/use-update-profile-mutation";
+import { useUpdateNicknameMutation } from "@/hooks/mutations/use-update-nickname-mutation";
 import type { ApiError } from "@/lib/api";
 import NicknameCheckField from "./nickname-check-field";
 
@@ -15,14 +15,14 @@ import NicknameCheckField from "./nickname-check-field";
  */
 export default function NicknameForm() {
   const router = useRouter();
-  const save = useUpdateProfileMutation();
+  const save = useUpdateNicknameMutation();
   const [value, setValue] = useState("");
   const [ok, setOk] = useState(false);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
     if (nicknameError(value)) return;
-    save.mutate({ nickname: value }, { onSuccess: () => router.replace(ROUTES.home) });
+    save.mutate(value, { onSuccess: () => router.replace(ROUTES.home) });
   };
 
   return (

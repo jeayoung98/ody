@@ -1,16 +1,16 @@
 "use client";
 
 import { useRouter } from "next/navigation";
-import { useCallback, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Avatar from "@/components/common/avatar";
 import Loading from "@/components/common/loading";
 import { ROUTES } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
-import { useUpdateProfileMutation, type ProfilePatch } from "@/hooks/mutations/use-update-profile-mutation";
+import { useUpdateNicknameMutation } from "@/hooks/mutations/use-update-nickname-mutation";
+import { useUpdateProfileImageMutation } from "@/hooks/mutations/use-update-profile-image-mutation";
 import { useUpdateVisibilityMutation } from "@/hooks/mutations/use-update-visibility-mutation";
 import type { ApiError } from "@/lib/api";
 import type { User } from "@/types";
-import AuthField from "./auth-field";
 import NicknameCheckField from "./nickname-check-field";
 
 /**
@@ -29,20 +29,26 @@ export default function ProfileEditForm() {
 
 function Fields({ me }: { me: User }) {
   const router = useRouter();
-  const save = useUpdateProfileMutation();
+  const saveNickname = useUpdateNicknameMutation();
+  const saveImage = useUpdateProfileImageMutation();
   const saveVisibility = useUpdateVisibilityMutation();
 
   const [nickname, setNickname] = useState(me.nickname ?? "");
-  const [imageUrl, setImageUrl] = useState(me.imageUrl ?? "");
+  const [file, setFile] = useState<File | null>(null);
   const [isPublic, setIsPublic] = useState(me.isPublic);
   const [nicknameOk, setNicknameOk] = useState(false);
+  const pickFile = useRef<HTMLInputElement>(null);
+
+  // 고른 사진을 저장 전에 보여 준다. 만든 주소는 반드시 거둔다 — 안 거두면 다른 사진을
+  // 고를 때마다 앞의 것이 메모리에 남는다
+  const preview = useMemo(() => (file ? URL.createObjectURL(file) : null), [file]);
+  useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   const nicknameChanged = nickname.trim() !== (me.nickname ?? "").trim();
-  const imageChanged = imageUrl.trim() !== (me.imageUrl ?? "").trim();
   const visibilityChanged = isPublic !== me.isPublic;
-  const dirty = nicknameChanged || imageChanged || visibilityChanged;
-  const pending = save.isPending || saveVisibility.isPending;
-  const error = (save.error ?? saveVisibility.error) as ApiError | null;
+  const dirty = nicknameChanged || file !== null || visibilityChanged;
+  const pending = saveNickname.isPending || saveImage.isPending || saveVisibility.isPending;
+  const error = (saveNickname.error ?? saveImage.error ?? saveVisibility.error) as ApiError | null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -50,13 +56,11 @@ function Fields({ me }: { me: User }) {
     if (!dirty) return router.replace(ROUTES.home);
     if (nicknameChanged && !nicknameOk) return;
 
-    const patch: ProfilePatch = {};
-    if (nicknameChanged) patch.nickname = nickname.trim();
-    if (imageChanged) patch.imageUrl = imageUrl.trim();
-
     try {
-      // 둘은 백엔드 엔드포인트가 달라서 따로 보낸다. 앞이 실패하면 뒤는 보내지 않는다
-      if (Object.keys(patch).length) await save.mutateAsync(patch);
+      // 셋 다 백엔드 엔드포인트가 다르다. 앞이 실패하면 뒤는 보내지 않는다 —
+      // 닉네임이 중복이라 막혔는데 사진만 바뀌어 있으면 무엇이 저장됐는지 알 수 없다
+      if (nicknameChanged) await saveNickname.mutateAsync(nickname.trim());
+      if (file) await saveImage.mutateAsync(file);
       if (visibilityChanged) await saveVisibility.mutateAsync(isPublic);
       router.replace(ROUTES.home);
     } catch {
@@ -66,20 +70,22 @@ function Fields({ me }: { me: User }) {
 
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
-      <div className="flex justify-center">
-        <Avatar src={imageUrl.trim() || null} name={nickname || me.name} size={64} />
+      <div className="flex flex-col items-center gap-2">
+        <Avatar src={preview ?? me.imageUrl} name={nickname || me.name} size={64} />
+        <button type="button" onClick={() => pickFile.current?.click()} className="text-[11.5px] text-ink-2 underline underline-offset-2 hover:text-ink-1">
+          사진 바꾸기
+        </button>
+        <input
+          ref={pickFile}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+        />
+        <p className="text-[11px] text-ink-3">{file ? `${file.name} — 저장하면 올라가요` : "5MB 까지, 이미지 파일만 올릴 수 있어요"}</p>
       </div>
 
       <NicknameCheckField value={nickname} onChange={setNickname} onStatus={useCallback((v: boolean) => setNicknameOk(v), [])} current={me.nickname} />
-
-      <AuthField
-        label="프로필 사진 주소"
-        placeholder="https://…"
-        value={imageUrl}
-        inputMode="url"
-        onChange={(e) => setImageUrl(e.target.value)}
-        hint="사진 파일 올리기는 아직 준비 중이에요 — 지금은 주소만 넣을 수 있어요. 비우면 지워집니다."
-      />
 
       <label className="flex cursor-pointer items-start gap-2.5 rounded-[13px] border border-line bg-white/[.03] px-3.5 py-3">
         <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal" />

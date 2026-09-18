@@ -1,5 +1,7 @@
-import { failLive, okLive } from "@/lib/api-response";
-import { backendPost, BackendError } from "@/lib/backend";
+import { failLive, ok, okLive } from "@/lib/api-response";
+import { backendPost, BackendError, isBackendEnabled } from "@/lib/backend";
+import { songById } from "@/mocks/songs";
+import { mockVideoId } from "@/mocks/video";
 import type { VideoIdLookup } from "@/types";
 
 interface BackendVideoIdBatch {
@@ -28,11 +30,22 @@ const NOT_FOUND = "none";
  * 주변 10곡 것까지 함께 싣고 있어서, 백엔드가 그 필드를 빼는 순간 프론트가 깨진다.
  * 전용 엔드포인트가 유일한 출처여야 그 변경에 안 흔들린다.
  *
- * 목이 없다. `videoId` 는 백엔드만 알 수 있으므로 실패하면 실패로 답한다.
+ * `videoId` 는 백엔드만 알 수 있으므로 **백엔드가 있을 때 실패하면 실패로 답한다** — 조용히
+ * 목으로 떨어지지 않는다. 실데이터인 줄 알고 목을 보는 일이 없어야 한다.
+ *
+ * `USE_MOCK_API=1` 로 목을 켰을 때만 목 영상을 태운다 (S15P21A405-467, `mocks/video.ts`).
+ * 예전에는 이 라우트만 목이 없어서, 목 모드에서는 어느 곡도 못 틀고 진행바가 0 에 붙어 있었다 —
+ * 백엔드가 내려가 있는 동안 플레이어바 작업을 확인할 방법이 없었다.
  */
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
   const musicId = Number(id);
+
+  if (!isBackendEnabled()) {
+    // 목 곡 데이터셋에 없는 ID 는 재생 가능으로 본다 — 목에 없다고 못 트는 곡인 건 아니다
+    const videoId = mockVideoId(musicId, songById(musicId)?.playable ?? true);
+    return ok({ musicId, videoId, lookup: videoId ? "found" : "notFound" } satisfies { musicId: number; videoId: string | null; lookup: VideoIdLookup });
+  }
 
   const upstream = "/api/music/videoid";
   try {

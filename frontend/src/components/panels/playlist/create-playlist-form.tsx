@@ -30,7 +30,7 @@ export default function CreatePlaylistForm({ onCreated }: CreatePlaylistFormProp
   return (
     <form onSubmit={handleSubmit} className="flex gap-2">
       <TextInput placeholder="새 플레이리스트 이름" value={name} onChange={(e) => setName(e.target.value)} maxLength={200} />
-      <Button type="submit" variant="primary" size="sm" disabled={!name.trim() || create.isPending}>
+      <Button type="submit" variant="primary" size="sm" className="shrink-0 whitespace-nowrap" disabled={!name.trim() || create.isPending}>
         만들기
       </Button>
     </form>

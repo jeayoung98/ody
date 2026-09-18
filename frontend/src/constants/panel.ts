@@ -7,14 +7,6 @@ export type PanelType = (typeof PANEL_TYPES)[number];
 export const MAP_VIEW_MODES = ["default", "nearby", "constellation"] as const;
 export type MapViewMode = (typeof MAP_VIEW_MODES)[number];
 
-/** 네비바 항목 (순서대로 표시) */
-export const NAV_ITEMS = [
-  { key: "friends", label: "주변 사람" },
-  { key: "journey", label: "여정" },
-  { key: "chart", label: "차트" },
-  { key: "feed", label: "내 프로필" },
-] as const satisfies ReadonlyArray<{ key: PanelType; label: string }>;
-
 /**
  * 접혀 있을 때 화면에 남겨 두는 몸통 폭(px) — **좌하단 계기판이 쓴다** (S15P21A405-406).
  *

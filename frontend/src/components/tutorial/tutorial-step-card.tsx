@@ -15,7 +15,7 @@ interface TutorialStepCardProps {
 /** #tip — 스포트라이트 투어 카드. 점 진행 표시 + 모노 카운터 + 태스크 안내 */
 export default function TutorialStepCard({ index, total, title, description, onConfirm, cta, onSkip }: TutorialStepCardProps) {
   return (
-    <div className="glass animate-tin flex flex-col gap-[9px] rounded-[16px]! bg-toast! px-[17px] pt-4 pb-3.5">
+    <div className="glass animate-tin flex flex-col gap-[9px] rounded-[20px]! bg-toast! px-[17px] pt-4 pb-3.5">
       <div className="flex items-center gap-[9px]">
         <div className="flex flex-1 gap-[3px]">
           {Array.from({ length: total }, (_, i) => (

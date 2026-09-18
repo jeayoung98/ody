@@ -22,7 +22,7 @@ export default function JourneyComposerResult({ result, isStart, isEnd, onPick }
     <button
       type="button"
       onClick={onPick}
-      className="flex w-full items-center gap-3 rounded-[9px] px-3 py-2 text-left transition-colors duration-fast hover:bg-white/[.06]"
+      className="flex w-full items-center gap-3 rounded-[11px] px-3 py-2 text-left transition-colors duration-fast hover:bg-white/[.06]"
     >
       <span className="h-[22px] w-[3px] shrink-0 rounded-pill" style={{ background: color }} />
       <span className="min-w-0 flex-1">

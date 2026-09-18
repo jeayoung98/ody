@@ -46,7 +46,7 @@ export default function LayerStepper() {
                       ? "한 칸 얕게 — 두고 온 별이 돌아오고 좌표도 복원"
                       : "한 칸씩만 이동합니다"
             }
-            className={`inline-flex flex-col items-stretch gap-[3px] rounded-[9px] border px-[7px] pt-1 pb-[3px] transition-all duration-fast ${
+            className={`inline-flex flex-col items-stretch gap-[3px] rounded-[11px] border px-[7px] pt-1 pb-[3px] transition-all duration-fast ${
               on ? "border-line-2 bg-white/[.07]" : next && gateOpen ? "border-teal/30" : "border-transparent"
             } ${!enabled && !on ? "opacity-40" : "hover:border-line hover:bg-white/[.06]"} disabled:cursor-default`}
           >

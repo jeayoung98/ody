@@ -15,7 +15,7 @@ export default function Tabs<T extends string>({ items, value, onChange }: TabsP
           role="tab"
           aria-selected={value === item.key}
           onClick={() => onChange(item.key)}
-          className={`flex-1 rounded-[7px] px-1 py-[7px] text-xs transition-colors duration-fast ${
+          className={`flex-1 rounded-[9px] px-1 py-[7px] text-xs transition-colors duration-fast ${
             value === item.key ? "bg-white/[.09] text-ink" : "text-ink-3 hover:text-ink-2"
           }`}
         >

@@ -24,7 +24,7 @@ function useHasToken() {
 function Splash() {
   return (
     <main className="stage-bg fixed inset-0 flex items-center justify-center">
-      <span className="grad-bg h-[26px] w-[26px] animate-pulse-dot rounded-[8px]" />
+      <span className="grad-bg h-[26px] w-[26px] animate-pulse-dot rounded-[10px]" />
     </main>
   );
 }

@@ -89,8 +89,15 @@ interface MapState extends EngineSnapshot {
   setViewMode: (mode: MapViewMode) => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
-  enterNearby: (musicId: number) => void;
+  /**
+   * 주변 탐색을 켠다. `panelHandled` 는 **부른 쪽이 패널을 직접 정했다**는 뜻이다
+   * (S15P21A405-384) — `map-view` 의 "중심곡 상세도 같이 연다" 효과(348)가 이 값을 보고
+   * 비켜난다. 이웃 카드를 고를 때처럼 중심곡이 아니라 **고른 곡**의 상세를 띄워야 할 때 쓴다.
+   */
+  enterNearby: (musicId: number, panelHandled?: boolean) => void;
   exitNearby: () => void;
+  /** {@link enterNearby} 참고. 효과가 읽고 나면 다음 enterNearby 가 다시 정한다 */
+  nearbyPanelHandled: boolean;
   /** 목록을 넣고 별자리 뷰를 바로 켠다. 주변 탐색이 켜져 있으면 닫힌다 (PATH-01-1) */
   showConstellation: (musicIds: number[], points: MapPoint[] | undefined, source: PlayContext) => void;
   /** 목록만 갈아끼운다 (뷰는 건드리지 않음) — 패널을 열었을 때 택만 뜨게 */
@@ -125,7 +132,7 @@ interface MapState extends EngineSnapshot {
 
 export const useMapStore = create<MapState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       layer: 0,
       boxes: EMPTY_BOXES,
       prefetchBoxes: null,
@@ -148,6 +155,7 @@ export const useMapStore = create<MapState>()(
       canGoHome: false,
 
       viewMode: "default",
+      nearbyPanelHandled: false,
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
@@ -162,14 +170,22 @@ export const useMapStore = create<MapState>()(
       },
 
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
-      enterNearby: (musicId) => {
+      enterNearby: (musicId, panelHandled = false) => {
         set(
-          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS, constellationSource: null },
+          {
+            viewMode: "nearby",
+            nearbyCenterMusicId: musicId,
+            selectedMusicId: musicId,
+            nearbyPanelHandled: panelHandled,
+            constellationMusicIds: EMPTY_IDS,
+            constellationPoints: EMPTY_POINTS,
+            constellationSource: null,
+          },
           false,
           "enterNearby",
         );
       },
-      exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null }, false, "exitNearby"),
+      exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null, nearbyPanelHandled: false }, false, "exitNearby"),
 
       showConstellation: (constellationMusicIds, points = EMPTY_POINTS, constellationSource) =>
         set(
@@ -216,8 +232,27 @@ export const useMapStore = create<MapState>()(
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");
         getMapEngine()?.surfaceToSong(musicId);
       },
-      /** 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다 */
-      goHome: () => getMapEngine()?.goHome() ?? "none",
+      /**
+       * 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다.
+       *
+       * **임시 뷰(주변 탐색·별자리)가 떠 있으면 먼저 닫고 간다** (S15P21A405-445). 예전에는 "닫고
+       * 눌러 달라" 고 토스트만 띄웠는데, 내 위치는 곧 재생 중인 곡이라 어디서 누르든 거기로 가는
+       * 게 맞다. 엔진 쪽 뷰를 여기서 직접 내린다 — 스토어만 바꾸면 효과가 도는 다음 렌더까지
+       * 엔진은 아직 뷰가 떠 있다고 보고 "overlay" 를 돌려준다.
+       */
+      goHome: () => {
+        const engine = getMapEngine();
+        if (!engine) return "none";
+        const { viewMode } = get();
+        if (viewMode === "nearby") {
+          engine.exitProbe();
+          get().exitNearby();
+        } else if (viewMode === "constellation") {
+          engine.exitConstellation();
+          get().hideConstellationView();
+        }
+        return engine.goHome();
+      },
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
 

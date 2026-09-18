@@ -57,7 +57,7 @@ export default function JourneyPanel() {
   const hasRoute = isRouteRequested && !!route.data;
 
   return (
-    <Box title="여정" code="JOURNEY-01 · PATH-01" actions={<PanelCloseButton />} footer={<JourneySummary route={route.data ?? null} />}>
+    <Box title="여정" actions={<PanelCloseButton />} footer={<JourneySummary route={route.data ?? null} />}>
       {!isRouteRequested && <JourneyEmptyPrompt />}
       {isRouteRequested && route.isPending && <Loading label="경로를 만드는 중" />}
       {hasRoute && (

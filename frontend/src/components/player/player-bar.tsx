@@ -1,21 +1,31 @@
 "use client";
 
-import { NextIcon, PauseIcon, PlayIcon, PrevIcon } from "@/components/common/icons";
-import { genreRgb, rgba } from "@/constants/design-tokens";
+import { useState } from "react";
+import { NextIcon, PauseIcon, PlayIcon, PlaylistAddIcon, PrevIcon } from "@/components/common/icons";
+import AddToPlaylistMenu from "@/components/panels/playlist/add-to-playlist-menu";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
+import { useFeatures } from "@/hooks/use-features";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import LocateButton from "./locate-button";
+import PlayerBackdrop from "./player-backdrop";
 import PlayerProgress from "./player-progress";
-import TransportButton from "./transport-button";
+import TransportButton from "@/components/common/transport-button";
 import { track } from "@/lib/analytics/client";
 
 /**
- * #transport — 지금 재생 중인 곡. 곡 정보를 클릭하면 우측 패널이 열린다.
+ * #transport — 지금 재생 중인 곡. 우하단 376px 기둥에 **세로 3단**으로 쌓는다 (S15P21A405-428):
+ *
+ *   제목 · 아티스트 (누르면 듣고 있는 것의 패널이 열린다)
+ *   파형 진행바
+ *   내 위치 ·  ⏮ ▶ ⏭  · 플리에 추가
+ *
+ * 가로 한 줄이던 것을 세웠다 — 폭이 376 으로 고정된 뒤로 제목이 늘 잘렸다.
+ * 배경에는 듣는 곡의 커버가 연하게 깔린다 (`player-backdrop.tsx`).
  * 우선순위: 여정 or 플리 > 개인 곡 상세. (여정과 플리는 동시에 켜질 수 없음)
  */
 export default function PlayerBar() {
@@ -31,10 +41,12 @@ export default function PlayerBar() {
   const openSong = usePanelStore((s) => s.openSong);
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
+  const features = useFeatures();
+  const [menuOpen, setMenuOpen] = useState(false);
   const { data } = useMusicDetailQuery(currentMusicId);
 
   /**
-   * 플레이어바를 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
+   * 제목을 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
    * 여정·플리면 **별자리도 같이 되살린다** (S15P21A405-316) — 패널을 닫으면 별자리도 같이
    * 꺼지므로, 다시 부르는 길이 여기여야 한다.
    */
@@ -83,49 +95,58 @@ export default function PlayerBar() {
     }
     toggle();
   };
-  const rgb = data ? genreRgb(data.genres[0]?.id ?? 0) : null;
   const contextLabel = context.kind === "playlist" ? "플레이리스트" : context.kind === "journey" ? "여정" : context.kind === "nearby" ? "주변 음악" : null;
+  const idle = currentMusicId == null;
+  const subtitle = idle
+    ? "지도에서 별을 눌러 골라보세요"
+    : [data?.artist ?? "-", contextLabel && `${contextLabel} 재생 중`, queue.length > 0 && `${queueIndex + 1}/${queue.length}`].filter(Boolean).join(" · ");
 
   return (
-    <div data-analytics-manual className="glass flex min-w-0 flex-1 items-center gap-3 rounded-pill! py-2 pr-3.5 pl-2.5">
-      {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
-      <LocateButton />
-      <span
-        className="relative h-9 w-9 shrink-0 overflow-hidden rounded-[9px]"
-        style={{ background: rgb ? `linear-gradient(140deg,${rgba(rgb, 0.5)},#13102a)` : "linear-gradient(140deg,#12203c,#1b1330)" }}
-      >
-        <i className="grad-bg absolute inset-0 opacity-55 [mask:radial-gradient(circle_at_50%_50%,#000_30%,transparent_72%)]" />
-      </span>
-      {/*
-        진행 바는 **버튼 밖**이다 (S15P21A405-334). 안에 두면 바를 끌 때마다 패널이 같이 열리고,
-        버튼 안의 슬라이더라 키보드 조작도 서로 먹는다. 곡 정보만 버튼으로 남긴다
-      */}
-      <span className="flex min-w-0 flex-1 flex-col">
-        <button type="button" onClick={openContext} className="min-w-0 text-left" disabled={currentMusicId == null}>
-          <p className="truncate text-sm">
-            {currentMusicId == null ? "재생할 곡을 지도에서 고르세요" : data?.title ?? `Track ${currentMusicId}`}
-            {currentMusicId != null && blocked && <span className="ml-2 text-[10px] text-warn">{blocked.badge}</span>}
-          </p>
-          <p className="truncate text-[10px] text-ink-3">
-            {currentMusicId == null ? "" : `${data?.artist ?? "-"}${contextLabel ? ` · ${contextLabel} 재생 중` : ""}`}
-          </p>
-        </button>
+    <div data-analytics-manual className="glass relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible rounded-[22px]! px-4 pt-3.5 pb-3">
+      <PlayerBackdrop musicId={currentMusicId} />
+      {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
+      <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left">
+        <p className="truncate font-display text-[15px] leading-tight font-semibold text-ink">
+          {idle ? "재생할 곡을 고르세요" : data?.title ?? `Track ${currentMusicId}`}
+          {!idle && blocked && <span className="ml-2 text-[10px] font-normal text-warn">{blocked.badge}</span>}
+        </p>
+        <p className="mt-0.5 truncate text-[11px] text-ink-3">{subtitle}</p>
+      </button>
+
+      <div className="relative">
         <PlayerProgress musicId={currentMusicId} durationSec={data?.duration} canPlay={canPlay} />
-      </span>
-      {queue.length > 0 && (
-        <span className="num shrink-0 text-[9.5px] tracking-[0.06em] text-teal">
-          {queueIndex + 1}/{queue.length}
-        </span>
+      </div>
+
+      <div className="relative flex items-center justify-between">
+        {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
+        <LocateButton />
+        <div className="flex items-center gap-3">
+          <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={queue.length === 0}>
+            <PrevIcon />
+          </TransportButton>
+          <TransportButton label={isPlaying ? "정지" : "재생"} primary size="lg" onClick={handleToggle} dimmed={!canPlay}>
+            {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
+          </TransportButton>
+          <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={queue.length === 0}>
+            <NextIcon />
+          </TransportButton>
+        </div>
+        {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 꺼져 있어도 자리는 남겨 이송 버튼이 가운데에 선다 */}
+        {features.playlist ? (
+          <TransportButton label="플레이리스트에 추가" disabled={idle} onClick={() => setMenuOpen((v) => !v)}>
+            <PlaylistAddIcon />
+          </TransportButton>
+        ) : (
+          <span className="h-8 w-8" />
+        )}
+      </div>
+
+      {/* 메뉴는 원래 아래로 펼쳐지는 상자다 — 여기는 화면 맨 아래라 **위로** 띄운다 */}
+      {features.playlist && menuOpen && currentMusicId != null && (
+        <div className="absolute inset-x-0 bottom-full mb-2 [&>div]:static! [&>div]:mt-0!">
+          <AddToPlaylistMenu musicId={currentMusicId} onDone={() => setMenuOpen(false)} />
+        </div>
       )}
-      <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={queue.length === 0}>
-        <PrevIcon />
-      </TransportButton>
-      <TransportButton label={isPlaying ? "정지" : "재생"} primary onClick={handleToggle} dimmed={!canPlay}>
-        {isPlaying ? <PauseIcon /> : <PlayIcon />}
-      </TransportButton>
-      <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={queue.length === 0}>
-        <NextIcon />
-      </TransportButton>
     </div>
   );
 }

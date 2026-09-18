@@ -62,7 +62,7 @@ class UserDetailControllerTests {
 				OffsetDateTime.parse("2026-09-07T13:41:02+09:00"),
 				OffsetDateTime.parse("2026-08-21T09:12:44+09:00"),
 				"https://cdn.example.com/profile/abc.png",
-				0, 0, false, isMe);
+				0, 0, false, isMe, 42);
 	}
 
 	@Test
@@ -71,6 +71,7 @@ class UserDetailControllerTests {
 
 		mockMvc.perform(get("/api/user/detail").param("email", "you@gmail.com").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.playedMusicCnt").value(42))
 				.andExpect(jsonPath("$.success").value(true))
 				.andExpect(jsonPath("$.error").doesNotExist())
 				.andExpect(jsonPath("$.data.email").value("you@gmail.com"))

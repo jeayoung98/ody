@@ -45,6 +45,9 @@ public class UserService {
 			throw new CustomException(UserErrorCode.USER_PRIVATE);
 		}
 
+		// 비공개 판정 뒤에 센다 — 볼 수 없는 사용자의 기록은 읽지 않는다 (S15P21A405-430).
+		int playedMusicCnt = userMapper.countDistinctPlayedMusic(targetEmail);
+
 		log.info("[User] 상세 조회 완료 targetEmail={} isMe={}", targetEmail, isMe);
 		return new UserDetailResponse(
 				row.getEmail(),
@@ -58,7 +61,8 @@ public class UserService {
 				0,
 				0,
 				false,
-				isMe);
+				isMe,
+				playedMusicCnt);
 	}
 
 	/**

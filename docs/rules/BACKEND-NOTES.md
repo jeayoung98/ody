@@ -71,6 +71,7 @@
 | A-33 | `PATCH /api/user/nickname` | `{ nickname }` | `{ nickname }` | **`PATCH /api/user/profile` 을 대체한다.** 이전 API 는 닉네임과 `imageUrl` 문자열을 함께 받았는데, 프로필 사진은 실제 파일 업로드가 필요해 두 API 로 나눴다. 오류: 빈 값 400 `INVALID_INPUT`, 2~20자 위반 400 `INVALID_NICKNAME_LENGTH`, 중복 409 `NICKNAME_ALREADY_EXISTS`. 대상은 토큰 주체 본인 | ✅ 구현됨 (S15P21A405-426) · **프론트 반영 필요** |
 | A-34 | `PATCH /api/user/image` | `multipart/form-data`, part 이름 **`file`** (jpg·png·gif·webp, 5MB 이하) | `{ imageUrl }` — 절대 URL | 프로필 사진 업로드. 대상은 토큰 주체 본인이라 요청 본문에 사용자 식별자가 없다. 형식은 클라이언트 `Content-Type` 이 아니라 실제 바이트로 판별한다. 오류: 형식 위반·빈 파일 400 `INVALID_IMAGE_FILE`, 크기 초과 413 `IMAGE_FILE_TOO_LARGE`, 저장 실패 500 `IMAGE_UPLOAD_FAILED`. 교체 시 이전 업로드 파일은 삭제되고 구글 사진(외부 URL)은 건드리지 않는다 | ✅ 구현됨 (S15P21A405-426) · **프론트 반영 필요** |
 | A-35 | 구글 로그인의 `imageUrl` | 변경 없음 | 사용자가 사진을 바꾼 뒤에는 구글 사진으로 되돌아가지 않는다 | `touchLogin` 이 로그인마다 `image_url` 을 구글 사진으로 덮어써서, 업로드한 사진이 다음 로그인에 사라졌다. 이제 `image_url` 이 비어 있을 때만 구글 값을 채운다 | ✅ 구현됨 (S15P21A405-426) |
+| A-36 | `GET /api/user/detail` | 변경 없음 | **`playedMusicCnt`(int) 추가** — 그 사용자가 재생한 곡 수, 같은 곡을 여러 번 들어도 1곡 | 마이페이지·상대 프로필에 표시한다. `play_history` 에서 `COUNT(DISTINCT music_id)` 로 센다. 비공개 사용자 판정 뒤에 세므로 볼 수 없는 사용자의 기록은 읽지 않는다. ⚠️ **DB 담당**: `db/play_history_001_email_music_index.sql` 의 `(email, music_id)` 인덱스를 운영 DB 에 적용해야 한다 — 없으면 로그가 쌓일수록 상세 조회가 느려진다 | ✅ 구현됨 (S15P21A405-430) · **프론트 반영 필요** · **인덱스 적용 필요** |
 
 > **A-5 곡 수 개정 (2026-09-13, BE2)** — 여정 응답의 `musicCnt` 범위가 **12~22 에서 2~20 으로** 바뀐다.
 > 무작위 쌍 기준 **중앙값이 12곡에서 6곡**이 되고, **중간 곡 없이 출발·도착 2곡만 나가는 응답이 정상**이다(오류 아님).

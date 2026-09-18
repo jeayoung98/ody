@@ -54,6 +54,40 @@ class UserDetailServiceTests {
 	}
 
 	@Test
+	void getDetail_countsDistinctPlayedMusic() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(42);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+
+		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
+
+		assertThat(result.playedMusicCnt()).isEqualTo(42);
+	}
+
+	@Test
+	void getDetail_noPlayHistory_returnsZero() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(0);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+
+		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").playedMusicCnt()).isZero();
+	}
+
+	@Test
+	void getDetail_privateOtherUser_doesNotCountPlayHistory() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class));
+
+		assertThatThrownBy(() -> service.getDetail("you@gmail.com", "me@gmail.com"))
+				.isInstanceOf(CustomException.class);
+
+		Mockito.verify(mapper, Mockito.never()).countDistinctPlayedMusic("you@gmail.com");
+	}
+
+	@Test
 	void getDetail_selfPrivateUser_returnsDetailWithIsMeTrue() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));

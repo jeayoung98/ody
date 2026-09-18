@@ -49,4 +49,16 @@
 		WHERE email = #{email}
 	</update>
 
+	<!--
+		사용자가 재생한 곡 수 (중복 제외, S15P21A405-430). play_history 는 재생할 때마다 한 줄씩 쌓이므로
+		같은 곡을 여러 번 들으면 여러 줄이 된다 — 곡 수는 music_id 의 distinct 개수다.
+		(email, music_id) 인덱스가 있어야 전체 테이블이 아니라 그 사용자 기록만 읽는다
+		(db/play_history_001_email_music_index.sql). 인덱스가 없으면 로그가 쌓일수록 느려진다.
+	-->
+	<select id="countDistinctPlayedMusic" resultType="int">
+		SELECT COUNT(DISTINCT music_id)
+		FROM play_history
+		WHERE email = #{email}
+	</select>
+
 </mapper>

@@ -11,7 +11,7 @@
 import { NextResponse } from "next/server";
 import { NO_GENRE_ID } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";
-import type { Music, User, UserProfile } from "@/types";
+import type { Music, PlaylistSummary, User, UserProfile } from "@/types";
 import { failLive, LIVE_HEADERS } from "./api-response";
 
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
@@ -51,7 +51,7 @@ interface Envelope<T> {
 }
 
 /** 배포 백엔드 호출. 봉투를 벗겨 data 만 돌려준다 */
-async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
+async function backendFetch<T>(path: string, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
   // 토큰은 **있으면 붙인다.** A-17 해제 중에는 없어도 조회가 되고, 원복되면 이게 있어야 한다
   const res = await fetch(`${BACKEND_ORIGIN}${path}`, {
     ...init,
@@ -84,11 +84,13 @@ async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
       `${path} 가 401 입니다. 백엔드 인증이 다시 걸린 것으로 보입니다 (BACKEND-NOTES A-17 원복). BACKEND_ACCESS_TOKEN 을 넣거나 USE_MOCK_API=1 로 목을 쓰세요.`,
     );
   }
-  if (!res.ok || !body.success || body.data == null) {
+  // 지우기처럼 돌려줄 것이 없는 API 는 성공해도 `data` 가 null 이다 (`ApiResponse<Void>`)
+  if (!res.ok || !body.success || (body.data == null && !opts?.allowNullData)) {
     throw new BackendError(res.status, body.error?.code ?? "UNKNOWN", body.error?.message ?? "백엔드 호출에 실패했습니다.");
   }
 
-  return body.data;
+  // allowNullData 일 때만 null 일 수 있다 — 그 경로의 호출자(backendDelete)는 값을 읽지 않는다
+  return body.data as T;
 }
 
 /** 배포 백엔드 GET 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다 */
@@ -104,12 +106,21 @@ export function backendGet<T>(path: string, init?: RequestInit): Promise<T> {
  * 로컬 `http://localhost:3000` 이 정확히 그 경우다 (S15P21A405-303).
  * 여기서 부르면 Next 서버가 새로 띄우는 요청이라 `Origin` 이 없어 통과한다.
  */
-export function backendPost<T>(path: string, body: unknown): Promise<T> {
+export function backendPost<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
   return backendFetch<T>(path, {
+    ...init,
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...init?.headers },
     body: JSON.stringify(body),
   });
+}
+
+/**
+ * 배포 백엔드 DELETE 호출. 지우는 건 늘 주인만 할 수 있으니 {@link callerAuth} 가 필요하다.
+ * 성공 응답에 돌려줄 데이터가 없으므로(`data: null`) 그것을 실패로 보지 않는다.
+ */
+export function backendDelete(path: string, init?: RequestInit): Promise<unknown> {
+  return backendFetch<unknown>(path, { ...init, method: "DELETE" }, { allowNullData: true });
 }
 
 /** 배포 백엔드 PATCH 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다 */
@@ -428,4 +439,25 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
     followingTarget: null,
     dashboard: { exploredCount: 0, discoveredCount: 0, moodPreference: [] },
   };
+}
+
+// ---------------------------------------------------------------------------
+// 플레이리스트 (S15P21A405-468)
+// ---------------------------------------------------------------------------
+
+/** `GET /api/playlist/search?email=` 의 원소. **좋아요·무드 태그·소유자 닉네임이 없다** (A-36) */
+export interface BackendPlaylistSummary {
+  playlistId: number;
+  playlistName: string;
+  musicCnt: number;
+  createdAt: string;
+}
+
+/**
+ * 백엔드 플리 요약 → 화면이 쓰는 {@link PlaylistSummary}.
+ * 좋아요 수와 소유자 닉네임은 응답에 없어서 null 이다 — 0 으로 채우면 "좋아요가 0개" 라는
+ * 없는 사실이 된다. 화면은 null 을 "모름" 으로 다룬다.
+ */
+export function toPlaylistSummary(p: BackendPlaylistSummary): PlaylistSummary {
+  return { id: p.playlistId, playlistName: p.playlistName, likeCnt: null, itemCount: p.musicCnt, ownerNickname: null };
 }

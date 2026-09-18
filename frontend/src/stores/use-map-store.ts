@@ -132,7 +132,7 @@ interface MapState extends EngineSnapshot {
 
 export const useMapStore = create<MapState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       layer: 0,
       boxes: EMPTY_BOXES,
       prefetchBoxes: null,
@@ -232,8 +232,27 @@ export const useMapStore = create<MapState>()(
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");
         getMapEngine()?.surfaceToSong(musicId);
       },
-      /** 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다 */
-      goHome: () => getMapEngine()?.goHome() ?? "none",
+      /**
+       * 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다.
+       *
+       * **임시 뷰(주변 탐색·별자리)가 떠 있으면 먼저 닫고 간다** (S15P21A405-445). 예전에는 "닫고
+       * 눌러 달라" 고 토스트만 띄웠는데, 내 위치는 곧 재생 중인 곡이라 어디서 누르든 거기로 가는
+       * 게 맞다. 엔진 쪽 뷰를 여기서 직접 내린다 — 스토어만 바꾸면 효과가 도는 다음 렌더까지
+       * 엔진은 아직 뷰가 떠 있다고 보고 "overlay" 를 돌려준다.
+       */
+      goHome: () => {
+        const engine = getMapEngine();
+        if (!engine) return "none";
+        const { viewMode } = get();
+        if (viewMode === "nearby") {
+          engine.exitProbe();
+          get().exitNearby();
+        } else if (viewMode === "constellation") {
+          engine.exitConstellation();
+          get().hideConstellationView();
+        }
+        return engine.goHome();
+      },
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
 

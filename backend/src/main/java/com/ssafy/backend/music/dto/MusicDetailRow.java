@@ -21,6 +21,8 @@ public class MusicDetailRow {
 	private Double bpm;
 	private Integer duration;
 	private String album;
+	/** music.release_year (smallint). 없으면 null. */
+	private Integer releaseYear;
 	private Integer playCnt;
 	private Integer youtubeCnt;
 	private String videoId;

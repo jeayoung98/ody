@@ -9,7 +9,6 @@ import SimilarityHint from "./similarity-hint";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
-import { usePlaySong } from "@/hooks/use-play-song";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -59,7 +58,6 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
   const selectMusic = useMapStore((s) => s.selectMusic);
-  const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const openNeighborSong = usePanelStore((s) => s.openNeighborSong);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -123,9 +121,13 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
    * 패널은 여기서 직접 정한다. `enterNearby` 의 두 번째 인자가 `map-view` 의 "중심곡 상세를
    * 연다" 효과(348)를 비켜서게 한다 — 안 그러면 방금 고른 이웃을 중심곡이 덮어쓴다.
    *
-   * 재생은 **묻지 않고** 튼다 (`silent`). 카드를 누르는 것은 자리를 옮기는 동작이지 "이 곡을
-   * 틀까요" 를 고르는 순간이 아니다. 안 틀면 상세만 옮겨가고 소리는 직전 곡에 머문다
-   * (S15P21A405-262) — 설문도 여기에 기댄다. // REMOVE-WITH-SURVEY
+   * **틀지는 않는다** (S15P21A405-453). 보는 것과 듣는 것은 따로다 — 카드는 상세를 옮기고,
+   * 재생은 그 상세의 재생 버튼이 맡는다. 소리는 직전 곡에 머문다. 예전에는 여기서 묻지 않고
+   * 틀었다 (S15P21A405-262).
+   *
+   * 설문은 그대로 돈다. 위의 `enterNearby` 가 고리를 켜 두므로 그 상세에서 재생을 누르면
+   * `single` 재생이어도 탐색으로 잡히고(`playback-connection` 의 center 판정), 같은 간선이
+   * 그때 생긴다 — 한 걸음 늦게 생길 뿐이다.
    */
   const handlePick = (id: number) => {
     // 한 걸음 나와 있었으면(이 곡이 중심이 아니면) 먼저 고리를 이 곡으로 옮긴다
@@ -133,7 +135,6 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     useTutorialStore.getState().complete("nearby");
     openNeighborSong(id, centerMusicId);
     selectMusic(id);
-    playWithConfirm(id, () => recordPlay({ musicId: id, source: "MAP", playedMs: 0 }), { silent: true });
   };
 
   return (

@@ -2,10 +2,12 @@
 
 import { useEffect, useState } from "react";
 import { formatDuration } from "@/lib/format";
+import { usePlayerStore } from "@/stores/use-player-store";
 import { getPlayer } from "./player-registry";
+import WaveformBars from "./waveform-bars";
 import { track } from "@/lib/analytics/client";
 
-/** 재생 시계를 물어보는 주기(ms). 3px 바에서는 이보다 촘촘해도 눈에 안 보인다 */
+/** 재생 시계를 물어보는 주기(ms). 바 56개짜리 파형에서는 이보다 촘촘해도 눈에 안 보인다 */
 const TICK_MS = 250;
 
 interface PlayerProgressProps {
@@ -22,20 +24,21 @@ interface PlayerProgressProps {
 }
 
 /**
- * #tBar — 재생 진행 바 겸 **위치 조절기** (S15P21A405-334).
+ * #tBar — 재생 진행 바 겸 **위치 조절기** (S15P21A405-334). 모양은 바 파형이다 (S15P21A405-428, `waveform-bars.tsx`).
  *
  * 예전에는 500ms 인터벌로 혼자 채우는 가짜 바였다. 실제 재생과 이어져 있지 않아서 유튜브 쪽에서
  * 되감아도 몰랐고, 곡 길이를 모르면 30초 데모를 되풀이했다. 이제 임베드가 띄운 공식 플레이어에게
  * 매 틱 시간을 물어보고, 사용자가 옮기면 `seekTo` 로 그 자리에 놓는다.
  *
- * **네이티브 `input[type=range]` 를 쓴다.** 끌기·클릭·키보드 화살표·스크린리더가 전부 공짜로
- * 따라온다 — div 로 만들면 그걸 전부 다시 짜야 한다. 칠해진 구간은 배경 그라데이션의 정지점을
- * 값에 맞춰 옮겨서 낸다.
+ * **조작은 여전히 네이티브 `input[type=range]` 다.** 파형 위에 투명하게 얹었다 — 끌기·클릭·키보드
+ * 화살표·스크린리더가 전부 공짜로 따라온다. div 로 만들면 그걸 전부 다시 짜야 한다.
+ * 키보드 포커스는 상자 테두리로 보인다 (`has-[:focus-visible]`) — 손잡이가 안 보이니 그게 유일한 표시다.
  *
  * 끄는 동안에는 플레이어가 보고하는 시간을 무시한다 (`scrub`). 안 그러면 손가락이 끄는 값과 아직
  * 안 옮겨진 재생 위치가 매 틱 서로를 덮어써서 손잡이가 튄다.
  */
 export default function PlayerProgress({ musicId, durationSec, canPlay = false }: PlayerProgressProps) {
+  const isPlaying = usePlayerStore((s) => s.isPlaying);
   const [clock, setClock] = useState({ musicId, t: 0, duration: 0 });
   /** 끄는 중인 값(초). null 이면 플레이어 시계를 따른다 */
   const [scrub, setScrub] = useState<number | null>(null);
@@ -88,36 +91,35 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   };
 
   return (
-    <span className="mt-[5px] flex items-center gap-1.5">
-      <input
-        data-analytics-manual
-        type="range"
-        min={0}
-        max={duration || 1}
-        step={0.5}
-        value={value}
-        disabled={!seekable}
-        aria-label="재생 위치"
-        aria-valuetext={`${formatDuration(Math.round(value))} / ${formatDuration(Math.round(shownDuration))}`}
-        onChange={(e) => setScrub(Number(e.target.value))}
-        onPointerUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
-        onKeyUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
-        /**
-         * 이 바는 패널을 여는 버튼 **옆에** 있다 (`player-bar.tsx`). 바깥 레이아웃이 다시 바뀌어
-         * 버튼 안으로 들어가는 일이 생겨도 패널이 같이 열리지 않게, 여기서 한 번 더 막는다.
-         */
-        onClick={(e) => e.stopPropagation()}
-        onPointerDown={(e) => e.stopPropagation()}
-        className="h-[3px] min-w-0 flex-1 cursor-pointer appearance-none rounded-pill bg-transparent disabled:cursor-default disabled:opacity-60 [&::-moz-range-thumb]:h-[9px] [&::-moz-range-thumb]:w-[9px] [&::-moz-range-thumb]:cursor-pointer [&::-moz-range-thumb]:appearance-none [&::-moz-range-thumb]:rounded-pill [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:bg-white [&::-webkit-slider-thumb]:h-[9px] [&::-webkit-slider-thumb]:w-[9px] [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-pill [&::-webkit-slider-thumb]:bg-white"
-        style={{
-          // 칠해진 구간 = 그라데이션 정지점을 값에 맞춰 옮긴 것. 트랙 하나로 두 색을 낸다
-          background: `linear-gradient(to right, var(--color-teal) 0%, var(--color-violet) ${ratio * 100}%, rgba(255,255,255,.1) ${ratio * 100}%)`,
-        }}
-      />
+    <div className="flex items-center gap-2.5">
       {/* 못 트는 곡이어도 길이는 알려 준다 — 바만 잠근다 */}
-      <span className="num shrink-0 text-[9px] text-ink-4 tabular-nums">
-        {shownDuration > 0 ? `${formatDuration(Math.round(value))} / ${formatDuration(Math.round(shownDuration))}` : "--:--"}
-      </span>
-    </span>
+      <span className="num w-8 shrink-0 text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
+      <div className="relative h-8 min-w-0 flex-1 rounded-box-xs has-[:focus-visible]:ring-1 has-[:focus-visible]:ring-teal/60">
+        <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
+        <input
+          data-analytics-manual
+          type="range"
+          min={0}
+          max={duration || 1}
+          step={0.5}
+          value={value}
+          disabled={!seekable}
+          aria-label="재생 위치"
+          aria-valuetext={`${formatDuration(Math.round(value))} / ${formatDuration(Math.round(shownDuration))}`}
+          onChange={(e) => setScrub(Number(e.target.value))}
+          onPointerUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+          onKeyUp={(e) => commit(Number((e.target as HTMLInputElement).value))}
+          /**
+           * 제목 버튼이 바로 위에 있다 (`player-bar.tsx`). 바깥 레이아웃이 다시 바뀌어
+           * 버튼 안으로 들어가는 일이 생겨도 패널이 같이 열리지 않게, 여기서 한 번 더 막는다.
+           */
+          onClick={(e) => e.stopPropagation()}
+          onPointerDown={(e) => e.stopPropagation()}
+          // 투명하게 파형 위에 얹는다 — 트랙도 손잡이도 안 보이고 조작만 받는다
+          className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"
+        />
+      </div>
+      <span className="num w-8 shrink-0 text-right text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
+    </div>
   );
 }

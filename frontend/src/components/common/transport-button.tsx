@@ -18,12 +18,13 @@ interface TransportButtonProps {
   dimmed?: boolean;
   primary?: boolean;
   /**
-   * 지름. 기본 `sm`(32px), `md` 는 36px 이고 `primary` 는 항상 `md` 다.
+   * 지름. 기본 `sm`(32px), `md` 는 36px 이고 `primary` 는 기본 `md` 다. `lg`(44px)는 플레이어바의
+   * 재생 버튼 하나만 쓴다 (S15P21A405-428) — 세로 배치에서 주인공이 이전·다음과 같은 크기면 묻힌다.
    *
    * 곡 상세 제목 줄에서 쓴다 (S15P21A405-384) — 플리 추가와 재생이 나란히 서므로 **크기를
    * 맞추되** 색으로만 무게를 가른다. 플레이어바의 이전/다음은 `sm` 그대로다.
    */
-  size?: "sm" | "md";
+  size?: "sm" | "md" | "lg";
   /**
    * 아이콘을 제일 밝은 색으로. 기본(`ink-2`)은 플레이어바의 이전/다음처럼 **주인공 옆에서
    * 거드는 버튼** 기준이라, 곡 상세 제목 줄의 플리 추가처럼 혼자 서 있는 버튼은 흐려 보인다
@@ -35,7 +36,7 @@ interface TransportButtonProps {
 
 /** .tBtn / #tPlay — 하단 플레이어바와 곡 상세 제목 줄이 함께 쓴다 */
 export default function TransportButton({ label, onClick, disabled, dimmed, primary, size = "sm", bright = false, children }: TransportButtonProps) {
-  const wide = primary || size === "md";
+  const dim = size === "lg" ? "h-11 w-11" : primary || size === "md" ? "h-9 w-9" : "h-8 w-8";
   return (
     <button
       type="button"
@@ -44,9 +45,7 @@ export default function TransportButton({ label, onClick, disabled, dimmed, prim
       onClick={onClick}
       disabled={disabled}
       aria-disabled={dimmed || undefined}
-      className={`grid shrink-0 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-35 ${dimmed ? "opacity-35" : ""} ${
-        wide ? "h-9 w-9" : "h-8 w-8"
-      } ${primary ? "bg-white/10 text-ink" : bright ? "text-ink" : "text-ink-2"} ${
+      className={`grid shrink-0 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-35 ${dimmed ? "opacity-35" : ""} ${dim} ${primary ? "bg-white/10 text-ink" : bright ? "text-ink" : "text-ink-2"} ${
         // 꺼진 버튼은 **호버도 하지 않는다** (S15P21A405-384). 색이 변하면 눌릴 것처럼 보인다
         disabled ? "" : primary ? "hover:grad-bg hover:text-void" : "hover:bg-white/[.08] hover:text-ink"
       }`}

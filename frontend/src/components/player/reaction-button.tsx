@@ -36,7 +36,7 @@ export default function ReactionButton() {
   if (overlay) return null;
 
   return (
-    <div className="absolute right-[18px] bottom-[86px] z-[22] flex flex-col items-center gap-2">
+    <div className="absolute right-[18px] bottom-[192px] z-[22] flex flex-col items-center gap-2">
       {open && <ReactionPicker onPick={handlePick} />}
       <button
         type="button"

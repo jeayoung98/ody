@@ -1,6 +1,8 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import SmallScreenGate from "@/components/layout/small-screen-gate";
+import { devModeScript } from "@/constants/dev-mode";
+import { TEST_TOOLS } from "@/constants/test-tools";
 import QueryProvider from "@/providers/query-provider";
 import "./globals.css";
 
@@ -15,8 +17,18 @@ export const metadata: Metadata = {
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
-    <html lang="ko" className="h-full antialiased" style={{ colorScheme: "dark" }}>
+    /*
+      `suppressHydrationWarning` 은 아래 개발 버전 스크립트 때문이다 (S15P21A405-421) — 하이드레이션
+      전에 `<html>` 에 클래스를 붙이므로 서버가 그린 className 과 달라진다. 이 태그의 속성에만 적용된다.
+    */
+    <html lang="ko" className="h-full antialiased" style={{ colorScheme: "dark" }} suppressHydrationWarning>
       <head>
+        {/*
+          개발 버전 스위치 (S15P21A405-421). **빌드 스위치가 꺼지면 이 줄이 통째로 사라진다** —
+          `TEST_TOOLS` 가 빌드 시각 상수라 최종 배포본에는 스크립트가 아예 안 실린다.
+          `<head>` 에서 막고 도는 이유는 `constants/dev-mode.ts` 주석에 있다.
+        */}
+        {TEST_TOOLS && <script dangerouslySetInnerHTML={{ __html: devModeScript }} />}
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
         {/* App Router 루트 레이아웃이라 모든 페이지에 적용된다 — pages/_document 기준 규칙은 해당 없음 */}

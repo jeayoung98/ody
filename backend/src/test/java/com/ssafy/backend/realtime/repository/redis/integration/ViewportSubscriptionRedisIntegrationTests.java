@@ -85,8 +85,8 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void replacesCellSubscriptionsAndMeta() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange first = new ViewportRange(1, -4.0, 4.0, -4.0, 4.0, List.of());
-		ViewportRange second = new ViewportRange(1, -2.0, 6.0, -3.0, 5.0, List.of());
+		ViewportRange first = new ViewportRange(0, -4.0, 4.0, -4.0, 4.0, List.of());
+		ViewportRange second = new ViewportRange(0, -2.0, 6.0, -3.0, 5.0, List.of());
 		Cell removed = new Cell(1, 1);
 		Cell shared = new Cell(1, 2);
 		Cell added = new Cell(2, 2);
@@ -101,9 +101,9 @@ class ViewportSubscriptionRedisIntegrationTests {
 				data.email(), 7L, 2L, second, ViewportMode.INDIVIDUAL, Set.of(shared, added)))
 				.isEqualTo(ReplaceResult.APPLIED);
 
-		assertThat(isSubscribed(data.email(), 1, removed)).isFalse();
-		assertThat(isSubscribed(data.email(), 1, shared)).isTrue();
-		assertThat(isSubscribed(data.email(), 1, added)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, removed)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, shared)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, added)).isTrue();
 		assertThat(repository.findMeta(data.email())).hasValueSatisfying(meta -> {
 			assertThat(meta.epoch()).isEqualTo(7L);
 			assertThat(meta.requestSeq()).isEqualTo(2L);
@@ -117,7 +117,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void oldRequestKeepsCurrentSubscriptions() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange viewport = new ViewportRange(1, -1.0, 1.0, -1.0, 1.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -1.0, 1.0, -1.0, 1.0, List.of());
 		Cell current = new Cell(3, 3);
 		Cell old = new Cell(4, 4);
 		trackCell(1, current);
@@ -130,8 +130,8 @@ class ViewportSubscriptionRedisIntegrationTests {
 				data.email(), 7L, 4L, viewport, ViewportMode.INDIVIDUAL, Set.of(old)))
 				.isEqualTo(ReplaceResult.OLD_REQUEST);
 
-		assertThat(isSubscribed(data.email(), 1, current)).isTrue();
-		assertThat(isSubscribed(data.email(), 1, old)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, current)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, old)).isFalse();
 		assertThat(repository.findMeta(data.email()).orElseThrow().requestSeq()).isEqualTo(5L);
 	}
 
@@ -140,7 +140,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void staleConnectionKeepsCurrentSubscriptions() {
 		TestData data = testData();
 		connect(data.email(), 2L);
-		ViewportRange viewport = new ViewportRange(1, -1.0, 1.0, -1.0, 1.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -1.0, 1.0, -1.0, 1.0, List.of());
 		Cell cell = new Cell(5, 5);
 		trackCell(1, cell);
 
@@ -148,7 +148,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 				data.email(), 1L, 1L, viewport, ViewportMode.INDIVIDUAL, Set.of(cell)))
 				.isEqualTo(ReplaceResult.STALE_CONNECTION);
 
-		assertThat(isSubscribed(data.email(), 1, cell)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, cell)).isFalse();
 		assertThat(repository.findMeta(data.email())).isEmpty();
 	}
 
@@ -157,7 +157,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void newConnectionCanRestartRequestSequence() {
 		TestData data = testData();
 		connect(data.email(), 1L);
-		ViewportRange viewport = new ViewportRange(1, -1.0, 1.0, -1.0, 1.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -1.0, 1.0, -1.0, 1.0, List.of());
 		Cell oldCell = new Cell(6, 6);
 		Cell newCell = new Cell(7, 7);
 		trackCell(1, oldCell);
@@ -171,8 +171,8 @@ class ViewportSubscriptionRedisIntegrationTests {
 		assertThat(repository.replaceSubscriptions(
 				data.email(), 2L, 1L, viewport, ViewportMode.INDIVIDUAL, Set.of(newCell)))
 				.isEqualTo(ReplaceResult.APPLIED);
-		assertThat(isSubscribed(data.email(), 1, oldCell)).isFalse();
-		assertThat(isSubscribed(data.email(), 1, newCell)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, oldCell)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, newCell)).isTrue();
 		assertThat(repository.findMeta(data.email()).orElseThrow().requestSeq()).isEqualTo(1L);
 	}
 
@@ -181,7 +181,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void switchesModesWithoutOldSubscriptions() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -2.0, 2.0, -2.0, 2.0, List.of());
 		Cell first = new Cell(1, 1);
 		Cell second = new Cell(2, 2);
 		trackCell(1, first);
@@ -195,14 +195,14 @@ class ViewportSubscriptionRedisIntegrationTests {
 				data.email(), 7L, 1L, viewport, ViewportMode.CLUSTERED, Set.of()))
 				.isEqualTo(ReplaceResult.APPLIED);
 
-		assertThat(isSubscribed(data.email(), 1, first)).isFalse();
-		assertThat(isClustered(data.email(), 1)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, first)).isFalse();
+		assertThat(isClustered(data.email(), 0)).isTrue();
 		assertThat(repository.findMeta(data.email())).hasValueSatisfying(meta -> {
 			assertThat(meta.mode()).isEqualTo(ViewportMode.CLUSTERED);
 			assertThat(meta.cells()).isEmpty();
 		});
 		assertThat(repository.findCellCountUsersByLayer(1))
-				.containsEntry(1, Set.of(data.email()));
+				.containsEntry(0, Set.of(data.email()));
 		assertThat(repository.findMetaByEmails(Set.of(data.email())))
 				.containsKey(data.email());
 
@@ -210,8 +210,8 @@ class ViewportSubscriptionRedisIntegrationTests {
 				data.email(), 7L, 2L, viewport, ViewportMode.INDIVIDUAL, Set.of(second)))
 				.isEqualTo(ReplaceResult.APPLIED);
 
-		assertThat(isClustered(data.email(), 1)).isFalse();
-		assertThat(isSubscribed(data.email(), 1, second)).isTrue();
+		assertThat(isClustered(data.email(), 0)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, second)).isTrue();
 		assertThat(repository.findCellCountUsersByLayer(1)).isEmpty();
 		assertThat(repository.findMeta(data.email())).hasValueSatisfying(meta -> {
 			assertThat(meta.mode()).isEqualTo(ViewportMode.INDIVIDUAL);
@@ -224,7 +224,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void closesIndividualSubscriptionsAndMeta() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -2.0, 2.0, -2.0, 2.0, List.of());
 		Cell first = new Cell(1, 1);
 		Cell second = new Cell(2, 2);
 		trackCell(1, first);
@@ -236,8 +236,8 @@ class ViewportSubscriptionRedisIntegrationTests {
 		assertThat(repository.closeCurrentScreen(data.email(), 7L, 18L))
 				.isEqualTo(CloseResult.CLOSED);
 
-		assertThat(isSubscribed(data.email(), 1, first)).isFalse();
-		assertThat(isSubscribed(data.email(), 1, second)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, first)).isFalse();
+		assertThat(isSubscribed(data.email(), 0, second)).isFalse();
 		assertThat(repository.findMeta(data.email())).isEmpty();
 	}
 
@@ -246,7 +246,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void closesClusteredSubscriptionAndMeta() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -2.0, 2.0, -2.0, 2.0, List.of());
 		trackClustered(1);
 		assertThat(repository.replaceSubscriptions(
 				data.email(), 7L, 20L, viewport, ViewportMode.CLUSTERED, Set.of()))
@@ -255,7 +255,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 		assertThat(repository.closeCurrentScreen(data.email(), 7L, 20L))
 				.isEqualTo(CloseResult.CLOSED);
 
-		assertThat(isClustered(data.email(), 1)).isFalse();
+		assertThat(isClustered(data.email(), 0)).isFalse();
 		assertThat(repository.findMeta(data.email())).isEmpty();
 	}
 
@@ -264,7 +264,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void oldCloseKeepsCurrentScreen() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -2.0, 2.0, -2.0, 2.0, List.of());
 		Cell cell = new Cell(3, 3);
 		trackCell(1, cell);
 		assertThat(repository.replaceSubscriptions(
@@ -274,7 +274,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 		assertThat(repository.closeCurrentScreen(data.email(), 7L, 21L))
 				.isEqualTo(CloseResult.OLD_REQUEST);
 
-		assertThat(isSubscribed(data.email(), 1, cell)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, cell)).isTrue();
 		assertThat(repository.findMeta(data.email())).isPresent();
 	}
 
@@ -283,7 +283,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 	void staleCloseKeepsCurrentScreen() {
 		TestData data = testData();
 		connect(data.email(), 7L);
-		ViewportRange viewport = new ViewportRange(1, -2.0, 2.0, -2.0, 2.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -2.0, 2.0, -2.0, 2.0, List.of());
 		Cell cell = new Cell(4, 4);
 		trackCell(1, cell);
 		assertThat(repository.replaceSubscriptions(
@@ -293,7 +293,7 @@ class ViewportSubscriptionRedisIntegrationTests {
 		assertThat(repository.closeCurrentScreen(data.email(), 6L, 24L))
 				.isEqualTo(CloseResult.STALE_CONNECTION);
 
-		assertThat(isSubscribed(data.email(), 1, cell)).isTrue();
+		assertThat(isSubscribed(data.email(), 0, cell)).isTrue();
 		assertThat(repository.findMeta(data.email())).isPresent();
 	}
 

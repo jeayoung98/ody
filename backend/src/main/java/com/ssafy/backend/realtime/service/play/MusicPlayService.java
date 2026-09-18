@@ -130,7 +130,9 @@ public class MusicPlayService {
 		meetingService.recordMeetings(email, meeting);
 
 		log.info("[Play] 재생 선언 완료 musicId={} layer={} playHistoryId={}", musicId, layer, history.getId());
-		return new PlayResponse(history.getId(), musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
+		// x·y 는 지도(뷰포트 요청·셀 인원수)와 같은 원시 PC 좌표. 정규화 값은 셀 계산 내부용이다.
+		return new PlayResponse(history.getId(), musicId, layer,
+				pc[p.axisX() - 1], pc[p.axisY() - 1], p.cellX(), p.cellY());
 	}
 
 	/**

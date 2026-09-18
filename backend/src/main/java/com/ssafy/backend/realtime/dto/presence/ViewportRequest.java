@@ -17,16 +17,16 @@ import jakarta.validation.constraints.Positive;
  * x·y 범위를 묶은 LayerBound를 사용한다. 이 구조로 레이어 순서와 범위 개수를 바로 검사할 수 있다.
  *
  * @param requestSeq 화면 요청 순번
- * @param layer 현재 레이어
+ * @param layer 현재 레이어 (0-based, 프론트 useMapStore.layer 그대로)
  * @param minX 현재 화면의 최소 x 좌표
  * @param maxX 현재 화면의 최대 x 좌표
  * @param minY 현재 화면의 최소 y 좌표
  * @param maxY 현재 화면의 최대 y 좌표
- * @param ancestorBounds 이전 레이어에서 선택한 화면 목록. 1레이어는 빈 목록
+ * @param ancestorBounds 이전 레이어에서 선택한 화면 목록 (프론트 boxes 그대로). 0레이어는 빈 목록, N레이어는 0..N-1 순서로 N개
  */
 public record ViewportRequest(
 		@NotNull @Positive Long requestSeq,
-		@NotNull @Min(1) @Max(8) Integer layer,
+		@NotNull @Min(0) @Max(7) Integer layer,
 		@NotNull Double minX, @NotNull Double maxX,
 		@NotNull Double minY, @NotNull Double maxY,
 		@NotNull @Valid List<LayerBound> ancestorBounds) {
@@ -78,7 +78,7 @@ public record ViewportRequest(
 	 * @param maxY 최대 y 좌표
 	 */
 	public record LayerBound(
-			@NotNull @Min(1) @Max(7) Integer layer,
+			@NotNull @Min(0) @Max(6) Integer layer,
 			@NotNull Double minX, @NotNull Double maxX,
 			@NotNull Double minY, @NotNull Double maxY) {
 	}

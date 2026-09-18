@@ -104,6 +104,9 @@ class MusicPlayServiceTests {
 	@DisplayName("아직 지도에 없는 사용자는 요청한 레이어로 첫 자리를 잡는다")
 	void firstPlayPlacesAtRequestedLayer() {
 		double[] location = new double[16];
+		// 레이어 3 의 표시축은 pc5·pc6 — 응답 x·y 는 이 원시 값이어야 한다(정규화 0.4·0.6 이 아니다)
+		location[4] = 1.25;
+		location[5] = -0.5;
 		Placement placement = new Placement(3, 5, 6, 0.4, 0.6, 6, 9);
 		// 접속만 하고 아무 곡도 안 들은 상태: 곡·레이어·셀이 전부 없다.
 		when(presenceRedisRepository.snapshot(EMAIL))
@@ -117,6 +120,8 @@ class MusicPlayServiceTests {
 		PlayResponse response = service.play(EMAIL, 20L, "MAP", 3);
 
 		assertThat(response.layer()).isEqualTo(3);
+		assertThat(response.x()).isEqualTo(1.25);
+		assertThat(response.y()).isEqualTo(-0.5);
 		verify(presenceRedisRepository).applyPlay(
 				EMAIL, null, null, null, null,
 				20L, 3, 0.4, 0.6, 6, 9);

@@ -15,7 +15,6 @@ import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
-import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
 import com.ssafy.backend.realtime.geometry.ViewportRange;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
@@ -108,9 +107,8 @@ public class ViewportDeltaService {
 				|| types.containsValue(RealtimeMessageType.VIEWPORT_MOVE);
 		UserDisplay display = needsCurrent ? userDisplayService.find(event.email()) : null;
 		Integer riderCount = needsCurrent ? riderCountService.count(event.email()) : null;
-		Placement placement = needsCurrent
-				? musicPositionCalculator.calculate(newLocation, event.newLayer())
-				: null;
+		// 표시 좌표는 화면 요청과 같은 원시 PC 값이다. 정규화(0~1)는 셀 계산 내부용이라 밖으로 내지 않는다.
+		double[] position = needsCurrent ? rawPosition(newLocation, event.newLayer()) : null;
 
 		// 6. 수신자의 현재 화면 요청 순번을 넣어 개인 큐로 보낸다.
 		for (Map.Entry<String, RealtimeMessageType> entry : types.entrySet()) {
@@ -119,7 +117,7 @@ public class ViewportDeltaService {
 			ViewportDelta payload = type == RealtimeMessageType.VIEWPORT_LEAVE
 					? leavePayload(metas.get(receiver).requestSeq(), event.email())
 					: currentPayload(
-							metas.get(receiver).requestSeq(), event, display, riderCount, placement);
+							metas.get(receiver).requestSeq(), event, display, riderCount, position);
 			realtimeMessageService.sendToUser(
 					receiver, WebSocketDestination.QUEUE_PRESENCE, type, payload);
 		}
@@ -245,14 +243,26 @@ public class ViewportDeltaService {
 	 * @param event 위치를 바꾼 사용자와 새 곡
 	 * @param display 닉네임과 사진
 	 * @param riderCount 따라오는 사용자 수
-	 * @param placement 새 화면 위치
+	 * @param position 새 위치의 원시 PC 좌표 {x, y}
 	 * @return ENTER 또는 MOVE 내용
 	 */
 	private static ViewportDelta currentPayload(
 			long requestSeq, PositionChanged event, UserDisplay display,
-			int riderCount, Placement placement) {
+			int riderCount, double[] position) {
 		return new ViewportDelta(
 				requestSeq, event.email(), display.nickname(), display.imageUrl(),
-				event.newMusicId(), placement.xNorm(), placement.yNorm(), riderCount);
+				event.newMusicId(), position[0], position[1], riderCount);
+	}
+
+	/**
+	 * 곡 좌표에서 그 레이어가 화면에 쓰는 두 축의 원시 값을 꺼낸다.
+	 *
+	 * @param location 곡의 16차원 좌표
+	 * @param layer 현재 레이어
+	 * @return {x, y} 원시 PC 좌표
+	 */
+	private double[] rawPosition(double[] location, int layer) {
+		int[] axes = musicPositionCalculator.findAxes(layer);
+		return new double[] {location[axes[0] - 1], location[axes[1] - 1]};
 	}
 }

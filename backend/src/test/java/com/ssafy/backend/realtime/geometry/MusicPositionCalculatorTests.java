@@ -26,10 +26,10 @@ class MusicPositionCalculatorTests {
 	}
 
 	@Test
-	@DisplayName("레이어1은 PC1·PC2 축, 중앙값 0 은 정규화 0.5 → 셀 grid/2")
-	void layer1_center() {
+	@DisplayName("레이어0은 PC1·PC2 축, 중앙값 0 은 정규화 0.5 → 셀 grid/2")
+	void layer0_center() {
 		MusicPositionCalculator m = mapper(4, 4);
-		MusicPositionCalculator.Placement p = m.calculate(new double[] {0, 0, 0, 0}, 1);
+		MusicPositionCalculator.Placement p = m.calculate(new double[] {0, 0, 0, 0}, 0);
 		assertThat(p.axisX()).isEqualTo(1);
 		assertThat(p.axisY()).isEqualTo(2);
 		assertThat(p.xNorm()).isEqualTo(0.5);
@@ -40,11 +40,11 @@ class MusicPositionCalculatorTests {
 	}
 
 	@Test
-	@DisplayName("레이어2는 PC3·PC4 축을 읽는다")
-	void layer2_usesAxes3and4() {
+	@DisplayName("레이어1은 PC3·PC4 축을 읽는다 (프론트 pc[2]·pc[3])")
+	void layer1_usesAxes3and4() {
 		MusicPositionCalculator m = mapper(16, 4);
-		// pc = [1,2,3,4] → 레이어2는 pc[2]=3(x), pc[3]=4(y)
-		MusicPositionCalculator.Placement p = m.calculate(new double[] {1, 2, 3, 4}, 2);
+		// pc = [1,2,3,4] → 레이어1은 pc[2]=3(x), pc[3]=4(y)
+		MusicPositionCalculator.Placement p = m.calculate(new double[] {1, 2, 3, 4}, 1);
 		assertThat(p.axisX()).isEqualTo(3);
 		assertThat(p.axisY()).isEqualTo(4);
 		// 3 → (3+10)/20 = 0.65, 4 → 0.70
@@ -56,7 +56,7 @@ class MusicPositionCalculatorTests {
 	@DisplayName("범위 밖 좌표는 가장자리 셀(0 / grid-1)로 clamp")
 	void outOfRange_clampsToEdge() {
 		MusicPositionCalculator m = mapper(4, 4);
-		MusicPositionCalculator.Placement p = m.calculate(new double[] {100, -100, 0, 0}, 1);
+		MusicPositionCalculator.Placement p = m.calculate(new double[] {100, -100, 0, 0}, 0);
 		assertThat(p.cellX()).isEqualTo(3);  // > max → grid-1
 		assertThat(p.cellY()).isEqualTo(0);  // < min → 0
 	}
@@ -66,18 +66,19 @@ class MusicPositionCalculatorTests {
 	void findsRawCenterOfCombinedCell() {
 		MusicPositionCalculator m = mapper(16, 4);
 
-		MusicPositionCalculator.CellCenter center = m.findCellCenter(2, 2, 3, 8);
+		// 레이어 1 = PC3·PC4 (0-based)
+		MusicPositionCalculator.CellCenter center = m.findCellCenter(1, 2, 3, 8);
 
 		assertThat(center.x()).isCloseTo(-3.75, within(1e-9));
 		assertThat(center.y()).isCloseTo(-1.25, within(1e-9));
 	}
 
 	@Test
-	@DisplayName("maxLayer 초과 레이어는 예외")
+	@DisplayName("레이어 수 이상의 번호는 예외 (4축 → 유효 0·1)")
 	void layerBeyondMax_throws() {
-		MusicPositionCalculator m = mapper(4, 4); // 4축 → maxLayer 2
+		MusicPositionCalculator m = mapper(4, 4); // 4축 → 레이어 2개(0, 1)
 		assertThat(m.maxLayer()).isEqualTo(2);
-		assertThatThrownBy(() -> m.calculate(new double[] {0, 0, 0, 0}, 3))
+		assertThatThrownBy(() -> m.calculate(new double[] {0, 0, 0, 0}, 2))
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 
@@ -85,7 +86,7 @@ class MusicPositionCalculatorTests {
 	@DisplayName("pc 길이가 축 인덱스보다 짧으면 예외")
 	void shortPc_throws() {
 		MusicPositionCalculator m = mapper(4, 4);
-		assertThatThrownBy(() -> m.calculate(new double[] {0, 0}, 2)) // 레이어2는 pc[3] 필요
+		assertThatThrownBy(() -> m.calculate(new double[] {0, 0}, 1)) // 레이어1은 pc[3] 필요
 				.isInstanceOf(IllegalArgumentException.class);
 	}
 

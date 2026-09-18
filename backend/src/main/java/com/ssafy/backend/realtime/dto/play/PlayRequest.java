@@ -10,10 +10,10 @@ import jakarta.validation.constraints.NotNull;
  *
  * layer 는 처음 자리를 잡을 때만 쓴다. 이미 지도에 서 있으면 무시하고 서버에 있는 레이어를 유지한다.
  * 재생 기록이 없는 사용자는 join 을 못 하므로(입장할 곡이 없다), 첫 재생이 첫 배치가 된다.
- * 그때 어느 레이어에 놓을지를 이 값으로 받는다.
+ * 그때 어느 레이어에 놓을지를 이 값으로 받는다. 번호는 프론트와 같은 0-based(0 ~ 7)다.
  */
 public record PlayRequest(
 		@NotNull Long musicId,
 		@NotNull PlaySource source,
-		@Min(1) @Max(8) Integer layer) {
+		@Min(0) @Max(7) Integer layer) {
 }

@@ -16,17 +16,17 @@ class LayerAxisCalculatorTests {
 	private static final int MAX_LAYER = 8; // PC16 → 8레이어
 
 	@Test
-	@DisplayName("레이어 → 축 쌍: 1→[1,2], 3→[5,6], 8→[15,16]")
+	@DisplayName("레이어(0-based) → 축 쌍: 0→[1,2], 2→[5,6], 7→[15,16]")
 	void axesArithmetic() {
-		assertArrayEquals(new int[] {1, 2}, LayerAxisCalculator.findAxes(1, MAX_LAYER).orElseThrow());
-		assertArrayEquals(new int[] {5, 6}, LayerAxisCalculator.findAxes(3, MAX_LAYER).orElseThrow());
-		assertArrayEquals(new int[] {15, 16}, LayerAxisCalculator.findAxes(8, MAX_LAYER).orElseThrow());
+		assertArrayEquals(new int[] {1, 2}, LayerAxisCalculator.findAxes(0, MAX_LAYER).orElseThrow());
+		assertArrayEquals(new int[] {5, 6}, LayerAxisCalculator.findAxes(2, MAX_LAYER).orElseThrow());
+		assertArrayEquals(new int[] {15, 16}, LayerAxisCalculator.findAxes(7, MAX_LAYER).orElseThrow());
 	}
 
 	@Test
-	@DisplayName("범위 밖 레이어(0, 상한 초과)는 empty")
+	@DisplayName("범위 밖 레이어(음수, 레이어 수 이상)는 empty")
 	void axesOutOfRange() {
-		assertTrue(LayerAxisCalculator.findAxes(0, MAX_LAYER).isEmpty());
+		assertTrue(LayerAxisCalculator.findAxes(8, MAX_LAYER).isEmpty()); // 0~7 만 유효
 		assertTrue(LayerAxisCalculator.findAxes(9, MAX_LAYER).isEmpty());
 		assertTrue(LayerAxisCalculator.findAxes(-1, MAX_LAYER).isEmpty());
 	}
@@ -34,8 +34,8 @@ class LayerAxisCalculatorTests {
 	@Test
 	@DisplayName("maxLayer 로 상한이 바뀐다")
 	void axesRespectsMaxLayer() {
-		Optional<int[]> l4 = LayerAxisCalculator.findAxes(4, 4);
-		assertArrayEquals(new int[] {7, 8}, l4.orElseThrow());
-		assertTrue(LayerAxisCalculator.findAxes(5, 4).isEmpty()); // maxLayer=4 이면 5는 없음
+		Optional<int[]> l3 = LayerAxisCalculator.findAxes(3, 4);
+		assertArrayEquals(new int[] {7, 8}, l3.orElseThrow());
+		assertTrue(LayerAxisCalculator.findAxes(4, 4).isEmpty()); // maxLayer=4 이면 유효 번호는 0~3
 	}
 }

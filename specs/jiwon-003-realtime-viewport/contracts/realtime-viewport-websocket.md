@@ -35,29 +35,29 @@
 ```json
 {
   "requestSeq": 17,
-  "layer": 3,
+  "layer": 2,
   "minX": -1.1,
   "maxX": 2.4,
   "minY": -1.8,
   "maxY": 2.6,
   "ancestorBounds": [
-    { "layer": 1, "minX": -3.2, "maxX": 4.1, "minY": -2.0, "maxY": 5.7 },
-    { "layer": 2, "minX": -1.4, "maxX": 2.9, "minY": -2.2, "maxY": 3.1 }
+    { "layer": 0, "minX": -3.2, "maxX": 4.1, "minY": -2.0, "maxY": 5.7 },
+    { "layer": 1, "minX": -1.4, "maxX": 2.9, "minY": -2.2, "maxY": 3.1 }
   ]
 }
 ```
 
-예시는 서버 layer 3이다. `minX...maxY`는 현재 PC5·PC6의 raw 화면 범위이고 ancestorBounds는 이전 PC1·PC2, PC3·PC4 진입 범위다.
+예시는 layer 2(0-based, 프론트 `useMapStore.layer` 와 같은 번호)다. `minX...maxY`는 현재 PC5·PC6의 raw 화면 범위이고 ancestorBounds는 이전 PC1·PC2(layer 0), PC3·PC4(layer 1) 진입 범위 — 프론트 `boxes` 그대로다.
 
 ### Validation
 
 - `requestSeq > 0`, 연결 동안 단조 증가
-- `layer`는 1~8
+- `layer`는 **0~7** (0-based, 2026-09-18 확정 — 이전 1~8 표기 폐기)
 - 모든 min < max, NaN·Infinity 불가
-- layer 1은 `ancestorBounds=[]`
-- layer N은 ancestorBounds가 정확히 N-1개
-- 각 bound.layer는 1부터 N-1까지 중복 없이 연속
-- 프론트 내부 레이어가 0~7이면 전송 직전에 +1
+- layer 0은 `ancestorBounds=[]`
+- layer N은 ancestorBounds가 정확히 N개
+- 각 bound.layer는 0부터 N-1까지 중복 없이 연속 (= 프론트 `boxes[i].layer === i`)
+- 프론트 내부 레이어를 변환 없이 그대로 보낸다
 
 ### Response A — Individual
 
@@ -67,12 +67,12 @@
 {
   "requestSeq": 17,
   "mode": "INDIVIDUAL",
-  "layer": 3,
+  "layer": 2,
   "groups": [
     {
       "musicId": 101,
-      "x": 0.42,
-      "y": 0.61,
+      "x": 0.37,
+      "y": 1.24,
       "users": [
         {
           "email": "user@example.com",
@@ -88,6 +88,8 @@
 }
 ```
 
+`groups[].x`·`y`는 그 곡의 **현재 레이어 표시 2축 원시 PC 좌표**다 — 요청의 `minX~maxX`·`minY~maxY`, §1-B `cells[].x/y`, §3 델타 `x/y`, `POST /api/music/play` 응답 `x/y` 와 모두 같은 좌표계라 프론트는 `MapEngine` 월드 좌표로 그대로 찍는다. 서버 내부의 정규화(0~1) 값은 셀 계산에만 쓰고 밖으로 내지 않는다 (2026-09-18 확정, 이전 계약의 0~1 표기는 폐기).
+
 ### Response B — Clustered
 
 `type = VIEWPORT_SNAPSHOT`
@@ -96,12 +98,12 @@
 {
   "requestSeq": 18,
   "mode": "CLUSTERED",
-  "layer": 3,
+  "layer": 2,
   "groups": [],
   "resolution": 8,
   "cells": [
-    { "cellX": 2, "cellY": 4, "x": 0.31, "y": 0.58, "count": 31 },
-    { "cellX": 3, "cellY": 4, "x": 0.44, "y": 0.58, "count": 12 }
+    { "cellX": 2, "cellY": 4, "x": -1.1, "y": 2.6, "count": 31 },
+    { "cellX": 3, "cellY": 4, "x": 0.69, "y": 2.6, "count": 12 }
   ]
 }
 ```
@@ -126,11 +128,11 @@
 ```json
 {
   "requestSeq": 18,
-  "layer": 3,
+  "layer": 2,
   "resolution": 8,
   "cells": [
-    { "cellX": 2, "cellY": 4, "x": 0.31, "y": 0.58, "count": 29 },
-    { "cellX": 3, "cellY": 4, "x": 0.44, "y": 0.58, "count": 14 }
+    { "cellX": 2, "cellY": 4, "x": -1.1, "y": 2.6, "count": 29 },
+    { "cellX": 3, "cellY": 4, "x": 0.69, "y": 2.6, "count": 14 }
   ]
 }
 ```
@@ -152,8 +154,8 @@
   "nickname": "off_beat",
   "imageUrl": "https://example.com/profile.png",
   "musicId": 101,
-  "x": 0.42,
-  "y": 0.61,
+  "x": 0.37,
+  "y": 1.24,
   "riderCount": 0
 }
 ```
@@ -169,8 +171,8 @@
   "nickname": "off_beat",
   "imageUrl": "https://example.com/profile.png",
   "musicId": 205,
-  "x": 0.48,
-  "y": 0.55,
+  "x": 2.05,
+  "y": -0.71,
   "riderCount": 0
 }
 ```
@@ -197,6 +199,7 @@
 - 모든 델타: requestSeq가 현재 viewport 요청과 다르면 무시
 - ENTER: email 기준 추가 또는 upsert
 - MOVE: email 기준 기존 마커를 새 곡 그룹·좌표로 이동, 없으면 upsert
+- ENTER·MOVE 의 `x`·`y`는 §1-A `groups[].x/y` 와 같은 원시 PC 좌표
 - LEAVE: email 기준 제거, 이미 없으면 무시
 - CLUSTERED 화면에서는 세 이벤트를 렌더링하지 않음
 
@@ -220,7 +223,7 @@
 
 prefetch 시작이 아니라 실제 layer·boxes가 변경되고 전환 화면이 안정된 뒤 아래 순서를 지킨다.
 
-1. 현재 `MapEngine.boxes`를 서버 1-based ancestorBounds로 변환
+1. 현재 `MapEngine.boxes`를 ancestorBounds로 복사 (layer 변환 없음, 0-based 그대로)
 2. `SEND /app/presence/join { "requestSeq": nextJoinSeq, "layer": newLayer, "musicId": currentMusicId }`
 3. 같은 join requestSeq의 `PRESENCE_JOINED` 확인
 4. 새 layer, 새 현재 화면, 같은 ancestorBounds로 `SEND /app/presence/viewport`
@@ -236,7 +239,7 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 ```json
 {
   "requestSeq": 4,
-  "layer": 3,
+  "layer": 2,
   "musicId": 101
 }
 ```
@@ -305,7 +308,7 @@ viewport 요청만 보내면 자신의 presence 레이어는 바뀌지 않는다
 - [ ] 팬·줌은 250ms debounce한다.
 - [ ] requestSeq를 요청마다 증가시킨다.
 - [ ] 응답 requestSeq가 현재 값과 다르면 버린다.
-- [ ] layer 0~7을 서버 1~8로 변환한다.
+- [ ] layer 0~7을 변환 없이 그대로 보낸다 (서버도 0-based).
 - [ ] 기존 boxes·prefetch·query cache를 다시 구현하지 않고 재사용한다.
 - [ ] major와 viewport가 같은 boxes 값에서 만든 ancestorBounds를 사용한다.
 - [ ] prefetch만으로 layer·join·viewport를 바꾸지 않는다.

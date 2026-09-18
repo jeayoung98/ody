@@ -11,14 +11,15 @@
 
 ## 1. 레이어 번호
 
-| 의미 | 프론트 내부 | REST/소켓 |
-| --- | --- | --- |
-| 최상위 PC1·PC2 | 0 | 1 |
-| PC3·PC4 | 1 | 2 |
-| ... | ... | ... |
-| PC15·PC16 | 7 | 8 |
+| 의미 | 프론트 내부 | 실시간 REST/소켓 (`/api/music/play`·`/app/presence/*`) | 곡 조회 `GET /api/music/major` |
+| --- | --- | --- | --- |
+| 최상위 PC1·PC2 | 0 | **0** | `level=1` |
+| PC3·PC4 | 1 | **1** | `level=2` |
+| ... | ... | ... | ... |
+| PC15·PC16 | 7 | **7** | `level=8` |
 
-소켓 경계에서 `serverLayer = frontendLayer + 1`로 변환한다. 기존 `LayerBox.layer`도 0부터 시작하므로 뷰포트의 `ancestorBounds`로 만들 때 각 layer에 1을 더한다.
+**실시간 계약은 프론트와 같은 0-based 다** (2026-09-18 확정, 이전 1-based 표기 폐기). `useMapStore.layer`·`LayerBox.layer` 를 변환 없이 그대로 보낸다. `ancestorBounds` 도 `boxes` 의 `layer` 를 그대로 쓴다.
+`GET /api/music/major` 의 `level = boxes.length + 1` 만 예전대로 1-based 다 — 그 API 는 BE2 소유라 이번 변경 범위 밖이다.
 
 ## 2. 기존 곡 조회 계약
 
@@ -61,7 +62,7 @@ interface LayerBox {
 }
 
 interface LayerBound {
-  layer: number; // server 1-based
+  layer: number; // 0-based — LayerBox.layer 그대로
   minX: number;
   maxX: number;
   minY: number;
@@ -69,10 +70,10 @@ interface LayerBound {
 }
 ```
 
-- `ancestorBounds`: 현재 `boxes`를 값 그대로 복사하되 layer만 `+1`해 만든다.
+- `ancestorBounds`: 현재 `boxes`를 값 그대로 복사한다 (`{layer, minX: xMin, maxX: xMax, minY: yMin, maxY: yMax}`). layer 변환 없음.
 - `currentRectangle`: 현재 레이어의 카메라가 실제로 보여주는 raw PC 사각형이다.
 - 같은 레이어의 팬·줌은 `boxes`와 `ancestorBounds`를 바꾸지 않는다.
-- 서버 layer N에는 ancestorBounds가 정확히 N-1개 있어야 한다.
+- layer N에는 ancestorBounds가 정확히 N개(layer 0..N-1 순서) 있어야 한다. layer 0 은 빈 배열.
 - 곡 REST 요청과 viewport 요청은 같은 `boxes` 값에서 만들어야 한다.
 
 ## 5. 전송 시점

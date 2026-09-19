@@ -21,7 +21,7 @@ export default function PanelCollapseHandle() {
       onClick={toggleCollapsed}
       aria-expanded={!collapsed}
       title={collapsed ? "패널 펼치기" : "패널 접기"}
-      className="glass absolute top-1/2 -left-[22px] z-10 flex h-[68px] w-[22px] -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-box-xs! rounded-r-none! border-r-0! text-ink-3 transition-colors hover:text-ink"
+      className="glass-liquid absolute top-1/2 -left-[22px] z-10 flex h-[68px] w-[22px] -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-box-xs! rounded-r-none! border-r-0! text-ink-3 transition-colors hover:text-ink"
     >
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         {/* 펼쳐져 있으면 → (밀어 넣기), 접혀 있으면 ← (끌어 내기) */}

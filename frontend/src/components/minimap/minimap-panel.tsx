@@ -29,14 +29,14 @@ export default function MinimapPanel() {
   return (
     <aside
       data-hud
-      className={`glass absolute bottom-[18px] left-[18px] z-20 flex w-instrument flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5 transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
+      className={`glass-liquid absolute bottom-[18px] left-[18px] z-20 flex w-instrument flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5 transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
     >
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
         aria-expanded={open}
         title={open ? "계기판 접기" : "계기판 펼치기"}
-        className="glass absolute top-1/2 -right-[22px] flex h-[68px] w-[22px] -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-none! rounded-r-box-xs! border-l-0! text-ink-3 transition-colors hover:text-ink"
+        className="glass-liquid absolute top-1/2 -right-[22px] flex h-[68px] w-[22px] -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-none! rounded-r-box-xs! border-l-0! text-ink-3 transition-colors hover:text-ink"
       >
         <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
           <path d={open ? "M6.5 1.5 3 5l3.5 3.5" : "M3.5 1.5 7 5 3.5 8.5"} />

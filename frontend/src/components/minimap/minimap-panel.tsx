@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import CollapseHandle from "@/components/common/collapse-handle";
 import HelpButton from "@/components/layout/help-button";
-import { useMapStore } from "@/stores/use-map-store";
 import AxisCompass from "./axis-compass";
 import LayerGauge from "./layer-gauge";
 import LayerName from "./layer-name";
@@ -24,26 +24,19 @@ export default function MinimapPanel() {
    * 첫 값일 뿐이라 언제든 핸들로 편다.
    */
   const [open, setOpen] = useState(false);
-  const layer = useMapStore((s) => s.layer);
 
   return (
     <aside
       data-hud
       className={`glass-liquid absolute bottom-[18px] left-[18px] z-20 flex w-instrument flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5 transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
     >
-      <button
-        type="button"
+      <CollapseHandle
+        side="right"
+        pointing={open ? "left" : "right"}
+        expanded={open}
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
         title={open ? "계기판 접기" : "계기판 펼치기"}
-        className="glass-liquid absolute top-1/2 -right-[22px] flex h-[68px] w-[22px] -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-none! rounded-r-box-xs! border-l-0! text-ink-3 transition-colors hover:text-ink"
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d={open ? "M6.5 1.5 3 5l3.5 3.5" : "M3.5 1.5 7 5 3.5 8.5"} />
-        </svg>
-        {/* 접혀 있을 때도 지금 겹은 보이게 */}
-        <span className="num text-[8.5px] tracking-[0.04em] text-teal">L{layer}</span>
-      </button>
+      />
       {/* 도움말 — 계기판 오른쪽에 붙어 같이 접힌다 (S15P21A405-434) */}
       <HelpButton />
       <MinimapCanvas />

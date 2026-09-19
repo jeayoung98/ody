@@ -83,7 +83,7 @@ export default function HoverCard({ engine, song, on }: HoverCardProps) {
         opacity: 0,
         transition: `opacity ${HOVER_CARD.fadeMs}ms ease-out`,
       }}
-      className="glass pointer-events-none absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform"
+      className="glass-liquid pointer-events-none absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform"
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}
       <span

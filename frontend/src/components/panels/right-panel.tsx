@@ -33,7 +33,7 @@ export default function RightPanel() {
     <aside
       data-hud
       data-tutorial={`panel-${activePanel}`}
-      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100vh-264px)] w-right-panel flex-col transition-[translate,opacity] duration-500 ease-out ${
+      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100vh-264px)] w-right-panel flex-col transition-[translate] duration-500 ease-out ${
         /*
           접으면 **몸통 18px 만 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이
           있었는지가 안 읽힌다 — 좌하단 계기판이 몸통을 조금 남기는 것(`COLLAPSED_PEEK_PX`)과 같은 이유다.
@@ -44,9 +44,11 @@ export default function RightPanel() {
             목표 왼쪽 끝   = 화면오른쪽 - 남길 몸통 18 = -18
             376 = 394 - 18
 
-          들어가면서 **흐려진다**. 자리만 옮기면 화면 끝에서 잘린 것처럼 보이는데, 같이 옅어지면
-          "물러났다" 로 읽힌다. 다 지우지 않고 0.6 에서 멈추는 이유는 핸들이 같이 흐려지기
-          때문이다 — 되돌릴 손잡이는 읽혀야 한다 (opacity 는 자식이 부모보다 진해질 수 없다).
+          들어가면서 **흐려지는 건 몸통뿐이다.** 자리만 옮기면 화면 끝에서 잘린 것처럼 보이는데,
+          같이 옅어지면 "물러났다" 로 읽힌다. 다만 opacity 는 자식이 부모보다 진해질 수 없어서
+          예전에는 핸들까지 같이 흐려졌고, 그래서 0.6 에서 멈춰 세웠는데도 **계기판 핸들과 달라
+          보였다** (S15P21A405-477). 지금은 흐림을 몸통 감싸개에만 걸어 핸들을 빼 둔다 — 좌우
+          핸들이 어느 상태에서나 같은 물건으로 보인다.
 
           500ms 는 300ms 보다 반 박자 느리다. 거리가 376px 로 길어서 300ms 면 미끄러지는 게
           아니라 튀어 들어간다.
@@ -60,16 +62,21 @@ export default function RightPanel() {
           계기판(`minimap-panel.tsx`)이 멀쩡했던 건 `transition-transform` 이 v4 에서
           transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
-        collapsed ? "translate-x-[376px] opacity-60" : "opacity-100"
+        collapsed ? "translate-x-[376px]" : ""
       }`}
     >
       <PanelCollapseHandle />
-      {activePanel === "song" && <SongDetailPanel />}
-      {activePanel === "playlist" && <PlaylistPanel />}
-      {activePanel === "feed" && <FeedPanel />}
-      {activePanel === "journey" && <JourneyPanel />}
-      {activePanel === "friends" && <FriendsPanel />}
-      {activePanel === "chart" && <ChartPanel />}
+      {/* 흐려지는 건 몸통만 — 핸들은 이 감싸개 밖에 있어 접혀도 또렷하다 */}
+      <div
+        className={`flex min-h-0 flex-col transition-opacity duration-500 ease-out ${collapsed ? "opacity-60" : "opacity-100"}`}
+      >
+        {activePanel === "song" && <SongDetailPanel />}
+        {activePanel === "playlist" && <PlaylistPanel />}
+        {activePanel === "feed" && <FeedPanel />}
+        {activePanel === "journey" && <JourneyPanel />}
+        {activePanel === "friends" && <FriendsPanel />}
+        {activePanel === "chart" && <ChartPanel />}
+      </div>
     </aside>
   );
 }

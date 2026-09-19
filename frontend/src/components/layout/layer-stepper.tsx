@@ -14,8 +14,9 @@ import { useMapStore } from "@/stores/use-map-store";
  * 칸으로 늘어놓았는데, 가 보지도 않은 겹이 자리를 차지해 "지금 어디까지 왔나" 가 안 읽혔다.
  * 파고들 때마다 한 칸씩 자란다.
  *
- * **글자와 꺾쇠뿐이다.** 테두리도 밑줄도 없다 — 웹에서 흔한 빵부스러기 그대로다. 지금 겹만
- * 굵고 밝게, 지나온 겹은 흐리게 두면 위치는 그것만으로 읽힌다.
+ * **글자와 꺾쇠뿐이다.** 테두리도 밑줄도 `L0` 같은 번호도 없다 — 웹에서 흔한 빵부스러기
+ * 그대로다. 지금 겹만 굵고 밝게, 지나온 겹은 흐리게 두면 위치는 그것만으로 읽힌다.
+ * 번호는 이름 옆에 붙어 있어 봐야 "몇 번째 겹" 과 "몇 겹짜리 지도" 가 헷갈리기만 했다.
  *
  * 상위 겹에 마우스를 올리면 **거기까지가 밝아지고 그 뒤는 더 흐려진다.** "여기를 누르면
  * 여기까지 돌아간다" 를 누르기 전에 보여 주는 자리다. 누르면 중간 겹을 거치지 않고 한 번에
@@ -75,7 +76,6 @@ export default function LayerStepper() {
               className={`px-2 py-1 text-md leading-none whitespace-nowrap transition-colors duration-fast disabled:cursor-default ${tone(i)}`}
             >
               {LAYER_NAMES[i]}
-              <em className="num ml-1 text-[8.5px] tracking-[0.02em] opacity-50 not-italic">L{i}</em>
             </button>
           </div>
         );

@@ -90,7 +90,7 @@
   .glass-liquid {
     background:
       linear-gradient(180deg, rgb(255 255 255 / 0.075) 0%, rgb(255 255 255 / 0.02) 48%, rgb(255 255 255 / 0.05) 100%),
-      rgb(8 11 20 / 0.24);
+      rgb(8 11 20 / 0.2);
     -webkit-backdrop-filter: blur(38px) saturate(2.1) brightness(1.04);
     backdrop-filter: blur(38px) saturate(2.1) brightness(1.04);
     border: 1px solid rgb(255 255 255 / 0.1);
@@ -103,6 +103,21 @@
     transition:
       border-color var(--duration-fast) ease,
       box-shadow var(--duration-fast) ease;
+  }
+  /*
+   * 좁은 유리(접기 손잡이 17px)를 넓은 유리와 **같아 보이게** 맞추는 보정
+   * (S15P21A405-477).
+   *
+   * 같은 `.glass-liquid` 를 써도 손잡이만 유독 비어 보였다. 블러 반경(38px)이 제 폭보다
+   * 넓어서, 좁은 판에서는 뒤 배경이 한 색으로 뭉개진 채 그대로 비친다 — 유리가 아니라 그냥
+   * 구멍처럼 읽힌다. 블러를 폭에 맞게 좁히고 밑칠을 올려 넓은 유리와 눈높이를 맞춘다.
+   */
+  .glass-liquid-narrow {
+    background:
+      linear-gradient(180deg, rgb(255 255 255 / 0.075) 0%, rgb(255 255 255 / 0.02) 48%, rgb(255 255 255 / 0.05) 100%),
+      rgb(8 11 20 / 0.42);
+    -webkit-backdrop-filter: blur(14px) saturate(2.1) brightness(1.04);
+    backdrop-filter: blur(14px) saturate(2.1) brightness(1.04);
   }
   /* 손이 닿으면 유리가 한 겹 더 두꺼워진다 — 평소에는 배경에 잠겨 있어야 한다 */
   .glass-liquid:hover {

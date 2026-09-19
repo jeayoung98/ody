@@ -34,7 +34,7 @@ export default function MinimapPanel() {
   return (
     <aside
       data-hud
-      className={`absolute bottom-[18px] left-[18px] z-20 w-instrument transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
+      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
     >
       <CollapseHandle
         side="right"

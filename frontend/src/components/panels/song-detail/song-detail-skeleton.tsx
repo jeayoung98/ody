@@ -13,12 +13,12 @@ import Skeleton from "@/components/common/skeleton";
  *
  * **다만 높이는 꽉 채운다** (`min-h`). 짧게 깔면 값이 올 때 패널이 훌쩍 늘어나 화면이 한 번
  * 튄다 — 자리를 잡아 두는 것이 이 화면의 일인데 자리 크기가 틀리면 도로아미타불이다.
- * 실제 곡 상세는 거의 늘 패널 최대 높이(`max-h-[calc(100vh-158px)]`)에 닿으므로 그 값에 맞춘다.
+ * 실제 곡 상세는 거의 늘 패널 최대 높이(`max-h-[calc(100dvh-264px)]`)에 닿으므로 그 값에 맞춘다.
  * 음원이 없어 아래를 접는 곡만 예외인데, 그건 소수라 다수 쪽에 맞췄다.
  */
 export default function SongDetailSkeleton() {
   return (
-    <div className="flex min-h-[calc(100vh-212px)] flex-col gap-3.5">
+    <div className="flex min-h-[calc(100dvh-212px)] flex-col gap-3.5">
       {/* 제목 · 가수 */}
       <div className="flex items-center gap-2.5">
         <div className="flex min-w-0 flex-1 flex-col gap-2">

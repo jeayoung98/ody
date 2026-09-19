@@ -131,7 +131,7 @@ export default function SearchBar() {
       data-hud
       onBlur={handleBlur}
       // 폭만 바뀐다. 가운데 정렬(-translate-x-1/2)이라 양쪽으로 같이 늘어난다
-      className={`absolute top-4 left-1/2 z-[22] -translate-x-1/2 transition-[width] duration-300 ease-out ${expanded ? "w-[min(420px,34vw)]" : "w-[104px]"}`}
+      className={`absolute top-hud-t left-1/2 z-[22] -translate-x-1/2 transition-[width] duration-300 ease-out ${expanded ? "w-[min(420px,34vw)]" : "w-[104px]"}`}
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div

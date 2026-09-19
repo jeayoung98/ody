@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
 import SmallScreenGate from "@/components/layout/small-screen-gate";
 import { devModeScript } from "@/constants/dev-mode";
@@ -9,6 +9,31 @@ import "./globals.css";
 export const metadata: Metadata = {
   title: "ODY",
   description: "음악을 좌표로 탐험하는 별지도",
+};
+
+/**
+ * 뷰포트 기본기 (S15P21A405-420).
+ *
+ * Next 가 아무것도 안 주면 `width=device-width, initial-scale=1` 만 넣는다. 나머지 셋은 이유가 있다.
+ *
+ * **`viewportFit: "cover"`** — 이게 없으면 `env(safe-area-inset-*)` 이 **전부 0 을 돌려준다.**
+ * 안전 영역 토큰(`tokens.css` 의 `--spacing-safe-*`)이 이 한 줄에 달려 있다. 화면을 노치 아래까지
+ * 쓰게 하고, 대신 "어디가 가려지는지" 를 CSS 에 알려 준다 — 둘이 한 쌍이다.
+ *
+ * **`maximumScale: 1` / `userScalable: false`** — 이 앱의 확대는 **지도 자체가 맡는다.** 별을 보려고
+ * 두 손가락으로 벌리면 지도가 파고들어야 하는데, 브라우저가 페이지를 통째로 확대해 버리면 HUD 까지
+ * 같이 커지고 지도는 그대로다. 캔버스 위에서 핀치를 쓰는 앱이라 페이지 줌과 충돌한다.
+ *
+ * **접근성 비용을 인정한다.** 페이지 확대를 막는 것은 저시력 사용자에게 손해다. iOS 는 16 이후로
+ * 이 설정을 무시하고 확대를 허용하므로 실제 차단은 안드로이드 크롬에서만 걸린다. 글자 크기 자체를
+ * 키우는 쪽은 S15P21A405-417 에서 좁은 화면 타이포를 잡을 때 다시 본다.
+ */
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: "cover",
 };
 
 /**

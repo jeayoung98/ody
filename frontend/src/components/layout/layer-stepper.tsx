@@ -58,7 +58,7 @@ export default function LayerStepper() {
         const enabled = !locked && (next ? gateOpen : i < layer && canRise);
         return (
           <div key={i} className="flex items-center">
-            {i > 0 && <ChevronRightIcon size={15} className="shrink-0 text-ink-4/60" />}
+            {i > 0 && <ChevronRightIcon size={16} className="shrink-0 text-ink-4/60" />}
             <button
               type="button"
               disabled={!enabled}
@@ -73,7 +73,7 @@ export default function LayerStepper() {
                       ? "한 칸 깊이 — 이 겹의 별을 그대로 데려가 새 축으로 재투영"
                       : `${LAYER_NAMES[i]}${ro(LAYER_NAMES[i])} 떠오르기 — 두고 온 별이 돌아오고 좌표도 복원`
               }
-              className={`px-2 py-1 text-md leading-none whitespace-nowrap transition-colors duration-fast disabled:cursor-default ${tone(i)}`}
+              className={`px-2 py-1 text-lg leading-none whitespace-nowrap transition-colors duration-fast disabled:cursor-default ${tone(i)}`}
             >
               {LAYER_NAMES[i]}
             </button>

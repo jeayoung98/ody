@@ -1739,8 +1739,24 @@ export class MapEngine {
 
   /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */
   ascend() {
+    this.ascendTo(this.layer - 1);
+  }
+
+  /**
+   * **여러 겹을 한 번에 떠오른다** (S15P21A405-477).
+   *
+   * `stack[i]` 는 겹 `i` 를 떠날 때 남긴 프레임이라(`tryStartPending` 의 push) 목표 겹까지
+   * 거슬러 꺼내면 그 자리의 카메라·상주 집합·진입 배율이 그대로 나온다. 중간 겹을 하나씩
+   * 거치지 않는 이유는 모프가 비동기라 그렇다 — `ascend()` 를 연달아 불러도 두 번째는
+   * `this.anim` 에 막혀 아무 일도 안 일어난다.
+   *
+   * 한 칸 떠오르기(`ascend`)도 이 길을 쓴다. 목표가 바로 위 겹일 뿐이다.
+   */
+  ascendTo(target: number) {
     if (this.anim || this.pending || !this.stack.length || this.follow) return;
-    const p = this.stack.pop()!;
+    if (target < 0 || target >= this.layer) return;
+    let p = this.stack.pop()!;
+    while (p.layer > target && this.stack.length) p = this.stack.pop()!;
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;

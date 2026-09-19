@@ -23,11 +23,14 @@ const SLANT = 2.5;
 /** 바깥쪽 두 모서리의 둥글기 */
 const R = 7;
 
-/** 바깥이 오른쪽인 손잡이의 윤곽. 왼쪽 것은 이걸 좌우로 뒤집은 것이다 */
-const CLIP = {
-  right: `path("M0 0 L${W - R} ${SLANT} A${R} ${R} 0 0 1 ${W} ${SLANT + R} L${W} ${H - SLANT - R} A${R} ${R} 0 0 1 ${W - R} ${H - SLANT} L0 ${H} Z")`,
-  left: `path("M${W} 0 L${R} ${SLANT} A${R} ${R} 0 0 0 0 ${SLANT + R} L0 ${H - SLANT - R} A${R} ${R} 0 0 0 ${R} ${H - SLANT} L${W} ${H} Z")`,
-} as const;
+/**
+ * 윤곽은 **하나뿐이다** — 바깥이 오른쪽인 모양 (S15P21A405-477).
+ *
+ * 예전에는 좌우 두 벌을 손으로 적어 뒀다. 좌표를 일일이 뒤집고 호(arc)의 sweep 플래그까지
+ * 0/1 로 갈라 적어야 해서, 눈으로는 같은지 확인할 길이 없고 한쪽만 틀어져도 모른다.
+ * 지금은 한 벌만 두고 왼쪽 것은 `scaleX(-1)` 로 뒤집는다 — **같을 수밖에 없다.**
+ */
+const CLIP = `path("M0 0 L${W - R} ${SLANT} A${R} ${R} 0 0 1 ${W} ${SLANT + R} L${W} ${H - SLANT - R} A${R} ${R} 0 0 1 ${W - R} ${H - SLANT} L0 ${H} Z")`;
 
 /**
  * 패널·계기판을 접었다 펴는 손잡이 (S15P21A405-287 · 318 · 477).
@@ -43,7 +46,10 @@ const CLIP = {
  * 둥근 자리를 지나가 소용이 없다. 대신 `path()` 는 px 절대좌표라 **크기가 고정이어야 한다** —
  * 위 상수 넷이 그 크기다.
  *
- * 기울어진 위아래 변에는 테두리가 안 남는다(잘린 자리라서). 세로 변과 블러가 유리의 두께를 맡는다.
+ * **색판과 화살표를 나눠 둔다.** 뒤집기(`scaleX(-1)`)를 버튼째 걸면 화살표까지 뒤집힌다.
+ * 그래서 자르고 칠하는 일은 안쪽 `<span>` 이 맡고, 화살표는 그 위에 따로 얹는다.
+ *
+ * 기울어진 위아래 변에는 테두리가 안 남는다(잘린 자리라서). 세로 변과 안쪽 하이라이트가 두께를 맡는다.
  *
  * **유리가 아니라 불투명한 남색 한 판이다** (`.glass-handle`, S15P21A405-477). 폭이 17px 뿐이라
  * 블러로는 뒤를 못 가렸고, 계기판 쪽은 부모가 유리라 블러가 먹지도 않아 좌우가 달라 보였다.
@@ -58,10 +64,12 @@ export default function CollapseHandle({ side, pointing, onClick, expanded, titl
       aria-expanded={expanded}
       title={title}
       aria-label={title}
-      style={{ width: W, height: H, clipPath: CLIP[side], [outerRight ? "right" : "left"]: -W }}
-      className="glass-handle absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-ink-3 hover:text-ink"
+      style={{ width: W, height: H, [outerRight ? "right" : "left"]: -W }}
+      className="glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-ink-3 transition-colors hover:text-ink"
     >
-      <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      {/* 색판. 왼쪽으로 나가는 손잡이는 같은 윤곽을 좌우로 뒤집어 쓴다 */}
+      <span aria-hidden style={{ clipPath: CLIP, transform: outerRight ? undefined : "scaleX(-1)" }} className="glass-handle absolute inset-0" />
+      <svg className="relative" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={pointing === "left" ? "M6.5 1.5 3 5l3.5 3.5" : "M3.5 1.5 7 5 3.5 8.5"} />
       </svg>
     </button>

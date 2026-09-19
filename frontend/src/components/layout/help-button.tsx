@@ -27,7 +27,7 @@ export default function HelpButton() {
         aria-label="도움말"
         title="도움말"
         onClick={() => { track("help_opened"); setAnalyticsContext({ help_open: true }); setOpen(true); }}
-        className="glass absolute -right-[64px] bottom-0 z-[22] grid h-[38px] w-[38px] place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink"
+        className="glass-liquid absolute -right-[64px] bottom-0 z-[22] grid h-[38px] w-[38px] place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink"
       >
         <HelpIcon />
       </button>

@@ -6,9 +6,9 @@
  */
 @theme {
   /* ---------- 팔레트: 배경(void) ---------- */
-  --color-void: #04060d;
-  --color-void-2: #070b16;
-  --color-void-3: #0c1220;
+  --color-void: #02040a;
+  --color-void-2: #05080f;
+  --color-void-3: #080d17;
 
   /* ---------- 팔레트: 텍스트(ink) ---------- */
   --color-ink: #e9f1ff;

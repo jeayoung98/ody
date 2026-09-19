@@ -39,8 +39,8 @@ export function genreColor(genreId: number): string {
 }
 
 export const PALETTE = {
-  void: "#04060d",
-  void2: "#070b16",
+  void: "#02040a",
+  void2: "#05080f",
   ink: "#e9f1ff",
   ink2: "#93a4c4",
   ink3: "#586a8b",

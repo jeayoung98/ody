@@ -179,7 +179,7 @@ export default function PlayHint() {
         아래에 자리가 없으면 위로 뒤집는다.
       */}
       <div className="animate-tin fixed" style={{ left: tip.x, top: tip.y }}>
-        <div ref={measure} className="glass flex items-center gap-2 rounded-pill px-3 py-1.5 whitespace-nowrap">
+        <div ref={measure} className="glass-liquid flex items-center gap-2 rounded-pill px-3 py-1.5 whitespace-nowrap">
           <span className="text-center text-[12.5px] text-ink">{LABEL[context]}</span>
           {/*
             안내가 주인이다 — 건너뛰기를 같은 무게로 두면 둘 중 무엇을 보라는 건지 안 읽힌다.

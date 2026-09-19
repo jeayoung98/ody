@@ -1,8 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import CollapseHandle from "@/components/common/collapse-handle";
 import HelpButton from "@/components/layout/help-button";
-import { useMapStore } from "@/stores/use-map-store";
 import AxisCompass from "./axis-compass";
 import LayerGauge from "./layer-gauge";
 import LayerName from "./layer-name";
@@ -15,6 +15,12 @@ import MinimapCanvas from "./minimap-canvas";
  * 접기·펼치기는 패널 **오른쪽 가장자리에 튀어나온 핸들** 하나다 (S15P21A405-287). 접으면 패널이 왼쪽으로
  * 미끄러져 나가고 핸들만 화면 왼쪽 끝에 남는다 — 핸들이 패널의 자식이라 두 상태에서 같은 요소고,
  * 모양이 바뀌지 않고 자리만 따라간다. 예전엔 패널 안 작은 ▼ 와 별도의 필 버튼이라 눈에 안 띄고 모양이 달랐다.
+ *
+ * **유리는 바깥 `<aside>` 가 아니라 안쪽 `<div>` 가 쓴다** (S15P21A405-477). `backdrop-filter` 가
+ * 걸린 요소는 backdrop root 가 되어, 그 **자식의** `backdrop-filter` 는 페이지 뒤가 아니라 그 root
+ * 안쪽만 보게 된다. 유리를 aside 에 두면 밖으로 튀어나온 손잡이·도움말이 그 안에 갇혀 블러가
+ * 아예 먹지 않았다 — 도움말이 검색창·네비바와 달라 보인 원인이다. 우측 패널(`right-panel`)은
+ * 처음부터 이 구조였다: 바깥은 자리만 잡고 유리는 안쪽에 있다.
  */
 export default function MinimapPanel() {
   /**
@@ -24,32 +30,28 @@ export default function MinimapPanel() {
    * 첫 값일 뿐이라 언제든 핸들로 편다.
    */
   const [open, setOpen] = useState(false);
-  const layer = useMapStore((s) => s.layer);
 
   return (
     <aside
       data-hud
-      className={`glass absolute bottom-hud-b left-[18px] z-20 flex w-instrument flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5 transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
+      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
     >
-      <button
-        type="button"
+      <CollapseHandle
+        side="right"
+        pointing={open ? "left" : "right"}
+        expanded={open}
         onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
         title={open ? "계기판 접기" : "계기판 펼치기"}
-        className="glass absolute top-1/2 -right-[22px] flex h-[68px] w-[22px] -translate-y-1/2 flex-col items-center justify-center gap-1.5 rounded-l-none! rounded-r-box-xs! border-l-0! text-ink-3 transition-colors hover:text-ink"
-      >
-        <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-          <path d={open ? "M6.5 1.5 3 5l3.5 3.5" : "M3.5 1.5 7 5 3.5 8.5"} />
-        </svg>
-        {/* 접혀 있을 때도 지금 겹은 보이게 */}
-        <span className="num text-[8.5px] tracking-[0.04em] text-teal">L{layer}</span>
-      </button>
+      />
       {/* 도움말 — 계기판 오른쪽에 붙어 같이 접힌다 (S15P21A405-434) */}
       <HelpButton />
-      <MinimapCanvas />
-      <LayerGauge />
-      <LayerName />
-      <AxisCompass />
+      {/* 유리는 여기. 손잡이·도움말은 이 밖에 있어야 제 블러가 산다 */}
+      <div className="glass-liquid flex flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5">
+        <MinimapCanvas />
+        <LayerGauge />
+        <LayerName />
+        <AxisCompass />
+      </div>
     </aside>
   );
 }

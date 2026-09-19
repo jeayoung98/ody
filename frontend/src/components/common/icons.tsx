@@ -157,6 +157,12 @@ export const FlagIcon = ({ size = 14, ...p }: P) => (
     <path d="M5 4h11l-2.2 3.6L16 11H5" />
   </svg>
 );
+/** 오른쪽 홑화살. 레이어 자취의 칸 사이를 잇는 표시 (S15P21A405-477) */
+export const ChevronRightIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2}>
+    <path d="M9.5 6l6 6-6 6" />
+  </svg>
+);
 /** 왼쪽 홑화살. 오른쪽은 `rotate-180` 으로 돌려 쓴다 (`ChevronDownIcon` 과 같은 이유) */
 export const ChevronLeftIcon = ({ size = 14, ...p }: P) => (
   <svg {...base(size, p)} strokeWidth={2.1}>

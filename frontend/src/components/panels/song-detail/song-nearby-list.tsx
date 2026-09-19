@@ -3,9 +3,9 @@
 import { useRef, useState } from "react";
 import { ChevronLeftIcon, ListPlayIcon } from "@/components/common/icons";
 import TransportButton from "@/components/common/transport-button";
+import InfoHint from "@/components/common/info-hint";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
-import SimilarityHint from "./similarity-hint";
 import { NEARBY_COUNT } from "@/constants";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -164,7 +164,10 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
               ) : undefined
             }
           >
-            이 곡과 가장 비슷해요! <SimilarityHint />
+            이 곡과 가장 비슷해요!{" "}
+            <InfoHint label="유사도 설명">
+              <b className="font-medium text-ink">유사도</b>는 소리를 16차원으로 압축한 좌표에서 잰 거리예요. 가까울수록 소리가 닮았다는 뜻이에요.
+            </InfoHint>
           </SectionTitle>
           {/* 오른쪽 목록 재생 버튼이 무엇을 하는지 말하는 유일한 자리다 — 카드 클릭은
           눌러 보면 알지만 줄 세 개짜리 아이콘은 안 그렇다 */}

@@ -19,7 +19,7 @@ export default function FollowBanner() {
   };
 
   return (
-    <div className="glass animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
+    <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
       <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-violet shadow-[0_0_12px_#a67cff]" />
       <div>
         <div className="text-sm">

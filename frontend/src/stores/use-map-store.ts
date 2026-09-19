@@ -126,6 +126,11 @@ interface MapState extends EngineSnapshot {
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
   surface: () => void;
+  /**
+   * 지나온 겹 중 하나로 **한 번에** 떠오른다 (S15P21A405-477). 좌상단 브레드크럼이 쓴다 —
+   * 한 칸씩(`surface`) 부르면 모프가 비동기라 두 번째 호출이 그냥 씹힌다.
+   */
+  surfaceTo: (layer: number) => void;
   /** 엔진 → 스토어 동기화 */
   syncFromEngine: (snap: Partial<EngineSnapshot>) => void;
 }
@@ -255,6 +260,7 @@ export const useMapStore = create<MapState>()(
       },
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
+      surfaceTo: (layer) => getMapEngine()?.ascendTo(layer),
 
       syncFromEngine: (snap) => set(snap, false, "syncFromEngine"),
     }),

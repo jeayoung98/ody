@@ -28,7 +28,7 @@ export default function Avatar({ src, name, size = 30, online = null }: AvatarPr
       )}
       {online != null && (
         <span
-          className={`absolute -right-px -bottom-px rounded-pill ${online ? "bg-teal shadow-[0_0_0_2px_#070b16,0_0_8px_#4fe3ce]" : "bg-ink-4 shadow-[0_0_0_2px_#070b16]"}`}
+          className={`absolute -right-px -bottom-px rounded-pill ${online ? "bg-teal shadow-[0_0_0_2px_#05080f,0_0_8px_#4fe3ce]" : "bg-ink-4 shadow-[0_0_0_2px_#05080f]"}`}
           style={{ width: Math.max(8, size * 0.3), height: Math.max(8, size * 0.3) }}
         />
       )}

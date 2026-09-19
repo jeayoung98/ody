@@ -135,7 +135,7 @@ export default function SearchBar() {
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div
-        className={`glass flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! pl-[15px] pr-[19px] ${expanded ? "" : "cursor-pointer hover:border-line-2"}`}
+        className={`glass flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! pl-[15px] pr-[26px] ${expanded ? "" : "cursor-pointer hover:border-line-2"}`}
         onMouseDown={(e) => {
           if (expanded) return;
           e.preventDefault(); // 포커스가 상자로 갔다가 입력으로 옮겨 가며 깜빡이지 않게

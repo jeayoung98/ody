@@ -102,7 +102,7 @@ export default function PlayerBar() {
     : [data?.artist ?? "-", contextLabel && `${contextLabel} 재생 중`, queue.length > 0 && `${queueIndex + 1}/${queue.length}`].filter(Boolean).join(" · ");
 
   return (
-    <div data-analytics-manual className="glass relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible rounded-[22px]! px-4 pt-3.5 pb-3">
+    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible rounded-[22px]! px-4 pt-3.5 pb-3">
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left">

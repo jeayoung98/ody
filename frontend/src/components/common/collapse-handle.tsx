@@ -45,8 +45,9 @@ const CLIP = {
  *
  * 기울어진 위아래 변에는 테두리가 안 남는다(잘린 자리라서). 세로 변과 블러가 유리의 두께를 맡는다.
  *
- * 유리는 `.glass-liquid` 에 **좁은 판 보정**(`.glass-liquid-narrow`)을 겹쳐 쓴다 — 폭 17px 에
- * 38px 블러를 걸면 뒤가 한 색으로 뭉개진 채 비쳐서 패널보다 훨씬 비어 보였다 (S15P21A405-477).
+ * 유리는 패널의 `.glass-liquid` 가 아니라 **제 것**(`.glass-handle`)을 쓴다 — 폭이 17px 뿐이라
+ * 같은 값으로는 뒤가 그대로 비쳐 패널보다 훨씬 비어 보였다 (S15P21A405-477). 느낌은 같게 두고
+ * 밑칠과 블러만 따로 가져간다. 값은 `tokens.css` 의 `--glass-handle-*`.
  */
 export default function CollapseHandle({ side, pointing, onClick, expanded, title }: CollapseHandleProps) {
   const outerRight = side === "right";
@@ -58,7 +59,7 @@ export default function CollapseHandle({ side, pointing, onClick, expanded, titl
       title={title}
       aria-label={title}
       style={{ width: W, height: H, clipPath: CLIP[side], [outerRight ? "right" : "left"]: -W }}
-      className="glass-liquid glass-liquid-narrow absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center rounded-none! border-x-0! text-ink-3 transition-colors hover:text-ink"
+      className="glass-handle absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-ink-3 hover:text-ink"
     >
       <svg width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={pointing === "left" ? "M6.5 1.5 3 5l3.5 3.5" : "M3.5 1.5 7 5 3.5 8.5"} />

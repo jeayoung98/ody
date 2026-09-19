@@ -97,7 +97,7 @@ export default function SongPcList({ items }: SongPcListProps) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? "고정 주성분 접기" : "고정 주성분 더보기"}
-            className="grid h-7 w-full place-items-center rounded-box-xs text-ink-3 transition-colors duration-fast hover:bg-white/[.05] hover:text-ink"
+            className="grid h-7 w-full place-items-center rounded-pill text-ink-3 transition-colors duration-fast hover:bg-white/[.05] hover:text-ink"
           >
             <ChevronDownIcon className={`transition-transform duration-normal ease-spring ${open ? "rotate-180" : ""}`} />
           </button>

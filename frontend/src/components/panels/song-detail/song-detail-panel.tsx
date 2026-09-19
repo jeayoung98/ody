@@ -136,19 +136,26 @@ export default function SongDetailPanel() {
 
               섹션이 셋을 넘거나 한 곡에서 주변곡 ↔ 소리를 오가는 사용이 실제로 보이면 그때
               탭으로 돌린다 — 이 구조에서 되돌리기는 쉽다.
+
+              **담긴 플리가 없으면 그 칸은 통째로 빠진다** — 탭이던 시절에는 빈 탭을 눌러 본
+              사람에게 "여기서 만들라" 고 권할 자리가 있었지만, 한 장이 된 지금은 그 권유가
+              주변곡과 소리 사이를 늘 갈라놓는다. 새 플리 만들기는 제목 줄의 플리 버튼
+              (`add-to-playlist-menu`) 에 그대로 있다.
             */}
             {!dead && (
-              <>
+              // 여정 버튼 줄과는 한 칸 더 띄운다 — 위는 "이 곡으로 할 일", 아래는 "이 곡에 관한 것"이다.
+              // 섹션 사이는 구분선 앞뒤로 20px 씩 — 탭을 걷은 뒤로는 이 빈칸이 탭바 노릇을 한다
+              <div className="flex flex-col gap-5 pt-2">
                 <SongNearbyList items={data.nearby} centerMusicId={data.id} />
-                {hasPlaylists && (
+                {hasPlaylists && data.relatedPlaylists.length > 0 && (
                   <>
                     <Divider />
-                    <SongRelatedPlaylists items={data.relatedPlaylists} musicId={data.id} />
+                    <SongRelatedPlaylists items={data.relatedPlaylists} />
                   </>
                 )}
                 <Divider />
                 <SongPcList items={data.principalComponents} />
-              </>
+              </div>
             )}
           </>
         )}

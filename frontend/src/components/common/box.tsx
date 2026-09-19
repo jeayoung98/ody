@@ -1,4 +1,7 @@
-import type { ReactNode, RefObject } from "react";
+"use client";
+
+import { useRef, type ReactNode, type RefObject } from "react";
+import ScrollThumb from "./scroll-thumb";
 
 interface BoxProps {
   /** 헤더 제목. 없으면 헤더를 그리지 않는다 */
@@ -32,6 +35,9 @@ interface BoxProps {
  * 프로토타입 .glass + #pHead/#pBody 구조를 그대로 따른다.
  */
 export default function Box({ title, lead, actions, footer, children, className = "", flush = false, bg, bodyRef }: BoxProps) {
+  // 스크롤 막대를 그리려면 상자 참조가 늘 필요하다. 밖에서 준 게 있으면 그걸 쓴다
+  const ownRef = useRef<HTMLDivElement>(null);
+  const scroller = bodyRef ?? ownRef;
   return (
     <section className={`glass-liquid relative flex min-h-0 flex-col overflow-hidden text-ink ${className}`}>
       {bg}
@@ -42,7 +48,11 @@ export default function Box({ title, lead, actions, footer, children, className 
           {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
         </header>
       )}
-      <div ref={bodyRef} className={`relative z-10 min-h-0 flex-1 overflow-y-auto ${flush ? "" : "flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]"}`}>{children}</div>
+      {/* 스크롤 막대를 내용 위에 띄우려면 상자와 크기가 똑같은 relative 부모가 필요하다 */}
+      <div className="relative z-10 flex min-h-0 flex-1 flex-col">
+        <div ref={scroller} className={`scroll-quiet min-h-0 flex-1 overflow-y-auto ${flush ? "" : "flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]"}`}>{children}</div>
+        <ScrollThumb scrollerRef={scroller} />
+      </div>
       {footer && <footer className="relative z-10 shrink-0 border-t border-line px-[15px] py-3">{footer}</footer>}
     </section>
   );

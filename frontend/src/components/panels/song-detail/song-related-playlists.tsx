@@ -1,30 +1,18 @@
 "use client";
 
-import EmptyState from "@/components/common/empty-state";
 import SectionTitle from "@/components/common/section-title";
-import CreatePlaylistForm from "@/components/panels/playlist/create-playlist-form";
-import { useAddPlaylistItemMutation } from "@/hooks/mutations/use-add-playlist-item-mutation";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicDetail } from "@/types";
 
 /**
- * 관련 플레이리스트 탭 (S15P21A405-435). 누르면 우측 패널이 플레이리스트로 바뀐다.
+ * 이 곡이 담긴 플레이리스트 (S15P21A405-435). 누르면 우측 패널이 그 플레이리스트로 바뀐다.
  *
- * **비어 있어도 탭은 산다.** 이 곡이 담긴 플리가 없으면 "없다" 로 끝내지 않고 여기서 바로
- * 이 곡으로 새 플리를 만들게 한다 — 만들면 곡을 담고 그 플리로 넘어간다.
+ * **비어 있으면 부르는 쪽이 이 칸을 통째로 뺀다** (S15P21A405-477) — 그래서 여기엔 빈 상태가
+ * 없다. 탭이던 시절에는 빈 탭에 "이 곡으로 새 플리 만들기" 를 뒀지만, 한 장으로 편 뒤로는
+ * 그 권유가 주변곡과 소리 사이에 늘 끼어든다. 만들기는 제목 줄의 플리 버튼에 있다.
  */
-export default function SongRelatedPlaylists({ items, musicId }: { items: MusicDetail["relatedPlaylists"]; musicId: number }) {
+export default function SongRelatedPlaylists({ items }: { items: MusicDetail["relatedPlaylists"] }) {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
-  const add = useAddPlaylistItemMutation();
-  if (items.length === 0) {
-    return (
-      <div className="flex flex-col gap-2.5">
-        <EmptyState message="이 곡이 담긴 플레이리스트가 아직 없어요." />
-        <SectionTitle>이 곡으로 새 플레이리스트 만들기</SectionTitle>
-        <CreatePlaylistForm onCreated={(p) => add.mutate({ playlistId: p.id, musicId }, { onSuccess: () => openPlaylist(p.id) })} />
-      </div>
-    );
-  }
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle>이 곡이 담긴 플레이리스트</SectionTitle>

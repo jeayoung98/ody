@@ -45,9 +45,9 @@ const CLIP = {
  *
  * 기울어진 위아래 변에는 테두리가 안 남는다(잘린 자리라서). 세로 변과 블러가 유리의 두께를 맡는다.
  *
- * 유리는 패널의 `.glass-liquid` 가 아니라 **제 것**(`.glass-handle`)을 쓴다 — 폭이 17px 뿐이라
- * 같은 값으로는 뒤가 그대로 비쳐 패널보다 훨씬 비어 보였다 (S15P21A405-477). 느낌은 같게 두고
- * 밑칠과 블러만 따로 가져간다. 값은 `tokens.css` 의 `--glass-handle-*`.
+ * **유리가 아니라 불투명한 남색 한 판이다** (`.glass-handle`, S15P21A405-477). 폭이 17px 뿐이라
+ * 블러로는 뒤를 못 가렸고, 계기판 쪽은 부모가 유리라 블러가 먹지도 않아 좌우가 달라 보였다.
+ * 색 하나로 칠해 어디에 붙어 있든 같게 만든다. 값은 `tokens.css` 의 `--glass-handle-bg`.
  */
 export default function CollapseHandle({ side, pointing, onClick, expanded, title }: CollapseHandleProps) {
   const outerRight = side === "right";

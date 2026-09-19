@@ -3,13 +3,18 @@
 import { LAYER_SUMMARIES } from "@/constants";
 import { useMapStore } from "@/stores/use-map-store";
 
-/** 지금 겹이 **무엇을 기준으로** 곡을 나눴는지 한 줄 (MAP-06). 겹마다 기준이 달라지는 걸 알아채게 한다 */
+/**
+ * 지금 겹이 **무엇으로** 곡을 나눴는지 한 줄 (MAP-06). 겹마다 기준이 달라지는 걸 알아채게 한다.
+ *
+ * `이 겹을 나눈 기준 —` 이라는 머리말은 걷어냈다 (S15P21A405-477). 문장 자체가 `…로 나눈
+ * 레이어` 로 끝나므로 같은 말을 두 번 하는 셈이었다.
+ */
 export default function LayerSummary() {
   const layer = useMapStore((s) => s.layer);
 
   return (
     <p className="max-w-[min(34vw,420px)] pl-1 text-[11px] leading-[1.4] text-ink-3">
-      이 겹을 나눈 기준 — <b className="font-medium text-ink-2">{LAYER_SUMMARIES[layer]}</b>
+      {LAYER_SUMMARIES[layer]}
     </p>
   );
 }

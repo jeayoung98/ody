@@ -6,8 +6,8 @@ import java.util.List;
  * 같은 곡 위치에 있는 사용자들.
  *
  * @param musicId 재생 중인 곡 ID
- * @param x 0부터 1 사이의 가로 위치
- * @param y 0부터 1 사이의 세로 위치
+ * @param x 현재 레이어 가로축의 원시 PC 좌표 (화면 요청 minX~maxX 와 같은 좌표계)
+ * @param y 현재 레이어 세로축의 원시 PC 좌표 (minY~maxY 와 같은 좌표계)
  * @param users 이 곡을 듣는 사용자들
  */
 public record ViewportMusicGroup(

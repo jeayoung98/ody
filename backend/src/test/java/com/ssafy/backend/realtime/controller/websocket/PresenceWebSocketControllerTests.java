@@ -137,7 +137,7 @@ class PresenceWebSocketControllerTests {
 	@DisplayName("잘못된 화면 범위는 개인 오류 큐로 알린다")
 	void sendsValidationError() {
 		ViewportRequest invalid = new ViewportRequest(
-				4L, 1, 3.0, 2.0, 0.0, 1.0, List.of());
+				4L, 0, 3.0, 2.0, 0.0, 1.0, List.of());
 		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
 
 		controller.viewport(invalid, PRINCIPAL, SESSION_ID);
@@ -260,8 +260,8 @@ class PresenceWebSocketControllerTests {
 		verifyNoInteractions(viewportService, realtimeMessageService);
 	}
 
-	/** 첫 레이어의 정상 화면 요청을 만든다. */
+	/** 첫 레이어(0)의 정상 화면 요청을 만든다. */
 	private static ViewportRequest request(long requestSeq) {
-		return new ViewportRequest(requestSeq, 1, 0.0, 2.0, 0.0, 2.0, List.of());
+		return new ViewportRequest(requestSeq, 0, 0.0, 2.0, 0.0, 2.0, List.of());
 	}
 }

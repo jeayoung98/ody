@@ -52,7 +52,7 @@ public class PresenceCleanupScheduler {
 	@Scheduled(fixedDelayString = "${realtime.presence.recount-interval-ms:60000}")
 	public void recount() {
 		int maxLayer = musicPositionCalculator.maxLayer(); // 축 설정(axis-range) 단일 출처
-		for (int layer = 1; layer <= maxLayer; layer++) {
+		for (int layer = 0; layer < maxLayer; layer++) { // 레이어 번호는 0-based
 			try {
 				long mismatches = presenceRedisRepository.recount(layer);
 				if (mismatches > 0) {

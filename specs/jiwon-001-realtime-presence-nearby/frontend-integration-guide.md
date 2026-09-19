@@ -1,889 +1,523 @@
-# 실시간 Presence · 재생 · 주변사람 프론트 연동 가이드
+# Realtime(실시간 위치·주변 사람) 프론트 연동 가이드
 
-> 대상: 프론트엔드 개발자 및 구현을 맡는 AI  
-> 기준: 2026-09-16 현재 백엔드 실제 코드  
-> 담당 범위: 박지원 구현분(WebSocket 기반, Presence, 음악 재생/종료, 만남 횟수, 주변사람)  
-> 중요: 이 문서는 과거 기획안이 아니라 **현재 실행되는 코드의 계약**을 설명한다.
+- 기준: 백엔드 `backend/dev` + `backend/fix/S15P21A405-429-realtime-hotfix` (2026-09-18, **레이어 0-based·표시 좌표 원시 PC 로 계약 변경 반영**), 프론트 `origin/frontend/dev @ a181179`
+- 대상: FE 담당자. "지금 프론트가 어떻게 돼 있고 → 백엔드는 무엇을 기대하고 → 어디를 어떻게 바꾸면 되는지"만 적었다.
+- 이 문서가 기존 `specs/jiwon-001-realtime-presence-nearby/frontend-integration-guide.md`(2026-09-16 기준)를 대체한다. 그 문서의 "뷰포트 미구현·join이 요청 musicId 사용·playEnd 422·play.layer 없음"은 전부 옛 정보다.
+- 상세 계약 원문: `specs/jiwon-003-realtime-viewport/contracts/realtime-viewport-websocket.md`, `specs/jiwon-001-.../contracts/music-play.md`
 
-## 1. 먼저 알아야 할 현재 상태
+---
 
-### 1.1 활성 조건
+## 0. 먼저 알아야 할 것 — 지금 프론트 구조로는 붙지 않는다. 무엇을 어떻게 바꿔야 하나
 
-이 문서의 REST 컨트롤러와 실시간 서비스 대부분은 Spring의 `realtime` 프로파일에서만 활성화된다.
+실시간 기능은 **"이 사용자가 지금 어디 서 있나"** 를 다루기 때문에 사용자별 인증이 전제다. 현재 프론트(유저 테스트 구성)는 그 전제와 정반대로 되어 있다. 아래 0.1 ~ 0.6 을 순서대로 처리해야 §1 이후가 동작한다.
 
-- 백엔드 실행 시 `realtime` 프로파일이 반드시 포함돼야 한다.
-- Redis와 PostgreSQL 연결이 필요하다.
-- `realtime` 프로파일이 없으면 `/api/music/play`, `/api/music/play/end`, `/api/realtime/nearby`가 등록되지 않는다.
-- 무로그인 데모에서는 이 프로파일을 끄는 방식으로 기존 동작과 분리돼 있다.
+### 0.1 진단 — 지금 구조가 왜 안 되는가
 
-### 1.2 로그인은 사실상 필수
+| 지금 프론트 | 왜 문제인가 |
+| --- | --- |
+| 로그인이 목(`SKIP_LOGIN`, `/bff/auth/*`). 브라우저에 백엔드가 인정하는 accessToken 이 없다 | presence·play·nearby 는 전부 **토큰 subject(email)** 로 사용자를 정한다. 토큰 없이는 누구의 위치인지 정할 수 없다 |
+| 실데이터 호출은 `src/app/bff/*` 라우트가 **서버 토큰(`BACKEND_ACCESS_TOKEN`)** 으로 대신 부른다 (`lib/backend.ts`) | 서버 토큰으로 play 를 치면 **모든 사용자가 한 계정으로 이동**한다. 실시간 API 는 BFF 대리호출 불가 |
+| 브라우저는 백엔드를 직접 부르지 않고 Next rewrite 만 탄다 (`next.config.ts`, `LIVE_API_PATHS` 는 비어 있음) | Next rewrite 는 **WebSocket Upgrade 를 프록시하지 않는다.** BFF 라우트 핸들러도 못 한다 |
+| STOMP 라이브러리 없음 (`package.json`) | — |
+| 배포 nginx 는 `/api/` 만 백엔드로 넘긴다 (BACKEND-NOTES B-16) | `/ws` 가 백엔드에 닿지 않는다 |
+| 백엔드 `SecurityConfig` 가 지금 `anyRequest().permitAll()` (데모용 임시) | permitAll 이면 컨트롤러 `Principal` 이 null → play/nearby 가 500. 백엔드(지원)가 원복해야 한다 |
 
-현재 `SecurityConfig`는 임시로 HTTP 요청을 `permitAll` 처리하지만, 아래 기능은 모두 `Principal.getName()`으로 사용자를 찾는다.
+### 0.2 인증 — 실로그인을 살린다 (필수, 가장 먼저)
 
-- 유효한 access token을 보내지 않으면 `Principal`이 없어 정상 동작하지 않는다.
-- REST와 WebSocket 모두 `Authorization: Bearer {accessToken}`을 반드시 사용한다.
-- JWT subject는 사용자 email이며, 서버는 이 값을 사용자 식별자로 사용한다.
-- WebSocket CONNECT는 토큰이 없거나 access token이 아니면 즉시 거부한다.
+실시간은 **진짜 accessToken 이 브라우저에 있어야** 시작된다. 백엔드 `/api/auth/*` 는 이미 다 있고, 프론트도 실연동 코드가 남아 있어 "되돌리기"에 가깝다.
 
-즉, `permitAll`을 비로그인 지원으로 해석하면 안 된다. 인증 설정이 원복되면 HTTP도 정식으로 `authenticated()`가 적용될 예정이다.
-
-### 1.3 현재 프론트 코드에서 반드시 바꿔야 하는 경로
-
-현재 프론트 목 API 경로와 실제 백엔드 경로가 다르다.
-
-| 기능 | 현재 프론트의 옛 경로 | 실제 백엔드 경로 |
+| 순서 | 파일 | 할 일 |
 | --- | --- | --- |
-| 재생 선언 | `POST /api/music/{id}/play` | `POST /api/music/play` |
-| 재생 종료 | 없음 | `PATCH /api/music/play/end` |
-| 주변사람 | `GET /api/users/nearby?layer=...` | `POST /api/realtime/nearby` |
+| 1 | `constants/live-api-paths.ts` | 주석 처리된 `/api/auth/signup` `/api/auth/login` `/api/auth/login/google` `/api/auth/exchange` `/api/auth/reissue` `/api/auth/logout` `/api/auth/withdraw` `/api/users/nickname-available` `/api/user/tutorial-completed` `/api/user/profile` `/oauth2/authorization/:provider` `/login/oauth2/code/:provider` 주석 해제 |
+| 2 | `constants/api-endpoints.ts` `auth.*` | `me` → 백엔드 본인 조회(A-15 확인 필요, 없으면 토큰 payload 의 email 을 쓰거나 `GET /api/user/detail?email=` 로 대체), `logout` → `/api/auth/logout`, `signup` → `/api/auth/signup`, `login` → `/api/auth/login`, `nickname` → `PATCH /api/user/profile`, `completeTutorial` → `PATCH /api/user/tutorial-completed` |
+| 3 | `constants/auth.ts` `SKIP_LOGIN` / `NEXT_PUBLIC_TEST_TOOLS` | 실시간을 켤 빌드에서는 로그인 게이트를 다시 태운다. 유저 테스트 빌드(게이트 생략)에서는 실시간을 **`FEATURES.social` 로 함께 끈다** — 토큰 없는 사용자가 소켓을 열어 `REALTIME_AUTH_MISSING` 으로 튕기는 것을 막는다 |
+| 4 | `lib/api.ts` | 이미 `Authorization: Bearer` 를 붙이고 401 이면 `reissueAccessToken()` 을 탄다. 그대로 쓴다. 소켓 CONNECT 거부 시에도 같은 함수를 재사용 (§1.1) |
+| 5 | 백엔드(BE1) | 로컬 개발용 `CORS_ALLOWED_ORIGINS` 에 `http://localhost:3000` 추가 요청. rewrite 는 브라우저 `Origin` 을 그대로 넘겨서(S15P21A405-303) 로컬에서만 403 이 난다. 배포는 동일 오리진이라 무관 |
 
-프론트 `API_ENDPOINTS`는 다음 형태로 추가하거나 교체해야 한다.
+> 유저 테스트 기간과 겹치면: **실시간은 `FEATURES.social` 뒤에 둔다.** 이 스위치는 이미 "지도 위 사람·주변 사람 탭·따라가기·반응"을 한 번에 여닫고 있어서(`use-nearby-users-query.ts` 주석) 자리가 맞다. 소켓 연결 자체를 `features.social && hasAccessToken` 일 때만 시작하면 된다.
 
-```ts
-export const API_ENDPOINTS = {
-  // ...
-  music: {
-    // 기존 detail, search 등은 유지
-    play: "/api/music/play",
-    playEnd: "/api/music/play/end",
-  },
-  realtime: {
-    nearby: "/api/realtime/nearby",
-  },
-} as const;
+### 0.3 실시간 REST 3개 — BFF 가 아니라 브라우저가 자기 토큰으로 직접
+
+`POST /api/music/play` · `PATCH /api/music/play/end` · `POST /api/realtime/nearby` 는 **`/bff/` 를 만들지 않는다.** `lib/api.ts` 로 바로 부르고 rewrite 통과 목록에 넣는다.
+
+| 파일 | 할 일 |
+| --- | --- |
+| `constants/live-api-paths.ts` | `"/api/music/play"`, `"/api/music/play/end"`, `"/api/realtime/nearby"` 추가 |
+| `constants/api-endpoints.ts` | `music.play` 를 `/bff/music/{id}/play` 에서 **`"/api/music/play"`** 로(곡 ID 는 본문). `music.playEnd: "/api/music/play/end"`, `realtime.nearby: "/api/realtime/nearby"` 추가 |
+| `src/app/bff/users/nearby/route.ts` | 실연동에서는 쓰지 않는다. `USE_MOCK_API=1` 목 전용으로 남기거나 삭제 |
+| `docs/rules/BACKEND-NOTES.md` | "실시간 3개 REST 는 BFF 대리호출 금지(사용자 토큰 필수)" 항목 추가 — 나중에 누가 `backendPost` 로 옮기지 않게 |
+
+### 0.4 WebSocket — 브라우저가 백엔드 `/ws` 에 직접 연결
+
+| 항목 | 할 일 |
+| --- | --- |
+| 의존성 | `npm i @stomp/stompjs` (SockJS 불필요 — 원시 WebSocket 으로 붙는다) |
+| 주소 | 새 환경변수 `NEXT_PUBLIC_WS_ORIGIN`. 비면 `location.origin` 의 `http`→`ws` 치환. 배포 `wss://j15a405.p.ssafy.io`, 로컬 `ws://localhost:8080`. **rewrite 를 거치지 않는다** — `BASE_URL` 이 빈 것과 무관하게 절대 주소로 연다 |
+| 엔드포인트 | `${WS_ORIGIN}/ws/websocket` (§1.1). 백엔드 `/ws` 는 SockJS 엔드포인트인데 `/ws/websocket` 이 원시 WebSocket 진입점이다 |
+| 인증 | CONNECT 헤더 `Authorization: Bearer {accessToken}`. `readStorage(STORAGE_KEYS.accessToken)` 그대로 |
+| 인프라 요청 | nginx 에 `location /ws/ { proxy_pass 백엔드; proxy_http_version 1.1; proxy_set_header Upgrade $http_upgrade; proxy_set_header Connection "upgrade"; proxy_read_timeout 60s 이상; }` 추가. 백엔드는 `spring.profiles.active` 에 `realtime` 포함 + Redis 연결. **이게 없으면 배포에서 소켓이 아예 안 열린다** — 프론트 작업 전에 인프라 담당에게 먼저 요청 |
+| 로컬 확인 | 브라우저 콘솔에서 `new WebSocket("ws://localhost:8080/ws/websocket")` 이 101 로 열리면 준비 끝(인증은 STOMP CONNECT 프레임에서 하므로 여기까지는 토큰 없이 열린다) |
+
+### 0.5 레이어 번호 — 변환 없음 (2026-09-18 백엔드 변경)
+
+실시간 계약(`/app/presence/join` · `/app/presence/viewport` · `POST /api/music/play` · 모든 응답)의 `layer` 는 **프론트와 같은 0-based(0~7)** 다. `useMapStore.layer`, `LayerBox.layer` 를 **그대로** 보낸다. `ancestorBounds` 도 `boxes` 의 `layer` 그대로.
+유일한 예외는 BE2 소유의 `GET /api/music/major` — 여기만 예전대로 `level = boxes.length + 1`(1-based) 이다. 실시간 코드에서 `+1` 을 하면 **레이어가 한 겹 어긋난다.**
+
+### 0.6 좌표계 — 전부 원시 PC (2026-09-18 백엔드 변경)
+
+실시간에서 오가는 `x`·`y` 는 **모두 엔진 월드 좌표(원시 PC 값)** 다: 뷰포트 요청 `minX..maxY`·`ancestorBounds`, 스냅샷 `groups[].x/y`, 셀 인원수 `cells[].x/y`, 델타 `x/y`, `PlayResponse.x/y`. 정규화(0~1) 값은 서버 내부 셀 계산에만 쓰고 밖으로 내지 않는다. 프론트는 변환 없이 `worldToScreen` 에 넣으면 된다.
+
+### 0.7 작업 순서 (권장)
+
+```
+[인프라] nginx /ws 프록시 + realtime 프로파일          ← 프론트 작업과 병행, 가장 먼저 요청
+[BE]     SecurityConfig permitAll 원복, CORS localhost   ← 지원·BE1
+[FE-1]   0.2 실로그인 복구 → 브라우저에 accessToken
+[FE-2]   0.3 REST 경로 3개 + use-record-play-mutation 수정 (§3)   ← 소켓 없이도 play 는 422 로 "미연결" 확인 가능
+[FE-3]   0.4 stomp-client + join + heartbeat (§1·§2)              ← 콘솔에서 PRESENCE_JOINED 확인
+[FE-4]   뷰포트 훅 → 지도 위 사람 교체 (§4)
+[FE-5]   주변 사람 패널 실연동 (§5)
+[FE-6]   목 코드 정리 (use-nearby-users-query / bff/users/nearby / mocks/user / use-mock-friend-reactions → USE_MOCK_API 전용)
 ```
 
-프론트의 `ApiErrorCode`에도 최소한 아래 코드를 추가해야 한다.
+---
 
-```ts
-type RealtimeErrorCode = "PRESENCE_ERROR" | "SERVICE_UNAVAILABLE";
-```
+## 1. WebSocket 연결 (STOMP)
 
-### 1.4 배포 프록시 확인 필요
-
-백엔드 WebSocket endpoint는 `/ws`지만 저장소에서 운영 Nginx의 `/ws` 프록시 설정은 확인되지 않았다.
-
-배포 환경에서는 인프라 담당자와 다음을 확인해야 한다.
-
-- `/ws/**` 요청이 백엔드 8080으로 전달되는가
-- `Upgrade`, `Connection` 헤더가 전달되는가
-- SockJS의 HTTP fallback 요청도 같은 backend로 전달되는가
-- WebSocket 연결 제한 시간이 Presence heartbeat보다 충분히 긴가
-
-프록시가 준비되지 않은 상태에서 프론트와 백엔드가 다른 origin이면, 프론트 origin의 `/ws`로 연결하지 말고 `NEXT_PUBLIC_API_URL`과 같은 실제 백엔드 base URL을 사용해야 한다.
-
-## 2. 전체 통신 구조
-
-```mermaid
-sequenceDiagram
-    participant FE as Frontend
-    participant WS as STOMP /ws
-    participant REST as REST API
-    participant RT as Realtime Service
-    participant Redis as Redis
-    participant DB as PostgreSQL
-
-    FE->>WS: CONNECT Authorization: Bearer token
-    WS->>RT: presence 생성(epoch 발급)
-    FE->>WS: SUBSCRIBE /user/queue/presence
-    FE->>WS: SUBSCRIBE /user/queue/errors
-    FE->>WS: SEND /app/presence/join requestSeq + layer + musicId
-    RT->>Redis: 현재 곡·레이어·셀 등록
-    RT-->>FE: PRESENCE_JOINED requestSeq + layer + musicId
-
-    loop 15초마다
-        FE->>WS: SEND /app/presence/heartbeat
-        RT->>Redis: 만료 시각을 45초 뒤로 갱신
-    end
-
-    FE->>REST: POST /api/music/play
-    REST->>Redis: 이전 곡 제거 + 새 곡 등록
-    REST->>DB: play_history 생성
-    RT-->>FE: /user/queue/presence 주변사람 델타
-    REST-->>FE: PlayResponse
-
-    FE->>REST: POST /api/realtime/nearby
-    REST->>Redis: 주변 곡 구독 등록 후 목록 조회
-    REST-->>FE: NearbySnapshot
-    RT-->>FE: ENTER / MOVE / LEAVE
-
-    FE->>WS: SEND /app/nearby/close
-    FE->>WS: SEND /app/presence/leave
-    FE->>WS: DISCONNECT
-```
-
-## 3. 프론트에 필요한 패키지
-
-현재 프론트에는 STOMP와 SockJS 패키지가 없다.
-
-```bash
-npm install @stomp/stompjs sockjs-client
-npm install -D @types/sockjs-client
-```
-
-- Spring endpoint는 `/ws`이며 SockJS가 활성화돼 있다.
-- 프론트에서는 `new SockJS("{backendBaseUrl}/ws")` 방식으로 연결하는 것을 권장한다.
-- WebSocket 코드는 브라우저 API를 사용하므로 Next.js Client Component 또는 클라이언트 전용 모듈에서 실행한다.
-
-## 4. 공통 REST 계약
-
-모든 REST 응답은 다음 봉투를 사용한다.
-
-### 성공
-
-```json
-{
-  "success": true,
-  "data": {},
-  "error": null
-}
-```
-
-### 실패
-
-```json
-{
-  "success": false,
-  "data": null,
-  "error": {
-    "code": "PRESENCE_ERROR",
-    "message": "실시간 처리 중 오류가 발생했습니다."
-  }
-}
-```
-
-현재 프론트의 `api<T>()` 함수는 이 봉투에서 `data`를 꺼내므로 그대로 재사용할 수 있다.
-
-### 공통 오류
-
-| HTTP | code | 의미 | 프론트 처리 |
-| ---: | --- | --- | --- |
-| 400 | `INVALID_INPUT` | body 누락, enum 오류, 음수 재생 시간 | 입력값과 타입 확인 |
-| 404 | `MUSIC_NOT_FOUND` | 기준 곡이 DB에 없음 | 곡 정보 새로고침 또는 이전 화면 이동 |
-| 422 | `PRESENCE_ERROR` | 미접속, 기준 곡 없음, 좌표 없음, 오래된 요청 | 소켓 재연결 후 join, 필요하면 요청 재시도 |
-| 503 | `SERVICE_UNAVAILABLE` | 주변 곡 조회 준비 안 됨 또는 실패 | 잠시 후 재시도 UI |
-| 500 | `INTERNAL_SERVER_ERROR` | 처리되지 않은 서버 오류 | 오류 안내 및 로그 수집 |
-
-`PRESENCE_ERROR`는 세부 원인을 REST body로 나누지 않는다. 프론트는 공통적으로 소켓 연결과 join 상태를 확인해야 한다.
-
-## 5. WebSocket/STOMP 공통 계약
-
-### 5.1 연결 정보
+### 1.1 서버 설정 (`WebSocketConfig`, `WebSocketAuthInterceptor`)
 
 | 항목 | 값 |
 | --- | --- |
-| SockJS endpoint | `/ws` |
-| 클라이언트 발행 prefix | `/app` |
-| 개인 수신 prefix | `/user` |
-| 실시간 데이터 구독 | `/user/queue/presence` |
-| 실시간 오류 구독 | `/user/queue/errors` |
-| CONNECT 헤더 | `Authorization: Bearer {accessToken}` |
-
-주의: HTTP `Authorization` 헤더와 별개로 STOMP CONNECT frame의 native header에도 토큰을 넣어야 한다.
-
-### 5.2 서버가 보내는 공통 봉투
-
-REST의 `ApiResponse`와 WebSocket 형식은 다르다.
+| 엔드포인트 | `/ws` (SockJS 활성). **원시 WebSocket 은 `/ws/websocket`** — SockJS 없이 붙을 때 이 주소 |
+| 허용 Origin | `*` (엔드포인트 단) |
+| 인증 | STOMP `CONNECT` 프레임의 native 헤더 `Authorization: Bearer {accessToken}`. 없거나 access 토큰이 아니면 연결 거부 |
+| 앱 prefix | `/app` (C→S 전송은 전부 `/app/...`) |
+| 개인 큐 | `/user/queue/presence` (모든 데이터), `/user/queue/errors` (오류). **토픽 브로드캐스트 없음** — 구독은 이 둘만 |
 
 ```ts
-type RealtimeEventType =
-  | "PRESENCE_JOINED"
-  | "NEARBY_SNAPSHOT"
-  | "NEARBY_ENTER"
-  | "NEARBY_MOVE"
-  | "NEARBY_LEAVE"
-  | "PRESENCE_ERROR"
-  | "VIEWPORT_SNAPSHOT"
-  | "VIEWPORT_ENTER"
-  | "VIEWPORT_MOVE"
-  | "VIEWPORT_LEAVE"
-  | "VIEWPORT_CELL_COUNTS";
-
-interface RealtimeEnvelope<T> {
-  type: RealtimeEventType;
-  seq: number;
-  ts: number;
-  payload: T;
-}
-```
-
-- `seq`: 사용자별 메시지 순번이다. 연결 중에는 증가한다.
-- `ts`: 서버가 메시지를 만든 Unix epoch millisecond다.
-- 마지막 소켓 연결이 끊기면 seq 상태도 사라진다. 재연결 후에는 이전 연결의 seq와 이어진다고 가정하면 안 된다.
-- 같은 연결에서 `seq <= lastAppliedSeq`인 메시지는 중복 또는 역순 메시지로 보고 버린다.
-- seq가 건너뛰면 스냅샷 재조회로 복구한다.
-
-현재 `VIEWPORT_*` enum은 존재하지만 실제 발행 기능은 구현되지 않았다. 이벤트 이름이 있다는 이유만으로 기다리면 안 된다.
-
-### 5.3 권장 연결 코드
-
-```ts
-"use client";
-
-import { Client, type IMessage } from "@stomp/stompjs";
-import SockJS from "sockjs-client";
-
-type Envelope<T> = {
-  type: string;
-  seq: number;
-  ts: number;
-  payload: T;
-};
-
-export function createRealtimeClient(params: {
-  backendBaseUrl: string;
-  accessToken: string;
-  onPresence: (event: Envelope<unknown>) => void;
-  onError: (event: Envelope<unknown>) => void;
-  onConnected: (client: Client) => void;
-}) {
-  const client = new Client({
-    webSocketFactory: () => new SockJS(`${params.backendBaseUrl}/ws`),
-    connectHeaders: {
-      Authorization: `Bearer ${params.accessToken}`,
-    },
-    reconnectDelay: 5_000,
-    heartbeatIncoming: 10_000,
-    heartbeatOutgoing: 10_000,
-    onConnect: () => {
-      client.subscribe("/user/queue/presence", (message: IMessage) => {
-        params.onPresence(JSON.parse(message.body));
-      });
-      client.subscribe("/user/queue/errors", (message: IMessage) => {
-        params.onError(JSON.parse(message.body));
-      });
-
-      // 구독을 먼저 만든 뒤 join한다.
-      params.onConnected(client);
-    },
-  });
-
-  return client;
-}
-```
-
-STOMP 자체 heartbeat와 `/app/presence/heartbeat`는 역할이 다르다. STOMP heartbeat를 설정해도 Presence TTL은 갱신되지 않으므로 애플리케이션 heartbeat를 별도로 보내야 한다.
-
-## 6. Presence 생명주기
-
-### 6.1 CONNECT
-
-WebSocket CONNECT가 성공하면 서버가 자동으로 다음 작업을 한다.
-
-1. 소켓 세션 ID와 email을 연결한다.
-2. 새로운 접속 버전인 `epoch`을 만든다.
-3. Redis에 presence를 생성한다.
-4. 아직 곡과 레이어는 없는 정지 상태로 둔다.
-
-CONNECT만으로는 다른 사용자에게 노출되지 않는다. 반드시 join이 필요하다.
-
-### 6.2 입장·복원: `/app/presence/join`
-
-소켓 연결과 개인 큐 구독이 끝난 다음 보낸다.
-
-```json
-{
-  "requestSeq": 1,
-  "layer": 1,
-  "musicId": 12345
-}
-```
-
-| 필드 | 타입 | 필수 | 규칙 |
-| --- | --- | --- | --- |
-| `requestSeq` | long | O | join마다 1부터 증가. ACK·오류를 요청과 연결할 값 |
-| `layer` | integer | O | 현재 구현 기준 `1~8` |
-| `musicId` | long | O | 최초 입장에 사용할 곡. 레이어 이동은 서버의 현재 곡이 우선 |
-
-동작:
-
-- 최초 join은 요청 `musicId`의 좌표를 사용한다.
-- 현재 곡이 있으면 요청 `musicId` 대신 서버의 현재 곡으로 새 layer 위치를 계산한다.
-- 클라이언트가 좌표를 보내지 않는다.
-- join은 재생 기록을 만들지 않는다.
-- join은 만남 횟수를 올리지 않는다.
-- 첫 join은 주변사람을 보고 있는 다른 사용자에게 `NEARBY_ENTER`를 발생시킬 수 있다.
-- 레이어와 곡을 함께 바꿀 때는 새 layer join의 성공을 확인한 뒤 `/api/music/play`로 새 곡을 재생한다.
-
-응답:
-
-- 성공은 `/user/queue/presence`의 `PRESENCE_JOINED`로 온다.
-
-```json
-{
-  "type": "PRESENCE_JOINED",
-  "seq": 3,
-  "ts": 1789520000000,
-  "payload": {
-    "requestSeq": 1,
-    "layer": 1,
-    "musicId": 12345
-  }
-}
-```
-
-- 실패는 `/user/queue/errors`의 `PRESENCE_ERROR`로 오며 join 오류에는 같은 `requestSeq`가 포함된다.
-- 프론트는 현재 대기 중인 requestSeq와 같은 성공 메시지를 받은 뒤 viewport나 `/music/play`을 진행한다.
-
-### 6.3 heartbeat: `/app/presence/heartbeat`
-
-body 없이 15초마다 보낸다.
-
-```ts
-const heartbeatTimer = window.setInterval(() => {
-  if (client.connected) {
-    client.publish({ destination: "/app/presence/heartbeat", body: "{}" });
-  }
-}, 15_000);
-```
-
-- 서버 TTL: 45초
-- 서버 만료 확인 주기: 5초
-- 탭이 백그라운드에 있어 타이머가 늦어질 수 있으므로 `visibilitychange`에서 즉시 한 번 보내는 것이 안전하다.
-- heartbeat가 이미 만료된 presence를 되살리지는 않는다.
-
-만료된 뒤 heartbeat를 보내면 `/user/queue/errors`로 다음 메시지가 온다.
-
-```json
-{
-  "type": "PRESENCE_ERROR",
-  "seq": 12,
-  "ts": 1789520000000,
-  "payload": {
-    "code": "PRESENCE_STALE",
-    "message": "접속이 만료됐다. 다시 연결해야 한다"
-  }
-}
-```
-
-`/app/presence/resync`는 이전 화면을 자동으로 복원하지 않는다. 호출하면 `PRESENCE_STALE`을 보내 새 연결에서 상태를 다시 보내도록 알린다. `PRESENCE_STALE`을 받으면 다음 순서로 복구한다.
-
-1. 기존 STOMP 연결 해제
-2. 새 STOMP 연결
-3. 개인 큐 재구독
-4. join requestSeq를 1부터 시작해 `/app/presence/join` 재전송
-5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
-6. viewport requestSeq도 1부터 시작해 `/app/presence/viewport` 재전송
-7. 주변사람 패널이 열려 있었다면 `POST /api/realtime/nearby` 재호출
-
-### 6.4 명시적 종료: `/app/presence/leave`
-
-body 없이 보낸다.
-
-```ts
-client.publish({ destination: "/app/presence/leave", body: "{}" });
-```
-
-- 현재 소켓 접속의 presence, listeners, 셀, 주변사람 구독을 정리한다.
-- 다른 사용자에게 필요한 `NEARBY_LEAVE`가 발행될 수 있다.
-- 별도 ACK는 없다.
-- STOMP DISCONNECT 또는 브라우저 연결 종료 시 서버도 자동 정리를 시도한다.
-- 비정상 종료로 DISCONNECT 처리가 늦더라도 TTL 만료가 최종 정리한다.
-- 재접속과 이전 연결의 종료가 겹쳐도 epoch 방어로 새 연결 상태를 지우지 않는다.
-
-권장 종료 순서:
-
-1. 주변사람 패널이 열려 있으면 `/app/nearby/close`
-2. `/app/presence/leave`
-3. heartbeat timer 정리
-4. STOMP `deactivate()`
-
-## 7. 음악 재생 선언 REST
-
-### 7.1 `POST /api/music/play`
-
-음악 재생으로 위치를 이동시키는 유일한 API다.
-
-사전 조건:
-
-1. 로그인 access token이 있어야 한다.
-2. WebSocket CONNECT가 끝나 presence가 생성돼 있어야 한다.
-3. `/app/presence/join`을 한 번 보내 현재 layer가 있어야 한다.
-
-요청:
-
-```json
-{
-  "musicId": 12345,
-  "source": "MAP"
-}
-```
-
-```ts
-type PlaySource = "MAP" | "JOURNEY" | "PLAYLIST" | "FOLLOW";
-
-interface PlayRequest {
-  musicId: number;
-  source: PlaySource;
-}
-```
-
-좌표, layer, email은 보내지 않는다.
-
-- layer: 현재 presence 값 사용
-- email: JWT subject 사용
-- 좌표: 서버가 musicId의 16차원 좌표로 계산
-
-성공 응답의 `data`:
-
-```json
-{
-  "playHistoryId": 98765,
-  "musicId": 12345,
-  "layer": 1,
-  "x": 0.421,
-  "y": 0.673,
-  "cellX": 6,
-  "cellY": 10
-}
-```
-
-```ts
-interface PlayResponse {
-  playHistoryId: number;
-  musicId: number;
-  layer: number;
-  x: number;
-  y: number;
-  cellX: number;
-  cellY: number;
-}
-
-const played = await api<PlayResponse>("/api/music/play", {
-  method: "POST",
-  body: JSON.stringify({ musicId, source }),
-});
-```
-
-성공 시 서버 내부 동작:
-
-1. 이전 곡의 청취자·셀에서 사용자 제거
-2. 새 곡의 청취자·셀에 사용자 등록
-3. 주변사람 델타 발행
-4. `play_history` 생성, 초기 `played_ms=0`
-5. 같은 layer·같은 곡을 먼저 듣고 있던 사용자와 만남 횟수 기록
-
-만남 기록은 비동기이며 동일 사용자 쌍은 3분 안에 한 번만 증가한다.
-
-주의:
-
-- 주변사람 소켓 이벤트는 REST 응답보다 먼저 도착할 수 있다.
-- 같은 곡을 다시 선언하면 위치와 인원수는 중복 변경되지 않지만 `play_history`는 새로 생성된다.
-- 새 곡 재생 성공 시 반환된 `playHistoryId`를 현재 재생 세션과 함께 저장해야 한다.
-
-### 7.2 권장 호출 시점
-
-HTML audio가 실제 재생을 시작한 시점에 호출한다. 곡을 바꿀 때는 다음 순서를 권장한다.
-
-1. 이전 재생의 누적 시간을 계산
-2. 이전 `playHistoryId`로 `/api/music/play/end` 호출
-3. 새 오디오 재생 시작
-4. 새 `musicId`로 `/api/music/play` 호출
-5. 응답의 새 `playHistoryId` 저장
-
-종료 요청 실패가 새 재생을 영구적으로 막게 하지는 말되, 재시도할 수 있도록 이전 종료 정보를 잠시 보관하는 것이 좋다.
-
-## 8. 음악 재생 종료 REST
-
-### 8.1 `PATCH /api/music/play/end`
-
-요청:
-
-```json
-{
-  "playHistoryId": 98765,
-  "playedMs": 185000
-}
-```
-
-```ts
-interface PlayEndRequest {
-  playHistoryId: number;
-  playedMs: number;
-}
-
-await api<null>("/api/music/play/end", {
-  method: "PATCH",
-  body: JSON.stringify({ playHistoryId, playedMs }),
-});
-```
-
-규칙:
-
-- `playedMs`는 0 이상의 정수 millisecond다.
-- 응답 `data`는 `null`이다.
-- 같은 `playHistoryId`로 다시 호출하면 마지막 값으로 덮어쓴다.
-- 재생 종료는 presence 위치를 바꾸지 않는다.
-- `pause`, `ended`, 곡 교체, 플레이어 종료 시점에서 호출할 수 있다.
-- 다른 사용자의 ID 또는 존재하지 않는 ID는 현재 구현상 422 `PRESENCE_ERROR`다.
-
-`beforeunload` 요청만 믿으면 브라우저가 요청을 취소할 수 있다. 재생 중간 저장이 필요하면 주기 저장이나 `visibilitychange`를 함께 고려한다.
-
-## 9. 주변사람 패널
-
-### 9.1 열기: `POST /api/realtime/nearby`
-
-body가 없다.
-
-```ts
-const snapshot = await api<NearbySnapshot>("/api/realtime/nearby", {
-  method: "POST",
-});
-```
-
-이 API는 조회만 하는 것이 아니라 다음 작업을 함께 한다.
-
-1. 내 현재 곡을 기준곡으로 확인
-2. 기준곡과 유사한 곡 최대 10개 조회
-3. 해당 곡들의 실시간 변화를 먼저 구독 등록
-4. 현재 소켓 메시지 순번 기록
-5. 곡별 청취자를 평면 사람 목록으로 반환
-
-WebSocket 없이도 REST 응답 자체는 가능하지만, 이후 델타를 잃는다. 정상 UI에서는 반드시 소켓 연결과 `/user/queue/presence` 구독을 먼저 끝낸다.
-
-응답 타입:
-
-```ts
-interface NearbyPerson {
-  email: string;
-  nickname: string | null;
-  imageUrl: string | null;
-  meetingCount: number;
-  riderCount: number;
-  musicId: number;
-  title: string;
-  artist: string;
-  distance: number;
-}
-
-interface NearbySnapshot {
-  anchorMusicId: number;
-  snapshotSeq: number;
-  people: NearbyPerson[];
-}
-```
-
-예시:
-
-```json
-{
-  "success": true,
-  "data": {
-    "anchorMusicId": 100,
-    "snapshotSeq": 7,
-    "people": [
-      {
-        "email": "user@example.com",
-        "nickname": "off_beat",
-        "imageUrl": "https://example.com/profile.png",
-        "meetingCount": 4,
-        "riderCount": 0,
-        "musicId": 201,
-        "title": "Example Song",
-        "artist": "Example Artist",
-        "distance": 0.42
-      }
-    ]
+import { Client } from "@stomp/stompjs";
+
+const client = new Client({
+  brokerURL: `${WS_ORIGIN}/ws/websocket`,       // wss://j15a405.p.ssafy.io/ws/websocket (로컬: ws://localhost:8080/ws/websocket)
+  connectHeaders: { Authorization: `Bearer ${readStorage(STORAGE_KEYS.accessToken)}` },
+  reconnectDelay: 3000,
+  onConnect: () => {
+    client.subscribe("/user/queue/presence", onPresence);
+    client.subscribe("/user/queue/errors", onError);
+    join(useMapStore.getState().layer);         // §2 — 0-based 그대로. 재연결 때마다 다시 보낸다
+    startHeartbeat();                            // §1.3
   },
-  "error": null
-}
+});
+client.activate();
 ```
 
-표시 규칙:
+- 로컬에서 SockJS(`/ws` + `sockjs-client`)를 쓰면 `/ws/info` XHR 이 CORS 를 타서 `localhost:3000` 이 403 날 수 있다. **원시 WebSocket(`/ws/websocket`)을 권장** — Upgrade 요청은 preflight 가 없다.
+- `NEXT_PUBLIC_API_URL` 은 비워 두는 구조라 WS 주소용 환경변수를 하나 새로 둔다 (예: `NEXT_PUBLIC_WS_ORIGIN`, 비면 `location.origin` 을 `wss://` 로 바꿔 쓴다).
+- 토큰이 만료돼 CONNECT 가 거부되면 `api.ts` 의 `reissueAccessToken()` 을 태운 뒤 재연결한다.
 
-- 내 email은 목록에서 제외된다.
-- 사람 목록은 곡의 거리 순서로 조립된다.
-- 같은 곡 안에서 사람 순서는 보장되지 않는다.
-- UI 상태는 배열 index가 아니라 `email`을 key로 관리한다.
-- `nickname`, `imageUrl`은 null일 수 있다.
-- 프로필 버튼의 대상 식별자로 `email`을 사용한다.
-- `meetingCount`는 나와 해당 사용자의 누적 만남 횟수다.
-- `riderCount`는 따라가기 기능이 아직 없어 현재 항상 0이다.
-- nickname과 imageUrl은 서버에서 5분 캐시되므로 프로필 수정 직후 바로 바뀌지 않을 수 있다.
+### 1.2 S→C 봉투 — 모든 수신 프레임은 이 모양이다
 
-### 9.2 REST와 소켓 사이 순서 처리
-
-패널을 열 때 다음 알고리즘을 사용한다.
-
-1. `/user/queue/presence` 구독 완료
-2. nearby 이벤트 임시 buffer 시작
-3. `POST /api/realtime/nearby` 호출
-4. 응답 `people`로 목록 전체 교체
-5. buffer에서 `seq <= snapshotSeq`인 이벤트 폐기
-6. `seq > snapshotSeq`인 이벤트를 순서대로 적용
-7. 이후 `seq <= lastAppliedSeq`인 중복 이벤트 폐기
-
-구독 등록이 목록 조회보다 먼저라서 같은 사용자가 스냅샷과 델타 양쪽에 들어올 수 있다. 모든 델타는 email 기준으로 멱등 처리한다.
-
-### 9.3 델타 타입
-
-```ts
-interface NearbyDelta {
-  email: string;
-  nickname: string | null;
-  imageUrl: string | null;
-  meetingCount: number | null;
-  riderCount: number | null;
-  musicId: number | null;
-}
+```json
+{ "type": "VIEWPORT_SNAPSHOT", "seq": 41, "ts": 1789700000000, "payload": { ... } }
 ```
 
-#### `NEARBY_ENTER`
+| 필드 | 뜻 |
+| --- | --- |
+| `type` | `PRESENCE_JOINED` · `VIEWPORT_SNAPSHOT` · `VIEWPORT_ENTER` · `VIEWPORT_MOVE` · `VIEWPORT_LEAVE` · `VIEWPORT_CELL_COUNTS` · `NEARBY_SNAPSHOT` · `NEARBY_ENTER` · `NEARBY_MOVE` · `NEARBY_LEAVE` · `PRESENCE_ERROR` |
+| `seq` | **사용자 단위 단조 증가.** 마지막으로 처리한 seq 보다 작거나 같으면 버린다(순서 역전). 주변 사람 `snapshotSeq` 비교에도 쓴다(§5) |
+| `ts` | 서버 epoch ms |
+| `payload` | 타입별 본문 (아래 각 절) |
 
-목록에 사용자를 추가한다. 이미 있으면 같은 email 항목을 갱신한다.
+REST 의 `{success, data, error}` 봉투는 WS 에 **적용되지 않는다.** `api.ts` 를 거치지 않으므로 별도 파서를 둔다.
+
+### 1.3 heartbeat / leave / resync
+
+| 목적지 | 본문 | 주기·시점 | 비고 |
+| --- | --- | --- | --- |
+| `/app/presence/heartbeat` | 없음 | **15초**마다 (`realtime.presence.heartbeat-interval-ms`) | TTL 45초. 3번 놓치면 서버가 지도에서 뺀다. 만료 뒤 보내면 `PRESENCE_STALE` → 재연결·재join |
+| `/app/presence/leave` | 없음 | 탭 닫힘(`pagehide`) 등 명시 종료 | 안 보내도 DISCONNECT 로 정리된다. 보내면 즉시 사라진다 |
+| `/app/presence/resync` | 없음 | 쓸 일 거의 없음 | 서버는 상태를 복원해 주지 않고 `PRESENCE_STALE` 로 "join·viewport 다시 보내라"고만 답한다. 즉 **재연결 후 복원은 클라이언트 책임** |
+
+멀티탭: 위치는 공유되고 **조종권은 마지막에 연결한 탭**에 있다. 이전 탭이 join/viewport 를 보내면 `PRESENCE_STALE` 이 온다 → 그 탭은 "다른 탭에서 사용 중" 처리(재시도 금지).
+
+---
+
+## 2. 입장(join) — 내 위치를 지도에 올린다
+
+`/app/presence/join`
+
+```json
+{ "requestSeq": 1, "layer": 2, "musicId": 8812 }
+```
+
+| 필드 | 규칙 |
+| --- | --- |
+| `requestSeq` | 1 이상, 클라이언트 단조 증가. 응답·오류에 그대로 돌아온다 |
+| `layer` | **0~7, `useMapStore.layer` 그대로** (변환 없음) |
+| `musicId` | 1 이상. **참고값이다.** 서버는 첫 입장이면 `play_history` 최신 곡, 그 뒤는 서버에 남은 현재 곡을 쓴다. 실제 적용 곡은 응답으로 알려준다. `STORAGE_KEYS.playingMusicId ?? myMusicId` 를 넣고, 없으면 임의의 양수를 넣어도 된다 |
+
+응답 `PRESENCE_JOINED` (`/user/queue/presence`):
+
+```json
+{ "type": "PRESENCE_JOINED", "seq": 3, "ts": 0, "payload": { "requestSeq": 1, "layer": 2, "musicId": 8812 } }
+```
+
+→ `payload.musicId` 로 **내 표식 위치(`myMusicId`/`currentMusicId`)를 맞춘다.** 요청과 다르면 서버 값이 정답이다(예: 다른 탭에서 곡을 바꿨다).
+
+### 2.1 언제 보내나
+
+1. 연결 직후(구독 후) — 현재 겹으로.
+2. **겹이 바뀔 때마다** (`useMapStore.layer` 변경: 파고들기·떠오르기·스테퍼). 곡은 그대로, 레이어만 옮기는 join.
+3. 재연결 직후.
+
+### 2.2 새 사용자 흐름 — join 이 거부되는 유일한 정상 케이스
+
+재생 기록이 한 번도 없는 사용자는 서 있을 곡이 없어서 join 이 `PRESENCE_NO_ANCHOR` 로 거부된다. **이건 오류 화면이 아니다.** 흐름:
+
+```
+연결 → join → PRESENCE_ERROR{code: PRESENCE_NO_ANCHOR}
+  → 지도는 그대로 보이고, 내 표식만 없다 (튜토리얼 "곡을 골라 재생하세요" 상태)
+  → 사용자가 첫 곡 재생 → POST /api/music/play { musicId, source, layer: useMapStore.layer }   ← layer 필수(§3)
+  → 서버가 그 곡·그 레이어에 첫 자리를 잡는다 (응답 x,y,layer)
+  → 이후 겹 이동은 평소처럼 join
+```
+
+첫 play 에 `layer` 를 안 넣으면 422 `PRESENCE_ERROR` 다. 이미 서 있는 사용자의 play 에 넣은 `layer` 는 **무시**된다(레이어는 join 으로만 바뀐다).
+
+---
+
+## 3. 재생 선언·종료 REST — 위치 이동의 유일한 원본
+
+### 3.1 지금 프론트
+
+`hooks/mutations/use-record-play-mutation.ts` 가 `POST /bff/music/{id}/play { source, playedMs: 0 }` 를 쏘고 응답 `{ok}` 를 버린다. 호출 지점 3곳: `map-view.tsx` `playSong`, `use-song-play-toggle.ts` `toggle`, (여정·플리 재생 쪽도 같은 훅). 종료 시각은 어디서도 기록하지 않는다.
+
+### 3.2 백엔드가 기대하는 것
+
+| | 요청 | 응답(`data`) | 오류 |
+| --- | --- | --- | --- |
+| `POST /api/music/play` | `{ "musicId": 8812, "source": "MAP", "layer": 2 }` · `source` ∈ `MAP·JOURNEY·PLAYLIST·FOLLOW` · `layer` 0~7(0-based, 현재 `useMapStore.layer`), **첫 배치일 때만 의미** (그 외 생략 가능) | `{ "playHistoryId": 501, "musicId": 8812, "layer": 2, "x": 0.37, "y": 1.24, "cellX": 6, "cellY": 12 }` — `x,y` 는 그 레이어 표시축의 **원시 PC 좌표**(엔진 월드 좌표 그대로), `cellX/Y` 는 디버깅용 | 400 `VALIDATION_ERROR`(source 오타·musicId 없음) · 404 `MUSIC_NOT_FOUND` · 422 `PRESENCE_ERROR`(소켓 미연결 / 첫 배치인데 layer 없음 / 곡 좌표 없음 / 처리 중 접속 바뀜) |
+| `PATCH /api/music/play/end` | `{ "playHistoryId": 501, "playedMs": 183000 }` · `playedMs` ≥ 0, 멱등(마지막 값으로 덮어씀) | `null` | 400 `VALIDATION_ERROR` · **403 `FORBIDDEN`**(내 기록이 아니거나 없는 ID — 둘을 구분하지 않는다) |
+
+- play 는 **소켓이 연결돼 있어야** 성공한다(`PRESENCE_NOT_CONNECTED` → 422). 재생 버튼은 소켓 연결 뒤에 살리거나, 422 면 토스트로 "연결 중" 안내.
+- play 한 번 = `play_history` 한 줄 + `music.play_cnt +1`. 같은 곡 다시 눌러도 기록은 쌓인다(위치 변경 알림만 안 나간다). 일시정지→재개는 play 를 다시 치지 말고 end 만 갱신.
+- 곡 위치는 **서버가 계산**한다. 좌표를 보내지 않는다(위치 조작 방지).
+
+### 3.3 프론트 수정
+
+| 파일 | 수정 |
+| --- | --- |
+| `constants/api-endpoints.ts` | `music.play` 를 `"/api/music/play"` 로, `music.playEnd: "/api/music/play/end"` 추가. `/bff/` 가 아니라 `/api/` 다(브라우저 자기 토큰) |
+| `constants/live-api-paths.ts` | `"/api/music/play"`, `"/api/music/play/end"`, `"/api/realtime/nearby"` 추가 (rewrite 통과 목록) |
+| `hooks/mutations/use-record-play-mutation.ts` | 본문 `{ musicId, source, layer? }`, 응답 타입 `PlayResponse`. `playedMs` 제거. 성공 시 `playHistoryId` 를 플레이어 스토어(또는 ref)에 보관 |
+| 새 `hooks/mutations/use-play-end-mutation.ts` | `PATCH /api/music/play/end { playHistoryId, playedMs }` |
+| `stores/use-player-store.ts` | `playHistoryId: number \| null`, `startedAt`. `playSeq` 가 바뀌거나 `stop/pause→다음 곡` 될 때 이전 곡의 end 를 보낸다 |
+| `lib/playback-events.ts` 구독자 | 실제 플레이어가 `ended`/`paused` 를 보고할 때 `playedMs` 누적 → end 호출. `pagehide` 에서도 한 번(`keepalive: true` fetch) |
+| 호출 지점 3곳 | `recordPlay({ musicId, source: "MAP", playedMs: 0 })` → `recordPlay({ musicId, source: "MAP", layer: useMapStore.getState().layer })`. `layer` 는 항상 넣어도 된다(서 있으면 무시). **+1 하지 않는다** |
+| `types/api.ts` `ApiErrorCode` | `"PRESENCE_ERROR"`, `"SERVICE_UNAVAILABLE"` 추가 (`SpecErrorCode` 에 `FORBIDDEN`·`MUSIC_NOT_FOUND` 는 이미 있음) |
+
+> 로컬 `localhost:3000` 에서 rewrite 로 `/api/music/play` 를 치면 `Origin` 이 그대로 전달되어 백엔드 CORS 가 403 을 낼 수 있다(S15P21A405-303 과 동일). 배포는 동일 오리진이라 통과. 로컬 개발용으로 **백엔드 `CORS_ALLOWED_ORIGINS` 에 `http://localhost:3000` 추가**를 지원에게 요청하면 된다(BFF 대리호출로 우회하면 안 된다 — 서버 토큰이 된다).
+
+---
+
+## 4. 뷰포트 — "지도 위 사람" (지금 `useNearbyUsersQuery` 가 하는 일의 대체)
+
+### 4.1 지금 프론트
+
+- `hooks/queries/use-nearby-users-query.ts` → `GET /bff/users/nearby?layer=` 15초 폴링, 목 12명/레이어(`mocks/user.ts`).
+- 결과 `NearbyUser[]` 를 `map-view.tsx` 가 `engine.setFriends(layer, friends)` 로 넘기고, 엔진 `anchorFor(u)` 가 `u.musicId` 의 상주 별 자리에 표식을 그린다(`draw-friends.ts`). 상주 집합에 없으면 이메일 해시로 임의 별에 붙인다(목 폴백).
+- `friends-panel.tsx`(주변 사람 패널)도 같은 훅을 쓴다 — 이건 §5 로 갈라진다.
+
+### 4.2 백엔드 모델 — 폴링이 아니라 "화면 구독"
+
+화면(뷰포트) 범위를 보내면 서버가 그 안의 사람을 **한 번 스냅샷**으로 주고, 이후 변화는 **델타**로 밀어준다. 화면이 넓으면(셀 36개 초과 또는 사람 20명 초과) 개인 대신 **셀별 인원수**로 준다.
+
+#### 요청 `/app/presence/viewport`
 
 ```json
 {
-  "type": "NEARBY_ENTER",
-  "seq": 8,
-  "ts": 1789520000000,
-  "payload": {
-    "email": "other@example.com",
-    "nickname": "off_beat",
-    "imageUrl": null,
-    "meetingCount": 4,
-    "riderCount": 0,
-    "musicId": 201
-  }
+  "requestSeq": 7,
+  "layer": 2,
+  "minX": -2.15, "maxX": 1.80, "minY": -0.90, "maxY": 3.42,
+  "ancestorBounds": [
+    { "layer": 0, "minX": -5.1, "maxX": 4.2, "minY": -3.3, "maxY": 6.0 },
+    { "layer": 1, "minX": -1.0, "maxX": 2.5, "minY": -2.0, "maxY": 1.1 }
+  ]
 }
 ```
 
-#### `NEARBY_MOVE`
-
-같은 사용자의 `musicId`, 표시 정보, 횟수를 갱신한다. 사용자가 없다면 upsert하거나 스냅샷을 다시 조회한다.
-
-#### `NEARBY_LEAVE`
-
-email로 목록에서 제거한다. LEAVE에서는 email을 제외한 필드가 null이다.
-
-```json
-{
-  "type": "NEARBY_LEAVE",
-  "seq": 9,
-  "ts": 1789520001000,
-  "payload": {
-    "email": "other@example.com",
-    "nickname": null,
-    "imageUrl": null,
-    "meetingCount": null,
-    "riderCount": null,
-    "musicId": null
-  }
-}
-```
-
-#### `NEARBY_SNAPSHOT`
-
-내 곡이 바뀌었고 패널이 열린 상태면 서버가 내 구독 기준을 다시 만들고 전체 목록을 보낸다.
-
-- payload는 REST의 `NearbySnapshot`과 같다.
-- 기존 목록을 부분 수정하지 말고 전체 교체한다.
-- 적용 후 `lastAppliedSeq`는 envelope의 `seq`로 갱신한다.
-
-### 9.4 현재 델타 계약의 제한
-
-`NEARBY_ENTER`와 `NEARBY_MOVE` payload에는 다음 필드가 없다.
-
-- `title`
-- `artist`
-- `distance`
-
-따라서 스냅샷과 완전히 같은 행을 델타만으로 새로 만들 수 없다. 프론트 구현 전에 아래 중 하나를 팀에서 선택해야 한다.
-
-1. 델타 DTO에 `title`, `artist`, `distance`를 추가하는 백엔드 보완
-2. 델타 행에서는 곡 상세를 별도 조회
-3. ENTER/MOVE 수신 시 nearby REST 스냅샷 재조회
-4. 해당 필드가 없는 축약 행을 UI에서 허용
-
-최종 화면이 제목·가수를 항상 표시한다면 **1번이 가장 안정적**이다. 이 결정 전에는 존재하지 않는 필드를 타입에 임의로 추가하지 않는다.
-
-또한 곡 재생 시 주변 델타 발행이 비동기 만남 횟수 기록보다 먼저다. ENTER/MOVE의 `meetingCount`는 막 증가한 횟수보다 1 작을 수 있으며, 다음 스냅샷에서 최신값이 반영된다.
-
-### 9.5 닫기: `/app/nearby/close`
-
-패널이 닫힐 때 body 없이 보낸다.
-
-```ts
-client.publish({ destination: "/app/nearby/close", body: "{}" });
-```
-
-- 저장해 둔 주변 곡 구독을 제거한다.
-- 별도 ACK는 없다.
-- 이전 소켓의 늦은 close가 새 접속의 구독을 삭제하지 못하도록 epoch를 확인한다.
-- close를 못 보내도 presence leave, disconnect, TTL 만료가 구독을 정리한다.
-
-## 10. 주변사람 상태 적용 예시
-
-```ts
-type NearbyState = {
-  anchorMusicId: number | null;
-  peopleByEmail: Map<string, NearbyPerson>;
-  lastSeq: number;
-};
-
-function applyNearbyEvent(
-  state: NearbyState,
-  event: RealtimeEnvelope<NearbySnapshot | NearbyDelta>,
-) {
-  if (event.seq <= state.lastSeq) return state;
-
-  if (event.type === "NEARBY_SNAPSHOT") {
-    const snapshot = event.payload as NearbySnapshot;
-    return {
-      anchorMusicId: snapshot.anchorMusicId,
-      peopleByEmail: new Map(snapshot.people.map((p) => [p.email, p])),
-      lastSeq: event.seq,
-    };
-  }
-
-  const delta = event.payload as NearbyDelta;
-  const next = new Map(state.peopleByEmail);
-
-  if (event.type === "NEARBY_LEAVE") {
-    next.delete(delta.email);
-  } else {
-    const old = next.get(delta.email);
-    if (old) {
-      next.set(delta.email, {
-        ...old,
-        nickname: delta.nickname,
-        imageUrl: delta.imageUrl,
-        meetingCount: delta.meetingCount ?? old.meetingCount,
-        riderCount: delta.riderCount ?? old.riderCount,
-        musicId: delta.musicId ?? old.musicId,
-      });
-    } else {
-      // title·artist·distance가 델타에 없으므로 계약 결정 전 임의 생성하지 않는다.
-      // 여기서는 스냅샷 재조회 또는 축약 행 처리가 필요하다.
-    }
-  }
-
-  return { ...state, peopleByEmail: next, lastSeq: event.seq };
-}
-```
-
-## 11. 권장 화면 진입 흐름
-
-```mermaid
-flowchart TD
-    LOGIN[로그인 완료·토큰 저장]
-    PAGE[실시간 지도 화면 진입]
-    CONNECT[STOMP CONNECT]
-    SUB[개인 큐 2개 구독]
-    JOIN[presence/join<br/>requestSeq + layer + 마지막 musicId]
-    JOINED[PRESENCE_JOINED 확인]
-    HEART[15초 heartbeat 시작]
-    READY[재생·주변사람 사용 가능]
-    OPEN[주변사람 버튼]
-    SNAP[POST realtime/nearby]
-    DELTA[소켓 델타 적용]
-    EXIT[화면 종료]
-
-    LOGIN --> PAGE --> CONNECT --> SUB --> JOIN --> JOINED --> HEART --> READY
-    READY --> OPEN --> SNAP --> DELTA
-    DELTA --> EXIT
-    READY --> EXIT
-    EXIT -->|패널 열림| CLOSE[nearby/close]
-    CLOSE --> LEAVE[presence/leave]
-    EXIT -->|패널 닫힘| LEAVE
-    LEAVE --> DISCONNECT[STOMP deactivate]
-```
-
-구현 순서:
-
-1. access token 확인
-2. STOMP 연결
-3. `/user/queue/presence`, `/user/queue/errors` 구독
-4. 마지막 musicId와 현재 layer로 `/app/presence/join`
-5. 같은 requestSeq의 `PRESENCE_JOINED` 확인
-6. 애플리케이션 heartbeat 시작
-7. 그 뒤에 재생 선언과 주변사람 버튼 활성화
-
-재연결의 `onConnect`에서도 3~5를 다시 수행해야 한다.
-
-## 12. 기능 검증 시나리오
-
-### 12.1 단일 사용자
-
-- [ ] realtime 프로파일 서버가 실행된다.
-- [ ] 유효한 access token으로 `/ws` CONNECT가 성공한다.
-- [ ] 개인 큐 2개를 구독한다.
-- [ ] join 후 같은 requestSeq의 `PRESENCE_JOINED`를 받는다.
-- [ ] join 후 `/api/music/play`이 200을 반환한다.
-- [ ] 응답에 `playHistoryId`, 좌표, 셀이 있다.
-- [ ] `/api/music/play/end`가 `data: null`로 성공한다.
-- [ ] 재생 종료 뒤에도 presence 위치는 유지된다.
-- [ ] 주변사람 API가 `anchorMusicId`, `snapshotSeq`, `people`을 반환한다.
-- [ ] nearby close와 presence leave 후 오류 없이 연결을 닫는다.
-
-### 12.2 두 사용자
-
-사용자 A와 B는 서로 다른 실제 계정과 토큰을 사용한다.
-
-- [ ] A와 B가 각각 별도 브라우저 또는 시크릿 창에서 접속한다.
-- [ ] 둘 다 같은 layer로 join한다.
-- [ ] A가 주변사람 패널을 열고 REST 스냅샷을 받는다.
-- [ ] B가 A의 기준곡 또는 이웃곡을 재생하면 A가 ENTER 또는 MOVE를 받는다.
-- [ ] B가 연결을 끊으면 A가 LEAVE를 받는다.
-- [ ] A가 패널을 닫은 뒤 B가 곡을 바꿔도 A에게 nearby 델타가 오지 않는다.
-- [ ] 같은 layer·같은 곡에서 만난 뒤 다음 스냅샷의 `meetingCount`가 증가한다.
-- [ ] 3분 안에 같은 두 사용자가 다시 만나도 count가 중복 증가하지 않는다.
-
-### 12.3 재접속과 만료
-
-- [ ] heartbeat를 45초 이상 중단하면 presence가 정리된다.
-- [ ] 만료 후 heartbeat에서 `PRESENCE_STALE`을 받는다.
-- [ ] 재연결·재구독·join 후 기능이 복구된다.
-- [ ] 이전 연결의 늦은 leave/nearby close가 새 연결 상태를 지우지 않는다.
-- [ ] 재연결 후 seq 기준을 0부터 새 연결 기준으로 초기화한다.
-
-## 13. 아직 구현되지 않은 기능
-
-아래 항목은 타입이나 핸들러 골격이 있어도 현재 사용할 수 없다.
-
-| 기능 | 현재 상태 | 프론트 처리 |
+| 필드 | 값의 출처 (엔진) | 규칙 |
 | --- | --- | --- |
-| `/app/presence/viewport` | 빈 핸들러 | 호출하지 않음 |
-| `/app/presence/resync` | `PRESENCE_STALE` 전송 | 재연결 + join + viewport + nearby REST로 복구 |
-| `VIEWPORT_*` 이벤트 | 발행 서비스 없음 | 기다리지 않음 |
-| 따라가기/동승자 계산 | 어댑터 대기 | `riderCount`는 항상 0 |
-| 다중 서버 실시간 브리지 | 없음 | 현재 단일 서버 전제 |
-| join 성공 ACK | 없음 | 연결·입력 선검증 필요 |
-| nearby 델타의 곡 메타 | 일부 필드 없음 | §9.4 계약 결정 필요 |
+| `requestSeq` | 뷰포트 요청 카운터 | 1 이상 단조 증가. 서버는 더 큰 seq 가 이미 오면 이전 요청을 **조용히 버린다**(응답 없음) |
+| `layer` | `useMapStore.layer` (= `boxes.length`) | 0~7, 변환 없음 |
+| `minX..maxY` | **엔진 `viewBox()` 의 원시 PC 좌표** (화면 네 귀퉁이 `screenToWorld`). 지금 파고들기 때 `drillBox()` 로 쓰는 것과 같은 값 | `min < max`, 유한수 |
+| `ancestorBounds` | `useMapStore.boxes` 를 이름만 바꿔 복사: `{layer: b.layer, minX: b.xMin, maxX: b.xMax, minY: b.yMin, maxY: b.yMax}` | **길이 = layer, `bounds[i].layer === i`** 여야 한다(= `boxes[i].layer === i`, 엔진이 이미 보장). 안 맞으면 `PRESENCE_VIEWPORT_INVALID` |
 
-## 14. 프론트 구현 완료 조건
+즉 `/api/music/major` 쿼리(`pc{k}min/max`)와 **같은 상자들**이다(그쪽 `level` 만 1-based). `api-endpoints.ts` `map.songs(boxes)` 옆에 `toViewportRequest(boxes, viewBox)` 헬퍼 하나로 만들 수 있다.
 
-- [ ] 옛 목 API 경로를 실제 REST 경로로 교체했다.
-- [ ] `PRESENCE_ERROR`, `SERVICE_UNAVAILABLE` 타입을 추가했다.
-- [ ] STOMP CONNECT에 Bearer token을 넣었다.
-- [ ] CONNECT 직후 개인 큐를 먼저 구독한다.
-- [ ] join 완료 흐름 전에는 play/nearby 버튼을 비활성화한다.
-- [ ] STOMP heartbeat와 별개로 15초 애플리케이션 heartbeat를 보낸다.
-- [ ] 재연결할 때 구독, join, viewport, heartbeat와 열린 nearby 패널을 다시 만든다.
-- [ ] 재생별 `playHistoryId`와 `playedMs`를 관리한다.
-- [ ] nearby REST 요청 중 들어온 델타를 buffer하고 `snapshotSeq` 기준으로 정리한다.
-- [ ] nearby 목록을 email key로 멱등 갱신한다.
-- [ ] `NEARBY_SNAPSHOT`은 전체 교체한다.
-- [ ] 패널 닫기와 화면 종료 메시지를 보낸다.
-- [ ] `/presence/resync`가 화면을 자동 복원한다고 가정하지 않는다.
-- [ ] nearby 델타 곡 메타 처리 방식을 백엔드와 확정한다.
-
-## 15. 백엔드 코드 기준 위치
-
-계약 확인이 필요할 때 아래 파일을 기준으로 본다.
-
-```text
-backend/src/main/java/com/ssafy/backend/
-├─ config/WebSocketConfig.java
-├─ config/SecurityConfig.java
-├─ realtime/config/StompAuthChannelInterceptor.java
-├─ realtime/session/WebSocketSessionEventListener.java
-├─ realtime/presence/controller/PresenceStompController.java
-├─ realtime/play/MusicPlayController.java
-├─ realtime/play/dto/
-├─ realtime/nearby/controller/NearbyController.java
-├─ realtime/nearby/controller/NearbyStompController.java
-├─ realtime/nearby/dto/
-├─ realtime/messaging/RealtimeEnvelope.java
-└─ realtime/messaging/RealtimeEventType.java
+```ts
+const toViewportRequest = (seq: number, boxes: readonly LayerBox[], view: LayerBox) => ({
+  requestSeq: seq,
+  layer: boxes.length,
+  minX: view.xMin, maxX: view.xMax, minY: view.yMin, maxY: view.yMax,
+  ancestorBounds: boxes.map((b) => ({ layer: b.layer, minX: b.xMin, maxX: b.xMax, minY: b.yMin, maxY: b.yMax })),
+});
 ```
+
+**언제 보내나**: 팬·줌·겹 전환이 멎은 뒤 **250ms 디바운스**(`realtime.viewport.debounce-ms`). 엔진 스냅샷(`syncFromEngine`)에 `boxes`·카메라가 이미 올라오므로 `map-view.tsx` 의 `useEffect` 한 개로 처리 가능. 주변 탐색/별자리 뷰처럼 지도가 실제 좌표를 안 보여줄 때는 보내지 않아도 된다(표식도 안 그리므로).
+
+#### 응답 ① `VIEWPORT_SNAPSHOT` — `mode: INDIVIDUAL`
+
+```json
+{ "requestSeq": 7, "mode": "INDIVIDUAL", "layer": 2,
+  "groups": [
+    { "musicId": 8812, "x": 0.37, "y": 1.24,
+      "users": [ { "email": "a@x.com", "nickname": "연희", "imageUrl": null, "riderCount": 0 } ] }
+  ],
+  "resolution": null, "cells": [] }
+```
+
+- `groups[]` = 같은 곡 위에 서 있는 사람들. **나는 빠져 있다.**
+- `groups[].x, y` 는 **원시 PC 좌표**(요청 `minX..maxY` 와 같은 좌표계) — 엔진 월드 좌표로 그대로 찍는다. 그 곡이 상주 집합에 있으면 `worldOf(musicId)` 와 같은 값이다.
+- `requestSeq` 가 내 마지막 요청과 다르면 버린다(늦게 도착한 옛 화면).
+
+#### 응답 ② `VIEWPORT_SNAPSHOT` — `mode: CLUSTERED`
+
+```json
+{ "requestSeq": 8, "mode": "CLUSTERED", "layer": 0,
+  "groups": [],
+  "resolution": 8,
+  "cells": [ { "cellX": 2, "cellY": 5, "x": -3.13, "y": 1.02, "count": 14 } ] }
+```
+
+- 화면이 넓어(셀 > 36) 또는 사람이 많아(> 20) 개인 표시를 포기한 경우. **셀별 인원수만** 온다. `resolution` 은 한 줄 셀 수(16 → 8 → 4 … 64칸 이하가 될 때까지 2×2 병합).
+- `cells[].x, y` 는 **원시 PC 좌표**(셀 중심, 화면 범위로 클램프). 그대로 `worldToScreen` 에 넣으면 된다. 그 자리에 "N명" 뭉치 표식.
+- 이 모드일 땐 개인 델타가 오지 않고, 대신 **5초마다 `VIEWPORT_CELL_COUNTS`** 가 온다:
+
+```json
+{ "type": "VIEWPORT_CELL_COUNTS", "payload": { "requestSeq": 8, "layer": 0, "resolution": 8, "cells": [ ... ] } }
+```
+→ `cells` 를 통째로 교체.
+
+#### 응답 ③ 델타 (`INDIVIDUAL` 일 때만) — `VIEWPORT_ENTER` · `VIEWPORT_MOVE` · `VIEWPORT_LEAVE`
+
+```json
+{ "requestSeq": 7, "email": "a@x.com", "nickname": "연희", "imageUrl": null,
+  "musicId": 9001, "x": 2.05, "y": -0.71, "riderCount": 0 }
+```
+
+| 타입 | 뜻 | 처리 |
+| --- | --- | --- |
+| `VIEWPORT_ENTER` | 화면 안으로 들어옴(다른 곳에서 이동·새 접속) | 목록에 추가 |
+| `VIEWPORT_MOVE` | 화면 안에서 다른 곡으로 이동 | 그 사람 `musicId/x/y` 갱신 → 엔진의 우주선 이동 연출(`FollowState.mv` 같은 것) |
+| `VIEWPORT_LEAVE` | 화면 밖으로 나감·접속 종료 | `email` 만 유효, 나머지 null. 목록에서 제거 |
+
+`requestSeq` 가 현재 것이 아니면 버린다. `x,y` 는 스냅샷과 같이 **원시 PC**.
+
+#### 닫기 `/app/presence/viewport/close`
+
+```json
+{ "requestSeq": 8 }
+```
+지도가 사라질 때(언마운트, 다른 화면으로 이동). 안 보내도 DISCONNECT·새 viewport 요청이 이전 구독을 덮는다.
+
+### 4.3 `NearbyUser` 타입과의 대응
+
+| FE `NearbyUser` 필드 | 서버가 주는가 | 처리 |
+| --- | --- | --- |
+| `email`, `nickname`, `imageUrl`, `musicId`, `riderCount` | O (`ViewportUser` + `group.musicId`) | 그대로 |
+| `isOnline` | X | 뷰포트에 있다 = 접속 중. **항상 `true`** |
+| `isPublic` | X | 비공개 계정은 미구현. `true` 고정 |
+| `viewingMusicId` | X (따라가기 미구현) | `musicId` 와 같게 |
+| `genreId` | X | 상주 집합에서 `musicId` 로 찾으면 그 곡의 `genreId`, 없으면 `NO_GENRE_ID` |
+| `meetingCount` | X (뷰포트에는 없음, 주변 사람 패널에는 있음 §5) | `0` |
+| `followingNickname` | X (따라가기 미구현) | `null` |
+| `avatarSeed` | X (FE 전용) | 이메일 해시로 생성(지금 목이 하는 방식) |
+
+`viewingMusicId·followingNickname·isPublic` 은 따라가기·비공개계정 스펙이 붙을 때 채워진다. 지금은 `NearbyUser` 에서 optional 로 바꾸거나 위 기본값으로 채운다.
+
+### 4.4 좌표 — 전부 원시 PC (변환 없음)
+
+실시간에서 오가는 모든 `x`·`y` 는 엔진 월드 좌표(원시 PC 값)다.
+
+| 어디 | 좌표계 |
+| --- | --- |
+| 요청 `minX..maxY`, `ancestorBounds` | 원시 PC (엔진 `viewBox()`·`boxes`) |
+| 응답 `groups[].x,y`(INDIVIDUAL), 델타 `x,y`, `cells[].x,y`(CLUSTERED), `PlayResponse.x,y` | 원시 PC — `worldToScreen` 에 그대로 |
+
+개인 표식은 `musicId` 가 상주 집합에 있으면 그 별 자리(`worldOf`)에, 없으면(그 겹 상주 1000곡 밖의 곡) 응답 `x,y` 에 그린다. 두 값은 같은 좌표계라 섞어 써도 된다. 지금 엔진의 `anchorFor` 이메일 해시 폴백은 필요 없어진다.
+
+### 4.5 프론트 수정
+
+| 파일 | 수정 |
+| --- | --- |
+| 새 `lib/realtime/stomp-client.ts` (또는 `stores/use-realtime-store.ts`) | §1 연결·구독·봉투 파싱·seq 검사·heartbeat·재연결 시 join/viewport 재전송. 앱 전체에 하나 |
+| 새 `hooks/use-presence-join.ts` | `layer` 변경을 보고 `/app/presence/join` 전송, `PRESENCE_JOINED` 로 `myMusicId` 동기화, `PRESENCE_NO_ANCHOR` 는 "아직 재생 전" 상태로 |
+| 새 `hooks/use-viewport-subscription.ts` | 엔진 `boxes`+`viewBox` → 250ms 디바운스 → viewport 전송. 스냅샷/델타/셀카운트를 `NearbyUser[]` 또는 `cells[]` 상태로 유지 |
+| `components/map/map-view.tsx` | `useNearbyUsersQuery(layer)` → 위 훅으로 교체. `engine.setFriends(layer, friends)` 는 그대로. CLUSTERED 면 `engine.setClusters(cells)` 같은 새 입력 |
+| `components/map/engine/map-engine.ts` | `viewBox()` 를 public 으로(요청 범위 산출), 셀 뭉치 그리기 추가, `anchorFor` 의 해시 폴백 제거 → 응답 `x,y` 로 |
+| `components/map/render/draw-friends.ts` | 그대로 사용 가능(`NearbyUser` 만 채우면). 셀 뭉치("N명") 렌더 추가 |
+| `hooks/queries/use-nearby-users-query.ts`, `app/bff/users/nearby/route.ts`, `mocks/user.ts` `mockNearbyUsers` | 목 스위치(`USE_MOCK_API`) 일 때만 남기고 실연동에서는 제거 |
+| `hooks/use-mock-friend-reactions.ts` | 반응은 범위 밖 — 실연동에서는 끈다 |
+
+---
+
+## 5. 주변 사람 패널 (`friends-panel.tsx`) — 내 곡과 비슷한 곡을 듣는 사람
+
+뷰포트("화면 안")와 다른 기준이다: **내가 듣는 곡의 이웃 곡(10곡)을 듣는 사람**, 가까운 순. 좌표는 없다(목록 전용).
+
+### 5.1 열기 — `POST /api/realtime/nearby` (본문 없음)
+
+```json
+{ "success": true, "data": {
+  "anchorMusicId": 8812, "snapshotSeq": 41,
+  "people": [
+    { "email": "a@x.com", "nickname": "연희", "imageUrl": null,
+      "meetingCount": 3, "riderCount": 0,
+      "musicId": 8812, "title": "…", "artist": "…", "distance": 0.0 },
+    { "email": "b@x.com", "nickname": null, "imageUrl": null,
+      "meetingCount": 0, "riderCount": 2,
+      "musicId": 9001, "title": "…", "artist": "…", "distance": 1.83 }
+  ] }, "error": null }
+```
+
+| 필드 | 뜻 |
+| --- | --- |
+| `anchorMusicId` | 기준이 된 내 곡 |
+| `snapshotSeq` | 이 목록이 반영한 마지막 WS `seq`. **이 값 이하의 `NEARBY_*` 델타는 이미 목록에 있으니 버린다** |
+| `people[]` | 평면 목록, 가까운 순. 나는 없다. `nickname` null 가능. `distance` 는 내 곡과 그 사람 곡의 16차원 거리(정렬용) |
+
+오류: 422 `PRESENCE_ERROR`(아직 재생한 곡이 없다 / 접속 아님) · 404 `MUSIC_NOT_FOUND` · 503 `SERVICE_UNAVAILABLE`(이웃곡 계산 실패 — 잠시 후 재시도 안내).
+
+호출하면 **동시에 실시간 구독이 시작**된다(그래서 POST 다). 패널을 열 때 한 번만 부른다 — 폴링 금지.
+
+### 5.2 델타 (`/user/queue/presence`)
+
+```json
+{ "email": "c@x.com", "nickname": "도현", "imageUrl": null, "meetingCount": 1, "riderCount": 0, "musicId": 9004 }
+```
+
+| 타입 | 처리 |
+| --- | --- |
+| `NEARBY_ENTER` | 목록에 추가. `musicId` 로 정렬 위치 — `people` 에 이미 있는 곡이면 그 곡 옆, 아니면 맨 뒤(distance 는 오지 않는다) |
+| `NEARBY_MOVE` | 그 사람의 `musicId` 갱신 |
+| `NEARBY_LEAVE` | `email` 만 유효. 제거 |
+| `NEARBY_SNAPSHOT` | **내 곡이 바뀌었을 때** 서버가 목록을 통째로 다시 보낸다(payload = §5.1 `data` 와 같은 모양). 통째로 교체 |
+
+봉투 `seq ≤ snapshotSeq` 면 버린다.
+
+### 5.3 닫기 — `/app/nearby/close` (본문 없음)
+
+패널을 닫을 때 보낸다. 안 보내면 델타가 계속 온다(패널이 닫혔는데 상태만 바뀌는 낭비).
+
+### 5.4 프론트 수정
+
+| 파일 | 수정 |
+| --- | --- |
+| `constants/api-endpoints.ts` | `realtime.nearby: "/api/realtime/nearby"` |
+| 새 `hooks/queries/use-nearby-people-query.ts` | `useQuery` 로 POST 한 번(`staleTime: Infinity`, `refetchInterval` 없음). `enabled: 패널 열림 && features.social && 소켓 연결됨` |
+| 새 `hooks/use-nearby-people-live.ts` | `NEARBY_*` 를 받아 캐시(`queryClient.setQueryData`) 갱신, `snapshotSeq` 필터. 패널 닫힘에 `/app/nearby/close` |
+| `components/panels/friends/friends-panel.tsx` | `useNearbyUsersQuery(layer)` → 위 훅. `layer` 인자는 없어진다(레이어 무관) |
+| `components/panels/friends/friend-row.tsx` | `user.isOnline` → 항상 true, `followingNickname` → 없음. "따라가기" 버튼은 `FEATURES` 로 감춘다(따라가기 백엔드 미구현) |
+| `types` | `NearbyPerson` 타입 추가 (`NearbyUser` 와 다르다: `title/artist/distance/meetingCount` 있음, 좌표 없음) |
+
+---
+
+## 6. 오류 코드 한 장
+
+### 6.1 WS — `/user/queue/errors`, 타입 `PRESENCE_ERROR`
+
+```json
+{ "type": "PRESENCE_ERROR", "seq": 5, "ts": 0,
+  "payload": { "code": "PRESENCE_NO_ANCHOR", "message": "재생 기록이 없어 입장할 수 없다. 먼저 곡을 재생해야 한다", "requestSeq": 1 } }
+```
+
+| `code` | 언제 | 프론트 처리 |
+| --- | --- | --- |
+| `PRESENCE_NO_ANCHOR` | 첫 join, 재생 기록 없음 | **정상 흐름.** 표식 없이 지도 표시, 첫 재생에 `layer` 넣기 (§2.2) |
+| `PRESENCE_NOT_CONNECTED` | 세션 등록 전에 요청 / 서버 재시작 | 잠시 후 재전송, 반복되면 재연결 |
+| `PRESENCE_STALE` | 이전 탭·만료된 접속·heartbeat 늦음·resync | 재연결 후 join·viewport 재전송. 다른 탭이 조종 중이면 안내 |
+| `PRESENCE_LAYER_INVALID` | layer 가 0~7 밖 | 코드 버그(예: 예전 습관으로 +1 해서 8 을 보냄) |
+| `PRESENCE_JOIN_INVALID` | requestSeq/musicId ≤ 0, 본문 없음 | 코드 버그 |
+| `PRESENCE_VIEWPORT_INVALID` | min≥max, ancestorBounds 길이/순서 불일치, 본문 없음 | 코드 버그 — §4.2 규칙 확인 |
+| `PRESENCE_LOCATION_NULL` | 서버에 곡 좌표 없음 | 드묾. 토스트 후 다른 곡 재생 유도 |
+
+`requestSeq` 는 join·viewport 오류에만 붙는다.
+
+### 6.2 REST — `{success:false, error:{code,message}}` (기존 `api.ts` 가 `ApiError` 로 던진다)
+
+| HTTP | `code` | 어디서 |
+| --- | --- | --- |
+| 400 | `VALIDATION_ERROR` | play(`source` 오타·`musicId` 없음·`layer` 범위 밖), end(`playedMs` 음수) |
+| 403 | `FORBIDDEN` | end — 내 기록 아님/없는 ID |
+| 404 | `MUSIC_NOT_FOUND` | play·nearby — 곡 없음 |
+| 422 | `PRESENCE_ERROR` | play·nearby — 소켓 미연결, 첫 배치인데 layer 없음, 곡 좌표 없음, 재생 곡 없음(nearby) |
+| 503 | `SERVICE_UNAVAILABLE` | nearby — 이웃곡 계산 실패 |
+
+---
+
+## 7. 전체 시퀀스 (한 세션)
+
+```
+[로그인 완료, accessToken 보유]
+1. WS CONNECT /ws/websocket  (Authorization: Bearer …)
+2. SUBSCRIBE /user/queue/presence, /user/queue/errors
+3. SEND /app/presence/join {requestSeq:1, layer:0, musicId:<저장된 곡 or 1>}
+   ← PRESENCE_JOINED {requestSeq:1, layer:0, musicId:8812}        → 내 표식 = 8812
+   (또는 ← PRESENCE_ERROR PRESENCE_NO_ANCHOR                      → 표식 없음, 첫 재생 대기)
+4. 15초마다 SEND /app/presence/heartbeat
+5. 지도 정지 250ms → SEND /app/presence/viewport {requestSeq:1, layer:0, minX.., ancestorBounds:[]}
+   ← VIEWPORT_SNAPSHOT (INDIVIDUAL | CLUSTERED)
+   ← VIEWPORT_ENTER/MOVE/LEAVE …  또는 5초마다 VIEWPORT_CELL_COUNTS
+6. 곡 재생 → POST /api/music/play {musicId:9001, source:"MAP", layer:0}
+   ← {playHistoryId:501, musicId:9001, layer:0, x, y, …}          → 내 표식 9001 로 비행
+   (다른 사람들 화면에는 서버가 VIEWPORT_MOVE 를 보낸다)
+7. 곡 끝/다음 곡 → PATCH /api/music/play/end {playHistoryId:501, playedMs:183000}
+8. 파고들기(레이어 0→1) → SEND /app/presence/join {requestSeq:2, layer:1, musicId:9001}
+   ← PRESENCE_JOINED {layer:1, musicId:9001}
+   → 새 화면 viewport {requestSeq:2, layer:1, ancestorBounds:[{layer:0,…}]}
+9. 주변 사람 패널 열기 → POST /api/realtime/nearby   ← {snapshotSeq, people[]}
+   ← NEARBY_ENTER/MOVE/LEAVE …, 내 곡 바뀌면 NEARBY_SNAPSHOT
+   패널 닫기 → SEND /app/nearby/close
+10. 탭 닫기 → SEND /app/presence/leave (선택) → DISCONNECT
+```
+
+---
+
+## 8. 백엔드·인프라에 요청할 것 (FE 가 막히는 지점)
+
+| 담당 | 항목 | 상태 |
+| --- | --- | --- |
+| 인프라 | nginx `/ws` location + `Upgrade`/`Connection: upgrade` 헤더, 타임아웃 ≥ 60s | 요청 필요 |
+| 인프라/BE | 배포 `spring.profiles.active` 에 `realtime` 포함, Redis 연결 | 확인 필요 |
+| BE1 | `CORS_ALLOWED_ORIGINS` 에 `http://localhost:3000` (로컬 개발) | 요청 필요 |
+| BE3(지원) | `SecurityConfig.anyRequest().permitAll()` → `authenticated()` 원복 (`/api/music/play*`, `/api/realtime/**`) | 원복 예정 |
+| BE3(지원) | 뷰포트 `groups/델타/PlayResponse x,y` 원시 좌표 통일 | **완료** (2026-09-18) |
+| BE3(지원) | 실시간 계약 `layer` 0-based 전환 (join·viewport·play·응답) | **완료** (2026-09-18) |
+| BE3(지원) | 따라가기·반응·비공개계정 | 이번 범위 밖 |
+
+---
+
+## 9. 프론트 수정 파일 총정리
+
+| 구분 | 파일 | 무엇을 |
+| --- | --- | --- |
+| 의존성 | `package.json` | `@stomp/stompjs` 추가 |
+| 환경 | `.env.example` | `NEXT_PUBLIC_WS_ORIGIN` (비면 현재 오리진) |
+| 상수 | `constants/api-endpoints.ts` | `music.play` → `/api/music/play`, `music.playEnd`, `realtime.nearby` |
+| 상수 | `constants/live-api-paths.ts` | 위 3경로 추가 + 실로그인 경로 주석 해제 (§0.2) |
+| 상수 | 새 `constants/realtime.ts` | destinations(`/app/presence/join` …), 큐 2개, heartbeat 15000, debounce 250 |
+| 타입 | `types/api.ts` | `PRESENCE_ERROR`, `SERVICE_UNAVAILABLE` |
+| 타입 | 새 `types/realtime.ts` | `RealtimeMessage<T>`, `PresenceJoined`, `ViewportRequest/Snapshot/Delta/CellCounts`, `NearbySnapshot/Person/Change`, `PlayResponse`, `WebSocketErrorCode` |
+| 통신 | 새 `lib/realtime/stomp-client.ts` | 연결·구독·봉투·seq·heartbeat·재연결 복원 |
+| 훅 | 새 `hooks/use-presence-join.ts` | join / PRESENCE_JOINED / NO_ANCHOR |
+| 훅 | 새 `hooks/use-viewport-subscription.ts` | viewport 요청·스냅샷·델타·셀카운트·close |
+| 훅 | `hooks/mutations/use-record-play-mutation.ts` | 본문·경로·응답 변경, `playHistoryId` 보관 |
+| 훅 | 새 `hooks/mutations/use-play-end-mutation.ts` | play/end |
+| 훅 | 새 `hooks/queries/use-nearby-people-query.ts`, `hooks/use-nearby-people-live.ts` | 주변 사람 패널 |
+| 스토어 | `stores/use-player-store.ts` | `playHistoryId`, 종료 시 end 전송 |
+| 지도 | `components/map/map-view.tsx` | 폴링 훅 → 뷰포트 훅, 재생 호출에 `layer` (0-based 그대로) |
+| 지도 | `components/map/engine/map-engine.ts` | `viewBox()` 공개, 셀 뭉치 입력, 해시 폴백 제거 |
+| 지도 | `components/map/render/draw-friends.ts` | 셀 뭉치 렌더 |
+| 패널 | `components/panels/friends/friends-panel.tsx`, `friend-row.tsx` | 주변 사람 실연동, 따라가기 버튼 가림 |
+| 제거/목 전용 | `hooks/queries/use-nearby-users-query.ts`, `app/bff/users/nearby/route.ts`, `mocks/user.ts`, `hooks/use-mock-friend-reactions.ts` | `USE_MOCK_API=1` 에서만 |

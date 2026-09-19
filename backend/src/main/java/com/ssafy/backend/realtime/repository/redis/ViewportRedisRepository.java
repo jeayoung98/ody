@@ -155,7 +155,7 @@ public class ViewportRedisRepository {
 	/**
 	 * 레이어별 셀 인원수 화면 사용자를 한 번에 읽는다.
 	 *
-	 * @param maxLayer 마지막 레이어 번호
+	 * @param maxLayer 레이어 수 (번호는 0 ~ maxLayer-1)
 	 * @return 레이어별 사용자 이메일
 	 */
 	public Map<Integer, Set<String>> findCellCountUsersByLayer(int maxLayer) {
@@ -163,13 +163,13 @@ public class ViewportRedisRepository {
 			return Map.of();
 		}
 		List<String> keys = new ArrayList<>(maxLayer);
-		for (int layer = 1; layer <= maxLayer; layer++) {
+		for (int layer = 0; layer < maxLayer; layer++) {
 			keys.add(CLUSTERED_SUBSCRIBERS_PREFIX + layer);
 		}
 		List<Object> values = readSetsAtOnce(keys);
 		Map<Integer, Set<String>> result = new LinkedHashMap<>();
-		for (int layer = 1; layer <= maxLayer; layer++) {
-			Set<String> emails = toStringSet(values.get(layer - 1));
+		for (int layer = 0; layer < maxLayer; layer++) {
+			Set<String> emails = toStringSet(values.get(layer));
 			if (!emails.isEmpty()) {
 				result.put(layer, emails);
 			}

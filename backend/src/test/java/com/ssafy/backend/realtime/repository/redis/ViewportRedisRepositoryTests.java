@@ -48,16 +48,17 @@ class ViewportRedisRepositoryTests {
 	@Test
 	@DisplayName("화면 구독 교체에 접속 버전과 화면 범위와 셀을 전달한다")
 	void replaceSubscriptionsPassesScreenAndCells() {
-		ViewportRange viewport = new ViewportRange(3, -1.0, 1.0, -2.0, 2.0,
+		// 레이어 2 (0-based) — 이전 화면은 레이어 0·1
+		ViewportRange viewport = new ViewportRange(2, -1.0, 1.0, -2.0, 2.0,
 				List.of(
-						new LayerBound(1, -3.0, 3.0, -4.0, 4.0),
-						new LayerBound(2, -5.0, 5.0, -6.0, 6.0)));
+						new LayerBound(0, -3.0, 3.0, -4.0, 4.0),
+						new LayerBound(1, -5.0, 5.0, -6.0, 6.0)));
 		Set<Cell> cells = Set.of(new Cell(3, 4), new Cell(1, 2));
 		when(redis.execute(replaceScript,
 				List.of("presence:user:user@x.com", "viewport:meta:user@x.com"),
-				"user@x.com", "7", "11", "3",
+				"user@x.com", "7", "11", "2",
 				"-1.0", "1.0", "-2.0", "2.0",
-				"1|-3.0|3.0|-4.0|4.0;2|-5.0|5.0|-6.0|6.0",
+				"0|-3.0|3.0|-4.0|4.0;1|-5.0|5.0|-6.0|6.0",
 				"INDIVIDUAL", "1:2,3:4", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(1L);
 
@@ -67,19 +68,19 @@ class ViewportRedisRepositoryTests {
 		assertThat(result).isEqualTo(ReplaceResult.APPLIED);
 		verify(redis).execute(replaceScript,
 				List.of("presence:user:user@x.com", "viewport:meta:user@x.com"),
-				"user@x.com", "7", "11", "3",
+				"user@x.com", "7", "11", "2",
 				"-1.0", "1.0", "-2.0", "2.0",
-				"1|-3.0|3.0|-4.0|4.0;2|-5.0|5.0|-6.0|6.0",
+				"0|-3.0|3.0|-4.0|4.0;1|-5.0|5.0|-6.0|6.0",
 				"INDIVIDUAL", "1:2,3:4", "viewport:cell:", "viewport:clustered:");
 	}
 
 	@Test
 	@DisplayName("오래된 화면 요청과 이전 접속을 구분한다")
 	void distinguishesOldRequestAndStaleConnection() {
-		ViewportRange viewport = new ViewportRange(1, -1.0, 1.0, -1.0, 1.0, List.of());
+		ViewportRange viewport = new ViewportRange(0, -1.0, 1.0, -1.0, 1.0, List.of());
 		List<String> keys = List.of("presence:user:user@x.com", "viewport:meta:user@x.com");
 		Object[] args = {
-				"user@x.com", "7", "2", "1",
+				"user@x.com", "7", "2", "0",
 				"-1.0", "1.0", "-1.0", "1.0", "",
 				"INDIVIDUAL", "0:0", "viewport:cell:", "viewport:clustered:"
 		};
@@ -152,10 +153,11 @@ class ViewportRedisRepositoryTests {
 
 		Map<Integer, Set<String>> result = repository.findCellCountUsersByLayer(3);
 
+		// 키 순서 = 레이어 0, 1, 2
 		assertThat(result)
-				.containsEntry(1, Set.of("a@test.local"))
-				.containsEntry(3, Set.of("b@test.local"))
-				.doesNotContainKey(2);
+				.containsEntry(0, Set.of("a@test.local"))
+				.containsEntry(2, Set.of("b@test.local"))
+				.doesNotContainKey(1);
 		verify(redis).executePipelined(any(RedisCallback.class));
 	}
 
@@ -168,7 +170,7 @@ class ViewportRedisRepositoryTests {
 				"epoch", "7",
 				"requestSeq", "11",
 				"mode", "CLUSTERED",
-				"layer", "1",
+				"layer", "0",
 				"minX", "0.0",
 				"maxX", "2.0",
 				"minY", "0.0",

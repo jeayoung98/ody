@@ -80,7 +80,7 @@ class ViewportDeltaServiceTests {
 		Set<String> candidates = Set.of(
 				ACTOR, "leave@example.com", "enter@example.com",
 				"move@example.com", "clustered@example.com");
-		when(viewportRepository.findUsersWatchingCells(1, "1:1", 1, "5:5"))
+		when(viewportRepository.findUsersWatchingCells(0, "1:1", 0, "5:5"))
 				.thenReturn(candidates);
 		when(viewportRepository.findMetaByEmails(anySet())).thenReturn(Map.of(
 				"leave@example.com", meta(11, ViewportMode.INDIVIDUAL, range(0, 2)),
@@ -103,12 +103,12 @@ class ViewportDeltaServiceTests {
 				"enter@example.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.VIEWPORT_ENTER,
 				new ViewportDelta(12, ACTOR, "actor", "actor.png", 20L,
-						5.0 / 16.0, 5.0 / 16.0, 3));
+						5.0, 5.0, 3));
 		verify(realtimeMessageService).sendToUser(
 				"move@example.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.VIEWPORT_MOVE,
 				new ViewportDelta(13, ACTOR, "actor", "actor.png", 20L,
-						5.0 / 16.0, 5.0 / 16.0, 3));
+						5.0, 5.0, 3));
 		verify(realtimeMessageService, never()).sendToUser(
 				org.mockito.ArgumentMatchers.eq("clustered@example.com"),
 				org.mockito.ArgumentMatchers.anyString(),
@@ -124,7 +124,7 @@ class ViewportDeltaServiceTests {
 	@DisplayName("같은 셀 안에서 위치가 바뀌어도 MOVE를 보낸다")
 	void sendsMoveInsideSameCell() {
 		PositionChanged event = change(10L, 20L, "1:1", "1:1");
-		when(viewportRepository.findUsersWatchingCells(1, "1:1", 1, "1:1"))
+		when(viewportRepository.findUsersWatchingCells(0, "1:1", 0, "1:1"))
 				.thenReturn(Set.of("viewer@example.com"));
 		when(viewportRepository.findMetaByEmails(Set.of("viewer@example.com")))
 				.thenReturn(Map.of("viewer@example.com", meta(21, ViewportMode.INDIVIDUAL, range(0, 2))));
@@ -139,18 +139,18 @@ class ViewportDeltaServiceTests {
 				"viewer@example.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.VIEWPORT_MOVE,
 				new ViewportDelta(21, ACTOR, "actor", null, 20L,
-						1.5 / 16.0, 1.5 / 16.0, 0));
+						1.5, 1.5, 0));
 	}
 
 	@Test
 	@DisplayName("레이어를 옮기면 이전 레이어에는 LEAVE, 새 레이어에는 ENTER를 보낸다")
 	void sendsLeaveAndEnterForLayerChange() {
 		PositionChanged event = new PositionChanged(
-				ACTOR, 7L, 1, 2, 10L, 10L, "1:1", "5:5", 0.3, 0.3);
-		when(viewportRepository.findUsersWatchingCells(1, "1:1", 2, "5:5"))
+				ACTOR, 7L, 0, 1, 10L, 10L, "1:1", "5:5", 0.3, 0.3);
+		when(viewportRepository.findUsersWatchingCells(0, "1:1", 1, "5:5"))
 				.thenReturn(Set.of("old@example.com", "new@example.com"));
 		ViewportRange newViewport = new ViewportRange(
-				2, 4, 6, 4, 6, List.of(new LayerBound(1, 0, 2, 0, 2)));
+				1, 4, 6, 4, 6, List.of(new LayerBound(0, 0, 2, 0, 2)));
 		when(viewportRepository.findMetaByEmails(Set.of("old@example.com", "new@example.com")))
 				.thenReturn(Map.of(
 						"old@example.com", meta(25, ViewportMode.INDIVIDUAL, range(0, 2)),
@@ -170,7 +170,7 @@ class ViewportDeltaServiceTests {
 				"new@example.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.VIEWPORT_ENTER,
 				new ViewportDelta(26, ACTOR, "actor", null, 10L,
-						5.0 / 16.0, 5.0 / 16.0, 0));
+						5.0, 5.0, 0));
 		verify(musicLocationService).findLocations(List.of(10L));
 	}
 
@@ -178,8 +178,8 @@ class ViewportDeltaServiceTests {
 	@DisplayName("이전 곡 좌표가 없어도 저장된 셀을 보고 있으면 LEAVE를 보낸다")
 	void sendsLeaveWhenOldLocationIsMissing() {
 		PositionChanged event = new PositionChanged(
-				ACTOR, 7L, 1, null, 10L, null, "1:1", null, null, null);
-		when(viewportRepository.findUsersWatchingCells(1, "1:1", null, null))
+				ACTOR, 7L, 0, null, 10L, null, "1:1", null, null, null);
+		when(viewportRepository.findUsersWatchingCells(0, "1:1", null, null))
 				.thenReturn(Set.of("viewer@example.com"));
 		when(viewportRepository.findMetaByEmails(Set.of("viewer@example.com")))
 				.thenReturn(Map.of("viewer@example.com", new ViewportMeta(
@@ -199,7 +199,7 @@ class ViewportDeltaServiceTests {
 	@DisplayName("셀 인원수 화면만 있으면 곡 좌표를 읽지 않는다")
 	void skipsClusteredReceiversBeforeLocationRead() {
 		PositionChanged event = change(10L, 20L, "1:1", "5:5");
-		when(viewportRepository.findUsersWatchingCells(1, "1:1", 1, "5:5"))
+		when(viewportRepository.findUsersWatchingCells(0, "1:1", 0, "5:5"))
 				.thenReturn(Set.of("viewer@example.com"));
 		when(viewportRepository.findMetaByEmails(Set.of("viewer@example.com")))
 				.thenReturn(Map.of("viewer@example.com", meta(41, ViewportMode.CLUSTERED, range(0, 6))));
@@ -214,10 +214,10 @@ class ViewportDeltaServiceTests {
 	@DisplayName("이전 레이어 선택 범위를 벗어난 곡은 보내지 않는다")
 	void skipsMusicOutsideAncestorBounds() {
 		PositionChanged event = new PositionChanged(
-				ACTOR, 7L, null, 2, null, 20L, null, "5:5", 0.3, 0.3);
+				ACTOR, 7L, null, 1, null, 20L, null, "5:5", 0.3, 0.3);
 		ViewportRange viewport = new ViewportRange(
-				2, 4, 6, 4, 6, List.of(new LayerBound(1, 0, 2, 0, 2)));
-		when(viewportRepository.findUsersWatchingCells(null, null, 2, "5:5"))
+				1, 4, 6, 4, 6, List.of(new LayerBound(0, 0, 2, 0, 2)));
+		when(viewportRepository.findUsersWatchingCells(null, null, 1, "5:5"))
 				.thenReturn(Set.of("viewer@example.com"));
 		when(viewportRepository.findMetaByEmails(Set.of("viewer@example.com")))
 				.thenReturn(Map.of("viewer@example.com", new ViewportMeta(
@@ -233,7 +233,7 @@ class ViewportDeltaServiceTests {
 	private static PositionChanged change(Long oldMusicId, Long newMusicId, String oldCell, String newCell) {
 		return new PositionChanged(
 				ACTOR, 7L,
-				oldMusicId == null ? null : 1, newMusicId == null ? null : 1,
+				oldMusicId == null ? null : 0, newMusicId == null ? null : 0,
 				oldMusicId, newMusicId, oldCell, newCell, 0.3, 0.3);
 	}
 
@@ -241,8 +241,9 @@ class ViewportDeltaServiceTests {
 		return new ViewportMeta(7, requestSeq, mode, viewport, Set.of());
 	}
 
+	/** 첫 레이어(0, pc1·pc2) 화면. */
 	private static ViewportRange range(double min, double max) {
-		return new ViewportRange(1, min, max, min, max, List.of());
+		return new ViewportRange(0, min, max, min, max, List.of());
 	}
 
 	private static RealtimeProperties properties() {

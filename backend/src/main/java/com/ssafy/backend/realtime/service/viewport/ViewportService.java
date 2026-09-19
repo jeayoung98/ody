@@ -183,7 +183,7 @@ public class ViewportService {
 	public ViewportSnapshot createCellCountSnapshot(
 			String email, long requestSeq, ViewportRange viewport, List<Cell> cells) {
 		viewport.validate();
-		Map<Cell, Integer> counts = viewport.layer() == 1
+		Map<Cell, Integer> counts = viewport.layer() == 0
 				? findFirstLayerCellCounts(email, viewport.layer(), cells)
 				: findDeepLayerCellCounts(email, viewport, cells);
 		CombinedCells combined = ViewportCellCalculator.combineNearbyCellsForDisplay(
@@ -211,7 +211,7 @@ public class ViewportService {
 	}
 
 	/**
-	 * 첫 레이어의 셀별 사용자 수를 가져오고 요청자를 뺀다.
+	 * 첫 레이어(0)의 셀별 사용자 수를 가져오고 요청자를 뺀다.
 	 *
 	 * @param email 요청한 사용자 이메일
 	 * @param layer 현재 레이어
@@ -334,7 +334,8 @@ public class ViewportService {
 			if (!viewport.contains(x, y) || !viewport.satisfiesBounds(pc)) {
 				continue;
 			}
-			result.add(new VisibleMusic(musicId, musicPositionCalculator.calculate(pc, viewport.layer())));
+			result.add(new VisibleMusic(
+					musicId, x, y, musicPositionCalculator.calculate(pc, viewport.layer())));
 		}
 		return result;
 	}
@@ -395,16 +396,21 @@ public class ViewportService {
 							})
 							.toList();
 					if (!users.isEmpty()) {
-						Placement calculate = music.placement();
-						groups.add(new ViewportMusicGroup(
-								music.musicId(), calculate.xNorm(), calculate.yNorm(), users));
+						// 화면 요청·셀 인원수와 같은 원시 PC 좌표로 준다. 정규화(0~1)는 셀 계산 내부용이다.
+						groups.add(new ViewportMusicGroup(music.musicId(), music.x(), music.y(), users));
 					}
 				});
 		return groups;
 	}
 
-	/** 화면에 실제로 있는 곡과 표시 위치. */
-	private record VisibleMusic(long musicId, Placement placement) {
+	/**
+	 * 화면에 실제로 있는 곡과 표시 위치.
+	 *
+	 * @param x 현재 레이어 가로축의 원시 PC 좌표 (프론트 지도 좌표계)
+	 * @param y 현재 레이어 세로축의 원시 PC 좌표
+	 * @param placement 셀 계산용 배치 (정규화 좌표·셀 번호)
+	 */
+	private record VisibleMusic(long musicId, double x, double y, Placement placement) {
 	}
 
 	/** 목록 생성 결과 종류. */

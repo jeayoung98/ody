@@ -22,7 +22,7 @@ class ViewportCellCalculatorTests {
 	@Test
 	void includesBothCellsWhenScreenTouchesBoundary() {
 		MusicPositionCalculator mapper = mapper(4);
-		ViewportRange viewport = new ViewportRange(1, 3, 4, 3, 4, List.of());
+		ViewportRange viewport = new ViewportRange(0, 3, 4, 3, 4, List.of());
 
 		Set<Cell> cells = ViewportCellCalculator.findCellsInCurrentScreen(viewport, mapper);
 
@@ -34,7 +34,7 @@ class ViewportCellCalculatorTests {
 	@Test
 	void clampsScreenOutsideAxisRangeToEdgeCells() {
 		MusicPositionCalculator mapper = mapper(4);
-		ViewportRange viewport = new ViewportRange(1, -100, 100, -100, 100, List.of());
+		ViewportRange viewport = new ViewportRange(0, -100, 100, -100, 100, List.of());
 
 		Set<Cell> cells = ViewportCellCalculator.findCellsInCurrentScreen(viewport, mapper);
 
@@ -46,7 +46,7 @@ class ViewportCellCalculatorTests {
 	@Test
 	void returnsOneCellForScreenInsideOneCell() {
 		MusicPositionCalculator mapper = mapper(4);
-		ViewportRange viewport = new ViewportRange(1, 1, 3, 1, 3, List.of());
+		ViewportRange viewport = new ViewportRange(0, 1, 3, 1, 3, List.of());
 
 		assertEquals(Set.of(new Cell(0, 0)), ViewportCellCalculator.findCellsInCurrentScreen(viewport, mapper));
 	}

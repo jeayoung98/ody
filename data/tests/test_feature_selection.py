@@ -37,8 +37,19 @@ def feature_list(current, root):
     return json.load(io.open(path, encoding="utf-8"))
 
 
-def test_korean_common_imports():
-    """참조 구현이 import 된다. feature_spec 누락으로 ModuleNotFoundError 가 났었다."""
+def test_korean_common_imports(current, root):
+    """참조 구현이 import 된다. feature_spec 누락으로 ModuleNotFoundError 가 났었다.
+
+    ⚠️ korean_common 은 **import 시점에** model_bundle.npz 를 읽는다
+    (scripts/korean_common.py:41 의 모듈 수준 np.load). 그 번들은 git 밖 대용량이라
+    팀 clone 에는 없다 — 없으면 skip 한다. conftest 의 bundle_dir 과 같은 규칙이다.
+
+    이 파일의 나머지 검사는 json 만 쓰므로 번들 없이도 그대로 돈다
+    (위 모듈 docstring 의 "대용량 데이터 없이 돈다" 를 이 검사만 어기고 있었다).
+    """
+    npz = os.path.join(root, "serving", current["bundle"], "model_bundle.npz")
+    if not os.path.exists(npz):
+        pytest.skip("번들 대용량 파일 없음: " + npz)
     import korean_common
     assert len(korean_common.KEPT) == N_KEPT
     assert korean_common.CLIP == 20.0

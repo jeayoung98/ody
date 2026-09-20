@@ -69,6 +69,31 @@ class SecurityPolicyTests {
 	}
 
 	/**
+	 * 실시간 REST 도 기본 거부다.
+	 *
+	 * <p>컨트롤러들이 principal 을 그대로 꺼내 쓰므로(임시 방어 제거, S15P21A405-82) 여기까지
+	 * 토큰 없는 요청이 들어오면 NPE 500 이 난다. 필터 체인이 먼저 막는다는 것을 고정한다.
+	 */
+	@Test
+	void realtimeApi_withoutToken_returns401() throws Exception {
+		mockMvc.perform(post("/api/realtime/nearby"))
+				.andExpect(status().isUnauthorized())
+				.andExpect(jsonPath("$.error.code").value("UNAUTHENTICATED"));
+	}
+
+	/**
+	 * 소켓 핸드셰이크는 인가 단계에서 막히면 안 된다.
+	 *
+	 * <p>토큰은 소켓이 열린 뒤 STOMP CONNECT 프레임에 실려 오고 WebSocketAuthInterceptor 가
+	 * 검사한다. 핸드셰이크 HTTP 요청에는 토큰이 없으므로 여기서 401 을 내면 실시간 기능 전체가
+	 * 붙지 않는다. 브라우저에는 1006 으로만 보여 원인을 찾기 어렵다.
+	 */
+	@Test
+	void websocketHandshake_withoutToken_isNotBlockedByAuthorization() throws Exception {
+		mockMvc.perform(get("/ws/info")).andExpect(status().is(Matchers.not(401)));
+	}
+
+	/**
 	 * 비로그인 허용 경로는 인가 단계에서 막히면 안 된다 (정본 §5.2 인증 선택, S15P21A405-346).
 	 * 뒤 단계에서 무엇이 나오든 상관없고, 401 이 아니어야 한다는 것만 본다.
 	 */

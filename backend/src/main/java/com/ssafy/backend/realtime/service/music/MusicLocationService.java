@@ -20,6 +20,16 @@ public interface MusicLocationService {
 	boolean exists(long musicId);
 
 	/**
+	 * 소리를 틀 수 있는 곡인지 확인한다.
+	 *
+	 * 곡마다 유튜브 영상을 찾아 둔 것이 있고, 찾아봤지만 쓸 만한 게 없다고 확정된 곡이 있다.
+	 * 프론트가 이미 같은 값으로 판정하므로 여기서도 같은 값을 쓴다 — 기준이 둘로 갈리면 화면이 어긋난다.
+	 *
+	 * 아직 찾아보지 않은 곡은 틀 수 있다고 본다. 프론트도 그때는 일단 시도한다.
+	 */
+	boolean playable(long musicId);
+
+	/**
 	 * 여러 곡의 16차원 좌표를 읽는다.
 	 * @param musicIds 곡 ID 목록
 	 * @return 곡 ID별 좌표. 없는 곡은 결과에서 빠진다

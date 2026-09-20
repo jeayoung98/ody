@@ -2,6 +2,11 @@ package com.ssafy.backend.realtime.service.play;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -32,6 +37,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 
 /** 곡 변경 뒤 이전 위치와 새 위치를 알리는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -45,6 +51,7 @@ class MusicPlayServiceTests {
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock PlayHistoryMapper playHistoryMapper;
 	@Mock MeetingService meetingService;
+	@Mock RiderMoveService riderMoveService;
 	@InjectMocks MusicPlayService service;
 
 	@Test
@@ -172,5 +179,32 @@ class MusicPlayServiceTests {
 						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.PRESENCE_ERROR));
 
 		verifyNoInteractions(playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("따라오는 사람이 있으면 기록을 한 번에 넣고 위치 알림은 한 건만 나간다")
+	void playWithRidersWritesOneBatchAndSendsOneEvent() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, 10L, 2, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(List.of());
+		when(riderMoveService.ridersOf(EMAIL)).thenReturn(List.of("r1@x.com", "r2@x.com"));
+		when(riderMoveService.moveAll(
+				eq(EMAIL), any(), eq(20L), eq(2), eq(placement),
+				anyDouble(), anyDouble(), eq("MAP"))).thenReturn(555L);
+
+		PlayResponse response = service.play(EMAIL, 20L, "MAP", 5);
+
+		// 인솔자 기록도 따라오는 사람들과 같이 들어가므로 한 줄씩 넣는 경로는 타지 않는다
+		assertThat(response.playHistoryId()).isEqualTo(555L);
+		verify(playHistoryMapper, never()).insert(any(PlayHistoryRow.class));
+		verify(playHistoryMapper, never()).incrementPlayCnt(20L);
+		// 따라오는 사람은 지도에 올리지 않아 알림은 인솔자 것 한 건뿐이다
+		verify(realtimeEventService, times(1)).send(any(PositionChanged.class));
 	}
 }

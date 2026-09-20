@@ -53,7 +53,6 @@ class PlayHistoryBatchStatementTests {
 			row.setMusicId(4927L);
 			row.setEmail("rider" + i + "@example.com");
 			row.setSource("FOLLOW");
-			row.setPlayedMs(i * 1000L);
 			rows.add(row);
 		}
 		return rows;
@@ -84,8 +83,8 @@ class PlayHistoryBatchStatementTests {
 
 		assertThat(countOf(boundSql.getSql(), "INSERT INTO play_history")).isEqualTo(1);
 		assertThat(boundSql.getSql()).doesNotContain(";");
-		// 한 줄에 칸이 5개
-		assertThat(boundSql.getParameterMappings()).hasSize(21 * 5);
+		// 한 줄에 칸이 4개
+		assertThat(boundSql.getParameterMappings()).hasSize(21 * 4);
 	}
 
 	@Test
@@ -107,19 +106,6 @@ class PlayHistoryBatchStatementTests {
 	}
 
 	@Test
-	@DisplayName("들은 시간도 UPDATE 한 문장으로 적고 사람마다 값이 다르다")
-	void updatesPlayedMsInOneStatement() {
-		List<PlayHistoryRow> rows = rows(21);
-
-		BoundSql boundSql = boundSql("updatePlayedMsBatch", param("rows", rows));
-
-		assertThat(countOf(boundSql.getSql(), "UPDATE play_history")).isEqualTo(1);
-		assertThat(boundSql.getSql()).doesNotContain(";");
-		// 한 줄에 번호와 시간 둘
-		assertThat(boundSql.getParameterMappings()).hasSize(21 * 2);
-	}
-
-	@Test
 	@DisplayName("재생수는 인원수만큼 한 번에 더한다")
 	void incrementsPlayCountOnce() {
 		Map<String, Object> parameter = param("musicId", 4927L);
@@ -137,7 +123,7 @@ class PlayHistoryBatchStatementTests {
 		BoundSql boundSql = boundSql("insertBatch", param("rows", rows(1)));
 
 		assertThat(countOf(boundSql.getSql(), "INSERT INTO play_history")).isEqualTo(1);
-		assertThat(boundSql.getParameterMappings()).hasSize(5);
+		assertThat(boundSql.getParameterMappings()).hasSize(4);
 	}
 
 	@Test
@@ -148,6 +134,6 @@ class PlayHistoryBatchStatementTests {
 		BoundSql boundSql = boundSql("insert", row);
 
 		assertThat(countOf(boundSql.getSql(), "INSERT INTO play_history")).isEqualTo(1);
-		assertThat(boundSql.getParameterMappings()).hasSize(5);
+		assertThat(boundSql.getParameterMappings()).hasSize(4);
 	}
 }

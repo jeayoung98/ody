@@ -5,6 +5,7 @@ import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import type { CSSProperties } from "react";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlayerBarHeight } from "@/hooks/use-player-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -77,8 +78,16 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   const features = useFeatures();
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
-  // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
-  const occludedRight = panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
+  /**
+   * 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318).
+   *
+   * **좁은 화면에서는 오른쪽을 아무도 안 가린다** (S15P21A405-417). 패널이 바텀시트로 아래에
+   * 서기 때문이다. 이걸 안 갈랐더니 375px 화면에 "오른쪽 410px 이 가려졌다" 고 알려 주게 돼서,
+   * 엔진이 남은 폭을 최소치 120px 로 잘랐다 — 주변 탐색 고리 반지름이 119 에서 43 으로 줄어
+   * 왼쪽 구석에 찌그러져 보였다 (실측).
+   */
+  const narrow = useIsNarrow();
+  const occludedRight = narrow ? 0 : panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
   /**
    * 지도가 가려지는 네 변 (S15P21A405-414). 지금 움직이는 것은 우측 패널 하나이고, 위아래는
    * 늘 덮여 있는 HUD 두께다. 바텀시트가 들어오면 아래가 여기서 움직인다 (S15P21A405-416).

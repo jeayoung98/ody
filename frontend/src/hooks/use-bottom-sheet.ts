@@ -11,10 +11,17 @@ import { usePanelStore } from "@/stores/use-panel-store";
 export const SHEET_PEEK = 120;
 
 /**
- * 시트 아래에 이미 서 있는 것들의 높이(px) — 화면 아래 여백 + 재생바 + 틈 + 네비.
- * 시트는 이 위에서만 움직인다. `layout/rail.tsx` · `player/bottom-bar.tsx` 와 같은 줄에 선다.
+ * 시트 아래에 서 있는 것들(재생바·네비)의 높이를 **읽어 온다.**
+ *
+ * 자리는 CSS 변수(`--sheet-bottom`)가 정하고, 여기서는 **얼마나 올릴 수 있는지**를 계산할 때만
+ * 필요하다. 재생바 높이가 재생 상태에 따라 바뀌므로 상수로 두면 어느 쪽에서든 어긋난다 —
+ * 값을 만드는 곳은 `main-screen.tsx` 한 곳이다.
  */
-export const SHEET_BOTTOM = 18 + 96 + 44 + 10;
+function bottomOffset(): number {
+  const raw = getComputedStyle(document.documentElement).getPropertyValue("--sheet-bottom");
+  const px = Number.parseFloat(raw);
+  return Number.isFinite(px) ? px : 170;
+}
 
 /**
  * 시트가 올라갔을 때 **지도에 남겨 두는 최소 높이**(px). 화면 높이에서 이만큼을 빼고 남는
@@ -36,7 +43,7 @@ const FLING = 0.5;
  * 높이는 `usePanelStore.sheetHeight` 에 쓴다. 지도 가림폭(`main-screen.tsx`)과 네비 숨김
  * (`layout/rail.tsx`)이 같은 값을 봐야 해서 컴포넌트 지역 상태로 두지 않았다.
  */
-export function useBottomSheet(bottomOffset: number) {
+export function useBottomSheet() {
   const sheetHeight = usePanelStore((s) => s.sheetHeight);
   const setSheetHeight = usePanelStore((s) => s.setSheetHeight);
   const activePanel = usePanelStore((s) => s.activePanel);
@@ -44,10 +51,7 @@ export function useBottomSheet(bottomOffset: number) {
   /** 드래그 한 번의 시작 상태. 프레임마다 바뀌는 값이라 state 로 두면 매번 다시 그린다 */
   const drag = useRef<{ y: number; h: number; t: number } | null>(null);
 
-  const maxHeight = useCallback(
-    () => Math.max(SHEET_PEEK, window.innerHeight - MAP_MIN - bottomOffset),
-    [bottomOffset],
-  );
+  const maxHeight = useCallback(() => Math.max(SHEET_PEEK, window.innerHeight - MAP_MIN - bottomOffset()), []);
 
   /**
    * 패널이 새로 열리면 늘 접힌 채로 시작한다 — 열자마자 지도를 덮어 버리지 않는다.

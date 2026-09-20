@@ -3,8 +3,9 @@
 import { useMemo, type ReactNode } from "react";
 import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { SHEET_BOTTOM } from "@/hooks/use-bottom-sheet";
+import type { CSSProperties } from "react";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
+import { usePlayerBarHeight } from "@/hooks/use-player-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
@@ -44,6 +45,15 @@ const PEEK_BODY = 10;
 const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
+/**
+ * 좁은 화면의 아래쪽 쌓기 (S15P21A405-417). 바닥부터 **재생바 → 네비 → 시트** 순서다.
+ * `--spacing-hud-b` 와 `--spacing-touch` 의 JS 쪽 거울이라 `tokens.css` 와 같이 고친다.
+ */
+const HUD_B = 18;
+const TOUCH = 44;
+/** 쌓인 것들 사이 틈 */
+const STACK_GAP = 8;
+
 interface MainScreenProps {
   /** 지도 위에 얹을 오버레이 (튜토리얼 등) */
   overlay?: ReactNode;
@@ -77,14 +87,28 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 시트는 좁은 화면에서만 생기므로 `sheetHeight` 가 `null` 이면 예전 값 그대로다.
    */
   const sheetHeight = usePanelStore((s) => s.sheetHeight);
-  const occludedBottom = sheetHeight == null ? HUD_OCCLUSION.bottom : SHEET_BOTTOM + sheetHeight;
+  /**
+   * 아래에 서 있는 것들의 실제 두께 (S15P21A405-417 · 416).
+   *
+   * 재생바 높이를 **재서** 쓴다 — 곡이 없으면 한 줄, 재생 중이면 진행바가 붙어 더 높다.
+   * 네비와 시트가 전부 이 위에 얹히므로, 상수로 박으면 그 차이만큼 떠 보이거나 겹친다.
+   * 같은 값을 CSS 변수로도 내려 보내 `layout/rail.tsx` · `panels/right-panel.tsx` 가 쓴다 —
+   * 두 군데가 각자 계산하면 어긋난다.
+   */
+  const playerH = usePlayerBarHeight();
+  const navBottom = HUD_B + playerH + STACK_GAP;
+  const sheetBottom = navBottom + TOUCH + STACK_GAP;
+  const occludedBottom = sheetHeight == null ? HUD_OCCLUSION.bottom : sheetBottom + sheetHeight;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],
   );
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-void text-ink">
+    <div
+      className="fixed inset-0 overflow-hidden bg-void text-ink"
+      style={{ "--nav-bottom": `${navBottom}px`, "--sheet-bottom": `${sheetBottom}px` } as CSSProperties}
+    >
       <MapView occlusion={occlusion} />
       {/* 축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다 */}
       <MapAxisLabels occlusion={occlusion} />

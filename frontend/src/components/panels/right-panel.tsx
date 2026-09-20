@@ -2,7 +2,7 @@
 
 import type { CSSProperties } from "react";
 import { usePanelEnabled } from "@/hooks/use-features";
-import { SHEET_BOTTOM, SHEET_PEEK, useBottomSheet } from "@/hooks/use-bottom-sheet";
+import { SHEET_PEEK, useBottomSheet } from "@/hooks/use-bottom-sheet";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
 import FeedPanel from "./feed/feed-panel";
@@ -31,9 +31,10 @@ export default function RightPanel() {
    * 376px 이라 열리는 순간 지도를 64% 덮었고, 왼쪽 19px 이 화면 밖으로 잘려 제목도 안 보였다.
    * 별을 눌러 상세를 열면 다음 별을 찾을 수가 없어 "한 번 탭 = 상세, 두 번 = 재생" 이 끊겼다.
    *
-   * `SHEET_BOTTOM` 은 아래에 이미 서 있는 것들(재생바·네비)의 높이다. 시트는 그 위에서만 움직인다.
+   * 아래 경계는 `main-screen.tsx` 가 재생바를 재서 내려 주는 `--sheet-bottom` 이다 —
+   * 재생바와 네비 위에서만 움직인다.
    */
-  const { sheetHeight, handlers, toggle } = useBottomSheet(SHEET_BOTTOM);
+  const { sheetHeight, handlers, toggle } = useBottomSheet();
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다
@@ -76,7 +77,7 @@ export default function RightPanel() {
        * 를 들어 봤지만 **브라우저 기기 에뮬레이션에서는 두 이벤트가 오지 않는다**(실측).
        * 변수로 두면 768px 이상에서는 아무도 안 읽으므로 이벤트가 오든 말든 상관이 없다.
        */
-      style={{ "--sheet-h": `${sheetHeight ?? SHEET_PEEK}px`, "--sheet-bottom": `${SHEET_BOTTOM}px` } as CSSProperties}
+      style={{ "--sheet-h": `${sheetHeight ?? SHEET_PEEK}px` } as CSSProperties}
     >
       {/*
         시트 손잡이 (S15P21A405-416). **좁은 화면에서만 보인다.**

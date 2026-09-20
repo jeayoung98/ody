@@ -4,7 +4,6 @@ import { FriendsIcon, JourneyIcon, RankIcon } from "@/components/common/icons";
 import { usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
-import { SHEET_PEEK } from "@/hooks/use-bottom-sheet";
 import { usePanelStore } from "@/stores/use-panel-store";
 import NearbyExploreButton from "./nearby-explore-button";
 import ProfileButton from "./profile-button";
@@ -43,16 +42,6 @@ export default function Rail() {
     else openComposer("start");
   };
   const panelEnabled = usePanelEnabled();
-  /**
-   * **시트가 올라오면 비켜 준다** (S15P21A405-416). 요청자는 네비를 손으로 끌어 옮기고
-   * 싶다고 했는데, 끌 수 있다는 걸 알아볼 방법이 없고 어디에 놔도 뭔가를 가린다.
-   *
-   * 실제로 거슬리는 순간은 **패널을 읽는 동안**이다 — 그때는 네비를 쓸 일이 없다.
-   * 그래서 시트가 접힘보다 올라가 있으면 아래로 미끄러져 나간다. 새 조작을 배울 것이 없고,
-   * 시트를 내리면 그대로 돌아온다. 데스크톱에는 `sheetHeight` 가 `null` 이라 걸리지 않는다.
-   */
-  const sheetHeight = usePanelStore((s) => s.sheetHeight);
-  const stepAside = sheetHeight != null && sheetHeight > SHEET_PEEK;
 
   return (
     /*
@@ -61,12 +50,14 @@ export default function Rail() {
      * 있어 조각이 따로 떠 보였다. 내려 보내면 상단이 비어 지도가 넓어지고, 바텀시트가
      * 들어올 때(S15P21A405-416) 시트가 이 묶음 위로 올라오면 된다.
      * 알약 모양은 그대로 둔다 — 떠 있는 유리라는 디자인 언어가 이 앱의 기본이다.
+     *
+     * 세로 자리는 `main-screen.tsx` 가 **재생바를 재서** 내려 주는 `--nav-bottom` 이다.
+     * 96px 로 박아 뒀더니 곡이 없을 때 재생바가 80px 이라 16px 이 비어 네비가 붕 떠 보였다.
+     * 재생 중이면 진행바가 붙어 더 높아지므로, 상수로는 어느 쪽에 맞춰도 한쪽이 어긋난다.
      */
     <div
       data-hud
-      className={`absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-[calc(var(--spacing-hud-b)+96px)] max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between max-tablet:transition-[translate,opacity] max-tablet:duration-300 ${
-        stepAside ? "max-tablet:pointer-events-none max-tablet:translate-y-[calc(100%+var(--spacing-hud-b))] max-tablet:opacity-0" : ""
-      }`}
+      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-[var(--nav-bottom)] max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between max-tablet:transition-[bottom] max-tablet:duration-200"
     >
       <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (

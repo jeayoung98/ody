@@ -44,7 +44,14 @@ export default function Rail() {
   const panelEnabled = usePanelEnabled();
 
   return (
-    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:right-gutter-sm">
+    /*
+     * 좁은 화면에서는 **아래로 내려와 재생바와 한 덩어리가 된다** (S15P21A405-417).
+     * 375px 상단은 마크·검색·레일이 한 줄을 다투는 자리였고, 아래는 재생바 하나만 덩그러니
+     * 있어 조각이 따로 떠 보였다. 내려 보내면 상단이 비어 지도가 넓어지고, 바텀시트가
+     * 들어올 때(S15P21A405-416) 시트가 이 묶음 위로 올라오면 된다.
+     * 알약 모양은 그대로 둔다 — 떠 있는 유리라는 디자인 언어가 이 앱의 기본이다.
+     */
+    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-hud-b max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between">
       <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">

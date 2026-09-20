@@ -19,7 +19,9 @@ export default function BottomBar() {
       <YoutubeEmbed />
       <footer
         data-hud
-        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:left-gutter-sm max-tablet:w-auto"
+        // 좁은 화면에서는 아래로 내려온 네비(`layout/rail.tsx`) 만큼 띄워 그 위에 앉는다.
+        // 두 값이 어긋나면 겹치거나 뜨므로 네비 높이(--spacing-touch)를 그대로 끌어 쓴다.
+        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:left-gutter-sm max-tablet:w-auto max-tablet:bottom-[calc(var(--spacing-hud-b)+var(--spacing-touch)+10px)]"
       >
         <PlayerBar />
       </footer>

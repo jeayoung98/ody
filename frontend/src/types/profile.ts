@@ -50,6 +50,14 @@ export interface NearbyUser {
   followingNickname: string | null;
   /** 절차적 아바타 시드 (0~1 여섯 개) */
   avatarSeed: number[];
+  /**
+   * 서버가 준 원시 PC 좌표 (S15P21A405-482). **ERD 에 없다** — 실시간 뷰포트 전용이다.
+   *
+   * 그 사람의 곡이 이 겹 상주 집합에 있으면 엔진이 그 별 자리를 쓰고, 없을 때 이 값으로
+   * 찍는다. 목 시절에는 없으면 이메일 해시로 아무 별에나 붙였는데, 그건 **엉뚱한 자리**였다.
+   */
+  x?: number;
+  y?: number;
 }
 
 /** 랭킹 항목 (사람) */

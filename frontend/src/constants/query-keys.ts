@@ -72,4 +72,12 @@ export const QUERY_KEYS = {
   chart: {
     ranking: (type: string) => ["chart", type] as const,
   },
+  /**
+   * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준
+   * 폴링이었고, 이건 내가 듣는 곡 기준이라 레이어를 타지 않는다. 그래서 키에 인자가 없다.
+   */
+  realtime: {
+    nearby: ["realtime", "nearby"] as const,
+  },
+
 } as const;

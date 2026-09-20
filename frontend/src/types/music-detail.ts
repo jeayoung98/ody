@@ -1,5 +1,5 @@
 import type { Id } from "./common";
-import type { Genre, Music } from "./music";
+import type { Music } from "./music";
 import type { Playlist } from "./playlist";
 
 /**
@@ -17,7 +17,6 @@ export interface MusicDetail extends Music {
   lyricist?: string | null;
   /** 무드 태그 */
   moods?: string[];
-  genres: Genre[];
   /**
    * 고정 주성분 16개. `axis` 는 0-based 축 번호, `value` 는 **원값**이다.
    *

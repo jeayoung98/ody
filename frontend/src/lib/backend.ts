@@ -295,7 +295,6 @@ interface BackendMusicSummary {
   artist: string | null;
   album: string | null;
   /** 장르 **이름** 배열. genreId 가 없다 — 지도 색칠에 필요하다 (BACKEND-NOTES B-21) */
-  genres: string[] | null;
   /** 검색 URL. 재생 URL 이 아니다 (규칙 6) */
   youtubeUrl: string | null;
   location: BackendLocation | null;

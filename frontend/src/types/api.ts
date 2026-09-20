@@ -22,7 +22,12 @@ export type ImplementedErrorCode =
   | "INVALID_CREDENTIALS"
   | "PASSWORD_MISMATCH"
   | "INVALID_PASSWORD_FORMAT"
-  | "INVALID_NICKNAME_LENGTH";
+  | "INVALID_NICKNAME_LENGTH"
+  // 실시간 (S15P21A405-482, 실시간 작업명세 §7.2)
+  /** 422 — 소켓 미연결 · 첫 배치인데 layer 없음 · 곡 좌표 없음 · 재생 없이 주변 사람 요청 */
+  | "PRESENCE_ERROR"
+  /** 503 — 주변 사람의 비슷한 곡 계산이 일시적으로 실패했다. **영구 오류가 아니다** */
+  | "SERVICE_UNAVAILABLE";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =

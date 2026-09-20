@@ -83,6 +83,7 @@ export default function SearchScreen() {
       <div className="min-h-0 flex-1 overflow-y-auto px-gutter-sm pb-hud-b">
         {(chip || input.trim()) && (
           <SearchResultList
+            variant="page"
             condition={condition}
             input={input.trim()}
             results={results}

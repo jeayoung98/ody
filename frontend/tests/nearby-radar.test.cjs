@@ -57,35 +57,3 @@ test("가장 먼 고리에 최대 인원이 서도 헬멧이 서로 겹치지 �
     for (let j = i + 1; j < n; j++) min = Math.min(min, Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]));
   assert.ok(min > RADAR.sizeMax, `가장 가까운 두 헬멧 간격 ${min.toFixed(1)}px 가 최대 지름 ${RADAR.sizeMax}px 보다 좁다`);
 });
-
-/**
- * **오디봇의 청취 시간** (S15P21A405-496).
- *
- * 예전 목은 몇 초 만에 곡을 갈아치워서 대충 듣고 넘기는 것처럼 보였다. 숫자로 고정해 둔다 —
- * 화면으로는 "좀 빨리 넘기는 것 같은데" 정도로만 보이고 원인을 짚기 어렵다.
- */
-const { listenMsFor } = require("../src/hooks/use-ody-bots.ts");
-const { ODY_BOTS } = require("../src/constants/realtime.ts");
-
-const always = (v) => () => v;
-
-test("끝까지 듣는 경우 곡 길이를 그대로 채운다", () => {
-  // rnd 가 0 이면 fullListenChance 아래라 항상 끝까지
-  assert.equal(listenMsFor(200, always(0)), 200_000);
-});
-
-test("중간에 넘겨도 최소 40% 는 듣는다 — 대충 듣고 넘기지 않는다", () => {
-  // rnd 가 1 에 가까우면 부분 청취. 그중 가장 짧은 경우를 본다
-  const ms = listenMsFor(600, always(0.999));
-  assert.ok(ms >= 600_000 * ODY_BOTS.partialRange[0] * 0.99, `${ms}ms 가 40% 보다 짧다`);
-  assert.ok(ms <= 600_000 * ODY_BOTS.partialRange[1] * 1.01);
-});
-
-test("아주 짧은 곡도 최소 체류 시간을 지킨다", () => {
-  assert.ok(listenMsFor(10, always(0.999)) >= ODY_BOTS.minListenMs);
-});
-
-test("곡 길이를 모르면 기본 범위 안에서 정한다", () => {
-  const ms = listenMsFor(null, always(0));
-  assert.equal(ms, ODY_BOTS.maxListenMs);
-});

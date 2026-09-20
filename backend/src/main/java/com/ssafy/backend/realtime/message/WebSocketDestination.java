@@ -20,4 +20,10 @@ public final class WebSocketDestination {
 	 * 클라이언트가 보내는 전체 경로는 /app/ride/playback 이고, 받는 쪽은 앞의 /app 을 뗀 값을 쓴다.
 	 */
 	public static final String APP_RIDE_PLAYBACK = "/ride/playback";
+
+	/**
+	 * C→S 인솔자 곡 상세 열기·닫기·탭 전환.
+	 * 전체 경로는 /app/ride/panel 이다.
+	 */
+	public static final String APP_RIDE_PANEL = "/ride/panel";
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
+import type { Occlusion } from "@/components/map/engine/map-engine";
 import { HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
@@ -32,7 +33,7 @@ import { nearbyResults } from "@/lib/analytics/flows";
 
 interface MapViewProps {
   /** 우측 패널·레일 등으로 가려진 폭(px). 중앙 계산에서 제외한다 */
-  occludedRight: number;
+  occlusion: Occlusion;
 }
 
 /**
@@ -42,7 +43,7 @@ interface MapViewProps {
  * **보는 곡과 내 위치는 다른 값이다** (S15P21A405-277). 클릭은 보는 곡만 바꾸고, 내 위치(우주선)는
  * 재생했을 때만 옮겨간다 — 엔진 `FollowState` 주석이 적어 둔 SOCIAL-07 의 두 단계와 같은 구분이다.
  */
-export default function MapView({ occludedRight }: MapViewProps) {
+export default function MapView({ occlusion }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
   const features = useFeatures();
   const { ref, size } = useViewport();
@@ -147,7 +148,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
     return () => registerMapEngine(null);
   }, [engine, syncFromEngine]);
 
-  useEffect(() => engine.setOcclusion(occludedRight), [engine, occludedRight]);
+  useEffect(() => engine.setOcclusion(occlusion), [engine, occlusion]);
 
   /**
    * 지도 위에 떠 있는 HUD 상자를 재서 엔진에 넘긴다 — 화면 밖 표식이 여기에 가리지 않게 한다.
@@ -172,7 +173,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       clearTimeout(later);
       window.removeEventListener("resize", measure);
     };
-  }, [engine, occludedRight, viewMode]);
+  }, [engine, occlusion, viewMode]);
 
   // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {

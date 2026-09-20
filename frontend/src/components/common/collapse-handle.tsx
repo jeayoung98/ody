@@ -11,8 +11,14 @@ interface CollapseHandleProps {
   title: string;
 }
 
-/** 손잡이 치수(px). `clip-path: path()` 가 절대좌표라 여기서 한 번에 정한다 */
-const W = 17;
+/**
+ * 손잡이 치수(px). `clip-path: path()` 가 절대좌표라 여기서 한 번에 정한다.
+ *
+ * 폭은 내보낸다 — 접힌 패널이 화면을 얼마나 가리는지 계산하는 쪽(`main-screen.tsx`)이 이 값을
+ * 손으로 옮겨 적고 있다가 22→17 변경을 놓쳤다 (S15P21A405-479).
+ */
+export const HANDLE_W = 17;
+const W = HANDLE_W;
 const H = 62;
 /**
  * 바깥쪽 변이 위아래로 깎이는 깊이 — 이만큼이 사다리꼴의 기울기다.

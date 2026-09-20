@@ -22,7 +22,6 @@ function toMusicDetail(res: BackendMusicDetailResponse): MusicDetail {
   return {
     ...toMusic(res),
     // 백엔드는 장르를 **이름만** 준다. id 는 배열 순번을 채운 자리표시자이지 실제 genre.id 가 아니다 (B-21)
-    genres: (res.genres ?? []).map((name, i) => ({ id: i, name })),
     // 16개를 **원값 그대로** 보낸다. 축마다 흩어진 폭이 달라서 어느 것이 유별난지는
     // 상주 집합의 축별 폭으로 재야 알 수 있다 — 그 잣대를 가진 쪽은 화면이다 (S15P21A405-355)
     principalComponents: pc.map((v, i) => ({ axis: i, value: v })),

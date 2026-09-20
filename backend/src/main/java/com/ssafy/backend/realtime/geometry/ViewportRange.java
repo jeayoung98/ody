@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * 현재 화면과 여기까지 내려오며 선택한 이전 화면들.
  *
- * @param layer 현재 레이어
+ * @param layer 현재 레이어 (0-based, 0 ~ 7)
  * @param minX 현재 화면의 최소 x 좌표
  * @param maxX 현재 화면의 최대 x 좌표
  * @param minY 현재 화면의 최소 y 좌표
@@ -18,7 +18,8 @@ public record ViewportRange(
 		double minY, double maxY,
 		List<LayerBound> ancestorBounds) {
 
-	private static final int MAX_LAYER = 8;
+	/** 레이어 수. 유효 번호는 0 ~ 7 (프론트와 같은 0-based). */
+	private static final int LAYER_COUNT = 8;
 
 	/** 이전 화면 목록이 밖에서 바뀌지 않도록 복사한다. */
 	public ViewportRange {
@@ -30,17 +31,17 @@ public record ViewportRange(
 	 * @throws IllegalArgumentException 레이어, 범위 또는 이전 화면 순서가 잘못된 경우
 	 */
 	public void validate() {
-		if (layer < 1 || layer > MAX_LAYER) {
-			throw new IllegalArgumentException("레이어는 1부터 8까지다");
+		if (layer < 0 || layer >= LAYER_COUNT) {
+			throw new IllegalArgumentException("레이어는 0부터 7까지다");
 		}
 		validateRange(minX, maxX, "현재 x 범위");
 		validateRange(minY, maxY, "현재 y 범위");
-		if (ancestorBounds == null || ancestorBounds.size() != layer - 1) {
+		if (ancestorBounds == null || ancestorBounds.size() != layer) {
 			throw new IllegalArgumentException("이전 레이어 범위 수가 맞지 않는다");
 		}
 		for (int i = 0; i < ancestorBounds.size(); i++) {
 			LayerBound bound = ancestorBounds.get(i);
-			if (bound == null || bound.layer() != i + 1) {
+			if (bound == null || bound.layer() != i) {
 				throw new IllegalArgumentException("이전 레이어 순서가 맞지 않는다");
 			}
 			validateRange(bound.minX(), bound.maxX(), "이전 x 범위");
@@ -70,7 +71,7 @@ public record ViewportRange(
 			return false;
 		}
 		for (LayerBound bound : ancestorBounds) {
-			int xIndex = (bound.layer() - 1) * 2;
+			int xIndex = bound.layer() * 2;
 			int yIndex = xIndex + 1;
 			if (pc.length <= yIndex || !bound.contains(pc[xIndex], pc[yIndex])) {
 				return false;

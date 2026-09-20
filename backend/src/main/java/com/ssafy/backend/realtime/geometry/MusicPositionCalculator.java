@@ -81,9 +81,9 @@ public class MusicPositionCalculator {
 	 * 곡 좌표 pc[] 를 해당 레이어의 격자 셀로 배치한다.
 	 *
 	 * @param pc    곡의 PC 성분 배열(pc[0]=PC1 … 길이 >= 2*maxLayer)
-	 * @param layer 1-based 레이어 번호
+	 * @param layer 0-based 레이어 번호 (프론트와 같다)
 	 * @return 표시 축쌍·정규화 좌표·격자 셀을 담은 배치 결과
-	 * @throws IllegalArgumentException 레이어가 [1, maxLayer] 밖이거나 pc 길이가 부족할 때
+	 * @throws IllegalArgumentException 레이어가 [0, maxLayer-1] 밖이거나 pc 길이가 부족할 때
 	 */
 	public Placement calculate(double[] pc, int layer) {
 		int[] axes = findAxes(layer);
@@ -104,7 +104,7 @@ public class MusicPositionCalculator {
 	public int[] findAxes(int layer) {
 		return LayerAxisCalculator.findAxes(layer, maxLayer)
 				.orElseThrow(() -> new IllegalArgumentException(
-						"레이어 범위 밖: " + layer + " (1.." + maxLayer + ")"));
+						"레이어 범위 밖: " + layer + " (0.." + (maxLayer - 1) + ")"));
 	}
 
 	/** 곡의 한 축 위치를 셀 번호로 바꾼다. */

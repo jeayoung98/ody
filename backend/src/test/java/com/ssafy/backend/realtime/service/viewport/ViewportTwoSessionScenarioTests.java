@@ -56,11 +56,11 @@ class ViewportTwoSessionScenarioTests {
 		deltaService.subscribeToChanges();
 
 		// 같은 셀 진입은 첫 연결, 화면 닫힘, 재연결 순서다.
-		when(viewportRepository.findUsersWatchingCells(null, null, 1, "1:1"))
+		when(viewportRepository.findUsersWatchingCells(null, null, 0, "1:1"))
 				.thenReturn(Set.of(VIEWER), Set.of(), Set.of(VIEWER));
-		when(viewportRepository.findUsersWatchingCells(1, "1:1", 1, "2:2"))
+		when(viewportRepository.findUsersWatchingCells(0, "1:1", 0, "2:2"))
 				.thenReturn(Set.of(VIEWER));
-		when(viewportRepository.findUsersWatchingCells(1, "2:2", null, null))
+		when(viewportRepository.findUsersWatchingCells(0, "2:2", null, null))
 				.thenReturn(Set.of(VIEWER));
 		when(viewportRepository.findMetaByEmails(Set.of(VIEWER)))
 				.thenReturn(
@@ -87,18 +87,18 @@ class ViewportTwoSessionScenarioTests {
 		order.verify(messageService).sendToUser(
 				VIEWER, WebSocketDestination.QUEUE_PRESENCE, RealtimeMessageType.VIEWPORT_ENTER,
 				new ViewportDelta(10, ACTOR, "actor", "actor.png", 10L,
-						1.0 / 16.0, 1.0 / 16.0, 2));
+						1.0, 1.0, 2));
 		order.verify(messageService).sendToUser(
 				VIEWER, WebSocketDestination.QUEUE_PRESENCE, RealtimeMessageType.VIEWPORT_MOVE,
 				new ViewportDelta(10, ACTOR, "actor", "actor.png", 20L,
-						2.0 / 16.0, 2.0 / 16.0, 2));
+						2.0, 2.0, 2));
 		order.verify(messageService).sendToUser(
 				VIEWER, WebSocketDestination.QUEUE_PRESENCE, RealtimeMessageType.VIEWPORT_LEAVE,
 				new ViewportDelta(10, ACTOR, null, null, null, null, null, null));
 		order.verify(messageService).sendToUser(
 				VIEWER, WebSocketDestination.QUEUE_PRESENCE, RealtimeMessageType.VIEWPORT_ENTER,
 				new ViewportDelta(1, ACTOR, "actor", "actor.png", 10L,
-						1.0 / 16.0, 1.0 / 16.0, 2));
+						1.0, 1.0, 2));
 		order.verifyNoMoreInteractions();
 	}
 
@@ -106,8 +106,8 @@ class ViewportTwoSessionScenarioTests {
 	private static PositionChanged change(Long oldMusicId, Long newMusicId, String oldCell, String newCell) {
 		return new PositionChanged(
 				ACTOR, 7L,
-				oldMusicId == null ? null : 1,
-				newMusicId == null ? null : 1,
+				oldMusicId == null ? null : 0,
+				newMusicId == null ? null : 0,
 				oldMusicId, newMusicId, oldCell, newCell, 0.0, 0.0);
 	}
 
@@ -115,7 +115,7 @@ class ViewportTwoSessionScenarioTests {
 	private static ViewportMeta meta(long epoch, long requestSeq) {
 		return new ViewportMeta(
 				epoch, requestSeq, ViewportMode.INDIVIDUAL,
-				new ViewportRange(1, 0, 4, 0, 4, List.of()), Set.of());
+				new ViewportRange(0, 0, 4, 0, 4, List.of()), Set.of());
 	}
 
 	/** 두 축만 채운 곡 좌표를 만든다. */

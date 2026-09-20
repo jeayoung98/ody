@@ -60,13 +60,13 @@ class ViewportCellCountSchedulerTests {
 	@Test
 	@DisplayName("대상과 화면 정보를 묶음 조회하고 현재 셀별 인원수 화면만 갱신한다")
 	void sendsOnlyCurrentCellCountScreens() {
-		ViewportRange layerOne = new ViewportRange(1, 0, 2, 0, 2, List.of());
+		ViewportRange layerOne = new ViewportRange(0, 0, 2, 0, 2, List.of());
 		ViewportRange layerTwo = new ViewportRange(
-				2, 0, 2, 0, 2,
-				List.of(new ViewportRange.LayerBound(1, 0, 2, 0, 2)));
+				1, 0, 2, 0, 2,
+				List.of(new ViewportRange.LayerBound(0, 0, 2, 0, 2)));
 		Set<String> users = Set.of(ACTIVE, OLD_MODE, WRONG_LAYER, NO_META);
 		when(musicPositionCalculator.maxLayer()).thenReturn(2);
-		when(viewportRepository.findCellCountUsersByLayer(2)).thenReturn(Map.of(1, users));
+		when(viewportRepository.findCellCountUsersByLayer(2)).thenReturn(Map.of(0, users));
 		when(viewportRepository.findMetaByEmails(anySet())).thenReturn(Map.of(
 				ACTIVE, meta(ViewportMode.CLUSTERED, 8L, layerOne),
 				OLD_MODE, meta(ViewportMode.INDIVIDUAL, 9L, layerOne),
@@ -119,10 +119,10 @@ class ViewportCellCountSchedulerTests {
 	@Test
 	@DisplayName("한 사용자 갱신이 실패해도 대상 수와 성공 수를 기록한다")
 	void recordsFailedCellCountUpdate() {
-		ViewportRange viewport = new ViewportRange(1, 0, 2, 0, 2, List.of());
+		ViewportRange viewport = new ViewportRange(0, 0, 2, 0, 2, List.of());
 		when(musicPositionCalculator.maxLayer()).thenReturn(1);
 		when(viewportRepository.findCellCountUsersByLayer(1))
-				.thenReturn(Map.of(1, Set.of(ACTIVE)));
+				.thenReturn(Map.of(0, Set.of(ACTIVE)));
 		when(viewportRepository.findMetaByEmails(Set.of(ACTIVE)))
 				.thenReturn(Map.of(ACTIVE, meta(ViewportMode.CLUSTERED, 8L, viewport)));
 		when(viewportService.createCellCountSnapshot(ACTIVE, 8L, viewport))

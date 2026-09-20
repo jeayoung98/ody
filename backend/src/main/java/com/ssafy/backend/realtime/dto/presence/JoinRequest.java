@@ -9,7 +9,7 @@ import jakarta.validation.constraints.NotNull;
  */
 public record JoinRequest(
 		@NotNull Long requestSeq,
-		@NotNull Integer layer,
+		@NotNull Integer layer, // 0-based (0 ~ 7), 프론트와 같다
 		@NotNull Long musicId) {
 
 	/** 요청값을 검사한다. */
@@ -17,8 +17,8 @@ public record JoinRequest(
 		if (requestSeq == null || requestSeq < 1) {
 			throw new IllegalArgumentException("입장 요청 순번은 1 이상이어야 한다");
 		}
-		if (layer == null || layer < 1) {
-			throw new IllegalArgumentException("레이어는 1 이상이어야 한다");
+		if (layer == null || layer < 0) {
+			throw new IllegalArgumentException("레이어는 0 이상이어야 한다");
 		}
 		if (musicId == null || musicId < 1) {
 			throw new IllegalArgumentException("곡 ID는 1 이상이어야 한다");

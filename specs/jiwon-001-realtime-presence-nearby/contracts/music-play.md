@@ -22,7 +22,7 @@
 | --- | --- | --- | --- | --- |
 | `musicId` | long | required | 곡 존재 · `music.location` NOT NULL | `MUSIC_NOT_FOUND` 404 / `PRESENCE_ERROR` 422 |
 | `source` | string | required | `MAP` \| `JOURNEY` \| `PLAYLIST` \| `FOLLOW` | `VALIDATION_ERROR` 400 |
-| `layer` | int | optional | 1~8. **아직 지도에 서 있지 않을 때만** 쓴다(첫 재생). 이미 서 있으면 무시하고 서버 레이어 유지 | 범위 밖 `VALIDATION_ERROR` 400 / 지도에 없는데 누락 `PRESENCE_ERROR` 422 |
+| `layer` | int | optional | **0~7** (0-based, 프론트 `useMapStore.layer` 그대로 — 2026-09-18 1~8 → 0~7 변경). **아직 지도에 서 있지 않을 때만** 쓴다(첫 재생). 이미 서 있으면 무시하고 서버 레이어 유지 | 범위 밖 `VALIDATION_ERROR` 400 / 지도에 없는데 누락 `PRESENCE_ERROR` 422 |
 
 **Response 200**
 
@@ -32,9 +32,9 @@
   "data": {
     "playHistoryId": 88213,
     "musicId": 10234,
-    "layer": 3,
-    "x": 0.62,
-    "y": 0.31,
+    "layer": 2,
+    "x": 4.21,
+    "y": -2.87,
     "cellX": 9,
     "cellY": 4
   },
@@ -46,7 +46,7 @@
 | --- | --- |
 | `playHistoryId` | `/music/play/end`에서 `playedMs` 갱신에 사용 |
 | `layer` | 요청자가 **실제로 서 있는 레이어**. 이미 지도에 있었으면 그 레이어(요청 `layer` 무시), 첫 재생이면 요청 `layer`. 이 API로 레이어가 바뀌지 않는다 |
-| `x`, `y` | 현재 레이어 표시 2축의 정규화 좌표(0~1). FE는 내 마커 보정에만 사용 |
+| `x`, `y` | 현재 레이어 표시 2축의 **원시 PC 좌표**(뷰포트 요청·`groups[]`·`cells[]` 와 같은 지도 좌표계). FE는 내 마커 보정에만 사용. 2026-09-18 정규화(0~1) → 원시로 변경 |
 | `cellX`, `cellY` | 소속 셀(격자 16). FE 표시 불필요 — 디버깅용 |
 
 **서버 처리 순서** (FR-012): ① 좌표·셀 계산(원자 단위 밖) → ② Lua 원자 갱신(구곡 SREM·셀·인원수 / 신곡 SADD·셀·인원수 / presence) → ③ `play_history` INSERT(`played_ms = 0`) → ④ 델타 팬아웃(뷰포트·근처) → ⑤ 만남 증가(비동기).

@@ -11,6 +11,7 @@ import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import PanelCloseButton from "../panel-close-button";
 import FriendRow from "./friend-row";
+import NearbyRadar from "./nearby-radar";
 import ReactionButton from "./reaction-button";
 
 /**
@@ -42,8 +43,17 @@ export default function FriendsPanel() {
       <Note>
         내가 듣는 곡과 <b>비슷한 곡</b>을 듣고 있는 사람입니다. 여기서의 거리는 실제 위치가 아니라 음악 지도상의 좌표 거리예요.
       </Note>
-      {/* 반응은 주변 사람에게 보내는 것이라 그 목록 위에 둔다 (S15P21A405-434). 우하단 FAB 였다 */}
-      <ReactionButton />
+      {/*
+        레이더가 위, 줄 목록이 아래다 (S15P21A405-496). 레이더는 **거리와 크기**를 한눈에
+        보여주고, 목록은 레이더에 넣을 자리가 없는 것(듣는 곡 제목·만남 횟수)을 적는다.
+        하나만 두면 둘 중 하나를 잃는다.
+      */}
+      {/*
+        **판은 늘 그리고, 사람만 연결됐을 때 얹는다** (S15P21A405-496). 연결까지 기다렸다가
+        그리면 실시간이 꺼져 있는 동안 패널에 빈 공간만 남아 무엇을 보는 화면인지 알 수 없다.
+        눈금과 가운데의 나는 연결과 상관없이 참인 것들이라 먼저 보여 줘도 거짓말이 아니다.
+      */}
+      <NearbyRadar people={connected && data ? data.people : []} />
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {/*
           **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는
@@ -64,6 +74,11 @@ export default function FriendsPanel() {
         {isError && !noPlay && !temporary && <ErrorMessage />}
         {connected && data && data.people.length === 0 && <EmptyState message="지금은 비슷한 곡을 듣는 사람이 없어요." />}
         {data?.people.map((p) => <FriendRow key={p.email} person={p} />)}
+      </div>
+      {/* 반응은 패널 **오른쪽 아래**다 (S15P21A405-496). 목록 위에 있으면 목록을 읽기 전에
+          먼저 걸리는데, 반응은 보고 나서 하는 일이다 */}
+      <div className="mt-1 flex justify-end">
+        <ReactionButton />
       </div>
     </Box>
   );

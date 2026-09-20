@@ -160,6 +160,15 @@
 @utility grad-bg {
   background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
 }
+/*
+ * 같은 색인데 가로로 눕혔다 (S15P21A405-479). 깊이 게이지처럼 **여러 칸이 하나의
+ * 그라데이션을 나눠 갖는** 자리에 쓴다 — 칸마다 `background-size`·`background-position-x`
+ * 로 제 몫의 구간만 보여주면, 칸이 떨어져 있어도 전체가 한 줄기로 읽힌다.
+ * 118deg 인 `grad-bg` 를 그대로 쓰면 칸마다 대각선이 다시 시작해 줄기가 끊긴다.
+ */
+@utility grad-bg-h {
+  background-image: linear-gradient(90deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
+}
 @utility grad-text {
   background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
   -webkit-background-clip: text;

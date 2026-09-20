@@ -42,6 +42,16 @@ export default function LayerStepper() {
   const nextOpen = !locked && gateOpen && layer + 1 < LAYER_COUNT;
   const last = nextOpen ? layer + 1 : layer;
 
+  /**
+   * 이 칸의 글자 크기. **지나온 겹은 작다** (S15P21A405-479). 색과 굵기만으로 갈라 두었더니
+   * 여덟 칸이 다 같은 덩치라 "지금 어디" 가 한눈에 안 잡혔다. 크기까지 다르면 훑기만 해도 읽힌다.
+   *
+   * 다음 겹(청록 미리보기)은 줄이지 않는다 — 지나온 길이 아니라 **갈 수 있는 길**이라, 작아지면
+   * 이미 지난 것처럼 보인다. 줄에서 가장 큰 글자가 늘 지금 겹이라 `items-center` 기준선도
+   * 흔들리지 않는다.
+   */
+  const size = (i: number) => (i < layer ? "text-sm" : "text-lg");
+
   /** 이 칸의 글자 색. 겨누는 중이면 돌아갈 길만 밝고 나머지는 물러난다 */
   const tone = (i: number) => {
     if (i === layer + 1) return "text-teal/70";
@@ -73,7 +83,7 @@ export default function LayerStepper() {
                       ? "한 칸 깊이 — 이 겹의 별을 그대로 데려가 새 축으로 재투영"
                       : `${LAYER_NAMES[i]}${ro(LAYER_NAMES[i])} 떠오르기 — 두고 온 별이 돌아오고 좌표도 복원`
               }
-              className={`px-2 py-1 text-lg leading-none whitespace-nowrap transition-colors duration-fast disabled:cursor-default ${tone(i)}`}
+              className={`px-2 py-1 leading-none whitespace-nowrap transition-colors duration-fast disabled:cursor-default ${size(i)} ${tone(i)}`}
             >
               {LAYER_NAMES[i]}
             </button>

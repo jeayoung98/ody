@@ -151,6 +151,13 @@ COMMENT ON TABLE :"sample_tbl" IS '레이어 첫 화면용 격자 대표 트랙.
 COMMENT ON COLUMN :"sample_tbl".gx IS 'floor(x / 2.0). 셀 크기 2.0. 칸 범위는 [gx*2.0, gx*2.0+2.0)';
 COMMENT ON COLUMN :"sample_tbl".cnt IS '그 칸에 든 곡 수. 칸마다 편차가 크다(1 ~ 수십만). FE 가 점 크기와 LIMIT 판단에 쓴다';
 
+-- ⚠️ 통계부터 갱신한다. is_unplayable 은 2026-09-18 에 추가·백필됐는데(S15P21A405-454)
+--    운영 last_analyze 는 2026-09-17 이라 **이 칼럼의 통계가 아예 없다**(pg_stats 에 행이 없다).
+--    그러면 플래너가 boolean 기본 선택도 50% 를 써서 후보를 2,348,587행으로 본다 — 실제 약 468만의 절반이다.
+--    아래 정렬이 그 절반 크기로 계획돼 work_mem 배분이 어긋난다. EXPLAIN 으로 확인한 실제 오차다.
+--    S15P21A405-305(인덱스 만들고 ANALYZE 안 해서 플랜 오선택)와 같은 부류다.
+ANALYZE :"music_tbl";
+
 DELETE FROM :"sample_tbl" WHERE layer = 1;
 
 -- 후보는 재생 가능한 곡뿐이다. 여기서 한 번 거르므로 **백엔드가 응답 단계에서 다시 거르면 안 된다** —
@@ -173,6 +180,12 @@ quota AS (
 ranked AS (
   -- 칸 안에서는 무작위. 중심 최근접을 쓰면 점이 칸 한복판에 박혀 바둑판이 보인다.
   -- md5 라서 재실행해도 같은 곡이 뽑힌다(재현 가능, AC).
+  --
+  -- 이 window 함수가 이 스크립트에서 제일 비싼 단계다. 칸별 상위 k 를 뽑는 연산자가 postgres 에
+  -- 없어서, 입력 전체를 (gx, gy, md5) 로 한 번 정렬해야 row_number 를 매길 수 있다.
+  -- 운영 EXPLAIN 기준 총비용 3,802,616 중 정렬이 3,371,546 (약 89%) 이다.
+  -- 칸마다 LATERAL 로 나눠 뽑는 대안은 (gx,gy) 표현식 인덱스가 없어 850번 스캔이 되므로 더 나쁘다.
+  -- **빌드 때 한 번 치르는 비용이고 서빙 경로에는 정렬이 없다** — 조회는 이 표를 그냥 읽는다.
   SELECT c.*, row_number() OVER (PARTITION BY c.gx, c.gy ORDER BY md5(c.id::text)) AS rn
   FROM cand c
 )

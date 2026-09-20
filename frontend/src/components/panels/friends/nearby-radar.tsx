@@ -2,7 +2,9 @@
 
 import Avatar from "@/components/common/avatar";
 import { RADAR } from "@/constants";
-import { usePanelStore } from "@/stores/use-panel-store";
+import { useFollowStore } from "@/stores/use-follow-store";
+import { useStartActivity } from "@/hooks/use-start-activity";
+import { isOdyBot } from "@/hooks/use-ody-bots";
 import type { NearbyPerson } from "@/types";
 
 /**
@@ -50,8 +52,18 @@ export function sizeOf(meetingCount: number, max: number): number {
 }
 
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
-  const openFeed = usePanelStore((s) => s.openFeed);
+  const leaderEmail = useFollowStore((s) => s.leaderEmail);
+  const startRide = useFollowStore((s) => s.start);
+  const startActivity = useStartActivity();
   if (people.length === 0) return null;
+
+  /**
+   * 누르면 **탑승**한다 (S15P21A405-496). 프로필은 아래 줄 목록에서 연다 — 레이더에서 두 동작을
+   * 겸하면 어느 쪽이 나올지 모른 채 누르게 된다.
+   *
+   * 서버에는 보내지 않는다. 진짜 사람에게도 지금 그렇게 돌고 있다(ride API 미배포).
+   */
+  const ride = (p: NearbyPerson) => startActivity("follow", p.email, () => startRide(p.email, p.nickname));
 
   const maxDistance = Math.max(...people.map((p) => p.distance).filter(Number.isFinite), 0);
   const maxMeeting = Math.max(...people.map((p) => p.meetingCount), 0);
@@ -81,9 +93,12 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           <button
             key={p.email}
             type="button"
-            onClick={() => openFeed(p.email)}
-            title={`${p.nickname ?? "이름 없음"}${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
-            className={`absolute grid place-items-center rounded-pill border border-teal/70 bg-void-3 transition-colors hover:border-teal ${breathes ? "animate-breathe" : ""}`}
+            onClick={() => ride(p)}
+            title={`${p.nickname ?? "이름 없음"} 따라가기${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
+            className={`absolute grid place-items-center rounded-pill bg-void-3 transition-colors ${
+              // 봇은 점선이다 — 사람과 같은 테두리를 쓰면 사람인 척하는 것이 된다
+              isOdyBot(p.email) ? "border border-dashed border-violet/70 hover:border-violet" : "border border-teal/70 hover:border-teal"
+            } ${leaderEmail === p.email ? "ring-2 ring-teal" : ""} ${breathes ? "animate-breathe" : ""}`}
             style={{
               width: d,
               height: d,

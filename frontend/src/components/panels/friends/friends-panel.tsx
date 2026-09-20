@@ -12,6 +12,7 @@ import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import PanelCloseButton from "../panel-close-button";
 import FriendRow from "./friend-row";
 import NearbyRadar from "./nearby-radar";
+import { useOdyBots } from "@/hooks/use-ody-bots";
 import ReactionButton from "./reaction-button";
 
 /**
@@ -32,6 +33,14 @@ export default function FriendsPanel() {
   // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
   useNearbyPeopleLive(connected, refetch);
 
+  /**
+   * 아무도 없으면 **오디봇**이 돈다 (S15P21A405-496). 진짜 사람이 한 명이라도 있으면 나오지
+   * 않는다 — 자리를 빼앗으면 안 된다. 봇은 사람인 척하지 않는다: 닉네임이 `오디봇 …` 이고
+   * 레이더에서 점선 헬멧으로 그려진다.
+   */
+  const bots = useOdyBots(!!data && data.people.length === 0);
+  const people = data && data.people.length > 0 ? data.people : bots;
+
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */
   const noPlay = code === "PRESENCE_ERROR";
@@ -50,7 +59,7 @@ export default function FriendsPanel() {
         보여주고, 목록은 레이더에 넣을 자리가 없는 것(듣는 곡 제목·만남 횟수)을 적는다.
         하나만 두면 둘 중 하나를 잃는다.
       */}
-      {data && data.people.length > 0 && <NearbyRadar people={data.people} />}
+      {people.length > 0 && <NearbyRadar people={people} />}
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {/*
           **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는
@@ -69,8 +78,10 @@ export default function FriendsPanel() {
           </div>
         )}
         {isError && !noPlay && !temporary && <ErrorMessage />}
-        {connected && data && data.people.length === 0 && <EmptyState message="지금은 비슷한 곡을 듣는 사람이 없어요." />}
-        {data?.people.map((p) => <FriendRow key={p.email} person={p} />)}
+        {connected && data && data.people.length === 0 && (
+          <Note>아직 주변에 사람이 없어서 오디봇이 대신 돌고 있어요. 점선 헬멧이 봇이에요.</Note>
+        )}
+        {people.map((p) => <FriendRow key={p.email} person={p} />)}
       </div>
     </Box>
   );

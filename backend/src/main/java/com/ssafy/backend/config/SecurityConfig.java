@@ -56,6 +56,8 @@ public class SecurityConfig {
 								"/api/music/report",   // 음원 신고는 비로그인도 보낸다 [S15P21A405-388]
 								"/oauth2/authorization/**", "/login/oauth2/code/**",
 								"/actuator/health", "/actuator/prometheus",
+								// 수동 테스트 페이지. 머지 전에 이 줄과 파일을 함께 지운다 [S15P21A405-82]
+								"/__realtime-test.html",
 								"/api/swagger-ui.html", "/api/swagger-ui/**", "/api/v3/api-docs/**")
 						.permitAll()
 						.anyRequest().authenticated())

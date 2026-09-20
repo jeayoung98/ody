@@ -51,7 +51,7 @@ export default function Rail() {
      * 들어올 때(S15P21A405-416) 시트가 이 묶음 위로 올라오면 된다.
      * 알약 모양은 그대로 둔다 — 떠 있는 유리라는 디자인 언어가 이 앱의 기본이다.
      */
-    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-hud-b max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between">
+    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-[calc(var(--spacing-hud-b)+96px)] max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between">
       <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">

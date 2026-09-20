@@ -111,7 +111,7 @@ export default function PlayerBar() {
      * 진행바를 빼는 것이 이 중 유일하게 잃는 것이다 — 바텀시트(S15P21A405-416)를 올리면
      * 그 안에서 전체 플레이어를 보여 주는 것이 다음 자리다.
      */
-    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible rounded-[22px]! px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:items-center max-tablet:gap-3 max-tablet:py-2.5">
+    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible rounded-[22px]! px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:px-3 max-tablet:py-2">
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">
@@ -119,11 +119,16 @@ export default function PlayerBar() {
           {idle ? "재생할 곡을 고르세요" : data?.title ?? `Track ${currentMusicId}`}
           {!idle && blocked && <span className="ml-2 text-[10px] font-normal text-warn">{blocked.badge}</span>}
         </p>
-        <p className="mt-0.5 truncate text-[11px] text-ink-3">{subtitle}</p>
+        {/* 고를 곡이 없을 때의 안내는 좁은 화면에서 뺀다 — 한 줄에 제목과 같이 들어가면 둘 다 잘린다 */}
+        <p className={`mt-0.5 truncate text-[11px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
 
-      {/* 진행바는 좁은 화면에서 빠진다 — 한 줄에 제목과 컨트롤만 남긴다 */}
-      <div className="relative max-tablet:hidden">
+      {/*
+        좁은 화면에서는 **아랫줄로 떨어진다** (S15P21A405-417). 부모가 `flex-wrap` 이라
+        `w-full` 이면 혼자 다음 줄을 차지한다 — 제목·컨트롤이 윗줄, 진행바가 아랫줄이다.
+        파형 높이는 `player-progress.tsx` 가 좁은 화면에서 줄인다.
+      */}
+      <div className="relative max-tablet:order-last max-tablet:w-full">
         <PlayerProgress musicId={currentMusicId} durationSec={data?.duration} canPlay={canPlay} />
       </div>
 

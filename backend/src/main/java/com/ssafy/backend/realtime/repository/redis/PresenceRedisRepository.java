@@ -52,6 +52,7 @@ public class PresenceRedisRepository {
 	private final DefaultRedisScript<List> presencePlayScript;
 	private final DefaultRedisScript<List> presenceLeaveScript;
 	private final DefaultRedisScript<Long> usercountRecountScript;
+	private final DefaultRedisScript<List> ridePlaceScript;
 
 	/** presence 스냅샷 — play 처리 전 old 상태 읽기. 미연결이면 null. */
 	public record PresenceSnapshot(Long musicId, Integer layer, Integer cellX, Integer cellY, Long epoch) {
@@ -219,6 +220,40 @@ public class PresenceRedisRepository {
 			return null; // 미연결/old 불일치
 		}
 		return result.subList(1, result.size()); // 'OK' 이후 = 만남 목록
+	}
+
+	/**
+	 * 따라가는 사람을 인솔자 자리로 옮기되 지도에는 넣지 않는다.
+	 *
+	 * <p>{@link #applyPlay} 와 달리 곡별·레이어별 청취자와 셀 인덱스에 넣지 않는다. 그룹은 지도에서
+	 * 한 점이고 따라오는 인원은 수로만 보이기 때문이다. 넣으면 인솔자가 곡을 바꿀 때마다 위치 변경이
+	 * 인원수만큼 터진다.
+	 *
+	 * <p>서 있던 자리가 있으면 거기서는 뺀다 — 남들 화면에서 사라져야 한다.
+	 * presence 자체는 남긴다. 하트비트·만료·접속 번호가 쓰고, 내릴 때 어느 자리에 남길지도 여기 있다.
+	 *
+	 * @return 옮겼으면 true. 접속이나 현재 곡이 바뀌었으면 false
+	 */
+	@SuppressWarnings("unchecked")
+	public boolean applyRidePlacement(String email, long expectedEpoch,
+			Long oldMusicId, Integer oldLayer, Integer oldCellX, Integer oldCellY,
+			long newMusicId, int newLayer, double x, double y, int newCellX, int newCellY) {
+
+		boolean hasOld = oldMusicId != null;
+		String oldM = hasOld ? oldMusicId.toString() : "";
+		String oldL = (hasOld && oldLayer != null) ? oldLayer.toString() : "";
+		String oldCellField = (hasOld && oldCellX != null && oldCellY != null)
+				? (oldCellX + ":" + oldCellY) : "";
+
+		List<String> result = redis.execute(ridePlaceScript, List.of(PRESENCE_USER_PREFIX + email),
+				email, Long.toString(expectedEpoch), oldM, oldL, oldCellField,
+				Long.toString(newMusicId), Integer.toString(newLayer),
+				Double.toString(x), Double.toString(y),
+				Integer.toString(newCellX), Integer.toString(newCellY),
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX,
+				USERCOUNT_PREFIX);
+
+		return result != null && !result.isEmpty() && "OK".equals(result.get(0));
 	}
 
 	/**

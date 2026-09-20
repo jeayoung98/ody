@@ -137,14 +137,7 @@ public class MusicPlayService {
 		}
 
 		// 4. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
-		PlayHistoryRow history = new PlayHistoryRow();
-		history.setMusicId(musicId);
-		history.setEmail(email);
-		history.setSource(source);
-		history.setPlayedMs(0L);
-		playHistoryMapper.insert(history);
-		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
-		playHistoryMapper.incrementPlayCnt(musicId);
+		long playHistoryId = recordPlay(email, musicId, source);
 
 		// 5. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
@@ -160,8 +153,29 @@ public class MusicPlayService {
 		}
 
 		// x·y 는 지도(뷰포트 요청·셀 인원수)와 같은 원시 PC 좌표. 정규화 값은 셀 계산 내부용이다.
-		return new Placed(history.getId(), layer,
+		return new Placed(playHistoryId, layer,
 				pc[p.axisX() - 1], pc[p.axisY() - 1], p.cellX(), p.cellY(), coResidents);
+	}
+
+	/**
+	 * 재생 기록을 남기고 재생수를 올린다.
+	 *
+	 * 발견자 기록과 만남 기록은 하지 않는다 — 부르는 쪽이 정한다.
+	 * 지도 위치도 건드리지 않는다. 따라가기처럼 지도에 넣지 않고 듣기만 하는 경우가 있다.
+	 *
+	 * @return 재생 기록 ID
+	 */
+	@Transactional
+	public long recordPlay(String email, long musicId, String source) {
+		PlayHistoryRow history = new PlayHistoryRow();
+		history.setMusicId(musicId);
+		history.setEmail(email);
+		history.setSource(source);
+		history.setPlayedMs(0L);
+		playHistoryMapper.insert(history);
+		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
+		playHistoryMapper.incrementPlayCnt(musicId);
+		return history.getId();
 	}
 
 	/**

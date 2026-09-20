@@ -85,6 +85,12 @@ public class RedisScriptConfig {
 		return listScript("redis/ride-mount.lua");
 	}
 
+	/** 따라가는 사람을 인솔자 자리로 옮기되 지도에는 넣지 않는다. */
+	@Bean
+	public DefaultRedisScript<List> ridePlaceScript() {
+		return listScript("redis/ride-place.lua");
+	}
+
 	/**
 	 * 목록을 돌려주는 Lua 파일을 읽는다.
 	 * @param path Lua 파일 경로

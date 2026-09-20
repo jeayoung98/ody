@@ -5,26 +5,33 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
+import com.ssafy.backend.realtime.event.PositionChanged;
+import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
+import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
-import com.ssafy.backend.realtime.service.play.MusicPlayService.Placed;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
  * 따라가기를 시작한다.
- * 자격을 확인해 등록하고, 인솔자가 서 있는 곡으로 옮긴 뒤, 어디서부터 틀면 되는지 알려준다.
+ * 자격을 확인해 등록하고, 인솔자 자리로 옮긴 뒤, 어디서부터 틀면 되는지 알려준다.
+ *
+ * <p>옮길 때 지도 인덱스에는 넣지 않는다. 그룹은 남들 화면에서 인솔자 한 점과 인원수로만 보인다.
  */
 @Slf4j
 @Service
@@ -37,8 +44,11 @@ public class RideService {
 
 	private final RideRedisRepository rideRedisRepository;
 	private final PresenceRedisRepository presenceRedisRepository;
+	private final MusicLocationService musicLocationService;
+	private final MusicPositionCalculator musicPositionCalculator;
 	private final MusicPlayService musicPlayService;
 	private final RidePlaybackService ridePlaybackService;
+	private final RealtimeEventService realtimeEventService;
 
 	/**
 	 * 따라가기를 시작한다.
@@ -68,20 +78,76 @@ public class RideService {
 			throw new CustomException(toErrorCode(mounted.status()));
 		}
 
-		// 4. 인솔자가 서 있는 곡으로 옮기고 재생 기록을 남긴다.
-		//    발견자 기록과 만남 기록은 하지 않는다 — placeOnMusic 이 그 둘을 빼 둔 이유다.
-		Placed placed = musicPlayService.placeOnMusic(
-				riderEmail, before, mounted.musicId(), mounted.layer(), PlaySource.FOLLOW.name());
+		// 4. 인솔자가 서 있는 곡의 자리를 계산한다.
+		Spot spot = spotOf(mounted.musicId(), mounted.layer());
+		Placement placement = spot.placement();
 
-		// 5. 어디서부터 틀을지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+		// 5. 그 자리로 옮기되 지도에는 넣지 않는다. 서 있던 자리에서는 빠진다.
+		boolean moved = presenceRedisRepository.applyRidePlacement(
+				riderEmail, before.epoch(),
+				before.musicId(), before.layer(), before.cellX(), before.cellY(),
+				mounted.musicId(), mounted.layer(),
+				placement.xNorm(), placement.yNorm(), placement.cellX(), placement.cellY());
+		if (!moved) {
+			log.warn("따라가기 STALE reason={}", WebSocketErrorCode.PRESENCE_STALE);
+			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+		}
+
+		// 6. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
+		//    따라가는 사람이 그 곡의 발견자가 될 수 없고, 따라붙은 것은 만남이 아니다.
+		long playHistoryId = musicPlayService.recordPlay(
+				riderEmail, mounted.musicId(), PlaySource.FOLLOW.name());
+
+		// 7. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
+		//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
+		notifyLeftMap(riderEmail, before);
+
+		// 8. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
 		RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
 
 		log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",
 				mounted.musicId(), mounted.layer(), playback.snapshotSeq());
-		return new RideResponse(captainEmail, placed.playHistoryId(),
+		return new RideResponse(captainEmail, playHistoryId,
 				mounted.musicId(), mounted.layer(),
-				placed.x(), placed.y(), placed.cellX(), placed.cellY(),
+				spot.rawX(), spot.rawY(), placement.cellX(), placement.cellY(),
 				playback.state(), playback.positionMs(), playback.snapshotSeq());
+	}
+
+	/**
+	 * 자리 계산 결과.
+	 * rawX·rawY 는 지도와 같은 원시 PC 좌표고, placement 안의 값은 셀 계산용 정규화 값이다.
+	 */
+	private record Spot(Placement placement, double rawX, double rawY) {
+	}
+
+	/** 곡의 좌표를 그 레이어의 자리로 바꾼다. */
+	private Spot spotOf(long musicId, int layer) {
+		double[] pc = musicLocationService.findLocation(musicId)
+				.orElseThrow(() -> {
+					if (!musicLocationService.exists(musicId)) {
+						return new CustomException(MusicErrorCode.MUSIC_NOT_FOUND);
+					}
+					log.warn("따라가기 거부 reason={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL);
+					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+				});
+		Placement placement = musicPositionCalculator.calculate(pc, layer);
+		return new Spot(placement, pc[placement.axisX() - 1], pc[placement.axisY() - 1]);
+	}
+
+	/**
+	 * 지도에서 사라졌음을 알린다.
+	 * 서 있던 자리가 없었으면(첫 배치) 알릴 것도 없다.
+	 */
+	private void notifyLeftMap(String riderEmail, PresenceSnapshot before) {
+		if (before.musicId() == null) {
+			return;
+		}
+		realtimeEventService.send(new PositionChanged(
+				riderEmail, before.epoch(),
+				before.layer(), null,
+				before.musicId(), null,
+				before.cellX() + ":" + before.cellY(), null,
+				null, null));
 	}
 
 	/**

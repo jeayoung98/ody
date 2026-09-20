@@ -109,12 +109,21 @@ fi
 
 echo "Starting new container..."
 
+# realtime 프로파일 (S15P21A405-495). 실시간 존재·주변 사람·따라가기 컨트롤러와 서비스가 전부
+# @Profile("realtime") 이라, 이 값이 없으면 /ws 소켓은 열려도 /app/presence/* 를 받는 쪽이 없고
+# /api/realtime/* 과 /api/music/play 는 404 가 된다.
+#
+# ACTIVE 가 아니라 INCLUDE 인 이유: 위 DB rollout 분기가 /etc/ody/backend.env 로 프로파일을
+# 정하는데, ACTIVE 로 넘기면 그걸 통째로 덮어써서 db 프로파일이 날아간다. INCLUDE 는 이미
+# 활성화된 집합에 더하기만 한다.
+
 docker run -d \
     "${DOCKER_RUNTIME_ARGS[@]}" \
     --name "$TARGET_CONTAINER" \
     --restart unless-stopped \
     -p "127.0.0.1:${TARGET_PORT}:8080" \
     --env-file "$ENV_FILE" \
+    -e SPRING_PROFILES_INCLUDE=realtime \
     -e PROFILE_IMAGE_DIR="$PROFILE_IMAGE_DIR" \
     -v "${PROFILE_IMAGE_DIR}:${PROFILE_IMAGE_DIR}" \
     "$IMAGE_NAME"

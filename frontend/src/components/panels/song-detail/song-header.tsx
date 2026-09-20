@@ -5,7 +5,6 @@ import { CalendarIcon, ClockIcon, PauseIcon, PlaylistAddIcon, PlayIcon } from "@
 import MarqueeText from "@/components/common/marquee-text";
 import Tag from "@/components/common/tag";
 import TransportButton from "@/components/common/transport-button";
-import { genreColor } from "@/constants/design-tokens";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useFeatures } from "@/hooks/use-features";
 import { useSongPlayToggle } from "@/hooks/use-song-play-toggle";
@@ -29,7 +28,6 @@ import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
 export default function SongHeader({ music }: { music: MusicDetail }) {
   const features = useFeatures();
   const [menuOpen, setMenuOpen] = useState(false);
-  const color = genreColor(music.genres[0]?.id ?? 0);
   const { blocked, isThisPlaying, toggle } = useSongPlayToggle(music.id);
   /**
    * **찾아봤는데 음원이 없는 곡** (S15P21A405-384). 다시 눌러도 답이 같으므로 재생도 플리 추가도
@@ -65,11 +63,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         글자로 뜬다 (S15P21A405-384). 장르·무드는 값 자체가 이름이라 아이콘이 필요 없다.
       */}
       <div className="flex flex-wrap gap-[5px]">
-        {music.genres.map((g) => (
-          <Tag key={g.id} color={color} title="장르">
-            {g.name}
-          </Tag>
-        ))}
+        {/* 장르 칩은 걷어냈다 — 이름을 읽을 원천이 없어졌다 (S15P21A405-490, A-47) */}
         {(music.moods ?? []).map((m) => (
           <Tag key={m} tone="teal" title="무드">
             {m}

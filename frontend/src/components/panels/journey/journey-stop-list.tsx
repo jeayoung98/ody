@@ -43,7 +43,8 @@ export default function JourneyStopList({ route }: { route: JourneyRoute | null 
             index={s.order + 1}
             title={s.title}
             artist={s.artist}
-            meta={s.genreName}
+            /* 장르 이름이 사라져 표시할 것이 없다 (S15P21A405-490, A-47) */
+            meta={null}
             duration={s.duration}
             active={s.id === currentMusicId}
             onClick={() => openSong(s.id)}

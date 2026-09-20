@@ -325,6 +325,9 @@ export interface BackendPlaylistDetailResponse {
   playlistName: string;
   musicCnt: number;
   totalDuration: number;
+  /** 좋아요 수 · 내가 눌렀는지 (S15P21A405-492, A-43). `isLiked` 는 **요청한 사람** 기준이다 */
+  likeCnt: number;
+  isLiked: boolean;
   musics: BackendMusicDetail[];
 }
 
@@ -508,6 +511,32 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
 // ---------------------------------------------------------------------------
 // 플레이리스트 (S15P21A405-468)
 // ---------------------------------------------------------------------------
+
+/**
+ * `POST /api/playlist/like` 응답 (S15P21A405-492, A-41).
+ * `likeCnt` 는 **변경 후** 값이라 화면이 다시 조회하지 않고 바로 쓴다.
+ */
+export interface BackendPlaylistLikeResponse {
+  playlistId: number;
+  liked: boolean;
+  likeCnt: number;
+}
+
+/**
+ * `GET /api/playlist/liked?email=` 의 원소 (S15P21A405-492, A-44).
+ *
+ * **남이 만든 플리가 섞인다** — 좋아요는 남의 플리에도 누를 수 있어서 소유자 정보가 함께 온다.
+ * 정렬은 좋아요를 누른 시각 역순이고 페이지네이션이 없다.
+ */
+export interface BackendLikedPlaylistSummary {
+  playlistId: number;
+  playlistName: string;
+  musicCnt: number;
+  likeCnt: number;
+  ownerEmail: string;
+  ownerNickname: string | null;
+  likedAt: string;
+}
 
 /** `GET /api/playlist/search?email=` 의 원소. **좋아요·무드 태그·소유자 닉네임이 없다** (A-36) */
 export interface BackendPlaylistSummary {

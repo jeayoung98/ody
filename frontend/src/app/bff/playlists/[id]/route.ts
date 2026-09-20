@@ -7,9 +7,11 @@ type Ctx = { params: Promise<{ id: string }> };
 /**
  * 백엔드 플리 상세 → 화면이 쓰는 PlaylistDetail.
  *
- * 백엔드에 없는 값은 **지어내지 않고 비운다** — 소유자·생성/수정 시각·좋아요·무드 태그·곡 추가 시각
+ * 백엔드에 없는 값은 **지어내지 않고 비운다** — 소유자·생성/수정 시각·무드 태그·곡 추가 시각
  * (BACKEND-NOTES 필드 대조). 소유자가 없으니 `isMine` 은 늘 false 라 편집 UI 가 뜨지 않는다.
  * 이 항목들을 살리려면 백엔드 응답에 필드가 더해져야 한다 (팀 결정 대기 — 요약 6번).
+ *
+ * **좋아요는 이제 온다** (S15P21A405-492, A-43). `likeCnt`·`isLiked` 가 응답에 더해졌다.
  */
 function toPlaylistDetail(res: BackendPlaylistDetailResponse): PlaylistDetail {
   const items = res.musics.map((m) => ({ playlistId: res.playlistId, musicId: m.id, addedAt: null, music: toMusic(m) }));
@@ -17,14 +19,14 @@ function toPlaylistDetail(res: BackendPlaylistDetailResponse): PlaylistDetail {
     id: res.playlistId,
     email: null,
     playlistName: res.playlistName,
-    likeCnt: null,
+    likeCnt: res.likeCnt,
     createdAt: null,
     updatedAt: null,
     ownerNickname: null,
     moodTags: [],
     itemCount: res.musicCnt ?? items.length,
     totalDuration: res.totalDuration ?? 0,
-    isLiked: false,
+    isLiked: res.isLiked,
     items,
   };
 }

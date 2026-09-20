@@ -1384,10 +1384,24 @@ export class MapEngine {
     return !!this.constellation && !this.constellation.exitingAt;
   }
 
+  /**
+   * 좌하단 계기판이 가리는 폭. **화면에 계기판이 없으면 0 이다** (S15P21A405-417).
+   *
+   * 좁은 화면에서는 계기판을 걷어냈는데(`minimap/minimap-panel.tsx`) 이 값이 260 으로
+   * 남아 있어서, 375px 폰에서 별자리를 놓을 폭이 `375 − 45 − 260 = 70px` 이 됐다.
+   * 경로가 점 하나로 뭉쳐 보이던 원인이다. 화면에 무엇이 떠 있는지는 엔진이 모르므로
+   * 재는 쪽(`map-view.tsx`)이 알려 준다.
+   */
+  private instrumentInset: number = CONSTELLATION.instrumentInsetPx;
+
+  setInstrumentInset(px: number) {
+    this.instrumentInset = px;
+  }
+
   /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
   private constellationRect() {
     const base = this.freeRect();
-    const x0 = base.x0 + CONSTELLATION.instrumentInsetPx;
+    const x0 = base.x0 + this.instrumentInset;
     const y1 = base.y1 - 20;
     return { x0, y0: base.y0, x1: base.x1, y1, cx: (x0 + base.x1) / 2, cy: (base.y0 + y1) / 2 };
   }

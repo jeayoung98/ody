@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, type PointerEvent as ReactPointerEvent } from "react";
 import { BREAKPOINTS } from "@/constants/design-tokens";
+import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 
 /**
@@ -70,6 +71,20 @@ export function useBottomSheet() {
     mq.addEventListener("change", sync);
     return () => mq.removeEventListener("change", sync);
   }, [activePanel, setSheetHeight]);
+
+  /**
+   * **지도가 곧 결과일 때는 시트를 내린다** (S15P21A405-416).
+   *
+   * 주변 탐색과 경로(별자리)는 결과가 지도 위에 그려진다 — 패널은 같은 곡의 목록일 뿐이다.
+   * 그 뷰를 켜는 순간 시트가 반쯤 올라와 있으면 정작 봐야 할 것을 시트가 덮는다.
+   * 목록이 필요하면 손잡이를 올리면 된다.
+   */
+  const viewMode = useMapStore((s) => s.viewMode);
+  useEffect(() => {
+    if (viewMode === "default") return;
+    if (window.innerWidth >= BREAKPOINTS.tablet) return;
+    setSheetHeight(SHEET_PEEK);
+  }, [viewMode, setSheetHeight]);
 
   const onPointerDown = (e: ReactPointerEvent) => {
     if (window.innerWidth >= BREAKPOINTS.tablet) return;

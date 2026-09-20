@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { HOLD, HOVER_CARD, PINCH, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, HOLD, HOVER_CARD, PINCH, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -159,6 +160,12 @@ export default function MapView({ occlusion }: MapViewProps) {
     const measure = () => {
       const host = document.querySelector("canvas")?.getBoundingClientRect();
       if (!host) return;
+      /**
+       * 좁은 화면에는 좌하단 계기판이 없다 (S15P21A405-417) — 별자리가 그 자리를 피할 이유도
+       * 없다. 안 알려 주면 375px 에서 별자리를 놓을 폭이 70px 로 줄어 점처럼 뭉친다.
+       * 여기서 폭을 읽어도 되는 이유는 이 effect 가 **이미 DOM 을 재고 있는** 자리이기 때문이다.
+       */
+      engine.setInstrumentInset(window.innerWidth < BREAKPOINTS.tablet ? 0 : CONSTELLATION.instrumentInsetPx);
       engine.setObstacles(
         [...document.querySelectorAll("[data-hud]")].map((el) => {
           const r = el.getBoundingClientRect();

@@ -86,3 +86,41 @@ export interface ReactionEvent {
   reactionKey: string;
   sentAt: ISODateString;
 }
+
+/**
+ * 팔로우 등록·해제 응답 (S15P21A405-489, BACKEND-NOTES A-37·A-38).
+ * `followeeFollowerCnt` 는 **바뀐 뒤** 값이라 화면이 다시 조회하지 않고 바로 쓴다.
+ */
+export interface FollowResponse {
+  followerEmail: string;
+  followeeEmail: string;
+  isFollowing: boolean;
+  followeeFollowerCnt: number;
+}
+
+/**
+ * 팔로워·팔로잉 목록의 한 사람 (A-39).
+ *
+ * `isFollowing` 과 `meetingCnt` 는 목록 소유자가 아니라 **토큰 주체 기준**이다 — 남의 팔로잉
+ * 목록을 봐도 "내가" 그 사람을 구독 중인지가 온다.
+ */
+export interface FollowUserSummary {
+  email: string;
+  name: string | null;
+  nickname: string | null;
+  imageUrl: string | null;
+  isPublic: boolean;
+  isFollowing: boolean;
+  lastActiveAt: string | null;
+  /** ⚠️ 정본 명세에 없는 추가 필드 — 기획 확인 대기 (A-39) */
+  meetingCnt: number;
+}
+
+/** `totalElements`·`totalPages` 가 없다 — 공통 래퍼 결정과 같다 (S15P21A405-255) */
+export interface FollowListResponse {
+  type: "follower" | "following";
+  content: FollowUserSummary[];
+  page: number;
+  size: number;
+  hasNext: boolean;
+}

@@ -67,7 +67,18 @@ export const API_ENDPOINTS = {
     /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
     publicVisibility: "/bff/user/public",
     nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
-    follow: (email: string) => `/bff/users/${encodeURIComponent(email)}/follow`,
+    /**
+     * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
+     * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
+     * 탑승은 `POST /api/realtime/ride` 로 따로 있다 — 아직 배포에 없다.
+     *
+     * 거는 쪽은 토큰 주체라 본문에 없다. 경로가 사용자별이 아니라 고정인 것도 그래서다.
+     */
+    followInsert: "/bff/users/follow/insert",
+    followDelete: "/bff/users/follow/delete",
+    /** `type` 은 `follower`(나를 구독한 사람) / `following`(내가 구독한 사람), `page` 는 0부터 */
+    followList: (email: string, type: "follower" | "following", page = 0) =>
+      `/bff/users/follow/list?email=${encodeURIComponent(email)}&type=${type}&page=${page}`,
     reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,
   },
 

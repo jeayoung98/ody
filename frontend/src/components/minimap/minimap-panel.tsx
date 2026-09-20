@@ -34,7 +34,14 @@ export default function MinimapPanel() {
   return (
     <aside
       data-hud
-      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:left-gutter-sm ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
+      /*
+       * 좁은 화면에서는 바닥을 떠나 세로 가운데로 간다 (S15P21A405-417). 375px 에서 재 보면
+       * 재생바가 y633~794 로 161px 을 쓰는데 계기판도 `bottom-hud-b` 라 같은 바닥에 붙어,
+       * 접힌 몸통 10px 과 **밖으로 튀어나온 도움말 버튼이 재생바 위에 얹혔다** (44×44 겹침).
+       * 가운데로 보내면 위로는 레일(~y60), 아래로는 재생바(y633~) 사이에 그대로 들어간다.
+       * 도움말은 이 `<aside>` 의 자식이라 따라온다.
+       */
+      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:top-1/2 max-tablet:bottom-auto max-tablet:left-gutter-sm ${open ? "max-tablet:-translate-y-1/2" : "translate-x-[calc(-100%_+_10px)] max-tablet:-translate-y-1/2"}`}
     >
       <CollapseHandle
         side="right"

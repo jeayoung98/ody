@@ -132,11 +132,12 @@ export default function SearchBar() {
       onBlur={handleBlur}
       // 폭만 바뀐다. 가운데 정렬(-translate-x-1/2)이라 양쪽으로 같이 늘어난다.
       // 좁은 화면에서는 34vw 가 127px 밖에 안 돼 글자가 안 들어간다 — 여백만 빼고 다 쓴다 (S15P21A405-417)
-      className={`absolute top-hud-t left-1/2 z-[22] -translate-x-1/2 transition-[width] duration-300 ease-out ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))]" : "w-[104px]"}`}
+      className={`absolute top-hud-t z-[22] transition-[width] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-[calc(var(--spacing-gutter-sm)+34px)] max-tablet:translate-x-0 ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-[104px] max-tablet:w-touch"}`}
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div
-        className={`glass-liquid flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! pl-[15px] pr-[26px] ${expanded ? "" : "cursor-pointer hover:border-line-2"}`}
+        // 좁은 화면에서 접혀 있을 때는 아이콘만 남는 원이다 — 여백 41px 로는 44px 안에 못 들어간다
+        className={`glass-liquid flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! pl-[15px] pr-[26px] ${expanded ? "" : "cursor-pointer hover:border-line-2 max-tablet:justify-center max-tablet:px-0"}`}
         onMouseDown={(e) => {
           if (expanded) return;
           e.preventDefault(); // 포커스가 상자로 갔다가 입력으로 옮겨 가며 깜빡이지 않게
@@ -195,7 +196,7 @@ export default function SearchBar() {
             }
           }}
         />
-        <span className="lbl shrink-0">search</span>
+        <span className={`lbl shrink-0 ${expanded ? "" : "max-tablet:hidden"}`}>search</span>
       </div>
       {expanded && open && (chip || input.trim()) && (
         <SearchResultList

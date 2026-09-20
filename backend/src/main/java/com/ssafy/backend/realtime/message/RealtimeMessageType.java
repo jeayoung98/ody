@@ -15,9 +15,9 @@ public enum RealtimeMessageType {
 	NEARBY_ENTER,
 	NEARBY_MOVE,
 	NEARBY_LEAVE,
-	/** 인솔자가 곡을 바꿨다 (RT-33). 동승자는 그 곡으로 옮겨 처음부터 튼다. */
+	/** 인솔자가 곡을 바꿨다. 따라가는 사람은 그 곡으로 옮겨 처음부터 튼다. */
 	RIDE_TRACK,
-	/** 인솔자의 재생·정지·구간 이동·어긋남 보정 (RT-34). */
+	/** 인솔자가 재생·정지·구간 이동을 했다. */
 	RIDE_PLAYBACK,
 	PRESENCE_ERROR
 }

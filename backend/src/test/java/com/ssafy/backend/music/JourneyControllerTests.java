@@ -63,7 +63,7 @@ class JourneyControllerTests {
 
 	private static MusicDetail song(long id, String mbid, String youtubeUrl, int duration) {
 		return new MusicDetail(id, mbid, "Love wins all", "IU", 128.4, duration, "The Winning", 2024,
-				List.of("K-Pop"), youtubeUrl, null, loc(), 1428, 3);
+				youtubeUrl, null, loc(), 1428, 3);
 	}
 
 	/** 정거장 n개 + 양 끝 = n+2 곡 경로. */
@@ -97,7 +97,6 @@ class JourneyControllerTests {
 				.andExpect(jsonPath("$.data.path[0].bpm").value(128.4))
 				.andExpect(jsonPath("$.data.path[0].duration").value(275))
 				.andExpect(jsonPath("$.data.path[0].album").value("The Winning"))
-				.andExpect(jsonPath("$.data.path[0].genres[0]").value("K-Pop"))
 				.andExpect(jsonPath("$.data.path[0].location.pc1").value(-0.4213))
 				.andExpect(jsonPath("$.data.path[0].location.pc16").value(-0.123))
 				.andExpect(jsonPath("$.data.path[0].playCnt").value(1428))

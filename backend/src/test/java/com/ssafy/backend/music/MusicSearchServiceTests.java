@@ -41,7 +41,7 @@ class MusicSearchServiceTests {
 	void search_passesConditionAndSize10_assemblesPage() {
 		MusicSearchCondition condition = new MusicSearchCondition("  IU  ", null, null);
 		when(reader.search(condition, 0, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(1L, "A", "IU", "al", List.of("K-Pop"), "https://y/1", null, LOC)),
+				List.of(new MusicSummary(1L, "A", "IU", "al", "https://y/1", null, LOC)),
 				true));
 
 		PageResponse<MusicSummary> r = service.search(condition, 0);
@@ -57,8 +57,8 @@ class MusicSearchServiceTests {
 		MusicSearchCondition condition = new MusicSearchCondition("q", null, null);
 		when(reader.search(condition, 0, 10)).thenReturn(new PageResult(
 				List.of(
-						new MusicSummary(1L, "high", "x", "al", List.of(), "https://y/1", null, LOC),
-						new MusicSummary(2L, "low", "y", "al", List.of(), "https://y/2", null, LOC)),
+						new MusicSummary(1L, "high", "x", "al", "https://y/1", null, LOC),
+						new MusicSummary(2L, "low", "y", "al", "https://y/2", null, LOC)),
 				false));
 
 		PageResponse<MusicSummary> r = service.search(condition, 0);
@@ -70,7 +70,7 @@ class MusicSearchServiceTests {
 	void search_keepsNullYoutubeUrl() {
 		MusicSearchCondition condition = new MusicSearchCondition("q", null, null);
 		when(reader.search(condition, 0, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(9L, "no link", "z", "al", List.of(), null, null, LOC)),
+				List.of(new MusicSummary(9L, "no link", "z", "al", null, null, LOC)),
 				false));
 
 		PageResponse<MusicSummary> r = service.search(condition, 0);
@@ -94,7 +94,7 @@ class MusicSearchServiceTests {
 		// 페이지 계산을 서비스가 하지 않는다. 어댑터가 한 건 더 떠보고 판단한 값을 그대로 전달한다.
 		MusicSearchCondition condition = new MusicSearchCondition(null, "Love", "Lana Del Rey");
 		when(reader.search(condition, 13, 10)).thenReturn(new PageResult(
-				List.of(new MusicSummary(1L, "t", "a", "al", List.of(), "https://y/1", null, LOC)), false));
+				List.of(new MusicSummary(1L, "t", "a", "al", "https://y/1", null, LOC)), false));
 
 		PageResponse<MusicSummary> r = service.search(condition, 13);
 

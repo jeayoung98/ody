@@ -34,12 +34,12 @@ class MusicDetailServiceTests {
 
 	private static MusicDetail detail() {
 		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", 2024,
-				List.of("K-Pop"), "https://youtu.be/x", null, LOC, 1428, 3);
+				"https://youtu.be/x", null, LOC, 1428, 3);
 	}
 
 	private static NeighborTrack neighbor(long id, double distance) {
 		return new NeighborTrack(
-				new MusicSummary(id, "t", "IU", "Palette", List.of("K-Pop"), "https://youtu.be/y", null, LOC),
+				new MusicSummary(id, "t", "IU", "Palette", "https://youtu.be/y", null, LOC),
 				distance);
 	}
 

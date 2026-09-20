@@ -73,15 +73,4 @@
 			#{id}
 		</foreach>
 	</select>
-
-	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">
-		SELECT mg.music_id, g.name
-		FROM music_genre mg
-		JOIN genre g ON g.id = mg.genre_id
-		WHERE mg.music_id IN
-		<foreach item="musicId" collection="musicIdList" open="(" separator="," close=")">
-			#{musicId}
-		</foreach>
-		ORDER BY mg.music_id, g.name
-	</select>
 </mapper>

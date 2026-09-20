@@ -1,6 +1,6 @@
 import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
-import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
+import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -317,6 +317,9 @@ export class MapEngine {
 
   friends: NearbyUser[] = [];
   private friendsLayer = -1;
+  /** "N명" 뭉치 (CLUSTERED 모드). 원시 PC 좌표다 */
+  crowd: CrowdCell[] = [];
+  crowdLayer = -1;
   private friendPos = new Map<string, { x: number; y: number; heading: number }>();
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
@@ -581,6 +584,17 @@ export class MapEngine {
     this.anchorCache.clear();
   }
 
+  /**
+   * 사람이 많거나 화면이 넓을 때 오는 **"N명" 뭉치** (S15P21A405-482, 실시간 작업명세 §5.2 B).
+   *
+   * 이 모드에서는 개별 사람 정보가 오지 않는다. `friends` 와 **둘 중 하나만** 차 있다 —
+   * 서버가 `INDIVIDUAL`·`CLUSTERED` 중 하나로 답하기 때문이다.
+   */
+  setCrowd(layer: number, cells: CrowdCell[]) {
+    this.crowd = cells;
+    this.crowdLayer = layer;
+  }
+
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
   setRepresentatives(layer: number, ids: number[]) {
     this.repIds = new Set(ids);
@@ -588,21 +602,17 @@ export class MapEngine {
   }
 
   /**
-   * 목 폴백: 사용자의 곡이 이 레이어 상주 집합에 없으면 이메일 해시로 상주 곡 하나를 정해 그 자리에 둔다.
-   * 실서비스는 백엔드가 현재 영역의 사용자만 내려주므로 필요 없다.
+   * 그 사람을 찍을 자리 (S15P21A405-482, 실시간 작업명세 §5.6).
+   *
+   * 둘 중 하나다. 그 사람의 곡이 이 겹 상주 집합에 있으면 **그 별 자리**, 없으면 서버가 준
+   * 원시 PC 좌표를 그대로 쓴다.
+   *
+   * **이메일 해시 폴백을 걷어냈다.** 목 시절에는 상주 집합에 없는 사람을 해시로 고른 아무 별에나
+   * 붙였는데, 실서비스에서는 서버가 진짜 좌표를 주므로 그 자리가 곧 거짓말이 된다.
    */
   private anchorFor(u: NearbyUser): { x: number; y: number } | null {
     if (this.isAlive(u.musicId)) return this.worldOf(u.musicId);
-    let idx = this.anchorCache.get(u.email);
-    if (idx == null) {
-      if (!this.aliveIdx.length) return null;
-      let h = 2166136261;
-      for (const ch of u.email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
-      idx = this.aliveIdx[h % this.aliveIdx.length];
-      this.anchorCache.set(u.email, idx);
-    }
-    const s = this.songs[idx];
-    return { x: s.pc[this.dx()], y: s.pc[this.dy()] };
+    return u.x != null && u.y != null ? { x: u.x, y: u.y } : null;
   }
 
   private rebuildAliveIdx() {
@@ -1433,7 +1443,7 @@ export class MapEngine {
    * 지금 화면에 담긴 영역을 이 겹의 축 범위로 (countInView 가 세는 사각형과 같다).
    * 파고들 때 이 범위를 누적에 쌓아 다음 겹 상주 집합을 요청한다.
    */
-  private viewBox(): LayerBox {
+  viewBox(): LayerBox {
     const f = this.freeRect();
     const lo = this.screenToWorld(f.x0, f.y1);
     const hi = this.screenToWorld(f.x1, f.y0);
@@ -1462,6 +1472,16 @@ export class MapEngine {
   }
 
   /** 곡의 현재 레이어 월드 좌표 */
+  /**
+   * 그 곡의 장르 (S15P21A405-482). 실시간으로 받은 사람의 헬멧 색을 정하는 데 쓴다 —
+   * 서버는 사람의 장르를 주지 않고 듣는 곡만 주므로, 상주 집합에서 곡을 찾아 그 장르를 쓴다.
+   * 상주 집합 밖의 곡이면 알 수 없어 `null` 이다.
+   */
+  genreOf(id: number): number | null {
+    const i = this.index.get(id);
+    return i == null ? null : this.songs[i].genreId;
+  }
+
   worldOf(id: number): { x: number; y: number } | null {
     const i = this.index.get(id);
     if (i == null) return null;

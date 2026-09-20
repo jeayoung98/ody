@@ -162,7 +162,45 @@ function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: numbe
 }
 
 /** 주변 친구 전체 — 동선 잔상 → 헬멧/우주선 → 접속 점 → 이름 */
+/**
+ * "N명" 뭉치 (S15P21A405-482, 실시간 작업명세 §5.2 B).
+ *
+ * 화면이 넓거나 사람이 많으면 서버가 개별 사람 대신 이걸 준다. 개별 표식과 **같이 뜨지 않는다** —
+ * 서버가 둘 중 한 모드로만 답하므로 한쪽은 늘 비어 있다.
+ *
+ * 우주인처럼 그리지 않는다. 숫자가 요점이라 원 하나에 인원수만 적는다 — 사람 모양으로 그리면
+ * "저기 한 명 있다" 로 읽혀서 14명이 한 명으로 보인다.
+ */
+function drawCrowd(g: CanvasRenderingContext2D, e: MapEngine) {
+  if (e.crowdLayer !== e.layer || !e.crowd.length) return;
+  g.save();
+  g.textAlign = "center";
+  g.textBaseline = "middle";
+  for (const c of e.crowd) {
+    const { px, py } = e.worldToScreen(c.x, c.y);
+    // 인원이 많을수록 조금 커지되 로그로 눌러 둔다 — 100명이 10명의 열 배가 되면 화면을 덮는다
+    const r = 11 + Math.min(13, Math.log2(Math.max(1, c.count)) * 3.2);
+    g.globalAlpha = 0.16;
+    g.fillStyle = "#5c9dff";
+    g.beginPath();
+    g.arc(px, py, r, 0, 6.3);
+    g.fill();
+    g.globalAlpha = 0.85;
+    g.strokeStyle = "#9fe1cb";
+    g.lineWidth = 1;
+    g.beginPath();
+    g.arc(px, py, r, 0, 6.3);
+    g.stroke();
+    g.globalAlpha = 1;
+    g.fillStyle = "#e9f1ff";
+    g.font = `600 ${Math.round(r * 0.78)}px ${FONTS.body}`;
+    g.fillText(String(c.count), px, py + 0.5);
+  }
+  g.restore();
+}
+
 export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
+  drawCrowd(g, e);
   if (e.friendAlpha < 0.01) return;
   const t = e.time;
   const fade = e.friendAlpha;

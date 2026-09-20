@@ -33,7 +33,7 @@ interface BoxProps {
  */
 export default function Box({ title, lead, actions, footer, children, className = "", flush = false, bg, bodyRef }: BoxProps) {
   return (
-    <section className={`glass relative flex min-h-0 flex-col overflow-hidden text-ink ${className}`}>
+    <section className={`glass-liquid relative flex min-h-0 flex-col overflow-hidden text-ink ${className}`}>
       {bg}
       {(title || lead || actions) && (
         <header className={`relative z-10 flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-3 ${bg ? "" : "border-b border-line"}`}>
@@ -42,7 +42,7 @@ export default function Box({ title, lead, actions, footer, children, className 
           {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
         </header>
       )}
-      <div ref={bodyRef} className={`relative z-10 min-h-0 flex-1 overflow-y-auto ${flush ? "" : "flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]"}`}>{children}</div>
+      <div ref={bodyRef} className={`scroll-quiet relative z-10 min-h-0 flex-1 overflow-y-auto ${flush ? "" : "flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]"}`}>{children}</div>
       {footer && <footer className="relative z-10 shrink-0 border-t border-line px-[15px] py-3">{footer}</footer>}
     </section>
   );

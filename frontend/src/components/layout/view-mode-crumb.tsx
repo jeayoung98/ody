@@ -12,9 +12,14 @@ import { usePlayerStore } from "@/stores/use-player-store";
  *
  * | 상태 | 칩 |
  * | --- | --- |
- * | 기본 | 회색 `기본 뷰`. 볼 목록이 있으면 눌러서 별자리를 켠다 |
+ * | 기본 · 볼 목록 없음 | **아무것도 안 그린다** |
+ * | 기본 · 볼 목록 있음 | 흐린 `별자리 뷰 n곡`. 누르면 켠다 |
  * | 주변 탐색 | 청록 `주변 탐색 뷰` + ✕. 칩을 누르면 끈다 |
  * | 별자리 | 보라 `별자리 뷰 n/m` + ✕. 칩을 누르면 끈다 |
+ *
+ * **기본 상태에서는 칩이 사라진다** (S15P21A405-477). `기본 뷰` 라고 적어 두는 건 "지금 아무
+ * 일도 일어나지 않았다" 는 말을 화면 한 칸을 써서 하는 것이다 — 뷰를 켰다 껐다 할 수 있을
+ * 때만(여정·플리 목록이 걸려 있을 때) 그 스위치로 선다.
  *
  * 세 상태 모두 **칩 전체가 버튼**이다 (S15P21A405-457) — ✕ 는 표식일 뿐이다.
  *
@@ -39,9 +44,9 @@ export default function ViewModeCrumb() {
   const cursor = currentMusicId == null ? -1 : ids.indexOf(currentMusicId);
   const count = cursor >= 0 ? `${cursor + 1}/${ids.length}` : `${ids.length}곡`;
 
-  const label = nearby ? "주변 탐색 뷰" : constellation ? "별자리 뷰" : "기본 뷰";
+  const label = nearby ? "주변 탐색 뷰" : "별자리 뷰";
   const on = nearby || constellation;
-  const dot = nearby ? "bg-teal shadow-[0_0_8px_#4fe3ce]" : constellation ? "bg-violet shadow-[0_0_8px_#a67cff]" : "bg-ink-4";
+  const dot = nearby ? "bg-teal shadow-[0_0_8px_#4fe3ce]" : constellation ? "bg-violet shadow-[0_0_8px_#a67cff]" : "bg-violet/40";
   const tone = nearby ? "border-teal/40 text-ink shadow-glow-teal" : constellation ? "border-violet/45 text-ink shadow-glow-violet" : "text-ink-2";
 
   /** 기본 상태에서 누르면 별자리를 켜고 그 목록의 패널도 같이 연다 */
@@ -62,6 +67,9 @@ export default function ViewModeCrumb() {
   const press = on ? turnOff : canOpen ? openConstellation : null;
   const hint = on ? `${label} 끄기` : press ? "별자리 뷰 켜기" : undefined;
 
+  // 켜져 있지도, 켤 수 있지도 않으면 그릴 것이 없다
+  if (!on && !canOpen) return null;
+
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-1">
       <span
@@ -77,9 +85,8 @@ export default function ViewModeCrumb() {
       >
         <span className={`h-1 w-1 rounded-pill ${dot}`} />
         {label}
-        {constellation && <span className="num text-ink-3">{count}</span>}
-        {/* 꺼져 있어도 볼 목록이 있으면 몇 곡인지는 알려 준다 */}
-        {!on && canOpen && <span className="num text-ink-3">{count}</span>}
+        {/* 꺼져 있어도 몇 곡짜리 목록인지는 알려 준다 — 켤지 말지의 근거다 */}
+        {(constellation || !on) && <span className="num text-ink-3">{count}</span>}
         {/*
           닫는 길임을 보이는 **표식**이다 — 버튼이 아니다. 칩 안에 또 버튼을 두면 클릭이 위로
           번져 핸들러가 두 번 돌고, 별자리 뷰는 토글이라 껐다가 그 자리에서 다시 켜진다.

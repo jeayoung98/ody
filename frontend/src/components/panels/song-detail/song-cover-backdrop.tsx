@@ -19,8 +19,9 @@ interface SongCoverBackdropProps {
  * 곡 상세 패널 배경 — 앨범 커버 (SONG-02, S15P21A405-384).
  *
  * 패널 **최상단부터** 깔린다. 헤더('곡 상세' · 신고 · 닫기) 뒤로도 지나가고, 커버 원본이
- * 정사각(104×104)이므로 **정사각형**으로 그린다. 오른쪽 스크롤바 자리는 비운다 —
- * 커버 위에 걸치면 옅은 스크롤바가 묻혀서 안 보인다.
+ * 정사각(104×104)이므로 **정사각형**으로 그린다. 패널 폭을 좌우로 꽉 채운다 — 예전에는
+ * 오른쪽에 스크롤바 자리 8px 을 비웠지만, 막대를 없앤 뒤로는 그 틈이 커버 옆에 빈 띠로만
+ * 보였다 (S15P21A405-477).
  *
  * 이 레이어는 **스크롤을 따라가지 않는다.** 앞의 내용 시트(`song-detail-panel`)가 위로
  * 올라오면서 커버를 덮어 점점 가린다 — 커버 자체는 제자리에 고정된 그림이다.
@@ -92,7 +93,7 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
     */
     <div
       aria-hidden
-      className="pointer-events-none absolute top-0 right-2 left-0 aspect-square [-webkit-mask-image:linear-gradient(to_bottom,#000_62%,transparent)] [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]"
+      className="pointer-events-none absolute inset-x-0 top-0 aspect-square [-webkit-mask-image:linear-gradient(to_bottom,#000_62%,transparent)] [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]"
     >
       {/* 1. 커버 */}
       <div ref={coverRef} className="absolute inset-0 scale-[1.02] bg-cover bg-center blur-[1px]" />

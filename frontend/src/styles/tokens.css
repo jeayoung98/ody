@@ -6,9 +6,9 @@
  */
 @theme {
   /* ---------- 팔레트: 배경(void) ---------- */
-  --color-void: #04060d;
-  --color-void-2: #070b16;
-  --color-void-3: #0c1220;
+  --color-void: #02040a;
+  --color-void-2: #05080f;
+  --color-void-3: #080d17;
 
   /* ---------- 팔레트: 텍스트(ink) ---------- */
   --color-ink: #e9f1ff;
@@ -69,11 +69,93 @@
   --shadow-glow-teal: 0 0 20px -8px rgb(79 227 206 / 0.6);
   --shadow-glow-violet: 0 0 26px -10px rgb(166 124 255 / 0.9);
 
+  /* ---------- 유리 (globals.css 의 .glass-liquid · .glass-handle) ---------- */
+  /*
+   * 밑칠과 블러를 여기 둔다 — 값을 만질 일이 잦은데 CSS 안에 박혀 있으면 어디를 고쳐야 하는지
+   * 매번 찾아야 한다. 밑칠을 올리면 덜 비치고, 블러를 올리면 뒤가 더 뭉개진다.
+   *
+   * **채도는 올리지 않는다.** 2.1 까지 올렸더니 어두운 남색 배경이 과채도로 끌려 올라와서
+   * 유리가 아니라 남색 판때기로 보였다 (S15P21A405-477).
+   *
+   * **손잡이는 유리가 아니라 불투명한 남색 한 판이다** (S15P21A405-477). 폭이 17px 뿐이라
+   * 흐릴 면적이 없어 뒤가 그대로 비쳤고, 계기판 쪽 손잡이는 부모(`.glass-liquid`)가 backdrop
+   * root 라 제 블러가 아예 먹지도 않았다 — 두 손잡이가 같은 컴포넌트인데도 달라 보인 원인이다.
+   * 블러를 걷고 색 하나로 칠하면 양쪽이 어디에 있든 똑같이 보인다.
+   */
+  --glass-tint: rgb(6 9 17 / 0.1);
+  --glass-blur: 10px;
+  --glass-handle-bg: #0a0f1c;
+  --glass-saturate: 1.25;
+  --glass-brightness: 1.02;
+  /* 위가 밝고 아래로 옅어지는 틴트 — 빛이 위에서 온다는 약속. 두 유리가 같이 쓴다 */
+  --glass-sheen: linear-gradient(180deg, rgb(255 255 255 / 0.075) 0%, rgb(255 255 255 / 0.02) 48%, rgb(255 255 255 / 0.05) 100%);
+
   /* ---------- 레이아웃 치수 ---------- */
   --spacing-hud: 18px;
   --spacing-right-panel: 376px;
   --spacing-rail: 56px;
   --spacing-instrument: 230px;
+
+  /* ---------- 브레이크포인트 (S15P21A405-412) ---------- */
+  /*
+   * 값은 물리 해상도가 아니라 **CSS 픽셀(뷰포트 폭)** 이다.
+   * iPhone 15 Pro = 물리 1179px / CSS 393px, iPad = 768px.
+   *
+   * `desk` 900px 은 좁은 화면 게이트와 **같은 선**이다 (globals.css `.small-screen-gate` 의 899).
+   * "그 아래로 내려가면 우측 패널과 지도가 같이 설 자리가 없다" 는 것이 게이트를 넣을 때의
+   * 근거였고(S15P21A405-379), 반응형 경계도 같은 자리에 둔다. **두 값을 따로 움직이지 않는다.**
+   *
+   * 이 저장소는 **데스크톱 우선**으로 쓰여 있다 (반응형 접두사 사용 0건, 2026-09-18 확인).
+   * 그래서 기존 클래스를 그대로 두고 `max-desk:` `max-tablet:` 으로 좁은 화면만 덮어쓴다.
+   * Tailwind 4 는 `--breakpoint-*` 하나로 min-width(`desk:`) 와 max-width(`max-desk:`) 를 모두 만든다.
+   *
+   * **태블릿(768~899)은 폰과 같은 레이아웃을 쓰고 여백·시트 폭만 넓힌다.**
+   * 세 번째 레이아웃을 만들면 유지 비용이 세 배가 되는데, 이 구간의 가용 폭은 데스크톱 HUD
+   * (우측 패널 376 + 레일 56 + 여백)를 어차피 못 받쳐서 폰 쪽에 가깝다.
+   */
+  --breakpoint-tablet: 768px;
+  --breakpoint-desk: 900px;
+
+  /* ---------- 좁은 화면 레이아웃 ---------- */
+  /* 데스크톱 --spacing-hud(18px) 를 좁은 화면에서 줄인 값 */
+  --spacing-hud-sm: 12px;
+  /* 화면 양끝 여백. 좁은 화면에서 HUD 가 가장자리에 붙지 않게 */
+  --spacing-gutter-sm: 16px;
+  /*
+   * 최소 터치 타깃. iOS HIG 44pt / Material 48dp 중 작은 쪽으로 잡는다.
+   * 지금 컨트롤에 h-[26px]·h-[30px] 짜리가 있어 그대로 두면 손가락으로 못 누른다.
+   */
+  --spacing-touch: 44px;
+
+  /* ---------- 안전 영역 (S15P21A405-420) ---------- */
+  /*
+   * **화면이긴 한데 내 자리가 아닌 구역.** 아이폰 아래쪽 홈 인디케이터(34px)와 위쪽 노치가
+   * 그렇다. 아래는 스와이프를 OS 가 먼저 채가서 **버튼이 보여도 안 눌리고**, 위는 그냥 가려진다.
+   *
+   * **`viewport-fit=cover` 가 없으면 `env()` 가 전부 0 을 돌려준다.** 그 설정은 `app/layout.tsx`
+   * 의 `viewport` export 에 있다 — 둘은 세트다.
+   *
+   * 데스크톱과 브라우저 에뮬레이터에서는 **항상 0** 이다. 그래서 아래 `hud-b` 같은 합성 값이
+   * 데스크톱에서는 원래 값 그대로 나온다 — 이 토큰을 써도 넓은 화면은 한 픽셀도 안 바뀐다.
+   * 뒤집어 말하면 **값이 맞는지는 실기기에서만 확인된다.**
+   *
+   * 기본값 `0px` 를 반드시 준다. `env()` 를 모르는 브라우저에서 빠지면 `calc()` 전체가 무효가 된다.
+   */
+  --spacing-safe-t: env(safe-area-inset-top, 0px);
+  --spacing-safe-b: env(safe-area-inset-bottom, 0px);
+  --spacing-safe-l: env(safe-area-inset-left, 0px);
+  --spacing-safe-r: env(safe-area-inset-right, 0px);
+  /*
+   * 화면 끝에 붙는 HUD 가 쓰는 여백 = **원래 값 그대로 + 안전 영역.**
+   *
+   * 원래 값을 손대지 않는 것이 요점이다. 데스크톱에서는 `env()` 가 0 이라 `hud-b` 는 18px,
+   * `hud-t` 는 16px 로 지금과 **완전히 같은 수**가 나온다. 아이폰에서만 각각 34px·47px 쯤 늘어난다.
+   *
+   * `hud-t` 가 `--spacing-hud`(18px) 가 아니라 1rem 인 이유: 상단 HUD 는 원래 `top-4`(16px) 라
+   * 18px 를 쓰면 데스크톱이 2px 움직인다. **바꾸는 건 안전 영역뿐이다.**
+   */
+  --spacing-hud-b: calc(var(--spacing-hud) + env(safe-area-inset-bottom, 0px));
+  --spacing-hud-t: calc(1rem + env(safe-area-inset-top, 0px));
 
   /* ---------- 타이포 ---------- */
   --text-3xs: 8.5px;

@@ -3,7 +3,7 @@
 import Script from "next/script";
 import { useRouter } from "next/navigation";
 import { useCallback, useRef } from "react";
-import { ROUTES } from "@/constants";
+import { GOOGLE_CLIENT_ID, ROUTES } from "@/constants";
 import { useGoogleLoginMutation } from "@/hooks/mutations/use-google-login-mutation";
 
 /**
@@ -25,8 +25,11 @@ declare global {
   }
 }
 
-/** 구글 OAuth 클라이언트 ID. 비밀값이 아니다 (브라우저에 그대로 노출되는 값) */
-const CLIENT_ID = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ?? "";
+/**
+ * 구글 OAuth 클라이언트 ID. 비밀값이 아니다 (브라우저에 그대로 노출되는 값).
+ * 환경변수가 없으면 코드 기본값으로 떨어진다 — 이유는 `constants/auth.ts` (S15P21A405-486).
+ */
+const CLIENT_ID = GOOGLE_CLIENT_ID;
 
 /**
  * 구글 로그인 (AUTH-01/02).
@@ -62,6 +65,8 @@ export default function GoogleLoginButton() {
     });
   }, [mutate, router]);
 
+  // 안전망이다. 코드 기본값이 있으므로 평소에는 여기로 오지 않는다 (S15P21A405-486) —
+  // 기본값이 지워지는 날 버튼이 조용히 사라지는 것보다 이유가 적힌 화면이 낫다.
   if (!CLIENT_ID) {
     return (
       <p className="rounded-pill border border-line px-3 py-3 text-center text-[12.5px] leading-[1.62] text-ink-2">

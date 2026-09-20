@@ -217,7 +217,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     g.arc(px + R * (ship ? 0.95 : 0.82), py + R * (ship ? 0.95 : 0.82), 2.9, 0, 6.284);
     g.fillStyle = "#4fe3ce";
     g.fill();
-    g.strokeStyle = "#04060d";
+    g.strokeStyle = "#02040a";
     g.lineWidth = 1.3;
     g.stroke();
     g.fillStyle = "rgba(233,241,255,.62)";

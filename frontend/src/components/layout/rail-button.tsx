@@ -38,7 +38,7 @@ export default function RailButton({ label, active, onClick, children, badge, di
       {badge != null && badge > 0 && (
         <span
           className={`num absolute top-0.5 right-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-pill px-1 text-[9px] font-semibold ${
-            active ? "bg-void text-teal" : "bg-teal text-[#04211d] shadow-[0_0_0_2px_#070b16]"
+            active ? "bg-void text-teal" : "bg-teal text-[#04211d] shadow-[0_0_0_2px_#05080f]"
           }`}
         >
           {badge}

@@ -1,8 +1,8 @@
 /**
  * **개발 버전을 URL 로 연다** (S15P21A405-421).
  *
- * 배포본에서 팀원이 개발 버전을 보는 길은 원래 [`useSurveyMode`](../hooks/use-survey-mode.ts)
- * 하나였고, 브라우저 콘솔에 직접 쳐야 했다.
+ * 배포본에서 팀원이 개발 버전을 보는 길은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나였고,
+ * 브라우저 콘솔에 직접 쳐야 했다.
  *
  * ```js
  * localStorage.setItem("ody:survey-mode", "false"); location.reload();
@@ -14,34 +14,30 @@
  * 그래서 주소로 켠다.
  *
  * ```text
- * ?dev=1     개발 버전 — 감춘 기능이 열리고 게이트를 넘는다. **로그인이 필요해진다**
- * ?dev=0     되돌린다 (설문 모드로)
- * ?gate=1    게이트만 넘는다 — 설문 모드 그대로라 로그인 없이 지도를 본다
- * ?gate=0    게이트를 되돌린다
+ * ?dev=1   설문을 끄고 좁은 화면 게이트를 넘는다
+ * ?dev=0   둘 다 되돌린다
  * ```
  *
  * 폰에서 한 번만 치면 이후로는 파라미터 없이 들어가도 유지된다.
  *
- * ## 스위치가 둘인 이유
+ * ## 스위치가 하나인 이유
  *
- * 설문 모드는 **설문만 가른다** (S15P21A405-480). 로그인은 모드와 상관없이 항상 필요하다.
- * 계정 없이 지도를 보는 것은 설문 모드일 때뿐이다. 그래서 `?dev=1` 하나만 두면 폰에서 화면 한 번
- * 보려고 매번 로그인해야 한다 — 실제로 붙여 보고 알았다.
+ * 원래는 `?gate` 가 따로 있었다 (S15P21A405-483 에서 합쳤다). 나눈 이유는 로그인 하나였다 —
+ * 설문 모드를 끄면 로그인 게이트가 살아나서(S15P21A405-459), 스위치가 하나뿐이면 폰에서 화면
+ * 한 번 보려고 매번 로그인해야 했다. 그래서 "게이트만 넘고 설문 모드는 그대로" 인 길을 뒀다.
  *
- * | | 감춘 기능 4개 | 좁은 화면 게이트 | 로그인 |
- * |---|---|---|---|
- * | 기본 (테스터) | 닫힘 | 막힘 | 없이 본다 |
- * | `?gate=1` | 닫힘 | **넘는다** | 없이 본다 |
- * | `?dev=1` | **열림** | **넘는다** | 해야 한다 |
+ * **S15P21A405-480 이 그 전제를 없앴다.** 설문 모드는 이제 설문만 가르고, 로그인은 모드와
+ * 상관없이 항상 필요하다. 감춰 둔 기능도 없다(전부 켜짐). 그러니 둘을 나눠 봐야 차이가
+ * "설문 화면이 뜨느냐" 뿐이고, 이름이 둘이면 어느 쪽을 써야 하는지가 안 읽힌다.
  *
- * 레이아웃만 보려면 `?gate=1`, 패널 6종을 다 열어 봐야 하면 `?dev=1`.
+ * ## 저장소 키는 둘로 둔다
  *
- * 감춘 기능(`profile` `playlist` `social` `chart`)이 `?dev=1` 에 딸려 오는 것은 `useFeatures` 가
- * 이미 설문 모드를 따르기 때문이다 (S15P21A405-387). 여기서 따로 하는 일이 없다.
+ * 스위치는 하나지만 `ody:survey-mode` 와 `ody:gate-off` 는 따로 쓴다. 게이트 우회를 제 키에
+ * 담아 두면 S15P21A405-419 에서 게이트를 걷어낼 때 **지울 것이 한 줄로 분명해진다.** 설문
+ * 모드에 얹어 두면 그때 두 뜻이 엉킨 키를 풀어야 한다.
  *
  * 게이트를 굳이 스위치로 넘기는 이유는 `globals.css` 의 `.small-screen-gate` 가 순수 CSS 라
- * 폰에서 끌 방법이 달리 없어서다. 게이트 자체는 S15P21A405-419 에서 걷어내고, 그때 이 스위치의
- * 게이트 쪽은 같이 지운다.
+ * 폰에서 끌 방법이 달리 없어서다.
  *
  * ## 왜 인라인 스크립트인가
  *
@@ -61,11 +57,8 @@
 // 배럴(@/constants)이 아니라 정의 파일에서 직접 받는다 — 이 파일도 배럴이 모으는 대상이라 순환이 된다
 import { STORAGE_KEYS } from "./storage-keys";
 
-/** 개발 버전 스위치. `?dev=1` 켜기, `?dev=0` 끄기 — 설문 모드와 게이트를 한꺼번에 뒤집는다 */
+/** 개발 버전 스위치. `?dev=1` 켜기, `?dev=0` 끄기 — 설문과 게이트를 한꺼번에 뒤집는다 */
 export const DEV_MODE_PARAM = "dev";
-
-/** 게이트만 넘는 스위치. `?gate=1` / `?gate=0` — 설문 모드는 그대로 두므로 로그인이 필요 없다 */
-export const GATE_PARAM = "gate";
 
 /**
  * 켜졌을 때 `<html>` 에 붙는 클래스. 게이트를 덮는 규칙이 `globals.css` 에 있고,
@@ -83,13 +76,14 @@ export const DEV_MODE_CLASS = "ody-dev";
  * 죽는다.** 실패하면 그냥 아무 일도 안 한 것이 된다.
  */
 export const devModeScript = `(function(){try{
-var K="${STORAGE_KEYS.surveyMode}",G="${STORAGE_KEYS.gateOff}",u=new URL(location.href),touched=false;
-function set(k,on){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);}
+var K="${STORAGE_KEYS.surveyMode}",G="${STORAGE_KEYS.gateOff}",u=new URL(location.href);
 var d=u.searchParams.get("${DEV_MODE_PARAM}");
-if(d!==null){set(K,d!=="0");set(G,d!=="0");u.searchParams.delete("${DEV_MODE_PARAM}");touched=true;}
-var g=u.searchParams.get("${GATE_PARAM}");
-if(g!==null){set(G,g!=="0");u.searchParams.delete("${GATE_PARAM}");touched=true;}
-if(touched){history.replaceState(null,"",u.pathname+u.search+u.hash);}
+if(d!==null){
+var on=d!=="0";
+[K,G].forEach(function(k){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
+u.searchParams.delete("${DEV_MODE_PARAM}");
+history.replaceState(null,"",u.pathname+u.search+u.hash);
+}
 function off(k){return localStorage.getItem(k)==="false"||sessionStorage.getItem(k)==="false";}
 document.documentElement.classList.toggle("${DEV_MODE_CLASS}",off(K)||off(G));
 }catch(e){}})();`;

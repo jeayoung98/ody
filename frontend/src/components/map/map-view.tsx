@@ -7,10 +7,9 @@ import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutatio
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
+import { useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
-import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -75,7 +74,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (prefetchBoxes && prefetchedSongs) engine.setPrefetched(prefetchBoxes, prefetchedSongs);
   }, [engine, prefetchBoxes, prefetchedSongs]);
   const layer = useMapStore((s) => s.layer);
-  const { data: friends } = useNearbyUsersQuery(layer);
+  /**
+   * 지도 위 사람 — 15초 폴링을 소켓 구독으로 갈아탔다 (S15P21A405-482).
+   * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
+   */
+  useViewportSubscription(features.social);
   const { data: representatives } = useRepresentativesQuery(layer);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
@@ -126,8 +129,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     usePanelStore.getState().collapse();
   }, [layer]);
 
-  // 목: 지도 위 사용자들이 스스로 반응을 쏜다 (실서비스에서는 소켓 수신)
-  useMockFriendReactions(friends);
+  /**
+   * 목 반응은 걷어냈다 (S15P21A405-482). 실시간 명세가 **반응을 "아직 없는 것"** 으로 명시했고
+   * (따라가기·반응·비공개 계정), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
+   * 도는 것처럼 보여서 테스트가 어긋난다. 훅 자체는 남겨 뒀다 — 데이터가 생기면 되살린다.
+   */
 
   // 엔진 등록 + 스냅샷 → 스토어
   useEffect(() => {
@@ -185,10 +191,6 @@ export default function MapView({ occludedRight }: MapViewProps) {
     engine.setLayerSongs(boxes.length, songs);
     trackOnce("map-ready", "map_ready", { result_count: songs.length, layer: boxes.length });
   }, [engine, boxes, songs]);
-  // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
-  useEffect(() => {
-    if (friends) engine.setFriends(layer, friends);
-  }, [engine, layer, friends]);
   useEffect(() => {
     if (representatives) engine.setRepresentatives(representatives.layer, representatives.musicIds);
   }, [engine, representatives]);
@@ -241,9 +243,16 @@ export default function MapView({ occludedRight }: MapViewProps) {
       engine.stopFollow();
       return;
     }
-    const leader = (friends ?? []).find((f) => f.email === leaderEmail);
+    /**
+     * 따라가기 대상은 **엔진이 들고 있는 목록**에서 찾는다 (S15P21A405-482). 예전에는 폴링 훅이
+     * 준 배열을 봤는데, 지금은 뷰포트 구독이 엔진에 직접 넣는다.
+     *
+     * 따라가기 자체는 아직 붙일 데이터가 없다 — 명세가 "아직 없는 것"으로 적었고 `riderCount`
+     * 도 늘 0 이다. 여기는 그때가 오면 그대로 도는 자리다.
+     */
+    const leader = engine.friends.find((f) => f.email === leaderEmail);
     if (leader) engine.startFollow(leader);
-  }, [engine, leaderEmail, friends]);
+  }, [engine, leaderEmail]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {
@@ -419,7 +428,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       selectMusic(s.musicId);
       openSong(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 }));
+      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
       useTutorialStore.getState().complete("select");
     },
     [openSong, playWithConfirm, recordPlay, selectMusic],

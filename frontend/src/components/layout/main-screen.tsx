@@ -15,6 +15,7 @@ import FollowBanner from "@/components/map/follow-banner";
 import GhostBanner from "@/components/map/ghost-banner";
 import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
+import { useRealtime } from "@/hooks/use-realtime";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
@@ -59,6 +60,11 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * **안 보이는 패널 몫으로 지도가 좁아지는** 일이 없다.
    */
   const features = useFeatures();
+  /**
+   * 실시간(내 위치·지도 위 사람·주변 사람)의 시작점 (S15P21A405-482).
+   * 화면 전체에 소켓 하나만 있어야 해서 지도가 아니라 여기서 연다 — 지도는 언마운트될 수 있다.
+   */
+  useRealtime();
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
   // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)

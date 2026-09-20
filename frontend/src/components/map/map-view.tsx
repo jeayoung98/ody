@@ -318,7 +318,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.
       // 배율이 얼마나 올랐는지는 튜토리얼이 직접 본다 (`tutorial-overlay.tsx`)
-      engine.wheel(deltaY, mx, my);
+      return engine.wheel(deltaY, mx, my);
     },
     [engine],
   );
@@ -355,6 +355,13 @@ export default function MapView({ occlusion }: MapViewProps) {
   const pointers = useRef(new Map<number, { x: number; y: number }>());
   /** 직전 두 손가락 사이 거리(px). `null` 이면 핀치 중이 아니다 */
   const pinchDist = useRef<number | null>(null);
+  /**
+   * 직전 확대가 **압력 구간**이었나 (게이트가 열려 배율이 얼어 있는 상태).
+   *
+   * 그 구간에서는 손가락 이동을 {@link PINCH.pressureBoost} 만큼 부풀려 보낸다 — 핀치는 화면 폭이
+   * 한계라 휠만큼 누적을 못 만든다. 배율이 얼어 있는 동안이라 부풀려도 손가락과 어긋나 보이지 않는다.
+   */
+  const pinchPressing = useRef(false);
   /** 닿아 있는 둘의 거리와 가운데. 셋 이상이면 먼저 닿은 둘만 본다 */
   const pinchNow = useCallback(() => {
     const [a, b] = [...pointers.current.values()];
@@ -383,6 +390,7 @@ export default function MapView({ occlusion }: MapViewProps) {
         cancelHold();
         drag.current = null;
         pinchDist.current = pinchNow()?.dist ?? null;
+        pinchPressing.current = false;
         return;
       }
       drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
@@ -424,7 +432,9 @@ export default function MapView({ occlusion }: MapViewProps) {
         // 손가락 하나가 잠깐 빠졌다 돌아오면 거리가 몇 배씩 튄다 — 한 번에 받는 폭을 묶는다
         const k = Math.min(PINCH.maxStep, Math.max(1 / PINCH.maxStep, p.dist / pinchDist.current));
         pinchDist.current = p.dist;
-        zoomBy(-Math.log(k) / WHEEL_ZOOM, p.mx - r.left, p.my - r.top);
+        const boost = pinchPressing.current ? PINCH.pressureBoost : 1;
+        const verdict = zoomBy((-Math.log(k) / WHEEL_ZOOM) * boost, p.mx - r.left, p.my - r.top);
+        pinchPressing.current = verdict === "pressure";
         return;
       }
       if (drag.current) {
@@ -528,10 +538,15 @@ export default function MapView({ occlusion }: MapViewProps) {
       /*
        * 핀치를 끝내며 뗀 손가락은 **탭이 아니다.** 여기서 아래로 흘려보내면 벌렸다 놓을 때마다
        * 손가락 밑에 있던 별이 선택되거나, 이미 선택된 별이면 재생까지 된다.
+       *
+       * 다만 **손가락이 하나 남아 있으면 그 자리에서 이동을 잇는다** (S15P21A405-415). 안 이으면
+       * 벌린 뒤 한 손가락으로 밀 때 아무 일도 안 일어나고, 뗐다 다시 대야 먹는다 — 폰에서
+       * "어정쩡하다" 고 나온 그 느낌이다.
        */
       if (wasPinching) {
         cancelHold();
-        drag.current = null;
+        const [rest] = [...pointers.current.values()];
+        drag.current = rest ? { x: rest.x, y: rest.y, moved: 0 } : null;
         return;
       }
       cancelHold();

@@ -1,8 +1,10 @@
 /**
  * **서버 전용.** `src/app/bff/` 라우트 핸들러에서만 쓴다 — 브라우저 번들에 들어가면 토큰이 샌다.
  *
- * 로그인이 목이라 브라우저에는 백엔드가 인정하는 토큰이 없다. 그래서 지도·주변 탐색·경로 탐색처럼
- * 실데이터가 필요한 것만 Next 서버가 서비스 토큰을 붙여 대신 호출한다.
+ * **호출자의 토큰을 그대로 넘긴다** (S15P21A405-481). 로그인이 항상 필수가 되면서
+ * (S15P21A405-480) 이 라우트들을 부르는 사람은 언제나 로그인한 사람이다. `BACKEND_ACCESS_TOKEN`
+ * 은 그 토큰이 없을 때의 **폴백**으로만 남는다 — 예전에는 이쪽이 기본이었고, 그때는 백엔드
+ * 로그에서 전원이 한 사람으로 보였다.
  *
  * `BACKEND_ACCESS_TOKEN` 이 없으면 `isBackendEnabled()` 가 false 이고, 라우트는 목으로 답한다.
  * 토큰이 있는데 실패하면 **목으로 조용히 떨어지지 않고 오류를 그대로 올린다** — 유저 테스트 중에
@@ -50,13 +52,60 @@ interface Envelope<T> {
   error: { code: string; message: string } | null;
 }
 
+/**
+ * **지금 처리 중인 요청이 들고 온 `Authorization`** (S15P21A405-481).
+ *
+ * 라우트 핸들러 안에서만 부른다. `headers()` 는 요청 범위에서만 유효해서, 그 밖(빌드 타임
+ * 평가 등)에서 부르면 던진다 — 그래서 실패를 삼키고 "토큰 없음" 으로 본다. 여기서 못 읽으면
+ * 아래 서비스 토큰으로 떨어질 뿐이라, 예전 동작 그대로다.
+ *
+ * `req` 를 인자로 받지 않는 이유는 **빼먹을 수 없게** 하기 위해서다. 라우트마다 손으로
+ * `callerAuth(req)` 를 달면 하나만 빠져도 그 라우트만 조용히 서비스 토큰으로 돌아가고,
+ * 백엔드 로그에서는 그 사람만 다른 계정으로 보인다 — 찾기 어려운 종류의 어긋남이다.
+ */
+async function callerToken(): Promise<string | null> {
+  try {
+    const { headers } = await import("next/headers");
+    return (await headers()).get("authorization");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 백엔드에 붙일 `Authorization` 을 고른다 (S15P21A405-481).
+ *
+ * **호출자의 토큰이 서비스 토큰을 이긴다.** 값이 둘 다 없으면 헤더를 아예 안 붙인다 —
+ * A-17(유저 테스트용 임시 인증 해제)이 살아 있는 동안은 그래도 조회가 됐다.
+ *
+ * 호출자 토큰은 이미 `Bearer ...` 형태로 온다(브라우저가 그렇게 보낸다). 서비스 토큰은
+ * 날값이라 여기서 `Bearer` 를 붙인다.
+ *
+ * 순수 함수로 뺀 것은 **시험할 수 있게** 하기 위해서다. `fetch` 안에 인라인으로 두면 우선순위가
+ * 뒤집혀도 배포 백엔드를 실제로 불러 보기 전에는 모른다.
+ */
+export function authHeader(caller: string | null | undefined, service: string | undefined): Record<string, string> {
+  if (caller) return { Authorization: caller };
+  if (service) return { Authorization: `Bearer ${service}` };
+  return {};
+}
+
 /** 배포 백엔드 호출. 봉투를 벗겨 data 만 돌려준다 */
 async function backendFetch<T>(path: string, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
-  // 토큰은 **있으면 붙인다.** A-17 해제 중에는 없어도 조회가 되고, 원복되면 이게 있어야 한다
+  /**
+   * **호출자의 토큰이 먼저다** (S15P21A405-481).
+   *
+   * 예전에는 서비스 토큰 하나로 전부 불렀다 — 로그인 없이도 지도가 보여야 했기 때문이다
+   * (A-17). S15P21A405-480 으로 로그인이 항상 필수가 되면서 그 전제가 없어졌고, 서비스
+   * 토큰으로 계속 부르면 백엔드 입장에서 **전원이 한 사람**으로 보인다.
+   *
+   * 셋의 우선순위: `init.headers`(라우트가 명시한 것) > 호출자 토큰 > 서비스 토큰.
+   * 이미 `callerAuth(req)` 를 넘기는 라우트 열 곳은 그래서 그대로 둔다 — 결과가 같다.
+   */
   const res = await fetch(`${BACKEND_ORIGIN}${path}`, {
     ...init,
     headers: {
-      ...(BACKEND_ACCESS_TOKEN ? { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` } : {}),
+      ...authHeader(await callerToken(), BACKEND_ACCESS_TOKEN),
       ...init?.headers,
     },
     cache: "no-store",
@@ -155,6 +204,11 @@ export function backendPatch<T>(path: string, body: unknown, init?: RequestInit)
  * 보여주려고 서비스가 **대신** 부르는 것이고, 이건 **로그인한 그 사람** 자격으로 부르는 것이다.
  * 내 정보·닉네임 변경처럼 "누가 부르는가"가 답을 바꾸는 API 는 반드시 이쪽이어야 한다 —
  * 서버 토큰으로 부르면 모두가 같은 계정의 답을 받는다.
+ */
+/**
+ * **이제 안 붙여도 된다** (S15P21A405-481). `backendFetch` 가 요청의 Authorization 을 스스로
+ * 읽어 붙이므로 결과가 같다. 이미 이걸 넘기고 있는 라우트 열 곳은 그대로 뒀다 — 명시가 이기고,
+ * 읽는 사람에게는 "이 라우트는 호출자 자격으로 부른다" 가 더 분명하다.
  */
 export function callerAuth(req: Request): Record<string, string> {
   const token = req.headers.get("authorization");

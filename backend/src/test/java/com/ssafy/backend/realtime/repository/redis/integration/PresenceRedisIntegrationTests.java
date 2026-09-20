@@ -68,7 +68,8 @@ class PresenceRedisIntegrationTests {
 		RedisScriptConfig scripts = new RedisScriptConfig();
 		repository = new PresenceRedisRepository(
 				redis, scripts.presenceJoinScript(), scripts.presencePlayScript(),
-				scripts.presenceLeaveScript(), scripts.usercountRecountScript());
+				scripts.presenceLeaveScript(), scripts.usercountRecountScript(),
+				scripts.ridePlaceScript());
 	}
 
 	@AfterEach

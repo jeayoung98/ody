@@ -62,7 +62,8 @@ class NearbyRedisIntegrationTests {
 				redis, scripts.nearbySubscriptionReplaceScript(), scripts.nearbySubscriptionCloseScript());
 		presenceRepository = new PresenceRedisRepository(
 				redis, scripts.presenceJoinScript(), scripts.presencePlayScript(),
-				scripts.presenceLeaveScript(), scripts.usercountRecountScript());
+				scripts.presenceLeaveScript(), scripts.usercountRecountScript(),
+				scripts.ridePlaceScript());
 	}
 
 	@AfterEach

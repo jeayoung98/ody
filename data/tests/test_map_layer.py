@@ -1,10 +1,20 @@
 # -*- coding: utf-8 -*-
 """지도 레이어 인덱스·대표 트랙 검증 (스펙 16, Jira S15P21A405-210).
 
-    coords_v2.parquet  →  칸(2.0) 격자  →  칸마다 중심 최근접 1개  →  1,094개
+    coords_v2.parquet  →  칸(2.0) 격자  →  칸마다 대표곡
 
-운영 DB 에 만든 `map_sample` 과 **같은 규칙**을 numpy 로 다시 계산해 대조한다.
 DB 없이 도는 검사다. 실제 DB 대조 기록은 `output/map_layer_bench_2026-09-11.json` 에 있다.
+
+⚠️ **2026-09-18 D20 (S15P21A405-466) 으로 칸별 선정 규칙이 바뀌었다.**
+
+    옛 규칙: 칸마다 중심 최근접 1개, 동률이면 작은 id          → 1,094칸 = 1,094곡
+    새 규칙: 칸마다 k = min(round(cbrt(재생가능 곡수)), kmax) 개,
+             칸 안에서는 md5(id::text) 무작위, 후보는 NOT is_unplayable
+
+`ingest/map_grid.py` 는 **옛 규칙의 numpy 거울**이라 이제 SQL 과 일치하지 않는다.
+아래 "옛 규칙" 절의 검사들은 그 거울을 그대로 검증하며, 롤백 자산으로 남긴다
+(헌법: 지우지 않고 보존). 새 규칙의 DB 대조는 `tests/fixtures/map_sample_density.sql` 로 한다 —
+실제 postgres 가 필요해 이 파일에서는 SQL 본문 규칙만 확인한다.
 """
 import io
 import json
@@ -20,11 +30,28 @@ sys.path.insert(0, os.path.join(ROOT, "ingest"))
 import map_grid  # noqa: E402
 
 SAMPLE_CELLS = 1094          # 2026-09-11 실측. 셀 2.0, 662만 곡
+# ⚠️ 위 1,094 는 2026-09-11 기록이고 현재값이 아니다. map_sample 이 그 뒤 재생성돼
+#    2026-09-18 운영 실집계는 850칸이다. 이 상수는 같은 시점의 coords_v2.parquet 와
+#    대조하는 test_grid_over_real_coords_matches_db 전용이라 그대로 둔다.
+LIVE_CELLS_2026_09_18 = 850  # 운영 실집계. 밀도 가중 후 약 7,272곡을 담는다
+
 BENCH = os.path.join(ROOT, "output", "map_layer_bench_2026-09-11.json")
 SQL_FILE = os.path.join(ROOT, "ingest", "build_map_layer.sql")
+FIXTURE_FILE = os.path.join(ROOT, "tests", "fixtures", "map_sample_density.sql")
 
 
-# --- 규칙 --------------------------------------------------------------------
+def sql_body():
+    """SQL 본문만. `-- ` 주석 줄은 걷어낸다.
+
+    "이건 쓰지 않는다" 를 설명하는 주석이 그 자체로 검사에 걸리기 때문이다.
+    실제로 `DO $$ 를 쓰지 않는다` 주석이 `"DO $$" not in sql` 을 깨뜨렸다.
+    """
+    text = io.open(SQL_FILE, encoding="utf-8").read()
+    return "\n".join(line for line in text.splitlines()
+                     if not line.lstrip().startswith("--"))
+
+
+# --- 옛 규칙 (D20 이전) — map_grid.py 거울. 롤백 자산으로 보존 -----------------
 
 def test_layer_pairs_cover_16_dims():
     """레이어 8개가 16차원을 두 개씩 나눠 쓴다."""
@@ -97,6 +124,71 @@ def test_sql_uses_same_cell_size():
     assert "/ 2.0)::smallint AS gx" in sql
     assert map_grid.CELL == 2.0
     assert "gx * 2.0 + 1.0" in sql, "중심 = gx * cell + cell/2"
+
+
+def test_sql_selects_density_weighted_k_per_cell():
+    """칸당 k = min(round(cbrt(n)), kmax). 칸당 1곡으로 돌아가지 않았는지 지킨다 (D20)."""
+    sql = sql_body()
+    assert "least(round(cbrt(count(*)))::int, :kmax) AS k" in sql
+    assert "WHERE r.rn <= q.k" in sql
+    assert r"\set kmax 40" in sql, "기본 상한이 있어야 인자 없이도 돈다"
+    assert "DISTINCT ON (gx, gy)" not in sql, "옛 칸당 1곡 규칙이 되살아나면 안 된다"
+
+
+def test_sql_picks_randomly_within_cell():
+    """칸 안은 md5 무작위다. 중심 최근접이면 점이 칸 한복판에 박혀 바둑판이 보인다 (D20).
+
+    md5 라서 재실행해도 같은 곡이 뽑힌다 — 재현 가능해야 한다는 AC 를 이게 만족시킨다.
+    """
+    sql = sql_body()
+    assert "ORDER BY md5(c.id::text)" in sql
+    assert "row_number() OVER (PARTITION BY c.gx, c.gy" in sql
+    # 옛 규칙의 거리식이 남아 선정에 다시 쓰이면 안 된다.
+    assert "^ 2 + (pc2" not in sql, "칸 중심 최근접 정렬이 되살아나면 안 된다"
+
+
+def test_sql_limits_candidates_to_playable():
+    """후보는 재생 가능한 곡뿐이다. 판정 정본은 is_unplayable 이다 (S15P21A405-454)."""
+    sql = sql_body()
+    assert "WHERE NOT is_unplayable" in sql
+    assert "IS DISTINCT FROM 'none'" not in sql, "video_id 표시값은 옛 판정이다"
+
+
+def test_sql_primary_key_holds_many_rows_per_cell():
+    """PK 가 (layer,gx,gy) 면 칸당 1행이 강제돼 밀도 가중을 담을 수 없다.
+
+    제약 이름을 추측하지 않는다 — 운영 PK 이름은 테이블명과 다른 map_sample_v2_pkey 다.
+    그리고 psql 은 달러 인용 블록 안에서 :변수를 치환하지 않으므로 DO $$ 를 쓰면 안 된다.
+    """
+    sql = sql_body()
+    assert "PRIMARY KEY (layer, gx, gy, music_id)" in sql
+    assert "PRIMARY KEY (layer, gx, gy)\n" not in sql
+    assert "FROM pg_constraint" in sql, "제약 이름은 찾아서 쓴다"
+    assert r"\gexec" in sql
+    assert "DO $$" not in sql, "psql 변수가 치환되지 않아 실패한다"
+
+
+def test_sql_analyzes_before_build():
+    """is_unplayable 통계가 없으면 플래너가 후보를 절반으로 보고 정렬을 잘못 잡는다."""
+    sql = sql_body()
+    assert 'ANALYZE :"music_tbl";' in sql
+
+
+def test_density_fixture_documents_expected_counts():
+    """DB 대조 픽스처가 있어야 칸별 k 를 실제로 확인할 수 있다.
+
+    이 검사는 픽스처가 사라지거나 기대값이 지워지는 것만 막는다.
+    실제 실행은 픽스처 헤더의 docker 절차대로 한다(파이썬에서 DB 를 띄우지 않는다).
+    """
+    assert os.path.exists(FIXTURE_FILE), "tests/fixtures/map_sample_density.sql 이 있어야 한다"
+    fx = io.open(FIXTURE_FILE, encoding="utf-8").read()
+    # 운영과 같은 함정 셋을 심어야 검증에 의미가 있다.
+    assert "map_sample_v2_pkey" in fx, "어긋난 PK 이름"
+    assert "999999999" in fx, "music 에 없는 고아 행"
+    assert "seed_cell(7,   10,  10)" in fx, "전부 재생 불가인 칸"
+    # 기대값이 적혀 있어야 리뷰어가 대조할 수 있다.
+    assert "INSERT 0 40" in fx
+    assert "INSERT 0 14" in fx, "kmax=3 클리핑 기대값"
 
 
 def test_sql_is_idempotent_and_grants_read_role():

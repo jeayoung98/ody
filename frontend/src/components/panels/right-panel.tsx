@@ -23,6 +23,15 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
  * 왼쪽 가장자리 핸들로 접을 수 있다 (S15P21A405-318). 접으면 오른쪽으로 미끄러져 나가고
  * 핸들만 남는다 — **별자리는 그대로 켜져 있다.** 지도를 넓게 보려고 잠깐 치우는 동작이라
  * 패널을 닫는 것(별자리도 같이 꺼짐)과 다르다.
+ *
+ * **접기는 폰에서 더 중요하다.** 여기서 패널은 화면을 통째로 덮으므로, 닫아 버리지 않고
+ * 잠깐 치우는 길이 없으면 지도를 보려면 매번 닫았다 다시 열어야 한다. 그래서 폰에서는
+ * `translate-x` 도 `overflow` 도 건드리지 않는다 — 접는 식은 데스크톱과 같은 것 하나뿐이고,
+ * `overflow-hidden` 을 걸면 몸통 바깥(-17px)에 붙은 핸들이 잘려 **접을 길 자체가 사라진다.**
+ *
+ * 왼쪽만 여백(16)에 손잡이 폭(17)을 더해 들여놓는다. 양쪽 다 16 으로 두면 손잡이가
+ * `16 - 17 = -1` 로 **화면 밖으로 나간다** (실측). 오른쪽은 그대로 16 이라 접혔을 때
+ * 남는 몸통도 데스크톱과 같다.
  */
 export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
@@ -62,7 +71,7 @@ export default function RightPanel() {
           transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
         collapsed ? "translate-x-[calc(100%_-_10px)]" : ""
-      } max-tablet:inset-x-gutter-sm max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:translate-x-0 max-tablet:overflow-hidden`}
+      } max-tablet:right-gutter-sm max-tablet:left-[calc(var(--spacing-gutter-sm)+var(--spacing-handle-w))] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
     >
       <PanelCollapseHandle />
       {activePanel === "song" && <SongDetailPanel />}

@@ -24,6 +24,13 @@ export default function PanelCollapseHandle() {
       expanded={!collapsed}
       onClick={toggleCollapsed}
       title={collapsed ? "패널 펼치기" : "패널 접기"}
+      /*
+       * 폰에서는 **손가락이 닿는 넓이만** 넓힌다 (S15P21A405-417). 17px 짜리 혀는 마우스로는
+       * 충분해도 손가락으로는 못 누른다 (`--spacing-touch` 44px). 모양은 그대로 두고 투명한
+       * 판을 깔아 위아래 8px · 좌우 14px 을 더한다 — 왼쪽은 화면 여백(16px)으로, 오른쪽은
+       * 패널 제 안쪽 여백으로 나가므로 가리는 것이 없다.
+       */
+      hitClassName="max-tablet:after:absolute max-tablet:after:-inset-y-2 max-tablet:after:-inset-x-[14px] max-tablet:after:content-['']"
     />
   );
 }

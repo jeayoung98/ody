@@ -538,11 +538,19 @@ export default function MapView({ occlusion }: MapViewProps) {
        * 넓어 여는 순간 지도가 사라진다 — 그래서 두 번째 탭으로 재생하는 것도, 주변 탐색·경로
        * 결과를 보는 것도 막혔다. 대신 호버 카드를 띄우고, 상세는 그 카드의 버튼으로 들어간다.
        */
-      if (narrow) {
+      // 주변 탐색 중에는 폰에서도 카드를 띄우지 않는다 (S15P21A405-288) — 고리 별에는 제목·순위
+      // 라벨과 "둘러보기 ›" 링크가 이미 붙어 있고, 375px 에서 300px 짜리 카드가 그걸 다 덮는다.
+      // 그 곡 상세는 다른 곡 상세의 "주변곡" 목록으로 들어간다
+      if (narrow && map.viewMode !== "nearby") {
+        // 엔진에도 알려야 한다 — 카드는 매 프레임 `hoverAnchor()` 로 자기 자리를 찾고,
+        // 그게 null 이면 **자리를 못 잡아 숨는다.** 이걸 빼먹어서 카드가 DOM 에는 있는데
+        // 화면에는 끝까지 안 나왔다 (그래서 "상세 버튼이 어디 있냐" 가 됐다)
+        engine.setHover(s.musicId);
+        cancelHide();
         heldSong.current = s;
         setHoverSong(s);
         setCardOn(true);
-      } else {
+      } else if (!narrow) {
         openSong(s.musicId);
       }
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
@@ -550,7 +558,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, narrow, openSong, playSong, selectMusic],
+    [engine, cancelHide, narrow, openSong, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(
@@ -606,10 +614,19 @@ export default function MapView({ occlusion }: MapViewProps) {
         return;
       }
       const hit = engine.hitTest(mx, my);
-      // 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
-      // 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다
-      const song = hit ? engine.songs[hit.i] : heldSong.current;
+      /**
+       * 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
+       * 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다.
+       *
+       * **마우스일 때만이다** (S15P21A405-417). 이 규칙은 커서가 별과 카드 사이 틈을 지나는
+       * 동안의 이야기고, 손가락에는 그 틈이 없다. 폰에서는 탭 한 번에 카드가 떠서 다음 탭까지
+       * 그대로 남는데, 여기서 같이 흘려보내면 **빈 곳을 눌러도 그 곡이 재생됐다** (실측).
+       */
+      const song = hit ? engine.songs[hit.i] : e.pointerType === "mouse" ? heldSong.current : null;
       if (!song) {
+        // 손가락으로 빈 곳을 누르는 것은 "그만 볼래" 다 — 떠 있던 카드를 내린다.
+        // 엔진 호버와 `heldSong` 은 페이드가 끝난 뒤 위쪽 이펙트가 푼다
+        if (heldSong.current) setCardOn(false);
         /**
          * **주변 탐색 중 빈 곳을 누르면 고리를 닫는다** (S15P21A405-384).
          *

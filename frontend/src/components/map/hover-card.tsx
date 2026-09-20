@@ -14,6 +14,14 @@ interface HoverCardProps {
   song: MapPoint | null;
   /** 켜져 있나. 꺼지면 사라지는 중이다 — 다 사라질 때까지는 그대로 붙어 있는다 */
   on: boolean;
+  /**
+   * 상세로 들어가는 길 (S15P21A405-417). **좁은 화면에서만 준다.**
+   *
+   * 폰에서는 별을 탭해도 패널을 열지 않는다 — 열면 지도를 덮어서 다음 별을 못 찾고,
+   * 그래서 두 번 탭 재생도 주변 탐색 결과 보기도 막혔다. 대신 이 카드가 뜨고,
+   * 상세가 **정말 보고 싶을 때만** 이 버튼으로 들어간다.
+   */
+  onDetail?: () => void;
 }
 
 /**
@@ -33,7 +41,7 @@ interface HoverCardProps {
  * 자리는 카메라가 움직일 때마다 바뀐다. 매 프레임 setState 하면 지도 전체가 리렌더되므로
  * rAF 에서 `style.transform` 만 직접 쓴다 — 리렌더는 곡이 바뀔 때만 일어난다.
  */
-export default function HoverCard({ engine, song, on }: HoverCardProps) {
+export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps) {
   // 커버는 캔버스로 만들어 쓰던 것을 그대로 쓴다 (곡마다 같은 그림이어야 지도와 어긋나지 않는다)
   const cover = useMemo(() => (song ? coverFor(song).toDataURL() : null), [song]);
   const cardRef = useRef<HTMLDivElement>(null);
@@ -98,6 +106,20 @@ export default function HoverCard({ engine, song, on }: HoverCardProps) {
           {song.playable ? "" : " · 재생 불가"}
         </p>
       </span>
+      {/*
+        카드 전체는 계속 클릭을 통과시킨다 (S15P21A405-323) — 덮인 별을 그냥 누를 수 있어야 한다.
+        **이 버튼만** 이벤트를 받는다. 카드 하나를 통째로 눌리게 만들면 그 아래 별들이 다시 막힌다.
+      */}
+      {onDetail && (
+        <button
+          type="button"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={onDetail}
+          className="pointer-events-auto shrink-0 self-stretch px-2 text-[11.5px] whitespace-nowrap text-ink-2"
+        >
+          상세 ›
+        </button>
+      )}
     </div>
   );
 }

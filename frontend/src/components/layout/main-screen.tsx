@@ -46,16 +46,9 @@ const PEEK_BODY = 10;
 const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
-/**
- * 좁은 화면의 아래쪽 쌓기 (S15P21A405-417). 바닥부터 **재생바 → 네비 → 시트** 순서다.
- * `--spacing-hud-b` 와 `--spacing-touch` 의 JS 쪽 거울이라 `tokens.css` 와 같이 고친다.
- */
+/** 화면 아래 여백. `tokens.css` 의 `--spacing-hud-b` 의 JS 쪽 거울이라 같이 고친다 */
 const HUD_B = 18;
-const TOUCH = 44;
-/**
- * 쌓인 것들 사이 틈. **재생바와 네비 사이는 좁다** — 둘이 한 덩어리로 읽혀야 한다.
- * 8px 로 뒀더니 따로 떠 있는 조각 둘로 보인다는 말이 나왔다.
- */
+/** 재생바와 그 위에 얹히는 것 사이 틈 */
 const STACK_GAP = 4;
 
 interface MainScreenProps {
@@ -81,36 +74,26 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   /**
    * 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318).
    *
-   * **좁은 화면에서는 오른쪽을 아무도 안 가린다** (S15P21A405-417). 패널이 바텀시트로 아래에
-   * 서기 때문이다. 이걸 안 갈랐더니 375px 화면에 "오른쪽 410px 이 가려졌다" 고 알려 주게 돼서,
+   * **좁은 화면에서는 오른쪽을 아무도 안 가린다** (S15P21A405-417). 패널이 지도를 통째로
+   * 덮거나 아예 닫혀 있거나 둘 중 하나라 "옆으로 비켜 준다" 는 개념이 없다.
+   * 이걸 안 갈랐더니 375px 화면에 "오른쪽 410px 이 가려졌다" 고 알려 주게 돼서,
    * 엔진이 남은 폭을 최소치 120px 로 잘랐다 — 주변 탐색 고리 반지름이 119 에서 43 으로 줄어
    * 왼쪽 구석에 찌그러져 보였다 (실측).
    */
   const narrow = useIsNarrow();
   const occludedRight = narrow ? 0 : panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
   /**
-   * 지도가 가려지는 네 변 (S15P21A405-414). 지금 움직이는 것은 우측 패널 하나이고, 위아래는
-   * 늘 덮여 있는 HUD 두께다. 바텀시트가 들어오면 아래가 여기서 움직인다 (S15P21A405-416).
-   *
+   * 지도가 가려지는 네 변 (S15P21A405-414).
    * **매 렌더 새 객체를 만들면 안 된다** — 받는 쪽 effect 의 의존성이라 값이 같아도 매번 다시 돈다.
-   */
-  /**
-   * 바텀시트가 서 있으면 아래가 그만큼 더 가려진다 (S15P21A405-416).
-   * 시트는 좁은 화면에서만 생기므로 `sheetHeight` 가 `null` 이면 예전 값 그대로다.
-   */
-  const sheetHeight = usePanelStore((s) => s.sheetHeight);
-  /**
-   * 아래에 서 있는 것들의 실제 두께 (S15P21A405-417 · 416).
    *
-   * 재생바 높이를 **재서** 쓴다 — 곡이 없으면 한 줄, 재생 중이면 진행바가 붙어 더 높다.
-   * 네비와 시트가 전부 이 위에 얹히므로, 상수로 박으면 그 차이만큼 떠 보이거나 겹친다.
-   * 같은 값을 CSS 변수로도 내려 보내 `layout/rail.tsx` · `panels/right-panel.tsx` 가 쓴다 —
-   * 두 군데가 각자 계산하면 어긋난다.
+   * 재생바 **위**가 어디인지 (S15P21A405-417). 재생바 높이는 재생 상태에 따라 바뀐다 —
+   * 곡이 없으면 한 줄, 재생 중이면 진행바가 붙어 더 높다. 상수로 박으면 그 차이만큼
+   * 위에 얹힌 것이 떠 보이거나 겹치므로 **재서** 쓰고, CSS 변수로 내려 보낸다.
+   * 좁은 화면에서 패널이 이 선 위까지 차지한다 (`panels/right-panel.tsx`).
    */
   const playerH = usePlayerBarHeight();
   const navBottom = HUD_B + playerH + STACK_GAP;
-  const sheetBottom = navBottom + TOUCH + STACK_GAP;
-  const occludedBottom = sheetHeight == null ? HUD_OCCLUSION.bottom : sheetBottom + sheetHeight;
+  const occludedBottom = narrow ? HUD_B + playerH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],
@@ -119,7 +102,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-void text-ink"
-      style={{ "--nav-bottom": `${navBottom}px`, "--sheet-bottom": `${sheetBottom}px` } as CSSProperties}
+      style={{ "--nav-bottom": `${navBottom}px` } as CSSProperties}
     >
       <MapView occlusion={occlusion} />
       {/* 축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다 */}

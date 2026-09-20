@@ -11,6 +11,7 @@ import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
 import { useFeatures } from "@/hooks/use-features";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { usePlaySong } from "@/hooks/use-play-song";
@@ -46,6 +47,7 @@ interface MapViewProps {
  */
 export default function MapView({ occlusion }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
+  const narrow = useIsNarrow();
   const features = useFeatures();
   const { ref, size } = useViewport();
   const [hover, setHover] = useState(false);
@@ -107,6 +109,8 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   useEffect(() => {
     if (nearbyCenterMusicId == null) return;
+    // 폰에서는 열지 않는다 (S15P21A405-417) — 주변 탐색은 **고리가 결과**인데 패널이 그걸 덮는다
+    if (window.innerWidth < BREAKPOINTS.tablet) return;
     // 켠 쪽이 패널을 이미 정했으면 비켜난다 (S15P21A405-384) — 이웃 카드를 고르면 중심은
     // 이 곡이지만 상세는 **고른 이웃**이라, 여기서 중심곡을 열면 그걸 덮어쓴다
     if (useMapStore.getState().nearbyPanelHandled) return;
@@ -503,12 +507,13 @@ export default function MapView({ occlusion }: MapViewProps) {
   const playSong = useCallback(
     (s: MapPoint) => {
       selectMusic(s.musicId);
-      openSong(s.musicId);
+      // 폰에서는 재생해도 패널을 열지 않는다 — 지금 듣는 곡은 재생바가 이미 보여 준다
+      if (!narrow) openSong(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
       playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 }));
       useTutorialStore.getState().complete("select");
     },
-    [openSong, playWithConfirm, recordPlay, selectMusic],
+    [narrow, openSong, playWithConfirm, recordPlay, selectMusic],
   );
 
   /**
@@ -528,13 +533,24 @@ export default function MapView({ occlusion }: MapViewProps) {
       // 클릭 = **보기만** (S15P21A405-277). 상세를 열고 뷰만 그리로 옮긴다 —
       // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
       selectMusic(s.musicId);
-      openSong(s.musicId);
+      /**
+       * **좁은 화면에서는 패널을 열지 않는다** (S15P21A405-417). 375px 에서 패널은 화면만큼
+       * 넓어 여는 순간 지도가 사라진다 — 그래서 두 번째 탭으로 재생하는 것도, 주변 탐색·경로
+       * 결과를 보는 것도 막혔다. 대신 호버 카드를 띄우고, 상세는 그 카드의 버튼으로 들어간다.
+       */
+      if (narrow) {
+        heldSong.current = s;
+        setHoverSong(s);
+        setCardOn(true);
+      } else {
+        openSong(s.musicId);
+      }
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, openSong, playSong, selectMusic],
+    [engine, narrow, openSong, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(
@@ -683,7 +699,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       {features.social && <FloatingReactions />}
-      <HoverCard engine={engine} song={hoverSong} on={cardOn} />
+      <HoverCard engine={engine} song={hoverSong} on={cardOn} onDetail={narrow && hoverSong ? () => openSong(hoverSong.musicId) : undefined} />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

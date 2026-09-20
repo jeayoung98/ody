@@ -45,26 +45,12 @@ export default function Rail() {
 
   return (
     /*
-     * 좁은 화면에서는 **아래로 내려와 재생바와 한 덩어리가 된다** (S15P21A405-417).
-     * 375px 상단은 마크·검색·레일이 한 줄을 다투는 자리였고, 아래는 재생바 하나만 덩그러니
-     * 있어 조각이 따로 떠 보였다. 내려 보내면 상단이 비어 지도가 넓어지고, 바텀시트가
-     * 들어올 때(S15P21A405-416) 시트가 이 묶음 위로 올라오면 된다.
-     * 알약 모양은 그대로 둔다 — 떠 있는 유리라는 디자인 언어가 이 앱의 기본이다.
-     *
-     * 세로 자리는 `main-screen.tsx` 가 **재생바를 재서** 내려 주는 `--nav-bottom` 이다.
-     * 96px 로 박아 뒀더니 곡이 없을 때 재생바가 80px 이라 16px 이 비어 네비가 붕 떠 보였다.
-     * 재생 중이면 진행바가 붙어 더 높아지므로, 상수로는 어느 쪽에 맞춰도 한쪽이 어긋난다.
+     * 좁은 화면에서도 **우상단 그대로다** (S15P21A405-417). 아래로 내려 재생바와 묶어 봤지만,
+     * 시트·네비·재생바가 줄 셋으로 쌓여 지도를 먹고 서로 따로 떠 보였다. 상단은 마크·검색만
+     * 남아 자리가 있고, 패널이 필요할 때만 열리는 구조(아래 참고)라 네비가 지도를 가리지 않는다.
      */
-    <div
-      data-hud
-      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-[var(--nav-bottom)] max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between max-tablet:transition-[bottom] max-tablet:duration-200"
-    >
-      {/*
-        좁은 화면에서는 **재생바와 같은 폭으로 늘어난다** (S15P21A405-417). 알약이 좁으면
-        아래 재생바(전체폭 상자)와 크기·모양이 달라 "떠 있는 조각 하나" 로 읽혔다 —
-        폭을 맞추고 아이콘을 고르게 펴면 두 줄짜리 하단 바로 읽힌다.
-      */}
-      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px max-tablet:flex-1 max-tablet:justify-around">
+    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:right-gutter-sm">
+      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
             <FriendsIcon />

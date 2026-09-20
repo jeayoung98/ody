@@ -11,6 +11,7 @@ import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import PanelCloseButton from "../panel-close-button";
 import FriendRow from "./friend-row";
+import NearbyRadar from "./nearby-radar";
 import ReactionButton from "./reaction-button";
 
 /**
@@ -44,6 +45,12 @@ export default function FriendsPanel() {
       </Note>
       {/* 반응은 주변 사람에게 보내는 것이라 그 목록 위에 둔다 (S15P21A405-434). 우하단 FAB 였다 */}
       <ReactionButton />
+      {/*
+        레이더가 위, 줄 목록이 아래다 (S15P21A405-496). 레이더는 **거리와 크기**를 한눈에
+        보여주고, 목록은 레이더에 넣을 자리가 없는 것(듣는 곡 제목·만남 횟수)을 적는다.
+        하나만 두면 둘 중 하나를 잃는다.
+      */}
+      {data && data.people.length > 0 && <NearbyRadar people={data.people} />}
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {/*
           **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는

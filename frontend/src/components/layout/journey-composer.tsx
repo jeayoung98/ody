@@ -80,8 +80,9 @@ export default function JourneyComposer() {
     setKeyword("");
   };
 
+  // 좁은 화면에서는 46vw 가 172px 밖에 안 된다 — 여백만 빼고 다 쓴다 (S15P21A405-417)
   return (
-    <div data-analytics-manual data-hud data-tutorial="journey-composer" className="glass animate-tin absolute top-hud-t left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[22px]! p-0!">
+    <div data-analytics-manual data-hud data-tutorial="journey-composer" className="glass animate-tin absolute top-hud-t left-1/2 z-[24] w-[min(520px,46vw)] -translate-x-1/2 overflow-hidden rounded-[22px]! p-0! max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))]">
       <header className="flex items-center gap-2 px-4 pt-3">
         <span className="lbl">여정 만들기</span>
         <span className="flex-1" />

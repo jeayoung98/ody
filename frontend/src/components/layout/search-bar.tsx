@@ -130,8 +130,9 @@ export default function SearchBar() {
       data-analytics-manual
       data-hud
       onBlur={handleBlur}
-      // 폭만 바뀐다. 가운데 정렬(-translate-x-1/2)이라 양쪽으로 같이 늘어난다
-      className={`absolute top-hud-t left-1/2 z-[22] -translate-x-1/2 transition-[width] duration-300 ease-out ${expanded ? "w-[min(420px,34vw)]" : "w-[104px]"}`}
+      // 폭만 바뀐다. 가운데 정렬(-translate-x-1/2)이라 양쪽으로 같이 늘어난다.
+      // 좁은 화면에서는 34vw 가 127px 밖에 안 돼 글자가 안 들어간다 — 여백만 빼고 다 쓴다 (S15P21A405-417)
+      className={`absolute top-hud-t left-1/2 z-[22] -translate-x-1/2 transition-[width] duration-300 ease-out ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))]" : "w-[104px]"}`}
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div

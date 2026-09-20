@@ -11,6 +11,7 @@ import org.springframework.stereotype.Component;
 
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.Location;
+import com.ssafy.backend.music.videoid.VideoIds;
 
 /**
  * music 영역의 좌표 조회 기능을 realtime에서 쓰는 배열 형태로 바꾼다.
@@ -44,6 +45,20 @@ public class MusicLocationServiceImpl implements MusicLocationService {
 	@Override
 	public boolean exists(long musicId) {
 		return musicDetailReader.findDetail(musicId).isPresent();
+	}
+
+	/**
+	 * 소리를 틀 수 있는 곡인지 확인한다.
+	 *
+	 * 상세 조회의 videoId 가 "none" 이면 찾아봤지만 쓸 만한 영상이 없다고 확정된 곡이다.
+	 * 프론트가 이미 이 값으로 판정하므로 같은 값을 쓴다.
+	 * 곡이 없거나 아직 안 찾아본 곡은 틀 수 있다고 본다.
+	 */
+	@Override
+	public boolean playable(long musicId) {
+		return musicDetailReader.findDetail(musicId)
+				.map(detail -> !VideoIds.UNPLAYABLE.equals(detail.videoId()))
+				.orElse(true);
 	}
 
 	/**

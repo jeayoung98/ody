@@ -48,7 +48,12 @@ export default function FriendsPanel() {
         보여주고, 목록은 레이더에 넣을 자리가 없는 것(듣는 곡 제목·만남 횟수)을 적는다.
         하나만 두면 둘 중 하나를 잃는다.
       */}
-      {connected && data && <NearbyRadar people={data.people} />}
+      {/*
+        **판은 늘 그리고, 사람만 연결됐을 때 얹는다** (S15P21A405-496). 연결까지 기다렸다가
+        그리면 실시간이 꺼져 있는 동안 패널에 빈 공간만 남아 무엇을 보는 화면인지 알 수 없다.
+        눈금과 가운데의 나는 연결과 상관없이 참인 것들이라 먼저 보여 줘도 거짓말이 아니다.
+      */}
+      <NearbyRadar people={connected && data ? data.people : []} />
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {/*
           **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는

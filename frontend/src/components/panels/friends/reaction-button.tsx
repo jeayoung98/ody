@@ -55,7 +55,9 @@ export default function ReactionButton() {
       >
         <SmileIcon />
       </button>
-      {open ? <ReactionPicker horizontal onPick={handlePick} /> : <span className="text-[12px] text-ink-3">주변 사람에게 반응 보내기</span>}
+      {/* 설명 글자는 뺐다 (S15P21A405-496) — 오른쪽 아래 구석이라 자리가 좁고, 웃는 얼굴만으로
+          무엇인지 읽힌다. 뜻은 `title`·`aria-label` 이 들고 있어 스크린리더에도 남는다 */}
+      {open && <ReactionPicker horizontal onPick={handlePick} />}
     </div>
   );
 }

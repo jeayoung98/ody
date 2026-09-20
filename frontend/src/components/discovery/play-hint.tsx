@@ -6,6 +6,7 @@ import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useStarScreenPos } from "@/components/tutorial/tutorial-hint";
 import TutorialSpotlight from "@/components/tutorial/tutorial-spotlight";
 import { ROUTES, STORAGE_KEYS } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
 import { track } from "@/lib/analytics/client";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useMapStore } from "@/stores/use-map-store";
@@ -149,16 +150,24 @@ export default function PlayHint() {
    * 박지 않는 이유는 재생바가 재생 상태에 따라 커지기 때문이다.
    */
   const bottomLimit = (left: number, right: number) => {
-    let limit = window.innerHeight - EDGE;
+    const limit = window.innerHeight - EDGE;
+    /**
+     * **좁은 화면에서만 HUD 를 피한다.** 데스크톱에도 같은 겹침이 날 수 있지만, 이번 작업의
+     * 전제가 "웹뷰 배치를 건드리지 않는다" 라 경계를 넘지 않는다. 데스크톱 쪽은 따로 다룬다.
+     *
+     * 폭을 여기서 읽어도 되는 이유는 `BREAKPOINTS` 주석이 말하는 대로 **이 계산이 이미
+     * `window.innerWidth` 를 읽고 있는 하이드레이션 이후 코드**이기 때문이다. 렌더 분기가 아니다.
+     */
+    if (window.innerWidth >= BREAKPOINTS.tablet) return limit;
+    let bounded = limit;
     for (const el of document.querySelectorAll("[data-hud]")) {
       const r = el.getBoundingClientRect();
-      // **가로로 겹치는 것만** 센다. 데스크톱 재생바는 오른쪽 구석에만 있어서, 이걸 안 보면
-      // 화면 왼쪽에 뜬 말풍선까지 이유 없이 위로 뒤집힌다.
+      // **가로로 겹치는 것만** 센다. 안 그러면 옆으로 비켜 있는 HUD 때문에도 뒤집힌다.
       if (r.height > 0 && r.top > window.innerHeight / 2 && r.right > left && r.left < right) {
-        limit = Math.min(limit, r.top - EDGE);
+        bounded = Math.min(bounded, r.top - EDGE);
       }
     }
-    return limit;
+    return bounded;
   };
 
   /**

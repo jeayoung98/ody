@@ -17,6 +17,7 @@ const { STORAGE_KEYS } = require("../src/constants/storage-keys.ts");
 
 const KEY = STORAGE_KEYS.surveyMode;
 const GATE = STORAGE_KEYS.gateOff;
+const ANALYTICS = STORAGE_KEYS.analyticsMode;
 
 /** 저장소 한 칸. `blocked` 면 시크릿 모드처럼 모든 접근이 던진다 */
 function makeStorage(initial = {}, blocked = false) {
@@ -68,8 +69,25 @@ test("?dev=1 이면 설문이 꺼지고 게이트를 넘는 클래스가 붙는�
   assert.equal(r.dev, true);
 });
 
+/*
+ * 분석도 같이 끈다 — 우리가 만지는 것이 테스터 데이터에 섞이면 안 된다. 브라우저별 스위치는
+ * 원래 있었지만 콘솔에서만 넣을 수 있었고, 폰에는 콘솔이 없다.
+ */
+test("?dev=1 이면 이 브라우저의 분석 전송이 멈춘다", () => {
+  assert.equal(run({ url: "https://ody.test/?dev=1" }).local.get(ANALYTICS), "false");
+});
+
+test("?dev=0 이면 분석이 다시 켜진다 — 껐다면 되돌릴 수도 있어야 한다", () => {
+  const r = run({ url: "https://ody.test/?dev=0", local: { [ANALYTICS]: "false" } });
+  assert.equal(r.local.has(ANALYTICS), false);
+});
+
+test("분석 스위치는 게이트 클래스와 무관하다 — 분석만 꺼 둔 브라우저가 게이트를 넘지 않는다", () => {
+  assert.equal(run({ url: "https://ody.test/", local: { [ANALYTICS]: "false" } }).dev, false);
+});
+
 test("?dev=0 은 둘 다 되돌린다 — 테스터가 보는 상태로", () => {
-  const r = run({ url: "https://ody.test/?dev=0", local: { [KEY]: "false", [GATE]: "false" } });
+  const r = run({ url: "https://ody.test/?dev=0", local: { [KEY]: "false", [GATE]: "false", [ANALYTICS]: "false" } });
   assert.equal(r.local.size, 0);
   assert.equal(r.dev, false);
 });

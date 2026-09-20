@@ -14,11 +14,23 @@
  * 그래서 주소로 켠다.
  *
  * ```text
- * ?dev=1   설문을 끄고 좁은 화면 게이트를 넘는다
- * ?dev=0   둘 다 되돌린다
+ * ?dev=1   설문을 끄고, 좁은 화면 게이트를 넘고, 이 브라우저의 분석 전송을 멈춘다
+ * ?dev=0   셋 다 되돌린다
  * ```
  *
  * 폰에서 한 번만 치면 이후로는 파라미터 없이 들어가도 유지된다.
+ *
+ * ## 분석을 같이 끄는 이유
+ *
+ * **우리가 만지는 것이 테스터 데이터에 섞이면 안 된다.** 브라우저별로 끄는 스위치는 원래
+ * 있었지만(`ody:analytics-mode`, [`lib/analytics/mode.ts`](../lib/analytics/mode.ts)) 콘솔에서만
+ * 넣을 수 있었다 — **폰에서는 그게 안 된다는 것이 이 파일이 생긴 이유 그대로다.** 그래서 같이 얹었다.
+ *
+ * 값이 다른 키와 반대인 데 주의한다. 설문·게이트는 `"false"` 가 "꺼짐" 이지만 분석은
+ * `analyticsEnabled()` 가 `!== false` 라 **`"false"` 를 넣어야 전송이 멈춘다** — 마침 같은 모양이다.
+ *
+ * 로컬(`localhost`)은 어차피 `environment=development` 로 갈려 나가지만, **배포 주소를 폰으로
+ * 볼 때가 문제다.** 거기서는 우리 조작이 테스터와 한 덩어리로 찍힌다.
  *
  * ## 스위치가 하나인 이유
  *
@@ -76,11 +88,11 @@ export const DEV_MODE_CLASS = "ody-dev";
  * 죽는다.** 실패하면 그냥 아무 일도 안 한 것이 된다.
  */
 export const devModeScript = `(function(){try{
-var K="${STORAGE_KEYS.surveyMode}",G="${STORAGE_KEYS.gateOff}",u=new URL(location.href);
+var K="${STORAGE_KEYS.surveyMode}",G="${STORAGE_KEYS.gateOff}",A="${STORAGE_KEYS.analyticsMode}",u=new URL(location.href);
 var d=u.searchParams.get("${DEV_MODE_PARAM}");
 if(d!==null){
 var on=d!=="0";
-[K,G].forEach(function(k){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
+[K,G,A].forEach(function(k){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
 u.searchParams.delete("${DEV_MODE_PARAM}");
 history.replaceState(null,"",u.pathname+u.search+u.hash);
 }

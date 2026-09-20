@@ -8,7 +8,7 @@ import Loading from "@/components/common/loading";
 import Note from "@/components/common/note";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
-import { isConnected } from "@/lib/realtime/stomp-client";
+import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import PanelCloseButton from "../panel-close-button";
 import FriendRow from "./friend-row";
 import ReactionButton from "./reaction-button";
@@ -22,8 +22,14 @@ import ReactionButton from "./reaction-button";
  * 열 때 한 번 부르고, 이후 변화는 소켓 델타로 온다 (`useNearbyPeopleLive`). 폴링하지 않는다.
  */
 export default function FriendsPanel() {
-  const { data, isPending, isError, error, refetch } = useNearbyPeopleQuery(isConnected());
-  useNearbyPeopleLive(true, refetch);
+  /**
+   * **구독해서 본다** (S15P21A405-493). 예전에는 `isConnected()` 를 렌더 중에 그냥 불렀는데,
+   * 그러면 소켓이 나중에 붙어도 다시 렌더되지 않아 `enabled` 가 false 로 굳었다.
+   */
+  const connected = useRealtimeConnected();
+  const { data, isLoading, isError, error, refetch } = useNearbyPeopleQuery(connected);
+  // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
+  useNearbyPeopleLive(connected, refetch);
 
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */
@@ -39,7 +45,15 @@ export default function FriendsPanel() {
       {/* 반응은 주변 사람에게 보내는 것이라 그 목록 위에 둔다 (S15P21A405-434). 우하단 FAB 였다 */}
       <ReactionButton />
       <div className="-mx-1.5 flex flex-col gap-0.5">
-        {isPending && <Loading />}
+        {/*
+          **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는
+          TanStack Query v5 에서 `pending` 으로 멈춰 있어서, `isPending` 으로 스피너를 띄우면
+          요청을 보낸 적도 없는데 영원히 "불러오는 중" 이 된다. 오류도 안내도 아닌 상태라
+          사용자는 기다리는 것 말고 할 수 있는 게 없다. `isLoading` 은 실제로 요청이 날아가는
+          동안만 참이다(= `isFetching && isPending`).
+        */}
+        {!connected && <EmptyState message="실시간 연결을 기다리는 중이에요. 연결되면 주변 사람이 보여요." />}
+        {connected && isLoading && <Loading />}
         {noPlay && <EmptyState message="곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요." />}
         {temporary && (
           <div className="flex flex-col items-center gap-2 py-4">
@@ -48,7 +62,7 @@ export default function FriendsPanel() {
           </div>
         )}
         {isError && !noPlay && !temporary && <ErrorMessage />}
-        {data && data.people.length === 0 && <EmptyState message="지금은 비슷한 곡을 듣는 사람이 없어요." />}
+        {connected && data && data.people.length === 0 && <EmptyState message="지금은 비슷한 곡을 듣는 사람이 없어요." />}
         {data?.people.map((p) => <FriendRow key={p.email} person={p} />)}
       </div>
     </Box>

@@ -2,7 +2,6 @@
 
 import Button from "@/components/common/button";
 import UserRow from "@/components/common/user-row";
-import { useStartFollowMutation } from "@/hooks/mutations/use-follow-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -13,7 +12,6 @@ export default function FriendRow({ user }: { user: NearbyUser }) {
   const openFeed = usePanelStore((s) => s.openFeed);
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const start = useFollowStore((s) => s.start);
-  const follow = useStartFollowMutation();
   const startActivity = useStartActivity();
 
   const isLeader = leaderEmail === user.email;
@@ -29,14 +27,12 @@ export default function FriendRow({ user }: { user: NearbyUser }) {
         <Button
           size="sm"
           variant={isLeader ? "secondary" : "primary"}
-          disabled={!user.isOnline || isLeader || follow.isPending}
+          disabled={!user.isOnline || isLeader}
           onClick={(e) => {
             e.stopPropagation();
             // ACT-01: 진행 중인 활동이 있으면 확인 후 멈추고 시작한다
-            startActivity("follow", user.email, () => {
-              follow.mutate(user.email);
-              start(user.email, user.nickname);
-            });
+            // 탑승은 로컬 상태만 — 서버 API 가 배포에 없다 (S15P21A405-489)
+            startActivity("follow", user.email, () => start(user.email, user.nickname));
           }}
         >
           {isLeader ? "탑승 중" : "따라가기"}

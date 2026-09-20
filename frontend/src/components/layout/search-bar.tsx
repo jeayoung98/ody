@@ -1,35 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { useRef, useState } from "react";
 import { CloseIcon, SearchIcon } from "@/components/common/icons";
-import { SEARCH_DEBOUNCE_MS } from "@/constants";
-import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
-import { useSearchAnalytics } from "@/hooks/use-search-analytics";
-import { useMapStore } from "@/stores/use-map-store";
+import { ROUTES } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
+import { CHIP_LABEL, useMusicSearch } from "@/hooks/use-music-search";
 import { usePanelStore } from "@/stores/use-panel-store";
-import type { MusicSearchResult, SearchCondition } from "@/types";
+import type { MusicSearchResult } from "@/types";
 import SearchResultList from "./search-result-list";
-
-/**
- * 검색바가 들고 있는 상태 (S15P21A405-399).
- *
- * `chip` 이 확정한 **첫 조건**이고 `input` 은 남은 입력이다. 둘 다 칩으로 굳히는 네 번째
- * 상태를 만들지 않는 이유는, 첫 조건만 고정해도 세 경로가 전부 표현되기 때문이다.
- */
-type Chip = { kind: "artist" | "music"; value: string } | null;
-
-/**
- * 칩에 띄우는 조건 이름. **조건을 가리킬 때만 `제목`이다** — 결과를 가리키는 말은 `음악`
- * 그대로 둔다("일치하는 음악이 없습니다"). 둘은 다른 것을 가리키므로 같은 말로 묶지 않는다.
- */
-const CHIP_LABEL = { artist: "아티스트", music: "제목" } as const;
-
-/** 상태 → 검색 조건. 화면 상태와 요청 조건을 가르는 자리는 여기 하나다 */
-function conditionOf(chip: Chip, input: string): SearchCondition {
-  if (!chip) return { mode: "all", query: input };
-  if (chip.kind === "artist") return { mode: "artist", artist: chip.value, music: input };
-  return { mode: "music", music: chip.value, artist: input };
-}
 
 /**
  * #searchWrap — 상단 중앙 글래스 검색. 결과 클릭 시 지도상 위치로 이동 (SEARCH-01).
@@ -42,44 +21,28 @@ function conditionOf(chip: Chip, input: string): SearchCondition {
  * 펼 때 우측 패널은 닫는다. 검색창과 사이드 패널은 동시에 뜨지 않는다는 규칙은 그대로다.
  */
 export default function SearchBar() {
-  const [input, setInput] = useState("");
-  const [chip, setChip] = useState<Chip>(null);
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [expanded, setExpanded] = useState(false);
-  const inputRef = useRef<HTMLInputElement>(null);
   const wrapRef = useRef<HTMLDivElement>(null);
-
-  /** 한 글자마다 묻지 않는다 — 닉네임 검사와 같은 길이로 맞춘다 */
-  const [debounced, setDebounced] = useState("");
-  useEffect(() => {
-    const t = setTimeout(() => setDebounced(input), SEARCH_DEBOUNCE_MS);
-    return () => clearTimeout(t);
-  }, [input]);
-
-  const condition = conditionOf(chip, debounced);
-  const { data, isPending, isSuccess, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = useMusicSearchQuery(condition);
-  const results = flattenSearch(data?.pages);
-  const analytics = useSearchAnalytics({
-    keyword: chip ? `${chip.kind}:${chip.value} ${debounced}` : debounced,
-    visible: open,
-    pending: isPending,
-    count: results.length,
-    pages: data?.pages.length ?? 0,
-    source: "map_search",
-  });
-  const focusMusic = useMapStore((s) => s.focusMusic);
-  const openSong = usePanelStore((s) => s.openSong);
   const closePanel = usePanelStore((s) => s.close);
+  const { input, setInput, chip, inputRef, condition, results, query, reset, select, promote, removeChip, analytics } =
+    useMusicSearch({ visible: open, source: "map_search" });
+  const { isSuccess, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
 
-  const reset = () => {
-    setInput("");
-    setDebounced("");
-    setChip(null);
-  };
-
-  /** 펴면서 입력에 포커스. 패널은 닫는다 */
+  /**
+   * 펴면서 입력에 포커스. 패널은 닫는다.
+   *
+   * **좁은 화면에서는 펴는 대신 `/search` 로 넘어간다** (S15P21A405-417). 375px 지도 위에서
+   * 드롭다운을 펼치면 결과가 서너 줄밖에 안 보이고, 그 아래 지도는 어차피 가려진다.
+   * 폭을 **누른 시점에** 재므로 렌더 분기가 아니다 — `BREAKPOINTS` 주석의 조건을 지킨다.
+   */
   const expand = () => {
     closePanel();
+    if (window.innerWidth < BREAKPOINTS.tablet) {
+      router.push(ROUTES.search);
+      return;
+    }
     setExpanded(true);
     setOpen(true);
     // 입력은 접혀 있어도 DOM 에 있다 — 바로 포커스해도 된다
@@ -100,28 +63,9 @@ export default function SearchBar() {
   };
 
   const handleSelect = (r: MusicSearchResult) => {
-    analytics.select(r.id, results.findIndex((item) => item.id === r.id) + 1);
     collapse();
     reset();
-    openSong(r.id);
-    // 이 겹에 있으면 확대해 가고, 없으면 고스트별로 띄운다 — 레이어를 자동으로 옮기지 않는다 (SEARCH-01, MAP-12)
-    focusMusic(r.id);
-  };
-
-  /** 입력값을 조건으로 굳힌다. 남은 입력은 비우고 포커스는 유지해 다음 조건을 바로 받는다 */
-  const promote = (kind: "artist" | "music") => {
-    const value = input.trim();
-    if (!value) return;
-    setChip({ kind, value });
-    setInput("");
-    setDebounced("");
-    inputRef.current?.focus();
-  };
-
-  /** 칩을 뗀다. 남은 입력은 통합 검색어로 그대로 살린다 (전달 문서 §2.1) */
-  const removeChip = () => {
-    setChip(null);
-    inputRef.current?.focus();
+    select(r);
   };
 
   return (

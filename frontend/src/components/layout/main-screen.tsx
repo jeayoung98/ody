@@ -6,7 +6,7 @@ import type { Occlusion } from "@/components/map/engine/map-engine";
 import type { CSSProperties } from "react";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
-import { usePlayerBarHeight } from "@/hooks/use-player-bar-height";
+import { usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
@@ -46,9 +46,7 @@ const PEEK_BODY = 10;
 const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
-/** 화면 아래 여백. `tokens.css` 의 `--spacing-hud-b` 의 JS 쪽 거울이라 같이 고친다 */
-const HUD_B = 18;
-/** 재생바와 그 위에 얹히는 것 사이 틈 */
+/** 아래로 쌓이는 것들(탭바 · 재생바 · 패널) 사이 틈 */
 const STACK_GAP = 4;
 
 interface MainScreenProps {
@@ -92,8 +90,16 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 좁은 화면에서 패널이 이 선 위까지 차지한다 (`panels/right-panel.tsx`).
    */
   const playerH = usePlayerBarHeight();
-  const navBottom = HUD_B + playerH + STACK_GAP;
-  const occludedBottom = narrow ? HUD_B + playerH : HUD_OCCLUSION.bottom;
+  const tabBarH = useTabBarHeight();
+  /**
+   * 폰에서 아래로 쌓이는 순서: **탭바 → 재생바 → 패널**.
+   *
+   * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
+   * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
+   * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
+   */
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH + STACK_GAP * 2}px)`;
+  const occludedBottom = narrow ? tabBarH + STACK_GAP + playerH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],
@@ -102,7 +108,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   return (
     <div
       className="fixed inset-0 overflow-hidden bg-void text-ink"
-      style={{ "--nav-bottom": `${navBottom}px` } as CSSProperties}
+      style={{ "--nav-bottom": navBottom } as CSSProperties}
     >
       <MapView occlusion={occlusion} />
       {/* 축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다 */}

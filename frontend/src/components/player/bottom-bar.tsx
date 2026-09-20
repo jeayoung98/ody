@@ -19,9 +19,12 @@ export default function BottomBar() {
       <YoutubeEmbed />
       <footer
         data-hud
-        // 좁은 화면에서는 **맨 아래**가 재생바다 (S15P21A405-417). 네비가 그 위에 뜨고,
-        // 네비 쪽에서 이 높이만큼을 침범 금지선으로 쓴다.
-        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:left-gutter-sm max-tablet:w-auto"
+        /*
+         * 좁은 화면에서는 **탭바 바로 위**다 (S15P21A405-417). 맨 아래는 고정 탭바가
+         * 가져가고(`layout/rail.tsx`), 재생바는 그 위에 얹힌다 — 음악 앱들이 쓰는 그 쌓임이다.
+         * 안전영역은 탭바가 이미 먹었으므로 여기서 또 더하면 두 번 밀린다.
+         */
+        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px)+4px)] max-tablet:left-gutter-sm max-tablet:w-auto"
       >
         <PlayerBar />
       </footer>

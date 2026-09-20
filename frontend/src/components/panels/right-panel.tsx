@@ -29,9 +29,10 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
  * `translate-x` 도 `overflow` 도 건드리지 않는다 — 접는 식은 데스크톱과 같은 것 하나뿐이고,
  * `overflow-hidden` 을 걸면 몸통 바깥(-17px)에 붙은 핸들이 잘려 **접을 길 자체가 사라진다.**
  *
- * 왼쪽만 여백(16)에 손잡이 폭(17)을 더해 들여놓는다. 양쪽 다 16 으로 두면 손잡이가
- * `16 - 17 = -1` 로 **화면 밖으로 나간다** (실측). 오른쪽은 그대로 16 이라 접혔을 때
- * 남는 몸통도 데스크톱과 같다.
+ * 폰에서는 **떠 있는 카드가 아니라 화면 한 칸**이다 (S15P21A405-417). 하단이 고정 탭바가
+ * 되면서 여기는 그 위를 채우는 내용 자리가 됐다 — 여백을 띄워 두면 프로필·곡 상세가
+ * "지도 위에 떠서 가리는 것" 으로 읽힌다. 오른쪽은 화면 끝까지 붙이고, 왼쪽만 손잡이
+ * 폭(17)만큼 비운다: 양쪽 다 0 으로 두면 손잡이가 `0 - 17 = -17` 로 화면 밖에 걸린다(실측).
  */
 export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
@@ -71,7 +72,7 @@ export default function RightPanel() {
           transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
         collapsed ? "translate-x-[calc(100%_-_10px)]" : ""
-      } max-tablet:right-gutter-sm max-tablet:left-[calc(var(--spacing-gutter-sm)+var(--spacing-handle-w))] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
+      } max-tablet:right-0 max-tablet:left-handle-w max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
     >
       <PanelCollapseHandle />
       {activePanel === "song" && <SongDetailPanel />}

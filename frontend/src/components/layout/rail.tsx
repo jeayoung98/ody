@@ -45,12 +45,24 @@ export default function Rail() {
 
   return (
     /*
-     * 좁은 화면에서도 **우상단 그대로다** (S15P21A405-417). 아래로 내려 재생바와 묶어 봤지만,
-     * 시트·네비·재생바가 줄 셋으로 쌓여 지도를 먹고 서로 따로 떠 보였다. 상단은 마크·검색만
-     * 남아 자리가 있고, 패널이 필요할 때만 열리는 구조(아래 참고)라 네비가 지도를 가리지 않는다.
+     * 좁은 화면에서는 **맨 아래 고정 탭바**다 (S15P21A405-417). 음악 앱들이 쓰는 그 자리 —
+     * 탭바가 바닥에 깔리고 그 위에 재생바, 그 위가 내용이다. 자리가 정해져 있어서
+     * 패널이 열려도 서로 안 비킨다(떠다니는 네비는 폰에서 주차할 자리가 없었다).
+     *
+     * **같은 버튼·같은 핸들러를 그대로 쓴다.** 갈라놓으면 기능이 한쪽에만 붙는다 —
+     * 바뀌는 것은 이 바깥 상자의 자리와 버튼이 가로냐 세로냐뿐이고, 전부 `max-tablet:` 안에 있다.
+     * 데스크톱 클래스는 한 글자도 안 건드린다.
      */
-    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:right-gutter-sm">
-      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
+    <div
+      data-hud
+      data-tabbar
+      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:glass-bar max-tablet:top-auto max-tablet:right-0 max-tablet:bottom-0 max-tablet:left-0 max-tablet:z-[23] max-tablet:gap-0 max-tablet:pb-[env(safe-area-inset-bottom,0px)]"
+    >
+      {/* 폰에서는 **바깥 상자 하나만** 유리다. 알약은 유리를 벗고 칸 넷을 고르게 벌린다 */}
+      <nav
+        aria-label="네비"
+        className="glass-liquid flex gap-0.5 rounded-pill! p-px max-tablet:glass-off max-tablet:h-tabbar max-tablet:flex-1 max-tablet:justify-around max-tablet:gap-0 max-tablet:p-0"
+      >
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
             <FriendsIcon />
@@ -68,7 +80,17 @@ export default function Rail() {
           </RailButton>
         )}
       </nav>
-      {panelEnabled.feed && <ProfileButton />}
+      {/*
+        프사는 알약 밖에 따로 선다 (S15P21A405-434) — 데스크톱에서는 `contents` 라 상자가 아예
+        없어서 지금과 똑같이 `ProfileButton` 하나가 붙어 있는 것과 같다. 폰에서만 칸이 되어
+        다른 탭처럼 아이콘 밑에 글자가 붙는다.
+      */}
+      {panelEnabled.feed && (
+        <span className="contents max-tablet:flex max-tablet:h-tabbar max-tablet:w-[72px] max-tablet:shrink-0 max-tablet:flex-col max-tablet:items-center max-tablet:justify-center max-tablet:gap-0.5">
+          <ProfileButton />
+          <span className="hidden text-2xs leading-none text-ink-3 max-tablet:block">프로필</span>
+        </span>
+      )}
     </div>
   );
 }

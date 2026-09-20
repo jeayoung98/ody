@@ -3,6 +3,7 @@
 import { useMemo, type ReactNode } from "react";
 import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
+import { SHEET_BOTTOM } from "@/hooks/use-bottom-sheet";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -71,9 +72,15 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    *
    * **매 렌더 새 객체를 만들면 안 된다** — 받는 쪽 effect 의 의존성이라 값이 같아도 매번 다시 돈다.
    */
+  /**
+   * 바텀시트가 서 있으면 아래가 그만큼 더 가려진다 (S15P21A405-416).
+   * 시트는 좁은 화면에서만 생기므로 `sheetHeight` 가 `null` 이면 예전 값 그대로다.
+   */
+  const sheetHeight = usePanelStore((s) => s.sheetHeight);
+  const occludedBottom = sheetHeight == null ? HUD_OCCLUSION.bottom : SHEET_BOTTOM + sheetHeight;
   const occlusion = useMemo<Occlusion>(
-    () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: HUD_OCCLUSION.bottom, left: 0 }),
-    [occludedRight],
+    () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
+    [occludedRight, occludedBottom],
   );
 
   return (

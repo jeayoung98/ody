@@ -84,6 +84,14 @@ interface PanelState {
    * 지도 가림 폭도 이 값을 따라간다 (`main-screen.tsx`).
    */
   collapsed: boolean;
+  /**
+   * 좁은 화면에서 패널이 바텀시트로 설 때의 **현재 높이(px)** (S15P21A405-416).
+   * `null` 이면 시트가 아니다 — 데스크톱이거나 아직 안 재 봤다는 뜻이다.
+   *
+   * 스토어에 두는 이유는 **보는 곳이 셋**이기 때문이다: 시트 자신, 지도 가림폭을 계산하는
+   * `main-screen.tsx`, 그리고 시트가 올라오면 비켜 주는 네비(`layout/rail.tsx`).
+   */
+  sheetHeight: number | null;
 
   openSong: (musicId: number) => void;
   /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
@@ -107,6 +115,11 @@ interface PanelState {
    * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
    */
   collapse: () => void;
+  /**
+   * 시트 높이를 적는다. **드래그 중 매 프레임 불린다** — `collapse` 와 같은 이유로
+   * 바뀔 때만 set 한다. 끝에 지도 가림폭 계산이 달려 있어서 같은 값을 계속 넣으면 무거워진다.
+   */
+  setSheetHeight: (px: number | null) => void;
 }
 
 export const usePanelStore = create<PanelState>()(
@@ -118,6 +131,7 @@ export const usePanelStore = create<PanelState>()(
       profileEmail: null,
       back: null,
       collapsed: false,
+      sheetHeight: null,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
 
@@ -169,6 +183,8 @@ export const usePanelStore = create<PanelState>()(
        */
       collapse: () =>
         set((s) => (s.activePanel && !s.collapsed ? { collapsed: true } : {}), false, "collapse"),
+
+      setSheetHeight: (px) => set((s) => (s.sheetHeight === px ? {} : { sheetHeight: px }), false, "setSheetHeight"),
     }),
     { name: "panel-store" },
   ),

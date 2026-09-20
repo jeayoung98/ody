@@ -1,6 +1,8 @@
 "use client";
 
+import type { CSSProperties } from "react";
 import { usePanelEnabled } from "@/hooks/use-features";
+import { SHEET_BOTTOM, SHEET_PEEK, useBottomSheet } from "@/hooks/use-bottom-sheet";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
 import FeedPanel from "./feed/feed-panel";
@@ -24,6 +26,14 @@ export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
   const collapsed = usePanelStore((s) => s.collapsed);
   const panelEnabled = usePanelEnabled();
+  /**
+   * 좁은 화면에서는 **아래에서 올라오는 시트**다 (S15P21A405-416). 375px 에서 이 패널은
+   * 376px 이라 열리는 순간 지도를 64% 덮었고, 왼쪽 19px 이 화면 밖으로 잘려 제목도 안 보였다.
+   * 별을 눌러 상세를 열면 다음 별을 찾을 수가 없어 "한 번 탭 = 상세, 두 번 = 재생" 이 끊겼다.
+   *
+   * `SHEET_BOTTOM` 은 아래에 이미 서 있는 것들(재생바·네비)의 높이다. 시트는 그 위에서만 움직인다.
+   */
+  const { sheetHeight, handlers, toggle } = useBottomSheet(SHEET_BOTTOM);
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다
@@ -58,8 +68,30 @@ export default function RightPanel() {
           transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
         collapsed ? "translate-x-[calc(100%_-_10px)]" : ""
-      }`}
+      } max-tablet:top-auto max-tablet:right-gutter-sm max-tablet:bottom-[var(--sheet-bottom)] max-tablet:left-gutter-sm max-tablet:h-[var(--sheet-h)] max-tablet:w-auto max-tablet:max-h-none max-tablet:translate-x-0 max-tablet:overflow-hidden max-tablet:rounded-box`}
+      /*
+       * 높이를 **CSS 변수로만** 넘기고 쓰는 쪽은 `max-tablet:` 안이다 (S15P21A405-416).
+       * `style={{height}}` 로 직접 박았더니, 좁은 화면에서 시트를 띄운 뒤 창을 넓혔을 때
+       * 그 값이 그대로 남아 **데스크톱 패널이 120px 로 눌렸다.** 지우려고 `resize`·`matchMedia`
+       * 를 들어 봤지만 **브라우저 기기 에뮬레이션에서는 두 이벤트가 오지 않는다**(실측).
+       * 변수로 두면 768px 이상에서는 아무도 안 읽으므로 이벤트가 오든 말든 상관이 없다.
+       */
+      style={{ "--sheet-h": `${sheetHeight ?? SHEET_PEEK}px`, "--sheet-bottom": `${SHEET_BOTTOM}px` } as CSSProperties}
     >
+      {/*
+        시트 손잡이 (S15P21A405-416). **좁은 화면에서만 보인다.**
+        요청자가 "접었다 폈다 되는 걸 알아보기 어렵다" 고 한 것이 우측 패널 손잡이(17px 반원)였다.
+        여기는 **폭 전체 · 높이 44px** 로 두고 가운데에 막대를 그린다 — 눌러도 되고 끌어도 된다.
+      */}
+      <button
+        type="button"
+        aria-label={sheetHeight != null && sheetHeight > SHEET_PEEK ? "패널 접기" : "패널 펼치기"}
+        onClick={toggle}
+        {...handlers}
+        className="hidden h-touch w-full shrink-0 touch-none place-items-center max-tablet:grid"
+      >
+        <span className="h-1 w-10 rounded-pill bg-white/30" />
+      </button>
       <PanelCollapseHandle />
       {activePanel === "song" && <SongDetailPanel />}
       {activePanel === "playlist" && <PlaylistPanel />}

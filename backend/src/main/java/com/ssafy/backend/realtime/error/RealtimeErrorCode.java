@@ -32,9 +32,9 @@ public enum RealtimeErrorCode implements ErrorCode {
 	RIDE_ALREADY_RIDING(HttpStatus.CONFLICT, "RIDE_ALREADY_RIDING",
 			"이미 다른 사용자를 따라가고 있습니다."),
 
-	/** 나를 따라오는 사람이 있다. 줄줄이 따라가기는 막는다. */
+	/** 줄줄이 따라가기다. 나를 따라오는 사람이 있거나, 상대가 남을 따라가는 중이다. */
 	RIDE_CHAIN_FORBIDDEN(HttpStatus.CONFLICT, "RIDE_CHAIN_FORBIDDEN",
-			"따라오는 사용자가 있어 다른 사용자를 따라갈 수 없습니다."),
+			"따라가기는 한 단계까지만 가능합니다."),
 
 	/** 자리가 다 찼다. 누가 내리면 탈 수 있다. */
 	RIDE_FULL(HttpStatus.CONFLICT, "RIDE_FULL", "따라가는 인원이 가득 찼습니다."),

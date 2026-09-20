@@ -107,3 +107,9 @@ export const BREAKPOINTS = {
 
 /** 최소 터치 타깃(px). `tokens.css` 의 `--spacing-touch` 와 같은 값 */
 export const TOUCH_TARGET_MIN = 44;
+
+/**
+ * 우측 패널 폭(px). `tokens.css` 의 `--spacing-right-panel` 과 같은 값 — **함께 고친다.**
+ * 지도 엔진이 패널에 가려지는 폭을 재려고 JS 에서 이 값을 쓴다 (S15P21A405-479).
+ */
+export const RIGHT_PANEL_W = 376;

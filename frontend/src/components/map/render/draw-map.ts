@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
@@ -11,10 +11,17 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 function lumOf(i: number, mag: number) {
   return clamp(0.28 * mag + 0.72 * Math.pow(((i * 7919) % 1000) / 1000, 0.8), 0, 1);
 }
-function twinkle(id: number, t: number) {
-  const dep = 0.05 + (id % 13) / 34;
-  const spd = 0.5 + (id % 23) / 9;
-  return 1 - dep * (0.5 + 0.5 * Math.sin(t * spd + id * 0.7));
+/**
+ * 큰 별 몇 개만 느리게 숨 쉰다 — 기준값과 왜 이렇게 눌렀는지는 {@link STAR_TWINKLE} 에 있다.
+ * 해당 없는 별은 1 을 돌려주므로 밝기가 그대로다 — **사라지는 별은 없다.**
+ */
+function twinkle(id: number, t: number, mag: number) {
+  if (mag < STAR_TWINKLE.minMag || id % STAR_TWINKLE.nth !== 0) return 1;
+  const [dLo, dHi] = STAR_TWINKLE.depth;
+  const [pLo, pHi] = STAR_TWINKLE.period;
+  const dep = dLo + ((id % 11) / 10) * (dHi - dLo);
+  const period = pLo + ((id % 7) / 6) * (pHi - pLo);
+  return 1 - dep * (0.5 + 0.5 * Math.sin(((2 * Math.PI) / period) * t + id * 0.7));
 }
 
 /**
@@ -36,9 +43,22 @@ function appear(id: number, t: number) {
   // 별은 기록이 남아 있어 **뚝** 하고 나온다 (S15P21A405-284)
   if ((t - e.last) * 1000 > STAR_VIEW.reappearGapMs) e.first = t;
   e.last = t;
-  if (seenAt.size > 4000 && t - e.first > 3) seenAt.delete(id);
   return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
 }
+/**
+ * 기억이 너무 불면 **한동안 안 그려진** 별만 잊는다 (S15P21A405-479).
+ *
+ * 예전에는 `appear` 안에서 `seenAt.size > 4000 && t - e.first > 3` 이면 지웠다. 그런데 그 줄은
+ * **지금 그리고 있는 별**을 지웠다 — 처음 나타나고 3초가 지나기만 하면 대상이라, 다음 프레임에
+ * `appear` 가 기억을 못 찾고 0(투명)부터 다시 밝혔다. 별이 3초마다 사라졌다 나타나는 것처럼
+ * 보이는 길이 여기였다. 기준을 `first`(언제 처음 봤나)에서 `last`(마지막으로 그린 때)로 바꾸면
+ * 화면에 있는 별은 절대 대상이 되지 않는다.
+ */
+function forgetStale(t: number) {
+  if (seenAt.size <= STAR_VIEW.memoryCap) return;
+  for (const [id, e] of seenAt) if ((t - e.last) * 1000 > STAR_VIEW.forgetMs) seenAt.delete(id);
+}
+
 /**
  * 화면 밖이지만 살아 있는 별은 "본 것" 으로 친다 — 지도를 밀어 다시 들어올 때는 페이드하지 않는다.
  * 페이드는 **집합에 없던 별이 생길 때**만이다
@@ -211,13 +231,13 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = 1;
     } else if (on) {
       d = (STAR_SIZE.min + Math.pow(mag, 1.75) * (STAR_SIZE.max - STAR_SIZE.min)) * grow;
-      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * born;
+      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t, mag) * born;
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
       // 집을 수 없는 별이라 눌리는 별(0.42~1)과 확실히 갈라놓는다 — 임시 랜덤 크기로 배경도 커진 뒤로
       // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.13
       d = (2.2 + Math.pow(mag, 1.6) * 3.6) * grow * fieldSize;
-      alpha = (0.04 + lumOf(i, mag) * 0.09) * twinkle(s.musicId, t) * fieldAlpha * born;
+      alpha = (0.04 + lumOf(i, mag) * 0.09) * fieldAlpha * born;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;
@@ -1023,6 +1043,8 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 
 /** 한 프레임 */
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
+  // 별을 그릴 때 쓰는 시계와 같아야 한다 — `appear` 가 이 잣대로 `last` 를 적는다
+  forgetStale(e.time);
   // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
   e.hopLink = null;
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다

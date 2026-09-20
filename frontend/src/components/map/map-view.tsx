@@ -617,13 +617,38 @@ export default function MapView({ occlusion }: MapViewProps) {
     },
     [engine, cancelHold, openFeed, openSong, pressSong, selectMusic],
   );
-  const onPointerLeave = useCallback(() => {
+  /**
+   * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.
+   *
+   * 손가락에는 적용하지 않는다. 포인터를 잡아 뒀으므로(`setPointerCapture`) 손가락이 요소 밖으로
+   * 나가도 이벤트는 계속 오고, 끝나는 것은 `pointerup`·`pointercancel` 이 알려 준다. 그런데
+   * 브라우저는 끄는 도중에도 `pointerleave` 를 쏠 수 있고, 그때 여기서 드래그를 지우면
+   * **몇 px 가다 멈추고 손을 뗐다 다시 대야** 하는 상태가 된다 — 폰에서 "개미 오줌만큼씩만
+   * 움직인다" 고 나온 그 증상이다.
+   */
+  const onPointerLeave = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse") return;
     if (drag.current && drag.current.moved > 5) track("map_pan_completed", { distance_px: Math.round(drag.current.moved), reason: "leave" });
     drag.current = null;
     cancelHold();
     scheduleHide();
     setHover(false);
   }, [scheduleHide, cancelHold]);
+
+  /**
+   * 브라우저가 제스처를 가져갔다 (S15P21A405-415). **탭이 아니다** — `onPointerUp` 으로 보내면
+   * 움직인 거리가 임계 아래일 때 클릭으로 읽혀서, 취소됐는데 별이 선택되거나 재생까지 된다.
+   * 여기서는 붙잡고 있던 것만 내려놓는다.
+   */
+  const onPointerCancel = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      pointers.current.delete(e.pointerId);
+      if (pointers.current.size < 2) pinchDist.current = null;
+      drag.current = null;
+      cancelHold();
+    },
+    [cancelHold],
+  );
 
   const following = leaderEmail != null;
   // 카드가 떠 있는 동안은 별 밖이라도 클릭이 그 곡을 연다 — 커서도 그렇게 말해야 한다
@@ -643,7 +668,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={onPointerUp}
-      onPointerCancel={onPointerUp}
+      onPointerCancel={onPointerCancel}
       onPointerLeave={onPointerLeave}
     >
       <MapCanvas engine={engine} width={size.width} height={size.height} />

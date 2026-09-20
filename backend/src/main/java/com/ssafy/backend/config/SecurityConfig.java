@@ -52,15 +52,13 @@ public class SecurityConfig {
 								"/api/users/nickname-available",
 								"/api/user/images/**",   // 업로드된 프로필 이미지 정적 서빙 [S15P21A405-426]
 								"/api/feedback",   // 탐색 설문은 비로그인도 보낸다 [S15P21A405-289]
+								"/api/feedback/answered",   // 답한 문항 조회는 인증 선택 (정본 §5.2, S15P21A405-346)
+								"/api/music/report",   // 음원 신고는 비로그인도 보낸다 [S15P21A405-388]
 								"/oauth2/authorization/**", "/login/oauth2/code/**",
 								"/actuator/health", "/actuator/prometheus",
 								"/api/swagger-ui.html", "/api/swagger-ui/**", "/api/v3/api-docs/**")
 						.permitAll()
-						// ponytail: FE 연동 테스트용 임시 해제 [S15P21A405-243]. 영구 정책 변경이 아니다.
-						// 원복 = 이 줄을 .anyRequest().authenticated() 로 되돌린다 (정본 §0.7 기본 거부, S15P21A405-33).
-						// 배포 중 급히 되돌릴 때는 코드가 아니라 nginx upstream 을 이전 Blue-Green 컨테이너로 돌린다.
-						// 해제 중에는 /api/user/detail 과 /api/playlist/** 가 공개 인터넷에 노출된다.
-						.anyRequest().permitAll())
+						.anyRequest().authenticated())
 				.oauth2Login(oauth2 -> oauth2
 						.userInfoEndpoint(userInfo -> userInfo.userService(customOAuth2UserService))
 						.successHandler(oAuth2SuccessHandler))

@@ -41,7 +41,7 @@ export default function MinimapPanel() {
        * 가운데로 보내면 위로는 레일(~y60), 아래로는 재생바(y633~) 사이에 그대로 들어간다.
        * 도움말은 이 `<aside>` 의 자식이라 따라온다.
        */
-      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:top-1/2 max-tablet:bottom-auto max-tablet:left-gutter-sm ${open ? "max-tablet:-translate-y-1/2" : "translate-x-[calc(-100%_+_10px)] max-tablet:-translate-y-1/2"}`}
+      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:top-1/2 max-tablet:bottom-auto max-tablet:left-gutter-sm ${open ? "max-tablet:-translate-y-1/2" : "translate-x-[calc(-100%_+_10px)] max-tablet:translate-x-[calc(-100%_-_var(--spacing-gutter-sm))] max-tablet:-translate-y-1/2"}`}
     >
       <CollapseHandle
         side="right"

@@ -73,9 +73,22 @@ public class RideRedisRepository {
 	/**
 	 * 그룹이 지금 트는 곡.
 	 * positionMs 는 updatedAt 당시의 재생 위치. 지금 위치는 읽는 쪽에서 더해서 구한다.
-	 * snapshotSeq 는 이 값이 몇 번째로 바뀐 것인지. 소켓 접속 번호(epoch)나 봉투 seq 와는 다르다.
+	 * snapshotSeq 는 재생 정보가 바뀔 때마다 1씩 오르는 번호. 어느 쪽이 최신인지 가릴 때 쓴다.
+	 * 접속 번호(epoch)와는 상관없다.
 	 */
 	public record PlaybackSnapshot(long musicId, PlaybackState state, long positionMs, long updatedAt, long snapshotSeq) {
+
+		/**
+		 * 지금 재생 위치.
+		 * 틀고 있으면 저장된 위치에 그 뒤 흐른 시간을 더하고, 멈춰 있으면 저장된 위치 그대로다.
+		 * 멈춰 있는데 더하면 가만히 있어도 위치가 흘러간다.
+		 */
+		public long positionAt(long nowMs) {
+			if (state != PlaybackState.PLAYING) {
+				return positionMs;
+			}
+			return positionMs + Math.max(0, nowMs - updatedAt);
+		}
 	}
 
 	/**

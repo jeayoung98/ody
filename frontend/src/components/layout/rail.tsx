@@ -56,41 +56,46 @@ export default function Rail() {
     <div
       data-hud
       data-tabbar
-      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:glass-bar max-tablet:top-auto max-tablet:right-0 max-tablet:bottom-0 max-tablet:left-0 max-tablet:z-[23] max-tablet:gap-0 max-tablet:pb-[env(safe-area-inset-bottom,0px)]"
+      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:right-0 max-tablet:bottom-0 max-tablet:left-0 max-tablet:z-[23] max-tablet:gap-0"
     >
-      {/* 폰에서는 **바깥 상자 하나만** 유리다. 알약은 유리를 벗고 칸 넷을 고르게 벌린다 */}
-      <nav
-        aria-label="네비"
-        className="glass-liquid flex gap-0.5 rounded-pill! p-px max-tablet:glass-off max-tablet:h-tabbar max-tablet:flex-1 max-tablet:justify-around max-tablet:gap-0 max-tablet:p-0"
-      >
-        {panelEnabled.friends && (
-          <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
-            <FriendsIcon />
-          </RailButton>
-        )}
-        {panelEnabled.chart && (
-          <RailButton label="랭킹" active={activePanel === "chart"} onClick={() => toggle("chart")} data-tutorial="chart">
-            <RankIcon />
-          </RailButton>
-        )}
-        <NearbyExploreButton />
-        {panelEnabled.journey && (
-          <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
-            <JourneyIcon size={16} />
-          </RailButton>
-        )}
-      </nav>
       {/*
-        프사는 알약 밖에 따로 선다 (S15P21A405-434) — 데스크톱에서는 `contents` 라 상자가 아예
-        없어서 지금과 똑같이 `ProfileButton` 하나가 붙어 있는 것과 같다. 폰에서만 칸이 되어
-        다른 탭처럼 아이콘 밑에 글자가 붙는다.
+        유리 바닥판. **자리 잡는 상자와 나눠 둔다** (S15P21A405-417) — 유리의 `backdrop-filter`
+        가 그 안의 `position: fixed` 를 자기 기준으로 가두기 때문이다. 한 상자에 같이 두면
+        프사가 우상단으로 못 올라가고 바 안에 눌러앉는다 (실측: 화면 아래로 4px 삐져나갔다).
+        데스크톱에서는 `contents` 라 상자가 아예 없어 지금과 똑같다.
       */}
-      {panelEnabled.feed && (
-        <span className="contents max-tablet:flex max-tablet:h-tabbar max-tablet:w-[72px] max-tablet:shrink-0 max-tablet:flex-col max-tablet:items-center max-tablet:justify-center max-tablet:gap-0.5">
-          <ProfileButton />
-          <span className="hidden text-2xs leading-none text-ink-3 max-tablet:block">프로필</span>
-        </span>
-      )}
+      <div className="contents max-tablet:glass-bar max-tablet:block max-tablet:w-full max-tablet:pb-[env(safe-area-inset-bottom,0px)]">
+        {/* 폰에서는 알약이 유리를 벗고 칸 넷을 고르게 벌린다 */}
+        <nav
+          aria-label="네비"
+          className="glass-liquid flex gap-0.5 rounded-pill! p-px max-tablet:glass-off max-tablet:h-tabbar max-tablet:flex-1 max-tablet:justify-around max-tablet:gap-0 max-tablet:p-0"
+        >
+          {panelEnabled.friends && (
+            <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
+              <FriendsIcon />
+            </RailButton>
+          )}
+          {panelEnabled.chart && (
+            <RailButton label="랭킹" active={activePanel === "chart"} onClick={() => toggle("chart")} data-tutorial="chart">
+              <RankIcon />
+            </RailButton>
+          )}
+          <NearbyExploreButton />
+          {panelEnabled.journey && (
+            <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
+              <JourneyIcon size={16} />
+            </RailButton>
+          )}
+        </nav>
+      </div>
+      {/*
+        프사는 알약 밖에 따로 선다 (S15P21A405-434). **폰에서도 우상단에 남는다** —
+        "나" 는 목적지가 아니라 주인이고, 탭바에 끼워 넣으면 5칸이 되어 칸마다 좁아진다.
+        네비가 아래로 내려가면서 우상단이 비었으므로 자리 다툼도 없다 (S15P21A405-417).
+        자기 자리를 잡으려면 `fixed` 여야 한다 — 이 바는 폰에서 화면 아래에 붙은 상자라
+        그 안에서 `absolute` 로는 위로 못 나간다.
+      */}
+      {panelEnabled.feed && <ProfileButton />}
     </div>
   );
 }

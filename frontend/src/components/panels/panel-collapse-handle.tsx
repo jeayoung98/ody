@@ -30,7 +30,7 @@ export default function PanelCollapseHandle() {
        * 판을 깔아 위아래 8px · 좌우 14px 을 더한다 — 왼쪽은 화면 여백(16px)으로, 오른쪽은
        * 패널 제 안쪽 여백으로 나가므로 가리는 것이 없다.
        */
-      hitClassName="max-tablet:after:absolute max-tablet:after:-inset-y-2 max-tablet:after:-inset-x-[14px] max-tablet:after:content-['']"
+      hitClassName="max-tablet:text-teal max-tablet:after:absolute max-tablet:after:-inset-y-2 max-tablet:after:-inset-x-[14px] max-tablet:after:content-['']"
     />
   );
 }

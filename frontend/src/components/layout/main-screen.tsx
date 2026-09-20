@@ -98,8 +98,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
    * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
    */
-  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH + STACK_GAP * 2}px)`;
-  const occludedBottom = narrow ? tabBarH + STACK_GAP + playerH : HUD_OCCLUSION.bottom;
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH + STACK_GAP}px)`;
+  const occludedBottom = narrow ? tabBarH + playerH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],

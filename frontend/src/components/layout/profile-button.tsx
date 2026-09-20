@@ -21,10 +21,9 @@ export default function ProfileButton() {
       aria-pressed={active}
       data-tutorial="feed"
       onClick={() => toggle("feed")}
-      // 폰 탭바에서는 아이콘 자리에 들어가므로 한 치수 줄인다 (S15P21A405-417) —
-      // 36 + 틈 2 + 글자 9.5 가 탭바 높이(56) 안에 들어온다. 유리 테두리는 남긴다: 켜졌을 때
-      // teal 로 물드는 곳이 여기뿐이라 (다른 탭은 아이콘·글자 색이 바뀐다)
-      className={`glass-liquid grid h-11 w-11 place-items-center rounded-pill! transition-colors duration-fast hover:border-line-2 max-tablet:h-9 max-tablet:w-9 ${active ? "border-teal/60! shadow-glow-azure" : ""}`}
+      // 폰에서는 네비가 아래로 내려가고 **프사만 우상단에 남는다** (S15P21A405-417).
+      // 레일 상자 안에 있지만 그 상자가 화면 아래에 붙으므로, 위로 올라오려면 `fixed` 여야 한다
+      className={`glass-liquid grid h-11 w-11 place-items-center rounded-pill! transition-colors duration-fast hover:border-line-2 max-tablet:fixed max-tablet:top-hud-t max-tablet:right-gutter-sm max-tablet:z-[24] ${active ? "border-teal/60! shadow-glow-azure" : ""}`}
     >
       <Avatar src={me?.imageUrl} name={me?.nickname ?? me?.name} size={32} />
     </button>

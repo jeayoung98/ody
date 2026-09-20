@@ -24,7 +24,7 @@ export default function BottomBar() {
          * 가져가고(`layout/rail.tsx`), 재생바는 그 위에 얹힌다 — 음악 앱들이 쓰는 그 쌓임이다.
          * 안전영역은 탭바가 이미 먹었으므로 여기서 또 더하면 두 번 밀린다.
          */
-        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px)+4px)] max-tablet:left-gutter-sm max-tablet:w-auto"
+        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-0 max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px))] max-tablet:left-0 max-tablet:w-auto"
       >
         <PlayerBar />
       </footer>

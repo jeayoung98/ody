@@ -71,8 +71,13 @@ export default function RightPanel() {
           계기판(`minimap-panel.tsx`)이 멀쩡했던 건 `transition-transform` 이 v4 에서
           transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
-        collapsed ? "translate-x-[calc(100%_-_10px)]" : ""
-      } max-tablet:right-0 max-tablet:left-handle-w max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
+        /*
+          폰에서는 **10px 도 안 남긴다** (S15P21A405-417). 데스크톱은 몸통을 조금 남겨 "여기
+          뭐가 있었다" 를 말하지만, 폰에서는 그 10px 이 지도 위에 남은 부스러기로 보인다.
+          손잡이는 몸통 바깥(-17px)에 붙어 있어 통째로 밀어내도 화면 안에 남는다.
+        */
+        collapsed ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-full" : ""
+      } max-tablet:right-0 max-tablet:left-[calc(var(--spacing-gutter-sm)+var(--spacing-handle-w))] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
     >
       <PanelCollapseHandle />
       {activePanel === "song" && <SongDetailPanel />}

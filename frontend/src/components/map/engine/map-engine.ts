@@ -2789,7 +2789,7 @@ export class MapEngine {
       morph: this.anim
         ? { big: this.anim.big }
         : this.pending
-          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중`, sub: `화면 안 ${this.pending.inView.toLocaleString()}곡 기준` }
+          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중` }
           : null,
       myMusicId: this.myId,
       // travelTo 때만 새 객체가 되므로 참조 비교로 변화가 잡힌다

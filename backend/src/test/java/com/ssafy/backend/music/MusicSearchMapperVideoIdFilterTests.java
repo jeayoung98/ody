@@ -89,11 +89,11 @@ class MusicSearchMapperVideoIdFilterTests {
 	}
 
 	private static void assertFilterCount(String sql, int expected) {
-		Matcher matches = Pattern.compile("video_id\\s+IS\\s+DISTINCT\\s+FROM\\s+'none'").matcher(sql);
+		Matcher matches = Pattern.compile("NOT\\s+m\\.is_unplayable").matcher(sql);
 		int count = 0;
 		while (matches.find()) {
 			count++;
 		}
-		assertEquals(expected, count, "각 검색 tier에 video_id='none' 제외 조건이 있어야 한다: " + sql);
+		assertEquals(expected, count, "각 검색 tier에 재생 불가 곡 제외 조건이 있어야 한다: " + sql);
 	}
 }

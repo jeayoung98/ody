@@ -37,7 +37,7 @@
 		FROM map_sample s
 		JOIN music m ON m.id = s.music_id
 		WHERE s.layer = 1
-		AND m.video_id IS DISTINCT FROM 'none'
+		AND NOT m.is_unplayable
 		LIMIT #{limit}
 	</select>
 
@@ -58,7 +58,7 @@
 					</otherwise>
 				</choose>
 			</foreach>
-			AND m.video_id IS DISTINCT FROM 'none'
+			AND NOT m.is_unplayable
 		</where>
 		LIMIT #{limit}
 	</select>

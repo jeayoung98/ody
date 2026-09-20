@@ -45,6 +45,14 @@ public class MusicPlayService {
 	private final MeetingService meetingService;
 
 	/**
+	 * 곡 위에 사람을 올린 결과.
+	 * coResidents 는 올라가기 직전 그 자리에 있던 사람들이다 — 만남으로 셀지는 부르는 쪽이 정한다.
+	 */
+	public record Placed(long playHistoryId, int layer, double x, double y,
+			int cellX, int cellY, List<String> coResidents) {
+	}
+
+	/**
 	 * 곡을 재생하고 그 곡 위치로 사용자를 옮긴다.
 	 *
 	 * 레이어는 서버에 있는 값을 우선한다 — 재생으로 레이어가 바뀌지 않는다.
@@ -72,48 +80,66 @@ public class MusicPlayService {
 			log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LAYER_INVALID, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
-		int layer = resolvedLayer;
 
-		// 2. 재생할 곡의 좌표를 찾는다.
+		// 2. 곡 위에 올리고 기록을 남긴다.
+		Placed placed = placeOnMusic(email, before, musicId, resolvedLayer, source);
+
+		// 3. 아무도 들은 적 없는 곡이면 이 사람이 발견자로 기록된다 (주간 발견왕 랭킹, S15P21A405-448).
+		//    이미 기록이 있으면 아무 일도 일어나지 않는다.
+		playHistoryMapper.insertDiscovery(musicId, email);
+
+		// 4. 같은 곡에서 만난 사용자들을 기록한다.
+		meetingService.recordMeetings(email, placed.coResidents());
+
+		log.info("[Play] 재생 선언 완료 musicId={} layer={} playHistoryId={}",
+				musicId, placed.layer(), placed.playHistoryId());
+		return new PlayResponse(placed.playHistoryId(), musicId, placed.layer(),
+				placed.x(), placed.y(), placed.cellX(), placed.cellY());
+	}
+
+	/**
+	 * 사람을 곡 위로 옮기고 재생 기록을 남긴다. 재생과 따라가기가 같이 쓴다.
+	 *
+	 * 발견자 기록과 만남 기록은 여기서 하지 않는다 — 따라가기는 둘 다 하면 안 되기 때문이다.
+	 * 따라가는 사람이 발견자가 되면 안 되고, 따라붙은 것은 만남이 아니다.
+	 *
+	 * @param before 옮기기 전 상태. 부르는 쪽이 읽어서 넘긴다
+	 * @param layer 놓을 레이어. 재생은 서 있던 레이어, 따라가기는 인솔자의 레이어다
+	 * @return 새 위치와 올라가기 직전 그 자리에 있던 사람들
+	 * @throws CustomException 곡이 없거나 지도에 놓을 수 없는 경우
+	 */
+	@Transactional
+	public Placed placeOnMusic(String email, PresenceSnapshot before, long musicId, int layer, String source) {
+		// 1. 곡의 좌표를 찾는다.
 		//    좌표가 없으면 곡 자체가 없는지(404) 곡은 있는데 지도에 못 놓는지(422) 갈라서 알린다.
 		double[] pc = musicLocationService.findLocation(musicId)
 				.orElseThrow(() -> {
 					if (!musicLocationService.exists(musicId)) {
-						log.warn("play 거부 reason=MUSIC_NOT_FOUND musicId={}", musicId);
+						log.warn("배치 거부 reason=MUSIC_NOT_FOUND musicId={}", musicId);
 						return new CustomException(MusicErrorCode.MUSIC_NOT_FOUND);
 					}
-					log.warn("play 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL, musicId);
+					log.warn("배치 거부 reason={} musicId={}", WebSocketErrorCode.PRESENCE_LOCATION_NULL, musicId);
 					return new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 				});
 
-		// 3. 곡 좌표를 현재 레이어의 위치와 셀로 바꾼다.
+		// 2. 곡 좌표를 그 레이어의 위치와 셀로 바꾼다.
 		Placement p = musicPositionCalculator.calculate(pc, layer);
 
-		// 4. 이전 곡에서 빼고 새 곡에 넣는다.
-		List<String> meeting = presenceRedisRepository.applyPlay(
+		// 3. 이전 곡에서 빼고 새 곡에 넣는다.
+		List<String> coResidents = presenceRedisRepository.applyPlay(
 				email,
 				before.musicId(), before.layer(), before.cellX(), before.cellY(),
 				musicId, layer, p.xNorm(), p.yNorm(), p.cellX(), p.cellY());
-		if (meeting == null) {
-			// 처리 중 접속 상태가 바뀌면 이번 재생을 거부한다.
-			log.warn("play STALE reason={} musicId={}", WebSocketErrorCode.PRESENCE_STALE, musicId);
+		if (coResidents == null) {
+			// 처리 중 접속 상태가 바뀌면 이번 배치를 거부한다.
+			log.warn("배치 STALE reason={} musicId={}", WebSocketErrorCode.PRESENCE_STALE, musicId);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 5. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
-		PlayHistoryRow history = new PlayHistoryRow();
-		history.setMusicId(musicId);
-		history.setEmail(email);
-		history.setSource(source);
-		history.setPlayedMs(0L);
-		playHistoryMapper.insert(history);
-		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
-		playHistoryMapper.incrementPlayCnt(musicId);
-		// 아무도 들은 적 없는 곡이면 이 사람이 발견자로 기록된다 (주간 발견왕 랭킹, S15P21A405-448).
-		// 이미 기록이 있으면 아무 일도 일어나지 않는다.
-		playHistoryMapper.insertDiscovery(musicId, email);
+		// 4. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
+		long playHistoryId = recordPlay(email, musicId, source);
 
-		// 6. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
+		// 5. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
 		if (before.musicId() == null
 				|| !Objects.equals(before.musicId(), musicId)
@@ -126,13 +152,30 @@ public class MusicPlayService {
 					p.xNorm(), p.yNorm()));
 		}
 
-		// 7. 같은 곡에서 만난 사용자들을 기록한다.
-		meetingService.recordMeetings(email, meeting);
-
-		log.info("[Play] 재생 선언 완료 musicId={} layer={} playHistoryId={}", musicId, layer, history.getId());
 		// x·y 는 지도(뷰포트 요청·셀 인원수)와 같은 원시 PC 좌표. 정규화 값은 셀 계산 내부용이다.
-		return new PlayResponse(history.getId(), musicId, layer,
-				pc[p.axisX() - 1], pc[p.axisY() - 1], p.cellX(), p.cellY());
+		return new Placed(playHistoryId, layer,
+				pc[p.axisX() - 1], pc[p.axisY() - 1], p.cellX(), p.cellY(), coResidents);
+	}
+
+	/**
+	 * 재생 기록을 남기고 재생수를 올린다.
+	 *
+	 * 발견자 기록과 만남 기록은 하지 않는다 — 부르는 쪽이 정한다.
+	 * 지도 위치도 건드리지 않는다. 따라가기처럼 지도에 넣지 않고 듣기만 하는 경우가 있다.
+	 *
+	 * @return 재생 기록 ID
+	 */
+	@Transactional
+	public long recordPlay(String email, long musicId, String source) {
+		PlayHistoryRow history = new PlayHistoryRow();
+		history.setMusicId(musicId);
+		history.setEmail(email);
+		history.setSource(source);
+		history.setPlayedMs(0L);
+		playHistoryMapper.insert(history);
+		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
+		playHistoryMapper.incrementPlayCnt(musicId);
+		return history.getId();
 	}
 
 	/**

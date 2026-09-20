@@ -31,13 +31,14 @@ class PresenceRedisRepositoryTests {
 	@Mock DefaultRedisScript<List> playScript;
 	@Mock DefaultRedisScript<List> leaveScript;
 	@Mock DefaultRedisScript<Long> recountScript;
+	@Mock DefaultRedisScript<List> ridePlaceScript;
 
 	private PresenceRedisRepository repository;
 
 	@BeforeEach
 	void setUp() {
 		repository = new PresenceRedisRepository(
-				redis, joinScript, playScript, leaveScript, recountScript);
+				redis, joinScript, playScript, leaveScript, recountScript, ridePlaceScript);
 	}
 
 	@Test

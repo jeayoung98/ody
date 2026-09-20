@@ -51,10 +51,15 @@ public class VideoIdApiClient implements VideoIdLookupPort {
 					.retrieve()
 					.body(VideoIdApiResponse.class);
 
-			if (response == null || response.best() == null) {
+			if (response == null) {
 				return Optional.empty();
 			}
-			return Optional.ofNullable(response.best().videoId());
+			if (response.best() != null && response.best().videoId() != null) {
+				return Optional.of(response.best().videoId());
+			}
+			// 후보가 없다. 재생 불가로 확정된 경우에만 판정을 돌려준다 — 검색 실패·일시 오류는
+			// 빈 값으로 두어 다음 요청이 다시 시도하게 한다(S15P21A405-454 FR-002·FR-003).
+			return response.unplayable() ? Optional.of(VideoIds.UNPLAYABLE) : Optional.empty();
 		} catch (RestClientException e) {
 			log.warn("[VideoId] 조회 실패 artist={} title={} error={}", artist, title, e.getMessage());
 			return Optional.empty();

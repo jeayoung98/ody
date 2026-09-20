@@ -9,6 +9,7 @@ import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
+import com.ssafy.backend.music.videoid.VideoIds;
 
 /**
  * {@link JourneyTrackReader} 의 MyBatis 어댑터 (T045, 헌법 X: BE2 계약 / 실행 분리).
@@ -58,7 +59,7 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 						row.getAlbum(),
 						row.getReleaseYear(),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						row.getVideoId(),
+						VideoIds.of(row.isUnplayable(), row.getVideoId()),
 						row.toLocation(),
 						row.getPlayCnt(),
 						row.getYoutubeCnt()))

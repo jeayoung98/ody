@@ -9,4 +9,14 @@
 	<update id="updateVideoId">
 		UPDATE music SET video_id = #{videoId} WHERE id = #{musicId}
 	</update>
+
+	<!--
+		재생 불가 확정 (S15P21A405-454). 예전에는 외부 API 가 video_id 자리에 'none' 을 넣어 줘서
+		위 updateVideoId 가 그대로 저장했지만, 새 resolver 는 후보가 없으면 best 를 비워 보낸다.
+		판정을 백엔드가 내려 이 플래그에 남긴다 — 삭제 배치와 검색·대표곡 제외가 같은 값을 읽는다.
+		video_id 는 건드리지 않는다. 정본은 플래그 하나여야 또 어긋나지 않는다.
+	-->
+	<update id="markUnplayable">
+		UPDATE music SET is_unplayable = true WHERE id = #{musicId}
+	</update>
 </mapper>

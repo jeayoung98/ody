@@ -59,7 +59,12 @@ export default function Rail() {
       data-hud
       className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:bottom-[var(--nav-bottom)] max-tablet:left-gutter-sm max-tablet:right-gutter-sm max-tablet:justify-between max-tablet:transition-[bottom] max-tablet:duration-200"
     >
-      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
+      {/*
+        좁은 화면에서는 **재생바와 같은 폭으로 늘어난다** (S15P21A405-417). 알약이 좁으면
+        아래 재생바(전체폭 상자)와 크기·모양이 달라 "떠 있는 조각 하나" 로 읽혔다 —
+        폭을 맞추고 아이콘을 고르게 펴면 두 줄짜리 하단 바로 읽힌다.
+      */}
+      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px max-tablet:flex-1 max-tablet:justify-around">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
             <FriendsIcon />

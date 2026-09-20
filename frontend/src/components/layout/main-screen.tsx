@@ -51,8 +51,11 @@ const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
  */
 const HUD_B = 18;
 const TOUCH = 44;
-/** 쌓인 것들 사이 틈 */
-const STACK_GAP = 8;
+/**
+ * 쌓인 것들 사이 틈. **재생바와 네비 사이는 좁다** — 둘이 한 덩어리로 읽혀야 한다.
+ * 8px 로 뒀더니 따로 떠 있는 조각 둘로 보인다는 말이 나왔다.
+ */
+const STACK_GAP = 4;
 
 interface MainScreenProps {
   /** 지도 위에 얹을 오버레이 (튜토리얼 등) */

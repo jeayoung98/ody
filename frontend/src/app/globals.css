@@ -333,6 +333,26 @@
     animation: none;
   }
 }
+/*
+ * 레이더 탐색 빛 (S15P21A405-510). 판이 멈춰 있으면 그냥 과녁이라, 돌아가는 빛 하나로
+ * "찾는 중" 을 말한다.
+ *
+ * `rotate` 속성을 쓴다 — `transform` 을 쓰면 크기·위치 유틸리티와 서로 덮어쓴다.
+ * 움직임을 줄인 환경에서는 **숨긴다** — 멈춰 있는 부채꼴만 남으면 고장처럼 보인다.
+ */
+@keyframes radar-sweep {
+  to {
+    rotate: 360deg;
+  }
+}
+.animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-radar-sweep {
+    display: none;
+  }
+}
 @keyframes tin {
   from { opacity: 0; transform: translateY(10px); }
 }

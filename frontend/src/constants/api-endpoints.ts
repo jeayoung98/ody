@@ -98,7 +98,6 @@ export const API_ENDPOINTS = {
       return `/bff/map/songs?${q.join("&")}`;
     },
     // nearby 는 라우트 핸들러가 백엔드 `GET /api/music/detail?id=` 의 neighbors 로 만들어 준다
-    representatives: (layer: number) => `/bff/map/layers/${layer}/representatives`,
     nearby: (musicId: number) => `/bff/map/nearby/${musicId}`,
   },
 

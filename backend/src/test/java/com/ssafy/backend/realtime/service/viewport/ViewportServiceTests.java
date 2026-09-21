@@ -2,10 +2,12 @@ package com.ssafy.backend.realtime.service.viewport;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anySet;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -90,8 +92,7 @@ class ViewportServiceTests {
 		when(userDisplayService.find("one@example.com")).thenReturn(new UserDisplay("one", "one.png"));
 		when(userDisplayService.find("same@example.com")).thenReturn(new UserDisplay("same", null));
 		when(userDisplayService.find("two@example.com")).thenReturn(new UserDisplay("two", "two.png"));
-		when(riderCountService.count(anyString()))
-				.thenAnswer(invocation -> invocation.getArgument(0).equals("same@example.com") ? 2 : 0);
+		when(riderCountService.countAll(anyCollection())).thenReturn(Map.of("same@example.com", 2));
 
 		OpenResult result = service.updateCurrentScreen(ME, 7L, 11L, viewport);
 
@@ -121,7 +122,9 @@ class ViewportServiceTests {
 		verify(musicLocationService).findLocations(List.of(101L, 102L, 103L, 104L));
 		verify(presenceRepository).findListenersByMusic(1, List.of(101L, 104L));
 		verify(userDisplayService).find("same@example.com");
-		verify(riderCountService).count("same@example.com");
+		// 사람마다 묻지 않고 화면에 보이는 사람을 한 번에 묶어 묻는다.
+		verify(riderCountService).countAll(argThat(emails -> emails.containsAll(
+				List.of("one@example.com", "same@example.com", "two@example.com"))));
 		verify(viewportMetrics).recordSnapshot(
 				eq("SNAPSHOT"), eq("INDIVIDUAL"),
 				org.mockito.ArgumentMatchers.anyInt(), eq(4), eq(3), anyLong());
@@ -204,7 +207,7 @@ class ViewportServiceTests {
 				.thenReturn(Map.of(101L, Set.copyOf(emails)));
 		when(userDisplayService.find(anyString()))
 				.thenAnswer(invocation -> new UserDisplay(invocation.getArgument(0), null));
-		when(riderCountService.count(anyString())).thenReturn(0);
+		when(riderCountService.countAll(anyCollection())).thenReturn(Map.of());
 
 		OpenResult result = service.updateCurrentScreen(ME, 7L, 14L, viewport);
 

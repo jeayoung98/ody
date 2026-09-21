@@ -15,6 +15,8 @@ public enum RealtimeMessageType {
 	NEARBY_ENTER,
 	NEARBY_MOVE,
 	NEARBY_LEAVE,
+	/** 선단이 흩어져 여러 사람이 한 곡에 한꺼번에 나타났다. */
+	NEARBY_BULK_ENTER,
 	/** 인솔자가 곡을 바꿨다. 따라가는 사람은 그 곡으로 옮겨 처음부터 튼다. */
 	RIDE_TRACK,
 	/** 인솔자가 재생·정지·구간 이동을 했다. */

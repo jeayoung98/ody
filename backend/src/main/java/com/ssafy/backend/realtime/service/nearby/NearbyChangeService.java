@@ -1,6 +1,9 @@
 package com.ssafy.backend.realtime.service.nearby;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -13,6 +16,7 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
 import com.ssafy.backend.realtime.repository.redis.NearbyRedisRepository;
@@ -85,6 +89,48 @@ public class NearbyChangeService {
 		}
 
 		refreshOwnPanel(event);
+	}
+
+	/**
+	 * 한 곡에 여러 사람이 한꺼번에 나타났다고 알린다.
+	 *
+	 * 선단이 흩어질 때 쓴다. 해체는 위치 변경 알림을 거치지 않고 지도 인덱스를 직접 바꾸기 때문에,
+	 * 주변사람 목록은 그대로 두면 아무것도 모른다. 패널을 다시 열면 보이는데 열어 둔 채로는
+	 * 안 보여서, 목록과 실제가 어긋난 채 남는다.
+	 *
+	 * 한 명씩 알리면 사람 수만큼 알림이 나가므로 받는 사람마다 한 덩어리로 보낸다.
+	 * 만난 횟수는 받는 사람마다 달라서 덩어리도 받는 사람마다 따로 만든다.
+	 *
+	 * @param emails 나타난 사람들
+	 * @param musicId 나타난 곡
+	 */
+	public void sendEnteredTogether(List<String> emails, long musicId) {
+		if (emails == null || emails.isEmpty()) {
+			return;
+		}
+		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(musicId));
+		receivers.removeAll(emails);
+		if (receivers.isEmpty()) {
+			return;
+		}
+
+		// 닉네임과 따라오는 인원수는 받는 사람과 무관하다. 한 번만 읽는다.
+		Map<String, UserDisplay> displayByEmail = new LinkedHashMap<>();
+		emails.forEach(email -> displayByEmail.computeIfAbsent(email, userDisplayService::find));
+		Map<String, Integer> riderCounts = riderCountService.countAll(emails);
+
+		for (String receiver : receivers) {
+			List<NearbyChange> people = emails.stream()
+					.map(email -> {
+						UserDisplay who = displayByEmail.get(email);
+						return new NearbyChange(email, who.nickname(), who.imageUrl(),
+								meetingService.countWith(receiver, email),
+								riderCounts.getOrDefault(email, 0), musicId);
+					})
+					.toList();
+			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.NEARBY_BULK_ENTER, new NearbyBulkEnter(musicId, people));
+		}
 	}
 
 	/**

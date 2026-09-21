@@ -236,4 +236,23 @@ class RiderMoveServiceTests {
 
 		verifyNoInteractions(presenceRedisRepository, playHistoryMapper, realtimeMessageService);
 	}
+
+	/** 사람은 이미 Redis 에서 옮겨졌다. 기록이 터져도 듣는 곡만큼은 맞아야 한다. */
+	@Test
+	@DisplayName("기록이 실패해도 새 곡은 이미 알린 뒤다")
+	void trackIsSentBeforeHistory() {
+		List<String> riders = givenRiders(1);
+		given(playHistoryMapper.nextIds(2)).willThrow(new IllegalStateException("기록 실패"));
+
+		try {
+			moveAll(riders);
+		} catch (IllegalStateException ignored) {
+			// 기록 실패는 그대로 올라간다
+		}
+
+		verify(rideRedisRepository).savePlayback(
+				eq(CAPTAIN), eq(MUSIC_ID), eq(PlaybackState.PLAYING), eq(0L), anyLong());
+		verify(realtimeMessageService).sendToUser(
+				eq(riders.get(0)), anyString(), eq(RealtimeMessageType.RIDE_TRACK), any());
+	}
 }

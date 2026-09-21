@@ -67,20 +67,22 @@ public class RiderMoveService {
 		// 1. 한 명씩 옮긴다. 옮기지 못한 사람은 건너뛴다 — 나머지까지 멈출 이유가 없다.
 		List<String> moved = moveRiders(riders, musicId, layer, placement);
 
-		// 2. 인솔자와 옮겨진 사람들의 기록을 한 문장으로 넣고 재생수도 한 번에 올린다.
+		// 2. 지금 트는 곡을 새 곡으로 바꾼다. 새 곡이니 위치는 0 이고, 시작 시각은 지금이다.
+		//    나중에 타는 사람은 이 두 값으로 "곡이 시작되고 몇 초 지났는지"를 계산해 그 지점부터 듣는다.
+		//    시작 시각을 안 고치면 앞 곡 기준으로 계산해 엉뚱한 지점부터 듣게 된다.
+		rideRedisRepository.savePlayback(captainEmail, musicId, PlaybackState.PLAYING, 0L, now);
+
+		// 3. 옮겨진 사람에게만 새 곡을 알린다.
+		//    기록보다 먼저 한다. 사람은 이미 Redis 에서 옮겨졌으니, 기록이 실패해도
+		//    듣는 곡만큼은 맞아야 한다. 뒤에 두면 기록이 터질 때 옛 곡을 계속 듣는다.
+		notifyTrack(moved, musicId, layer, rawX, rawY, now);
+
+		// 4. 인솔자와 옮겨진 사람들의 기록을 한 문장으로 넣고 재생수도 한 번에 올린다.
 		List<String> listeners = new ArrayList<>();
 		listeners.add(captainEmail);
 		listeners.addAll(moved);
 		List<Long> ids = insertPlayHistory(listeners, musicId, source);
 		playHistoryMapper.incrementPlayCntBy(musicId, listeners.size());
-
-		// 3. 지금 트는 곡을 새 곡으로 바꾼다. 새 곡이니 위치는 0 이고, 시작 시각은 지금이다.
-		//    나중에 타는 사람은 이 두 값으로 "곡이 시작되고 몇 초 지났는지"를 계산해 그 지점부터 듣는다.
-		//    시작 시각을 안 고치면 앞 곡 기준으로 계산해 엉뚱한 지점부터 듣게 된다.
-		rideRedisRepository.savePlayback(captainEmail, musicId, PlaybackState.PLAYING, 0L, now);
-
-		// 4. 옮겨진 사람에게만 새 곡을 알린다.
-		notifyTrack(moved, musicId, layer, rawX, rawY, now);
 
 		log.info("[Ride] 곡 이동 musicId={} layer={} riders={}", musicId, layer, moved.size());
 		return ids.get(0);

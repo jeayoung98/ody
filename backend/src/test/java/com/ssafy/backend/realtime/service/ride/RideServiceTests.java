@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -50,6 +51,7 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.service.nearby.NearbyChangeService;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
@@ -79,6 +81,7 @@ class RideServiceTests {
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock MeetingService meetingService;
 	@Mock ViewportDeltaService viewportDeltaService;
+	@Mock NearbyChangeService nearbyChangeService;
 	@InjectMocks RideService service;
 
 	private final double[] location = location();
@@ -618,6 +621,31 @@ class RideServiceTests {
 	}
 
 	/** 지도에 못 돌아간 사람도 따라가기가 끝난 것은 마찬가지다. */
+	/** 해체는 위치 변경 알림을 거치지 않아, 주변사람 목록은 이걸 안 보내면 끝내 안 바뀐다. */
+	@Test
+	@DisplayName("해체를 주변사람 목록에도 알린다")
+	void disbandTellsNearbyPanels() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
+	}
+
+	/** 여기까지 왔으면 Redis 는 이미 바뀐 뒤다. 하나가 터졌다고 나머지를 건너뛰면 안 된다. */
+	@Test
+	@DisplayName("알림 하나가 터져도 나머지는 나간다")
+	void oneFailedNotificationDoesNotStopTheRest() {
+		givenDisbandOk();
+		doThrow(new IllegalStateException("화면 알림 실패"))
+				.when(viewportDeltaService).sendBulkEnter(any(), anyInt(), anyLong(), anyString());
+
+		service.disband(CAPTAIN);
+
+		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
+		verify(meetingService).recordOnDismount(any(), any(), any());
+	}
+
 	@Test
 	@DisplayName("지도에 못 돌아간 사람에게도 끝났다고 알린다")
 	void disbandTellsRidersWithoutSpot() {
@@ -646,7 +674,8 @@ class RideServiceTests {
 
 		service.disband(CAPTAIN);
 
-		verifyNoInteractions(realtimeMessageService, viewportDeltaService, meetingService);
+		verifyNoInteractions(realtimeMessageService, viewportDeltaService,
+				nearbyChangeService, meetingService);
 	}
 
 	@Test
@@ -658,7 +687,8 @@ class RideServiceTests {
 
 		service.disband(CAPTAIN);
 
-		verifyNoInteractions(realtimeMessageService, viewportDeltaService, meetingService);
+		verifyNoInteractions(realtimeMessageService, viewportDeltaService,
+				nearbyChangeService, meetingService);
 	}
 
 	// ── 따라가던 사람이 사라짐 ─────────────────────────────

@@ -40,6 +40,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnap
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.service.nearby.NearbyChangeService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
 
@@ -75,6 +76,7 @@ public class RideService {
 	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
 	private final MeetingService meetingService; // 하차 시점 만남 기록
 	private final ViewportDeltaService viewportDeltaService; // 해체를 한 덩어리로 알림
+	private final NearbyChangeService nearbyChangeService; // 해체를 주변사람 목록에도 알림
 
 	/**
 	 * 따라가기를 시작한다.
@@ -154,6 +156,22 @@ public class RideService {
 		} catch (RuntimeException e) {
 			undoMount(riderEmail, captainEmail, placed);
 			throw e;
+		}
+	}
+
+	/**
+	 * 알림 한 건이 실패해도 나머지를 막지 않게 감싼다.
+	 *
+	 * 여기까지 왔으면 Redis 는 이미 바뀐 뒤다. 알림 하나가 터졌다고 나머지를 건너뛰면
+	 * 상태는 바뀌었는데 아무도 모르는 쪽이 늘어난다.
+	 *
+	 * @param what 실패했을 때 로그에 남길 이름
+	 */
+	private void notifyQuietly(String what, Runnable action) {
+		try {
+			action.run();
+		} catch (RuntimeException e) {
+			log.warn("[Ride] {} 실패 — 상태는 이미 바뀌었다", what, e);
 		}
 	}
 
@@ -238,16 +256,19 @@ public class RideService {
 
 		// 5. 지도에 나타났음을 알린다. 이전 자리는 없다 — 따라가는 동안 지도에 없었기 때문이다.
 		Spot spot = spotOf(result.musicId(), result.layer());
-		notifyEnteredMap(riderEmail, presence.epoch(), result, spot);
+		notifyQuietly("하차 지도 등장 알림",
+				() -> notifyEnteredMap(riderEmail, presence.epoch(), result, spot));
 
 		// 6. 인솔자에게 누가 내렸는지 알린다. 남은 인원도 같이 보낸다.
-		realtimeMessageService.sendToUser(ride.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
+		notifyQuietly("하차 인솔자 알림", () -> realtimeMessageService.sendToUser(
+				ride.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.RIDE_RIDER_LEFT,
-				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+				new RideRiderLeftPayload(riderEmail, result.remainingRiders())));
 
 		// 7. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
 		//    명단은 지도에 다시 들어가기 전에 찍힌 것이라 자기 자신이 섞여 있지 않다.
-		meetingService.recordOnDismount(List.of(riderEmail), result.residents(), fleetMembers);
+		notifyQuietly("하차 만남 기록", () ->
+				meetingService.recordOnDismount(List.of(riderEmail), result.residents(), fleetMembers));
 
 		log.info("[Ride] 하차 musicId={} layer={} 남은인원={}",
 				result.musicId(), result.layer(), result.remainingRiders());
@@ -328,17 +349,25 @@ public class RideService {
 				result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
 		for (String rider : riders) {
-			realtimeMessageService.sendToUser(rider, WebSocketDestination.QUEUE_PRESENCE,
-					RealtimeMessageType.RIDE_ENDED, ended);
+			notifyQuietly("해체 알림", () -> realtimeMessageService.sendToUser(
+					rider, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.RIDE_ENDED, ended));
 		}
 
 		// 4. 남들 화면에는 한 덩어리로 알린다. 한 명씩 보내면 그 수만큼 다시 그린다.
-		viewportDeltaService.sendBulkEnter(result.leftRiders(), result.layer(), result.musicId(),
-				result.cellX() + ":" + result.cellY());
+		notifyQuietly("해체 화면 알림", () ->
+				viewportDeltaService.sendBulkEnter(result.leftRiders(), result.layer(),
+						result.musicId(), result.cellX() + ":" + result.cellY()));
 
-		// 5. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
+		// 5. 주변사람 목록에도 알린다. 해체는 위치 변경 알림을 거치지 않아
+		//    이걸 안 보내면 패널을 열어 둔 사람의 목록에 이 사람들이 끝내 안 나타난다.
+		notifyQuietly("해체 주변사람 알림", () ->
+				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.musicId()));
+
+		// 6. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
 		//    한 명이 스스로 내릴 때와 같은 함수다. 두 벌로 두면 한쪽만 고쳐진다.
-		meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers);
+		notifyQuietly("해체 만남 기록", () ->
+				meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers));
 
 		log.info("[Ride] 선단 해체 musicId={} layer={} 내린인원={}",
 				result.musicId(), result.layer(), result.leftRiders().size());

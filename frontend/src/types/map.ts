@@ -25,7 +25,7 @@ export interface MapPoint {
   youtubeUrl: string | null;
   /**
    * 이 곡이 실린 앨범의 MusicBrainz 릴리스 ID (S15P21A405-518). 있으면 Cover Art Archive 에서
-   * **진짜 앨범 커버**를 받는다 (`render/cover-art`). 없으면 절차적 커버로 떨어진다.
+   * **진짜 앨범 커버**를 받는다 (`render/cover-art`). 없거나 CAA 에 그림이 없으면 절차적 커버로 떨어진다.
    *
    * optional 인 이유: 절차적 커버만 쓰려고 만드는 가짜 점들이 여럿 있어서, 거기까지 null 을
    * 적게 하면 잡음만 는다. **백엔드 응답을 옮기는 매퍼는 반드시 채운다.**

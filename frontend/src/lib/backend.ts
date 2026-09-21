@@ -297,9 +297,8 @@ interface BackendMusicSummary {
   /** 장르 **이름** 배열. genreId 가 없다 — 지도 색칠에 필요하다 (BACKEND-NOTES B-21) */
   /** 검색 URL. 재생 URL 이 아니다 (규칙 6) */
   youtubeUrl: string | null;
-  /** 앨범(MusicBrainz 릴리스) ID (S15P21A405-518). 표기가 확정 전이라 두 쪽을 다 받는다 */
+  /** 이 곡이 실린 앨범의 MusicBrainz 릴리스 ID (S15P21A405-518) */
   albumMbid?: string | null;
-  album_mbid?: string | null;
   location: BackendLocation | null;
 }
 
@@ -370,13 +369,10 @@ export interface BackendMapPoint {
    */
   youtubeUrl?: string | null;
   /**
-   * 앨범(MusicBrainz 릴리스) ID (S15P21A405-518).
-   *
-   * **두 표기를 다 받는다.** 백엔드 합의는 `album_mbid` 인데 Jackson 기본 설정이면 `albumMbid`
-   * 로 나간다 — 어느 쪽이 배포될지 확정 전이라 양쪽을 읽는다. 한쪽으로 굳으면 지워도 된다.
+   * 이 곡이 실린 앨범의 MusicBrainz **릴리스** ID (S15P21A405-518).
+   * 2026-09-21 배포 확인 — 스키마에 `albumMbid` 로 있고 지도 응답 100건 전부 값이 차 있다.
    */
   albumMbid?: string | null;
-  album_mbid?: string | null;
   playable: boolean;
 }
 
@@ -394,7 +390,7 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
     title: p.title,
     artist: p.artist ?? null,
     youtubeUrl: p.youtubeUrl ?? null,
-    albumMbid: p.albumMbid ?? p.album_mbid ?? null,
+    albumMbid: p.albumMbid ?? null,
     playable: p.playable,
   };
 }
@@ -418,7 +414,7 @@ export function toMusic(res: BackendMusicDetail): Music {
   return {
     id: res.id,
     mbid: res.mbid,
-    albumMbid: res.albumMbid ?? res.album_mbid ?? null,
+    albumMbid: res.albumMbid ?? null,
     title: res.title,
     artist: res.artist,
     releaseYear: res.releaseYear ?? null,

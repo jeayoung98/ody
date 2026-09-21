@@ -11,15 +11,14 @@
  * 16곡 중 절반이 번호판 사진·인물 스틸 같은 것이었다. `albumMbid` 는 앨범 그 자체를 가리킨다.
  */
 
-/** 500px 원본. 지도 커버(≈33px)에도 상세 배경(376px)에도 이 한 장이면 충분하다 */
-const RELEASE = (mbid: string) => `https://coverartarchive.org/release/${mbid}/front-500`;
 /**
- * 릴리스에 그림이 없을 때 한 번 더 두드리는 곳.
+ * 500px 원본. 지도 커버(≈33px)에도 상세 배경(376px)에도 이 한 장이면 충분하다.
  *
- * 백엔드가 릴리스 ID 를 준다는 전제지만, **릴리스 그룹 ID 가 와도 돌아가게** 둔다 — 둘은
- * 생김새가 같은 UUID 라 값만 보고는 구분할 수 없고, 잘못 짚었을 때 커버가 통째로 안 뜬다.
+ * **릴리스(release) ID 다.** 릴리스 그룹이 아니다 — 2026-09-21 실데이터 6개로 확인했고
+ * `release` 는 200, `release-group` 은 전부 404 였다. 그래서 그룹 재시도는 두지 않는다.
+ * 그림이 없는 릴리스도 있다(6개 중 1개) — 그건 404 로 오고 절차적 커버로 떨어진다.
  */
-const RELEASE_GROUP = (mbid: string) => `https://coverartarchive.org/release-group/${mbid}/front-500`;
+const RELEASE = (mbid: string) => `https://coverartarchive.org/release/${mbid}/front-500`;
 
 /** 캐시 키 — 같은 곡도 쓰는 자리마다 크기가 다르다 (지도는 작게, 상세 배경은 크게) */
 const keyOf = (musicId: number, size: number) => `${musicId}:${size}`;
@@ -62,13 +61,11 @@ export function albumCover(musicId: number, albumMbid: string | null | undefined
     img.onerror = onFail;
     img.src = url;
   };
-  load(RELEASE(albumMbid), () =>
-    load(RELEASE_GROUP(albumMbid), () => {
-      // 둘 다 없으면 이 곡은 포기한다 — 매 프레임 다시 두드리지 않게 곡 단위로 굳힌다
-      loading.delete(key);
-      failed.add(musicId);
-    }),
-  );
+  load(RELEASE(albumMbid), () => {
+    // 없으면 이 곡은 포기한다 — 매 프레임 다시 두드리지 않게 곡 단위로 굳힌다
+    loading.delete(key);
+    failed.add(musicId);
+  });
   return null;
 }
 

@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
+import java.util.Map;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
@@ -232,5 +233,40 @@ class RidePlaybackRedisIntegrationTests {
 	private static String env(String name, String fallback) {
 		String value = System.getenv(name);
 		return value == null || value.isBlank() ? fallback : value;
+	}
+
+	/** 한 명씩 물으면 수신자 수만큼 왕복이 생겨 그대로 지연이 된다. */
+	@Test
+	@DisplayName("여러 사람을 한 번에 물어도 각자 따라오는 사람이 맞게 나온다")
+	void asksManyAtOnce() {
+		String first = user();
+		String second = user();
+		String alone = user();
+		String riderA = user();
+		String riderB = user();
+		String riderC = user();
+		addRider(first, riderA);
+		addRider(first, riderB);
+		addRider(second, riderC);
+
+		Map<String, Set<String>> result = repository.ridersOf(List.of(first, second, alone));
+
+		assertThat(result).containsOnlyKeys(first, second);
+		assertThat(result.get(first)).containsExactlyInAnyOrder(riderA, riderB);
+		assertThat(result.get(second)).containsExactly(riderC);
+	}
+
+	/** 따라오는 사람이 없는 사람까지 담으면 받는 쪽이 매번 빈 값을 걸러야 한다. */
+	@Test
+	@DisplayName("따라오는 사람이 없는 사람은 결과에서 빠진다")
+	void emptyOnesAreLeftOut() {
+		assertThat(repository.ridersOf(List.of(user(), user()))).isEmpty();
+	}
+
+	@Test
+	@DisplayName("물을 사람이 없으면 읽지 않는다")
+	void emptyInputReturnsEmpty() {
+		assertThat(repository.ridersOf(List.of())).isEmpty();
+		assertThat(repository.ridersOf(null)).isEmpty();
 	}
 }

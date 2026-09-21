@@ -26,6 +26,7 @@
 | [012](012-survey-playback-lifecycle.md) | 설문이 사라지거나 다음 곡이 멈춤·튜토리얼 완료 복원 누락 | 재생 의도와 실제 청취를 혼동하고 뷰·제출 수명주기를 결합, 로컬 완료값 미복원 | S15P21A405-369 |
 | [013](013-analytics-uuid-on-http.md) | HTTP 테스트 주소에서 분석 이벤트가 전부 멈춤 | 보안 컨텍스트 전용 `crypto.randomUUID()` 호출이 첫 이벤트 생성을 중단 | S15P21A405-295 |
 | [014](014-button-font-size-utilities-ignored.md) | 버튼 글씨 크기 클래스가 전부 무시됨 | 레이어 밖의 `button { font: inherit }` 가 `@layer utilities` 의 `.text-*` 를 항상 이김 | S15P21A405-384 |
+| [015](015-stars-blink-every-3-seconds.md) | 별이 3초마다 사라졌다 나타남 (재로딩처럼 보임) | 기억 정리가 `first`(처음 본 때)를 잣대로 써 **지금 그리는 별**을 지움 — 다음 프레임에 알파 0부터 다시 밝힘 | S15P21A405-479 |
 
 ---
 

@@ -1,7 +1,7 @@
 "use client";
 
 import EmptyState from "@/components/common/empty-state";
-import Loading from "@/components/common/loading";
+import SkeletonRows from "@/components/common/skeleton-rows";
 import UserRow from "@/components/common/user-row";
 import type { ChartType } from "@/constants";
 import { useUserRankingQuery } from "@/hooks/queries/use-ranking-query";
@@ -14,7 +14,7 @@ export default function UserRankingList({ type }: { type: Exclude<ChartType, "to
   const { data, isPending } = useUserRankingQuery(type);
   const openFeed = usePanelStore((s) => s.openFeed);
 
-  if (isPending) return <Loading />;
+  if (isPending) return <SkeletonRows count={5} thumb="circle" sub={false} />;
   if (!data || data.length === 0) return <EmptyState message="아직 랭킹이 없어요." />;
 
   return (

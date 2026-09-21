@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import type { Occlusion } from "@/components/map/engine/map-engine";
 import { LAYER_AXES } from "@/constants";
 import { useMapStore } from "@/stores/use-map-store";
 import { getMapEngine } from "./engine/engine-registry";
@@ -24,7 +25,7 @@ const TICK_MS = 160;
  * 움직임은 **카메라를 들여다봐서** 안다. 휠·드래그 이벤트를 듣는 것보다 확실하다 — 내 위치로
  * 가기나 겹 전환처럼 코드가 옮기는 경우까지 같은 잣대로 잡힌다.
  */
-export default function MapAxisLabels({ occludedRight }: { occludedRight: number }) {
+export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
   const layer = useMapStore((s) => s.layer);
   const [awake, setAwake] = useState(false);
 
@@ -59,7 +60,7 @@ export default function MapAxisLabels({ occludedRight }: { occludedRight: number
     <>
       <span className={`${cl} top-1/2 left-[18px] -translate-y-1/2`}>◀ {x[0]}</span>
       {/* 우측 패널이 열리면 그만큼 안쪽으로 — 패널 뒤에 숨으면 적어 둔 보람이 없다 */}
-      <span className={`${cl} top-1/2 -translate-y-1/2 text-right`} style={{ right: occludedRight + 18 }}>
+      <span className={`${cl} top-1/2 -translate-y-1/2 text-right`} style={{ right: occlusion.right + 18 }}>
         {x[1]} ▶
       </span>
       {/* 위아래는 검색창·플레이어바를 피해 안쪽으로 물린다 */}

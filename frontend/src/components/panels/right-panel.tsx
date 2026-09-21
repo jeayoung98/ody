@@ -33,28 +33,31 @@ export default function RightPanel() {
     <aside
       data-hud
       data-tutorial={`panel-${activePanel}`}
-      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100vh-264px)] w-right-panel flex-col transition-[transform,opacity] duration-500 ease-out ${
+      className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100dvh-264px)] w-right-panel flex-col transition-[translate] duration-500 ease-out ${
         /*
-          접으면 **몸통 18px 만 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이
-          있었는지가 안 읽힌다 — 좌하단 계기판이 몸통을 조금 남기는 것(`COLLAPSED_PEEK_PX`)과 같은 이유다.
-          핸들(22px)은 그 왼쪽에 붙어 화면 안에 온전히 남는다.
+          접으면 **몸통을 조금 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이
+          있었는지가 안 읽힌다. 핸들은 그 바깥에 붙어 화면 안에 온전히 남는다.
 
-          376 = 패널이 제자리에서 오른쪽으로 갈 거리.
-            제자리 왼쪽 끝 = 화면오른쪽 - (패널폭 376 + 여백 18) = -394
-            목표 왼쪽 끝   = 화면오른쪽 - 남길 몸통 18 = -18
-            376 = 394 - 18
+          남기는 양과 미는 식을 **좌하단 계기판과 같게 맞췄다** (S15P21A405-477).
+          계기판: `translate-x-[calc(-100%_+_10px)]` → 제 폭만큼 왼쪽으로 밀되 10px 을 덜 민다.
+          여기: 그 거울인 `calc(100%_-_10px)`. 화면 끝에 남는 몸통이 양쪽 다 28px(여백 18 + 10)이다.
+          숫자를 직접 적지 않고 `100%` 로 두는 편이 낫다 — 패널 폭이 바뀌어도 따라간다.
 
-          들어가면서 **흐려진다**. 자리만 옮기면 화면 끝에서 잘린 것처럼 보이는데, 같이 옅어지면
-          "물러났다" 로 읽힌다. 다 지우지 않고 0.6 에서 멈추는 이유는 핸들이 같이 흐려지기
-          때문이다 — 되돌릴 손잡이는 읽혀야 한다 (opacity 는 자식이 부모보다 진해질 수 없다).
+          **흐려지지 않는다** (S15P21A405-477). 예전에는 들어가면서 opacity 0.6 으로 옅어졌는데,
+          opacity 는 자식이 부모보다 진해질 수 없어서 핸들까지 같이 흐려졌다 — 계기판 핸들은
+          또렷한데 이쪽만 흐리니 같은 물건으로 안 보였다. 계기판이 자리만 옮기는 것처럼 여기도
+          자리만 옮긴다.
 
-          500ms 는 300ms 보다 반 박자 느리다. 거리가 376px 로 길어서 300ms 면 미끄러지는 게
-          아니라 튀어 들어간다.
+          500ms 는 계기판의 300ms 보다 반 박자 느리다. 거리가 366px 로 계기판(220px)보다 길어서
+          300ms 면 미끄러지는 게 아니라 튀어 들어간다 — 그래서 여기만 그대로 둔다.
 
-          **클래스를 런타임에 조합하지 않는다** — Tailwind 는 소스를 훑어 유틸리티를 만들어서
-          문자열로 짜 넣으면 CSS 가 생기지 않는다. 그래서 계산 결과를 직접 적는다.
+          transition 대상이 `transform` 이 아니라 **`translate`** 인 것도 그냥 둔다 (S15P21A405-463).
+          Tailwind v4 의 `translate-x-*` 는 transform 이 아니라 translate 프로퍼티에 값을 넣는다 —
+          `transition-[transform,opacity]` 로 적으면 흐려지기만 하고 자리는 순간이동했다.
+          계기판(`minimap-panel.tsx`)이 멀쩡했던 건 `transition-transform` 이 v4 에서
+          transform·translate·scale·rotate 를 다 걸어 주기 때문이다.
         */
-        collapsed ? "translate-x-[376px] opacity-60" : "opacity-100"
+        collapsed ? "translate-x-[calc(100%_-_10px)]" : ""
       }`}
     >
       <PanelCollapseHandle />

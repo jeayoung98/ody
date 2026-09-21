@@ -19,7 +19,7 @@ export default function GhostBanner() {
 
   return (
     <div
-      className={`glass animate-tin pointer-events-auto absolute left-1/2 z-[23] flex -translate-x-1/2 items-center gap-2.5 rounded-pill! py-1.5 pr-1.5 pl-3.5 ${
+      className={`glass-liquid animate-tin pointer-events-auto absolute left-1/2 z-[23] flex -translate-x-1/2 items-center gap-2.5 rounded-pill! py-1.5 pr-1.5 pl-3.5 ${
         overlayOpen ? "top-[106px]" : "top-[62px]"
       }`}
     >

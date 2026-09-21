@@ -1,5 +1,26 @@
+import { networkInterfaces } from "node:os";
 import type { NextConfig } from "next";
 import { LIVE_API_PATHS } from "./src/constants/live-api-paths";
+
+/**
+ * 이 컴퓨터의 LAN IPv4 주소들 (S15P21A405-476).
+ *
+ * **개발 서버를 폰으로 볼 때 필요하다.** Next dev 는 자기가 뜬 호스트(`localhost`)가 아닌
+ * 곳에서 오는 `/_next/*` 요청을 **기본으로 막는다.** 폰이 `http://192.168.x.x:3000` 으로
+ * 들어오면 HTML 은 받지만 청크와 HMR 이 차단돼서 **화면이 로딩 상태로 멈춘다** — 실제로
+ * 아이폰에서 별이 안 뜨고 `LOADING STARS` 에 머물렀고, 서버 로그에 차단 경고가 찍혀 있었다.
+ *
+ * IP 를 손으로 적어 두면 망이 바뀔 때마다(핫스팟 ↔ 학교 Wi-Fi) 고쳐야 하므로 **뜰 때 읽는다.**
+ * 주소가 바뀌면 dev 서버만 다시 띄우면 된다.
+ *
+ * `allowedDevOrigins` 는 **개발 모드에서만** 쓰인다. 배포(`output: "standalone"`)에는 영향이 없다.
+ */
+function lanOrigins(): string[] {
+  return Object.values(networkInterfaces())
+    .flat()
+    .filter((net) => net && net.family === "IPv4" && !net.internal)
+    .map((net) => net!.address);
+}
 
 /**
  * 배포된 백엔드 주소. `j15a405a` (a 붙음) 는 Jenkins·Grafana 가 있는 master-node 라 API 가 없다.
@@ -14,6 +35,8 @@ const nextConfig: NextConfig = {
    * 실제로 그랬다 (S15P21A405-273). standalone 은 `.next/standalone/server.js` 하나로 뜬다.
    */
   output: "standalone",
+  /** 같은 망의 폰에서 개발 서버를 열 수 있게 한다 — 위 `lanOrigins` 주석 참고 */
+  allowedDevOrigins: lanOrigins(),
   /**
    * 브라우저가 백엔드를 직접 부르지 않고 Next 서버를 거치게 한다.
    *

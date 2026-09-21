@@ -17,51 +17,68 @@ const round = (v: number) => v.toFixed(4);
  * 프로덕션에서 아예 닿지 않는다** — 실제로 그래서 모든 데이터 화면이 500 이었다 (S15P21A405-273).
  * 그래서 우리 것은 전부 `/bff/` 다.
  *
- * 지금 `/api/` 로 남아 있는 건 **목이 없어서 백엔드를 직접 부를 수밖에 없는 것**뿐이다
- * (`googleLogin` · `exchange` · `reissue`). 로컬에서 쓰려면 `live-api-paths.ts` 에 넣어야 한다.
- *
- * 로그인·온보딩은 **의도적으로 목이다.** 유저 테스트가 주변 탐색·경로 탐색만 보기 때문에
- * 실계정 가입 절차를 태우지 않는다. 백엔드에는 `/api/auth/*` 가 전부 있으므로
- * 나중에 `live-api-paths.ts` 에 다시 넣기만 하면 실연동으로 돌아온다.
+ * 인증·마이페이지는 **실연동이다** (S15P21A405-462). 다만 경로는 `/bff/` 로 둔다 —
+ * `/api/` 로 직접 부르면 로컬에서 rewrite 가 브라우저의 `Origin` 을 실어 보내 403 이 된다
+ * (S15P21A405-303). BFF 라우트가 호출자의 Bearer 토큰과 refresh 쿠키를 그대로 중계한다.
  */
 export const API_ENDPOINTS = {
   health: "/bff/health",
 
   auth: {
-    /** 목. 본인 조회는 백엔드에 아직 없다 (BACKEND-NOTES A-15) */
+    /** 실연동. **본인 조회 API 가 없어서** 토큰의 `sub` 로 `GET /api/user/detail` 을 대신 부른다 (A-15) */
     me: "/bff/auth/me",
-    /** 목. 백엔드 `POST /api/auth/logout` 이 있다 */
+    /** 실연동 → `POST /api/auth/logout`. 토큰 무효화 + refresh 쿠키 삭제 */
     logout: "/bff/auth/logout",
     /**
-     * 구글 idToken 로그인 (S15P21A405-129). `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
-     * 목이 없는 유일한 인증 경로라 실제로 쓰려면 `live-api-paths.ts` 에 이 경로를 넣어야 한다.
+     * 구글 idToken 로그인 (S15P21A405-129) → `POST /api/auth/login/google`.
+     * `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
      * 백엔드의 리다이렉트 진입점 `/oauth2/authorization/google` 은 그 흐름을 쓰지 않으므로 여기 두지 않는다.
      */
-    googleLogin: "/api/auth/login/google",
-    /** 목. 백엔드 `POST /api/auth/signup` 이 있다 — 본문 `{email, password, nickname}` */
+    googleLogin: "/bff/auth/google",
+    /** 실연동 → `POST /api/auth/signup`. 본문 `{email, password, nickname}` */
     signup: "/bff/auth/signup",
-    /** 목. 백엔드 `POST /api/auth/login` 이 있다 — 본문 `{email, password}` */
+    /** 실연동 → `POST /api/auth/login`. 본문 `{email, password}` */
     login: "/bff/auth/login",
-    /** 목. 백엔드에서는 `PATCH /api/user/profile` 이 이 역할을 한다 (A-13) */
-    nickname: "/bff/auth/nickname",
-    /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 */
+    /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 — OAuth 리다이렉트 흐름을 쓸 때 붙인다 */
     exchange: "/api/auth/exchange",
-    /** 목. 백엔드 `PATCH /api/user/tutorial-completed` 가 이 역할을 한다 */
+    /** 실연동 → `PATCH /api/user/tutorial-completed` */
     completeTutorial: "/bff/auth/tutorial/complete",
-    /** 백엔드 전용 — refresh 쿠키로 재발급. 실연동으로 돌아갈 때 쓴다 (B-8) */
-    reissue: "/api/auth/reissue",
+    /** 실연동 → `POST /api/auth/reissue`. refresh 쿠키로 재발급 (B-8) */
+    reissue: "/bff/auth/reissue",
   },
 
   user: {
     /**
-     * 목. 백엔드는 `GET /api/user/detail?email=` 이고 **도달은 된다** (B-16 해소).
-     * 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe` 가 더 오고 `updatedAt` 은 없다 (0-2 필드 대조).
+     * 실연동 → `GET /api/user/detail?email=`. 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe`
+     * 가 더 오고 `updatedAt` 은 없다. **지금 듣는 곡·만남 횟수·대시보드 통계는 백엔드에 아예 없다** (A-35).
      */
     detail: (email: string) => `/bff/users/${encodeURIComponent(email)}`,
-    /** 목. 백엔드 `GET /api/users/nickname-available` 이 있다 */
+    /** 실연동 → `GET /api/users/nickname-available` */
     nicknameAvailable: (nickname: string) => `/bff/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
+    /**
+     * 실연동 → `PATCH /api/user/nickname`. 가입 직후 닉네임 화면과 프로필 수정 화면이 같이 쓴다.
+     *
+     * 예전에는 이미지와 함께 `PATCH /api/user/profile` 하나로 보냈는데(A-13), 백엔드가 둘을
+     * 갈라 놓으면서 그 경로가 없어졌다 (S15P21A405-426 · 474).
+     */
+    nickname: "/bff/user/nickname",
+    /** 실연동 → `PATCH /api/user/image`. **파일**을 올린다 — 주소 문자열은 받지 않는다 */
+    image: "/bff/user/image",
+    /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
+    publicVisibility: "/bff/user/public",
     nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
-    follow: (email: string) => `/bff/users/${encodeURIComponent(email)}/follow`,
+    /**
+     * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
+     * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
+     * 탑승은 `POST /api/realtime/ride` 로 따로 있다 — 아직 배포에 없다.
+     *
+     * 거는 쪽은 토큰 주체라 본문에 없다. 경로가 사용자별이 아니라 고정인 것도 그래서다.
+     */
+    followInsert: "/bff/users/follow/insert",
+    followDelete: "/bff/users/follow/delete",
+    /** `type` 은 `follower`(나를 구독한 사람) / `following`(내가 구독한 사람), `page` 는 0부터 */
+    followList: (email: string, type: "follower" | "following", page = 0) =>
+      `/bff/users/follow/list?email=${encodeURIComponent(email)}&type=${type}&page=${page}`,
     reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,
   },
 
@@ -81,14 +98,19 @@ export const API_ENDPOINTS = {
       return `/bff/map/songs?${q.join("&")}`;
     },
     // nearby 는 라우트 핸들러가 백엔드 `GET /api/music/detail?id=` 의 neighbors 로 만들어 준다
-    representatives: (layer: number) => `/bff/map/layers/${layer}/representatives`,
     nearby: (musicId: number) => `/bff/map/nearby/${musicId}`,
   },
 
   music: {
     detail: (id: number) => `/bff/music/${id}`,
     search: "/bff/music/search",
-    play: (id: number) => `/bff/music/${id}/play`,
+    /**
+     * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.
+     * 이 호출이 곧 내 위치 이동이다. 응답의 `playHistoryId` 를 보관했다가 종료에 쓴다.
+     */
+    play: "/bff/music/play",
+    /** 재생 종료. 위치는 바뀌지 않고 들은 시간만 남긴다 */
+    playEnd: "/bff/music/play/end",
     /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
     videoId: (id: number) => `/bff/music/${id}/video-id`,
     /**
@@ -115,6 +137,26 @@ export const API_ENDPOINTS = {
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,
     like: (id: number) => `/bff/playlists/${id}/like`,
+  },
+
+  /**
+   * 실시간 (S15P21A405-482).
+   *
+   * **`/bff/` 를 거친다 — 명세와 다른 선택이다.** 명세 §0 은 "브라우저가 직접 부른다,
+   * `/bff/` 라우트를 만들지 않는다" 고 적었고 이유는 "서버가 대신 부르면 전원이 한 사람으로
+   * 취급된다" 였다. 그 이유가 S15P21A405-481 로 사라졌다 — BFF 가 **호출자의 Authorization 을
+   * 그대로 넘기므로** 백엔드는 각 사용자를 그대로 본다.
+   *
+   * 대신 직접 호출에는 막는 함정이 있다 (`live-api-paths.ts`, S15P21A405-303): rewrite 는
+   * 브라우저의 `Origin` 을 그대로 넘기는데 백엔드가 `http://localhost:3000` 을
+   * `403 Invalid CORS request` 로 막는다. 직접 호출로 두면 **로컬에서만 전부 터진다.**
+   *
+   * 되돌리기는 쉽다 — 경로를 `/api/...` 로 바꾸고 `live-api-paths.ts` 에 세 줄을 넣으면 된다.
+   * 백엔드 CORS 허용 목록에 로컬 오리진이 들어가면 그때 옮긴다.
+   */
+  realtime: {
+    /** 주변 사람 목록 열기. 본문 없음. 이 호출이 곧 실시간 구독 시작이다 */
+    nearby: "/bff/realtime/nearby",
   },
 
   constellation: {

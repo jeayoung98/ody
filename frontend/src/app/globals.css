@@ -65,6 +65,90 @@
     box-shadow: var(--shadow-box);
   }
 }
+/**
+ * 리퀴드 글래스 — 떠 있는 버튼·검색창처럼 **손이 닿는 작은 HUD** 용 (S15P21A405-477).
+ *
+ * `.glass` 는 패널처럼 넓은 면을 위한 것이라 평평하다. 작고 둥근 것들은 그 위에 **유리 한 겹의
+ * 두께**가 보여야 iOS 의 그것처럼 읽힌다. 세 가지를 더한다.
+ * 1. 위가 살짝 밝고 아래로 옅어지는 틴트 — 빛이 위에서 온다는 약속
+ * 2. 윗변 안쪽의 하이라이트 한 줄과 아랫변의 옅은 반사 — 유리의 모서리
+ * 3. 블러 — 뒤의 별빛이 유리를 통과하며 번진다. 바탕은 아주 얇게(10%) 깔아 **뒤가 실제로
+ *    비치게** 두고, 글씨가 묻히지 않는 몫은 블러가 맡는다.
+ *    **채도는 올리지 않는다.** 2.1 까지 올렸더니 어두운 남색 배경이 과채도로 끌려 올라와서
+ *    유리가 아니라 **남색 판때기**로 보였다 (S15P21A405-477) — 검색창이 특히 그랬다
+ *
+ * **떠 있는 것에 붙인다** — 검색창(상단·여정 만들기 둘 다)·네비바·프로필·물음표, 우측
+ * 패널(`Box`)과 좌하단 계기판, 그리고 그 손잡이들. 화면 위에 얹혀 지도를 가리는 것들이라 유리로 읽혀야 뒤가 비쳐 보인다.
+ * `Box` 를 쓰는 팝업(신고·플리 추가)도 함께 바뀐다 — 같은 껍데기라 따로 놀면 그게 더 이상하다.
+ *
+ * 남겨 둔 것들은 `.glass` 그대로다: 토스트·호버 카드·반응 고르개처럼 **잠깐 떴다 사라지는 것**과,
+ * 이미 유리 위에 얹히는 것(검색 결과 목록·튜토리얼 카드). 유리 위에 유리를 겹치면 경계가 사라진다.
+ *
+ * 여정 만들기 검색창은 477 에서 빠졌다가 S15P21A405-498 에서 합류했다 — 상단 검색창과 나란히
+ * 떴을 때 두 유리가 달라 보였다.
+ *
+ * **밝기는 눌러 둔다.** 처음에 흰 틴트를 0.14 까지 올렸더니 어두운 별하늘 위에서 유리가
+ * 아니라 밝은 판때기로 떠 버렸다. 유리답게 보이는 건 흰색의 양이 아니라 **위아래 밝기 차이와
+ * 모서리 한 줄**이라, 전체 밝기는 배경에 잠기게 두고 그 둘만 남긴다.
+ */
+@layer components {
+  .glass-liquid {
+    background: var(--glass-sheen), var(--glass-tint);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: var(--radius-box);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 rgb(255 255 255 / 0.04),
+      inset 0 0 20px -12px rgb(255 255 255 / 0.22),
+      0 12px 32px -16px rgb(0 0 0 / 0.8);
+    transition:
+      border-color var(--duration-fast) ease,
+      box-shadow var(--duration-fast) ease;
+  }
+  /* 손이 닿으면 유리가 한 겹 더 두꺼워진다 — 평소에는 배경에 잠겨 있어야 한다 */
+  .glass-liquid:hover {
+    border-color: rgb(255 255 255 / 0.08);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.24),
+      inset 0 -1px 0 rgb(255 255 255 / 0.06),
+      inset 0 0 24px -12px rgb(255 255 255 / 0.32),
+      0 14px 36px -16px rgb(0 0 0 / 0.85);
+  }
+}
+
+/*
+ * 접기 손잡이 — `.glass-liquid` 와 **겹쳐 쓰지 않는 독립된 한 겹**이고, **유리가 아니다**
+ * (S15P21A405-477).
+ *
+ * 블러를 걷고 불투명한 남색으로 칠한다. 폭이 17px 뿐이라 흐릴 면적이 없어 뒤가 그대로 비쳤고,
+ * 계기판 쪽 손잡이는 부모가 `.glass-liquid` 라 **backdrop root** 안에 갇혀 제 블러가 먹지도
+ * 않았다 — 같은 컴포넌트인데 좌우가 달라 보인 원인이다. 색 하나로 칠하면 어디에 붙어 있든
+ * 똑같이 보인다.
+ *
+ * 유리의 기미는 sheen 한 겹과 안쪽 하이라이트 두 줄로만 남긴다. 테두리도 반경도 주지 않는다 —
+ * 모양은 `clip-path` 가 만들고(`collapse-handle`), 잘린 자리에는 테두리가 남지 않는다.
+ */
+@layer components {
+  .glass-handle {
+    background: var(--glass-sheen), var(--glass-handle-bg);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 rgb(255 255 255 / 0.04),
+      0 8px 22px -14px rgb(0 0 0 / 0.8);
+    transition:
+      color var(--duration-fast) ease,
+      box-shadow var(--duration-fast) ease;
+  }
+  .glass-handle-host:hover .glass-handle {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.24),
+      inset 0 -1px 0 rgb(255 255 255 / 0.06),
+      0 10px 26px -14px rgb(0 0 0 / 0.85);
+  }
+}
+
 @utility lbl {
   font-family: var(--font-mono);
   font-size: 9.5px;
@@ -78,6 +162,15 @@
 }
 @utility grad-bg {
   background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
+}
+/*
+ * 같은 색인데 가로로 눕혔다 (S15P21A405-479). 깊이 게이지처럼 **여러 칸이 하나의
+ * 그라데이션을 나눠 갖는** 자리에 쓴다 — 칸마다 `background-size`·`background-position-x`
+ * 로 제 몫의 구간만 보여주면, 칸이 떨어져 있어도 전체가 한 줄기로 읽힌다.
+ * 118deg 인 `grad-bg` 를 그대로 쓰면 칸마다 대각선이 다시 시작해 줄기가 끊긴다.
+ */
+@utility grad-bg-h {
+  background-image: linear-gradient(90deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
 }
 @utility grad-text {
   background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
@@ -96,6 +189,22 @@
 }
 .rail::-webkit-scrollbar {
   display: none;
+}
+
+/* ---------- 막대 없는 스크롤 (Box 본문) ---------- */
+/*
+ * 스크롤 막대를 아예 없앤다 (S15P21A405-477). 네이티브 8px 짜리는 **자리를 차지해서** 패널
+ * 안쪽 폭을 그만큼 먹고, 유리 위에 회색 기둥 하나가 늘 서 있다.
+ *
+ * 자리를 차지하지 않는 3px 막대를 내용 위에 띄워 굴릴 때만 보이게도 해 봤지만 (`scroll-thumb`),
+ * 그 3px 도 유리 오른쪽에 군더더기로 보였다 — 걷어냈다. 스크롤은 그대로 된다.
+ */
+.scroll-quiet {
+  scrollbar-width: none;
+}
+.scroll-quiet::-webkit-scrollbar {
+  width: 0;
+  height: 0;
 }
 
 /* ---------- 불러오는 동안의 자리 (skeleton.tsx) ---------- */
@@ -168,8 +277,8 @@
 /* ---------- 스테이지 배경 (지도 뒤) ---------- */
 .stage-bg {
   background:
-    radial-gradient(120% 80% at 18% 8%, #0a1226 0%, transparent 62%),
-    radial-gradient(90% 70% at 88% 92%, #120b26 0%, transparent 60%),
+    radial-gradient(120% 80% at 18% 8%, #060b18 0%, transparent 62%),
+    radial-gradient(90% 70% at 88% 92%, #0a0619 0%, transparent 60%),
     var(--color-void);
 }
 .vignette {
@@ -202,6 +311,47 @@
 }
 .animate-pulse-dot {
   animation: pulse-dot 1.5s infinite;
+}
+/*
+ * 레이더의 숨쉬기 (S15P21A405-496). 자주 마주친 사람만 약하게 커졌다 작아진다.
+ *
+ * **기본은 4% 다.** 더 키우면 옆 사람과 부딪히고, 여럿이 동시에 뛰면 화면이 출렁인다.
+ * 주기도 사람마다 달리 줘서(인라인 `animation-duration`) 심장박동처럼 맞아떨어지지 않게 했다.
+ *
+ * 배율은 부르는 쪽이 올릴 수 있다 (`--breathe-hi`, S15P21A405-506) — 레이더 **가운데의 나**는
+ * 옆에 부딪힐 것이 없고 하나뿐이라 세게 뛰어도 화면이 출렁이지 않는다. `tbeat` 와 같은 방식이다.
+ */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(var(--breathe-hi, 1.04)); }
+}
+.animate-breathe {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-breathe {
+    animation: none;
+  }
+}
+/*
+ * 레이더 탐색 빛 (S15P21A405-510). 판이 멈춰 있으면 그냥 과녁이라, 돌아가는 빛 하나로
+ * "찾는 중" 을 말한다.
+ *
+ * `rotate` 속성을 쓴다 — `transform` 을 쓰면 크기·위치 유틸리티와 서로 덮어쓴다.
+ * 움직임을 줄인 환경에서는 **숨긴다** — 멈춰 있는 부채꼴만 남으면 고장처럼 보인다.
+ */
+@keyframes radar-sweep {
+  to {
+    rotate: 360deg;
+  }
+}
+.animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-radar-sweep {
+    display: none;
+  }
 }
 @keyframes tin {
   from { opacity: 0; transform: translateY(10px); }
@@ -274,8 +424,15 @@
  * (`matchMedia('(max-width: 899px)')` 는 true 인데 계산된 display 가 none 이었다.)
  * 여기서 직접 쓰면 순서가 내 손에 있어 그 문제가 없다.
  *
- * **기준 폭을 바꾸려면 아래 899 한 곳만 고친다.** 안내 문구의 "900px" 도 같이 맞춘다
- * (`components/layout/small-screen-gate.tsx`).
+ * **기준 폭은 이제 세 곳이 함께 움직인다** (S15P21A405-412 에서 한 곳 늘었다):
+ *   1. 아래 `899`
+ *   2. 안내 문구의 "900px" (`components/layout/small-screen-gate.tsx`)
+ *   3. `styles/tokens.css` 의 `--breakpoint-desk: 900px` — 반응형 경계
+ *
+ * 3번이 같은 선인 이유: "이 아래로는 우측 패널과 지도가 같이 설 자리가 없다" 는 판단이
+ * 게이트의 근거였고, 그 판단이 그대로 반응형 경계의 근거이기도 하다. 두 값이 어긋나면
+ * 게이트는 걸렸는데 모바일 레이아웃은 안 붙는(또는 그 반대) 폭이 생긴다.
+ * 미디어 쿼리는 CSS 변수를 못 읽어서 한 곳으로 합칠 수 없다 — 그래서 주석으로 묶어 둔다.
  */
 .small-screen-gate {
   display: none;
@@ -284,6 +441,18 @@
   .small-screen-gate {
     display: flex;
   }
+}
+/*
+ * 개발 버전(`?dev=1`)에서는 게이트를 넘는다 (S15P21A405-421).
+ *
+ * 폰에서는 콘솔을 못 열어 이 게이트를 끌 방법이 없고, 못 넘으면 모바일 화면을 실기기에서
+ * 아예 볼 수가 없다. 클래스는 `constants/dev-mode.ts` 의 인라인 스크립트가 첫 페인트 전에 붙인다.
+ *
+ * **특이도로 이긴다.** `html.ody-dev .small-screen-gate` 가 위 미디어 쿼리 규칙보다 높아
+ * 순서와 무관하게 이긴다 — 이 파일 맨 위 주석이 말하는 그 함정을 여기서도 피한다.
+ */
+html.ody-dev .small-screen-gate {
+  display: none;
 }
 
 /* 플레이어바 파형 — 재생 헤드 근처 바만 숨 쉰다 (S15P21A405-428, waveform-bars.tsx) */

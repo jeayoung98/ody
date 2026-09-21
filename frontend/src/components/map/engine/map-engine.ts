@@ -1,6 +1,6 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
-import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
+import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -123,6 +123,32 @@ export interface FollowState {
 }
 
 /**
+ * 지도가 **네 변에서 얼마나 가려져 있는지**(px) — {@link MapEngine.freeRect} 의 입력이다
+ * (S15P21A405-414).
+ *
+ * 데스크톱에서 움직이는 것은 `right`(우측 패널) 하나뿐이고, 모바일에서는 `bottom`(바텀시트)이
+ * 움직인다. `top` 은 늘 덮여 있는 상단 HUD 두께라 지금은 고정값이다. `left` 는 아직 아무것도
+ * 쓰지 않지만, 좌하단 계기판을 나중에 이 모델로 넣게 되면 그 자리가 된다.
+ */
+export interface Occlusion {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** 보간 루프가 도는 변 목록. `Object.keys` 를 쓰면 타입이 string 으로 풀려 인덱싱이 막힌다 */
+const OCCLUSION_EDGES = ["top", "right", "bottom", "left"] as const;
+
+/**
+ * 아무도 값을 주지 않았을 때의 가림.
+ *
+ * `right: 76` 은 예전 `occludedRight` 의 초깃값을 그대로 가져온 것이다 — 첫 프레임에 `MainScreen`
+ * 이 실제 값을 내려주기 전까지만 쓰인다. 위아래는 {@link HUD_OCCLUSION}, 왼쪽은 0 이다.
+ */
+const DEFAULT_OCCLUSION: Occlusion = { top: HUD_OCCLUSION.top, right: 76, bottom: HUD_OCCLUSION.bottom, left: 0 };
+
+/**
  * 지도 엔진 — 좌표·카메라·레이어(재투영)·모프·따라가기·친구 배치를 한 곳에서 다룬다.
  * React 는 프레임마다 스냅샷만 받고, 그리기는 draw-map 이 이 객체를 읽어 수행한다.
  *
@@ -148,14 +174,18 @@ export class MapEngine {
 
   W = 1;
   H = 1;
-  occludedRight = 76;
+  /**
+   * 지금 지도가 가려져 있는 두께 (`occludedTarget` 을 프레임마다 따라간다).
+   * 읽는 곳은 {@link freeRect} 하나다 — 다른 데서 직접 보지 않는다.
+   */
+  private occluded: Occlusion = { ...DEFAULT_OCCLUSION };
   /**
    * 지도 위에 떠 있는 HUD 상자들 (화면 좌표). 화면 밖 표식을 여기에 가리지 않게 놓는다.
    * 상수로 박지 않고 **실제 DOM 을 재서** 받는다 — 패널이 열리고 닫히면 달라지기 때문이다.
    */
   private obstacles: { x0: number; y0: number; x1: number; y1: number }[] = [];
-  /** 패널이 열리고 닫히면 여기가 먼저 바뀌고 occludedRight 가 프레임마다 따라간다 */
-  private occludedTarget = 76;
+  /** 패널·시트가 움직이면 여기가 먼저 바뀌고 {@link occluded} 가 프레임마다 따라간다 */
+  private occludedTarget: Occlusion = { ...DEFAULT_OCCLUSION };
 
   layer = 0;
   cam: MapCamera = { cx: 0, cy: 0, s: 100 };
@@ -287,6 +317,9 @@ export class MapEngine {
 
   friends: NearbyUser[] = [];
   private friendsLayer = -1;
+  /** "N명" 뭉치 (CLUSTERED 모드). 원시 PC 좌표다 */
+  crowd: CrowdCell[] = [];
+  crowdLayer = -1;
   private friendPos = new Map<string, { x: number; y: number; heading: number }>();
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
@@ -338,20 +371,30 @@ export class MapEngine {
     this.H = Math.max(1, H);
     if (!this.inited || this.anim) return;
     if ((wasUnsized || !this.touched) && this.myId != null) {
-      this.cam = this.fitCam(this.layer, this.subset, this.fitAnchor(this.subset, this.layer));
+      const anchor = this.fitAnchor(this.subset, this.layer);
+      this.cam = this.fitCam(this.layer, this.subset, anchor);
       this.entryS = this.cam.s;
+      // 0겹은 첫 화면 규칙을 그대로 지킨다 — entryS 는 전역 맞춤, 카메라만 조임 (S15P21A405-469)
+      if (this.layer === 0) this.cam = this.startCam0(this.subset, anchor);
     }
     this.project();
   }
 
   /**
-   * 우측 패널 폭 변화. 값을 바로 갈아끼우면 freeRect 를 쓰는 것들(별자리 배치·주변 탐색 고리)이
-   * 한 프레임에 순간이동한다 — 목표만 잡아두고 frame() 에서 따라가게 한다.
+   * 지도를 덮고 있는 두께가 바뀌었다고 알린다. 준 변만 바뀌고 나머지는 그대로다.
+   *
+   * **기본은 `"ease"`** — 값을 바로 갈아끼우면 `freeRect` 를 쓰는 것들(별자리 배치·주변 탐색
+   * 고리·카메라 중앙)이 한 프레임에 순간이동한다. 목표만 잡아 두고 {@link frame} 에서 따라간다.
+   *
+   * **손가락을 따라가는 동안에는 `"now"`** (S15P21A405-414). 바텀시트를 끄는 중에 완충을 태우면
+   * 시트는 손끝에 붙어 있는데 지도만 늦게 와서 미끄러져 보인다. 끄는 동안은 즉시, 손을 떼고
+   * 단계에 붙을 때는 `"ease"` 로 부르면 된다.
+   *
+   * 첫 설정(`!inited`)은 따라갈 이전 값이 없으므로 언제나 즉시다.
    */
-  setOcclusion(right: number) {
-    this.occludedTarget = right;
-    // 첫 설정은 애니메이션 없이 바로
-    if (!this.inited) this.occludedRight = right;
+  setOcclusion(next: Partial<Occlusion>, mode: "ease" | "now" = "ease") {
+    this.occludedTarget = { ...this.occludedTarget, ...next };
+    if (mode === "now" || !this.inited) this.occluded = { ...this.occludedTarget };
   }
 
   /**
@@ -409,8 +452,9 @@ export class MapEngine {
       const m = this.songs[this.index.get(this.myId)!];
       this.me = { x: m.pc[0], y: m.pc[1] };
     }
-    this.cam = this.fitCam(0, this.subset, anchor);
-    this.entryS = this.cam.s;
+    // entryS 는 전역 맞춤이고 첫 화면만 조인다 (S15P21A405-469, `startCam0`)
+    this.entryS = this.fitCam(0, this.subset, anchor).s;
+    this.cam = this.startCam0(this.subset, anchor);
     this.inited = true;
     this.rebuildAliveIdx();
     this.project();
@@ -540,6 +584,17 @@ export class MapEngine {
     this.anchorCache.clear();
   }
 
+  /**
+   * 사람이 많거나 화면이 넓을 때 오는 **"N명" 뭉치** (S15P21A405-482, 실시간 작업명세 §5.2 B).
+   *
+   * 이 모드에서는 개별 사람 정보가 오지 않는다. `friends` 와 **둘 중 하나만** 차 있다 —
+   * 서버가 `INDIVIDUAL`·`CLUSTERED` 중 하나로 답하기 때문이다.
+   */
+  setCrowd(layer: number, cells: CrowdCell[]) {
+    this.crowd = cells;
+    this.crowdLayer = layer;
+  }
+
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
   setRepresentatives(layer: number, ids: number[]) {
     this.repIds = new Set(ids);
@@ -547,21 +602,17 @@ export class MapEngine {
   }
 
   /**
-   * 목 폴백: 사용자의 곡이 이 레이어 상주 집합에 없으면 이메일 해시로 상주 곡 하나를 정해 그 자리에 둔다.
-   * 실서비스는 백엔드가 현재 영역의 사용자만 내려주므로 필요 없다.
+   * 그 사람을 찍을 자리 (S15P21A405-482, 실시간 작업명세 §5.6).
+   *
+   * 둘 중 하나다. 그 사람의 곡이 이 겹 상주 집합에 있으면 **그 별 자리**, 없으면 서버가 준
+   * 원시 PC 좌표를 그대로 쓴다.
+   *
+   * **이메일 해시 폴백을 걷어냈다.** 목 시절에는 상주 집합에 없는 사람을 해시로 고른 아무 별에나
+   * 붙였는데, 실서비스에서는 서버가 진짜 좌표를 주므로 그 자리가 곧 거짓말이 된다.
    */
   private anchorFor(u: NearbyUser): { x: number; y: number } | null {
     if (this.isAlive(u.musicId)) return this.worldOf(u.musicId);
-    let idx = this.anchorCache.get(u.email);
-    if (idx == null) {
-      if (!this.aliveIdx.length) return null;
-      let h = 2166136261;
-      for (const ch of u.email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
-      idx = this.aliveIdx[h % this.aliveIdx.length];
-      this.anchorCache.set(u.email, idx);
-    }
-    const s = this.songs[idx];
-    return { x: s.pc[this.dx()], y: s.pc[this.dy()] };
+    return u.x != null && u.y != null ? { x: u.x, y: u.y } : null;
   }
 
   private rebuildAliveIdx() {
@@ -1359,12 +1410,24 @@ export class MapEngine {
     return this.layer * 2 + 1;
   }
 
-  /** 패널·HUD를 뺀 "실제로 지도가 보이는 사각형" */
+  /**
+   * 패널·HUD를 뺀 **"실제로 지도가 보이는 사각형"**. 이 클래스에서 "어디에 놓을지" 를 정하는
+   * 것들이 전부 이걸 읽는다 — 카메라 한계, 주변 탐색 고리, 별자리, 파고들 때 맞출 배율,
+   * 화면 밖 표식, 튜토리얼이 짚을 별, 게이트 판정까지.
+   *
+   * **네 변이 다 움직인다** (S15P21A405-414). 예전에는 우측만 변수고 위아래는 `58`·`92` 로
+   * 박혀 있었다 — 열고 닫히는 것이 우측 패널뿐이었기 때문이다. 모바일에서는 그 패널이
+   * 바텀시트로 내려가 아래를 덮으므로 그 모델로는 표현이 안 된다.
+   *
+   * **최소 120px 는 남긴다.** 시트를 끝까지 올려 덮어도 사각형이 뒤집히거나 0 이 되면 그걸 읽는
+   * 스물몇 군데가 전부 NaN·무한대로 번진다. 좁아도 유효한 사각형이 나가는 편이 낫다.
+   */
   freeRect() {
-    const x0 = 0;
-    const x1 = Math.max(120, this.W - this.occludedRight);
-    const y0 = 58;
-    const y1 = Math.max(y0 + 120, this.H - 92);
+    const o = this.occluded;
+    const x0 = o.left;
+    const x1 = Math.max(x0 + 120, this.W - o.right);
+    const y0 = o.top;
+    const y1 = Math.max(y0 + 120, this.H - o.bottom);
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
   }
 
@@ -1380,7 +1443,7 @@ export class MapEngine {
    * 지금 화면에 담긴 영역을 이 겹의 축 범위로 (countInView 가 세는 사각형과 같다).
    * 파고들 때 이 범위를 누적에 쌓아 다음 겹 상주 집합을 요청한다.
    */
-  private viewBox(): LayerBox {
+  viewBox(): LayerBox {
     const f = this.freeRect();
     const lo = this.screenToWorld(f.x0, f.y1);
     const hi = this.screenToWorld(f.x1, f.y0);
@@ -1409,6 +1472,16 @@ export class MapEngine {
   }
 
   /** 곡의 현재 레이어 월드 좌표 */
+  /**
+   * 그 곡의 장르 (S15P21A405-482). 실시간으로 받은 사람의 헬멧 색을 정하는 데 쓴다 —
+   * 서버는 사람의 장르를 주지 않고 듣는 곡만 주므로, 상주 집합에서 곡을 찾아 그 장르를 쓴다.
+   * 상주 집합 밖의 곡이면 알 수 없어 `null` 이다.
+   */
+  genreOf(id: number): number | null {
+    const i = this.index.get(id);
+    return i == null ? null : this.songs[i].genreId;
+  }
+
   worldOf(id: number): { x: number; y: number } | null {
     const i = this.index.get(id);
     if (i == null) return null;
@@ -1460,6 +1533,26 @@ export class MapEngine {
     return this.saneCam({ cx: b.cx - (f.cx - this.W / 2) / b.s, cy: b.cy + (f.cy - this.H / 2) / b.s, s: b.s });
   }
 
+  /**
+   * 0겹 **첫 화면**의 카메라 (S15P21A405-469). 기준 곡은 `fitCam` 과 같고 배율만 조인다.
+   *
+   * `fitCam` 의 0겹 맞춤은 구름이 다 들어오게 맞춘다. 그런데 상주 집합의 분위수 상자는 거의
+   * 정사각인데 화면은 2배 넘게 가로로 길어서, 실측상 첫 화면이 **가로 30% · 세로 62%** 만 차고
+   * 좌우가 통째로 비었다 — 지도가 줌아웃된 채로 열린 것처럼 보인다. 그래서 첫 화면만
+   * **긴 쪽을 채우는 배율**로 연다. 짧은 쪽으로는 넘쳐서 상주 집합의 절반가량이 화면 밖이다.
+   *
+   * **`entryS` 는 건드리지 않는다.** 줌 한계(`zoomRange`)·파고들기 임계(`gateMinZoom`)·
+   * 떠오르기 압력(`riseScaleRatio`)·곡 맞춤(`FOCUS.zoomMul`)이 전부 `entryS` 대비라, 그걸 같이
+   * 조이면 "줌아웃해서 전체를 본다" 가 막히고 파고들기 임계까지 그만큼 깊어진다.
+   * 조이는 건 첫 프레임의 카메라뿐이고, 휠을 뒤로 굴리면 예전처럼 전역이 들어온다.
+   */
+  private startCam0(mask: Uint8Array<ArrayBufferLike>, centerId: number): MapCamera {
+    const s = this.fitBox(0, 1, mask).sCover;
+    const c = this.songs[this.index.get(centerId)!];
+    const f = this.freeRect();
+    return this.saneCam({ cx: c.pc[0] - (f.cx - this.W / 2) / s, cy: c.pc[1] + (f.cy - this.H / 2) / s, s });
+  }
+
   /** 배율이 0·무한대·NaN 이면 카메라가 통째로 깨져 모든 좌표가 NaN 이 된다 — 그럴 땐 지금 카메라를 그대로 쓴다 */
   private saneCam(c: MapCamera): MapCamera {
     return Number.isFinite(c.s) && c.s > 0 && Number.isFinite(c.cx) && Number.isFinite(c.cy) ? c : { ...this.cam };
@@ -1487,7 +1580,7 @@ export class MapEngine {
       xs.push(this.songs[i].pc[dx]);
       ys.push(this.songs[i].pc[dy]);
     }
-    if (!xs.length) return { s: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
+    if (!xs.length) return { s: this.cam.s, sCover: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
     xs.sort((a, b) => a - b);
     ys.sort((a, b) => a - b);
     const lo = Math.floor((xs.length - 1) * DRILL.deepFit.trim);
@@ -1495,8 +1588,10 @@ export class MapEngine {
     const w = Math.max(1e-6, xs[hi] - xs[lo]);
     const h = Math.max(1e-6, ys[hi] - ys[lo]);
     const f = this.freeRect();
-    const s = Math.min(((f.x1 - f.x0) * DRILL.deepFit.fill) / w, ((f.y1 - f.y0) * DRILL.deepFit.fill) / h);
-    return { s, cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
+    const byW = ((f.x1 - f.x0) * DRILL.deepFit.fill) / w;
+    const byH = ((f.y1 - f.y0) * DRILL.deepFit.fill) / h;
+    // `s` 는 상자가 다 들어오는 배율(contain), `sCover` 는 짧은 쪽이 넘치더라도 긴 쪽을 채우는 배율
+    return { s: Math.min(byW, byH), sCover: Math.max(byW, byH), cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
   }
 
   // ------------------------------------------------------------------ layer transitions
@@ -1713,8 +1808,24 @@ export class MapEngine {
 
   /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */
   ascend() {
+    this.ascendTo(this.layer - 1);
+  }
+
+  /**
+   * **여러 겹을 한 번에 떠오른다** (S15P21A405-477).
+   *
+   * `stack[i]` 는 겹 `i` 를 떠날 때 남긴 프레임이라(`tryStartPending` 의 push) 목표 겹까지
+   * 거슬러 꺼내면 그 자리의 카메라·상주 집합·진입 배율이 그대로 나온다. 중간 겹을 하나씩
+   * 거치지 않는 이유는 모프가 비동기라 그렇다 — `ascend()` 를 연달아 불러도 두 번째는
+   * `this.anim` 에 막혀 아무 일도 안 일어난다.
+   *
+   * 한 칸 떠오르기(`ascend`)도 이 길을 쓴다. 목표가 바로 위 겹일 뿐이다.
+   */
+  ascendTo(target: number) {
     if (this.anim || this.pending || !this.stack.length || this.follow) return;
-    const p = this.stack.pop()!;
+    if (target < 0 || target >= this.layer) return;
+    let p = this.stack.pop()!;
+    while (p.layer > target && this.stack.length) p = this.stack.pop()!;
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
@@ -2391,14 +2502,17 @@ export class MapEngine {
     this.time = now / 1000;
     if (!this.inited) return;
 
-    // 패널 폭을 부드럽게 따라간다 (사이드 패널 열고 닫을 때 화면이 끊기며 튀지 않게)
-    if (this.occludedRight !== this.occludedTarget) {
-      this.occludedRight = lerp(this.occludedRight, this.occludedTarget, OCCLUSION_EASE);
-      if (Math.abs(this.occludedRight - this.occludedTarget) < 0.5) this.occludedRight = this.occludedTarget;
+    // 가림 두께를 부드럽게 따라간다 (패널·시트가 열고 닫힐 때 화면이 끊기며 튀지 않게)
+    for (const edge of OCCLUSION_EDGES) {
+      const to = this.occludedTarget[edge];
+      if (this.occluded[edge] === to) continue;
+      this.occluded[edge] = lerp(this.occluded[edge], to, OCCLUSION_EASE);
+      // 0.5px 아래로 붙으면 끝낸다 — 안 그러면 영원히 수렴만 하며 매 프레임 project() 를 부른다
+      if (Math.abs(this.occluded[edge] - to) < 0.5) this.occluded[edge] = to;
     }
 
     /**
-     * 가운데 고정. 패널이 열리고 닫히면 `occludedRight` 가 부드럽게 변하므로,
+     * 가운데 고정. 패널·시트가 열리고 닫히면 가림 두께가 부드럽게 변하므로,
      * 여기서 매 프레임 다시 맞추면 '나'도 그 속도로 자연스럽게 따라간다.
      * 배율은 건드리지 않는다 — 가운데로 "옮기는" 것이지 확대하는 게 아니다.
      */
@@ -2747,7 +2861,7 @@ export class MapEngine {
       morph: this.anim
         ? { big: this.anim.big }
         : this.pending
-          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중`, sub: `화면 안 ${this.pending.inView.toLocaleString()}곡 기준` }
+          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중` }
           : null,
       myMusicId: this.myId,
       // travelTo 때만 새 객체가 되므로 참조 비교로 변화가 잡힌다

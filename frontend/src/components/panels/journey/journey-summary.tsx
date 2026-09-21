@@ -29,7 +29,7 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
     const ids = route.stops.map((s) => s.id);
     startActivity("journey", `${route.startMusicId}-${route.endMusicId}`, () => {
       playQueue({ kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId }, ids);
-      recordPlay.mutate({ musicId: ids[0], source: "JOURNEY", playedMs: 0 });
+      recordPlay.mutate({ musicId: ids[0], source: "JOURNEY", layer: useMapStore.getState().layer });
     });
   };
 

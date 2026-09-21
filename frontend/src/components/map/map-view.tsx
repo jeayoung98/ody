@@ -1,16 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState, type MouseEvent, type WheelEvent } from "react";
-import { HOLD, HOVER_CARD, STORAGE_KEYS } from "@/constants";
+import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import type { Occlusion } from "@/components/map/engine/map-engine";
+import { HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
+import { useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
-import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
-import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -25,6 +24,7 @@ import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
+import StarfieldPlaceholder from "./starfield-placeholder";
 import { useViewport } from "./use-viewport";
 import { ANALYTICS } from "@/constants/analytics";
 import { analyticsContext, track, trackOnce } from "@/lib/analytics/client";
@@ -32,7 +32,7 @@ import { nearbyResults } from "@/lib/analytics/flows";
 
 interface MapViewProps {
   /** 우측 패널·레일 등으로 가려진 폭(px). 중앙 계산에서 제외한다 */
-  occludedRight: number;
+  occlusion: Occlusion;
 }
 
 /**
@@ -42,7 +42,7 @@ interface MapViewProps {
  * **보는 곡과 내 위치는 다른 값이다** (S15P21A405-277). 클릭은 보는 곡만 바꾸고, 내 위치(우주선)는
  * 재생했을 때만 옮겨간다 — 엔진 `FollowState` 주석이 적어 둔 SOCIAL-07 의 두 단계와 같은 구분이다.
  */
-export default function MapView({ occludedRight }: MapViewProps) {
+export default function MapView({ occlusion }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
   const features = useFeatures();
   const { ref, size } = useViewport();
@@ -65,7 +65,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
-  const { data: songs } = useMapSongsQuery(boxes);
+  const { data: songs, isError: songsFailed } = useMapSongsQuery(boxes);
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);
@@ -75,8 +75,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     if (prefetchBoxes && prefetchedSongs) engine.setPrefetched(prefetchBoxes, prefetchedSongs);
   }, [engine, prefetchBoxes, prefetchedSongs]);
   const layer = useMapStore((s) => s.layer);
-  const { data: friends } = useNearbyUsersQuery(layer);
-  const { data: representatives } = useRepresentativesQuery(layer);
+  /**
+   * 지도 위 사람 — 15초 폴링을 소켓 구독으로 갈아탔다 (S15P21A405-482).
+   * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
+   */
+  useViewportSubscription(features.social);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
@@ -126,8 +129,11 @@ export default function MapView({ occludedRight }: MapViewProps) {
     usePanelStore.getState().collapse();
   }, [layer]);
 
-  // 목: 지도 위 사용자들이 스스로 반응을 쏜다 (실서비스에서는 소켓 수신)
-  useMockFriendReactions(friends);
+  /**
+   * 목 반응은 걷어냈다 (S15P21A405-482). 실시간 명세가 **반응을 "아직 없는 것"** 으로 명시했고
+   * (따라가기·반응·비공개 계정), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
+   * 도는 것처럼 보여서 테스트가 어긋난다. 훅 자체는 남겨 뒀다 — 데이터가 생기면 되살린다.
+   */
 
   // 엔진 등록 + 스냅샷 → 스토어
   useEffect(() => {
@@ -147,7 +153,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
     return () => registerMapEngine(null);
   }, [engine, syncFromEngine]);
 
-  useEffect(() => engine.setOcclusion(occludedRight), [engine, occludedRight]);
+  useEffect(() => engine.setOcclusion(occlusion), [engine, occlusion]);
 
   /**
    * 지도 위에 떠 있는 HUD 상자를 재서 엔진에 넘긴다 — 화면 밖 표식이 여기에 가리지 않게 한다.
@@ -172,7 +178,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       clearTimeout(later);
       window.removeEventListener("resize", measure);
     };
-  }, [engine, occludedRight, viewMode]);
+  }, [engine, occlusion, viewMode]);
 
   // 이 겹의 상주 집합이 도착하면 엔진에 넣는다. 첫 진입이면 저장된 내 곡 자리에서 시작
   useEffect(() => {
@@ -185,13 +191,31 @@ export default function MapView({ occludedRight }: MapViewProps) {
     engine.setLayerSongs(boxes.length, songs);
     trackOnce("map-ready", "map_ready", { result_count: songs.length, layer: boxes.length });
   }, [engine, boxes, songs]);
-  // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
+  /**
+   * 커버로 띄울 후보곡 — **이미 받은 상주 집합에서 뽑는다** (S15P21A405-513).
+   *
+   * 예전에는 `/bff/map/layers/{l}/representatives` 를 따로 불렀는데, 그 라우트가 하는 일이
+   * `/api/music/major` 를 **통째로 다시 받아** 재생수 상위 40개의 id 만 남기고 버리는 것이었다.
+   * 같은 응답을 `songs` 가 이미 들고 있으니 두 번 받을 이유가 없다 — 실측으로 겹 하나 여는 데
+   * 1.5초짜리 요청이 하나 더 붙었고, 둘이 겹쳐 돌면서 서로를 느리게 만들었다.
+   *
+   * 덤으로 레이어 2 부터 나던 400 도 사라진다 — 그 라우트가 누적 범위를 안 보내서 백엔드
+   * `MajorQuery` 의 `accumulated.size() == level-1` 검사에 걸리고 있었다.
+   */
+  const representatives = useMemo(
+    () =>
+      songs
+        ? [...songs]
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, REPRESENTATIVE_COUNT)
+            .map((p) => p.musicId)
+        : null,
+    [songs],
+  );
   useEffect(() => {
-    if (friends) engine.setFriends(layer, friends);
-  }, [engine, layer, friends]);
-  useEffect(() => {
-    if (representatives) engine.setRepresentatives(representatives.layer, representatives.musicIds);
-  }, [engine, representatives]);
+    // 겹 번호는 songs 를 넣을 때와 **같은 값**을 쓴다 — 둘이 어긋나면 엔진이 남의 겹 커버를 든다
+    if (representatives) engine.setRepresentatives(boxes.length, representatives);
+  }, [engine, boxes.length, representatives]);
 
   // 주변 탐색: 유사곡 10곡이 오면 연출 뷰로 진입, 모드가 꺼지면 복귀
   useEffect(() => {
@@ -241,9 +265,16 @@ export default function MapView({ occludedRight }: MapViewProps) {
       engine.stopFollow();
       return;
     }
-    const leader = (friends ?? []).find((f) => f.email === leaderEmail);
+    /**
+     * 따라가기 대상은 **엔진이 들고 있는 목록**에서 찾는다 (S15P21A405-482). 예전에는 폴링 훅이
+     * 준 배열을 봤는데, 지금은 뷰포트 구독이 엔진에 직접 넣는다.
+     *
+     * 따라가기 자체는 아직 붙일 데이터가 없다 — 명세가 "아직 없는 것"으로 적었고 `riderCount`
+     * 도 늘 0 이다. 여기는 그때가 오면 그대로 도는 자리다.
+     */
+    const leader = engine.friends.find((f) => f.email === leaderEmail);
     if (leader) engine.startFollow(leader);
-  }, [engine, leaderEmail, friends]);
+  }, [engine, leaderEmail]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {
@@ -284,9 +315,15 @@ export default function MapView({ occludedRight }: MapViewProps) {
   }, [engine, cardOn, hoverSong]);
   useEffect(() => cancelHide, [cancelHide]);
 
-  const onWheel = useCallback(
-    (e: WheelEvent<HTMLDivElement>) => {
-      const r = e.currentTarget.getBoundingClientRect();
+  /**
+   * 확대·축소 한 번. **휠과 두 손가락이 같은 길로 들어온다** (S15P21A405-415).
+   *
+   * 나누지 않는 이유는 이 함수가 하는 일이 확대만이 아니기 때문이다 — 뷰 모드별 분기(별자리는
+   * 오버레이만, 주변 탐색은 줌아웃이 곧 해제), 분석 이벤트, 그리고 엔진 쪽 파고들기 게이트·압력이
+   * 전부 여기 걸려 있다. 손가락용 확대를 따로 만들면 **핀치로는 파고들 수 없는** 지도가 된다.
+   */
+  const zoomBy = useCallback(
+    (deltaY: number, mx: number, my: number) => {
       const mode = useMapStore.getState().viewMode;
       const mapSnapshot = useMapStore.getState();
       wheelStart.current ??= { layer: mapSnapshot.layer, zoom: mapSnapshot.zoomK, mode };
@@ -301,19 +338,27 @@ export default function MapView({ occludedRight }: MapViewProps) {
       }, ANALYTICS.wheelSettleMs);
       // 오버레이가 떠 있으면 뒷화면 지도는 건드리지 않는다 — 휠은 오버레이 안에서만 작동
       if (mode === "constellation") {
-        engine.overlayWheel(e.deltaY);
+        engine.overlayWheel(deltaY);
         return;
       }
       // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
       if (mode === "nearby") {
-        if (e.deltaY > 0) useMapStore.getState().exitNearby();
+        if (deltaY > 0) useMapStore.getState().exitNearby();
         return;
       }
       // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.
       // 배율이 얼마나 올랐는지는 튜토리얼이 직접 본다 (`tutorial-overlay.tsx`)
-      engine.wheel(e.deltaY, e.clientX - r.left, e.clientY - r.top);
+      return engine.wheel(deltaY, mx, my);
     },
     [engine],
+  );
+
+  const onWheel = useCallback(
+    (e: WheelEvent<HTMLDivElement>) => {
+      const r = e.currentTarget.getBoundingClientRect();
+      zoomBy(e.deltaY, e.clientX - r.left, e.clientY - r.top);
+    },
+    [zoomBy],
   );
   /**
    * 길게 누르기 = 그 별 주변으로 **파고들기** (S15P21A405-288). 휠 압력으로 다음 겹에 파고드는 것과 같은 은유다.
@@ -331,8 +376,53 @@ export default function MapView({ occludedRight }: MapViewProps) {
   }, [engine]);
   useEffect(() => cancelHold, [cancelHold]);
 
-  const onMouseDown = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
+  /**
+   * 지금 화면에 닿아 있는 포인터들 (id → 마지막 화면 좌표). **둘이 되면 핀치다.**
+   *
+   * 마우스도 포인터 이벤트를 내므로 데스크톱은 늘 하나다 — 기존 드래그·누르기 코드가 그대로
+   * 돈다. 손가락 둘이 닿는 순간에만 다른 길로 빠진다.
+   */
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  /** 직전 두 손가락 사이 거리(px). `null` 이면 핀치 중이 아니다 */
+  const pinchDist = useRef<number | null>(null);
+  /**
+   * 직전 확대가 **압력 구간**이었나 (게이트가 열려 배율이 얼어 있는 상태).
+   *
+   * 그 구간에서는 손가락 이동을 {@link PINCH.pressureBoost} 만큼 부풀려 보낸다 — 핀치는 화면 폭이
+   * 한계라 휠만큼 누적을 못 만든다. 배율이 얼어 있는 동안이라 부풀려도 손가락과 어긋나 보이지 않는다.
+   */
+  const pinchPressing = useRef(false);
+  /** 닿아 있는 둘의 거리와 가운데. 셋 이상이면 먼저 닿은 둘만 본다 */
+  const pinchNow = useCallback(() => {
+    const [a, b] = [...pointers.current.values()];
+    if (!a || !b) return null;
+    return { dist: Math.hypot(a.x - b.x, a.y - b.y), mx: (a.x + b.x) / 2, my: (a.y + b.y) / 2 };
+  }, []);
+
+  const onPointerDown = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      /*
+       * 손가락이 이 요소 밖으로 나가도 계속 받는다. 안 잡아 두면 지도를 끌다가 패널이나 화면
+       * 밖으로 넘어가는 순간 이동이 끊기고, 그 자리에서 손을 떼면 up 이 아예 안 온다.
+       *
+       * **반드시 감싼다.** 그 사이 포인터가 이미 풀렸으면 `NotFoundError` 를 던지는데, 여기서
+       * 터지면 아래 핀치 준비와 드래그 시작이 통째로 안 돈다 — 잡기에 실패했다고 조작까지
+       * 못 하게 둘 이유가 없다.
+       */
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch {
+        /* 이미 풀린 포인터 — 잡기만 포기하고 계속 간다 */
+      }
+      if (pointers.current.size >= 2) {
+        // 둘째 손가락이 닿는 순간 한 손가락 동작은 접는다 — 벌리는 중에 별이 선택되면 안 된다
+        cancelHold();
+        drag.current = null;
+        pinchDist.current = pinchNow()?.dist ?? null;
+        pinchPressing.current = false;
+        return;
+      }
       drag.current = { x: e.clientX, y: e.clientY, moved: 0 };
       holdFired.current = false;
       if (engine.follow) return;
@@ -355,11 +445,28 @@ export default function MapView({ occludedRight }: MapViewProps) {
         useTutorialStore.getState().complete("nearby");
       }, HOLD.ms);
     },
-    [engine],
+    [engine, cancelHold, pinchNow],
   );
-  const onMouseMove = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
+  const onPointerMove = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
+      if (pointers.current.has(e.pointerId)) pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      /*
+       * 두 손가락 = 확대. 거리의 **비율**을 휠 델타로 바꿔 `zoomBy` 로 보낸다 — 파고들기 게이트와
+       * 압력이 그 안에 있어서, 여기서 배율을 직접 만지면 핀치로는 겹을 넘을 수 없게 된다.
+       */
+      if (pointers.current.size >= 2) {
+        const p = pinchNow();
+        if (!p || pinchDist.current == null) return;
+        if (Math.abs(p.dist - pinchDist.current) < PINCH.minDeltaPx) return;
+        // 손가락 하나가 잠깐 빠졌다 돌아오면 거리가 몇 배씩 튄다 — 한 번에 받는 폭을 묶는다
+        const k = Math.min(PINCH.maxStep, Math.max(1 / PINCH.maxStep, p.dist / pinchDist.current));
+        pinchDist.current = p.dist;
+        const boost = pinchPressing.current ? PINCH.pressureBoost : 1;
+        const verdict = zoomBy((-Math.log(k) / WHEEL_ZOOM) * boost, p.mx - r.left, p.my - r.top);
+        pinchPressing.current = verdict === "pressure";
+        return;
+      }
       if (drag.current) {
         const dx = e.clientX - drag.current.x;
         const dy = e.clientY - drag.current.y;
@@ -385,6 +492,8 @@ export default function MapView({ occludedRight }: MapViewProps) {
         else engine.dragBy(dx, dy);
         return;
       }
+      // 손가락에는 호버가 없다 (S15P21A405-415). 여기부터는 마우스만 — 탭의 대체 동작은 누르기가 맡는다
+      if (e.pointerType !== "mouse") return;
       // 호버 카드는 이벤트를 받지 않는다 (S15P21A405-323). 카드 위인지 재던 판정이 여기 있었는데,
       // 이제 마우스는 언제나 지도에 닿으므로 카드 뒤의 별도 그냥 집힌다 — 툴팁이 그 곡으로 바뀐다
       const mx = e.clientX - r.left;
@@ -407,7 +516,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       }
       setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my));
     },
-    [engine, cancelHide, scheduleHide, cancelHold],
+    [engine, cancelHide, scheduleHide, cancelHold, pinchNow, zoomBy],
   );
   /**
    * 곡을 **재생**한다 — 상세를 열면서 동시에. 호버 카드의 재생 버튼과 선택된 별 재클릭이 여기로 온다.
@@ -419,7 +528,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       selectMusic(s.musicId);
       openSong(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 }));
+      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
       useTutorialStore.getState().complete("select");
     },
     [openSong, playWithConfirm, recordPlay, selectMusic],
@@ -451,8 +560,25 @@ export default function MapView({ occludedRight }: MapViewProps) {
     [engine, openSong, playSong, selectMusic],
   );
 
-  const onMouseUp = useCallback(
-    (e: MouseEvent<HTMLDivElement>) => {
+  const onPointerUp = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      const wasPinching = pinchDist.current != null;
+      pointers.current.delete(e.pointerId);
+      if (pointers.current.size < 2) pinchDist.current = null;
+      /*
+       * 핀치를 끝내며 뗀 손가락은 **탭이 아니다.** 여기서 아래로 흘려보내면 벌렸다 놓을 때마다
+       * 손가락 밑에 있던 별이 선택되거나, 이미 선택된 별이면 재생까지 된다.
+       *
+       * 다만 **손가락이 하나 남아 있으면 그 자리에서 이동을 잇는다** (S15P21A405-415). 안 이으면
+       * 벌린 뒤 한 손가락으로 밀 때 아무 일도 안 일어나고, 뗐다 다시 대야 먹는다 — 폰에서
+       * "어정쩡하다" 고 나온 그 느낌이다.
+       */
+      if (wasPinching) {
+        cancelHold();
+        const [rest] = [...pointers.current.values()];
+        drag.current = rest ? { x: rest.x, y: rest.y, moved: 0 } : null;
+        return;
+      }
       cancelHold();
       const d = drag.current;
       drag.current = null;
@@ -521,13 +647,38 @@ export default function MapView({ occludedRight }: MapViewProps) {
     },
     [engine, cancelHold, openFeed, openSong, pressSong, selectMusic],
   );
-  const onMouseLeave = useCallback(() => {
+  /**
+   * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.
+   *
+   * 손가락에는 적용하지 않는다. 포인터를 잡아 뒀으므로(`setPointerCapture`) 손가락이 요소 밖으로
+   * 나가도 이벤트는 계속 오고, 끝나는 것은 `pointerup`·`pointercancel` 이 알려 준다. 그런데
+   * 브라우저는 끄는 도중에도 `pointerleave` 를 쏠 수 있고, 그때 여기서 드래그를 지우면
+   * **몇 px 가다 멈추고 손을 뗐다 다시 대야** 하는 상태가 된다 — 폰에서 "개미 오줌만큼씩만
+   * 움직인다" 고 나온 그 증상이다.
+   */
+  const onPointerLeave = useCallback((e: PointerEvent<HTMLDivElement>) => {
+    if (e.pointerType !== "mouse") return;
     if (drag.current && drag.current.moved > 5) track("map_pan_completed", { distance_px: Math.round(drag.current.moved), reason: "leave" });
     drag.current = null;
     cancelHold();
     scheduleHide();
     setHover(false);
   }, [scheduleHide, cancelHold]);
+
+  /**
+   * 브라우저가 제스처를 가져갔다 (S15P21A405-415). **탭이 아니다** — `onPointerUp` 으로 보내면
+   * 움직인 거리가 임계 아래일 때 클릭으로 읽혀서, 취소됐는데 별이 선택되거나 재생까지 된다.
+   * 여기서는 붙잡고 있던 것만 내려놓는다.
+   */
+  const onPointerCancel = useCallback(
+    (e: PointerEvent<HTMLDivElement>) => {
+      pointers.current.delete(e.pointerId);
+      if (pointers.current.size < 2) pinchDist.current = null;
+      drag.current = null;
+      cancelHold();
+    },
+    [cancelHold],
+  );
 
   const following = leaderEmail != null;
   // 카드가 떠 있는 동안은 별 밖이라도 클릭이 그 곡을 연다 — 커서도 그렇게 말해야 한다
@@ -537,12 +688,18 @@ export default function MapView({ occludedRight }: MapViewProps) {
     <div
       data-analytics-manual
       ref={ref}
-      className={`stage-bg absolute inset-0 select-none overflow-hidden ${cursor}`}
+      /*
+       * `touch-none` 은 브라우저의 기본 제스처를 전부 끈다 (S15P21A405-415) — 스크롤·고무줄·
+       * 더블탭 확대. 이게 없으면 한 손가락으로 지도를 끌 때 브라우저가 먼저 페이지를 스크롤해
+       * 버리고, 두 손가락은 지도가 아니라 페이지를 확대한다.
+       */
+      className={`stage-bg absolute inset-0 touch-none select-none overflow-hidden ${cursor}`}
       onWheel={onWheel}
-      onMouseDown={onMouseDown}
-      onMouseMove={onMouseMove}
-      onMouseUp={onMouseUp}
-      onMouseLeave={onMouseLeave}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
+      onPointerLeave={onPointerLeave}
     >
       <MapCanvas engine={engine} width={size.width} height={size.height} />
       <div className="vignette pointer-events-none absolute inset-0" />
@@ -550,7 +707,7 @@ export default function MapView({ occludedRight }: MapViewProps) {
       <LayerToast />
       {features.social && <FloatingReactions />}
       <HoverCard engine={engine} song={hoverSong} on={cardOn} />
-      {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
+      {!songs && <StarfieldPlaceholder width={size.width} height={size.height} failed={songsFailed} />}
     </div>
   );
 }

@@ -39,8 +39,8 @@ export function genreColor(genreId: number): string {
 }
 
 export const PALETTE = {
-  void: "#04060d",
-  void2: "#070b16",
+  void: "#02040a",
+  void2: "#05080f",
   ink: "#e9f1ff",
   ink2: "#93a4c4",
   ink3: "#586a8b",
@@ -90,3 +90,26 @@ export const FONTS = {
   mono: '"IBM Plex Mono",ui-monospace,monospace',
   display: '"Familjen Grotesk","IBM Plex Sans KR",sans-serif',
 } as const;
+
+/**
+ * 브레이크포인트 (**CSS 픽셀**). 원본은 `src/styles/tokens.css` 의 `--breakpoint-*` 이고
+ * 값이 바뀌면 양쪽을 함께 고친다. `desk` 는 좁은 화면 게이트(globals.css 의 899)와 같은 선이다.
+ *
+ * **화면을 가르는 것은 CSS 미디어 쿼리 담당이다.** 렌더 분기에 `window.innerWidth` 를 읽지 않는다 —
+ * 서버 렌더에는 창 크기가 없어 하이드레이션이 어긋나고, JS 가 뜨기 전 첫 페인트에 잘못된 화면이
+ * 그대로 보인다 (S15P21A405-379). 이 상수는 하이드레이션 이후에만 도는 캔버스 엔진처럼
+ * **JS 안에서 이미 폭을 재고 있는 곳**이 같은 경계를 쓰려고 참조한다.
+ */
+export const BREAKPOINTS = {
+  tablet: 768,
+  desk: 900,
+} as const;
+
+/** 최소 터치 타깃(px). `tokens.css` 의 `--spacing-touch` 와 같은 값 */
+export const TOUCH_TARGET_MIN = 44;
+
+/**
+ * 우측 패널 폭(px). `tokens.css` 의 `--spacing-right-panel` 과 같은 값 — **함께 고친다.**
+ * 지도 엔진이 패널에 가려지는 폭을 재려고 JS 에서 이 값을 쓴다 (S15P21A405-479).
+ */
+export const RIGHT_PANEL_W = 376;

@@ -94,7 +94,7 @@ A-17 해제 덕에 토큰 없이 아래가 **배포 백엔드의 실제 곡**으
 | `GET /api/music/journey?start=&end=` | `/api/journeys/route` 라우트 | ✅ **일치.** `JourneyStop` 에 `location`(pc1~16)이 **있다** — 별자리 배치가 여기에 기댄다 (S15P21A405-264) |
 | `GET /api/users/nickname-available?nickname=` | `/api/users/nickname-available` 목 | ⚠️ **경로·응답이 똑같다.** 목이 `{available}` 로 모양까지 맞춰 뒀다. 로그인 실연동 때 `live-api-paths.ts` 에 넣기만 하면 된다 |
 | `GET /api/user/detail?email=` | `/api/users/{email}` 목 | ⚠️ **모양이 다르다.** 아래 필드 대조 참고 |
-| `PATCH /api/user/profile` · `PATCH /api/user/tutorial-completed` | 목 (`/api/auth/nickname`, `/api/auth/tutorial/complete`) | ⚠️ 경로가 다르다. A-13 대로 실연동 때 바꾼다 |
+| `PATCH /api/user/nickname` · `PATCH /api/user/image` · `PATCH /api/user/tutorial-completed` | 실연동 | ✅ 2026-09-18 반영. `/api/user/profile` 은 배포 스펙에서 사라졌다 (A-13) |
 | `POST /api/auth/{signup,login,login/google,exchange,reissue,logout,withdraw}` | 전부 목 | ⚠️ **의도적 목** (A-17 — 유저 테스트에서 로그인을 태우지 않는다) |
 | `POST /api/playlist/create` · `PATCH /api/playlist/update` · `DELETE /api/playlist/delete/{id}` · `GET /api/playlist/detail?playlistId=` · `GET /api/playlist/search?email=` · `POST /api/playlist/music/{insert,delete,reorder}` | `/api/playlists/**` 목 8종 | ❌ **경로도 모양도 다르다.** 아래 필드 대조 참고 |
 | `GET /api/hello` · `/api/test` · `/api/test/neo4j` · `/api/test/redis` | — | 확인용 엔드포인트. 프론트는 쓰지 않는다 |
@@ -189,9 +189,9 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-10 | `POST /api/auth/signup` | `{ email, password, nickname }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 가입 (AUTH-01) | ✅ 구현됨 (backend/dev, S15P21A405-121) · 프론트 반영 완료 |
 | A-11 | `POST /api/auth/login` | `{ email, password }` | `{ accessToken }` + refresh 쿠키 | 이메일·비밀번호 로그인 (AUTH-02) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
 | A-12 | `GET /api/users/nickname-available?nickname=` | nickname | `{ available }` | 닉네임 중복 확인 (AUTH-01) | ✅ 구현됨 (backend/dev) · 프론트 반영 완료 |
-| A-13 | `PATCH /api/user/profile` | `{ nickname?, imageUrl? }` | `{ nickname, imageUrl }` | **구글 신규 사용자의 닉네임 저장.** 전용 `/api/auth/nickname` 대신 프로필 부분 수정 API 로 해결됐다 (S15P21A405-216). 넘기지 않은 필드는 기존 값 유지 | ✅ 구현·도달 가능 · 프론트 반영 완료, 목 라우트 삭제 (2026-09-12) |
+| A-13 | ~~`PATCH /api/user/profile`~~ → `PATCH /api/user/nickname` |  `{ nickname }` | `{ nickname }` | **구글 신규 사용자의 닉네임 저장.** 전용 `/api/auth/nickname` 대신 프로필 부분 수정 API 로 해결됐었다 (S15P21A405-216). **2026-09-18 배포 스펙에 `/api/user/profile` 이 없다** — S15P21A405-426 에서 닉네임(`PATCH /api/user/nickname`, JSON)과 이미지(`PATCH /api/user/image`, multipart)로 갈렸다. 프론트도 BFF 라우트를 둘로 나눠 따라갔다 | ✅ 해소 (2026-09-18) · 프론트 반영 완료 (S15P21A405-474) |
 | A-14 | 신규 가입 여부 판단 | — | 본인 조회 응답의 `nickname` 이 null 이면 신규로 본다 | 프론트는 닉네임이 비어 있으면 닉네임 설정 화면으로 보낸다. exchange 응답만으로는 신규를 알 수 없어서 본인 조회(A-15)로 판단한다 | A-15 로 대체 |
-| A-15 | **본인 조회 API** | 없음 (Bearer 토큰) | `User` (email, nickname, isPublic, tutorialCompleted, imageUrl …) | 프론트는 `GET /api/auth/me` 를 쓰는데 **백엔드에 없다.** `GET /user/detail?email=` 은 이메일을 파라미터로 요구하지만, 로그인 직후 프론트는 JWT 안의 이메일을 모른다(디코딩하지 않는다). 토큰 주체 기준으로 본인을 돌려주는 엔드포인트가 필요하다. **2026-09-12 api-docs 전수 확인 — 27개 경로에 여전히 없다.** `GET /api/user/detail` 은 `email` 을 required 로 받는다 | 협의 전 (**필요**) |
+| A-15 | **본인 조회 API** | 없음 (Bearer 토큰) | `User` (email, nickname, isPublic, tutorialCompleted, imageUrl …) | 프론트는 `GET /api/auth/me` 를 쓰는데 **백엔드에 없다.** `GET /user/detail?email=` 은 이메일을 파라미터로 요구하지만, 로그인 직후 프론트는 JWT 안의 이메일을 모른다(디코딩하지 않는다). 토큰 주체 기준으로 본인을 돌려주는 엔드포인트가 필요하다. **2026-09-12 api-docs 전수 확인 — 27개 경로에 여전히 없다.** `GET /api/user/detail` 은 `email` 을 required 로 받는다. **2026-09-18 에도 없다(34개 경로).** 프론트는 우회로 넘어갔다 (S15P21A405-462): 액세스 토큰의 JWT `sub` 가 이메일이라(실측 확인) BFF 라우트가 그 값을 꺼내 `GET /api/user/detail?email=` 을 대신 부른다. 서명은 검증하지 않는다 — 위조 토큰은 그 요청을 받은 백엔드가 거절한다. **여전히 본인 조회 API 가 있는 편이 낫다**: 토큰 클레임 모양이 바뀌면 프론트가 조용히 깨지고, 지금은 본인 조회 한 번에 왕복이 두 번이다 | 협의 전 (**필요**) · FE 는 JWT sub 우회로 동작 중 (2026-09-18) |
 | A-16 | `/user/detail` 경로 접두 | — | — | **해소됨.** 배포본이 `/api/user/detail?email=` 로 정렬됐고 2026-09-12 실호출로 도달을 확인했다 (없는 이메일에 500 을 주는 건 별건 — B-24) | ✅ 해소 (2026-09-12) |
 | A-9 | `POST /api/constellations/layout` | `{ musicIds: number[] }` (최대 30) | `{ points: [{ musicId, x, y }] }` — `x`, `y` 는 `-1 ~ 1` 정규화 좌표 | **별자리 오버레이의 모양** (PATH-01). 16차원 좌표를 2D로 압축한 고정 배치다. 레이어와 무관하게 **같은 곡 집합이면 항상 같은 모양**이어야 한다 — 플리 모양(예: 강아지)이 상품이 되려면 모양이 고정·재현 가능해야 하고, 나중에 "누가 만든 모양"으로 저장·거래하려면 서버에 있어야 한다. 클라이언트 MDS 로도 계산은 되지만 그러면 모양이 클라이언트 구현에 종속된다. **2026-09-12 — 아직 없어서 프론트 목이 계산 중이고, 그 목이 여정 별자리를 한 점으로 뭉개고 있었다 (S15P21A405-264).** 목은 좌표를 `mocks/songs.ts` 에서 찾는데 여정 경로 곡은 **배포 백엔드에서 오는 곡**이라 목이 모른다 — 좌표가 전부 0 으로 채워져 22곡이 `{x:0, y:0}` 한 점에 겹쳤다. **임시 조치:** 프론트가 아는 16차원 좌표를 `points: [{musicId, pc}]` 로 함께 보내고 목이 그걸 쓴다. 백엔드가 이 API 를 구현하면 `points` 는 **무시하면 된다** — 계약은 `musicIds` 만이다. **아직 필요한 이유:** 프론트 계산은 그 화면이 가진 좌표에만 의존하므로 (a) 좌표를 모르는 곡이 섞이면 다시 뭉치고 (b) 여러 사용자가 같은 플리를 같은 모양으로 본다는 보장이 없다 — 플리 모양 거래가 성립하려면 서버 계산이어야 한다 | **구현됨 · 배포 대기 (2026-09-13)**. BE 회신: 본문은 `{musicIds}` (2개 이상 30개 이하, 중복 불가), 응답은 `{points:[{musicId,x,y}]}` — 프론트 목과 같은 모양이라 `types/constellation.ts` 는 그대로 쓴다. **`points` 는 이제 보내도 무시된다.** 프론트는 S15P21A405-278 에서 목 라우트(`app/bff/constellations/layout`)·목 계산(`mocks/constellation.ts`)·`points` 우회를 전부 지우고 `live-api-paths.ts` 로 흘려보낸다. **남은 것은 배포뿐** — 2026-09-13 실호출 시 `/api/v3/api-docs` 27개 경로에 constellation 이 없고 POST 는 500(미매핑 경로와 같은 응답)이다. 프론트 MR 은 배포 확인 뒤 머지한다 |
 | A-17 | **유저 테스트 기간 한정 — 조회 API 를 토큰 없이 열어 둔다** | — | — | 유저 테스트에서 **로그인을 태우지 않기로 했다.** 테스트 참가자에게 가입·로그인을 시키면 (a) 지도를 보기도 전에 이탈하고 (b) 실계정·비밀번호가 생겨 뒷정리가 필요하며 (c) 우리가 보려는 건 지도 탐색·주변 탐색·경로 탐색이지 인증 흐름이 아니다. 그런데 지금 백엔드는 `anyRequest().authenticated()` 라 조회 API 가 전부 401 이고, 프론트는 서버 토큰(`BACKEND_ACCESS_TOKEN`)으로 우회 중인데 **그 토큰도 결국 누군가 로그인해서 발급받아야** 한다. 그래서 백엔드에 조회 API 를 한시적으로 열어 달라고 요청했다. 대상은 **읽기 전용**(`/api/music/**` = major·search·detail·journey)이고, 쓰기(플레이리스트 생성·프로필 수정·재생 로그)와 `/api/auth/**` 는 그대로 둔다. **되돌릴 조건:** 유저 테스트 종료 시점. 또는 로그인 실연동(S15P21A405-242 후속)이 붙는 시점 중 **먼저 오는 쪽**. **남는 위험:** 공개 호스트라 그동안 곡 데이터셋이 누구에게나 열린다 — 되돌리기 전에는 발표·운영으로 넘기지 않는다. 프론트 코드는 바뀌지 않는다 (토큰이 있으면 그대로 Bearer 로 붙이고, 없으면 안 붙일 뿐이다). **2026-09-12 배포 확인 — 다만 범위가 요청보다 넓다:** 구현이 `anyRequest().permitAll()` 이라 `/api/playlist/**`(생성·삭제 포함)와 `/api/user/detail` 까지 무인증으로 열렸다. 읽기 전용만 여는 게 원래 요청이었다 | **적용됨 (임시 · 되돌릴 것)**. 2026-09-12 BE 회신으로 **전체 해제가 의도된 범위임을 확인**했고, 되돌리는 시점은 위 정의("유저 테스트 종료 또는 로그인 실연동 중 먼저 오는 쪽")로 합의했다. BE 는 S15P21A405-245 로 추적하며 원복 전 조율한다. **프론트도 같은 창에서 로그인 게이트를 껐다** (S15P21A405-252) — `AuthGuard` 가 토큰 없이 통과시킨다. 되돌릴 때 백엔드 인증과 **함께** 되돌린다: `NEXT_PUBLIC_REQUIRE_LOGIN=1` 또는 `constants/auth.ts` 제거. **같은 창에서 기능 몇 개도 감췄다** (S15P21A405-333, `constants/features.ts`) — 마이페이지 · 플레이리스트 · 주변 사람/따라가기/반응 · 차트. 이번 테스트에서 볼 것이 탐색 · 주변 탐색 · 검색 · 여정 넷이라 나머지 입구를 닫았다. 코드는 지우지 않았고 `NEXT_PUBLIC_FEATURE_{PROFILE,PLAYLIST,SOCIAL,CHART}=1` 로 되돌린다. 원복 시점은 이 항목과 같다 |
@@ -204,6 +204,9 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-23 | **`GET /api/feedback/answered` 가 아직 머지 전이다** (S15P21A405-346) | `anonymousId=<uuid>` (인증 선택) | `[{ mode, anchorMusicId, prevMusicId, musicId, verdict }]` | S15P21A405-346 이 **같은 사람 × 같은 문항 1회 저장**을 넣으면서 이 조회도 함께 만들었는데, `backend/dev` 에도 **아직 안 들어갔다** (2026-09-15 확인, MR 단계). 프론트는 이게 없으면 방금 답한 문항을 또 묻고 서버는 저장하지 않고 조용히 버린다 — 사용자에게는 같은 질문이 두 번 뜨는 고장으로 보인다. 프론트는 `/bff/feedback/answered` 통로를 만들어 두고 **실패를 삼키게** 해 뒀으니(404 면 이번 탭에서 답한 것만 기억) 머지 전에도 안 깨진다. 배포 DB 에 `explore_feedback_003_answered_index.sql` 실행이 함께 필요하다 | 협의 전 (**FE 준비 완료, BE 머지 대기**) |
 | A-24 | **설문 `prev_music_id` 가 경로표의 인접 역이 아닐 수 있다** | `POST /api/feedback` | 그대로 | 재생 불가 역(`videoId` 없음)은 **없는 셈 치고 간선을 잇는다** (S15P21A405-335). A→B→C 에서 B 를 못 들려줬으면 `prev=A, music=C, rank=2` 인 행이 정상적으로 생긴다. `findAnsweredId` 의 문항 키가 `prev` 를 포함하므로 저장·중복 방지는 그대로 동작한다. **다만 정본(`01_EXPLORE_SURVEY.md` §5)의 "역 번호별 끊김률" 쿼리는 `rank` 기준**이라, rank 와 prev 가 인접하지 않는 행이 섞인다는 것을 알고 읽어야 한다. 거리 구간별 정밀도 쿼리는 `COALESCE(prev, anchor)` 로 조인하므로 영향 없다 | 협의 전 (알림) |
 | A-25 | **재생 불가 곡에서 순차 재생이 멈춘다** | — | — | `videoId` 가 없는 곡은 임베드가 안 붙어 `ended` 이벤트가 안 오고, 그래서 `next()` 가 안 불려 **그 곡에서 큐가 정지한다.** 주변 10곡 순차 재생·여정 재생에서 그 뒤 곡을 아무도 못 듣는다 (2026-09-14 실측: 이웃 10곡 중 1곡이 `videoId` 없음 → 평균적으로 10곡 중 뒤쪽 절반이 날아간다). 설문 표본을 직접 깎지만 **설문 버그가 아니라 재생 버그**라 S15P21A405-335 범위 밖이다. 프론트 별도 이슈 필요 | 프론트 과제 (기록용) |
+| A-34 | **A-17(조회 API 무인증 개방)이 원복됐다 — 원복이 영구인지 확인 필요** | — | — | **2026-09-20 실측: 배포 백엔드가 `/api/music/major` 에 401 을 준다.** A-17 은 "유저 테스트 종료 또는 로그인 실연동 중 먼저 오는 쪽" 에 되돌리기로 합의했던 임시 조치인데, 어느 쪽이 트리거였는지 프론트가 통보받지 못했다. **확인이 필요한 이유:** 되돌림이 영구라면 `BACKEND_ACCESS_TOKEN` 폴백(`lib/backend.ts`)은 의미가 없어지고 — 서비스 토큰도 결국 누가 로그인해서 발급받아야 하며 만료되면 같은 일이 반복된다 — 프론트는 S15P21A405-481(호출자 토큰 중계)과 S15P21A405-480(로그인 필수)에만 기대게 된다. 일시적이라면 되돌아오는 시점을 알아야 배포 계획을 잡는다. **지금 벌어진 일:** 배포된 프론트는 481 이전이라 호출자 토큰을 안 넘기고, 그래서 **로그인한 사람에게도 지도가 안 뜬다**(2026-09-20 실측, `/bff/map/songs` → 401) | 확인 요청 (2026-09-20) |
+| A-35 | **구글 idToken audience 검증에 쓰는 클라이언트 ID 확인** | `POST /api/auth/login/google` | — | 프론트가 `602769818964-nt9s5tgu7u89cdvq7t0couihdf6floab.apps.googleusercontent.com` 으로 idToken 을 받는다 (S15P21A405-486 에서 코드 기본값으로 고정 — 빌드 환경변수가 없어 배포본이 늘 빈 값이었다). **백엔드가 audience 검증에 다른 클라이언트 ID 를 쓰면 로그인 버튼은 떠도 누르는 순간 전부 거부된다.** 같은 값인지 한 번만 대조해 주면 된다 | 확인 요청 (2026-09-20) |
+| A-36 | **같은 이메일로 이메일 가입 후 구글 로그인하면 어떻게 되나** | `POST /api/auth/login/google` | 정의된 동작 | 이메일·비밀번호로 가입한 계정(A-10)과 **같은 이메일**의 구글 계정으로 로그인하면 (a) 기존 계정에 연결되는지 (b) 별도 계정이 생기는지 (c) 오류인지가 정의돼 있지 않다. 구글 이메일로 이메일 가입하는 사람이 흔해서 실제로 부딪힌다. **없으면 무엇이 안 되나:** 프론트가 이 경우에 띄울 안내를 정할 수 없다 — 지금은 백엔드 오류 메시지를 그대로 보여 준다. **함께 물어봄:** 탈퇴(`withdraw`)가 `users` 행을 지우는지 익명화만 하는지도 정해져 있으면 알려 달라 — 익명화라면 같은 이메일로 재가입이 막힌다 | 협의 전 (2026-09-20) |
 
 ---
 
@@ -214,6 +217,10 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | # | 내용 | 이유 | 상태 |
 | --- | --- | --- | --- |
 | A-33 | `GET /api/music/detail` 응답에 **발매년도가 없다** | `id` | 기존 필드 + `releaseYear` (또는 발매일) | 곡 상세 제목 아래 칩 줄에 발매년도를 넣기로 했다 (SONG-02, S15P21A405-384). ERD 에는 있는 값인데 상세 응답에 안 실려 프론트는 `toMusic` 에서 `releaseYear: null` 로 못 박고 있다(`lib/backend.ts`). 칩은 이미 붙여 뒀고 값이 오면 그대로 뜬다 — **지금은 영영 안 뜬다.** BPM·곡 길이·누적 재생은 잘 온다 | 협의 전 — BE 요청 필요 |
+| A-34 | ~~비 ASCII(한글) 닉네임을 거부한다~~ **재현되지 않음 — 취소** | `PATCH /api/user/profile` · `GET /api/users/nickname-available` | — | 2026-09-18 15:1x 에 한글 닉네임이 `PATCH /api/user/profile` 에서 `400 INVALID_INPUT`, 중복확인에서 500 으로 보여 검증 정규식이 ASCII 전용이라고 적었다. **같은 날 16:0x 재확인 결과 전부 정상이다**: `별하나` 저장 200, `테스트닉`·`별하나둘` 중복확인 200. 그 사이에 user 테이블을 타는 엔드포인트가 전부 500 이 되는 장애가 있었으므로(그때는 `/api/music/major` 까지 500), **처음 관찰은 그 장애 구간에 걸린 것으로 본다.** 백엔드 쪽에 할 일 없음 — 기록만 남긴다. 다시 보이면 이 항목을 되살린다 | 취소 (2026-09-18 재확인) |
+| A-35 | **마이페이지·프로필에 필요한 값이 배포 API 에 없다** | `GET /api/user/detail?email=` | 지금: email·name·nickname·isPublic·tutorialCompleted·lastActiveAt·createdAt·imageUrl·followerCnt·followingCnt·isFollowing·isMe | 프론트 `UserProfile`(USER-02/04) 이 쓰는 값 중 **다음이 아예 없다**: 지금 듣는 곡(`nowPlaying`), 나와 만난 횟수(`meetingCount`), 따라가는 대상(`followingTarget`), 대시보드 통계(탐험한 곡 수·발견한 곡 수·선호 분위기), 온라인 여부. **팔로우·반응 API 자체도 배포 스펙 34개 경로에 없다** (`/api/user/{email}/follow` 계열). 2026-09-18 실연동 때 목으로 채우지 않고 **빈 값으로 뒀다** — 목을 섞으면 실데이터인 줄 알고 보게 된다. 그래서 지금 마이페이지 대시보드는 0 으로 보인다. 온라인 여부만 `lastActiveAt` 이 5분 이내면 접속 중으로 **가늠해서** 쓴다(`toUserProfile`). 소켓 접속자 목록이 생기면 그걸로 바꾼다. `updatedAt` 도 응답에 없어서 프론트 타입을 nullable 로 바꿨다 | 요청됨 (2026-09-18, S15P21A405-462) |
+| A-36 | **화면은 있는데 배포 API 에 아예 없는 기능들** | — | — | 2026-09-18 배포 스펙 34개 경로를 전수 대조한 결과, 프론트 화면·훅·BFF 라우트가 다 있는데 **백엔드에 대응 경로가 없는 것**이 아래다. **(1) 플리 좋아요** — 토글도 `좋아요한 플리 목록`도 없다. 마이페이지의 그 섹션은 지금 빈 목록이고, 좋아요 버튼은 501 `NOT_IMPLEMENTED` 로 실패한다(목으로 켜 두면 새로고침 때 꺼져서 '가끔 저장이 안 되는' 고장으로 보인다). **(2) 플리 무드 태그·소유자·생성/수정 시각** — `PlaylistDetailResponse`·`PlaylistSearchResponse` 에 없다. 소유자가 없으니 `isMine` 이 늘 false 라 남의 플리와 내 플리를 구분하지 못한다. **(3) 차트(인기 플리·유저 랭킹) (4) 주변 사용자 (5) 따라가기 (6) 반응 (7) 재생 기록(play_history)** — 경로 자체가 없다. 이 여섯은 **목을 남겨 뒀고** 라우트 첫 줄에 목이라고 못 박아 뒀다(`⚠ 목이다`). 화면이 이미 다 있어서 API 가 생기면 그 파일만 바꾸면 된다. **지표·시연에 이 값을 쓰면 안 된다.** 우선순위를 정해 주면 프론트는 그 순서로 붙인다 | 요청됨 (2026-09-18, S15P21A405-468) |
+| A-37 | **프로필 사진 삭제 API** | — | — | `PATCH /api/user/image` 는 `file` 이 필수라 **사진을 지우는 길이 없다.** 지금은 다른 사진으로 덮는 것만 된다. 예전 `PATCH /api/user/profile` 은 `imageUrl: null` 로 지울 수 있었고 화면도 "비우면 지워집니다" 로 안내했는데, 경로가 갈리면서 그 길이 없어져 프론트에서 그 안내를 걷어냈다. `DELETE /api/user/image` 든 `file` 없는 PATCH 든 지우는 방법이 하나 필요하다 | 요청됨 (2026-09-18, S15P21A405-474) |
 | A-26 | 사람×문항 중복 저장의 원자성 확인 | `origin/backend/dev`의 346 구현은 `findAnsweredId` 후 `upsert`이고 UNIQUE는 `(session_id, rank)`다. 여러 탭의 동시 제출에는 중복 행이 가능하다. 프론트는 단일 탭 중복 제출을 막고 동일 본문으로 재시도하지만 DB 수준 보장은 할 수 없다. 사람 식별/집계 또는 원자적 저장 방안 확인 필요 | 협의 전 — BE 요청 필요 |
 | A-27 | 동일 세션·rank의 비교 상대 변경 방지와 실패 행 의미 | FE는 같은 rank에서 문항 키가 달라질 때 새 sessionId를 사용한다. 다른 탐색을 실제 청취했다가 복귀할 때도 새 세션이다. 저장 실패를 verdict=null로 바꾸지 않고, 응답 미시도 질문의 pagehide만 null로 보낸다. 저장 성공 후 응답 유실은 DB 실패 행과 구분할 수 없고, FE는 동일 식별자로 재시도한다 | FE 반영 — 분석 시 세션 분절/실패 표본 미저장에 유의 |
 
@@ -334,3 +341,89 @@ ALTER TYPE explore_feedback_reason ADD VALUE 'compare';
 | 표 | `music_report` (신설 요청) | `explore_feedback` (기존) |
 
 합치지 않는 편이 낫다고 본다 — 설문 쪽은 **그 문항을 지표에서 빼는 근거**가 되어야 하고, 신고 쪽은 곡 데이터 정제 대상 목록이다. 다만 `compare` 가 쌓인 곡을 신고와 함께 보면 정제 우선순위를 정하기 쉬울 것이다.
+
+---
+
+## 실시간 연동에서 나온 협의 항목 (S15P21A405-482, 2026-09-20)
+
+실시간 작업명세대로 내 위치·지도 위 사람·주변 사람을 붙이면서 나온 것들이다.
+프론트는 명세대로 다 짰고, 아래는 **백엔드·인프라 확인이 있어야 실제로 도는** 항목이다.
+
+| 항목 | 상태 |
+| --- | --- |
+| 배포 소켓 주소(`NEXT_PUBLIC_WS_ORIGIN`)와 `/ws/websocket` 프록시 | **협의 전** |
+| `NEARBY_ENTER` 에 곡 정보(`title`·`artist`)·`distance` 포함 | **협의 전** |
+| 직접 호출을 하려면 CORS 에 로컬 오리진 (B-17 과 같은 건) | **협의 전** |
+| 조회 API 인증 (A-17 원복 여부) | **협의 전** |
+| 따라가기·반응 API | 백엔드 브랜치만 있음, `backend/dev` 미머지 |
+
+### 1. 배포 소켓 주소를 모른다
+
+소켓은 rewrite 를 타지 않고 `NEXT_PUBLIC_WS_ORIGIN` 절대 주소로 직접 연다(명세 §0). 비우면
+페이지 오리진에서 `http`→`ws` 로 유추하는데, **배포에서 그 유추가 맞는지 확인되지 않았다.**
+
+- nginx 가 `/ws/websocket` 을 백엔드로 넘기고 `Upgrade`·`Connection` 헤더를 유지하는지
+- 유지하지 않으면 유추 주소(`wss://j15a405.p.ssafy.io/ws/websocket`)로는 연결이 안 된다
+
+**없으면 안 되는 것:** 실시간 세 기능 전부. 소켓이 안 붙으면 지도는 곡만 그리는 지금 화면이다.
+
+### 2. `NEARBY_ENTER` 에 곡 정보가 없다
+
+주변 사람 패널은 각 행에 **그 사람이 듣는 곡**을 보여준다. 그런데 `POST /api/realtime/nearby`
+스냅샷에는 `title`·`artist`·`distance` 가 있고 **`NEARBY_ENTER` 에는 없다**(명세 §6.2).
+
+그래서 패널을 연 뒤에 들어온 사람은 곡 자리가 빈 채로 뜬다. 프론트가 곡 상세를 따로 부르면
+사람이 들어올 때마다 요청이 한 번씩 더 나가고, 같은 곡이면 이미 목록에 있는 값을 베껴 쓰지만
+새 곡이면 방법이 없다. `distance` 도 없어서 **정렬 자리를 추측**하고 있다(같은 곡 옆 아니면 맨 뒤).
+
+**요청:** `NEARBY_ENTER`·`NEARBY_MOVE` 에도 `title`·`artist`·`distance` 를 넣어주세요.
+**없으면:** 새로 들어온 사람은 "듣는 곡을 불러오는 중" 으로 남고, 목록 정렬이 거리순이 아니게 된다.
+
+### 3. 실시간 REST 3개를 `/bff/` 로 보냈다 — 명세와 다르다
+
+명세 §0 은 "브라우저가 직접 부른다, `/bff/` 라우트를 만들지 않는다" 이고 이유는
+**"서버가 대신 부르면 전원이 한 사람으로 취급된다"** 였다.
+
+그 이유가 S15P21A405-481 로 사라졌다 — BFF 가 **호출자의 `Authorization` 을 그대로 넘긴다.**
+반대로 직접 호출에는 막는 함정이 있다(S15P21A405-303): rewrite 가 브라우저 `Origin` 을 그대로
+넘기는데 백엔드가 `http://localhost:3000` 을 `403 Invalid CORS request` 로 막아서 **로컬에서만
+전부 터진다.**
+
+**되돌리기는 쉽다** — 경로를 `/api/...` 로 바꾸고 `live-api-paths.ts` 에 세 줄을 넣으면 된다.
+백엔드 CORS 허용 목록에 로컬 오리진이 들어가면(B-17) 그때 옮긴다. **이 선택이 맞는지
+백엔드 쪽 확인을 부탁드립니다** — 백엔드가 요청 출처(IP·세션)를 presence 에 쓰고 있다면
+BFF 경유가 문제가 될 수 있다.
+
+### 4. 조회 API 인증 — A-17 이 원복된 것으로 보인다
+
+`/bff/map/songs` 가 **401** 을 준다(2026-09-20 실측). A-17(유저 테스트용 임시 인증 해제)이
+되돌아간 신호다. 프론트는 S15P21A405-481 로 호출자 토큰을 넘기게 바꿔서 **로그인하면 돌아간다** —
+다만 로그인 전 화면이 남아 있다면 그쪽은 여전히 안 된다.
+
+**확인 필요:** A-17 을 의도적으로 되돌린 것인지, 되돌렸다면 로그인 전에 보여야 하는 API 가
+남아 있는지.
+
+### 5. 따라가기·반응은 붙이지 않았다 (2026-09-20 재확인)
+
+**처음에 "follow API 가 `backend/dev` 에 미머지" 라고 적었는데 틀렸다.** 브랜치 목록만 보고
+판단한 것이었다. 실제로는 아래와 같다.
+
+| | backend/dev | 배포 |
+| --- | --- | --- |
+| 팔로우(구독) `/api/user/follow/*` | ✅ | ✅ |
+| 따라가기(탑승) `POST /api/realtime/ride` | ✅ | ❌ |
+| 따라가기 소켓 이벤트 | ❌ | ❌ |
+
+**팔로우와 따라가기는 다른 기능이다.** 팔로우는 오래 남는 구독이고 배포까지 끝나 프론트가
+S15P21A405-489 에서 실연동했다. 따라가기는 `RideRestController` 로 따로 있는데 **배포에 없다** —
+`@Profile("realtime")` 이고 배포 api-docs 41개 경로에 `/api/realtime/*` 가 하나도 없다.
+
+더 큰 문제는 **소켓 이벤트가 없다는 것**이다. `RealtimeMessageType` enum 주석에 그대로 적혀 있다:
+`(반응·따라가기는 이번 범위 밖 — 추가 시 이 enum 확장)`. 탑승은 되는데 선장이 곡을 바꾸거나
+레이어를 옮기거나 접속을 끊어도 알릴 길이 없다. 이 문서의 S-1·S-2·S-5 가 그대로 "협의 전" 이다.
+
+프론트는 탑승 버튼을 **로컬 상태로만** 돌리고 목 반응(`useMockFriendReactions`)을 껐다.
+없는 API 를 부르는 것보다 안 부르는 쪽이 정직하다.
+
+**요청 ①** `realtime` 프로파일을 배포에 켜주세요 — 지금은 실시간 세 기능과 탑승이 전부 안 됩니다.
+**요청 ②** 따라가기 소켓 이벤트(S-1·S-2)를 열어주세요. REST 탑승만으로는 기능이 성립하지 않습니다.

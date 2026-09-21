@@ -1,6 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
 import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
-import { GENRE_NAMES } from "@/constants/map";
 import { api } from "@/lib/api";
 import { subscribePlayback } from "@/lib/playback-events";
 import { useBlockingStore } from "@/stores/use-blocking-store";
@@ -46,9 +45,9 @@ function captureExploration(client: QueryClient): Promise<Exploration | null> {
       // The playing queue, not a later refetch, defines the route being rated.
       stops: ids.map((id) => {
         const stop = route.stops.find((s) => s.id === id);
-        const genreId = stop?.genreName == null ? -1 : GENRE_NAMES.indexOf(stop.genreName as (typeof GENRE_NAMES)[number]);
+        // 장르 이름이 응답에서 사라져 알 수 없다 (S15P21A405-490, A-47). 지어내지 않고 null 로 둔다
         return { musicId: id, title: stop?.title ?? `곡 ${id}`, artist: stop?.artist ?? null,
-          genreId: genreId < 0 ? null : genreId, durationSec: stop?.duration };
+          genreId: null, durationSec: stop?.duration };
       }),
     }));
   }

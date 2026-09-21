@@ -3,9 +3,9 @@
 import EmptyState from "@/components/common/empty-state";
 import IconButton from "@/components/common/icon-button";
 import { CloseIcon } from "@/components/common/icons";
-import Loading from "@/components/common/loading";
 import PlaylistRow from "@/components/common/playlist-row";
 import SectionTitle from "@/components/common/section-title";
+import SkeletonRows from "@/components/common/skeleton-rows";
 import { useDeletePlaylistMutation } from "@/hooks/mutations/use-delete-playlist-mutation";
 import { useMyPlaylistsQuery } from "@/hooks/queries/use-my-playlists-query";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -22,7 +22,7 @@ export default function FeedMyPlaylists() {
       <SectionTitle aside={data ? `${data.length}개` : undefined}>내 플레이리스트</SectionTitle>
       <CreatePlaylistForm />
       <div className="-mx-1.5 flex flex-col gap-0.5">
-        {isPending && <Loading />}
+        {isPending && <SkeletonRows count={3} />}
         {data && data.length === 0 && <EmptyState message="아직 플레이리스트가 없어요." />}
         {data?.map((p) => (
           <PlaylistRow

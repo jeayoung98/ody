@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { API_ENDPOINTS, STORAGE_KEYS } from "@/constants";
 import { api } from "@/lib/api";
+import { clearPersistedQueries } from "@/lib/query-persist";
 import { removeStorage } from "@/lib/storage";
 
 export function useLogoutMutation() {
@@ -11,6 +12,8 @@ export function useLogoutMutation() {
     onSettled: () => {
       removeStorage(STORAGE_KEYS.accessToken);
       qc.clear();
+      // 메모리만 비우면 새로고침 때 저장소에서 남의 프로필이 되살아난다 (S15P21A405-504)
+      clearPersistedQueries();
     },
   });
 }

@@ -167,26 +167,4 @@ export function nearestSongs(center: MapPoint, n: number): MapPoint[] {
     .map((x) => x.s);
 }
 
-/**
- * 레이어별 대표곡 (백엔드가 레이어마다 다르게 선별해 내려준다는 전제).
- * 목에서는 레이어 시드로 재생수 가중 표본을 뽑아 레이어마다 다른 곡이 커버로 뜨게 한다.
- */
-export const REPRESENTATIVES_MOCK_PER_LAYER = 40;
-const repCache = new Map<number, number[]>();
-export function representativesFor(layer: number): number[] {
-  let ids = repCache.get(layer);
-  if (ids) return ids;
-  const rnd = seeded(5000 + layer * 131);
-  const songs = allSongs();
-  const picked = new Set<number>();
-  // 재생수 상위 절반에서 가중 추첨
-  const pool = songs.slice().sort((a, b) => b.weight - a.weight).slice(0, Math.floor(songs.length / 2));
-  while (picked.size < REPRESENTATIVES_MOCK_PER_LAYER && picked.size < pool.length) {
-    const idx = Math.floor(Math.pow(rnd(), 1.6) * pool.length);
-    picked.add(pool[idx].musicId);
-  }
-  ids = [...picked];
-  repCache.set(layer, ids);
-  return ids;
-}
 

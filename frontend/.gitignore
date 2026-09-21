@@ -1,7 +1,9 @@
 # See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
 
 # dependencies
-/node_modules
+# 앞 슬래시를 붙이지 않는다 (S15P21A405-507) — 슬래시가 있으면 이 파일 바로 아래만
+# 가리켜서, frontend/frontend/.next 처럼 한 칸 더 들어간 산출물이 git 에 잡힌다.
+node_modules/
 /.pnp
 .pnp.*
 .yarn/*
@@ -11,15 +13,15 @@
 !.yarn/versions
 
 # testing
-/coverage
+coverage/
 
 # next.js
-/.next/
-/out/
-/dist/
+.next/
+out/
+dist/
 
 # production
-/build
+build/
 
 # misc
 .DS_Store

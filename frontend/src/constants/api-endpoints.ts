@@ -67,7 +67,18 @@ export const API_ENDPOINTS = {
     /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
     publicVisibility: "/bff/user/public",
     nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
-    follow: (email: string) => `/bff/users/${encodeURIComponent(email)}/follow`,
+    /**
+     * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
+     * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
+     * 탑승은 `POST /api/realtime/ride` 로 따로 있다 — 아직 배포에 없다.
+     *
+     * 거는 쪽은 토큰 주체라 본문에 없다. 경로가 사용자별이 아니라 고정인 것도 그래서다.
+     */
+    followInsert: "/bff/users/follow/insert",
+    followDelete: "/bff/users/follow/delete",
+    /** `type` 은 `follower`(나를 구독한 사람) / `following`(내가 구독한 사람), `page` 는 0부터 */
+    followList: (email: string, type: "follower" | "following", page = 0) =>
+      `/bff/users/follow/list?email=${encodeURIComponent(email)}&type=${type}&page=${page}`,
     reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,
   },
 
@@ -87,14 +98,19 @@ export const API_ENDPOINTS = {
       return `/bff/map/songs?${q.join("&")}`;
     },
     // nearby 는 라우트 핸들러가 백엔드 `GET /api/music/detail?id=` 의 neighbors 로 만들어 준다
-    representatives: (layer: number) => `/bff/map/layers/${layer}/representatives`,
     nearby: (musicId: number) => `/bff/map/nearby/${musicId}`,
   },
 
   music: {
     detail: (id: number) => `/bff/music/${id}`,
     search: "/bff/music/search",
-    play: (id: number) => `/bff/music/${id}/play`,
+    /**
+     * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.
+     * 이 호출이 곧 내 위치 이동이다. 응답의 `playHistoryId` 를 보관했다가 종료에 쓴다.
+     */
+    play: "/bff/music/play",
+    /** 재생 종료. 위치는 바뀌지 않고 들은 시간만 남긴다 */
+    playEnd: "/bff/music/play/end",
     /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
     videoId: (id: number) => `/bff/music/${id}/video-id`,
     /**
@@ -121,6 +137,26 @@ export const API_ENDPOINTS = {
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,
     like: (id: number) => `/bff/playlists/${id}/like`,
+  },
+
+  /**
+   * 실시간 (S15P21A405-482).
+   *
+   * **`/bff/` 를 거친다 — 명세와 다른 선택이다.** 명세 §0 은 "브라우저가 직접 부른다,
+   * `/bff/` 라우트를 만들지 않는다" 고 적었고 이유는 "서버가 대신 부르면 전원이 한 사람으로
+   * 취급된다" 였다. 그 이유가 S15P21A405-481 로 사라졌다 — BFF 가 **호출자의 Authorization 을
+   * 그대로 넘기므로** 백엔드는 각 사용자를 그대로 본다.
+   *
+   * 대신 직접 호출에는 막는 함정이 있다 (`live-api-paths.ts`, S15P21A405-303): rewrite 는
+   * 브라우저의 `Origin` 을 그대로 넘기는데 백엔드가 `http://localhost:3000` 을
+   * `403 Invalid CORS request` 로 막는다. 직접 호출로 두면 **로컬에서만 전부 터진다.**
+   *
+   * 되돌리기는 쉽다 — 경로를 `/api/...` 로 바꾸고 `live-api-paths.ts` 에 세 줄을 넣으면 된다.
+   * 백엔드 CORS 허용 목록에 로컬 오리진이 들어가면 그때 옮긴다.
+   */
+  realtime: {
+    /** 주변 사람 목록 열기. 본문 없음. 이 호출이 곧 실시간 구독 시작이다 */
+    nearby: "/bff/realtime/nearby",
   },
 
   constellation: {

@@ -26,8 +26,6 @@ export const QUERY_KEYS = {
      */
     songs: (boxes: readonly LayerBox[]) =>
       ["map", "songs", boxes.map((b) => `${b.layer}:${[b.xMin, b.yMin, b.xMax, b.yMax].map((v) => v.toFixed(4)).join(",")}`).join("|")] as const,
-    /** 레이어별 대표곡 ID */
-    representatives: (layer: number) => ["map", "representatives", layer] as const,
     /** 이 곡이 대표곡으로 노출되는 레이어 목록 */
     /** 특정 곡 기준 가까운 곡 */
     nearby: (musicId: number) => ["map", "nearby", musicId] as const,
@@ -54,6 +52,8 @@ export const QUERY_KEYS = {
     all: ["user"] as const,
     profile: (email: string) => ["user", "profile", email] as const,
     nearby: (layer: number) => ["user", "nearby", layer] as const,
+    /** 팔로워·팔로잉 목록 (S15P21A405-489). 보는 사람 기준 값이 섞여 있어 email·type·page 가 다 키다 */
+    followList: (email: string, type: "follower" | "following", page: number) => ["user", "follow-list", email, type, page] as const,
   },
 
   playlist: {
@@ -70,4 +70,12 @@ export const QUERY_KEYS = {
   chart: {
     ranking: (type: string) => ["chart", type] as const,
   },
+  /**
+   * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준
+   * 폴링이었고, 이건 내가 듣는 곡 기준이라 레이어를 타지 않는다. 그래서 키에 인자가 없다.
+   */
+  realtime: {
+    nearby: ["realtime", "nearby"] as const,
+  },
+
 } as const;

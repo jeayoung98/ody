@@ -3,7 +3,6 @@
 import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
-import Loading from "@/components/common/loading";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useUserProfileQuery } from "@/hooks/queries/use-user-profile-query";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -12,6 +11,7 @@ import FeedDashboard from "./feed-dashboard";
 import FeedHeader from "./feed-header";
 import FeedLikedPlaylists from "./feed-liked-playlists";
 import FeedMyPlaylists from "./feed-my-playlists";
+import FeedSkeleton from "./feed-skeleton";
 import EditProfileButton from "@/components/auth/edit-profile-button";
 import LogoutButton from "@/components/auth/logout-button";
 
@@ -25,7 +25,7 @@ export default function FeedPanel() {
 
   return (
     <Box title={isMe ? "마이페이지" : "프로필"} actions={<PanelCloseButton />}>
-      {isPending && <Loading />}
+      {isPending && <FeedSkeleton />}
       {isError && <ErrorMessage />}
       {data && (
         <>

@@ -4,6 +4,7 @@ import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
+import { cellOf, gridFor, spreadOrder } from "./cover-spread";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -346,17 +347,43 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     if (picked.length >= n) break;
     if (usable(i) && spaced(i, picked)) picked.push(i);
   }
-  // ② 남는 자리만 새로 채운다. 후보는 예전과 같다 (백엔드 대표곡 → 없으면 격자 대표곡)
+  /*
+   * ② 남는 자리를 **화면 전체에 고루** 채운다 (S15P21A405-518).
+   *
+   * 예전에는 후보를 배열 순서대로 훑어 앞에서부터 집었다. `weight` 정렬이 붙어 있었지만
+   * 실데이터는 전부 0 이라 정렬이 아무것도 안 하고, 결국 **상주 집합이 담겨 온 순서**가 곧
+   * 우선순위였다 — 그 순서가 좌표와 상관있어서 커버가 화면 왼쪽에만 우르르 몰렸다.
+   * 최소 간격(`spaced`)은 54px 겹침만 막을 뿐 "고루 퍼짐" 을 만들지는 못한다.
+   *
+   * 그래서 **화면을 커버 수만큼 칸으로 나누고 칸마다 하나씩** 집는다. 이미 커버가 있는 칸은
+   * 건너뛰므로 새 커버는 늘 비어 있는 쪽으로 간다.
+   */
   if (picked.length < n) {
     const candidates = new Set<number>();
     for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
-    if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
-    const fill = [...candidates].filter((i) => !picked.includes(i)).sort((a, b) => e.songs[b].weight - e.songs[a].weight);
+    /**
+     * 격자 대표곡을 **늘 함께 넣는다.** 예전에는 후보가 모자랄 때만 더했는데, 대표곡 40곡이
+     * 한쪽에 뭉쳐 있으면 개수는 충분하면서 자리는 비는 일이 생긴다. `chosen` 은 86px 월드
+     * 격자에서 칸마다 하나씩 뽑은 것이라 화면에 고르게 흩어져 있다.
+     */
+    for (const i of e.chosen) candidates.add(i);
+
+    // 칸마다 하나씩 (규칙과 검사는 `cover-spread.ts`)
+    const at = (i: number) => ({ x: e.pos[i * 2], y: e.pos[i * 2 + 1] });
+    const { cols, rows } = gridFor(n, f);
+    const taken = new Set(picked.map((i) => cellOf(at(i).x, at(i).y, f, cols, rows)));
+    const fill = spreadOrder(
+      [...candidates].filter((i) => !picked.includes(i) && usable(i)),
+      at,
+      f,
+      n,
+      taken,
+    );
     // 처음(들고 있던 게 없다)에는 한 번에 채운다. 그 뒤로는 한 칸씩만 — 위 주석 참고
     let room = coverIdx.length === 0 ? n : COVER_COUNT.fillPerFrame;
     for (const i of fill) {
       if (picked.length >= n || room <= 0) break;
-      if (usable(i) && spaced(i, picked)) {
+      if (spaced(i, picked)) {
         picked.push(i);
         room--;
       }

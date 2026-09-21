@@ -6,6 +6,7 @@ import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useStarScreenPos } from "@/components/tutorial/tutorial-hint";
 import TutorialSpotlight from "@/components/tutorial/tutorial-spotlight";
 import { ROUTES, STORAGE_KEYS } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
 import { track } from "@/lib/analytics/client";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useMapStore } from "@/stores/use-map-store";
@@ -139,6 +140,37 @@ export default function PlayHint() {
   }, []);
 
   /**
+   * 말풍선이 넘어가면 안 되는 아래쪽 한계 (S15P21A405-417).
+   *
+   * 예전에는 **화면 끝만** 피해서, 별이 아래쪽에 있으면 말풍선이 **재생바 제목 위에 얹혔다.**
+   * 좁은 화면에서 네비가 아래로 내려오며 재생바가 54px 위로 올라가자 더 도드라졌다.
+   *
+   * 떠 있는 HUD 는 전부 `[data-hud]` 를 달고 있고(`map-view.tsx` 가 지도 표식을 비킬 때 쓰는
+   * 것과 같은 표시다), 그중 **화면 아래 절반에 있는 것들의 윗변**이 곧 한계다. 높이를 상수로
+   * 박지 않는 이유는 재생바가 재생 상태에 따라 커지기 때문이다.
+   */
+  const bottomLimit = (left: number, right: number) => {
+    const limit = window.innerHeight - EDGE;
+    /**
+     * **좁은 화면에서만 HUD 를 피한다.** 데스크톱에도 같은 겹침이 날 수 있지만, 이번 작업의
+     * 전제가 "웹뷰 배치를 건드리지 않는다" 라 경계를 넘지 않는다. 데스크톱 쪽은 따로 다룬다.
+     *
+     * 폭을 여기서 읽어도 되는 이유는 `BREAKPOINTS` 주석이 말하는 대로 **이 계산이 이미
+     * `window.innerWidth` 를 읽고 있는 하이드레이션 이후 코드**이기 때문이다. 렌더 분기가 아니다.
+     */
+    if (window.innerWidth >= BREAKPOINTS.tablet) return limit;
+    let bounded = limit;
+    for (const el of document.querySelectorAll("[data-hud]")) {
+      const r = el.getBoundingClientRect();
+      // **가로로 겹치는 것만** 센다. 안 그러면 옆으로 비켜 있는 HUD 때문에도 뒤집힌다.
+      if (r.height > 0 && r.top > window.innerHeight / 2 && r.right > left && r.left < right) {
+        bounded = Math.min(bounded, r.top - EDGE);
+      }
+    }
+    return bounded;
+  };
+
+  /**
    * 별을 따라가되 화면 밖으로 넘치지 않게 가둔다. 재기 전(첫 렌더)에는 별 위치 그대로 두고,
    * 잰 뒤 한 번 더 그려지며 제자리를 잡는다 — 그 사이가 한 프레임이라 눈에 띄지 않는다.
    */
@@ -149,7 +181,7 @@ export default function PlayHint() {
     const x = Math.min(Math.max(at.x - half, EDGE), window.innerWidth - size.w - EDGE);
     // 아래에 자리가 없으면 별 위로 뒤집는다
     const below = at.y + TIP_GAP;
-    const y = below + size.h > window.innerHeight - EDGE ? at.y - TIP_GAP - size.h : below;
+    const y = below + size.h > bottomLimit(x, x + size.w) ? at.y - TIP_GAP - size.h : below;
     return { x, y };
   })();
 

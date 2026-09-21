@@ -36,7 +36,11 @@ export default function Box({ title, lead, actions, footer, children, className 
     <section className={`glass-liquid relative flex min-h-0 flex-col overflow-hidden text-ink ${className}`}>
       {bg}
       {(title || lead || actions) && (
-        <header className={`relative z-10 flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-3 ${bg ? "" : "border-b border-line"}`}>
+        <header
+          /* 본문보다 위다 (z-20 > z-10). 헤더에서 내려오는 옵션 메뉴가 본문 뒤로 숨지 않아야
+             한다 (S15P21A405-524) — 둘 다 z-10 이면 DOM 이 뒤인 본문이 위로 올라온다 */
+          className={`relative z-20 flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-3 ${bg ? "" : "border-b border-line"}`}
+        >
           {lead && <div className="-ml-1 flex shrink-0 items-center">{lead}</div>}
           <h2 className="flex-1 truncate font-display text-lg font-semibold tracking-[0.01em]">{title}</h2>
           {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}

@@ -2,7 +2,8 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -10,6 +11,7 @@ import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -44,6 +46,7 @@ interface MapViewProps {
  */
 export default function MapView({ occlusion }: MapViewProps) {
   const engine = useMemo(() => new MapEngine(), []);
+  const narrow = useIsNarrow();
   const features = useFeatures();
   const { ref, size } = useViewport();
   const [hover, setHover] = useState(false);
@@ -92,6 +95,12 @@ export default function MapView({ occlusion }: MapViewProps) {
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
   // 지도에서 별을 누르는 길만 이걸 쓴다 — 주변 사람을 보는 중이면 패널을 갈아타지 않는다 (S15P21A405-515)
   const openSongFromMap = usePanelStore((s) => s.openSongFromMap);
+  /**
+   * 카드의 `상세` 버튼은 **명시적 지시**라 `openSongFromMap` 이 아니라 이쪽이다 (S15P21A405-515).
+   * 지도 클릭은 주변 사람을 보는 중이면 패널을 안 갈아타지만, 이건 "이 곡 상세를 보겠다" 를
+   * 손으로 누른 것이다 — 막으면 폰에서 곡 상세로 들어가는 길이 아예 없어진다.
+   */
+  const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playWithConfirm = usePlaySong();
@@ -109,6 +118,8 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   useEffect(() => {
     if (nearbyCenterMusicId == null) return;
+    // 폰에서는 열지 않는다 (S15P21A405-417) — 주변 탐색은 **고리가 결과**인데 패널이 그걸 덮는다
+    if (window.innerWidth < BREAKPOINTS.tablet) return;
     // 켠 쪽이 패널을 이미 정했으면 비켜난다 (S15P21A405-384) — 이웃 카드를 고르면 중심은
     // 이 곡이지만 상세는 **고른 이웃**이라, 여기서 중심곡을 열면 그걸 덮어쓴다
     if (useMapStore.getState().nearbyPanelHandled) return;
@@ -165,6 +176,12 @@ export default function MapView({ occlusion }: MapViewProps) {
     const measure = () => {
       const host = document.querySelector("canvas")?.getBoundingClientRect();
       if (!host) return;
+      /**
+       * 좁은 화면에는 좌하단 계기판이 없다 (S15P21A405-417) — 별자리가 그 자리를 피할 이유도
+       * 없다. 안 알려 주면 375px 에서 별자리를 놓을 폭이 70px 로 줄어 점처럼 뭉친다.
+       * 여기서 폭을 읽어도 되는 이유는 이 effect 가 **이미 DOM 을 재고 있는** 자리이기 때문이다.
+       */
+      engine.setInstrumentInset(window.innerWidth < BREAKPOINTS.tablet ? 0 : CONSTELLATION.instrumentInsetPx);
       engine.setObstacles(
         [...document.querySelectorAll("[data-hud]")].map((el) => {
           const r = el.getBoundingClientRect();
@@ -527,12 +544,13 @@ export default function MapView({ occlusion }: MapViewProps) {
   const playSong = useCallback(
     (s: MapPoint) => {
       selectMusic(s.musicId);
-      openSongFromMap(s.musicId);
+      // 폰에서는 재생해도 패널을 열지 않는다 — 지금 듣는 곡은 재생바가 이미 보여 준다
+      if (!narrow) openSongFromMap(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
       playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
       useTutorialStore.getState().complete("select");
     },
-    [openSongFromMap, playWithConfirm, recordPlay, selectMusic],
+    [narrow, openSongFromMap, playWithConfirm, recordPlay, selectMusic],
   );
 
   /**
@@ -552,13 +570,32 @@ export default function MapView({ occlusion }: MapViewProps) {
       // 클릭 = **보기만** (S15P21A405-277). 상세를 열고 뷰만 그리로 옮긴다 —
       // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
       selectMusic(s.musicId);
-      openSongFromMap(s.musicId);
+      /**
+       * **좁은 화면에서는 패널을 열지 않는다** (S15P21A405-417). 375px 에서 패널은 화면만큼
+       * 넓어 여는 순간 지도가 사라진다 — 그래서 두 번째 탭으로 재생하는 것도, 주변 탐색·경로
+       * 결과를 보는 것도 막혔다. 대신 호버 카드를 띄우고, 상세는 그 카드의 버튼으로 들어간다.
+       */
+      // 주변 탐색 중에는 폰에서도 카드를 띄우지 않는다 (S15P21A405-288) — 고리 별에는 제목·순위
+      // 라벨과 "둘러보기 ›" 링크가 이미 붙어 있고, 375px 에서 300px 짜리 카드가 그걸 다 덮는다.
+      // 그 곡 상세는 다른 곡 상세의 "주변곡" 목록으로 들어간다
+      if (narrow && map.viewMode !== "nearby") {
+        // 엔진에도 알려야 한다 — 카드는 매 프레임 `hoverAnchor()` 로 자기 자리를 찾고,
+        // 그게 null 이면 **자리를 못 잡아 숨는다.** 이걸 빼먹어서 카드가 DOM 에는 있는데
+        // 화면에는 끝까지 안 나왔다 (그래서 "상세 버튼이 어디 있냐" 가 됐다)
+        engine.setHover(s.musicId);
+        cancelHide();
+        heldSong.current = s;
+        setHoverSong(s);
+        setCardOn(true);
+      } else if (!narrow) {
+        openSongFromMap(s.musicId);
+      }
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, openSongFromMap, playSong, selectMusic],
+    [engine, cancelHide, narrow, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(
@@ -614,10 +651,19 @@ export default function MapView({ occlusion }: MapViewProps) {
         return;
       }
       const hit = engine.hitTest(mx, my);
-      // 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
-      // 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다
-      const song = hit ? engine.songs[hit.i] : heldSong.current;
+      /**
+       * 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
+       * 유예·페이드 동안 카드는 보이는데 클릭이 빈손이면, 사용자는 "보이는 걸 눌렀는데 안 열린다" 로 겪는다.
+       *
+       * **마우스일 때만이다** (S15P21A405-417). 이 규칙은 커서가 별과 카드 사이 틈을 지나는
+       * 동안의 이야기고, 손가락에는 그 틈이 없다. 폰에서는 탭 한 번에 카드가 떠서 다음 탭까지
+       * 그대로 남는데, 여기서 같이 흘려보내면 **빈 곳을 눌러도 그 곡이 재생됐다** (실측).
+       */
+      const song = hit ? engine.songs[hit.i] : e.pointerType === "mouse" ? heldSong.current : null;
       if (!song) {
+        // 손가락으로 빈 곳을 누르는 것은 "그만 볼래" 다 — 떠 있던 카드를 내린다.
+        // 엔진 호버와 `heldSong` 은 페이드가 끝난 뒤 위쪽 이펙트가 푼다
+        if (heldSong.current) setCardOn(false);
         /**
          * **주변 탐색 중 빈 곳을 누르면 고리를 닫는다** (S15P21A405-384).
          *
@@ -707,7 +753,23 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       {features.social && <FloatingReactions />}
-      <HoverCard engine={engine} song={hoverSong} on={cardOn} />
+      {/*
+        상세로 들어가면 **카드를 같이 내린다** (S15P21A405-417). 카드는 z-25 라 패널(z-20) 위에
+        뜬다 — 안 내리면 곡 상세를 열어 놓고도 카드가 그 위에 얹혀 "UI 가 뚫고 나온" 것처럼 보인다.
+      */}
+      <HoverCard
+        engine={engine}
+        song={hoverSong}
+        on={cardOn}
+        onDetail={
+          narrow && hoverSong
+            ? () => {
+                setCardOn(false);
+                openSong(hoverSong.musicId);
+              }
+            : undefined
+        }
+      />
       {!songs && <StarfieldPlaceholder width={size.width} height={size.height} failed={songsFailed} />}
     </div>
   );

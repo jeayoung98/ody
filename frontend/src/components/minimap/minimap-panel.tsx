@@ -34,7 +34,21 @@ export default function MinimapPanel() {
   return (
     <aside
       data-hud
-      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
+      /*
+       * **좁은 화면에서는 계기판을 걷어낸다** (S15P21A405-417). 접어 놔도 화면 왼쪽을 세로로
+       * 관통하는 상자로만 존재했고, 폰에서 대신할 곳이 있다 — 겹 이름·깊이는 좌상단 브랜드
+       * 아래가, 축은 지도 가장자리 라벨(`map-axis-labels`)이 늘 적는다.
+       *
+       * **도움말은 살린다.** 이 `<aside>` 의 자식이라 같이 사라지므로, 몸통과 손잡이만 감추고
+       * 껍데기는 남겨 우상단으로 보낸다 — 레일이 아래로 내려가 비어 있는 자리다. 도움말이
+       * `-right-[52px] bottom-0` 으로 이 상자에 매달려 있어서, 폭 0 · 높이 44 로 두면
+       * 오른쪽 끝이 여백선(16px)에 맞고 윗줄 높이와도 나란해진다.
+       *
+       * **감추는 선택자에 `div` 를 붙인다** (S15P21A405-417). `[&>.glass-liquid]` 는 몸통뿐
+       * 아니라 **도움말 버튼까지** 잡는다 — 그것도 이 aside 의 직계이고 같은 유리를 쓴다.
+       * 그래서 살리려던 도움말이 폰에서 같이 사라져 있었다 (실측: display none).
+       */
+      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:top-hud-t max-tablet:right-[68px] max-tablet:bottom-auto max-tablet:left-auto max-tablet:h-touch max-tablet:w-0 max-tablet:translate-x-0 max-tablet:[&>div.glass-liquid]:hidden max-tablet:[&_.glass-handle-host]:hidden ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
     >
       <CollapseHandle
         side="right"

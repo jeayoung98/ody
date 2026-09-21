@@ -2,7 +2,7 @@
 
 import Box from "@/components/common/box";
 import EmptyState from "@/components/common/empty-state";
-import Loading from "@/components/common/loading";
+import SkeletonRows from "@/components/common/skeleton-rows";
 import { useAddPlaylistItemMutation } from "@/hooks/mutations/use-add-playlist-item-mutation";
 import { useMyPlaylistsQuery } from "@/hooks/queries/use-my-playlists-query";
 import CreatePlaylistForm from "./create-playlist-form";
@@ -25,7 +25,7 @@ export default function AddToPlaylistMenu({ musicId, onDone }: AddToPlaylistMenu
     <div className="absolute top-full left-0 z-20 mt-2 w-full">
       <Box title="플레이리스트에 추가" flush className="shadow-[0_24px_60px_-20px_#000]">
         <div className="max-h-56 overflow-y-auto p-1.5">
-          {isPending && <Loading />}
+          {isPending && <SkeletonRows count={3} thumb="none" sub={false} />}
           {data && data.length === 0 && <EmptyState message="아직 플레이리스트가 없어요." />}
           {data?.map((p) => (
             <button

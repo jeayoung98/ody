@@ -4,7 +4,6 @@ import { useEffect } from "react";
 import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
-import Loading from "@/components/common/loading";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { usePlaylistDetailQuery } from "@/hooks/queries/use-playlist-detail-query";
 import { musicToMapPoint } from "@/lib/map-point";
@@ -13,6 +12,7 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import type { MapPoint } from "@/types";
 import PanelCloseButton from "../panel-close-button";
 import PlaylistHeader from "./playlist-header";
+import PlaylistSkeleton from "./playlist-skeleton";
 import PlaylistTrackList from "./playlist-track-list";
 
 /**
@@ -42,7 +42,7 @@ export default function PlaylistPanel() {
 
   return (
     <Box title="플레이리스트" actions={<PanelCloseButton />}>
-      {isPending && <Loading />}
+      {isPending && <PlaylistSkeleton />}
       {isError && <ErrorMessage />}
       {data && (
         <>

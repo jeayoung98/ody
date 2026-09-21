@@ -3,7 +3,7 @@
 import Avatar from "@/components/common/avatar";
 import Button from "@/components/common/button";
 import Note from "@/components/common/note";
-import { useStartFollowMutation } from "@/hooks/mutations/use-follow-mutation";
+import { useFollowMutation, useUnfollowMutation } from "@/hooks/mutations/use-follow-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -28,21 +28,28 @@ function StatInline({ label, value }: { label: string; value: number | string })
  */
 export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
-  const startFollow = useFollowStore((s) => s.start);
-  const followMutation = useStartFollowMutation();
+  const startRide = useFollowStore((s) => s.start);
+  const follow = useFollowMutation();
+  const unfollow = useUnfollowMutation();
   const openSong = usePanelStore((s) => s.openSong);
   const startActivity = useStartActivity();
 
-  const isFollowingThis = leaderEmail === profile.email;
-  const canFollow = !isMe && profile.isOnline && profile.isPublic && !isFollowingThis;
+  /** 지금 이 사람의 우주선에 **타고 있는가** (지금 이 순간의 일) */
+  const isRiding = leaderEmail === profile.email;
+  /** 이 사람을 **구독 중인가** (오래 남는 관계). 서버가 준 값이다 */
+  const isFollowing = profile.isFollowing;
+  const canRide = !isMe && profile.isOnline && profile.isPublic && !isRiding;
 
-  // ACT-01: 다른 활동(여정·플리 재생, 다른 사람 따라가기)이 진행 중이면 확인 후 멈추고 시작한다
-  const handleFollow = () => {
-    startActivity("follow", profile.email, () => {
-      followMutation.mutate(profile.email);
-      startFollow(profile.email, profile.nickname);
-    });
-  };
+  /**
+   * 구독 — **실연동이다** (S15P21A405-489). 해제는 팔로우 중이 아니어도 200 이라 먼저 확인하지
+   * 않는다. 응답의 `followeeFollowerCnt` 가 바뀐 뒤 값이지만, 같은 화면의 다른 값도 맞춰야 해서
+   * 훅이 프로필 쿼리를 무효화한다.
+   */
+  const pending = follow.isPending || unfollow.isPending;
+  const handleFollow = () => (isFollowing ? unfollow : follow).mutate(profile.email);
+
+  // ACT-01: 다른 활동(여정·플리 재생, 다른 사람 탑승)이 진행 중이면 확인 후 멈추고 시작한다
+  const handleRide = () => startActivity("follow", profile.email, () => startRide(profile.email, profile.nickname));
 
   return (
     <div className="flex flex-col gap-3">
@@ -69,8 +76,12 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
 
       {!isMe && (
         <div className="flex flex-col gap-1.5">
-          <Button variant="primary" onClick={handleFollow} disabled={!canFollow || followMutation.isPending}>
-            {isFollowingThis ? "🚀 탑승 중" : "🚀 따라가기"}
+          {/* 구독과 탑승은 다른 일이다 — 구독은 오래 남는 관계, 탑승은 지금 이 순간 따라다니는 것 */}
+          <Button variant={isFollowing ? "secondary" : "primary"} onClick={handleFollow} disabled={pending}>
+            {isFollowing ? "팔로잉" : "팔로우"}
+          </Button>
+          <Button variant="secondary" onClick={handleRide} disabled={!canRide}>
+            {isRiding ? "🚀 탑승 중" : "🚀 따라가기"}
           </Button>
           {!profile.isOnline && <Note>오프라인이라 따라갈 수 없습니다.</Note>}
           {profile.isOnline && !profile.isPublic && (
@@ -78,6 +89,8 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
               비공개 계정이라 따라가기를 시작할 수 없습니다. <span className="text-ink-4">SOCIAL-06</span>
             </Note>
           )}
+          {/* 없는 API 를 부르는 것처럼 보이지 않게 한 줄 밝혀 둔다 (S15P21A405-489) */}
+          <Note>따라가기는 아직 이 화면 안에서만 도는 기능이에요. 서버 연동 전입니다.</Note>
         </div>
       )}
     </div>

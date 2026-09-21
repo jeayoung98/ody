@@ -9,9 +9,10 @@ import { useReactionStore } from "@/stores/use-reaction-store";
 import ReactionPicker from "./reaction-picker";
 
 /**
- * 반응 보내기 — **주변 사람 패널 안의 한 줄** (SOCIAL-02, S15P21A405-434). 기본 반응 세트를 고르면
- * 내 위로 떠서 사라진다. 우하단 FAB 였는데 플레이어바가 그 자리를 차지했고, 반응은 주변 사람에게
- * 보내는 것이라 그 목록 위에 있는 게 맞다.
+ * 반응 보내기 — **주변 사람 패널 오른쪽 아래** (SOCIAL-02, S15P21A405-434·496). 기본 반응 세트를
+ * 고르면 내 위로 떠서 사라진다. 우하단 FAB 였는데 플레이어바가 그 자리를 차지해 패널 안으로
+ * 들어왔고, 목록 위에 있다가 아래로 내려왔다 — 반응은 주변 사람을 **보고 나서** 하는 일이라
+ * 목록보다 먼저 걸리면 순서가 뒤집힌다.
  *
  * 전송 대상은 같은 영역 사용자 — 대상 지정 UI 확정 전까지는 로컬 표시만.
  * 동일 사용자 반복 전송 제한(SOCIAL-04)은 lastSentAt 으로 처리.
@@ -39,7 +40,9 @@ export default function ReactionButton() {
   if (overlay) return null;
 
   return (
-    <div className="flex items-center gap-2">
+    // 패널 **오른쪽 아래**에 선다 (S15P21A405-496). 버튼이 맨 오른쪽이고 고르는 칸은 왼쪽으로
+    // 펼쳐진다 — 오른쪽으로 열면 패널 밖으로 나간다
+    <div className="flex flex-row-reverse items-center gap-2">
       <button
         type="button"
         title="반응 보내기"
@@ -52,7 +55,9 @@ export default function ReactionButton() {
       >
         <SmileIcon />
       </button>
-      {open ? <ReactionPicker horizontal onPick={handlePick} /> : <span className="text-[12px] text-ink-3">주변 사람에게 반응 보내기</span>}
+      {/* 설명 글자는 뺐다 (S15P21A405-496) — 오른쪽 아래 구석이라 자리가 좁고, 웃는 얼굴만으로
+          무엇인지 읽힌다. 뜻은 `title`·`aria-label` 이 들고 있어 스크린리더에도 남는다 */}
+      {open && <ReactionPicker horizontal onPick={handlePick} />}
     </div>
   );
 }

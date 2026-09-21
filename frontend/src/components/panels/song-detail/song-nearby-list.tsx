@@ -104,7 +104,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     startActivity("nearby", String(centerMusicId), () => {
       if (!inNearby || nearbyCenterMusicId !== centerMusicId) enterNearby(centerMusicId);
       playQueue({ kind: "nearby", centerMusicId }, ids);
-      recordPlay({ musicId: ids[0], source: "MAP", playedMs: 0 });
+      recordPlay({ musicId: ids[0], source: "MAP", layer: useMapStore.getState().layer });
     });
   };
 

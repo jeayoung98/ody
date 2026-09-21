@@ -2,7 +2,6 @@
 
 import { useCallback } from "react";
 import { ACTIVITY_CONFIRM, type ActivityKind } from "@/constants";
-import { useStopFollowMutation } from "@/hooks/mutations/use-follow-mutation";
 import { useConfirmStore } from "@/stores/use-confirm-store";
 import { ownedMapRepresentation, playbackActivity, type PlaybackActivity } from "@/lib/play-context";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -34,12 +33,11 @@ function currentActivity(): CurrentActivity | null {
  */
 export function useStartActivity() {
   const ask = useConfirmStore((s) => s.ask);
-  const stopFollow = useStopFollowMutation();
 
   const stopCurrent = useCallback(
     (cur: CurrentActivity) => {
       if (cur.kind === "follow") {
-        stopFollow.mutate(cur.targetKey);
+        // 탑승 중단은 로컬 상태만 — 서버 API 가 배포에 없다 (S15P21A405-489)
         useFollowStore.getState().stop();
         return;
       }
@@ -52,7 +50,7 @@ export function useStartActivity() {
       if (owned === "nearby") map.exitNearby();
       else if (owned === "constellation") map.clearConstellation();
     },
-    [stopFollow],
+    [],
   );
 
   return useCallback(

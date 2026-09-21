@@ -480,13 +480,13 @@ html.ody-dev .small-screen-gate {
  * 바텀시트를 **내렸을 때** 곡 상세의 커버 창을 줄인다 (S15P21A405-417).
  *
  * 접으면 화면에 걸리는 건 머리글(`곡 상세`)과 커버 창뿐이라 **무슨 곡인지가 안 보였다** —
- * 커버만 188px 그대로 깔려 있었다. 창을 줄이면 제목·가수·칩이 그 자리로 따라 올라온다.
+ * 커버만 188px 그대로 깔려 있었다. 창을 없애면 제목·가수·칩이 그 자리로 따라 올라온다.
  * 펴면 원래대로 돌아간다.
  *
  * 인라인 `height` 를 덮어야 해서 `!important` 다. 폰에서만, 접힌 시트 안에서만 먹는다.
  */
 @media (width < 768px) {
   [data-sheet][data-collapsed] [data-cover-window] {
-    height: 40px !important;
+    height: 0 !important;
   }
 }

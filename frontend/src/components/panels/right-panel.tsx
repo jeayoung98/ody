@@ -96,7 +96,7 @@ export default function RightPanel() {
         collapsed
           ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0 max-tablet:translate-y-[calc(100%_-_var(--spacing-sheet-peek))]"
           : ""
-      } max-tablet:glass-bar max-tablet:inset-x-0 max-tablet:top-[72px] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:rounded-[22px] max-tablet:rounded-b-none max-tablet:border-x-0 max-tablet:border-b-0 max-tablet:[&>section]:rounded-none! max-tablet:[&>section]:border-0 max-tablet:[&>section]:bg-transparent max-tablet:[&>section]:shadow-none max-tablet:[&>section]:backdrop-filter-none`}
+      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
       data-sheet
       data-collapsed={collapsed ? "" : undefined}
     >
@@ -111,9 +111,14 @@ export default function RightPanel() {
         onClick={toggleCollapsed}
         aria-expanded={!collapsed}
         aria-label={collapsed ? "패널 펼치기" : "패널 접기"}
-        className="hidden shrink-0 items-center justify-center py-2.5 max-tablet:flex"
+        /*
+          **시트 위에 얹는다** (S15P21A405-417). 흐름에 두면 그만큼 자리를 차지하면서 제 바닥이
+          필요해지는데, 그 바닥을 깔았더니 내용 위에 검은 띠 한 줄이 생겼다. 절대 배치로
+          머리글의 위 여백에 겹쳐 놓으면 띠도 없고 자리도 안 먹는다.
+        */
+        className="absolute inset-x-0 top-0 z-[2] hidden items-center justify-center pt-1.5 pb-1 max-tablet:flex"
       >
-        <span aria-hidden className="h-1 w-10 rounded-pill bg-white/25" />
+        <span aria-hidden className="h-1 w-10 rounded-pill bg-white/30" />
       </button>
       {activePanel === "song" && <SongDetailPanel />}
       {activePanel === "playlist" && <PlaylistPanel />}

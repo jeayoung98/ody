@@ -188,7 +188,7 @@ class NearbyRedisIntegrationTests {
 		redis.opsForSet().add(subscribers1, data.email());
 		redis.opsForSet().add(subscribers2, data.email());
 
-		assertThat(presenceRepository.applyLeave(data.email(), 7L)).containsExactly(
+		assertThat(presenceRepository.applyLeave(data.email(), 7L).removed()).containsExactly(
 				Long.toString(data.music1()), Integer.toString(data.layer()), "3", "4", "7");
 
 		assertThat(redis.hasKey(presenceKey)).isFalse();
@@ -218,7 +218,7 @@ class NearbyRedisIntegrationTests {
 				"epoch", "2", "musicIds", Long.toString(data.music1())));
 		redis.opsForSet().add(subscribersKey, data.email());
 
-		assertThat(presenceRepository.applyLeave(data.email(), 1L)).isEmpty();
+		assertThat(presenceRepository.applyLeave(data.email(), 1L).applied()).isFalse();
 		assertThat(redis.hasKey(presenceKey)).isTrue();
 		assertThat(redis.hasKey(metaKey)).isTrue();
 		assertThat(redis.opsForSet().isMember(subscribersKey, data.email())).isTrue();
@@ -242,7 +242,7 @@ class NearbyRedisIntegrationTests {
 				"epoch", "2", "musicIds", Long.toString(data.music1())));
 		redis.opsForSet().add(subscribersKey, data.email());
 
-		assertThat(presenceRepository.applyLeaveExpired(data.email(), sweepTime)).isEmpty();
+		assertThat(presenceRepository.applyLeaveExpired(data.email(), sweepTime).applied()).isFalse();
 		assertThat(redis.hasKey(presenceKey)).isTrue();
 		assertThat(redis.hasKey(metaKey)).isTrue();
 		assertThat(redis.opsForSet().isMember(subscribersKey, data.email())).isTrue();
@@ -271,7 +271,7 @@ class NearbyRedisIntegrationTests {
 				data.email(), 7L, List.of(data.music1(), data.music2()))).isTrue();
 		redis.opsForZSet().add("presence:expiry", data.email(), sweepTime - 1);
 
-		assertThat(presenceRepository.applyLeaveExpired(data.email(), sweepTime)).containsExactly(
+		assertThat(presenceRepository.applyLeaveExpired(data.email(), sweepTime).removed()).containsExactly(
 				Long.toString(data.music1()), Integer.toString(data.layer()), "3", "4", "7");
 
 		assertThat(redis.hasKey(presenceKey)).isFalse();
@@ -303,7 +303,7 @@ class NearbyRedisIntegrationTests {
 		redis.opsForZSet().add("presence:expiry", data.email(), System.currentTimeMillis() - 1);
 
 		assertThat(redis.hasKey(presenceKey)).isFalse();
-		assertThat(presenceRepository.applyLeave(data.email(), 7L)).isEmpty();
+		assertThat(presenceRepository.applyLeave(data.email(), 7L).removed()).isEmpty();
 
 		assertThat(redis.hasKey(metaKey)).isFalse();
 		assertThat(redis.opsForSet().isMember(firstSubscribers, data.email())).isFalse();

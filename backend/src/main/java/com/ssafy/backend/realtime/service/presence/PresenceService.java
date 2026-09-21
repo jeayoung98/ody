@@ -19,6 +19,7 @@ import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.LeaveResult;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 
 import lombok.RequiredArgsConstructor;
@@ -55,18 +56,21 @@ public class PresenceService {
 	 *
 	 * @param email 사용자 이메일
 	 * @param epoch 새 접속 번호
-	 * @param hasOtherSession 같은 사용자의 다른 소켓이 남아 있으면 true
 	 */
-	public void connect(String email, long epoch, boolean hasOtherSession) {
-		if (!hasOtherSession) {
-			PresenceSnapshot previous = presenceRedisRepository.snapshot(email);
-			if (previous != null && previous.epoch() != null) {
-				List<String> removed = presenceRedisRepository.applyLeave(email, previous.epoch());
-				sendLeave(email, removed);
+	public void connect(String email, long epoch) {
+		// 새 접속은 언제나 새 출발이다. 탭을 여러 개 켜도 마지막 것만 산다 —
+		// 접속 번호가 올라가 앞의 탭이 보내는 요청은 그 뒤로 전부 거부된다.
+		PresenceSnapshot previous = presenceRedisRepository.snapshot(email);
+		if (previous != null && previous.epoch() != null) {
+			LeaveResult result = presenceRedisRepository.applyLeave(email, previous.epoch());
+			if (result.applied()) {
+				sendLeave(email, result.removed());
 			}
 		}
+		// 따라가기도 끊는다. 다시 연결하면 단독으로 돌아온다.
+		rideService.onUserGone(email);
 		presenceRedisRepository.connect(email, epoch, ttlMs);
-		log.info("[Presence] 접속 생성 완료 epoch={} 다른탭={}", epoch, hasOtherSession);
+		log.info("[Presence] 접속 생성 완료 epoch={}", epoch);
 	}
 
 	/**
@@ -182,8 +186,13 @@ public class PresenceService {
 	 * @param epoch 종료할 접속 버전
 	 */
 	public void leave(String email, long epoch) {
-		List<String> removed = presenceRedisRepository.applyLeave(email, epoch);
-		sendLeave(email, removed);
+		LeaveResult result = presenceRedisRepository.applyLeave(email, epoch);
+		// 옛 접속의 종료 요청이면 아무것도 안 바뀐다. 그 사람은 아직 접속해 있으니 따라가기도 그대로 둔다.
+		if (!result.applied()) {
+			log.info("[Presence] 이탈 건너뜀 — 옛 접속의 요청 epoch={}", epoch);
+			return;
+		}
+		sendLeave(email, result.removed());
 		// 지도에서 지운 뒤에 정리한다. 인솔자였으면 따라가던 사람들이 빈 자리로 돌아온다.
 		rideService.onUserGone(email);
 		log.info("[Presence] 이탈 처리 완료 epoch={}", epoch);
@@ -196,8 +205,12 @@ public class PresenceService {
 	 * @param sweepTimeMs 만료 확인 시각
 	 */
 	public void leaveExpired(String email, long sweepTimeMs) {
-		List<String> removed = presenceRedisRepository.applyLeaveExpired(email, sweepTimeMs);
-		sendLeave(email, removed);
+		LeaveResult result = presenceRedisRepository.applyLeaveExpired(email, sweepTimeMs);
+		// 그 사이에 heartbeat 가 도착했으면 아직 살아 있다. 건드리지 않는다.
+		if (!result.applied()) {
+			return;
+		}
+		sendLeave(email, result.removed());
 		// 연결 종료와 같은 길이다. 둘로 나누면 한쪽만 고쳐진다.
 		rideService.onUserGone(email);
 	}

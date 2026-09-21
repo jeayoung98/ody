@@ -9,6 +9,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
 import com.ssafy.backend.realtime.service.nearby.NearbyPeopleService;
+import com.ssafy.backend.realtime.service.ride.RideGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,7 @@ import com.ssafy.backend.common.ApiResponse;
 public class NearbyRestController {
 
 	private final NearbyPeopleService nearbyPeopleService;
+	private final RideGuard rideGuard; // 따라가는 중에는 스스로 주변 사람을 열지 못하게 막는다
 
 	/** 주변사람 목록 조회.
 	 * 내가 지금 듣는 곡 기준으로 비슷한 곡 듣는 사람들을 가까운 순으로 주고,
@@ -37,6 +39,9 @@ public class NearbyRestController {
 	@Operation(summary = "주변사람 목록 조회", description = "내가 지금 듣는 곡과 비슷한 곡을 듣는 사람을 가까운 순으로 조회한다.")
 	@PostMapping("/nearby")
 	public ApiResponse<NearbySnapshot> nearby(Principal principal) {
+		// 주변 사람은 내가 듣는 곡을 기준으로 만든다. 따라가는 동안 열면
+		// 인솔자 곡 기준 목록이 오고 그 곡의 변화를 계속 받게 돼 화면이 섞인다.
+		rideGuard.requireNotRidingOnRest(principal.getName());
 		return ApiResponse.success(nearbyPeopleService.open(principal.getName()));
 	}
 }

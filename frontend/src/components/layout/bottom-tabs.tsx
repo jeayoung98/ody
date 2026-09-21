@@ -62,11 +62,17 @@ export default function BottomTabs() {
                 aria-label={t.label}
                 aria-current={active ? "page" : undefined}
                 onClick={() => router.push(t.href)}
-                className={`grid h-10 w-10 place-items-center rounded-pill transition-colors duration-fast ${
-                  active ? "grad-bg text-void shadow-glow-azure" : "text-ink-3"
+                /*
+                  **칠하지 않고 물들인다** (S15P21A405-417). 칸이 화면 폭의 1/4 이라 그라데이션을
+                  채우면 알약이 아니라 색 블록 하나가 되고 밑의 글자까지 덮는다 — 아이콘·글자
+                  색만 바꾸는 편이 탭바 문법에 맞는다.
+                */
+                className={`flex h-tabbar flex-1 flex-col items-center justify-center gap-0.5 transition-colors duration-fast ${
+                  active ? "text-teal" : "text-ink-3"
                 }`}
               >
                 {t.icon}
+                <span className="text-2xs leading-none">{t.label}</span>
               </button>
             );
           })}

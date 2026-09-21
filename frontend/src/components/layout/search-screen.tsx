@@ -36,7 +36,13 @@ export default function SearchScreen() {
   };
 
   return (
-    <main className="stage-bg fixed inset-0 flex flex-col">
+    /*
+      아래는 **재생바 위에서 끝난다** (S15P21A405-417, `--nav-bottom`). 예전에는 화면을 통째로
+      덮었는데, 그러면 검색하는 동안 듣던 곡이 화면에서 사라지고 — 이 화면이 앱 셸 밖에 있던
+      시절에는 유튜브 임베드까지 같이 떨어져 **음악이 끊겼다.** 지금은 셸 안이라 지도도 재생도
+      살아 있고, 재생바와 탭바는 그대로 아래에 보인다.
+    */
+    <main className="stage-bg fixed inset-x-0 top-0 bottom-[var(--nav-bottom)] z-[22] flex flex-col">
       <header className="flex items-center gap-2 px-gutter-sm pt-hud-t pb-2">
         <div className="glass-liquid flex h-11 min-w-0 flex-1 items-center gap-[9px] rounded-pill! pr-3 pl-[15px]">
           <SearchIcon className="shrink-0 opacity-50" />

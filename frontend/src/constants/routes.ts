@@ -26,4 +26,4 @@ export const ROUTES = {
 } as const;
 
 /** 하단 탭이 오가는 경로 모음 — `app-shell` 이 이 목록으로 "앱 화면인가" 를 가른다 */
-export const APP_ROUTES: readonly string[] = [ROUTES.home, ROUTES.friends, ROUTES.chart, ROUTES.me];
+export const APP_ROUTES: readonly string[] = [ROUTES.home, ROUTES.friends, ROUTES.chart, ROUTES.me, ROUTES.search];

@@ -43,9 +43,14 @@ export default function BottomTabs() {
     <div
       data-hud
       data-tabbar
-      className="glass-bar fixed right-gutter-sm bottom-hud-b left-gutter-sm z-[23] hidden rounded-[22px] rounded-t-none border-t-0 max-tablet:block"
+      /*
+       * **화면 맨 아래에 붙인다** (S15P21A405-417). 여백을 띄운 둥근 상자로 떠 있으니
+       * 화면 끝과 바 사이에 뜬 지도 조각이 남아 어정쩡했다 — 앱들이 쓰는 대로 바닥에 깐다.
+       * 위 테두리 한 줄만 남기고, 안전영역(홈 인디케이터)만큼 아래에 패딩을 준다.
+       */
+      className="glass-bar fixed inset-x-0 bottom-0 z-[23] hidden rounded-none border-x-0 border-b-0 pb-[env(safe-area-inset-bottom,0px)] max-tablet:block"
     >
-      <nav aria-label="네비" className="flex h-tabbar items-center justify-around">
+      <nav aria-label="네비" className="flex h-tabbar items-center justify-around px-gutter-sm">
         {tabs
           .filter((t) => t.enabled)
           .map((t) => {

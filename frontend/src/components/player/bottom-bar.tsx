@@ -20,15 +20,15 @@ export default function BottomBar() {
       <footer
         data-hud
         /*
-         * 좁은 화면에서는 네비 줄과 **한 상자**다 (S15P21A405-417). 화면 끝까지 붙는 띠로
-         * 만들어 봤더니 지도와 따로 놀았다 — 여백 안에 뜬 둥근 사각형 하나로 되돌리고,
-         * 그 상자의 아랫칸에 네비를 넣는다 (`layout/rail.tsx`).
+         * 좁은 화면에서는 탭바와 **한 판**이다 (S15P21A405-417). 둘 다 화면 좌우 끝까지 붙고
+         * 바닥에 깔린다 — 여백을 띄운 둥근 상자로 떠 있으니 화면 끝과의 사이에 지도 조각이
+         * 남아 어정쩡했다.
          *
-         * **둘 사이에 선을 긋지 않는다** (S15P21A405-417). 유리가 불투명해진 뒤로는 가르는
-         * 줄이 상자를 둘로 쪼개 보이게만 했다. `-1px` 로 살짝 겹쳐 두면 틈도 선도 없이 이어진다.
-         * 안전영역은 네비 줄의 `bottom-hud-b` 가 이미 먹었으므로 여기서 또 더하면 두 번 밀린다.
+         * **둘 사이에 선을 긋지 않는다.** 유리가 불투명해진 뒤로는 가르는 줄이 한 판을 둘로
+         * 쪼개 보이게만 했다. `-1px` 로 살짝 겹쳐 두면 틈도 선도 없이 이어진다.
+         * 안전영역은 탭바가 제 패딩으로 이미 먹었다.
          */
-        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:bottom-[calc(var(--spacing-hud-b)+var(--spacing-tabbar)-1px)] max-tablet:left-gutter-sm max-tablet:w-auto"
+        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-0 max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px)-1px)] max-tablet:left-0 max-tablet:w-auto"
       >
         <PlayerBar />
       </footer>

@@ -46,8 +46,6 @@ const PEEK_BODY = 10;
 const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
-/** 화면 아래 여백. `tokens.css` 의 `--spacing-hud-b` 의 JS 쪽 거울이라 같이 고친다 */
-const HUD_B = 18;
 /** 아래 상자(재생바+네비)와 그 위 패널 사이 틈 */
 const STACK_GAP = 4;
 
@@ -100,7 +98,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
    * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
    */
-  const navBottom = `calc(var(--spacing-hud-b) + var(--spacing-tabbar) + ${playerH + STACK_GAP}px)`;
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH + STACK_GAP}px)`;
   /**
    * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
    * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.
@@ -109,7 +107,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   useEffect(() => {
     document.documentElement.style.setProperty("--nav-bottom", navBottom);
   }, [navBottom]);
-  const occludedBottom = narrow ? HUD_B + tabBarH + playerH : HUD_OCCLUSION.bottom;
+  const occludedBottom = narrow ? tabBarH + playerH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],

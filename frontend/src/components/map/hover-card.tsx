@@ -52,10 +52,11 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
    */
   const narrow = onDetail != null;
   const w = narrow ? HOVER_CARD.wNarrow : HOVER_CARD.w;
+  const h = narrow ? HOVER_CARD.hNarrow : HOVER_CARD.h;
 
   useEffect(() => {
     if (musicId == null) return;
-    const { h, gap, margin } = HOVER_CARD;
+    const { gap, margin } = HOVER_CARD;
     let raf = 0;
     const follow = () => {
       raf = requestAnimationFrame(follow);
@@ -81,7 +82,7 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
     };
     raf = requestAnimationFrame(follow);
     return () => cancelAnimationFrame(raf);
-  }, [engine, musicId, on, w]);
+  }, [engine, musicId, on, w, h]);
 
   if (!song) return null;
 
@@ -101,7 +102,7 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
       aria-label={narrow && song ? `${song.title} 상세 열기` : undefined}
       style={{
         width: w,
-        height: HOVER_CARD.h,
+        height: h,
         visibility: "hidden",
         opacity: 0,
         transition: `opacity ${HOVER_CARD.fadeMs}ms ease-out`,
@@ -112,16 +113,22 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}
       <span
-        className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover"
+        className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover max-tablet:h-10 max-tablet:w-10"
         style={cover ? { backgroundImage: `url(${cover})` } : undefined}
       />
       <span className="min-w-0 flex-1">
         <p className="truncate text-[12.5px] font-semibold text-ink">{song.title}</p>
         <p className="truncate text-[10.5px] text-ink-2">{song.artist ?? "-"}</p>
-        <p className={`num truncate text-2xs ${song.playable ? "text-ink-3" : "text-warn"}`}>
-          ▶ {song.weight.toLocaleString()}
-          {song.playable ? "" : " · 재생 불가"}
-        </p>
+        {/*
+          재생수 줄은 **폰에서 뺀다** (S15P21A405-417). 카드가 자리를 너무 먹는다는 말이 나왔고,
+          이 줄은 상세에 들어가면 그대로 다시 보인다 — 덮은 별 하나를 되찾는 편이 낫다.
+        */}
+        {!narrow && (
+          <p className={`num truncate text-2xs ${song.playable ? "text-ink-3" : "text-warn"}`}>
+            ▶ {song.weight.toLocaleString()}
+            {song.playable ? "" : " · 재생 불가"}
+          </p>
+        )}
       </span>
       {/*
         카드가 통째로 눌리므로 이건 **버튼이 아니라 표지판**이다 — "여기 누르면 상세로 간다" 를

@@ -1,6 +1,7 @@
 "use client";
 
 import { CoronaIcon } from "@/components/common/icons";
+import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
@@ -32,9 +33,14 @@ export default function NearbyExploreButton() {
    * 폰에서는 패널이 화면을 덮으니 고리가 그 아래 깔려 보이지도 않았다.
    *
    * 곡 상세는 예외다 — 고리는 그 곡에 딸린 화면이라 같이 떠 있는 게 맞다.
+   *
+   * **여정 만들기 상자도 같이 내린다.** 그건 패널이 아니라 상단 검색줄 자리에 뜨는 별개
+   * 화면이라 `activePanel` 이 null 이다 — 그래서 경로를 짜다가 주변 탐색을 누르면 둘 다 떴다.
    */
   const activePanel = usePanelStore((s) => s.activePanel);
   const closePanel = usePanelStore((s) => s.close);
+  const composerOpen = useJourneyStore((s) => s.isComposerOpen);
+  const closeComposer = useJourneyStore((s) => s.closeComposer);
 
   const target = selectedMusicId ?? currentMusicId;
   const active = viewMode === "nearby";
@@ -44,6 +50,7 @@ export default function NearbyExploreButton() {
     if (active) exitNearby();
     else if (target != null) {
       if (activePanel != null && activePanel !== "song") closePanel();
+      if (composerOpen) closeComposer();
       enterNearby(target);
       useTutorialStore.getState().complete("nearby");
     }

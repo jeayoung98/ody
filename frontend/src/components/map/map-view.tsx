@@ -716,7 +716,23 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
       {features.social && <FloatingReactions />}
-      <HoverCard engine={engine} song={hoverSong} on={cardOn} onDetail={narrow && hoverSong ? () => openSong(hoverSong.musicId) : undefined} />
+      {/*
+        상세로 들어가면 **카드를 같이 내린다** (S15P21A405-417). 카드는 z-25 라 패널(z-20) 위에
+        뜬다 — 안 내리면 곡 상세를 열어 놓고도 카드가 그 위에 얹혀 "UI 가 뚫고 나온" 것처럼 보인다.
+      */}
+      <HoverCard
+        engine={engine}
+        song={hoverSong}
+        on={cardOn}
+        onDetail={
+          narrow && hoverSong
+            ? () => {
+                setCardOn(false);
+                openSong(hoverSong.musicId);
+              }
+            : undefined
+        }
+      />
       {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
     </div>
   );

@@ -1,6 +1,7 @@
 "use client";
 
 import { usePanelEnabled } from "@/hooks/use-features";
+import { usePanelSwipe } from "@/hooks/use-panel-swipe";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
 import FeedPanel from "./feed/feed-panel";
@@ -20,6 +21,9 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
  * 넓어 어떻게 놓아도 지도를 가린다. 대신 **내가 열었을 때만 열린다** — 별을 탭하면 작은 카드가
  * 뜨고, 거기 `상세` 를 눌러야 여기로 온다. 안 시켰는데 덮이던 것이 문제였지 덮는 것 자체가 아니었다.
  *
+ * **폰에서는 옆으로 밀어도 접힌다** (S15P21A405-417, `use-panel-swipe`). 손잡이가 17px 이라
+ * 화면을 통째로 덮는 쪽에서는 매번 그 혀를 겨누게 할 일이 아니다. 접기·펴기 자체는 같은 동작이다.
+ *
  * 왼쪽 가장자리 핸들로 접을 수 있다 (S15P21A405-318). 접으면 오른쪽으로 미끄러져 나가고
  * 핸들만 남는다 — **별자리는 그대로 켜져 있다.** 지도를 넓게 보려고 잠깐 치우는 동작이라
  * 패널을 닫는 것(별자리도 같이 꺼짐)과 다르다.
@@ -38,6 +42,8 @@ export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
   const collapsed = usePanelStore((s) => s.collapsed);
   const panelEnabled = usePanelEnabled();
+  // 폰에서 옆으로 밀어 접었다 편다 (S15P21A405-417). 마우스는 무시하므로 데스크톱은 그대로다
+  const swipe = usePanelSwipe();
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다
@@ -47,6 +53,7 @@ export default function RightPanel() {
     <aside
       data-hud
       data-tutorial={`panel-${activePanel}`}
+      {...swipe}
       className={`animate-tin absolute top-[72px] right-[18px] z-20 flex max-h-[calc(100dvh-264px)] w-right-panel flex-col transition-[translate] duration-500 ease-out ${
         /*
           접으면 **몸통을 조금 남기고** 들어간다 (S15P21A405-427). 싹 밀어 넣으면 거기에 무엇이

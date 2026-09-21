@@ -127,6 +127,22 @@ class RideDismountRedisIntegrationTests {
 		assertThat(redis.hasKey("ride:playback:" + captain)).isTrue();
 	}
 
+	/** 자바가 따로 읽으면 그 사이에 새로 탄 사람이 빠져 같은 선단인데 만남으로 세어진다. */
+	@Test
+	@DisplayName("남은 동료 명단을 같이 돌려준다")
+	void answersWithRemainingMates() {
+		String captain = user();
+		String rider = user();
+		String mate = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForSet().add("ride:riders:" + captain, mate);
+
+		DismountResult result = repository.dismount(rider, captain);
+
+		assertThat(result.remainingMates()).containsExactly(mate);
+		assertThat(result.remainingRiders()).isEqualTo(1);
+	}
+
 	/** 표시가 남으면 지도에 있으면서도 재생·입장이 거부된다. */
 	@Test
 	@DisplayName("내리면 따라가는 중 표시가 사라진다")

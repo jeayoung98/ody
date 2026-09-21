@@ -239,12 +239,7 @@ public class RideService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 3. 선단이 누구인지 먼저 찍어 둔다. 내리고 나면 ride:riders 에서 빠져 읽어도 늦다.
-		//    만남을 셀 때 이 사람들을 뺀다 — 따라다닌 것은 만남이 아니기 때문이다.
-		Set<String> fleetMembers = new LinkedHashSet<>(rideRedisRepository.riders(ride.captainEmail()));
-		fleetMembers.add(ride.captainEmail());
-
-		// 4. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
+		// 3. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
 		DismountResult result = rideRedisRepository.dismount(riderEmail, ride.captainEmail());
 		if (result.status() == DismountStatus.NOT_RIDING) {
 			throw new CustomException(RealtimeErrorCode.RIDE_NOT_RIDING);
@@ -253,6 +248,13 @@ public class RideService {
 			log.info("하차 거부 reason={}", result.status());
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
+
+		// 4. 만남에서 뺄 명단을 만든다. 인솔자 + 남은 동료 + 나 자신이다.
+		//    남은 동료는 스크립트가 등록을 지운 뒤에 읽어 준 것이라, 자바에서 따로 읽을 때처럼
+		//    그 사이에 새로 탄 사람이 빠지는 일이 없다.
+		Set<String> fleetMembers = new LinkedHashSet<>(result.remainingMates());
+		fleetMembers.add(ride.captainEmail());
+		fleetMembers.add(riderEmail);
 
 		// 5. 지도에 나타났음을 알린다. 이전 자리는 없다 — 따라가는 동안 지도에 없었기 때문이다.
 		Spot spot = spotOf(result.musicId(), result.layer());
@@ -321,15 +323,9 @@ public class RideService {
 	 * @param captainEmail 사라진 인솔자
 	 */
 	public void disband(String captainEmail) {
-		// 1. 이 인솔자를 따라가던 사람들을 먼저 읽는다. 흩고 나면 ride:riders 가 비어
-		//    누가 따라갔는지 알 수 없다. 끝났다는 알림은 이 전원에게 간다.
-		Set<String> riders = new LinkedHashSet<>(rideRedisRepository.riders(captainEmail));
-		//    만남에서 뺄 명단은 여기에 인솔자를 더한 것이다.
-		//    그 곡에 원래 있던 사람들과는 다른 명단이다.
-		Set<String> fleetMembers = new LinkedHashSet<>(riders);
-		fleetMembers.add(captainEmail);
-
-		// 2. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
+		// 1. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
+		//    누가 따라가고 있었는지도 스크립트가 같이 돌려준다. 자바에서 따로 읽으면
+		//    그 사이에 새로 탄 사람이 명단에서 빠져 같은 선단인데 만남으로 세어진다.
 		DisbandResult result = rideRedisRepository.disband(captainEmail);
 		if (!result.hadRiders()) {
 			return; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
@@ -337,9 +333,14 @@ public class RideService {
 		if (result.musicId() <= 0) {
 			// 아무도 서 있는 자리를 갖고 있지 않았다. 등록은 지웠지만 어디에 남았다고
 			// 알릴 자리가 없다. 여기까지 온 것 자체가 이상하므로 남겨 둔다.
-			log.warn("[Ride] 선단 해체 — 돌아갈 자리를 찾지 못했다 인원={}", riders.size());
+			log.warn("[Ride] 선단 해체 — 돌아갈 자리를 찾지 못했다 인원={}", result.riders().size());
 			return;
 		}
+
+		// 2. 만남에서 뺄 명단은 따라가던 전원에 인솔자를 더한 것이다.
+		//    그 곡에 원래 있던 사람들과는 다른 명단이다.
+		Set<String> fleetMembers = new LinkedHashSet<>(result.riders());
+		fleetMembers.add(captainEmail);
 
 		// 3. 따라가던 사람에게 끝났다고 알린다. 남게 된 자리는 스스로 내렸을 때와 같은 모양이다.
 		//    지도에 못 돌아간 사람에게도 보낸다. 끝난 것은 그 사람도 마찬가지다.
@@ -348,7 +349,7 @@ public class RideService {
 				captainEmail, RideEndReason.CAPTAIN_LEFT,
 				result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
-		for (String rider : riders) {
+		for (String rider : result.riders()) {
 			notifyQuietly("해체 알림", () -> realtimeMessageService.sendToUser(
 					rider, WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.RIDE_ENDED, ended));

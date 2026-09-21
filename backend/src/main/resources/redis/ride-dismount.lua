@@ -21,7 +21,10 @@
 --   [3] 곡별 청취자 키   [4] 레이어별 청취자 키
 --   [5] 셀별 재생 곡 키  [6] 사용 중인 셀 키   [7] 셀별 사용자 수 키
 --
--- 반환: {'OK', 곡, 레이어, 셀X, 셀Y, 남은 인원, 그 곡에 있던 사람들...} 또는 {'NOT_RIDING'} · {'STALE'}
+-- 반환: {'OK', 곡, 레이어, 셀X, 셀Y, 남은 인원, 그 곡에 있던 사람 수,
+--        남은 동료들..., 그 곡에 있던 사람들...} 또는 {'NOT_RIDING'} · {'STALE'}
+--   남은 동료는 이 사람을 뺀 뒤의 선단이다. 만남에서 뺄 명단을 자바가 따로 읽지 않게 여기서 준다.
+--   따로 읽으면 그 사이에 새로 탄 사람이 명단에서 빠져 같은 선단인데 만남으로 세어진다.
 --   그 곡에 있던 사람들은 다시 넣기 전에 읽은 것이다. 만남 계산에 쓴다.
 
 local rider = ARGV[1]
@@ -81,11 +84,12 @@ redis.call('HINCRBY', P_uc .. layer, cellField, 1)
 
 -- 9) 마지막 한 명이 내렸으면 선단이 없어진 것이다. 재생 정보와 열어 둔 곡 상세도 지운다.
 --    남겨 두면 인솔자가 혼자 곡을 바꿔도 갱신되지 않아, 다음에 타는 사람이 옛 곡 정보를 받는다.
-local remaining = redis.call('SCARD', KEYS[3])
-if remaining == 0 then
+local mates = redis.call('SMEMBERS', KEYS[3])
+if #mates == 0 then
   redis.call('DEL', KEYS[4], KEYS[5])
 end
 
-local out = {'OK', musicId, layer, cellX, cellY, tostring(remaining)}
+local out = {'OK', musicId, layer, cellX, cellY, tostring(#mates), tostring(#residents)}
+for i = 1, #mates do out[#out + 1] = mates[i] end
 for i = 1, #residents do out[#out + 1] = residents[i] end
 return out

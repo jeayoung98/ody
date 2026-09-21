@@ -103,6 +103,24 @@ class RideDisbandRedisIntegrationTests {
 		assertThat(redis.opsForHash().get("cell:usercount:" + LAYER, CELL)).isEqualTo("2");
 	}
 
+	/** 알림은 전원에게, 남들에게 알리는 것과 만남은 지도로 돌아간 사람만 쓴다. */
+	@Test
+	@DisplayName("따라가던 전원과 지도로 돌아간 사람을 따로 돌려준다")
+	void answersWithBothRosters() {
+		String captain = user();
+		String alive = user();
+		String gone = user();
+		givenRiding(captain, alive);
+		keysToDelete.add("ride:captain:" + gone);
+		redis.opsForHash().put("ride:captain:" + gone, "captain", captain);
+		redis.opsForSet().add("ride:riders:" + captain, gone);
+
+		DisbandResult result = repository.disband(captain);
+
+		assertThat(result.riders()).containsExactlyInAnyOrder(alive, gone);
+		assertThat(result.leftRiders()).containsExactly(alive);
+	}
+
 	/** 고아 키가 남으면 다음 선단이 엉뚱한 상태를 물려받는다. */
 	@Test
 	@DisplayName("선단의 흔적이 하나도 남지 않는다")

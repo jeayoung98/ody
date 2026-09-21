@@ -446,9 +446,19 @@ class RideServiceTests {
 		when(presenceRedisRepository.snapshot(RIDER)).thenReturn(standingAt(MUSIC, LAYER));
 	}
 
+	/** 남은 동료 명단. 수만 맞으면 되는 자리에 쓴다. */
+	private static List<String> mates(int count) {
+		List<String> mates = new java.util.ArrayList<>();
+		for (int i = 0; i < count; i++) {
+			mates.add("mate" + i + "@x.com");
+		}
+		return mates;
+	}
+
 	private void givenDismountOk(int remaining) {
 		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
-				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, remaining, List.of()));
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5,
+						mates(remaining), List.of()));
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 	}
@@ -531,7 +541,7 @@ class RideServiceTests {
 	void staleDismountNotifiesNobody() {
 		givenRiding();
 		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
-				.thenReturn(new DismountResult(DismountStatus.STALE, 0, 0, 0, 0, 0, List.of()));
+				.thenReturn(new DismountResult(DismountStatus.STALE, 0, 0, 0, 0, List.of(), List.of()));
 
 		assertThatThrownBy(() -> service.dismount(RIDER))
 				.isInstanceOf(CustomException.class);
@@ -546,10 +556,9 @@ class RideServiceTests {
 		String mate = "mate@example.com";
 		String outsider = "outsider@example.com";
 		givenRiding();
-		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, mate));
 		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
-				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, 1,
-						List.of(CAPTAIN, outsider)));
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5,
+						List.of(mate), List.of(CAPTAIN, outsider)));
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 
@@ -577,9 +586,9 @@ class RideServiceTests {
 	private static final String OUTSIDER = "outsider@x.com";
 
 	private void givenDisbandOk() {
-		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, MATE));
 		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
-				true, MUSIC, LAYER, 7, 5, List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER)));
+				true, MUSIC, LAYER, 7, 5,
+				List.of(RIDER, MATE), List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER)));
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 	}
@@ -649,10 +658,10 @@ class RideServiceTests {
 	@Test
 	@DisplayName("지도에 못 돌아간 사람에게도 끝났다고 알린다")
 	void disbandTellsRidersWithoutSpot() {
-		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, MATE));
 		// MATE 는 서 있는 자리가 없어 지도에 못 돌아갔다.
 		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
-				true, MUSIC, LAYER, 7, 5, List.of(RIDER), List.of(OUTSIDER)));
+				true, MUSIC, LAYER, 7, 5,
+				List.of(RIDER, MATE), List.of(RIDER), List.of(OUTSIDER)));
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 
@@ -668,9 +677,8 @@ class RideServiceTests {
 	@Test
 	@DisplayName("돌아갈 자리를 못 찾으면 알리지 않는다")
 	void disbandWithoutSpotNotifiesNobody() {
-		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER));
 		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
-				true, 0, 0, 0, 0, List.of(), List.of()));
+				true, 0, 0, 0, 0, List.of(RIDER), List.of(), List.of()));
 
 		service.disband(CAPTAIN);
 
@@ -681,9 +689,8 @@ class RideServiceTests {
 	@Test
 	@DisplayName("따라오던 사람이 없으면 아무에게도 알리지 않는다")
 	void disbandWithoutRidersNotifiesNobody() {
-		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of());
 		when(rideRedisRepository.disband(CAPTAIN))
-				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
 
 		service.disband(CAPTAIN);
 
@@ -697,9 +704,8 @@ class RideServiceTests {
 	@Test
 	@DisplayName("따라가던 사람이 사라지면 인솔자에게 알리고 지도에는 넣지 않는다")
 	void goneRiderIsRemovedWithoutReturningToMap() {
-		when(rideRedisRepository.riders(RIDER)).thenReturn(Set.of());
 		when(rideRedisRepository.disband(RIDER))
-				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
 		when(rideRedisRepository.riderLeave(RIDER)).thenReturn(new RiderLeaveResult(CAPTAIN, 1));
 
 		service.onUserGone(RIDER);
@@ -712,9 +718,8 @@ class RideServiceTests {
 	@Test
 	@DisplayName("따라가지도 이끌지도 않던 사람이 나가면 아무 일도 없다")
 	void goneStrangerChangesNothing() {
-		when(rideRedisRepository.riders(RIDER)).thenReturn(Set.of());
 		when(rideRedisRepository.disband(RIDER))
-				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
 		when(rideRedisRepository.riderLeave(RIDER)).thenReturn(null);
 
 		service.onUserGone(RIDER);

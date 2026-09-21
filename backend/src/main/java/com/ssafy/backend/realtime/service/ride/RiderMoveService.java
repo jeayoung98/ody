@@ -9,6 +9,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
+import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.RideTrackPayload;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
@@ -150,6 +151,9 @@ public class RiderMoveService {
 	 * 번호를 먼저 받아 두는 이유는 넣은 뒤에 돌려받지 않아도 되기 때문이다.
 	 * 인솔자 번호는 응답에 실어야 해서 순서를 그대로 지킨다.
 	 *
+	 * 출처는 첫 번째(인솔자)만 넘어온 값을 쓰고 나머지는 FOLLOW 다. 따라온 사람은
+	 * 지도에서 고른 것도 재생목록에서 고른 것도 아니다. 탈 때 남긴 기록과도 같은 값이 된다.
+	 *
 	 * @return 넣은 순서 그대로의 기록 번호. 첫 번째가 인솔자다
 	 */
 	private List<Long> insertPlayHistory(List<String> listeners, long musicId, String source) {
@@ -160,7 +164,7 @@ public class RiderMoveService {
 			row.setId(ids.get(i));
 			row.setMusicId(musicId);
 			row.setEmail(listeners.get(i));
-			row.setSource(source);
+			row.setSource(i == 0 ? source : PlaySource.FOLLOW.name());
 			rows.add(row);
 		}
 		playHistoryMapper.insertBatch(rows);

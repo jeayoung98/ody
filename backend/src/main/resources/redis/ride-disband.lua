@@ -22,8 +22,11 @@
 --   [4] 곡별 청취자 키   [5] 레이어별 청취자 키
 --   [6] 셀별 재생 곡 키  [7] 사용 중인 셀 키   [8] 셀별 사용자 수 키
 --
--- 반환: {'OK', 곡, 레이어, 셀X, 셀Y, 내린 사람 수, 원래 있던 사람 수, 내린 사람들..., 원래 있던 사람들...}
+-- 반환: {'OK', 곡, 레이어, 셀X, 셀Y, 따라가던 사람 수, 지도로 돌아간 사람 수, 원래 있던 사람 수,
+--        따라가던 사람들..., 지도로 돌아간 사람들..., 원래 있던 사람들...}
 --       또는 {'NO_RIDERS'} — 따라오던 사람이 없었다. 남은 키는 그래도 지운다.
+--   따라가던 사람과 지도로 돌아간 사람은 다르다. 접속 정보가 없으면 지도에 넣지 않기 때문이다.
+--   끝났다는 알림은 앞쪽 전원에게 가고, 남들에게 알리는 것과 만남은 뒤쪽만 쓴다.
 
 local P_pre, P_cap = ARGV[2], ARGV[3]
 local P_lis, P_ll = ARGV[4], ARGV[5]
@@ -82,7 +85,8 @@ end
 redis.call('DEL', KEYS[1], KEYS[2], KEYS[3])
 
 local out = {'OK', musicId or '', layer or '', cellX or '', cellY or '',
-             tostring(#left), tostring(#residents)}
+             tostring(#riders), tostring(#left), tostring(#residents)}
+for i = 1, #riders do out[#out + 1] = riders[i] end
 for i = 1, #left do out[#out + 1] = left[i] end
 for i = 1, #residents do out[#out + 1] = residents[i] end
 return out

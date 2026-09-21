@@ -4,7 +4,10 @@
 --
 -- KEYS[1] presence:user:{email}
 --
--- ARGV (presence-join.lua 와 동일):
+-- ARGV — presence-join.lua 와 비슷하지만 같지 않다. join 은 [2] 가 접속 번호라
+-- 그 뒤가 한 칸씩 밀려 있다. 한쪽을 고칠 때 다른 쪽을 따라 고치면 전부 어긋난다.
+-- 여기에 접속 번호가 없는 것은 재생이 REST 로 들어와 소켓 접속 번호를 실을 수 없기 때문이다.
+-- 대신 "따라가는 중인가"와 "이전 곡이 맞는가" 두 가지로 늦은 요청을 거른다.
 --   [1] email  [2] oldMusicId("" 정지/첫재생)  [3] oldLayer("")  [4] oldCellField("ox:oy","")
 --   [5] newMusicId  [6] newLayer  [7] newCellField("nx:ny")
 --   [8] x  [9] y  [10] newCellX  [11] newCellY
@@ -12,7 +15,8 @@
 --   [14] activeCellPrefix "active-song:cell:"    [15] activeCellsPrefix "active-song:cells:"
 --   [16] usercountPrefix "cell:usercount:"
 --
--- 반환: {'OK', 만남email...} 성공(같은 자리 재선언이면 빈 만남). {'STALE'} presence 없음/old 불일치.
+-- 반환: {'OK', 만남email...} 성공(같은 자리 재선언이면 빈 만남).
+--       {'STALE'} presence 없음 · 따라가는 중 · 이전 곡 불일치.
 
 local email = ARGV[1]
 local oldM, oldL, oldCellF = ARGV[2], ARGV[3], ARGV[4]

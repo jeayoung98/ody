@@ -146,14 +146,20 @@ public class RideRedisRepository {
 	/**
 	 * 하차 결과. 성공이면 내린 자리와 남은 인원이 같이 온다.
 	 *
+	 * @param remainingMates 이 사람을 뺀 뒤의 선단. 만남에서 뺄 명단을 만들 때 쓴다
 	 * @param residents 내린 사람이 지도에 다시 들어가기 전, 그 곡에 있던 사람들. 만남 계산에 쓴다
 	 */
 	public record DismountResult(DismountStatus status, long musicId, int layer,
-			int cellX, int cellY, int remainingRiders, List<String> residents) {
+			int cellX, int cellY, List<String> remainingMates, List<String> residents) {
+
+		/** 남은 인원. 명단의 크기가 곧 인원이다. */
+		public int remainingRiders() {
+			return remainingMates.size();
+		}
 
 		/** 실패 결과를 만든다. */
 		private static DismountResult of(DismountStatus status) {
-			return new DismountResult(status, 0, 0, 0, 0, 0, List.of());
+			return new DismountResult(status, 0, 0, 0, 0, List.of(), List.of());
 		}
 	}
 
@@ -170,16 +176,29 @@ public class RideRedisRepository {
 	/**
 	 * 해체 결과.
 	 *
+	 * @param riders 따라가던 사람 전원. 끝났다는 알림은 이 전원에게 간다
 	 * @param leftRiders 지도에 다시 넣은 사람들. 접속이 이미 끊긴 사람은 빠진다
 	 * @param residents 아무도 다시 넣기 전, 그 곡에 있던 사람들. 만남 계산에 쓴다
 	 */
 	public record DisbandResult(boolean hadRiders, long musicId, int layer, int cellX, int cellY,
-			List<String> leftRiders, List<String> residents) {
+			List<String> riders, List<String> leftRiders, List<String> residents) {
 
 		/** 따라오던 사람이 없었던 결과. */
 		private static DisbandResult empty() {
-			return new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of());
+			return new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of());
 		}
+	}
+
+	/** 하차 응답을 자리·남은 동료·그 곡에 있던 사람들로 나눈다. */
+	private static DismountResult dismounted(List<String> r) {
+		int mateCount = Integer.parseInt(r.get(5));
+		int residentCount = Integer.parseInt(r.get(6));
+		int residentFrom = 7 + mateCount;
+		return new DismountResult(DismountStatus.OK,
+				Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
+				Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
+				List.copyOf(r.subList(7, residentFrom)),
+				List.copyOf(r.subList(residentFrom, residentFrom + residentCount)));
 	}
 
 	/** 빈 칸이나 숫자가 아닌 값은 0 으로 본다. */
@@ -246,16 +265,20 @@ public class RideRedisRepository {
 		if (r == null || r.isEmpty() || !"OK".equals(r.get(0))) {
 			return DisbandResult.empty();
 		}
-		// 여섯·일곱 번째 칸이 각각 몇 명인지를 말해 준다. 그 뒤로 내린 사람들, 그 뒤로 원래 있던 사람들.
-		int leftCount = Integer.parseInt(r.get(5));
-		int residentCount = Integer.parseInt(r.get(6));
-		int residentFrom = 7 + leftCount;
+		// 여섯~여덟 번째 칸이 각각 몇 명인지를 말해 준다.
+		// 그 뒤로 따라가던 전원, 지도로 돌아간 사람들, 원래 있던 사람들 순이다.
+		int riderCount = Integer.parseInt(r.get(5));
+		int leftCount = Integer.parseInt(r.get(6));
+		int residentCount = Integer.parseInt(r.get(7));
+		int leftFrom = 8 + riderCount;
+		int residentFrom = leftFrom + leftCount;
 		// 아무도 서 있는 자리를 갖고 있지 않으면 자리 칸이 빈 문자열로 온다. 0 으로 받아
 		// 부르는 쪽이 "돌아갈 자리를 못 찾았다"로 판단하게 한다.
 		return new DisbandResult(true,
 				numberOrZero(r.get(1)), (int) numberOrZero(r.get(2)),
 				(int) numberOrZero(r.get(3)), (int) numberOrZero(r.get(4)),
-				List.copyOf(r.subList(7, residentFrom)),
+				List.copyOf(r.subList(8, leftFrom)),
+				List.copyOf(r.subList(leftFrom, residentFrom)),
 				List.copyOf(r.subList(residentFrom, residentFrom + residentCount)));
 	}
 
@@ -286,11 +309,9 @@ public class RideRedisRepository {
 			return DismountResult.of(DismountStatus.STALE);
 		}
 		return switch (r.get(0)) {
-			// 여섯 번째 칸까지가 자리와 남은 인원이고, 그 뒤는 전부 그 곡에 있던 사람들이다.
-			case "OK" -> new DismountResult(DismountStatus.OK,
-					Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
-					Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
-					Integer.parseInt(r.get(5)), List.copyOf(r.subList(6, r.size())));
+			// 다섯 번째 칸까지가 자리, 여섯·일곱 번째가 각각 몇 명인지,
+			// 그 뒤로 남은 동료들, 그 뒤로 그 곡에 있던 사람들.
+			case "OK" -> dismounted(r);
 			case "NOT_RIDING" -> DismountResult.of(DismountStatus.NOT_RIDING);
 			default -> DismountResult.of(DismountStatus.STALE);
 		};

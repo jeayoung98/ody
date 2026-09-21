@@ -18,6 +18,7 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
 
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ public class ViewportCellCountScheduler {
 	private final MusicPositionCalculator musicPositionCalculator; // 전체 레이어 수 확인
 	private final ViewportRedisRepository viewportRepository; // 갱신 대상과 화면 정보 조회
 	private final ViewportService viewportService; // 최신 셀별 사용자 수 계산
+	private final RideViewportService rideViewportService; // 따라오는 사람에게 같은 내용 전달
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐 발송
 	private final ViewportMetrics viewportMetrics; // 갱신 대상 수와 처리 시간 기록
 
@@ -96,6 +98,8 @@ public class ViewportCellCountScheduler {
 					WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.VIEWPORT_CELL_COUNTS,
 					payload);
+			// 따라오는 사람 화면도 같이 갱신한다. 안 하면 넓은 화면에서 자리별 사람 수가 멈춰 있다.
+			rideViewportService.mirrorCellCounts(email, payload);
 			return true;
 		} catch (Exception e) {
 			log.warn("한 사용자의 셀별 인원수 갱신 실패", e);

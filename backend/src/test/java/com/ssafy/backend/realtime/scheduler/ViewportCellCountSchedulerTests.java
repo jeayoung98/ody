@@ -31,6 +31,7 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.observability.ViewportMetrics;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
 
 /** 셀별 인원수 화면의 주기 갱신 대상을 검증한다. */
@@ -45,6 +46,7 @@ class ViewportCellCountSchedulerTests {
 	@Mock MusicPositionCalculator musicPositionCalculator;
 	@Mock ViewportRedisRepository viewportRepository;
 	@Mock ViewportService viewportService;
+	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock ViewportMetrics viewportMetrics;
 
@@ -54,7 +56,7 @@ class ViewportCellCountSchedulerTests {
 	void setUp() {
 		scheduler = new ViewportCellCountScheduler(
 				musicPositionCalculator, viewportRepository, viewportService,
-				realtimeMessageService, viewportMetrics);
+				rideViewportService, realtimeMessageService, viewportMetrics);
 	}
 
 	@Test

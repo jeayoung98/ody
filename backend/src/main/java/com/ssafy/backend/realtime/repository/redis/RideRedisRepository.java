@@ -1,9 +1,14 @@
 package com.ssafy.backend.realtime.repository.redis;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
@@ -144,6 +149,54 @@ public class RideRedisRepository {
 	public Set<String> riders(String captainEmail) {
 		Set<String> res = redis.opsForSet().members(RIDERS_PREFIX + captainEmail);
 		return res != null ? res : Set.of();
+	}
+
+	/**
+	 * 여러 사람을 한 번에 물어 각자를 따라오는 사람들을 읽는다.
+	 *
+	 * 한 명씩 물으면 사람 수만큼 왕복이 생긴다. 화면 변화 알림은 수신자가 여럿이라
+	 * 그 왕복이 그대로 지연이 된다. 그래서 한 번에 묶어 보낸다.
+	 *
+	 * @param captainEmails 물어볼 사람들
+	 * @return 따라오는 사람이 있는 사람만 담긴 결과. 없으면 아예 빠진다
+	 */
+	public Map<String, Set<String>> ridersOf(Collection<String> captainEmails) {
+		if (captainEmails == null || captainEmails.isEmpty()) {
+			return Map.of();
+		}
+		List<String> targets = List.copyOf(new LinkedHashSet<>(captainEmails));
+		byte[][] keys = targets.stream()
+				.map(email -> redis.getStringSerializer().serialize(RIDERS_PREFIX + email))
+				.toArray(byte[][]::new);
+		List<Object> results = redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : keys) {
+				connection.setCommands().sMembers(key);
+			}
+			return null;
+		});
+
+		Map<String, Set<String>> ridersByCaptain = new LinkedHashMap<>();
+		for (int i = 0; i < targets.size(); i++) {
+			Set<String> riders = toStringSet(i < results.size() ? results.get(i) : null);
+			if (!riders.isEmpty()) {
+				ridersByCaptain.put(targets.get(i), riders);
+			}
+		}
+		return ridersByCaptain;
+	}
+
+	/** 묶어 읽은 결과 한 칸을 사람 목록으로 바꾼다. */
+	private static Set<String> toStringSet(Object value) {
+		if (!(value instanceof Set<?> set)) {
+			return Set.of();
+		}
+		Set<String> result = new LinkedHashSet<>();
+		for (Object item : set) {
+			if (item != null) {
+				result.add(item.toString());
+			}
+		}
+		return result;
 	}
 
 	/** 그룹이 지금 트는 곡을 읽는다. 아직 없으면 null. */

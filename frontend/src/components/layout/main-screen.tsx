@@ -46,9 +46,6 @@ const PEEK_BODY = 10;
 const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
-/** 아래 상자(재생바+네비)와 그 위 패널 사이 틈 */
-const STACK_GAP = 4;
-
 interface MainScreenProps {
   /** 지도 위에 얹을 오버레이 (튜토리얼 등) */
   overlay?: ReactNode;
@@ -94,11 +91,14 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   /**
    * 폰에서 아래로 쌓이는 순서: **네비 줄 → 재생바 → 패널**. 앞의 둘은 한 상자로 읽힌다.
    *
+   * `-1px` 은 재생바와 탭바가 쓰는 것과 **같은 겹침**이다 — 안 겹치면 1px 짜리 틈으로 지도가
+   * 새어 나와 화면이 갈라져 보인다 (실측으로 잡았다).
+   *
    * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
    * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
    * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
    */
-  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH + STACK_GAP}px)`;
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - 1px)`;
   /**
    * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
    * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.

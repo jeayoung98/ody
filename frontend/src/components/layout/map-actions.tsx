@@ -50,7 +50,7 @@ export default function MapActions() {
   return (
     <div
       data-hud
-      className="glass-liquid absolute right-gutter-sm bottom-[calc(var(--nav-bottom)+4px)] z-[22] hidden gap-0.5 rounded-pill! p-px max-tablet:flex"
+      className="glass-liquid absolute right-gutter-sm bottom-[calc(var(--nav-bottom)+8px)] z-[22] hidden gap-0.5 rounded-pill! p-px max-tablet:flex"
     >
       <NearbyExploreButton />
       {panelEnabled.journey && (

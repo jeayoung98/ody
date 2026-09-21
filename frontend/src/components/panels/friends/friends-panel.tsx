@@ -62,7 +62,6 @@ export default function FriendsPanel() {
           사용자는 기다리는 것 말고 할 수 있는 게 없다. `isLoading` 은 실제로 요청이 날아가는
           동안만 참이다(= `isFetching && isPending`).
         */}
-        {!connected && <EmptyState message="실시간 연결을 기다리는 중이에요. 연결되면 주변 사람이 보여요." />}
         {connected && isLoading && <SkeletonRows count={4} thumb="circle" />}
         {noPlay && <EmptyState message="곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요." />}
         {temporary && (

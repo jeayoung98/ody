@@ -2,6 +2,7 @@
 
 import Avatar from "@/components/common/avatar";
 import { RADAR } from "@/constants";
+import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { NearbyPerson } from "@/types";
 
@@ -56,6 +57,7 @@ export function sizeOf(meetingCount: number, max: number): number {
  */
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
   const openFeed = usePanelStore((s) => s.openFeed);
+  const { data: me } = useMeQuery();
 
   // 빈 배열이면 Math.max 가 -Infinity 라 0 을 함께 넣는다
   const maxDistance = Math.max(...people.map((p) => p.distance).filter(Number.isFinite), 0);
@@ -71,9 +73,23 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
         ))}
       </svg>
 
-      {/* 가운데는 나 */}
-      <span className="grad-bg absolute top-1/2 left-1/2 grid h-11 w-11 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-pill text-xs font-semibold text-[#04121a] shadow-[0_0_18px_-2px_rgba(79,227,206,.8)]">
-        나
+      {/*
+        가운데는 나 (S15P21A405-506). 예전에는 `나` 라는 글자 한 자였는데, 둘레의 사람은 전부
+        프로필 사진이라 **나만 다른 종류로 읽혔다.** 같은 Avatar 를 쓰고 `나` 는 아래 라벨로 뺀다 —
+        사진만 두면 내 사진을 외우지 못한 사람이 "가운데가 누구지" 를 묻게 된다.
+
+        숨쉬기는 둘레 사람보다 세게 준다(`--breathe-hi`). 하나뿐이고 옆에 부딪힐 것이 없어서
+        화면이 출렁이지 않는다 — 여기서는 "이게 너야" 를 짚는 것이 일이다.
+      */}
+      {/* 사진은 판의 정중앙이다 — 반지름이 여기서부터 재지므로 라벨 몫으로 밀면 안 된다 */}
+      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+        <span
+          className="animate-breathe grid place-items-center rounded-pill p-[3px] shadow-[0_0_18px_-2px_rgba(79,227,206,.8)] ring-2 ring-teal/80"
+          style={{ ["--breathe-hi" as string]: 1.12, animationDuration: "1.9s" }}
+        >
+          <Avatar src={me?.imageUrl} name={me?.nickname ?? me?.name} size={40} />
+        </span>
+        <span className="lbl absolute top-full left-1/2 mt-1 -translate-x-1/2">나</span>
       </span>
 
       {people.map((p, i) => {

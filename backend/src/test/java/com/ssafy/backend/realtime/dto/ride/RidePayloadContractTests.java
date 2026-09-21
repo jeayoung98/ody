@@ -10,7 +10,7 @@ import org.junit.jupiter.api.Test;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
- * 따라가기 소켓 계약 검증 (RT-33·RT-34·RT-36).
+ * 따라가기 소켓 계약 검증 (RT-33·RT-34·RT-36·RT-38).
  * 필드 이름이 하나만 틀려도 프론트가 조용히 못 읽으므로 JSON 키를 직접 확인한다.
  */
 class RidePayloadContractTests {
@@ -168,5 +168,27 @@ class RidePayloadContractTests {
 		RidePanelRequest request = new RidePanelRequest(null, 4927L, RidePanelTab.INFO);
 
 		assertThatThrownBy(request::validate).isInstanceOf(IllegalArgumentException.class);
+	}
+
+	@Test
+	@DisplayName("RIDE_RIDER_LEFT payload 의 JSON 키가 계약과 같다")
+	void rideRiderLeftPayloadKeys() throws Exception {
+		RideRiderLeftPayload payload = new RideRiderLeftPayload("rider@x.com", 3);
+
+		String json = objectMapper.writeValueAsString(payload);
+
+		assertThat(objectMapper.readTree(json).fieldNames())
+				.toIterable()
+				.containsExactlyInAnyOrder("email", "riderCount");
+		assertThat(objectMapper.readTree(json).get("riderCount").asInt()).isEqualTo(3);
+	}
+
+	/** 마지막 한 명이 내리면 0 이 나가야 한다. 안 보내면 인솔자 화면에 인원수가 남는다. */
+	@Test
+	@DisplayName("남은 인원이 0 이어도 그대로 나간다")
+	void lastRiderLeavesWithZero() throws Exception {
+		String json = objectMapper.writeValueAsString(new RideRiderLeftPayload("rider@x.com", 0));
+
+		assertThat(objectMapper.readTree(json).get("riderCount").asInt()).isZero();
 	}
 }

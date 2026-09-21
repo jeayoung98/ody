@@ -63,7 +63,9 @@ class RideMountRedisIntegrationTests {
 		redis.afterPropertiesSet();
 		assertThat(connectionFactory.getConnection().ping()).isEqualTo("PONG");
 
-		repository = new RideRedisRepository(redis, new RedisScriptConfig().rideMountScript());
+		RedisScriptConfig scripts = new RedisScriptConfig();
+		repository = new RideRedisRepository(
+				redis, scripts.rideMountScript(), scripts.rideDismountScript());
 	}
 
 	@AfterEach

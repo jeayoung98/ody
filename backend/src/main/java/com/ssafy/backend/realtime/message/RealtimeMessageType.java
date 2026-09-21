@@ -34,5 +34,7 @@ public enum RealtimeMessageType {
 	RIDE_VIEWPORT_CELL_COUNTS,
 	/** 인솔자가 곡 상세를 열거나 닫거나 탭을 바꿨다. */
 	RIDE_PANEL,
+	/** 따라오던 사람이 내렸다. 인솔자에게만 간다. */
+	RIDE_RIDER_LEFT,
 	PRESENCE_ERROR
 }

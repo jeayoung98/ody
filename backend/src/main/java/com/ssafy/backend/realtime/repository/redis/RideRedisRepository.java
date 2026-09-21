@@ -34,6 +34,13 @@ public class RideRedisRepository {
 	// presence 쪽 키는 PresenceRedisRepository 와 같은 문자열이다. 접속 번호와 현재 곡을
 	// 따라가기 시작 검사에서 같이 봐야 해서, 두 저장소를 오가지 않고 한 스크립트에 넘긴다.
 	private static final String PRESENCE_USER_PREFIX = "presence:user:";
+	// 지도 인덱스 키. 내릴 때 여기에 다시 넣어야 남들 화면에 보인다.
+	// PresenceRedisRepository 와 같은 문자열이다 — 같은 인덱스를 가리킨다.
+	private static final String LISTENERS_PREFIX = "listeners:";
+	private static final String LAYER_LISTENERS_PREFIX = "layer-listeners:";
+	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:";
+	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:";
+	private static final String USERCOUNT_PREFIX = "cell:usercount:";
 
 	private static final String CAPTAIN_PREFIX = "ride:captain:"; // 내가 따라가는 사람
 	private static final String RIDERS_PREFIX = "ride:riders:"; // 나를 따라오는 사람들
@@ -53,6 +60,7 @@ public class RideRedisRepository {
 
 	private final StringRedisTemplate redis;
 	private final DefaultRedisScript<List> rideMountScript;
+	private final DefaultRedisScript<List> rideDismountScript;
 
 	/** 따라가기 시작 결과. 거부면 musicId·layer 는 의미 없다. */
 	public record MountResult(MountStatus status, long musicId, int layer) {
@@ -130,6 +138,60 @@ public class RideRedisRepository {
 			case "CAPTAIN_INACTIVE" -> new MountResult(MountStatus.CAPTAIN_INACTIVE, 0, 0);
 			case "FULL" -> new MountResult(MountStatus.FULL, 0, 0);
 			default -> new MountResult(MountStatus.STALE, 0, 0);
+		};
+	}
+
+	/** 하차 결과. 성공이면 내린 자리와 남은 인원이 같이 온다. */
+	public record DismountResult(DismountStatus status, long musicId, int layer,
+			int cellX, int cellY, int remainingRiders) {
+
+		/** 실패 결과를 만든다. */
+		private static DismountResult of(DismountStatus status) {
+			return new DismountResult(status, 0, 0, 0, 0, 0);
+		}
+	}
+
+	/** 하차가 거부된 이유. */
+	public enum DismountStatus {
+		/** 성공. */
+		OK,
+		/** 따라가는 중이 아니다. 이미 내려졌을 수도 있다. */
+		NOT_RIDING,
+		/** 지금 연결에서 만든 탑승이 아니거나 그 사이에 갈아탔다. */
+		STALE
+	}
+
+	/**
+	 * 따라가기를 끝내고 지도에 다시 넣는다.
+	 *
+	 * 등록 지우기와 지도 복귀를 한 번에 한다. 나누면 그 사이에
+	 * "따라가지도 않고 지도에도 없는" 순간이 생긴다.
+	 *
+	 * @param riderEmail 내리는 사람
+	 * @param captainEmail 따라가던 사람. 실제와 다르면 거부한다
+	 * @return 성공이면 돌아간 자리와 남은 인원, 아니면 거부 사유
+	 */
+	@SuppressWarnings("unchecked")
+	public DismountResult dismount(String riderEmail, String captainEmail) {
+		List<String> r = redis.execute(rideDismountScript,
+				List.of(PRESENCE_USER_PREFIX + riderEmail,
+						CAPTAIN_PREFIX + riderEmail,
+						RIDERS_PREFIX + captainEmail),
+				riderEmail, captainEmail,
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX,
+				ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+
+		// 빈 응답은 스크립트가 못 돈 것이다. 아무것도 안 지워졌으니 거부로 본다.
+		if (r == null || r.isEmpty()) {
+			return DismountResult.of(DismountStatus.STALE);
+		}
+		return switch (r.get(0)) {
+			case "OK" -> new DismountResult(DismountStatus.OK,
+					Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
+					Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
+					Integer.parseInt(r.get(5)));
+			case "NOT_RIDING" -> DismountResult.of(DismountStatus.NOT_RIDING);
+			default -> DismountResult.of(DismountStatus.STALE);
 		};
 	}
 

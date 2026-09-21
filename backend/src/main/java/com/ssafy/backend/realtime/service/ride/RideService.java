@@ -8,6 +8,7 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
+import com.ssafy.backend.realtime.dto.ride.DismountResponse;
 import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
@@ -15,14 +16,21 @@ import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.dto.ride.RideRiderLeftPayload;
+import com.ssafy.backend.realtime.message.RealtimeMessageService;
+import com.ssafy.backend.realtime.message.RealtimeMessageType;
+import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
 
@@ -53,6 +61,7 @@ public class RideService {
 	private final RideSubscriptionService rideSubscriptionService;
 	private final RideViewportService rideViewportService;
 	private final RealtimeEventService realtimeEventService;
+	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
 
 	/**
 	 * 따라가기를 시작한다.
@@ -140,6 +149,70 @@ public class RideService {
 		return panel == null
 				? RidePanelPayload.closed()
 				: RidePanelPayload.opened(panel.musicId(), panel.tab());
+	}
+
+	/**
+	 * 따라가기를 끝낸다.
+	 *
+	 * 내린 사람은 인솔자가 마지막으로 있던 곡에 그대로 남는다. 탑승 전 자리로 되돌리지 않는다.
+	 * 듣던 곡도 끊지 않는다 — 서버는 어떤 재생 명령도 보내지 않는다.
+	 * 재생 기록도 새로 만들지 않는다. 그 곡의 기록은 탈 때와 곡이 바뀔 때 이미 남았다.
+	 *
+	 * @return 내려서 남게 된 자리
+	 * @throws CustomException 따라가는 중이 아니거나 그 사이에 상태가 바뀌었을 때
+	 */
+	@Transactional
+	public DismountResponse dismount(String riderEmail) {
+		// 1. 누구를 따라가는 중인지 읽는다. 안 따라가면 내릴 것도 없다.
+		Ride ride = rideRedisRepository.findRide(riderEmail);
+		if (ride == null) {
+			throw new CustomException(RealtimeErrorCode.RIDE_NOT_RIDING);
+		}
+
+		// 2. 접속 번호는 지도에 나타났다고 알릴 때 쓴다.
+		PresenceSnapshot presence = presenceRedisRepository.snapshot(riderEmail);
+		if (presence == null || presence.epoch() == null) {
+			log.warn("하차 거부 reason={}", WebSocketErrorCode.PRESENCE_NOT_CONNECTED);
+			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+		}
+
+		// 3. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
+		DismountResult result = rideRedisRepository.dismount(riderEmail, ride.captainEmail());
+		if (result.status() == DismountStatus.NOT_RIDING) {
+			throw new CustomException(RealtimeErrorCode.RIDE_NOT_RIDING);
+		}
+		if (result.status() != DismountStatus.OK) {
+			log.info("하차 거부 reason={}", result.status());
+			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+		}
+
+		// 4. 지도에 나타났음을 알린다. 이전 자리는 없다 — 따라가는 동안 지도에 없었기 때문이다.
+		Spot spot = spotOf(result.musicId(), result.layer());
+		notifyEnteredMap(riderEmail, presence.epoch(), result, spot);
+
+		// 5. 인솔자에게 누가 내렸는지 알린다. 남은 인원도 같이 보낸다.
+		realtimeMessageService.sendToUser(ride.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.RIDE_RIDER_LEFT,
+				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+
+		log.info("[Ride] 하차 musicId={} layer={} 남은인원={}",
+				result.musicId(), result.layer(), result.remainingRiders());
+		return new DismountResponse(result.musicId(), result.layer(),
+				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
+	}
+
+	/**
+	 * 지도에 나타났음을 알린다.
+	 * 따라가는 동안에는 지도에 없었으므로 이전 자리는 비운다.
+	 */
+	private void notifyEnteredMap(
+			String riderEmail, long epoch, DismountResult result, Spot spot) {
+		realtimeEventService.send(new PositionChanged(
+				riderEmail, epoch,
+				null, result.layer(),
+				null, result.musicId(),
+				null, result.cellX() + ":" + result.cellY(),
+				spot.placement().xNorm(), spot.placement().yNorm()));
 	}
 
 	/**

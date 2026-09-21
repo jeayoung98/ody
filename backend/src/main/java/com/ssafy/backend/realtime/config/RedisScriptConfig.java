@@ -91,6 +91,12 @@ public class RedisScriptConfig {
 		return listScript("redis/ride-place.lua");
 	}
 
+	/** 따라가기를 끝내고 지도에 다시 넣는다. */
+	@Bean
+	public DefaultRedisScript<List> rideDismountScript() {
+		return listScript("redis/ride-dismount.lua");
+	}
+
 	/**
 	 * 목록을 돌려주는 Lua 파일을 읽는다.
 	 * @param path Lua 파일 경로

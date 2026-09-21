@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -32,6 +33,14 @@ import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.message.RealtimeMessageService;
+import com.ssafy.backend.realtime.message.RealtimeMessageType;
+import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.ride.RideRiderLeftPayload;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountStatus;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
@@ -61,6 +70,7 @@ class RideServiceTests {
 	@Mock RideSubscriptionService rideSubscriptionService;
 	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeEventService realtimeEventService;
+	@Mock RealtimeMessageService realtimeMessageService;
 	@InjectMocks RideService service;
 
 	private final double[] location = location();
@@ -347,5 +357,105 @@ class RideServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(rideViewportService);
+	}
+
+	// ── 하차 ───────────────────────────────────────────────
+
+	private void givenRiding() {
+		when(rideRedisRepository.findRide(RIDER)).thenReturn(new Ride(CAPTAIN, 5L));
+		when(presenceRedisRepository.snapshot(RIDER)).thenReturn(standingAt(MUSIC, LAYER));
+	}
+
+	private void givenDismountOk(int remaining) {
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, remaining));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+	}
+
+	@Test
+	@DisplayName("따라가는 중이 아니면 내릴 것도 없다")
+	void notRidingIsRejected() {
+		when(rideRedisRepository.findRide(RIDER)).thenReturn(null);
+
+		assertThatThrownBy(() -> service.dismount(RIDER))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_RIDING));
+
+		verify(rideRedisRepository, never()).dismount(anyString(), anyString());
+	}
+
+	@Test
+	@DisplayName("내리면 인솔자가 마지막으로 있던 자리를 돌려준다")
+	void dismountAnswersWithSpot() {
+		givenRiding();
+		givenDismountOk(2);
+
+		DismountResponse response = service.dismount(RIDER);
+
+		assertThat(response.musicId()).isEqualTo(MUSIC);
+		assertThat(response.layer()).isEqualTo(LAYER);
+		assertThat(response.cellX()).isEqualTo(7);
+		assertThat(response.cellY()).isEqualTo(5);
+	}
+
+	/** 따라가는 동안 지도에 없었으니 이전 자리가 있으면 안 된다. */
+	@Test
+	@DisplayName("지도에 새로 나타났다고 알린다")
+	void notifiesEnteredMap() {
+		givenRiding();
+		givenDismountOk(2);
+
+		service.dismount(RIDER);
+
+		ArgumentCaptor<PositionChanged> captor = ArgumentCaptor.forClass(PositionChanged.class);
+		verify(realtimeEventService).send(captor.capture());
+		PositionChanged event = captor.getValue();
+		assertThat(event.oldMusicId()).isNull();
+		assertThat(event.oldLayer()).isNull();
+		assertThat(event.oldCell()).isNull();
+		assertThat(event.newMusicId()).isEqualTo(MUSIC);
+		assertThat(event.newCell()).isEqualTo("7:5");
+	}
+
+	@Test
+	@DisplayName("인솔자에게 누가 내렸는지와 남은 인원을 알린다")
+	void notifiesCaptain() {
+		givenRiding();
+		givenDismountOk(3);
+
+		service.dismount(RIDER);
+
+		verify(realtimeMessageService).sendToUser(CAPTAIN, WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.RIDE_RIDER_LEFT, new RideRiderLeftPayload(RIDER, 3));
+	}
+
+	/** 재생 명령을 보내면 듣던 곡이 끊긴다. 기록을 또 남기면 같은 곡이 두 번 쌓인다. */
+	@Test
+	@DisplayName("재생 명령도 재생 기록도 만들지 않는다")
+	void dismountTouchesNeitherPlaybackNorHistory() {
+		givenRiding();
+		givenDismountOk(0);
+
+		service.dismount(RIDER);
+
+		verifyNoInteractions(musicPlayService, ridePlaybackService);
+		verify(realtimeMessageService, never()).sendToUser(
+				anyString(), anyString(), eq(RealtimeMessageType.RIDE_PLAYBACK), any());
+		verify(realtimeMessageService, never()).sendToUser(
+				anyString(), anyString(), eq(RealtimeMessageType.RIDE_TRACK), any());
+	}
+
+	@Test
+	@DisplayName("그 사이에 상태가 바뀌었으면 알리지 않는다")
+	void staleDismountNotifiesNobody() {
+		givenRiding();
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenReturn(new DismountResult(DismountStatus.STALE, 0, 0, 0, 0, 0));
+
+		assertThatThrownBy(() -> service.dismount(RIDER))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(realtimeEventService, realtimeMessageService);
 	}
 }

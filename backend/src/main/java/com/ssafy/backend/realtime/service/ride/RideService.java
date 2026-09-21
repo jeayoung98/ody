@@ -48,6 +48,7 @@ public class RideService {
 	private final MusicPositionCalculator musicPositionCalculator;
 	private final MusicPlayService musicPlayService;
 	private final RidePlaybackService ridePlaybackService;
+	private final RideSubscriptionService rideSubscriptionService;
 	private final RealtimeEventService realtimeEventService;
 
 	/**
@@ -93,16 +94,20 @@ public class RideService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 6. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
+		// 6. 혼자 보던 화면과 주변사람 구독을 끊는다.
+		//    이제부터는 인솔자가 보는 것을 옮겨 받는다. 안 끊으면 두 동네 소식이 섞여 들어온다.
+		rideSubscriptionService.closeOwnViews(riderEmail, before.epoch());
+
+		// 7. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
 		//    따라가는 사람이 그 곡의 발견자가 될 수 없고, 따라붙은 것은 만남이 아니다.
 		long playHistoryId = musicPlayService.recordPlay(
 				riderEmail, mounted.musicId(), PlaySource.FOLLOW.name());
 
-		// 7. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
+		// 8. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
 		//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
 		notifyLeftMap(riderEmail, before);
 
-		// 8. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+		// 9. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
 		RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
 
 		log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",

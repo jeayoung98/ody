@@ -55,6 +55,7 @@ class RideServiceTests {
 	@Mock MusicPositionCalculator musicPositionCalculator;
 	@Mock MusicPlayService musicPlayService;
 	@Mock RidePlaybackService ridePlaybackService;
+	@Mock RideSubscriptionService rideSubscriptionService;
 	@Mock RealtimeEventService realtimeEventService;
 	@InjectMocks RideService service;
 
@@ -257,5 +258,32 @@ class RideServiceTests {
 		pc[1] = -1.25;
 		pc[2] = 1.2;
 		return pc;
+	}
+
+	/** 안 끊으면 인솔자 동네 위에 자기 옛 동네 사람들이 겹쳐 뜬다. */
+	@Test
+	@DisplayName("혼자 보던 화면과 주변사람 구독을 끊는다")
+	void closesOwnViews() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(42_000L, 4L);
+
+		service.mount(RIDER, CAPTAIN);
+
+		verify(rideSubscriptionService).closeOwnViews(RIDER, 5L);
+	}
+
+	@Test
+	@DisplayName("자격 확인에 걸리면 구독을 끊지 않는다")
+	void rejectedMountKeepsOwnViews() {
+		when(presenceRedisRepository.snapshot(RIDER)).thenReturn(standingAt(20999L, 1));
+		when(rideRedisRepository.mount(RIDER, CAPTAIN, 5L, 20))
+				.thenReturn(new MountResult(MountStatus.FULL, 0, 0));
+
+		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(rideSubscriptionService);
 	}
 }

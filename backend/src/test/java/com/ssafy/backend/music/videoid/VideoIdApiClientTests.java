@@ -1,10 +1,12 @@
 package com.ssafy.backend.music.videoid;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
 import java.net.InetSocketAddress;
+import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicReference;
@@ -28,11 +30,14 @@ class VideoIdApiClientTests {
 	private VideoIdApiClient client;
 	private final AtomicReference<String> body = new AtomicReference<>("{}");
 	private final AtomicReference<Integer> status = new AtomicReference<>(200);
+	/** 마지막 요청의 질의 문자열. 무엇을 실어 보냈는지는 본문이 아니라 여기에만 남는다. */
+	private final AtomicReference<String> lastQuery = new AtomicReference<>();
 
 	@BeforeEach
 	void startStub() throws IOException {
 		server = HttpServer.create(new InetSocketAddress("127.0.0.1", 0), 0);
 		server.createContext("/videoid", exchange -> {
+			lastQuery.set(exchange.getRequestURI().getQuery());
 			byte[] raw = body.get().getBytes(StandardCharsets.UTF_8);
 			exchange.getResponseHeaders().add("Content-Type", "application/json; charset=utf-8");
 			exchange.sendResponseHeaders(status.get(), raw.length);
@@ -49,7 +54,7 @@ class VideoIdApiClientTests {
 	}
 
 	private Optional<String> lookup() {
-		return client.lookup("Bastille", "Give Me the Future", 215);
+		return client.lookup("Bastille", "Give Me the Future", "Give Me the Future", 215);
 	}
 
 	@Test
@@ -121,6 +126,33 @@ class VideoIdApiClientTests {
 
 		assertEquals(Optional.of("ugffpCgWBqs"), verified);
 		assertEquals(verified, bestGuess);
+	}
+
+	/**
+	 * 앨범명을 알면 실어 보낸다. resolver 가 "artist title album" 검색을 한 번 더 돌리고
+	 * 설명란으로 공식 Art Track 을 알아보는 재료다({@code data/videoid/resolver.py}).
+	 */
+	@Test
+	void sendsAlbum_whenKnown() {
+		body.set("{\"best\":null,\"playable\":false,\"retryable\":true}");
+
+		client.lookup("Bastille", "Give Me the Future", "Give Me the Future", 215);
+
+		// 퍼센트 인코딩이든 + 든 서버가 받는 값은 같다. 인코딩 방식이 아니라 값을 본다.
+		String query = URLDecoder.decode(lastQuery.get(), StandardCharsets.UTF_8);
+		assertTrue(query.contains("album=Give Me the Future"), query);
+	}
+
+	/** 앨범을 모르면 파라미터 자체를 빼고 보낸다 — 빈 값을 보내는 것과 구분된다. */
+	@Test
+	void omitsAlbum_whenUnknown() {
+		body.set("{\"best\":null,\"playable\":false,\"retryable\":true}");
+
+		client.lookup("Bastille", "Give Me the Future", null, 215);
+		assertFalse(lastQuery.get().contains("album="), lastQuery.get());
+
+		client.lookup("Bastille", "Give Me the Future", "   ", 215);
+		assertFalse(lastQuery.get().contains("album="), lastQuery.get());
 	}
 
 	/** artist·title 이 비면 서비스가 400 을 준다. 클라이언트 오류라 기록하지 않는다. */

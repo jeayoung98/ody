@@ -42,8 +42,8 @@ class MusicVideoIdBatchServiceTests {
         when(reader.findDetailsByIds(List.of(1L, 2L))).thenReturn(List.of(
                 detail(1L, "IU", "Love wins all", 275, null),
                 detail(2L, "BTS", "Dynamite", 199, "existingVid1")));
-        when(enricher.resolve(1L, "IU", "Love wins all", null, 275)).thenReturn("resolvedVid1");
-        when(enricher.resolve(2L, "BTS", "Dynamite", "existingVid1", 199)).thenReturn("existingVid1");
+        when(enricher.resolve(1L, "IU", "Love wins all", "album", null, 275)).thenReturn("resolvedVid1");
+        when(enricher.resolve(2L, "BTS", "Dynamite", "album", "existingVid1", 199)).thenReturn("existingVid1");
 
         VideoIdBatchResponse res = serviceWith(reader, enricher).getVideoIds(List.of(1L, 2L));
 
@@ -51,8 +51,8 @@ class MusicVideoIdBatchServiceTests {
         assertThat(res.items().get(0).musicId()).isEqualTo(1L);
         assertThat(res.items().get(0).videoId()).isEqualTo("resolvedVid1");
         assertThat(res.items().get(1).videoId()).isEqualTo("existingVid1");
-        verify(enricher).resolve(1L, "IU", "Love wins all", null, 275);
-        verify(enricher).resolve(2L, "BTS", "Dynamite", "existingVid1", 199);
+        verify(enricher).resolve(1L, "IU", "Love wins all", "album", null, 275);
+        verify(enricher).resolve(2L, "BTS", "Dynamite", "album", "existingVid1", 199);
     }
 
     @Test
@@ -60,7 +60,7 @@ class MusicVideoIdBatchServiceTests {
         MusicDetailReader reader = mock(MusicDetailReader.class);
         VideoIdEnricher enricher = mock(VideoIdEnricher.class);
         when(reader.findDetailsByIds(List.of(1L, 999L))).thenReturn(List.of(detail(1L, "IU", "t", 200, "v")));
-        when(enricher.resolve(1L, "IU", "t", "v", 200)).thenReturn("v");
+        when(enricher.resolve(1L, "IU", "t", "album", "v", 200)).thenReturn("v");
 
         assertThat(serviceWith(reader, enricher).getVideoIds(List.of(1L, 999L)).items()).hasSize(1);
     }

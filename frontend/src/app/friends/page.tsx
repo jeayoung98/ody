@@ -7,7 +7,7 @@ import FriendsPanel from "@/components/panels/friends/friends-panel";
  */
 export default function FriendsPage() {
   return (
-    <PanelScreen>
+    <PanelScreen panel="friends">
       <FriendsPanel />
     </PanelScreen>
   );

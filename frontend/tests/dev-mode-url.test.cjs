@@ -12,11 +12,10 @@ const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const vm = require("node:vm");
 
-const { devModeScript, DEV_MODE_CLASS } = require("../src/constants/dev-mode.ts");
+const { devModeScript } = require("../src/constants/dev-mode.ts");
 const { STORAGE_KEYS } = require("../src/constants/storage-keys.ts");
 
 const KEY = STORAGE_KEYS.surveyMode;
-const GATE = STORAGE_KEYS.gateOff;
 const ANALYTICS = STORAGE_KEYS.analyticsMode;
 
 /** 저장소 한 칸. `blocked` 면 시크릿 모드처럼 모든 접근이 던진다 */
@@ -55,18 +54,24 @@ function run({ url = "https://ody.test/", local = {}, session = {}, blocked = fa
   vm.createContext(context);
   vm.runInContext(devModeScript, context);
   return {
-    dev: classes.has(DEV_MODE_CLASS),
+    classes,
     local: context.localStorage.values,
     session: context.sessionStorage.values,
     url: replaced.at(-1) ?? null,
   };
 }
 
-test("?dev=1 이면 설문이 꺼지고 게이트를 넘는 클래스가 붙는다", () => {
-  const r = run({ url: "https://ody.test/?dev=1" });
-  assert.equal(r.local.get(KEY), "false");
-  assert.equal(r.local.get(GATE), "false");
-  assert.equal(r.dev, true);
+test("?dev=1 이면 설문이 꺼진다", () => {
+  assert.equal(run({ url: "https://ody.test/?dev=1" }).local.get(KEY), "false");
+});
+
+/*
+ * 좁은 화면 게이트가 없어지면서(S15P21A405-419) 이 스크립트가 <html> 에 클래스를 붙이던 일도
+ * 같이 사라졌다. 남은 일은 저장소 키 둘(설문·분석)을 뒤집는 것뿐이다.
+ */
+test("<html> 에 아무 클래스도 안 붙인다 — 게이트가 없어졌다", () => {
+  assert.equal(run({ url: "https://ody.test/?dev=1" }).classes.size, 0);
+  assert.equal(run({ url: "https://ody.test/" }).classes.size, 0);
 });
 
 /*
@@ -82,14 +87,9 @@ test("?dev=0 이면 분석이 다시 켜진다 — 껐다면 되돌릴 수도 �
   assert.equal(r.local.has(ANALYTICS), false);
 });
 
-test("분석 스위치는 게이트 클래스와 무관하다 — 분석만 꺼 둔 브라우저가 게이트를 넘지 않는다", () => {
-  assert.equal(run({ url: "https://ody.test/", local: { [ANALYTICS]: "false" } }).dev, false);
-});
-
 test("?dev=0 은 둘 다 되돌린다 — 테스터가 보는 상태로", () => {
-  const r = run({ url: "https://ody.test/?dev=0", local: { [KEY]: "false", [GATE]: "false", [ANALYTICS]: "false" } });
+  const r = run({ url: "https://ody.test/?dev=0", local: { [KEY]: "false", [ANALYTICS]: "false" } });
   assert.equal(r.local.size, 0);
-  assert.equal(r.dev, false);
 });
 
 test("파라미터를 주소에서 지운다 — 링크를 다시 보낼 때 딸려가지 않게", () => {
@@ -99,25 +99,15 @@ test("파라미터를 주소에서 지운다 — 링크를 다시 보낼 때 딸
 });
 
 test("파라미터 없이 다시 들어와도 유지된다 — 폰에서 한 번만 치면 된다", () => {
-  const r = run({ url: "https://ody.test/", local: { [KEY]: "false", [GATE]: "false" } });
-  assert.equal(r.dev, true);
+  const r = run({ url: "https://ody.test/", local: { [KEY]: "false" } });
+  assert.equal(r.local.get(KEY), "false", "손대지 않는다");
   assert.equal(r.url, null, "주소를 안 건드린다");
 });
 
 test("손댄 적 없으면 아무 일도 안 한다 — 테스터가 보는 기본값", () => {
   const r = run({ url: "https://ody.test/" });
-  assert.equal(r.dev, false);
   assert.equal(r.local.size, 0);
   assert.equal(r.url, null);
-});
-
-/*
- * 게이트 우회를 제 키에 담아 두는 이유는 S15P21A405-419 다 — 게이트를 걷어낼 때 지울 것이
- * 한 줄로 분명해진다. 스위치가 하나로 합쳐져도 키는 둘로 남는다.
- */
-test("둘 중 하나만 꺼져 있어도 게이트는 넘는다", () => {
-  assert.equal(run({ url: "https://ody.test/", local: { [GATE]: "false" } }).dev, true);
-  assert.equal(run({ url: "https://ody.test/", local: { [KEY]: "false" } }).dev, true);
 });
 
 test("session 에 남은 옛 값을 지운다 — 읽는 순서 때문에 살아나지 않게", () => {
@@ -133,6 +123,5 @@ test("저장소가 막혀 있어도 안 죽는다 — 시크릿 모드에서 앱
 test("gate 파라미터는 더 이상 아무 일도 안 한다 (S15P21A405-483)", () => {
   const r = run({ url: "https://ody.test/?gate=1" });
   assert.equal(r.local.size, 0, "저장소를 안 건드린다");
-  assert.equal(r.dev, false);
   assert.equal(r.url, null, "모르는 파라미터는 주소에 그대로 둔다");
 });

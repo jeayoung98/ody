@@ -29,14 +29,13 @@ export default function MapActions() {
   const closeComposer = useJourneyStore((s) => s.closeComposer);
   const openComposer = useOpenJourneyComposer();
   const activePanel = usePanelStore((s) => s.activePanel);
-  const collapsed = usePanelStore((s) => s.collapsed);
-  const sheetUp = activePanel != null && !collapsed;
+  const sheetUp = activePanel != null;
 
   if (pathname !== ROUTES.home) return null;
   /**
-   * 시트가 올라와 있으면 숨는다 (S15P21A405-417). 이 줄은 z-22 라 시트(z-20) 위에 뜨는데,
-   * 시트가 화면을 채운 동안에는 지도를 바꿀 일이 없다 — 떠 있어 봐야 내용만 가린다.
-   * 접어서 지도가 드러나면 다시 나온다.
+   * 시트가 떠 있으면 숨는다 (S15P21A405-417). 이 줄은 z-22 라 시트(z-20) 위에 뜨는데,
+   * 펼치면 내용을 가리고 **접어도 그 자리가 곧 시트가 걸쳐 있는 자리**라 제목 위에 얹힌다.
+   * 시트를 닫으면 다시 나온다.
    */
   if (sheetUp) return null;
 

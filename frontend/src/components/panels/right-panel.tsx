@@ -96,7 +96,9 @@ export default function RightPanel() {
         collapsed
           ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0 max-tablet:translate-y-[calc(100%_-_var(--spacing-sheet-peek))]"
           : ""
-      } max-tablet:inset-x-gutter-sm max-tablet:top-[72px] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
+      } max-tablet:glass-bar max-tablet:inset-x-0 max-tablet:top-[72px] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:rounded-[22px] max-tablet:rounded-b-none max-tablet:border-x-0 max-tablet:border-b-0 max-tablet:[&>section]:rounded-none! max-tablet:[&>section]:border-0 max-tablet:[&>section]:bg-transparent max-tablet:[&>section]:shadow-none max-tablet:[&>section]:backdrop-filter-none`}
+      data-sheet
+      data-collapsed={collapsed ? "" : undefined}
     >
       <PanelCollapseHandle />
       {/*

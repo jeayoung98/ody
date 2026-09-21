@@ -3,7 +3,6 @@
 import Box from "@/components/common/box";
 import Button from "@/components/common/button";
 import EmptyState from "@/components/common/empty-state";
-import ErrorMessage from "@/components/common/error-message";
 import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
@@ -28,7 +27,7 @@ export default function FriendsPanel() {
    * 그러면 소켓이 나중에 붙어도 다시 렌더되지 않아 `enabled` 가 false 로 굳었다.
    */
   const connected = useRealtimeConnected();
-  const { data, isLoading, isError, error, refetch } = useNearbyPeopleQuery(connected);
+  const { data, isLoading, error, refetch } = useNearbyPeopleQuery(connected);
   // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
   useNearbyPeopleLive(connected, refetch);
 
@@ -70,7 +69,11 @@ export default function FriendsPanel() {
             <Button onClick={() => void refetch()}>다시 시도</Button>
           </div>
         )}
-        {isError && !noPlay && !temporary && <ErrorMessage />}
+        {/*
+          그냥 실패했을 때는 **아무 말도 하지 않는다** (S15P21A405-509). 지도 별과 같은 판단이다
+          (S15P21A405-508) — 사용자가 할 수 있는 게 없는 문구라, 레이더 밑에 한 줄 깔리면서
+          가운데의 나를 위로 밀어낼 뿐이었다. 할 일이 있는 422·503 안내는 위에 그대로 남는다.
+        */}
         {connected && data && data.people.length === 0 && <EmptyState message="지금은 비슷한 곡을 듣는 사람이 없어요." />}
         {data?.people.map((p) => <FriendRow key={p.email} person={p} />)}
       </div>

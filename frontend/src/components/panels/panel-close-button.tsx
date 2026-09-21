@@ -2,6 +2,7 @@
 
 import IconButton from "@/components/common/icon-button";
 import { CloseIcon } from "@/components/common/icons";
+import { useBackToMap } from "@/hooks/use-back-to-map";
 import { usePanelStore } from "@/stores/use-panel-store";
 
 /**
@@ -12,8 +13,20 @@ import { usePanelStore } from "@/stores/use-panel-store";
  */
 export default function PanelCloseButton() {
   const close = usePanelStore((s) => s.close);
+  /**
+   * 폰에서 이 컴포넌트는 **하위 화면 안**에도 있다 (S15P21A405-417) — 거기서는 닫을 패널이
+   * 아니라 떠날 화면이므로 지도 탭으로 돌아간다. 지도 위 패널이면 예전처럼 그냥 닫는다.
+   */
+  const backToMap = useBackToMap();
   return (
-    <IconButton label="패널 닫기" onClick={close} className="text-ink-2!">
+    <IconButton
+      label="패널 닫기"
+      onClick={() => {
+        close();
+        backToMap();
+      }}
+      className="text-ink-2!"
+    >
       <CloseIcon />
     </IconButton>
   );

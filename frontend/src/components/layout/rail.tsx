@@ -45,56 +45,31 @@ export default function Rail() {
 
   return (
     /*
-     * 좁은 화면에서는 **맨 아래 고정 탭바**다 (S15P21A405-417). 음악 앱들이 쓰는 그 자리 —
-     * 탭바가 바닥에 깔리고 그 위에 재생바, 그 위가 내용이다. 자리가 정해져 있어서
-     * 패널이 열려도 서로 안 비킨다(떠다니는 네비는 폰에서 주차할 자리가 없었다).
-     *
-     * **같은 버튼·같은 핸들러를 그대로 쓴다.** 갈라놓으면 기능이 한쪽에만 붙는다 —
-     * 바뀌는 것은 이 바깥 상자의 자리와 버튼이 가로냐 세로냐뿐이고, 전부 `max-tablet:` 안에 있다.
-     * 데스크톱 클래스는 한 글자도 안 건드린다.
+     * **폰에서는 통째로 숨는다** (S15P21A405-417). 좁은 화면의 네비는 하단 고정 탭바가
+     * 맡고(`bottom-tabs.tsx`), 목록도 아예 다르다 — 거기는 목적지 넷(주변 사람·랭킹·지도·
+     * 마이페이지)이고 여기는 목적지 셋에 동작 둘이 섞여 있다. 한 컴포넌트를 양쪽 모양으로
+     * 비틀어 쓰다가 "랭킹을 보는 중인데 주변 탐색이 켜진" 상태가 생겼다.
      */
-    <div
-      data-hud
-      data-tabbar
-      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:right-gutter-sm max-tablet:bottom-hud-b max-tablet:left-gutter-sm max-tablet:z-[23] max-tablet:gap-0"
-    >
-      {/*
-        유리 바닥판. **자리 잡는 상자와 나눠 둔다** (S15P21A405-417) — 유리의 `backdrop-filter`
-        가 그 안의 `position: fixed` 를 자기 기준으로 가두기 때문이다. 한 상자에 같이 두면
-        프사가 우상단으로 못 올라가고 바 안에 눌러앉는다 (실측: 화면 아래로 4px 삐져나갔다).
-        데스크톱에서는 `contents` 라 상자가 아예 없어 지금과 똑같다.
-      */}
-      <div className="contents max-tablet:glass-bar max-tablet:block max-tablet:w-full max-tablet:rounded-[22px] max-tablet:rounded-t-none max-tablet:border-t-0">
-        {/* 폰에서는 알약이 유리를 벗고 칸 넷을 고르게 벌린다 */}
-        <nav
-          aria-label="네비"
-          className="glass-liquid flex gap-0.5 rounded-pill! p-px max-tablet:glass-off max-tablet:h-tabbar max-tablet:flex-1 max-tablet:justify-around max-tablet:gap-0 max-tablet:p-0"
-        >
-          {panelEnabled.friends && (
-            <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
-              <FriendsIcon />
-            </RailButton>
-          )}
-          {panelEnabled.chart && (
-            <RailButton label="랭킹" active={activePanel === "chart"} onClick={() => toggle("chart")} data-tutorial="chart">
-              <RankIcon />
-            </RailButton>
-          )}
-          <NearbyExploreButton />
-          {panelEnabled.journey && (
-            <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
-              <JourneyIcon size={16} />
-            </RailButton>
-          )}
-        </nav>
-      </div>
-      {/*
-        프사는 알약 밖에 따로 선다 (S15P21A405-434). **폰에서도 우상단에 남는다** —
-        "나" 는 목적지가 아니라 주인이고, 탭바에 끼워 넣으면 5칸이 되어 칸마다 좁아진다.
-        네비가 아래로 내려가면서 우상단이 비었으므로 자리 다툼도 없다 (S15P21A405-417).
-        자기 자리를 잡으려면 `fixed` 여야 한다 — 이 바는 폰에서 화면 아래에 붙은 상자라
-        그 안에서 `absolute` 로는 위로 못 나간다.
-      */}
+    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:hidden">
+      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
+        {panelEnabled.friends && (
+          <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
+            <FriendsIcon />
+          </RailButton>
+        )}
+        {panelEnabled.chart && (
+          <RailButton label="랭킹" active={activePanel === "chart"} onClick={() => toggle("chart")} data-tutorial="chart">
+            <RankIcon />
+          </RailButton>
+        )}
+        <NearbyExploreButton />
+        {panelEnabled.journey && (
+          <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
+            <JourneyIcon size={16} />
+          </RailButton>
+        )}
+      </nav>
+      {/* 프사는 알약 밖에 따로 선다 (S15P21A405-434) — "나" 는 목적지가 아니라 주인이라 따로 */}
       {panelEnabled.feed && <ProfileButton />}
     </div>
   );

@@ -1,9 +1,8 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import type { CSSProperties } from "react";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
@@ -13,6 +12,7 @@ import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
 import Brand from "./brand";
+import MapActions from "./map-actions";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
@@ -101,6 +101,14 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
    */
   const navBottom = `calc(var(--spacing-hud-b) + var(--spacing-tabbar) + ${playerH + STACK_GAP}px)`;
+  /**
+   * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
+   * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.
+   * 값은 여전히 `max-tablet:` 안에서만 읽히므로 넓은 화면은 한 픽셀도 안 바뀐다.
+   */
+  useEffect(() => {
+    document.documentElement.style.setProperty("--nav-bottom", navBottom);
+  }, [navBottom]);
   const occludedBottom = narrow ? HUD_B + tabBarH + playerH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
@@ -108,10 +116,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   );
 
   return (
-    <div
-      className="fixed inset-0 overflow-hidden bg-void text-ink"
-      style={{ "--nav-bottom": navBottom } as CSSProperties}
-    >
+    <div className="fixed inset-0 overflow-hidden bg-void text-ink">
       <MapView occlusion={occlusion} />
       {/* 축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다 */}
       <MapAxisLabels occlusion={occlusion} />
@@ -122,6 +127,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {features.social && <FollowBanner />}
       <GhostBanner />
       <Rail />
+      {/* 지도 탭에서만 나오는 동작(주변 탐색·여정) — 폰 전용 (S15P21A405-417) */}
+      <MapActions />
       {panelOpen && <RightPanel />}
       <MinimapPanel />
       <BottomBar />

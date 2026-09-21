@@ -21,9 +21,7 @@ export default function ProfileButton() {
       aria-pressed={active}
       data-tutorial="feed"
       onClick={() => toggle("feed")}
-      // 폰에서는 네비가 아래로 내려가고 **프사만 우상단에 남는다** (S15P21A405-417).
-      // 레일 상자 안에 있지만 그 상자가 화면 아래에 붙으므로, 위로 올라오려면 `fixed` 여야 한다
-      className={`glass-liquid grid h-11 w-11 place-items-center rounded-pill! transition-colors duration-fast hover:border-line-2 max-tablet:fixed max-tablet:top-hud-t max-tablet:right-gutter-sm max-tablet:z-[24] ${active ? "border-teal/60! shadow-glow-azure" : ""}`}
+      className={`glass-liquid grid h-11 w-11 place-items-center rounded-pill! transition-colors duration-fast hover:border-line-2 ${active ? "border-teal/60! shadow-glow-azure" : ""}`}
     >
       <Avatar src={me?.imageUrl} name={me?.nickname ?? me?.name} size={32} />
     </button>

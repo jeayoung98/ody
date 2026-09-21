@@ -39,6 +39,7 @@ class MajorTrackReaderAdapterTests {
 		r.setMusicId(musicId);
 		r.setTitle("t" + musicId);
 		r.setArtist("a" + musicId);
+		r.setAlbumMbid("alb-" + musicId);
 		r.setPc1(PCS[0]);
 		r.setPc2(PCS[1]);
 		r.setPc16(PCS[15]);
@@ -78,6 +79,8 @@ class MajorTrackReaderAdapterTests {
 		assertEquals(PCS[1], point.pc().get(1));
 		assertEquals(PCS[15], point.pc().get(15));
 		assertEquals(7L, point.musicId());
+		// 앨범 커버를 여는 열쇠다. music 조인으로 실어 보낸다 (S15P21A405-520)
+		assertEquals("alb-7", point.albumMbid());
 	}
 
 	@Test

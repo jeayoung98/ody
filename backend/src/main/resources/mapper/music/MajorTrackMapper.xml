@@ -27,12 +27,12 @@
 	</sql>
 
 	<!--
-		map_sample 에는 pc 16축이 없어 music 조인이 필요하다(MapPoint.pc 계약).
+		map_sample 에는 pc 16축도 album_mbid 도 없어 music 조인이 필요하다(MapPoint.pc·albumMbid 계약).
 		조인 없는 0.4 ms 는 이 조인만큼 깎인다 — 실 DB 재측정 대상(T016 지시).
 		장르는 조인하지 않는다: 29종 멜론 코드를 FE 10종으로 접는 매핑이 아직 없다.
 	-->
 	<select id="findLayerOneSample" resultType="com.ssafy.backend.music.dto.MapPointRow">
-		SELECT s.music_id, s.title, s.artist,
+		SELECT s.music_id, s.title, s.artist, m.album_mbid,
 		<include refid="locationColumns"/>
 		FROM map_sample s
 		JOIN music m ON m.id = s.music_id
@@ -42,7 +42,7 @@
 	</select>
 
 	<select id="findInAccumulatedBoxes" resultType="com.ssafy.backend.music.dto.MapPointRow">
-		SELECT m.id AS music_id, m.title, m.artist,
+		SELECT m.id AS music_id, m.title, m.artist, m.album_mbid,
 		<include refid="locationColumns"/>
 		FROM music m
 		<where>

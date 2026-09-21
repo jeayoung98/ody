@@ -58,6 +58,7 @@ class MusicDetailReaderAdapterTests {
 		r.setDuration(215);
 		r.setPlayCnt(42);
 		r.setYoutubeCnt(3);
+		r.setAlbumMbid("0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9");
 		r.setPc1(0.125);
 		r.setPc16(-3.5);
 		when(mapper.findById(7L)).thenReturn(r);
@@ -71,6 +72,8 @@ class MusicDetailReaderAdapterTests {
 		assertEquals(3, detail.youtubeCnt());
 		assertEquals(0.125, detail.location().pc1()); // 재계산·반올림 없음 (FR-006)
 		assertEquals(-3.5, detail.location().pc16());
+		// 앨범 커버를 여는 열쇠는 recording 쪽 mbid 가 아니라 이쪽이다 (S15P21A405-520)
+		assertEquals("0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9", detail.albumMbid());
 		assertNull(detail.album()); // 적재 결과상 전 행 NULL
 	}
 

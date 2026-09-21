@@ -77,6 +77,7 @@ public class MusicDetailReaderAdapter implements MusicDetailReader {
 				row.getBpm(),
 				row.getDuration(),
 				row.getAlbum(),
+				row.getAlbumMbid(),
 				row.getReleaseYear(),
 				YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
 				VideoIds.of(row.isUnplayable(), row.getVideoId()),

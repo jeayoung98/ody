@@ -62,6 +62,9 @@ class MusicControllerTests {
 
 
 
+	/** 앨범(release) MBID. FE 가 이 값으로 Cover Art Archive 를 두드린다(S15P21A405-520). */
+	private static final String ALBUM_MBID = "0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9";
+
 	/** D18: 응답 원소는 MapPoint 다. 1레이어는 범위 파라미터 없이 호출한다(FR-004). */
 	private static final double[] PCS = { 0.11, -0.22, 0.33, -0.44, 0.55, -0.66, 0.77, -0.88,
 			0.99, -1.10, 1.21, -1.32, 1.43, -1.54, 1.65, -1.76 };
@@ -71,7 +74,7 @@ class MusicControllerTests {
 		for (double v : PCS) {
 			pc.add(v);
 		}
-		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, false);
+		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, ALBUM_MBID, false);
 	}
 
 	@Test
@@ -86,6 +89,7 @@ class MusicControllerTests {
 				.andExpect(jsonPath("$.data.content[0].title").value("Love wins all"))
 				.andExpect(jsonPath("$.data.content[0].genreId").value(0))
 				.andExpect(jsonPath("$.data.content[0].youtubeUrl").doesNotExist())
+				.andExpect(jsonPath("$.data.content[0].albumMbid").value(ALBUM_MBID))
 				.andExpect(jsonPath("$.data.content[0].playable").value(false));
 
 		verify(musicService).getMajor(eq(1), eq(List.of()), eq(null));

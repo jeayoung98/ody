@@ -24,6 +24,10 @@ import java.util.List;
  *                   적재 전까지 전 곡 {@code null} 이다.
  *                   값은 {@code music.video_id} 에 있고 {@code map_sample} 에 PK 조인해 가져온다 — 2026-09-13 실측
  *                   웜 4.97 ms(1,094행), 엔드포인트 240 ms 대비 2% 라 비정규화하지 않는다(SC-004)
+ * @param albumMbid  이 곡이 실린 <b>앨범</b>의 MusicBrainz ID. 없으면 {@code null} (S15P21A405-520).
+ *                   FE 가 이 값으로 Cover Art Archive 에서 진짜 앨범 커버를 받고, 없으면 절차적 커버로
+ *                   떨어진다(S15P21A405-518). {@code map_sample} 에 없는 값이라 {@code music} 조인으로
+ *                   가져온다 — 좌표 16축 때문에 어차피 도는 조인이라 질의가 늘지 않는다
  * @param playable   제목·아티스트로 유튜브 검색 링크를 만들 수 있는지 여부. {@code videoId} 유무와는 다르다.
  */
 public record MapPoint(
@@ -34,6 +38,7 @@ public record MapPoint(
 		String title,
 		String artist,
 		String videoId,
+		String albumMbid,
 		boolean playable) {
 
 	/** 좌표 차원. data D7 로 PCA-16 확정, {@code manifest.k} 와 같아야 한다. */

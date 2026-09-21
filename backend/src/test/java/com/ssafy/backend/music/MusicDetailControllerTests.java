@@ -59,12 +59,15 @@ class MusicDetailControllerTests {
 
 
 
+	/** 앨범(release) MBID. FE 가 이 값으로 Cover Art Archive 를 두드린다(S15P21A405-520). */
+	private static final String ALBUM_MBID = "0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9";
+
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
 	}
 
 	private static MusicDetail detail(String youtubeUrl) {
-		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", 2024,
+		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", ALBUM_MBID, 2024,
 				youtubeUrl, null, loc(), 1428, 3);
 	}
 
@@ -88,6 +91,8 @@ class MusicDetailControllerTests {
 				// @JsonUnwrapped: 상세 필드가 data top-level에 flat
 				.andExpect(jsonPath("$.data.id").value(10234))
 				.andExpect(jsonPath("$.data.mbid").value("b1a9c0e9"))
+				// 앨범 커버를 여는 열쇠는 recording mbid 가 아니라 이쪽이다 (S15P21A405-520)
+				.andExpect(jsonPath("$.data.albumMbid").value(ALBUM_MBID))
 				.andExpect(jsonPath("$.data.bpm").value(128.4))
 				.andExpect(jsonPath("$.data.releaseYear").value(2024))
 				.andExpect(jsonPath("$.data.location.pc1").value(-0.4213))

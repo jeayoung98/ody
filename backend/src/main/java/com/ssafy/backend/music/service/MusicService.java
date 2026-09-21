@@ -113,7 +113,7 @@ public class MusicService {
 
 	private static MusicDetail withVideoId(MusicDetail detail, String videoId) {
 		return new MusicDetail(detail.id(), detail.mbid(), detail.title(), detail.artist(), detail.bpm(),
-				detail.duration(), detail.album(), detail.releaseYear(), detail.youtubeUrl(), videoId,
+				detail.duration(), detail.album(), detail.albumMbid(), detail.releaseYear(), detail.youtubeUrl(), videoId,
 				detail.location(), detail.playCnt(), detail.youtubeCnt());
 	}
 

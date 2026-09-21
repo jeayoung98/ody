@@ -29,7 +29,7 @@ class MusicReportServiceTests {
             new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private static MusicDetail detail(long id) {
-        return new MusicDetail(id, "mbid", "title", "artist", 120.0, 200, "album", 2007,
+        return new MusicDetail(id, "mbid", "title", "artist", 120.0, 200, "album", "album-mbid", 2007,
                 "https://youtu.be/x", null, LOC, 0, 0);
     }
 

@@ -142,7 +142,7 @@ class PlaylistControllerTests {
 	@Test
 	void detail_success_returnsMusics() throws Exception {
 		Location loc = new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-		MusicDetail track = new MusicDetail(1L, "mbid", "제목", "가수", 120.0, 200, "앨범", 2005,
+		MusicDetail track = new MusicDetail(1L, "mbid", "제목", "가수", 120.0, 200, "앨범", "album-mbid", 2005,
 				"https://youtu.be/x", null, loc, 10, 1);
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
 				.thenReturn(new PlaylistDetailResponse(42, "드라이브", 1, 200, 9, true, List.of(track)));

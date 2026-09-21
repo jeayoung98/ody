@@ -26,7 +26,7 @@ class MusicVideoIdBatchServiceTests {
             new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
 
     private static MusicDetail detail(long id, String artist, String title, Integer duration, String videoId) {
-        return new MusicDetail(id, "mbid", title, artist, 120.0, duration, "album", 2003,
+        return new MusicDetail(id, "mbid", title, artist, 120.0, duration, "album", "album-mbid", 2003,
                 "https://youtu.be/x", videoId, LOC, 0, 0);
     }
 

@@ -36,5 +36,9 @@ public enum RealtimeMessageType {
 	RIDE_PANEL,
 	/** 따라오던 사람이 내렸다. 인솔자에게만 간다. */
 	RIDE_RIDER_LEFT,
+	/** 인솔자가 사라져 따라가기가 끝났다. 따라가던 사람에게만 간다. */
+	RIDE_ENDED,
+	/** 선단이 흩어져 여러 사람이 한 자리에 한꺼번에 나타났다. */
+	VIEWPORT_BULK_ENTER,
 	PRESENCE_ERROR
 }

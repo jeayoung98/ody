@@ -191,4 +191,20 @@ class RidePayloadContractTests {
 
 		assertThat(objectMapper.readTree(json).get("riderCount").asInt()).isZero();
 	}
+
+	@Test
+	@DisplayName("RIDE_ENDED payload 의 JSON 키가 계약과 같다")
+	void rideEndedPayloadKeys() throws Exception {
+		RideEndedPayload payload = new RideEndedPayload(
+				"captain@example.com", RideEndReason.CAPTAIN_LEFT,
+				4927L, 3, -1.2542783, 1.2062433, 7, 5);
+
+		String json = objectMapper.writeValueAsString(payload);
+
+		assertThat(objectMapper.readTree(json).fieldNames())
+				.toIterable()
+				.containsExactlyInAnyOrder(
+						"captainEmail", "reason", "musicId", "layer", "x", "y", "cellX", "cellY");
+		assertThat(objectMapper.readTree(json).get("reason").asText()).isEqualTo("CAPTAIN_LEFT");
+	}
 }

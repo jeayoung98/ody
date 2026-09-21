@@ -29,6 +29,7 @@ import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 
 /** 두 사용자의 이동과 화면 재연결 흐름을 한 번에 검증한다. */
@@ -45,13 +46,14 @@ class ViewportTwoSessionScenarioTests {
 		MusicLocationService musicLocationService = mock(MusicLocationService.class);
 		UserDisplayService userDisplayService = mock(UserDisplayService.class);
 		RiderCountService riderCountService = mock(RiderCountService.class);
+		RideViewportService rideViewportService = mock(RideViewportService.class);
 		RealtimeMessageService messageService = mock(RealtimeMessageService.class);
 		RealtimeEventServiceImpl eventService = new RealtimeEventServiceImpl();
 		ViewportMetrics viewportMetrics = mock(ViewportMetrics.class);
 		ViewportDeltaService deltaService = new ViewportDeltaService(
 				viewportRepository, musicLocationService,
 				new MusicPositionCalculator(properties()),
-				userDisplayService, riderCountService, messageService, eventService,
+				userDisplayService, riderCountService, rideViewportService, messageService, eventService,
 				viewportMetrics);
 		deltaService.subscribeToChanges();
 

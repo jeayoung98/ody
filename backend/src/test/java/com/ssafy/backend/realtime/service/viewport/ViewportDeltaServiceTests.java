@@ -38,6 +38,7 @@ import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 
 /** 화면별 ENTER·MOVE·LEAVE 분류와 발송을 검증한다. */
@@ -50,6 +51,7 @@ class ViewportDeltaServiceTests {
 	@Mock MusicLocationService musicLocationService;
 	@Mock UserDisplayService userDisplayService;
 	@Mock RiderCountService riderCountService;
+	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock ViewportMetrics viewportMetrics; // 처리 시간·수신자 수 기록
@@ -61,7 +63,7 @@ class ViewportDeltaServiceTests {
 		service = new ViewportDeltaService(
 				viewportRepository, musicLocationService,
 				new MusicPositionCalculator(properties()),
-				userDisplayService, riderCountService,
+				userDisplayService, riderCountService, rideViewportService,
 				realtimeMessageService, realtimeEventService, viewportMetrics);
 	}
 

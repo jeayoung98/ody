@@ -25,6 +25,7 @@ import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 
 import jakarta.annotation.PostConstruct;
@@ -41,6 +42,7 @@ public class ViewportDeltaService {
 	private final MusicPositionCalculator musicPositionCalculator; // 화면에 표시할 위치
 	private final UserDisplayService userDisplayService; // 닉네임과 사진
 	private final RiderCountService riderCountService; // 따라오는 사용자 수
+	private final RideViewportService rideViewportService; // 따라오는 사람에게 같은 알림 전달
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐 발송
 	private final RealtimeEventService realtimeEventService; // 위치 변경 알림
 	private final ViewportMetrics viewportMetrics; // 수신자 수와 발송 시간 기록
@@ -110,7 +112,12 @@ public class ViewportDeltaService {
 		// 표시 좌표는 화면 요청과 같은 원시 PC 값이다. 정규화(0~1)는 셀 계산 내부용이라 밖으로 내지 않는다.
 		double[] position = needsCurrent ? rawPosition(newLocation, event.newLayer()) : null;
 
-		// 6. 수신자의 현재 화면 요청 순번을 넣어 개인 큐로 보낸다.
+		// 6. 수신자를 따라오는 사람들을 한 번에 읽어 둔다.
+		//    한 명씩 물으면 수신자 수만큼 왕복이 생겨 그대로 지연이 된다.
+		Map<String, Set<String>> ridersByReceiver = rideViewportService.ridersOf(types.keySet());
+
+		// 7. 수신자의 현재 화면 요청 순번을 넣어 개인 큐로 보낸다.
+		//    따라오는 사람에게는 인솔자 것을 그대로 보낸다. 그쪽은 자기 순번이 없다.
 		for (Map.Entry<String, RealtimeMessageType> entry : types.entrySet()) {
 			String receiver = entry.getKey();
 			RealtimeMessageType type = entry.getValue();
@@ -120,6 +127,7 @@ public class ViewportDeltaService {
 							metas.get(receiver).requestSeq(), event, display, riderCount, position);
 			realtimeMessageService.sendToUser(
 					receiver, WebSocketDestination.QUEUE_PRESENCE, type, payload);
+			rideViewportService.mirrorDelta(ridersByReceiver.get(receiver), type, payload);
 		}
 		recordDelta(startedAt, candidateCount, receiverCount, types.size());
 	}

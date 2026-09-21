@@ -27,6 +27,7 @@ import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
@@ -45,6 +46,7 @@ class PresenceWebSocketControllerTests {
 	@Mock WebSocketSessionService webSocketSessionService;
 	@Mock WebSocketErrorService webSocketErrorService;
 	@Mock ViewportService viewportService;
+	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeMessageService realtimeMessageService;
 
 	private PresenceWebSocketController controller;
@@ -52,7 +54,8 @@ class PresenceWebSocketControllerTests {
 	@BeforeEach
 	void setUp() {
 		controller = new PresenceWebSocketController(
-				presenceService, webSocketSessionService, webSocketErrorService, viewportService, realtimeMessageService);
+				presenceService, webSocketSessionService, webSocketErrorService, viewportService,
+				rideViewportService, realtimeMessageService);
 	}
 
 	@Test
@@ -263,5 +266,33 @@ class PresenceWebSocketControllerTests {
 	/** 첫 레이어(0)의 정상 화면 요청을 만든다. */
 	private static ViewportRequest request(long requestSeq) {
 		return new ViewportRequest(requestSeq, 0, 0.0, 2.0, 0.0, 2.0, List.of());
+	}
+
+	/** 인솔자가 화면을 움직이면 따라오는 사람 화면도 같이 움직여야 한다. */
+	@Test
+	@DisplayName("화면 목록을 보낼 때 따라오는 사람에게도 같은 목록을 넘긴다")
+	void mirrorsSnapshotToRiders() {
+		ViewportRequest request = request(3L);
+		ViewportSnapshot snapshot = ViewportSnapshot.individual(3L, 0, List.of());
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 3L, request.toViewport()))
+				.thenReturn(new OpenResult(OpenStatus.SNAPSHOT, snapshot));
+
+		controller.viewport(request, PRINCIPAL, SESSION_ID);
+
+		verify(rideViewportService).mirrorSnapshot(EMAIL, snapshot);
+	}
+
+	@Test
+	@DisplayName("보낼 목록이 없으면 따라오는 사람에게도 넘기지 않는다")
+	void noSnapshotNoMirror() {
+		ViewportRequest request = request(3L);
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 3L, request.toViewport()))
+				.thenReturn(new OpenResult(OpenStatus.OLD_REQUEST, null));
+
+		controller.viewport(request, PRINCIPAL, SESSION_ID);
+
+		verifyNoInteractions(rideViewportService);
 	}
 }

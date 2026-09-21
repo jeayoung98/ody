@@ -16,6 +16,13 @@ management:
       percentiles-histogram:
         http.server.requests: true
         ody.journey.engine: true
+        # 20명 선단으로 주변곡 탭을 열 때 p99 와 커넥션 풀 대기를 재려면 분포가 있어야 한다.
+        ody.nearby.candidates: true
+        hikaricp.connections.acquire: true
+      # 스크랩 한 번으로 p99 를 바로 읽으려면 분위수도 같이 내보내야 한다.
+      percentiles:
+        ody.nearby.candidates: 0.5, 0.95, 0.99
+        hikaricp.connections.acquire: 0.5, 0.95, 0.99
 
 # 좌표계 버전에 귀속된 후처리 임계값 (FR-024).
 # 값의 유일한 출처는 data/serving/<bundle>/postprocess_rules.json 이다 — 여기 적은 값은 그 사본이고,

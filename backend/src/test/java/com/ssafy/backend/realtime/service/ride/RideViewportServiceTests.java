@@ -2,6 +2,7 @@ package com.ssafy.backend.realtime.service.ride;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
@@ -10,6 +11,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.Map;
 import java.util.Set;
 
@@ -30,6 +32,11 @@ import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
+import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
+import com.ssafy.backend.realtime.geometry.ViewportRange;
+import com.ssafy.backend.realtime.service.viewport.ViewportService;
 
 /** 인솔자 화면이 따라오는 사람들에게 그대로 가는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -40,6 +47,8 @@ class RideViewportServiceTests {
 	private static final String RIDER_B = "b@x.com";
 
 	@Mock RideRedisRepository rideRedisRepository;
+	@Mock ViewportRedisRepository viewportRedisRepository;
+	@Mock ViewportService viewportService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@InjectMocks RideViewportService service;
 
@@ -171,5 +180,61 @@ class RideViewportServiceTests {
 
 		assertThat(service.ridersOf(List.of(CAPTAIN)))
 				.containsEntry(CAPTAIN, Set.of(RIDER_A));
+	}
+
+	private static ViewportMeta meta() {
+		return new ViewportMeta(7L, 12L, ViewportMode.INDIVIDUAL,
+				new ViewportRange(3, -2, 6, -2, 6, List.of()), Set.of());
+	}
+
+	/** 알림만으로는 못 그린다. 바탕이 되는 목록이 없으면 화면이 계속 비어 있다. */
+	@Test
+	@DisplayName("방금 탄 사람에게 인솔자가 보고 있는 화면을 한 번 보낸다")
+	void sendsCurrentScreenOnMount() {
+		ViewportSnapshot snapshot = snapshot();
+		when(viewportRedisRepository.findMeta(CAPTAIN)).thenReturn(Optional.of(meta()));
+		when(viewportService.createSnapshot(eq(CAPTAIN), eq(ViewportMode.INDIVIDUAL), eq(12L), any()))
+				.thenReturn(snapshot);
+
+		service.sendCurrentScreen(RIDER_A, CAPTAIN);
+
+		verify(realtimeMessageService).sendToUser(RIDER_A, WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.RIDE_VIEWPORT, snapshot);
+	}
+
+	/** 목록에서 빠지는 사람이 인솔자여야 탄 사람이 인솔자와 같은 화면을 본다. */
+	@Test
+	@DisplayName("목록은 인솔자 기준으로 만든다")
+	void buildsScreenForCaptainNotRider() {
+		when(viewportRedisRepository.findMeta(CAPTAIN)).thenReturn(Optional.of(meta()));
+		when(viewportService.createSnapshot(eq(CAPTAIN), any(), anyLong(), any()))
+				.thenReturn(snapshot());
+
+		service.sendCurrentScreen(RIDER_A, CAPTAIN);
+
+		verify(viewportService).createSnapshot(eq(CAPTAIN), any(), anyLong(), any());
+	}
+
+	@Test
+	@DisplayName("인솔자가 화면을 연 적이 없으면 보내지 않는다")
+	void noScreenSendsNothing() {
+		when(viewportRedisRepository.findMeta(CAPTAIN)).thenReturn(Optional.empty());
+
+		service.sendCurrentScreen(RIDER_A, CAPTAIN);
+
+		verifyNoInteractions(viewportService, realtimeMessageService);
+	}
+
+	/** 화면을 못 보내도 따라가기 자체는 성립한다. */
+	@Test
+	@DisplayName("목록을 만들다 실패해도 터뜨리지 않는다")
+	void screenFailureIsSwallowed() {
+		when(viewportRedisRepository.findMeta(CAPTAIN)).thenReturn(Optional.of(meta()));
+		when(viewportService.createSnapshot(anyString(), any(), anyLong(), any()))
+				.thenThrow(new IllegalStateException("저장된 화면 정보가 올바르지 않다"));
+
+		service.sendCurrentScreen(RIDER_A, CAPTAIN);
+
+		verifyNoInteractions(realtimeMessageService);
 	}
 }

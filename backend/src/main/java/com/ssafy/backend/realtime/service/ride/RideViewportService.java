@@ -14,8 +14,12 @@ import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.ViewportRedisRepository.ViewportMeta;
+import com.ssafy.backend.realtime.service.viewport.ViewportService;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 
 /**
  * 인솔자가 보는 지도를 따라오는 사람들에게 그대로 옮긴다.
@@ -26,12 +30,15 @@ import lombok.RequiredArgsConstructor;
  * 옮기는 것은 네 가지다 — 화면 목록, 누가 들어오고 나가고 움직인 알림, 자리별 사람 수.
  * 목록만 옮기면 인솔자가 지도를 가만히 둔 동안 나간 사람이 계속 떠 있게 된다.
  */
+@Slf4j
 @Service
 @Profile("realtime")
 @RequiredArgsConstructor
 public class RideViewportService {
 
 	private final RideRedisRepository rideRedisRepository; // 따라오는 사람 명단
+	private final ViewportRedisRepository viewportRedisRepository; // 인솔자가 열어 둔 화면
+	private final ViewportService viewportService; // 저장된 화면으로 목록 만들기
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐 발송
 
 	/**
@@ -45,6 +52,38 @@ public class RideViewportService {
 			return;
 		}
 		send(rideRedisRepository.riders(captainEmail), RealtimeMessageType.RIDE_VIEWPORT, snapshot);
+	}
+
+	/**
+	 * 방금 탄 사람에게 인솔자가 보고 있는 화면을 한 번 보낸다.
+	 *
+	 * 탄 뒤로 받는 것은 "누가 들어왔다", "누가 나갔다" 같은 변화만 받음 (델타).
+	 * 처음 지도가 비어 있는 상태에서 변화만 받으면 아무도 못 그린다.
+	 * 전체 목록은 인솔자가 지도를 움직일 때만 오는데, 인솔자가 가만히 있으면
+	 * 그때까지 계속 빈 지도를 보게 된다. 그래서 여기서 한 번 채워 준다.
+	 *
+	 * @param riderEmail 방금 탄 사람
+	 * @param captainEmail 따라가는 대상
+	 */
+	public void sendCurrentScreen(String riderEmail, String captainEmail) {
+		// 1. 인솔자가 화면을 연 적이 없으면 보낼 것도 없다.
+		ViewportMeta meta = viewportRedisRepository.findMeta(captainEmail).orElse(null);
+		if (meta == null) {
+			return;
+		}
+
+		// 2. 인솔자 기준으로 목록을 만든다.
+		//    목록에는 만든 사람 본인이 빠진다. 인솔자로 만들어야 인솔자가 보는 것과 같아진다.
+		//    인솔자가 이미 열어 둔 화면이라 구독은 건드리지 않는다.
+		try {
+			ViewportSnapshot snapshot = viewportService.createSnapshot(
+					captainEmail, meta.mode(), meta.requestSeq(), meta.viewport());
+			realtimeMessageService.sendToUser(riderEmail, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.RIDE_VIEWPORT, snapshot);
+		} catch (RuntimeException e) {
+			// 화면을 못 보내도 따라가기 자체는 성립한다. 인솔자가 지도를 움직이면 곧 채워진다.
+			log.warn("[Ride] 탑승 직후 인솔자 화면 전달 실패", e);
+		}
 	}
 
 	/**

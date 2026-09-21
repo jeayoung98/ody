@@ -59,6 +59,7 @@ class RideServiceTests {
 	@Mock MusicPlayService musicPlayService;
 	@Mock RidePlaybackService ridePlaybackService;
 	@Mock RideSubscriptionService rideSubscriptionService;
+	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeEventService realtimeEventService;
 	@InjectMocks RideService service;
 
@@ -319,5 +320,32 @@ class RideServiceTests {
 		RideResponse response = service.mount(RIDER, CAPTAIN);
 
 		assertThat(response.panel()).isEqualTo(RidePanelPayload.closed());
+	}
+
+	/** 안 보내면 인솔자가 지도를 다시 움직일 때까지 빈 화면이다. */
+	@Test
+	@DisplayName("탑승하면 인솔자가 보고 있는 화면을 한 번 보낸다")
+	void sendsCaptainScreenOnMount() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(42_000L, 4L);
+
+		service.mount(RIDER, CAPTAIN);
+
+		verify(rideViewportService).sendCurrentScreen(RIDER, CAPTAIN);
+	}
+
+	@Test
+	@DisplayName("자격 확인에 걸리면 화면도 보내지 않는다")
+	void rejectedMountSendsNoScreen() {
+		when(presenceRedisRepository.snapshot(RIDER)).thenReturn(standingAt(20999L, 1));
+		when(rideRedisRepository.mount(RIDER, CAPTAIN, 5L, 20))
+				.thenReturn(new MountResult(MountStatus.FULL, 0, 0));
+
+		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(rideViewportService);
 	}
 }

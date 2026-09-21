@@ -33,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
  * 따라가기를 시작한다.
  * 자격을 확인해 등록하고, 인솔자 자리로 옮긴 뒤, 어디서부터 틀면 되는지 알려준다.
  *
- * 옮길 때 지도 인덱스에는 넣지 않는다. 그룹은 남들 화면에서 인솔자 한 점과 인원수로만 보인다.
+ * 옮길 때 지도 뷰포트에는 넣지 않는다. 그룹은 남들 화면에서 인솔자 한 점과 인원수로만 보인다.
  */
 @Slf4j
 @Service
@@ -51,6 +51,7 @@ public class RideService {
 	private final MusicPlayService musicPlayService;
 	private final RidePlaybackService ridePlaybackService;
 	private final RideSubscriptionService rideSubscriptionService;
+	private final RideViewportService rideViewportService;
 	private final RealtimeEventService realtimeEventService;
 
 	/**
@@ -109,7 +110,12 @@ public class RideService {
 		//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
 		notifyLeftMap(riderEmail, before);
 
-		// 9. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+		// 9. 인솔자가 보고 있는 화면을 한 번 보낸다.
+		//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
+		//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
+		rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
+
+		// 10. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
 		RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
 
 		log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",

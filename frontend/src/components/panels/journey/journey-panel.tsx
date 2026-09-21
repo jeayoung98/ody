@@ -2,7 +2,6 @@
 
 import { useEffect } from "react";
 import Box from "@/components/common/box";
-import Loading from "@/components/common/loading";
 import { NO_GENRE_ID } from "@/constants";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
@@ -10,6 +9,7 @@ import { useMapStore } from "@/stores/use-map-store";
 import PanelCloseButton from "../panel-close-button";
 import JourneyEmptyPrompt from "./journey-empty-prompt";
 import JourneyEndpoints from "./journey-endpoints";
+import JourneySkeleton from "./journey-skeleton";
 import JourneyStopList from "./journey-stop-list";
 import JourneySummary from "./journey-summary";
 import { analyticsContext, trackOnce } from "@/lib/analytics/client";
@@ -59,7 +59,7 @@ export default function JourneyPanel() {
   return (
     <Box title="여정" actions={<PanelCloseButton />} footer={<JourneySummary route={route.data ?? null} />}>
       {!isRouteRequested && <JourneyEmptyPrompt />}
-      {isRouteRequested && route.isPending && <Loading label="경로를 만드는 중" />}
+      {isRouteRequested && route.isPending && <JourneySkeleton />}
       {hasRoute && (
         <>
           <JourneyEndpoints />

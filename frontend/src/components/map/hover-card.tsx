@@ -118,7 +118,15 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
       />
       <span className="min-w-0 flex-1">
         <p className="truncate text-[12.5px] font-semibold text-ink">{song.title}</p>
-        <p className="truncate text-[10.5px] text-ink-2">{song.artist ?? "-"}</p>
+        <p className="truncate text-[10.5px] text-ink-2">
+          {song.artist ?? "-"}
+          {/*
+            **재생 불가는 폰에서도 보여야 한다** (S15P21A405-417). 이 표시는 원래 재생수 줄에
+            붙어 있었는데, 카드를 줄이면서 그 줄을 빼는 바람에 폰에서만 사라졌다 —
+            누르면 안 들리는 곡을 미리 알려 주는 유일한 자리다.
+          */}
+          {!song.playable && <span className="text-warn"> · 재생 불가</span>}
+        </p>
         {/*
           재생수 줄은 **폰에서 뺀다** (S15P21A405-417). 카드가 자리를 너무 먹는다는 말이 나왔고,
           이 줄은 상세에 들어가면 그대로 다시 보인다 — 덮은 별 하나를 되찾는 편이 낫다.

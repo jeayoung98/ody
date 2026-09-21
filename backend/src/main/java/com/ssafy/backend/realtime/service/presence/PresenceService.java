@@ -14,6 +14,7 @@ import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
+import com.ssafy.backend.realtime.service.ride.RideService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
@@ -38,6 +39,7 @@ public class PresenceService {
 	private final MusicPositionCalculator musicPositionCalculator;
 	private final RealtimeEventService realtimeEventService; // 위치 변경 전달
 	private final PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡 확인
+	private final RideService rideService; // 나가는 사람의 따라가기 정리
 
 	@Value("${realtime.presence.ttl-ms:45000}")
 	private long ttlMs;
@@ -182,6 +184,8 @@ public class PresenceService {
 	public void leave(String email, long epoch) {
 		List<String> removed = presenceRedisRepository.applyLeave(email, epoch);
 		sendLeave(email, removed);
+		// 지도에서 지운 뒤에 정리한다. 인솔자였으면 따라가던 사람들이 빈 자리로 돌아온다.
+		rideService.onUserGone(email);
 		log.info("[Presence] 이탈 처리 완료 epoch={}", epoch);
 	}
 
@@ -194,6 +198,8 @@ public class PresenceService {
 	public void leaveExpired(String email, long sweepTimeMs) {
 		List<String> removed = presenceRedisRepository.applyLeaveExpired(email, sweepTimeMs);
 		sendLeave(email, removed);
+		// 연결 종료와 같은 길이다. 둘로 나누면 한쪽만 고쳐진다.
+		rideService.onUserGone(email);
 	}
 
 	/**

@@ -13,6 +13,8 @@ import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.ride.RideEndReason;
+import com.ssafy.backend.realtime.dto.ride.RideEndedPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
@@ -30,14 +32,18 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DisbandResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+
+import com.ssafy.backend.realtime.service.viewport.ViewportDeltaService;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -68,6 +74,7 @@ public class RideService {
 	private final RealtimeEventService realtimeEventService;
 	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
 	private final MeetingService meetingService; // 하차 시점 만남 기록
+	private final ViewportDeltaService viewportDeltaService; // 해체를 한 덩어리로 알림
 
 	/**
 	 * 따라가기를 시작한다.
@@ -214,6 +221,86 @@ public class RideService {
 				result.musicId(), result.layer(), result.remainingRiders());
 		return new DismountResponse(result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
+	}
+
+	/**
+	 * 접속이 끊기거나 만료된 사람을 따라가기에서 정리한다.
+	 *
+	 * 그 사람이 인솔자면 선단을 해제하고, 따라가던 사람이면 그 사람만 뺀다.
+	 * 둘 다 아니면 아무 일도 없다.
+	 *
+	 * 나가는 길이 연결 종료와 접속 만료 둘인데, 둘 다 여기로 들어온다.
+	 *
+	 * @param email 사라진 사람
+	 */
+	public void onUserGone(String email) {
+		disband(email);
+		leaveRide(email);
+	}
+
+	/**
+	 * 따라가던 사람이 사라졌다. 그 사람만 빼고 선단은 유지한다.
+	 *
+	 * 지도에 다시 넣지 않는다. 스스로 내린 것이 아니라 사라진 것이라 넣으면 유령이 된다.
+	 * 인솔자에게는 스스로 내렸을 때와 같은 알림을 보낸다 — 인솔자가 할 일이 같기 때문이다.
+	 *
+	 * @param riderEmail 사라진 사람
+	 */
+	private void leaveRide(String riderEmail) {
+		RiderLeaveResult result = rideRedisRepository.riderLeave(riderEmail);
+		if (result == null) {
+			return; // 따라가는 중이 아니었다
+		}
+		realtimeMessageService.sendToUser(result.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.RIDE_RIDER_LEFT,
+				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+		log.info("[Ride] 따라가던 사람 이탈 남은인원={}", result.remainingRiders());
+	}
+
+	/**
+	 * 인솔자가 사라졌을 때 그 선단을 해제한다.
+	 *
+	 * 따라가던 사람은 전원 강제로 내리고, 인솔자가 마지막으로 있던 곡에 그대로 남는다.
+	 * 듣던 곡은 끊기지 않는다. 스스로 내렸을 때와 결과가 같다.
+	 *
+	 * 인솔자가 창을 닫든 접속이 만료되든 여기로 들어온다. 길을 둘로 두면 한쪽만 고쳐진다.
+	 *
+	 * @param captainEmail 사라진 인솔자
+	 */
+	public void disband(String captainEmail) {
+		// 1. 이 인솔자를 따라가던 사람들 + 인솔자 본인의 명단을 먼저 만든다.
+		//    그 곡에 원래 있던 사람들과는 다른 명단이다. 이쪽은 만남에서 뺄 사람들이다.
+		//    흩고 나면 ride:riders 가 비어서 누가 따라갔는지 알 수 없으므로 지금 읽는다.
+		Set<String> fleetMembers = new LinkedHashSet<>(rideRedisRepository.riders(captainEmail));
+		fleetMembers.add(captainEmail);
+
+		// 2. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
+		DisbandResult result = rideRedisRepository.disband(captainEmail);
+		if (!result.hadRiders()) {
+			return; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
+		}
+
+		// 3. 따라가던 사람에게 끝났다고 알린다. 남게 된 자리는 스스로 내렸을 때와 같은 모양이다.
+		Spot spot = spotOf(result.musicId(), result.layer());
+		RideEndedPayload ended = new RideEndedPayload(
+				captainEmail, RideEndReason.CAPTAIN_LEFT,
+				result.musicId(), result.layer(),
+				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
+		for (String rider : result.leftRiders()) {
+			realtimeMessageService.sendToUser(rider, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.RIDE_ENDED, ended);
+		}
+
+		// 4. 남들 화면에는 한 덩어리로 알린다. 한 명씩 보내면 그 수만큼 다시 그린다.
+		viewportDeltaService.sendBulkEnter(result.leftRiders(), result.layer(), result.musicId(),
+				result.cellX() + ":" + result.cellY());
+
+		// 5. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
+		//    한 명이 스스로 내릴 때와 같은 함수다. 두 벌로 두면 한쪽만 고쳐진다.
+		meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers);
+
+		log.info("[Ride] 선단 해체 musicId={} layer={} 내린인원={}",
+				result.musicId(), result.layer(), result.leftRiders().size());
 	}
 
 	/**

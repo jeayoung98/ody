@@ -97,6 +97,18 @@ public class RedisScriptConfig {
 		return listScript("redis/ride-dismount.lua");
 	}
 
+	/** 인솔자 한 명의 선단을 흩고, 그를 따라가던 사람 전원을 지도에 다시 넣는다. */
+	@Bean
+	public DefaultRedisScript<List> rideDisbandScript() {
+		return listScript("redis/ride-disband.lua");
+	}
+
+	/** 따라가던 사람 한 명이 사라졌을 때 그 사람만 뺀다. 선단은 유지된다. */
+	@Bean
+	public DefaultRedisScript<List> rideRiderLeaveScript() {
+		return listScript("redis/ride-rider-leave.lua");
+	}
+
 	/**
 	 * 목록을 돌려주는 Lua 파일을 읽는다.
 	 * @param path Lua 파일 경로

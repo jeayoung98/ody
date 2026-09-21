@@ -10,8 +10,10 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.realtime.dto.presence.UserDisplay;
+import com.ssafy.backend.realtime.dto.viewport.ViewportBulkEnter;
 import com.ssafy.backend.realtime.dto.viewport.ViewportDelta;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
+import com.ssafy.backend.realtime.dto.viewport.ViewportUser;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
@@ -130,6 +132,71 @@ public class ViewportDeltaService {
 			rideViewportService.mirrorDelta(ridersByReceiver.get(receiver), type, payload);
 		}
 		recordDelta(startedAt, candidateCount, receiverCount, types.size());
+	}
+
+	/**
+	 * 여러 사람이 한 자리에 한꺼번에 나타났다고 알린다.
+	 *
+	 * 선단이 흩어질 때 쓴다. 한 명씩 알리면 사람 수만큼 알림이 나가고, 받는 쪽은
+	 * 그 수만큼 다시 그리면서 중간 상태가 화면에 보인다. 그래서 한 덩어리로 보낸다.
+	 *
+	 * 전원이 인솔자의 마지막 곡에 남으므로 자리는 하나뿐이다.
+	 *
+	 * @param emails 나타난 사람들
+	 * @param layer 그 곡이 있는 레이어
+	 * @param musicId 사람들이 나타난 곡
+	 * @param cell 그 곡이 있는 자리
+	 */
+	public void sendBulkEnter(List<String> emails, int layer, long musicId, String cell) {
+		if (emails == null || emails.isEmpty()) {
+			return;
+		}
+		// 1. 그 자리를 보고 있는 사람을 찾는다. 나타난 본인들은 뺀다.
+		Set<String> receivers = new LinkedHashSet<>(
+				viewportRepository.findUsersWatchingCells(layer, cell, layer, cell));
+		receivers.removeAll(emails);
+		if (receivers.isEmpty()) {
+			return;
+		}
+
+		// 2. 개별 사용자 방식인 화면만 남긴다. 묶음 방식은 자리별 사람 수로 따로 받는다.
+		Map<String, ViewportMeta> metas = new LinkedHashMap<>(
+				viewportRepository.findMetaByEmails(receivers));
+		metas.entrySet().removeIf(entry -> entry.getValue().mode() != ViewportMode.INDIVIDUAL);
+		if (metas.isEmpty()) {
+			return;
+		}
+
+		// 3. 그 곡이 각자의 화면 안에 실제로 들어오는지 본다.
+		double[] location = musicLocationService.findLocation(musicId).orElse(null);
+		if (location == null) {
+			return;
+		}
+		metas.entrySet().removeIf(entry -> !isVisible(entry.getValue(), layer, location));
+		if (metas.isEmpty()) {
+			return;
+		}
+		double[] position = rawPosition(location, layer);
+
+		// 4. 나타난 사람들의 정보는 한 번만 만든다. 받는 사람이 여럿이어도 내용은 같다.
+		Map<String, Integer> riderCounts = riderCountService.countAll(emails);
+		List<ViewportUser> users = emails.stream()
+				.map(email -> {
+					UserDisplay display = userDisplayService.find(email);
+					return new ViewportUser(email, display.nickname(), display.imageUrl(),
+							riderCounts.getOrDefault(email, 0));
+				})
+				.toList();
+
+		// 5. 받는 사람의 화면 요청 번호만 갈아 끼워 개인 큐로 보낸다.
+		Map<String, Set<String>> ridersByReceiver = rideViewportService.ridersOf(metas.keySet());
+		for (Map.Entry<String, ViewportMeta> entry : metas.entrySet()) {
+			ViewportBulkEnter payload = new ViewportBulkEnter(
+					entry.getValue().requestSeq(), musicId, position[0], position[1], users);
+			realtimeMessageService.sendToUser(entry.getKey(), WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.VIEWPORT_BULK_ENTER, payload);
+			rideViewportService.mirrorBulkEnter(ridersByReceiver.get(entry.getKey()), payload);
+		}
 	}
 
 	/**

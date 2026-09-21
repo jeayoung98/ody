@@ -87,6 +87,32 @@ public class RiderMoveService {
 	}
 
 	/**
+	 * 인솔자가 레이어만 옮겼을 때 따라오는 사람들도 같은 곳으로 옮긴다.
+	 *
+	 * 곡이 그대로라 재생 기록도, 재생 정보 저장도, 곡 알림도 없다. 자리만 맞춘다.
+	 * 안 맞추면 인솔자는 5층, 따라오는 사람은 3층에 서게 된다. 그 상태로 내리거나
+	 * 해체하면 엉뚱한 층에 풀려나고 만남도 그 층의 이웃과 계산된다.
+	 *
+	 * 따라오는 사람은 자기 자리를 화면에 쓰지 않는다 — 인솔자 화면을 옮겨 받기 때문이다.
+	 * 그래서 이 사람들에게 따로 보낼 것은 없다.
+	 *
+	 * @param captainEmail 레이어를 옮긴 인솔자
+	 * @param musicId 그대로인 곡
+	 * @param layer 인솔자가 옮겨 간 레이어
+	 * @param placement 그 레이어에서의 자리
+	 * @return 실제로 옮겨진 사람 수
+	 */
+	public int moveToLayer(String captainEmail, long musicId, int layer, Placement placement) {
+		List<String> riders = ridersOf(captainEmail);
+		if (riders.isEmpty()) {
+			return 0;
+		}
+		int moved = moveRiders(riders, musicId, layer, placement).size();
+		log.info("[Ride] 레이어 이동에 따라오는 사람도 옮김 layer={} 인원={}", layer, moved);
+		return moved;
+	}
+
+	/**
 	 * 따라오는 사람들을 인솔자 자리로 옮긴다.
 	 *
 	 * 옮기기 전 자리는 각자에게서 읽는다. 대부분 인솔자가 있던 앞 곡이지만,

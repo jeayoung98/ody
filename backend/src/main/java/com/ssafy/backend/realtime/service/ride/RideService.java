@@ -104,49 +104,81 @@ public class RideService {
 			throw new CustomException(toErrorCode(mounted.status()));
 		}
 
-		// 4. 인솔자가 서 있는 곡의 자리를 계산한다.
-		Spot spot = spotOf(mounted.musicId(), mounted.layer());
-		Placement placement = spot.placement();
+		// 여기서부터는 등록이 이미 끝나 있다. 아래에서 터지면 등록만 남아
+		// "따라가는 중인데 지도에도 있는" 상태가 되므로 되돌린다.
+		boolean placed = false;
+		try {
+			// 4. 인솔자가 서 있는 곡의 자리를 계산한다.
+			Spot spot = spotOf(mounted.musicId(), mounted.layer());
+			Placement placement = spot.placement();
 
-		// 5. 그 자리로 옮기되 지도에는 넣지 않는다. 서 있던 자리에서는 빠진다.
-		boolean moved = presenceRedisRepository.applyRidePlacement(
-				riderEmail, before.epoch(),
-				before.musicId(), before.layer(), before.cellX(), before.cellY(),
-				mounted.musicId(), mounted.layer(),
-				placement.xNorm(), placement.yNorm(), placement.cellX(), placement.cellY());
-		if (!moved) {
-			log.warn("따라가기 STALE reason={}", WebSocketErrorCode.PRESENCE_STALE);
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			// 5. 그 자리로 옮기되 지도에는 넣지 않는다. 서 있던 자리에서는 빠진다.
+			placed = presenceRedisRepository.applyRidePlacement(
+					riderEmail, before.epoch(),
+					before.musicId(), before.layer(), before.cellX(), before.cellY(),
+					mounted.musicId(), mounted.layer(),
+					placement.xNorm(), placement.yNorm(), placement.cellX(), placement.cellY());
+			if (!placed) {
+				log.warn("따라가기 STALE reason={}", WebSocketErrorCode.PRESENCE_STALE);
+				throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			}
+
+			// 6. 혼자 보던 화면과 주변사람 구독을 끊는다.
+			//    이제부터는 인솔자가 보는 것을 옮겨 받는다. 안 끊으면 두 동네 소식이 섞여 들어온다.
+			rideSubscriptionService.closeOwnViews(riderEmail, before.epoch());
+
+			// 7. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
+			//    따라가는 사람이 그 곡의 발견자가 될 수 없고, 따라붙은 것은 만남이 아니다.
+			long playHistoryId = musicPlayService.recordPlay(
+					riderEmail, mounted.musicId(), PlaySource.FOLLOW.name());
+
+			// 8. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
+			//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
+			notifyLeftMap(riderEmail, before);
+
+			// 9. 인솔자가 보고 있는 화면을 한 번 보낸다.
+			//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
+			//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
+			rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
+
+			// 10. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+			RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
+
+			log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",
+					mounted.musicId(), mounted.layer(), playback.snapshotSeq());
+			return new RideResponse(captainEmail, playHistoryId,
+					mounted.musicId(), mounted.layer(),
+					spot.rawX(), spot.rawY(), placement.cellX(), placement.cellY(),
+					playback.state(), playback.positionMs(), playback.snapshotSeq(),
+					openPanel(captainEmail));
+		} catch (RuntimeException e) {
+			undoMount(riderEmail, captainEmail, placed);
+			throw e;
 		}
+	}
 
-		// 6. 혼자 보던 화면과 주변사람 구독을 끊는다.
-		//    이제부터는 인솔자가 보는 것을 옮겨 받는다. 안 끊으면 두 동네 소식이 섞여 들어온다.
-		rideSubscriptionService.closeOwnViews(riderEmail, before.epoch());
-
-		// 7. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
-		//    따라가는 사람이 그 곡의 발견자가 될 수 없고, 따라붙은 것은 만남이 아니다.
-		long playHistoryId = musicPlayService.recordPlay(
-				riderEmail, mounted.musicId(), PlaySource.FOLLOW.name());
-
-		// 8. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
-		//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
-		notifyLeftMap(riderEmail, before);
-
-		// 9. 인솔자가 보고 있는 화면을 한 번 보낸다.
-		//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
-		//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
-		rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
-
-		// 10. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
-		RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
-
-		log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",
-				mounted.musicId(), mounted.layer(), playback.snapshotSeq());
-		return new RideResponse(captainEmail, playHistoryId,
-				mounted.musicId(), mounted.layer(),
-				spot.rawX(), spot.rawY(), placement.cellX(), placement.cellY(),
-				playback.state(), playback.positionMs(), playback.snapshotSeq(),
-				openPanel(captainEmail));
+	/**
+	 * 등록만 해 놓고 뒤에서 실패한 따라가기를 되돌린다.
+	 *
+	 * 자리를 이미 옮겼는지에 따라 되돌리는 방법이 다르다. 옮기기 전이면 아직 지도에 있으므로
+	 * 등록만 지우면 되고, 옮긴 뒤면 지도에서 빠져 있으므로 다시 넣어야 한다.
+	 * 반대로 하면 지도에 두 번 들어가 그 자리 인원수가 하나 늘어난 채 남는다.
+	 *
+	 * 화면과 주변사람 구독은 되살리지 않는다. 실패를 받은 쪽이 다시 요청한다.
+	 *
+	 * @param placed 자리를 이미 옮겼으면 true
+	 */
+	private void undoMount(String riderEmail, String captainEmail, boolean placed) {
+		try {
+			if (placed) {
+				rideRedisRepository.dismount(riderEmail, captainEmail);
+			} else {
+				rideRedisRepository.riderLeave(riderEmail);
+			}
+		} catch (RuntimeException e) {
+			// 되돌리기까지 실패하면 등록이 남는다. 접속이 끊길 때 정리된다.
+			log.warn("따라가기 되돌리기 실패 — 등록이 남을 수 있다", e);
+		}
 	}
 
 	/**

@@ -367,6 +367,75 @@ class RideServiceTests {
 		verifyNoInteractions(rideViewportService);
 	}
 
+	// ── 탑승이 뒤에서 실패하면 되돌린다 ───────────────────
+
+	/** 아직 지도에 서 있다. 지도 복귀까지 하면 그 자리 인원수가 하나 늘어난 채 남는다. */
+	@Test
+	@DisplayName("자리를 옮기기 전에 터지면 등록만 지운다")
+	void failureBeforePlacementRemovesRegistrationOnly() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.empty());
+		when(musicLocationService.exists(MUSIC)).thenReturn(false);
+
+		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
+				.isInstanceOf(CustomException.class);
+
+		verify(rideRedisRepository).riderLeave(RIDER);
+		verify(rideRedisRepository, never()).dismount(anyString(), anyString());
+	}
+
+	/** 이미 지도에서 빠져 있다. 등록만 지우면 어디에도 없는 사람이 된다. */
+	@Test
+	@DisplayName("자리를 옮긴 뒤에 터지면 지도에 다시 넣는다")
+	void failureAfterPlacementPutsBackOnMap() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		when(musicPlayService.recordPlay(anyString(), anyLong(), anyString()))
+				.thenThrow(new IllegalStateException("기록 실패"));
+
+		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
+				.isInstanceOf(IllegalStateException.class);
+
+		verify(rideRedisRepository).dismount(RIDER, CAPTAIN);
+		verify(rideRedisRepository, never()).riderLeave(anyString());
+	}
+
+	@Test
+	@DisplayName("자리 옮기기가 거부되면 등록만 지운다")
+	void rejectedPlacementRemovesRegistrationOnly() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+		when(presenceRedisRepository.applyRidePlacement(
+				anyString(), anyLong(), any(), any(), any(), any(),
+				anyLong(), anyInt(), anyDouble(), anyDouble(), anyInt(), anyInt())).thenReturn(false);
+
+		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
+				.isInstanceOf(CustomException.class);
+
+		verify(rideRedisRepository).riderLeave(RIDER);
+	}
+
+	/** 되돌리기까지 실패해도 원래 오류를 그대로 올려야 원인을 알 수 있다. */
+	@Test
+	@DisplayName("되돌리기가 실패해도 원래 오류를 올린다")
+	void undoFailureKeepsOriginalError() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		when(musicPlayService.recordPlay(anyString(), anyLong(), anyString()))
+				.thenThrow(new IllegalStateException("기록 실패"));
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenThrow(new IllegalStateException("되돌리기도 실패"));
+
+		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
+				.isInstanceOf(IllegalStateException.class)
+				.hasMessage("기록 실패");
+	}
+
 	// ── 하차 ───────────────────────────────────────────────
 
 	private void givenRiding() {

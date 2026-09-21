@@ -32,6 +32,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.Prese
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
 import com.ssafy.backend.realtime.service.ride.RideService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 
 /** 실제 Redis에서 사용자 배치와 상태 관리를 검증한다. */
 @EnabledIfEnvironmentVariable(named = "RUN_REDIS_INTEGRATION", matches = "true")
@@ -271,7 +272,8 @@ class PresenceRedisIntegrationTests {
 				mock(MusicPositionCalculator.class),
 				eventService,
 				mock(PlayHistoryMapper.class),
-				mock(RideService.class));
+				mock(RideService.class),
+				mock(RiderMoveService.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 다른 탭이 남아 있지 않은 재연결이므로 이전 위치를 지운다.
@@ -307,7 +309,8 @@ class PresenceRedisIntegrationTests {
 				mock(MusicPositionCalculator.class),
 				eventService,
 				mock(PlayHistoryMapper.class),
-				mock(RideService.class));
+				mock(RideService.class),
+				mock(RiderMoveService.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 앞의 탭이 남아 있든 아니든 새 접속은 새 출발이다.

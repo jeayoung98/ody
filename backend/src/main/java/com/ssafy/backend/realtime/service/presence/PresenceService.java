@@ -14,6 +14,7 @@ import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 import com.ssafy.backend.realtime.service.ride.RideService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
@@ -41,6 +42,7 @@ public class PresenceService {
 	private final RealtimeEventService realtimeEventService; // 위치 변경 전달
 	private final PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡 확인
 	private final RideService rideService; // 나가는 사람의 따라가기 정리
+	private final RiderMoveService riderMoveService; // 인솔자가 층을 옮기면 따라오는 사람도 옮김
 
 	@Value("${realtime.presence.ttl-ms:45000}")
 	private long ttlMs;
@@ -132,6 +134,10 @@ public class PresenceService {
 		if (!ok) {
 			throw joinError(WebSocketErrorCode.PRESENCE_STALE, "입장 처리 중 접속이나 현재 곡이 바뀌었다");
 		}
+
+		// 4. 따라오는 사람이 있으면 같은 곳으로 옮긴다. 곡은 그대로라 자리만 맞춘다.
+		//    안 옮기면 인솔자만 새 층으로 가고 선단이 두 층으로 갈라진다.
+		riderMoveService.moveToLayer(email, musicId, layer, p);
 
 		// 처음 자리를 잡거나 곡·레이어·셀이 바뀌면 새 위치를 알린다.
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();

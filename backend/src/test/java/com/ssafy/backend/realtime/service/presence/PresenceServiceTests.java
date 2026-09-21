@@ -31,6 +31,7 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.ride.RideService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
@@ -50,6 +51,7 @@ class PresenceServiceTests {
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡
 	@Mock RideService rideService; // 나가는 사람의 따라가기 정리
+	@Mock RiderMoveService riderMoveService; // 인솔자가 층을 옮기면 따라오는 사람도 옮김
 	@InjectMocks PresenceService service;
 
 	@BeforeEach
@@ -327,5 +329,22 @@ class PresenceServiceTests {
 		service.leaveExpired(EMAIL, 1000L);
 
 		verifyNoInteractions(realtimeEventService, rideService);
+	}
+
+	/** 안 옮기면 인솔자는 새 층, 따라오는 사람은 옛 층에 남아 선단이 갈라진다. */
+	@Test
+	@DisplayName("레이어를 옮기면 따라오는 사람도 같은 곳으로 옮긴다")
+	void joinMovesRidersToNewLayer() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(20L, 1, 1, 1, 7L));
+		when(presenceRepository.join(EMAIL, 7L, 20L, 1, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(true);
+
+		service.join(EMAIL, 7L, new JoinRequest(2L, 2, 99L));
+
+		verify(riderMoveService).moveToLayer(EMAIL, 20L, 2, placement);
 	}
 }

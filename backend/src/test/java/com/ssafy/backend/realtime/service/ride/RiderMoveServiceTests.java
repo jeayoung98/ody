@@ -12,6 +12,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Clock;
 import java.time.Instant;
@@ -205,5 +206,34 @@ class RiderMoveServiceTests {
 		verify(realtimeMessageService, times(5)).sendToUser(
 				anyString(), anyString(), eq(RealtimeMessageType.RIDE_TRACK), payload.capture());
 		assertThat(payload.getAllValues()).allMatch(p -> !p.playable());
+	}
+
+	// ── 인솔자가 층만 옮겼을 때 ─────────────────────────────
+
+	/** 곡은 그대로다. 기록도 재생 정보도 곡 알림도 없어야 한다. */
+	@Test
+	@DisplayName("층만 옮기면 자리만 맞추고 기록은 남기지 않는다")
+	void layerMoveOnlyRepositions() {
+		List<String> riders = givenRiders(2);
+		given(rideRedisRepository.riders(CAPTAIN)).willReturn(new LinkedHashSet<>(riders));
+
+		assertThat(riderMoveService.moveToLayer(CAPTAIN, MUSIC_ID, LAYER, placement)).isEqualTo(2);
+
+		verify(presenceRedisRepository, times(2)).applyRidePlacement(
+				anyString(), anyLong(), any(), any(), any(), any(),
+				eq(MUSIC_ID), eq(LAYER), anyDouble(), anyDouble(), anyInt(), anyInt());
+		verifyNoInteractions(playHistoryMapper, realtimeMessageService);
+		verify(rideRedisRepository, never()).savePlayback(
+				anyString(), anyLong(), any(), anyLong(), anyLong());
+	}
+
+	@Test
+	@DisplayName("따라오는 사람이 없으면 아무것도 하지 않는다")
+	void layerMoveWithoutRidersDoesNothing() {
+		given(rideRedisRepository.riders(CAPTAIN)).willReturn(Set.of());
+
+		assertThat(riderMoveService.moveToLayer(CAPTAIN, MUSIC_ID, LAYER, placement)).isZero();
+
+		verifyNoInteractions(presenceRedisRepository, playHistoryMapper, realtimeMessageService);
 	}
 }

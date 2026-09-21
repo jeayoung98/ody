@@ -42,7 +42,12 @@ export default function LocateButton() {
       disabled={!canGoHome}
       aria-label="내 위치로 가기"
       title="내 위치로 가기"
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent"
+      /*
+       * 폰에서는 **손가락이 닿는 넓이만** 넓힌다 (S15P21A405-417). 보이는 크기는 32 그대로라
+       * 재생바 줄이 안 흔들리고, 투명한 판이 위아래·좌우로 6px 씩 더해 44 를 만든다
+       * (`--spacing-touch`). 32px 짜리 과녁은 손가락으로 겨누기에 작다.
+       */
+      className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent max-tablet:after:absolute max-tablet:after:-inset-1.5 max-tablet:after:content-['']"
     >
       <LocateIcon />
     </button>

@@ -19,6 +19,7 @@ import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.dto.presence.ViewportRequest;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
 import com.ssafy.backend.realtime.service.viewport.ViewportService.OpenResult;
@@ -39,6 +40,7 @@ public class PresenceWebSocketController {
 	private final WebSocketSessionService webSocketSessionService; // 현재 소켓의 접속 번호 조회
 	private final WebSocketErrorService webSocketErrorService; // 개인 오류 큐로 전송
 	private final ViewportService viewportService; // 현재 화면의 사용자 목록 생성
+	private final RideViewportService rideViewportService; // 따라오는 사람에게 같은 화면 전달
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐로 목록 전송
 
 	/**
@@ -125,9 +127,11 @@ public class PresenceWebSocketController {
 					email, epoch, request.requestSeq(), viewport);
 
 			// 3. 현재 화면 정보가 완성되면 개인 큐로 보낸다.
+			//    따라오는 사람이 있으면 같은 목록을 그대로 한 번 더 보낸다.
 			if (result.status() == OpenStatus.SNAPSHOT) {
 				realtimeMessageService.sendToUser(email, WebSocketDestination.QUEUE_PRESENCE,
 						RealtimeMessageType.VIEWPORT_SNAPSHOT, result.snapshot());
+				rideViewportService.mirrorSnapshot(email, result.snapshot());
 				return;
 			}
 			if (result.status() == OpenStatus.STALE_CONNECTION) {

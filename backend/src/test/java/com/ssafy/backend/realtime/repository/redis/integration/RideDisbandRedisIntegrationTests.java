@@ -21,6 +21,7 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import com.ssafy.backend.realtime.config.RedisScriptConfig;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DisbandResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 
 /** 실제 Redis에서 선단 해체가 전원을 지도에 돌려보내고 흔적을 지우는지 검증한다. */
 @EnabledIfEnvironmentVariable(named = "RUN_REDIS_INTEGRATION", matches = "true")
@@ -63,7 +64,7 @@ class RideDisbandRedisIntegrationTests {
 		RedisScriptConfig scripts = new RedisScriptConfig();
 		repository = new RideRedisRepository(
 				redis, scripts.rideMountScript(), scripts.rideDismountScript(),
-				scripts.rideDisbandScript());
+				scripts.rideDisbandScript(), scripts.rideRiderLeaveScript());
 	}
 
 	@AfterEach
@@ -183,6 +184,47 @@ class RideDisbandRedisIntegrationTests {
 		assertThat(result.hadRiders()).isFalse();
 		assertThat(result.leftRiders()).isEmpty();
 		assertThat(redis.hasKey("ride:playback:" + captain)).isFalse();
+	}
+
+	// ── 따라가던 사람 한 명만 사라짐 ───────────────────────
+
+	/** 선단은 그대로 둔다. 사라진 것은 인솔자가 아니라 따라가던 사람이다. */
+	@Test
+	@DisplayName("사라진 사람만 빠지고 선단은 남는다")
+	void oneRiderLeavesFleetAlone() {
+		String captain = user();
+		String gone = user();
+		String stays = user();
+		givenRiding(captain, gone);
+		givenRiding(captain, stays);
+
+		RiderLeaveResult result = repository.riderLeave(gone);
+
+		assertThat(result.captainEmail()).isEqualTo(captain);
+		assertThat(result.remainingRiders()).isEqualTo(1);
+		assertThat(redis.hasKey("ride:captain:" + gone)).isFalse();
+		assertThat(repository.riders(captain)).containsExactly(stays);
+	}
+
+	/** 사라진 사람이라 넣으면 유령이 된다. 스스로 내리는 것과 다른 점이다. */
+	@Test
+	@DisplayName("사라진 사람은 지도에 다시 넣지 않는다")
+	void goneRiderIsNotPutOnMap() {
+		String captain = user();
+		String gone = user();
+		givenRiding(captain, gone);
+
+		repository.riderLeave(gone);
+
+		assertThat(redis.opsForSet().isMember("listeners:" + MUSIC, gone)).isFalse();
+		assertThat(redis.opsForSet()
+				.isMember("layer-listeners:" + LAYER + ":" + MUSIC, gone)).isFalse();
+	}
+
+	@Test
+	@DisplayName("따라가는 중이 아니었으면 아무것도 돌려주지 않는다")
+	void notRidingReturnsNothing() {
+		assertThat(repository.riderLeave(user())).isNull();
 	}
 
 	/** 탑승 뒤 상태를 만든다 — 자리는 presence 에만 있고 지도에는 없다. */

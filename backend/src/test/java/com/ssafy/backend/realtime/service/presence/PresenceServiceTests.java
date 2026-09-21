@@ -29,6 +29,7 @@ import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.ride.RideService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
@@ -46,6 +47,7 @@ class PresenceServiceTests {
 	@Mock MusicPositionCalculator musicPositionCalculator;
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡
+	@Mock RideService rideService; // 나가는 사람의 따라가기 정리
 	@InjectMocks PresenceService service;
 
 	@BeforeEach
@@ -262,5 +264,22 @@ class PresenceServiceTests {
 		service.leave(EMAIL, 7L);
 
 		verifyNoInteractions(realtimeEventService);
+	}
+
+	/** 연결 종료와 접속 만료가 같은 길로 가야 한 쪽만 고쳐지는 사고가 없다. */
+	@Test
+	@DisplayName("연결이 끊기면 따라가기도 정리한다")
+	void leaveCleansUpRide() {
+		service.leave(EMAIL, 7L);
+
+		verify(rideService).onUserGone(EMAIL);
+	}
+
+	@Test
+	@DisplayName("접속이 만료돼도 같은 정리를 한다")
+	void expiredLeaveCleansUpRide() {
+		service.leaveExpired(EMAIL, 1000L);
+
+		verify(rideService).onUserGone(EMAIL);
 	}
 }

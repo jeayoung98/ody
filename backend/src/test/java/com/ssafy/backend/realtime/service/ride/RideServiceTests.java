@@ -44,6 +44,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DisbandRe
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
@@ -557,5 +558,37 @@ class RideServiceTests {
 		service.disband(CAPTAIN);
 
 		verifyNoInteractions(realtimeMessageService, viewportDeltaService, meetingService);
+	}
+
+	// ── 따라가던 사람이 사라짐 ─────────────────────────────
+
+	/** 스스로 내린 것이 아니라 사라진 것이라 지도에 넣으면 유령이 된다. */
+	@Test
+	@DisplayName("따라가던 사람이 사라지면 인솔자에게 알리고 지도에는 넣지 않는다")
+	void goneRiderIsRemovedWithoutReturningToMap() {
+		when(rideRedisRepository.riders(RIDER)).thenReturn(Set.of());
+		when(rideRedisRepository.disband(RIDER))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+		when(rideRedisRepository.riderLeave(RIDER)).thenReturn(new RiderLeaveResult(CAPTAIN, 1));
+
+		service.onUserGone(RIDER);
+
+		verify(realtimeMessageService).sendToUser(eq(CAPTAIN), anyString(),
+				eq(RealtimeMessageType.RIDE_RIDER_LEFT), eq(new RideRiderLeftPayload(RIDER, 1)));
+		verifyNoInteractions(realtimeEventService, viewportDeltaService);
+	}
+
+	@Test
+	@DisplayName("따라가지도 이끌지도 않던 사람이 나가면 아무 일도 없다")
+	void goneStrangerChangesNothing() {
+		when(rideRedisRepository.riders(RIDER)).thenReturn(Set.of());
+		when(rideRedisRepository.disband(RIDER))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+		when(rideRedisRepository.riderLeave(RIDER)).thenReturn(null);
+
+		service.onUserGone(RIDER);
+
+		verifyNoInteractions(realtimeMessageService, realtimeEventService,
+				viewportDeltaService, meetingService);
 	}
 }

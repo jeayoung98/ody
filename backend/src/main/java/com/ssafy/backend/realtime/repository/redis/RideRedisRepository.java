@@ -62,6 +62,7 @@ public class RideRedisRepository {
 	private final DefaultRedisScript<List> rideMountScript;
 	private final DefaultRedisScript<List> rideDismountScript;
 	private final DefaultRedisScript<List> rideDisbandScript;
+	private final DefaultRedisScript<List> rideRiderLeaveScript;
 
 	/** 따라가기 시작 결과. 거부면 musicId·layer 는 의미 없다. */
 	public record MountResult(MountStatus status, long musicId, int layer) {
@@ -179,6 +180,36 @@ public class RideRedisRepository {
 		private static DisbandResult empty() {
 			return new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of());
 		}
+	}
+
+	/**
+	 * 따라가던 사람 한 명이 사라졌을 때 그 사람만 뺀다. 선단은 그대로 둔다.
+	 *
+	 * @param riderEmail 사라진 사람
+	 * @param remainingRiders 그 사람을 뺀 뒤 남은 인원
+	 */
+	public record RiderLeaveResult(String captainEmail, int remainingRiders) {
+	}
+
+	/**
+	 * 따라가던 사람 한 명을 선단에서 뺀다.
+	 *
+	 * 지도에 다시 넣지 않는다. 사라진 사람이라 넣으면 유령이 된다.
+	 * 스스로 내리는 것(dismount)과 다른 점이 그것이다.
+	 *
+	 * @param riderEmail 사라진 사람
+	 * @return 인솔자와 남은 인원. 따라가는 중이 아니었으면 null
+	 */
+	@SuppressWarnings("unchecked")
+	public RiderLeaveResult riderLeave(String riderEmail) {
+		List<String> r = redis.execute(rideRiderLeaveScript,
+				List.of(CAPTAIN_PREFIX + riderEmail),
+				riderEmail, RIDERS_PREFIX);
+
+		if (r == null || r.size() < 3 || !"OK".equals(r.get(0))) {
+			return null;
+		}
+		return new RiderLeaveResult(r.get(1), Integer.parseInt(r.get(2)));
 	}
 
 	/**

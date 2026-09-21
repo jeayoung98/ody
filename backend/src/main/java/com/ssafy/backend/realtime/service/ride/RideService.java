@@ -38,6 +38,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountS
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
@@ -220,6 +221,40 @@ public class RideService {
 				result.musicId(), result.layer(), result.remainingRiders());
 		return new DismountResponse(result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
+	}
+
+	/**
+	 * 접속이 끊기거나 만료된 사람을 따라가기에서 정리한다.
+	 *
+	 * 그 사람이 인솔자면 선단을 해제하고, 따라가던 사람이면 그 사람만 뺀다.
+	 * 둘 다 아니면 아무 일도 없다.
+	 *
+	 * 나가는 길이 연결 종료와 접속 만료 둘인데, 둘 다 여기로 들어온다.
+	 *
+	 * @param email 사라진 사람
+	 */
+	public void onUserGone(String email) {
+		disband(email);
+		leaveRide(email);
+	}
+
+	/**
+	 * 따라가던 사람이 사라졌다. 그 사람만 빼고 선단은 유지한다.
+	 *
+	 * 지도에 다시 넣지 않는다. 스스로 내린 것이 아니라 사라진 것이라 넣으면 유령이 된다.
+	 * 인솔자에게는 스스로 내렸을 때와 같은 알림을 보낸다 — 인솔자가 할 일이 같기 때문이다.
+	 *
+	 * @param riderEmail 사라진 사람
+	 */
+	private void leaveRide(String riderEmail) {
+		RiderLeaveResult result = rideRedisRepository.riderLeave(riderEmail);
+		if (result == null) {
+			return; // 따라가는 중이 아니었다
+		}
+		realtimeMessageService.sendToUser(result.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.RIDE_RIDER_LEFT,
+				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+		log.info("[Ride] 따라가던 사람 이탈 남은인원={}", result.remainingRiders());
 	}
 
 	/**

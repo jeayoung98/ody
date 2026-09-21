@@ -15,6 +15,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -46,6 +47,7 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
@@ -72,6 +74,7 @@ class RideServiceTests {
 	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock RealtimeMessageService realtimeMessageService;
+	@Mock MeetingService meetingService;
 	@InjectMocks RideService service;
 
 	private final double[] location = location();
@@ -458,5 +461,37 @@ class RideServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(realtimeEventService, realtimeMessageService);
+	}
+
+	/** 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이 성립한다. */
+	@Test
+	@DisplayName("내리면 그 곡에 있던 사람들과 만남을 센다")
+	void dismountRecordsMeetings() {
+		String mate = "mate@example.com";
+		String outsider = "outsider@example.com";
+		givenRiding();
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, mate));
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, 1,
+						List.of(CAPTAIN, outsider)));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+
+		service.dismount(RIDER);
+
+		// 선단은 내리기 전에 찍어야 한다. 내린 뒤에 읽으면 본인이 빠져 있다.
+		verify(meetingService).recordOnDismount(
+				List.of(RIDER), List.of(CAPTAIN, outsider), Set.of(CAPTAIN, RIDER, mate));
+	}
+
+	@Test
+	@DisplayName("내릴 것이 없으면 만남도 세지 않는다")
+	void rejectedDismountRecordsNothing() {
+		when(rideRedisRepository.findRide(RIDER)).thenReturn(null);
+
+		assertThatThrownBy(() -> service.dismount(RIDER))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(meetingService);
 	}
 }

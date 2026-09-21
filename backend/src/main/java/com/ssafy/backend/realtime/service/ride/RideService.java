@@ -1,5 +1,9 @@
 package com.ssafy.backend.realtime.service.ride;
 
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -31,6 +35,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountS
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
+import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
 
@@ -62,6 +67,7 @@ public class RideService {
 	private final RideViewportService rideViewportService;
 	private final RealtimeEventService realtimeEventService;
 	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
+	private final MeetingService meetingService; // 하차 시점 만남 기록
 
 	/**
 	 * 따라가기를 시작한다.
@@ -176,7 +182,12 @@ public class RideService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 3. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
+		// 3. 선단이 누구인지 먼저 찍어 둔다. 내리고 나면 ride:riders 에서 빠져 읽어도 늦다.
+		//    만남을 셀 때 이 사람들을 뺀다 — 따라다닌 것은 만남이 아니기 때문이다.
+		Set<String> fleetMembers = new LinkedHashSet<>(rideRedisRepository.riders(ride.captainEmail()));
+		fleetMembers.add(ride.captainEmail());
+
+		// 4. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
 		DismountResult result = rideRedisRepository.dismount(riderEmail, ride.captainEmail());
 		if (result.status() == DismountStatus.NOT_RIDING) {
 			throw new CustomException(RealtimeErrorCode.RIDE_NOT_RIDING);
@@ -186,14 +197,18 @@ public class RideService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 4. 지도에 나타났음을 알린다. 이전 자리는 없다 — 따라가는 동안 지도에 없었기 때문이다.
+		// 5. 지도에 나타났음을 알린다. 이전 자리는 없다 — 따라가는 동안 지도에 없었기 때문이다.
 		Spot spot = spotOf(result.musicId(), result.layer());
 		notifyEnteredMap(riderEmail, presence.epoch(), result, spot);
 
-		// 5. 인솔자에게 누가 내렸는지 알린다. 남은 인원도 같이 보낸다.
+		// 6. 인솔자에게 누가 내렸는지 알린다. 남은 인원도 같이 보낸다.
 		realtimeMessageService.sendToUser(ride.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.RIDE_RIDER_LEFT,
 				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+
+		// 7. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
+		//    명단은 지도에 다시 들어가기 전에 찍힌 것이라 자기 자신이 섞여 있지 않다.
+		meetingService.recordOnDismount(List.of(riderEmail), result.residents(), fleetMembers);
 
 		log.info("[Ride] 하차 musicId={} layer={} 남은인원={}",
 				result.musicId(), result.layer(), result.remainingRiders());

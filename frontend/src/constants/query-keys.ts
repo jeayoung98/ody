@@ -26,8 +26,6 @@ export const QUERY_KEYS = {
      */
     songs: (boxes: readonly LayerBox[]) =>
       ["map", "songs", boxes.map((b) => `${b.layer}:${[b.xMin, b.yMin, b.xMax, b.yMax].map((v) => v.toFixed(4)).join(",")}`).join("|")] as const,
-    /** 레이어별 대표곡 ID */
-    representatives: (layer: number) => ["map", "representatives", layer] as const,
     /** 이 곡이 대표곡으로 노출되는 레이어 목록 */
     /** 특정 곡 기준 가까운 곡 */
     nearby: (musicId: number) => ["map", "nearby", musicId] as const,

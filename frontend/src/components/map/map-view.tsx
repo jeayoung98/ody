@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { HOLD, HOVER_CARD, PINCH, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -10,7 +10,6 @@ import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
-import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -81,7 +80,6 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
    */
   useViewportSubscription(features.social);
-  const { data: representatives } = useRepresentativesQuery(layer);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
@@ -193,9 +191,31 @@ export default function MapView({ occlusion }: MapViewProps) {
     engine.setLayerSongs(boxes.length, songs);
     trackOnce("map-ready", "map_ready", { result_count: songs.length, layer: boxes.length });
   }, [engine, boxes, songs]);
+  /**
+   * 커버로 띄울 후보곡 — **이미 받은 상주 집합에서 뽑는다** (S15P21A405-513).
+   *
+   * 예전에는 `/bff/map/layers/{l}/representatives` 를 따로 불렀는데, 그 라우트가 하는 일이
+   * `/api/music/major` 를 **통째로 다시 받아** 재생수 상위 40개의 id 만 남기고 버리는 것이었다.
+   * 같은 응답을 `songs` 가 이미 들고 있으니 두 번 받을 이유가 없다 — 실측으로 겹 하나 여는 데
+   * 1.5초짜리 요청이 하나 더 붙었고, 둘이 겹쳐 돌면서 서로를 느리게 만들었다.
+   *
+   * 덤으로 레이어 2 부터 나던 400 도 사라진다 — 그 라우트가 누적 범위를 안 보내서 백엔드
+   * `MajorQuery` 의 `accumulated.size() == level-1` 검사에 걸리고 있었다.
+   */
+  const representatives = useMemo(
+    () =>
+      songs
+        ? [...songs]
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, REPRESENTATIVE_COUNT)
+            .map((p) => p.musicId)
+        : null,
+    [songs],
+  );
   useEffect(() => {
-    if (representatives) engine.setRepresentatives(representatives.layer, representatives.musicIds);
-  }, [engine, representatives]);
+    // 겹 번호는 songs 를 넣을 때와 **같은 값**을 쓴다 — 둘이 어긋나면 엔진이 남의 겹 커버를 든다
+    if (representatives) engine.setRepresentatives(boxes.length, representatives);
+  }, [engine, boxes.length, representatives]);
 
   // 주변 탐색: 유사곡 10곡이 오면 연출 뷰로 진입, 모드가 꺼지면 복귀
   useEffect(() => {

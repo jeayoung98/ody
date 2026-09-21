@@ -403,6 +403,15 @@ export const STAR_LOOK = { randomSize: true, randomColor: true } as const;
 export const REPRESENTATIVE_GRID_PX = 86;
 
 /**
+ * 커버로 띄울 후보 곡 수 (S15P21A405-513). 이 겹 상주 집합에서 재생수 상위로 이만큼 고른다.
+ *
+ * **화면에 이만큼 뜨는 것이 아니다** — 엔진이 {@link REPRESENTATIVE_GRID_PX} 격자로 다시 걸러서
+ * 겹치지 않게 고른다. 여기서는 후보만 넉넉히 준다. 예전에 대표곡을 따로 받던 BFF 라우트가
+ * 쓰던 수(40)를 그대로 가져왔다.
+ */
+export const REPRESENTATIVE_COUNT = 40;
+
+/**
  * 앨범 커버로 띄우는 대표곡 (MAP-01).
  *
  * 뽑는 규칙은 {@link REPRESENTATIVE_GRID_PX} 격자 대표곡이지만, **매 프레임 새로 뽑지 않는다** —

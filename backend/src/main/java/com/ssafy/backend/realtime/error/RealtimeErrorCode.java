@@ -7,25 +7,32 @@ import com.ssafy.backend.common.ErrorCode;
 import lombok.Getter;
 
 /**
- * 실시간 도메인 에러 (BE3 소유). 기존 MusicErrorCode 패턴으로 공통 ErrorCode 계약 확장.
- * 정본 §0.5 에러표에 PRESENCE_ERROR 추가 요청(BE1) — contracts/music-play.md §3.
- * WebSocket 오류 코드는 {@link WebSocketErrorCode}로 따로 관리한다.
+ * 실시간 기능이 REST 로 돌려주는 오류 코드.
+ *
+ * 거부 사유마다 받는 쪽이 할 일이 다르다. 다시 해 보면 되는 것과 아무리 해도 안 되는 것을
+ * 한 코드로 뭉치면 구분할 수 없어서 사유별로 나눠 둔다.
+ * 소켓으로 나가는 오류는 {@link WebSocketErrorCode} 에 따로 있다.
  */
 @Getter
 public enum RealtimeErrorCode implements ErrorCode {
 
+	/** 실시간 처리 중에 난 그 밖의 오류. */
 	PRESENCE_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "PRESENCE_ERROR", "실시간 처리 중 오류가 발생했습니다."),
-	// 근처 사람 목록에서 이웃곡 찾기(BE2)가 준비 안됐거나 실패했을 때. 빈 목록으로 숨기지 않고 이걸로 알린다.
+
+	/**
+	 * 주변 사람 목록을 만들 때 쓰는 이웃곡 찾기가 아직 준비되지 않았거나 실패했다.
+	 * 빈 목록으로 내보내면 "아무도 없다"로 보이기 때문에 그렇게 숨기지 않고 이 코드로 알린다.
+	 */
 	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
 			"일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
 
-	// 따라가기. 거부 사유마다 프론트가 할 일이 달라서 하나로 뭉치지 않는다.
+	// 아래는 따라가기가 거부되는 사유들이다.
 
 	/** 따라갈 사람이 곡 위에 없다. 잠시 뒤 다시 하면 된다. */
 	RIDE_CAPTAIN_INACTIVE(HttpStatus.CONFLICT, "RIDE_CAPTAIN_INACTIVE",
 			"지금은 따라갈 수 없는 사용자입니다."),
 
-	/** 자기 자신을 골랐다. 언제 다시 해도 안 되므로 400. */
+	/** 자기 자신을 골랐다. 언제 다시 해도 안 되므로 400 이다. */
 	RIDE_SELF(HttpStatus.BAD_REQUEST, "RIDE_SELF", "자기 자신은 따라갈 수 없습니다."),
 
 	/** 이미 누군가를 따라가는 중이다. 갈아타려면 먼저 내려야 한다. */
@@ -40,7 +47,14 @@ public enum RealtimeErrorCode implements ErrorCode {
 	RIDE_FULL(HttpStatus.CONFLICT, "RIDE_FULL", "따라가는 인원이 가득 찼습니다."),
 
 	/** 따라가는 중이 아닌데 내리려 했다. 이미 내려졌을 수도 있다. */
-	RIDE_NOT_RIDING(HttpStatus.CONFLICT, "RIDE_NOT_RIDING", "따라가는 중이 아닙니다.");
+	RIDE_NOT_RIDING(HttpStatus.CONFLICT, "RIDE_NOT_RIDING", "따라가는 중이 아닙니다."),
+
+	/**
+	 * 따라가는 중이라 스스로 할 수 없는 동작이다. 내리면 된다.
+	 * 소켓으로 같은 일이 막힐 때도 {@code WebSocketErrorCode.RIDE_NOT_CAPTAIN} 으로 같은 이름이 나간다.
+	 */
+	RIDE_NOT_CAPTAIN(HttpStatus.CONFLICT, "RIDE_NOT_CAPTAIN",
+			"따라가는 중에는 할 수 없습니다. 먼저 내려 주세요.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

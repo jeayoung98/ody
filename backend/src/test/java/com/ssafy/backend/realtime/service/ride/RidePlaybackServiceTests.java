@@ -35,7 +35,6 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PlaybackSnapshot;
-import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
 
 /** 그룹이 트는 곡의 지금 위치와, 인솔자 재생 조작 전달을 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -48,12 +47,13 @@ class RidePlaybackServiceTests {
 	@Mock RideRedisRepository rideRedisRepository;
 	@Mock PresenceRedisRepository presenceRedisRepository;
 	@Mock RealtimeMessageService realtimeMessageService;
+	@Mock RideGuard rideGuard;
 
 	private final Clock clock = Clock.fixed(Instant.ofEpochMilli(NOW), ZoneOffset.UTC);
 
 	private RidePlaybackService service() {
 		return new RidePlaybackService(
-				rideRedisRepository, presenceRedisRepository, clock, realtimeMessageService);
+				rideRedisRepository, presenceRedisRepository, clock, rideGuard, realtimeMessageService);
 	}
 
 	@Test
@@ -122,7 +122,6 @@ class RidePlaybackServiceTests {
 	@Test
 	@DisplayName("정지는 멈춤 상태로 저장하고 따라오는 사람에게 넘긴다")
 	void pauseSavesAndSends() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.findPlayback(CAPTAIN)).thenReturn(
 				new PlaybackSnapshot(10877L, PlaybackState.PLAYING, 30_000L, NOW - 2_000L, 4L));
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER));
@@ -140,7 +139,6 @@ class RidePlaybackServiceTests {
 	@Test
 	@DisplayName("구간 이동은 멈춤·재생 상태를 그대로 둔다")
 	void seekKeepsState() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.findPlayback(CAPTAIN)).thenReturn(
 				new PlaybackSnapshot(10877L, PlaybackState.PAUSED, 30_000L, NOW - 2_000L, 4L));
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of());
@@ -154,7 +152,6 @@ class RidePlaybackServiceTests {
 	@Test
 	@DisplayName("따라오는 사람이 없으면 저장만 하고 보내지 않는다")
 	void noRidersSkipsSend() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.findPlayback(CAPTAIN)).thenReturn(
 				new PlaybackSnapshot(10877L, PlaybackState.PLAYING, 30_000L, NOW - 2_000L, 4L));
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of());
@@ -169,7 +166,9 @@ class RidePlaybackServiceTests {
 	@Test
 	@DisplayName("따라가는 중인 사람이 보내면 거부한다")
 	void riderCannotControl() {
-		when(rideRedisRepository.findRide(RIDER)).thenReturn(new Ride(CAPTAIN, 7L));
+		org.mockito.Mockito.doThrow(new WebSocketRequestException(
+				WebSocketErrorCode.RIDE_NOT_CAPTAIN, "따라가는 중에는 재생 조작을 보낼 수 없다"))
+				.when(rideGuard).requireNotRiding(anyString(), anyString());
 
 		assertThatThrownBy(() ->
 				service().relay(RIDER, new RidePlaybackRequest(RidePlaybackEvent.PAUSE, 1_000L)))

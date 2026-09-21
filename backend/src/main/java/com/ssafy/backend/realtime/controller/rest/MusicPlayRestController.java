@@ -13,6 +13,7 @@ import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.realtime.dto.play.PlayRequest;
 import com.ssafy.backend.realtime.dto.play.PlayResponse;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+import com.ssafy.backend.realtime.service.ride.RideGuard;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -32,6 +33,7 @@ import lombok.RequiredArgsConstructor;
 public class MusicPlayRestController {
 
 	private final MusicPlayService musicPlayService;
+	private final RideGuard rideGuard; // 따라가는 중에는 스스로 곡을 고르지 못하게 막는다
 
 	/**
 	 * 재생 선언 = 위치 이동의 유일한 원본. musicId 로 서버가 좌표를 계산한다.
@@ -42,6 +44,9 @@ public class MusicPlayRestController {
 					+ "아직 지도에 없는 사용자는 layer로 첫 자리를 잡는다.")
 	@PostMapping("/play")
 	public ApiResponse<PlayResponse> play(@Valid @RequestBody PlayRequest request, Principal principal) {
+		// 따라가는 중에 스스로 곡을 고르면 인솔자와 다른 자리에 서게 된다.
+		// 직접 골랐다고 해서 내려 주지는 않는다. 내리는 것은 하차 버튼으로만 한다.
+		rideGuard.requireNotRidingOnRest(principal.getName());
 		PlayResponse res = musicPlayService.play(
 				principal.getName(), request.musicId(), request.source().name(), request.layer());
 		return ApiResponse.success(res);

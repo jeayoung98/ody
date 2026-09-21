@@ -27,7 +27,6 @@ import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
-import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
 
 /** 인솔자가 연 곡 상세가 따라오는 사람들에게 가는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -39,12 +38,12 @@ class RidePanelServiceTests {
 
 	@Mock RideRedisRepository rideRedisRepository;
 	@Mock RealtimeMessageService realtimeMessageService;
+	@Mock RideGuard rideGuard;
 	@InjectMocks RidePanelService service;
 
 	@Test
 	@DisplayName("열면 저장하고 따라오는 사람에게 넘긴다")
 	void openSavesAndSends() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER));
 
 		service.relay(CAPTAIN, new RidePanelRequest(true, MUSIC, RidePanelTab.INFO));
@@ -57,7 +56,6 @@ class RidePanelServiceTests {
 	@Test
 	@DisplayName("탭만 바꿔도 바뀐 탭으로 저장하고 넘긴다")
 	void tabChangeSavesAndSends() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER));
 
 		service.relay(CAPTAIN, new RidePanelRequest(true, MUSIC, RidePanelTab.PLAYLISTS));
@@ -72,7 +70,6 @@ class RidePanelServiceTests {
 	@Test
 	@DisplayName("닫으면 저장해 둔 것을 지우고 닫혔다고 넘긴다")
 	void closeDeletesAndSends() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER));
 
 		service.relay(CAPTAIN, new RidePanelRequest(false, null, null));
@@ -86,7 +83,6 @@ class RidePanelServiceTests {
 	@Test
 	@DisplayName("따라오는 사람이 없으면 저장만 하고 보내지 않는다")
 	void noRidersSkipsSend() {
-		when(rideRedisRepository.findRide(CAPTAIN)).thenReturn(null);
 		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of());
 
 		service.relay(CAPTAIN, new RidePanelRequest(true, MUSIC, RidePanelTab.NEARBY));
@@ -98,7 +94,9 @@ class RidePanelServiceTests {
 	@Test
 	@DisplayName("따라가는 중인 사람이 보내면 거부한다")
 	void riderCannotControl() {
-		when(rideRedisRepository.findRide(RIDER)).thenReturn(new Ride(CAPTAIN, 7L));
+		org.mockito.Mockito.doThrow(new WebSocketRequestException(
+				WebSocketErrorCode.RIDE_NOT_CAPTAIN, "따라가는 중에는 곡 상세를 바꿀 수 없다"))
+				.when(rideGuard).requireNotRiding(anyString(), anyString());
 
 		assertThatThrownBy(() ->
 				service.relay(RIDER, new RidePanelRequest(true, MUSIC, RidePanelTab.INFO)))

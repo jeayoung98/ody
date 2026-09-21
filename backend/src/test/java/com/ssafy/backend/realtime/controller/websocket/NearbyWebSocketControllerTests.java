@@ -13,7 +13,11 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
+import com.ssafy.backend.realtime.error.WebSocketErrorCode;
+import com.ssafy.backend.realtime.error.WebSocketErrorService;
+import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.service.nearby.NearbyPeopleService;
+import com.ssafy.backend.realtime.service.ride.RideGuard;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 
 /** 주변사람 소켓 요청이 로그인 사용자 기준으로 전달되는지 검증한다. */
@@ -22,6 +26,8 @@ class NearbyWebSocketControllerTests {
 
 	@Mock NearbyPeopleService nearbyPeopleService;
 	@Mock WebSocketSessionService webSocketSessionService;
+	@Mock RideGuard rideGuard;
+	@Mock WebSocketErrorService webSocketErrorService;
 	@InjectMocks NearbyWebSocketController controller;
 
 	@Test
@@ -42,5 +48,23 @@ class NearbyWebSocketControllerTests {
 		controller.close(() -> "viewer@x.com", "unknown");
 
 		verifyNoInteractions(nearbyPeopleService);
+	}
+
+	/** 조용히 넘기면 받는 쪽이 막힌 것인지 요청이 사라진 것인지 모른다. */
+	@Test
+	@DisplayName("따라가는 중이면 닫지 않고 오류를 보낸다")
+	void ridingIsRejected() {
+		org.mockito.Mockito.doThrow(new WebSocketRequestException(
+				WebSocketErrorCode.RIDE_NOT_CAPTAIN, "따라가는 중에는 주변 사람을 닫을 수 없다"))
+				.when(rideGuard).requireNotRiding(org.mockito.ArgumentMatchers.anyString(),
+						org.mockito.ArgumentMatchers.anyString());
+
+		controller.close(() -> "viewer@x.com", "session-1");
+
+		verifyNoInteractions(nearbyPeopleService, webSocketSessionService);
+		verify(webSocketErrorService).send(
+				org.mockito.ArgumentMatchers.eq("viewer@x.com"),
+				org.mockito.ArgumentMatchers.eq(WebSocketErrorCode.RIDE_NOT_CAPTAIN),
+				org.mockito.ArgumentMatchers.anyString());
 	}
 }

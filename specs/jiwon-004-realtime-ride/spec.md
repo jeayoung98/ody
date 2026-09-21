@@ -211,15 +211,16 @@ ride:panel:{captain}    Hash    - {open, musicId, tab}
 
 **Acceptance Scenarios**:
 
-1. **R60** **Given** B가 동승 중, **When** `/app/presence/viewport` 전송, **Then** `RIDE_FORBIDDEN`으로 거부한다.
+1. **R60** **Given** B가 동승 중, **When** `/app/presence/viewport` 전송, **Then** `RIDE_NOT_CAPTAIN`으로 거부한다. (2026-09-21 확정: 83·88에서 같은 뜻의 거부가 이미 `RIDE_NOT_CAPTAIN`으로 나가고 있어 새 코드를 만들지 않고 통일한다)
 2. **R61** **Given** B가 동승 중, **When** `/app/presence/join` 전송, **Then** 거부하고 B의 위치를 바꾸지 않는다.
-3. **R62** **Given** B가 동승 중, **When** `POST /api/realtime/play` 호출, **Then** 거부한다.
-4. **R63** **Given** B가 동승 중, **When** 재생 종료 호출, **Then** 거부한다.
+3. **R62** **Given** B가 동승 중, **When** `POST /api/music/play` 호출, **Then** 거부한다.
+4. **R63** *(삭제 — 2026-09-21)* 재생 종료 거부. 막을 엔드포인트가 없다. `PATCH /api/music/play/end` 는 핫픽스 S15P21A405-500 에서 삭제됐다.
 5. **R64** **Given** B가 동승 중, **When** `POST /api/realtime/nearby` 호출, **Then** 거부한다.
 6. **R65** **Given** B가 동승 중, **When** 곡 상세 열기·닫기·탭 전환 전송, **Then** 모두 거부한다.
 7. **R66** **Given** B가 동승 중, **When** 뷰포트 종료 전송, **Then** 거부한다.
 8. **R67** **Given** B가 거부당함, **When** 응답, **Then** 조용히 무시하지 않고 오류 큐로 알린다. 무시하면 프론트가 차단인지 유실인지 구분할 수 없다.
 9. **R68** **Given** B가 하차 버튼을 누름, **When** 처리, **Then** 이것만은 허용한다.
+10. **R69** **Given** B가 동승 중, **When** `/app/nearby/close` 전송, **Then** 거부한다. (2026-09-21 추가: 뷰포트 종료(R66)와 대칭이다)
 
 ---
 
@@ -344,7 +345,7 @@ ride:panel:{captain}    Hash    - {open, musicId, tab}
 
 ### 6.5 S15P21A405-84 — 조작 차단
 
-- **FR-040** 동승자의 화면 요청·레이어 이동·재생 선언·재생 종료·근처사람 열기·곡 상세 열기·닫기·탭 전환을 모두 거부해야 한다.
+- **FR-040** 동승자의 화면 요청·화면 종료·레이어 이동·재생 선언·재생 조작·근처사람 열기·근처사람 닫기·곡 상세 열기·닫기·탭 전환을 모두 거부해야 한다. 거부 코드는 소켓과 REST 모두 `RIDE_NOT_CAPTAIN` 이다. (2026-09-21 수정: 재생 종료는 엔드포인트가 없어져 뺐고, 실제로 막은 진입점으로 목록을 맞췄다)
 - **FR-041** 거부는 조용한 무시가 아니라 오류 응답이어야 한다.
 - **FR-042** 직접 재생으로 자동 하차하지 않아야 한다.
 - **FR-043** 하차 요청만 허용해야 한다.

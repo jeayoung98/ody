@@ -37,6 +37,7 @@ public class RidePlaybackService {
 	private final RideRedisRepository rideRedisRepository;
 	private final PresenceRedisRepository presenceRedisRepository;
 	private final Clock clock;
+	private final RideGuard rideGuard; // 따라가는 사람이 보낸 조작을 막는다
 	private final RealtimeMessageService realtimeMessageService; // 따라오는 사람 개인 큐로 발송
 
 	/**
@@ -80,10 +81,7 @@ public class RidePlaybackService {
 		request.validate();
 
 		// 1. 따라가는 사람이 보낸 조작은 받지 않는다. 받으면 남의 재생을 마음대로 돌리게 된다.
-		if (rideRedisRepository.findRide(captainEmail) != null) {
-			throw new WebSocketRequestException(WebSocketErrorCode.RIDE_NOT_CAPTAIN,
-					"따라가는 중에는 재생 조작을 보낼 수 없다");
-		}
+		rideGuard.requireNotRiding(captainEmail, "재생 조작을 보낼");
 
 		// 2. 지금 트는 곡을 읽는다. 곡 위에 없으면 넘길 내용 자체가 없다.
 		RidePlayback current = read(captainEmail);

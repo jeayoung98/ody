@@ -141,13 +141,17 @@ public class RideRedisRepository {
 		};
 	}
 
-	/** 하차 결과. 성공이면 내린 자리와 남은 인원이 같이 온다. */
+	/**
+	 * 하차 결과. 성공이면 내린 자리와 남은 인원이 같이 온다.
+	 *
+	 * @param residents 내린 사람이 지도에 다시 들어가기 전, 그 곡에 있던 사람들. 만남 계산에 쓴다
+	 */
 	public record DismountResult(DismountStatus status, long musicId, int layer,
-			int cellX, int cellY, int remainingRiders) {
+			int cellX, int cellY, int remainingRiders, List<String> residents) {
 
 		/** 실패 결과를 만든다. */
 		private static DismountResult of(DismountStatus status) {
-			return new DismountResult(status, 0, 0, 0, 0, 0);
+			return new DismountResult(status, 0, 0, 0, 0, 0, List.of());
 		}
 	}
 
@@ -169,7 +173,7 @@ public class RideRedisRepository {
 	 *
 	 * @param riderEmail 내리는 사람
 	 * @param captainEmail 따라가던 사람. 실제와 다르면 거부한다
-	 * @return 성공이면 돌아간 자리와 남은 인원, 아니면 거부 사유
+	 * @return 성공이면 돌아간 자리·남은 인원·그 곡에 있던 사람들, 아니면 거부 사유
 	 */
 	@SuppressWarnings("unchecked")
 	public DismountResult dismount(String riderEmail, String captainEmail) {
@@ -186,10 +190,11 @@ public class RideRedisRepository {
 			return DismountResult.of(DismountStatus.STALE);
 		}
 		return switch (r.get(0)) {
+			// 여섯 번째 칸까지가 자리와 남은 인원이고, 그 뒤는 전부 그 곡에 있던 사람들이다.
 			case "OK" -> new DismountResult(DismountStatus.OK,
 					Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
 					Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
-					Integer.parseInt(r.get(5)));
+					Integer.parseInt(r.get(5)), List.copyOf(r.subList(6, r.size())));
 			case "NOT_RIDING" -> DismountResult.of(DismountStatus.NOT_RIDING);
 			default -> DismountResult.of(DismountStatus.STALE);
 		};

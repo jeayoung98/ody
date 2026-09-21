@@ -13,6 +13,7 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
 
 import org.junit.jupiter.api.DisplayName;
@@ -368,7 +369,7 @@ class RideServiceTests {
 
 	private void givenDismountOk(int remaining) {
 		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
-				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, remaining));
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, remaining, List.of()));
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 	}
@@ -451,7 +452,7 @@ class RideServiceTests {
 	void staleDismountNotifiesNobody() {
 		givenRiding();
 		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
-				.thenReturn(new DismountResult(DismountStatus.STALE, 0, 0, 0, 0, 0));
+				.thenReturn(new DismountResult(DismountStatus.STALE, 0, 0, 0, 0, 0, List.of()));
 
 		assertThatThrownBy(() -> service.dismount(RIDER))
 				.isInstanceOf(CustomException.class);

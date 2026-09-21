@@ -8,6 +8,7 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
+import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
@@ -21,6 +22,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.Prese
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
 
@@ -31,7 +33,7 @@ import lombok.extern.slf4j.Slf4j;
  * 따라가기를 시작한다.
  * 자격을 확인해 등록하고, 인솔자 자리로 옮긴 뒤, 어디서부터 틀면 되는지 알려준다.
  *
- * <p>옮길 때 지도 인덱스에는 넣지 않는다. 그룹은 남들 화면에서 인솔자 한 점과 인원수로만 보인다.
+ * 옮길 때 지도 인덱스에는 넣지 않는다. 그룹은 남들 화면에서 인솔자 한 점과 인원수로만 보인다.
  */
 @Slf4j
 @Service
@@ -115,7 +117,23 @@ public class RideService {
 		return new RideResponse(captainEmail, playHistoryId,
 				mounted.musicId(), mounted.layer(),
 				spot.rawX(), spot.rawY(), placement.cellX(), placement.cellY(),
-				playback.state(), playback.positionMs(), playback.snapshotSeq());
+				playback.state(), playback.positionMs(), playback.snapshotSeq(),
+				openPanel(captainEmail));
+	}
+
+	/**
+	 * 인솔자가 지금 열어 둔 곡 상세를 읽는다.
+	 *
+	 * 중간에 탄 사람은 열린 순간의 알림을 못 받았다. 여기서 같이 주지 않으면
+	 * 인솔자가 다시 열거나 탭을 바꿀 때까지 혼자 빈 화면을 본다.
+	 *
+	 * @return 열어 둔 게 없으면 닫힌 상태
+	 */
+	private RidePanelPayload openPanel(String captainEmail) {
+		PanelSnapshot panel = rideRedisRepository.findPanel(captainEmail);
+		return panel == null
+				? RidePanelPayload.closed()
+				: RidePanelPayload.opened(panel.musicId(), panel.tab());
 	}
 
 	/**

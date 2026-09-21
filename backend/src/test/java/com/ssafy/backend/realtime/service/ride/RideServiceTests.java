@@ -25,6 +25,8 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
+import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
+import com.ssafy.backend.realtime.dto.ride.RidePanelTab;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
@@ -37,6 +39,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.Prese
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
 
@@ -285,5 +288,36 @@ class RideServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(rideSubscriptionService);
+	}
+
+	/** 중간에 탄 사람은 열린 순간의 알림을 못 받았다. 여기서 안 주면 혼자 빈 화면을 본다. */
+	@Test
+	@DisplayName("인솔자가 열어 둔 곡 상세를 응답에 같이 준다")
+	void answersWithOpenPanel() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(42_000L, 4L);
+		when(rideRedisRepository.findPanel(CAPTAIN))
+				.thenReturn(new PanelSnapshot(4927L, RidePanelTab.INFO));
+
+		RideResponse response = service.mount(RIDER, CAPTAIN);
+
+		assertThat(response.panel())
+				.isEqualTo(RidePanelPayload.opened(4927L, RidePanelTab.INFO));
+	}
+
+	@Test
+	@DisplayName("열어 둔 곡 상세가 없으면 닫힌 상태로 준다")
+	void answersWithClosedPanel() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(42_000L, 4L);
+		when(rideRedisRepository.findPanel(CAPTAIN)).thenReturn(null);
+
+		RideResponse response = service.mount(RIDER, CAPTAIN);
+
+		assertThat(response.panel()).isEqualTo(RidePanelPayload.closed());
 	}
 }

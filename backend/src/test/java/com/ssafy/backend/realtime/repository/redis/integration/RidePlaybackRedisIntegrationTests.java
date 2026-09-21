@@ -271,4 +271,49 @@ class RidePlaybackRedisIntegrationTests {
 		assertThat(repository.ridersOf(List.of())).isEmpty();
 		assertThat(repository.ridersOf(null)).isEmpty();
 	}
+
+	/** 목록은 필요 없고 수만 필요한 자리다. 한 명씩 물으면 사람 수만큼 왕복이 생긴다. */
+	@Test
+	@DisplayName("여러 사람을 한 번에 물어도 각자 인원 수가 맞게 나온다")
+	void countsManyAtOnce() {
+		String first = user();
+		String second = user();
+		String alone = user();
+		addRider(first, user());
+		addRider(first, user());
+		addRider(second, user());
+
+		Map<String, Integer> result = repository.riderCountsOf(List.of(first, second, alone));
+
+		assertThat(result).containsOnlyKeys(first, second);
+		assertThat(result.get(first)).isEqualTo(2);
+		assertThat(result.get(second)).isEqualTo(1);
+	}
+
+	/** 0 인 사람까지 담으면 받는 쪽이 매번 빈 값을 걸러야 한다. */
+	@Test
+	@DisplayName("따라오는 사람이 없는 사람은 결과에서 빠진다")
+	void zeroOnesAreLeftOut() {
+		assertThat(repository.riderCountsOf(List.of(user(), user()))).isEmpty();
+	}
+
+	@Test
+	@DisplayName("인원 수도 물을 사람이 없으면 읽지 않는다")
+	void emptyInputReturnsNoCounts() {
+		assertThat(repository.riderCountsOf(List.of())).isEmpty();
+		assertThat(repository.riderCountsOf(null)).isEmpty();
+	}
+
+	/** 같은 사람이 두 번 들어와도 한 번만 묻고 한 칸만 나온다. */
+	@Test
+	@DisplayName("같은 사람이 겹쳐 들어와도 한 번만 센다")
+	void duplicatesAreAskedOnce() {
+		String captain = user();
+		addRider(captain, user());
+
+		Map<String, Integer> result = repository.riderCountsOf(List.of(captain, captain));
+
+		assertThat(result).containsOnlyKeys(captain);
+		assertThat(result.get(captain)).isEqualTo(1);
+	}
 }

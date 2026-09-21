@@ -76,9 +76,13 @@ local cellX   = redis.call('HGET', KEYS[1], 'cellX')
 local cellY   = redis.call('HGET', KEYS[1], 'cellY')
 local storedEpoch = redis.call('HGET', KEYS[1], 'epoch')
 
+-- 따라가는 중이면 자리는 적혀 있어도 지도에는 없다. 빼면 인솔자 셀 인원수가 깎이고,
+-- 아무에게도 보인 적 없는 사람의 퇴장 알림이 나간다.
+local riding = redis.call('HGET', KEYS[1], 'riding')
+
 -- 재생 중이었다면 곡과 위치를 지운다.
 local removed = {}
-if musicId then
+if musicId and not riding then
   local cellF = cellX .. ':' .. cellY
   redis.call('SREM', ARGV[4] .. musicId, email)
 

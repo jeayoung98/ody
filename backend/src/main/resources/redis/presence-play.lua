@@ -23,7 +23,13 @@ if redis.call('EXISTS', KEYS[1]) == 0 then
   return {'STALE'}
 end
 
--- 1) 가드: 저장된 현재 곡이 넘어온 old 와 같은가
+-- 1) 가드: 따라가는 중이면 지도에 없다. 여기서 옮기면 지도에 다시 나타나고
+--    인솔자 셀 인원수도 깎인다. 컨트롤러가 이미 막지만 경합으로 새어 들어올 수 있다.
+if redis.call('HGET', KEYS[1], 'riding') then
+  return {'STALE'}
+end
+
+-- 2) 가드: 저장된 현재 곡이 넘어온 old 와 같은가
 local cur = redis.call('HGET', KEYS[1], 'musicId')
 local curStr = cur or ''
 if curStr ~= oldM then

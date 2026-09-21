@@ -96,6 +96,19 @@ class RideDismountRedisIntegrationTests {
 		assertThat(repository.riders(captain)).doesNotContain(rider);
 	}
 
+	/** 표시가 남으면 지도에 있으면서도 재생·입장이 거부된다. */
+	@Test
+	@DisplayName("내리면 따라가는 중 표시가 사라진다")
+	void ridingMarkIsCleared() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider, 1L);
+
+		repository.dismount(rider, captain);
+
+		assertThat(redis.opsForHash().hasKey("presence:user:" + rider, "riding")).isFalse();
+	}
+
 	/** 다시 넣지 않으면 내린 뒤에도 남들 화면과 주변 사람 목록에 안 잡힌다. */
 	@Test
 	@DisplayName("내리면 지도 인덱스 다섯 곳에 다시 들어간다")
@@ -246,6 +259,8 @@ class RideDismountRedisIntegrationTests {
 		redis.opsForHash().put(key, "layer", Integer.toString(LAYER));
 		redis.opsForHash().put(key, "cellX", Integer.toString(CELL_X));
 		redis.opsForHash().put(key, "cellY", Integer.toString(CELL_Y));
+		// ride-place.lua 가 남기는 표시. 자리는 적혀 있어도 지도에는 없다는 뜻이다.
+		redis.opsForHash().put(key, "riding", "1");
 	}
 
 	private String user() {

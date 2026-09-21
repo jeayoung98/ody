@@ -204,7 +204,7 @@ public class RideRedisRepository {
 	public RiderLeaveResult riderLeave(String riderEmail) {
 		List<String> r = redis.execute(rideRiderLeaveScript,
 				List.of(CAPTAIN_PREFIX + riderEmail),
-				riderEmail, RIDERS_PREFIX);
+				riderEmail, RIDERS_PREFIX, PRESENCE_USER_PREFIX + riderEmail);
 
 		if (r == null || r.size() < 3 || !"OK".equals(r.get(0))) {
 			return null;

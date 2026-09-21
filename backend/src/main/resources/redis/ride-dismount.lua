@@ -69,6 +69,8 @@ local cellField = cellX .. ':' .. cellY
 local residents = redis.call('SMEMBERS', P_ll .. layer .. ':' .. musicId)
 
 -- 8) 지도에 다시 넣는다. 이제 남들 화면에 한 점으로 보인다.
+--    riding 표시도 지운다. 이제 자리와 지도가 다시 일치한다.
+redis.call('HDEL', KEYS[1], 'riding')
 redis.call('SADD', P_lis .. musicId, rider)
 redis.call('SADD', P_ll .. layer .. ':' .. musicId, rider)
 redis.call('SADD', P_cell .. layer .. ':' .. cellField, musicId)

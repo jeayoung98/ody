@@ -67,6 +67,8 @@ for i = 1, #riders do
   -- 접속 정보가 없으면 그 사람도 이미 나간 것이다. 지도에 넣지 않는다.
   if s[1] and s[1] ~= '' and s[2] and s[2] ~= '' then
     local cf = s[3] .. ':' .. s[4]
+    -- riding 표시를 지운다. 이제 자리와 지도가 다시 일치한다.
+    redis.call('HDEL', P_pre .. rider, 'riding')
     redis.call('SADD', P_lis .. s[1], rider)
     redis.call('SADD', P_ll .. s[2] .. ':' .. s[1], rider)
     redis.call('SADD', P_cell .. s[2] .. ':' .. cf, s[1])

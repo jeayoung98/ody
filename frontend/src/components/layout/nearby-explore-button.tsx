@@ -2,6 +2,7 @@
 
 import { CoronaIcon } from "@/components/common/icons";
 import { useMapStore } from "@/stores/use-map-store";
+import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import RailButton from "./rail-button";
@@ -23,6 +24,18 @@ export default function NearbyExploreButton() {
   const enterNearby = useMapStore((s) => s.enterNearby);
   const exitNearby = useMapStore((s) => s.exitNearby);
 
+  /**
+   * 주변 탐색을 켜면 **상관없는 패널은 내려간다** (S15P21A405-417).
+   *
+   * 반대 방향은 이미 막혀 있었다 — `use-panel-store` 의 `syncMapView` 가 곡 상세가 아닌 패널을
+   * 열 때 고리를 끈다. 이쪽만 빠져 있어서 **랭킹을 켜 둔 채 주변 탐색을 누르면 둘 다 떴고**,
+   * 폰에서는 패널이 화면을 덮으니 고리가 그 아래 깔려 보이지도 않았다.
+   *
+   * 곡 상세는 예외다 — 고리는 그 곡에 딸린 화면이라 같이 떠 있는 게 맞다.
+   */
+  const activePanel = usePanelStore((s) => s.activePanel);
+  const closePanel = usePanelStore((s) => s.close);
+
   const target = selectedMusicId ?? currentMusicId;
   const active = viewMode === "nearby";
   const disabled = !active && target == null;
@@ -30,6 +43,7 @@ export default function NearbyExploreButton() {
   const handleClick = () => {
     if (active) exitNearby();
     else if (target != null) {
+      if (activePanel != null && activePanel !== "song") closePanel();
       enterNearby(target);
       useTutorialStore.getState().complete("nearby");
     }

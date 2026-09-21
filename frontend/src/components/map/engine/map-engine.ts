@@ -1640,6 +1640,27 @@ export class MapEngine {
   }
 
   /**
+   * 한 겹 안에서 갈 수 있는 최대 배율 (진입 배율 대비) — **화면이 좁으면 그만큼 더 준다**
+   * (S15P21A405-417).
+   *
+   * 진입 배율이 빈 영역에 맞춘 값이라, 좁은 화면의 `24배` 는 넓은 화면의 `24배` 보다 실제로
+   * 덜 확대된 상태다. 그대로 두면 폰에서는 한계까지 밀어도 곡이 충분히 안 걸러져
+   * 게이트가 안 열렸다 — 자리에 따라 파고들기가 됐다 안 됐다 한 원인이다 (실측: 같은 지점에서
+   * 데스크톱은 밀도 354, 폰은 973).
+   *
+   * 넓이의 **제곱근**(= 길이 비)으로 보정한다. 기준보다 넓으면 1 이라 데스크톱은 그대로 24 다.
+   */
+  private maxZoomK() {
+    const f = this.freeRect();
+    const areaMpx = ((f.x1 - f.x0) * (f.y1 - f.y0)) / 1e6;
+    const base = DRILL.zoomRange.max * Math.max(1, Math.sqrt(DRILL.zoomRefAreaMpx / Math.max(areaMpx, 1e-6)));
+    // 게이트가 닫혀 있는 동안에는 한계가 막지 않는다 — 막으면 빽빽한 자리에서 영영 못 내려간다
+    const cap = this.layer < LAYER_COUNT - 1 && !this.zoomedEnough() ? base * DRILL.denseZoomBoost : base;
+    // 이미 넘어와 있으면 도로 끌어내리지 않는다 (게이트가 열리는 순간 화면이 튄다)
+    return Math.max(cap, this.zoomK());
+  }
+
+  /**
    * 파고들 만큼 좁혔는가 (S15P21A405-342).
    *
    * **화면 안 곡 수**로 잰다 — 배율 배수로 재면 진입 배율이 겹마다 달라서 같은 배수가 어떤 겹에선
@@ -1883,7 +1904,7 @@ export class MapEngine {
     // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게).
     // 파고든 겹의 축소 한계는 진입 배율 자체다 — 그 아래는 빈 우주만 보여 줄 뿐이다
     const minK = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.zoomRange.min;
-    this.cam.s = Math.min(this.entryS * DRILL.zoomRange.max, Math.max(this.entryS * minK, want));
+    this.cam.s = Math.min(this.entryS * this.maxZoomK(), Math.max(this.entryS * minK, want));
     this.cam.cx = w.x - (mx - this.W / 2) / this.cam.s;
     this.cam.cy = w.y + (my - this.H / 2) / this.cam.s;
     this.clampCam();

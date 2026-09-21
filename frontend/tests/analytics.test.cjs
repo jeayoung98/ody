@@ -36,6 +36,30 @@ test("analytics separates real dev and production traffic by environment", () =>
   assert.equal(analyticsEnvironment("j15a405.p.ssafy.io"), "production");
 });
 
+/*
+ * 폰에는 개발자도구가 없어서 노트북 LAN 주소로 붙어 확인한다 (S15P21A405-485). 그 주소가
+ * loopback 이 아니라는 이유로 운영으로 찍히면 개발 중 만든 이벤트가 유저 데이터에 섞인다.
+ */
+test("analytics counts private-network hosts as development — phones reach the laptop by LAN", () => {
+  assert.equal(analyticsEnvironment("172.20.10.6"), "development", "폰 핫스팟이 주는 대역");
+  assert.equal(analyticsEnvironment("192.168.0.12"), "development");
+  assert.equal(analyticsEnvironment("10.0.1.5"), "development");
+  assert.equal(analyticsEnvironment("169.254.7.1"), "development");
+  assert.equal(analyticsEnvironment("[fe80::1cf2]"), "development");
+  assert.equal(analyticsEnvironment("MY-MACBOOK.local"), "development", "대소문자를 가리지 않는다");
+});
+
+test("analytics keeps public hosts on production — the 172 range has edges", () => {
+  // 172.16.0.0/12 은 172.16~172.31 이다. 바로 바깥은 공인 주소다
+  assert.equal(analyticsEnvironment("172.15.0.1"), "production");
+  assert.equal(analyticsEnvironment("172.32.0.1"), "production");
+  assert.equal(analyticsEnvironment("172.217.25.110"), "production");
+  // 사설 대역과 글자만 닮은 공인 도메인이 개발로 새지 않아야 한다
+  assert.equal(analyticsEnvironment("10.example.com"), "production");
+  assert.equal(analyticsEnvironment("local"), "production");
+  assert.equal(analyticsEnvironment("ody.local.example.com"), "production");
+});
+
 test("analytics runtime matrix is automatic and browser off wins everywhere", () => {
   const cases = [
     ["localhost", "live", true, "development", true, true],

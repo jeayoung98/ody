@@ -297,6 +297,8 @@ interface BackendMusicSummary {
   /** 장르 **이름** 배열. genreId 가 없다 — 지도 색칠에 필요하다 (BACKEND-NOTES B-21) */
   /** 검색 URL. 재생 URL 이 아니다 (규칙 6) */
   youtubeUrl: string | null;
+  /** 이 곡이 실린 앨범의 MusicBrainz 릴리스 ID (S15P21A405-518) */
+  albumMbid?: string | null;
   location: BackendLocation | null;
 }
 
@@ -366,6 +368,11 @@ export interface BackendMapPoint {
    * 그래서 아래에서 null 로 받아 둔다.
    */
   youtubeUrl?: string | null;
+  /**
+   * 이 곡이 실린 앨범의 MusicBrainz **릴리스** ID (S15P21A405-518).
+   * 2026-09-21 배포 확인 — 스키마에 `albumMbid` 로 있고 지도 응답 100건 전부 값이 차 있다.
+   */
+  albumMbid?: string | null;
   playable: boolean;
 }
 
@@ -383,6 +390,7 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
     title: p.title,
     artist: p.artist ?? null,
     youtubeUrl: p.youtubeUrl ?? null,
+    albumMbid: p.albumMbid ?? null,
     playable: p.playable,
   };
 }
@@ -406,6 +414,7 @@ export function toMusic(res: BackendMusicDetail): Music {
   return {
     id: res.id,
     mbid: res.mbid,
+    albumMbid: res.albumMbid ?? null,
     title: res.title,
     artist: res.artist,
     releaseYear: res.releaseYear ?? null,

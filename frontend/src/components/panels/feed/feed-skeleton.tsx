@@ -28,38 +28,21 @@ export default function FeedSkeleton() {
         <Skeleton w={50} h={13} />
       </div>
       <Divider />
-      {/* 대시보드 — 라벨:값 두 줄 */}
-      <div className="flex flex-col gap-2">
-        <Skeleton w={64} h={9} />
-        <div className="flex flex-col gap-[9px]">
-          <div className="flex justify-between gap-3">
-            <Skeleton w={96} h={10} />
-            <Skeleton w={44} h={10} />
-          </div>
-          <div className="flex justify-between gap-3">
-            <Skeleton w={118} h={10} />
-            <Skeleton w={38} h={10} />
-          </div>
+      {/* 대시보드 — 라벨:값 두 줄. 제목 글자는 없앴다 (S15P21A405-524) */}
+      <div className="flex flex-col gap-[9px]">
+        <div className="flex justify-between gap-3">
+          <Skeleton w={96} h={10} />
+          <Skeleton w={44} h={10} />
         </div>
-      </div>
-      {/* 선호 분위기 — 라벨 / 막대 / 값 */}
-      <div className="flex flex-col gap-2">
-        <Skeleton w={72} h={9} />
-        <div className="flex flex-col gap-[7px]">
-          {["58%", "44%", "66%"].map((w) => (
-            <div key={w} className="grid grid-cols-[1fr_76px_34px] items-center gap-[9px]">
-              <Skeleton w={w} h={10} />
-              <Skeleton w="100%" h={4} />
-              <Skeleton w={24} h={9} />
-            </div>
-          ))}
+        <div className="flex justify-between gap-3">
+          <Skeleton w={118} h={10} />
+          <Skeleton w={38} h={10} />
         </div>
       </div>
       <Divider />
-      {/* 플리 목록 */}
-      <div className="-mx-1.5 flex flex-col gap-2">
-        <Skeleton w={88} h={9} className="mx-1.5" />
-        <SkeletonRows count={3} />
+      {/* 플리 목록 — 내 플리와 좋아요한 플리가 한 줄기로 이어진다 (S15P21A405-524) */}
+      <div className="-mx-1.5">
+        <SkeletonRows count={5} />
       </div>
     </div>
   );

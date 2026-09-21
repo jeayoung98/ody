@@ -61,6 +61,7 @@ public class RideRedisRepository {
 	private final StringRedisTemplate redis;
 	private final DefaultRedisScript<List> rideMountScript;
 	private final DefaultRedisScript<List> rideDismountScript;
+	private final DefaultRedisScript<List> rideDisbandScript;
 
 	/** 따라가기 시작 결과. 거부면 musicId·layer 는 의미 없다. */
 	public record MountResult(MountStatus status, long musicId, int layer) {
@@ -163,6 +164,54 @@ public class RideRedisRepository {
 		NOT_RIDING,
 		/** 지금 연결에서 만든 탑승이 아니거나 그 사이에 갈아탔다. */
 		STALE
+	}
+
+	/**
+	 * 해체 결과.
+	 *
+	 * @param leftRiders 지도에 다시 넣은 사람들. 접속이 이미 끊긴 사람은 빠진다
+	 * @param residents 아무도 다시 넣기 전, 그 곡에 있던 사람들. 만남 계산에 쓴다
+	 */
+	public record DisbandResult(boolean hadRiders, long musicId, int layer, int cellX, int cellY,
+			List<String> leftRiders, List<String> residents) {
+
+		/** 따라오던 사람이 없었던 결과. */
+		private static DisbandResult empty() {
+			return new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of());
+		}
+	}
+
+	/**
+	 * 인솔자 한 명의 선단을 흩는다. 그를 따라가던 사람 전원이 인솔자의 마지막 곡에 남는다.
+	 *
+	 * 한 명씩 나눠 하면 그 사이에 따라가지도 않고 지도에도 없는 사람이 생긴다.
+	 * 스무 명이면 그 구간이 스무 배 길다. 그래서 한 스크립트에서 끝낸다.
+	 *
+	 * @param captainEmail 사라진 인솔자
+	 * @return 내린 사람들과 그 곡에 원래 있던 사람들. 따라오던 사람이 없었으면 빈 결과
+	 */
+	@SuppressWarnings("unchecked")
+	public DisbandResult disband(String captainEmail) {
+		List<String> r = redis.execute(rideDisbandScript,
+				List.of(RIDERS_PREFIX + captainEmail,
+						PLAYBACK_PREFIX + captainEmail,
+						PANEL_PREFIX + captainEmail),
+				captainEmail, PRESENCE_USER_PREFIX, CAPTAIN_PREFIX,
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX,
+				ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+
+		if (r == null || r.isEmpty() || !"OK".equals(r.get(0))) {
+			return DisbandResult.empty();
+		}
+		// 여섯·일곱 번째 칸이 각각 몇 명인지를 말해 준다. 그 뒤로 내린 사람들, 그 뒤로 원래 있던 사람들.
+		int leftCount = Integer.parseInt(r.get(5));
+		int residentCount = Integer.parseInt(r.get(6));
+		int residentFrom = 7 + leftCount;
+		return new DisbandResult(true,
+				Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
+				Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
+				List.copyOf(r.subList(7, residentFrom)),
+				List.copyOf(r.subList(residentFrom, residentFrom + residentCount)));
 	}
 
 	/**

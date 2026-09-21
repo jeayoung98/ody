@@ -67,7 +67,8 @@ class RidePlaybackRedisIntegrationTests {
 
 		RedisScriptConfig scripts = new RedisScriptConfig();
 		repository = new RideRedisRepository(
-				redis, scripts.rideMountScript(), scripts.rideDismountScript());
+				redis, scripts.rideMountScript(), scripts.rideDismountScript(),
+				scripts.rideDisbandScript());
 	}
 
 	@AfterEach

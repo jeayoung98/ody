@@ -26,7 +26,7 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_returnsExisting_withoutCallingLookupOrWriter() {
-		String result = enricher.resolve(1L, "a", "t", "existing1234", 200);
+		String result = enricher.resolve(1L, "a", "t", "al", "existing1234", 200);
 
 		assertEquals("existing1234", result);
 		verifyNoInteractions(lookupPort, writerPort);
@@ -34,9 +34,9 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_looksUpAndSaves_whenMissing() {
-		when(lookupPort.lookup("a", "t", 200)).thenReturn(Optional.of("xyz12345678"));
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of("xyz12345678"));
 
-		String result = enricher.resolve(1L, "a", "t", null, 200);
+		String result = enricher.resolve(1L, "a", "t", "al", null, 200);
 
 		assertEquals("xyz12345678", result);
 		verify(writerPort).save(1L, "xyz12345678");
@@ -44,9 +44,9 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_returnsNull_andDoesNotSave_whenLookupFindsNothing() {
-		when(lookupPort.lookup("a", "t", null)).thenReturn(Optional.empty());
+		when(lookupPort.lookup("a", "t", "al", null)).thenReturn(Optional.empty());
 
-		String result = enricher.resolve(1L, "a", "t", null, null);
+		String result = enricher.resolve(1L, "a", "t", "al", null, null);
 
 		assertNull(result);
 		verifyNoInteractions(writerPort);
@@ -58,9 +58,9 @@ class VideoIdEnricherTests {
 	 */
 	@Test
 	void resolve_marksUnplayable_andDoesNotWriteVideoId_whenLookupSaysUnplayable() {
-		when(lookupPort.lookup("a", "t", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
 
-		String result = enricher.resolve(1L, "a", "t", null, 200);
+		String result = enricher.resolve(1L, "a", "t", "al", null, 200);
 
 		assertEquals(VideoIds.UNPLAYABLE, result);
 		verify(writerPort).markUnplayable(1L);
@@ -70,19 +70,29 @@ class VideoIdEnricherTests {
 	/** 판정이 끝난 곡은 다시 묻지 않는다 — "없음" 과 "아직 모름" 을 가르는 이유가 이것이다. */
 	@Test
 	void resolve_returnsUnplayable_withoutLookup_whenAlreadyJudged() {
-		String result = enricher.resolve(1L, "a", "t", VideoIds.UNPLAYABLE, 200);
+		String result = enricher.resolve(1L, "a", "t", "al", VideoIds.UNPLAYABLE, 200);
 
 		assertEquals(VideoIds.UNPLAYABLE, result);
 		verifyNoInteractions(lookupPort, writerPort);
 	}
 
+	/** 앨범을 모르는 곡이 많다. 지어내지 않고 null 그대로 넘긴다 — 생략 여부는 클라이언트가 정한다. */
+	@Test
+	void resolve_passesNullAlbum_whenUnknown() {
+		when(lookupPort.lookup("a", "t", null, 200)).thenReturn(Optional.of("xyz12345678"));
+
+		enricher.resolve(1L, "a", "t", null, null, 200);
+
+		verify(lookupPort).lookup("a", "t", null, 200);
+	}
+
 	/** S15P21A405-401 — duration 을 모르면 null 로 그대로 lookupPort 에 넘긴다(생략하지 않는다). */
 	@Test
 	void resolve_passesNullDuration_whenUnknown() {
-		when(lookupPort.lookup("a", "t", null)).thenReturn(Optional.of("xyz12345678"));
+		when(lookupPort.lookup("a", "t", "al", null)).thenReturn(Optional.of("xyz12345678"));
 
-		enricher.resolve(1L, "a", "t", null, null);
+		enricher.resolve(1L, "a", "t", "al", null, null);
 
-		verify(lookupPort).lookup("a", "t", null);
+		verify(lookupPort).lookup("a", "t", "al", null);
 	}
 }

@@ -25,6 +25,7 @@ import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
+import StarfieldPlaceholder from "./starfield-placeholder";
 import { useViewport } from "./use-viewport";
 import { ANALYTICS } from "@/constants/analytics";
 import { analyticsContext, track, trackOnce } from "@/lib/analytics/client";
@@ -686,7 +687,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       <LayerToast />
       {features.social && <FloatingReactions />}
       <HoverCard engine={engine} song={hoverSong} on={cardOn} />
-      {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
+      {!songs && <StarfieldPlaceholder />}
     </div>
   );
 }

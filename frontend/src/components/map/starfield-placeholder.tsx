@@ -1,5 +1,4 @@
 import { useMemo } from "react";
-import Button from "@/components/common/button";
 import { GENRE_COLORS } from "@/constants/design-tokens";
 import { hash01 } from "./render/star-look";
 
@@ -44,12 +43,17 @@ function makeStars(count: number) {
 interface StarfieldPlaceholderProps {
   width: number;
   height: number;
-  /** 상주 집합 요청이 끝내 실패했다 */
+  /**
+   * 상주 집합 요청이 끝내 실패했다. 실패하면 **글자를 하나도 띄우지 않고 별만 남긴다**
+   * (S15P21A405-508). 안내 문구도 다시 시도 버튼도 없다 — 판단은 사용자 요청이다.
+   *
+   * 그래도 이 값을 받는 이유는 **불러오는 중 문구를 거두기 위해서**다. 없으면 요청이
+   * 죽은 뒤에도 "별을 불러오는 중" 이 영원히 남아 거짓말이 된다.
+   */
   failed?: boolean;
-  onRetry?: () => void;
 }
 
-export default function StarfieldPlaceholder({ width, height, failed = false, onRetry }: StarfieldPlaceholderProps) {
+export default function StarfieldPlaceholder({ width, height, failed = false }: StarfieldPlaceholderProps) {
   // 자리는 인덱스에서 나오므로 화면이 커지면 앞의 별은 그대로 두고 뒤에 더 붙는다
   const count = Math.min(MAX_STARS, Math.max(MIN_STARS, Math.round((width * height) / AREA_PER_STAR)));
   const stars = useMemo(() => makeStars(count), [count]);
@@ -73,19 +77,8 @@ export default function StarfieldPlaceholder({ width, height, failed = false, on
           }}
         />
       ))}
-      <div className="absolute inset-0 flex flex-col items-center justify-center gap-2.5">
-        {/*
-          실패했으면 실패라고 말한다 (S15P21A405-505). 예전에는 songs 가 없으면 무조건
-          "불러오는 중" 이라, 요청이 죽어도 같은 문구가 영원히 남았다 — 기다리는 것 말고
-          할 수 있는 게 없는 화면이었다.
-        */}
-        <p className="lbl">{failed ? "별을 불러오지 못했어요" : "별을 불러오는 중"}</p>
-        {failed && onRetry && (
-          <Button size="sm" className="pointer-events-auto" onClick={onRetry}>
-            다시 시도
-          </Button>
-        )}
-      </div>
+      {/* 실패하면 아무 말도 하지 않는다 — 빈 하늘보다는 별이 깔린 화면이 낫다는 판단이다 */}
+      {!failed && <p className="lbl absolute inset-0 flex items-center justify-center">별을 불러오는 중</p>}
     </div>
   );
 }

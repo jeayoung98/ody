@@ -2,16 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { HOLD, HOVER_CARD, PINCH, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useNearbyUsersQuery } from "@/hooks/queries/use-nearby-users-query";
+import { useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
-import { useRepresentativesQuery } from "@/hooks/queries/use-representatives-query";
-import { useMockFriendReactions } from "@/hooks/use-mock-friend-reactions";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -26,6 +24,7 @@ import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
+import StarfieldPlaceholder from "./starfield-placeholder";
 import { useViewport } from "./use-viewport";
 import { ANALYTICS } from "@/constants/analytics";
 import { analyticsContext, track, trackOnce } from "@/lib/analytics/client";
@@ -66,7 +65,7 @@ export default function MapView({ occlusion }: MapViewProps) {
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
-  const { data: songs } = useMapSongsQuery(boxes);
+  const { data: songs, isError: songsFailed } = useMapSongsQuery(boxes);
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);
@@ -76,8 +75,11 @@ export default function MapView({ occlusion }: MapViewProps) {
     if (prefetchBoxes && prefetchedSongs) engine.setPrefetched(prefetchBoxes, prefetchedSongs);
   }, [engine, prefetchBoxes, prefetchedSongs]);
   const layer = useMapStore((s) => s.layer);
-  const { data: friends } = useNearbyUsersQuery(layer);
-  const { data: representatives } = useRepresentativesQuery(layer);
+  /**
+   * 지도 위 사람 — 15초 폴링을 소켓 구독으로 갈아탔다 (S15P21A405-482).
+   * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
+   */
+  useViewportSubscription(features.social);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
@@ -88,7 +90,8 @@ export default function MapView({ occlusion }: MapViewProps) {
   const home = useMapStore((s) => s.home);
   const selectMusic = useMapStore((s) => s.selectMusic);
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
-  const openSong = usePanelStore((s) => s.openSong);
+  // 지도에서 별을 누르는 길만 이걸 쓴다 — 주변 사람을 보는 중이면 패널을 갈아타지 않는다 (S15P21A405-515)
+  const openSongFromMap = usePanelStore((s) => s.openSongFromMap);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playWithConfirm = usePlaySong();
@@ -127,8 +130,11 @@ export default function MapView({ occlusion }: MapViewProps) {
     usePanelStore.getState().collapse();
   }, [layer]);
 
-  // 목: 지도 위 사용자들이 스스로 반응을 쏜다 (실서비스에서는 소켓 수신)
-  useMockFriendReactions(friends);
+  /**
+   * 목 반응은 걷어냈다 (S15P21A405-482). 실시간 명세가 **반응을 "아직 없는 것"** 으로 명시했고
+   * (따라가기·반응·비공개 계정), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
+   * 도는 것처럼 보여서 테스트가 어긋난다. 훅 자체는 남겨 뒀다 — 데이터가 생기면 되살린다.
+   */
 
   // 엔진 등록 + 스냅샷 → 스토어
   useEffect(() => {
@@ -186,13 +192,31 @@ export default function MapView({ occlusion }: MapViewProps) {
     engine.setLayerSongs(boxes.length, songs);
     trackOnce("map-ready", "map_ready", { result_count: songs.length, layer: boxes.length });
   }, [engine, boxes, songs]);
-  // 레이어별 데이터 — 새 레이어 것이 도착하면 엔진이 페이드인한다
+  /**
+   * 커버로 띄울 후보곡 — **이미 받은 상주 집합에서 뽑는다** (S15P21A405-513).
+   *
+   * 예전에는 `/bff/map/layers/{l}/representatives` 를 따로 불렀는데, 그 라우트가 하는 일이
+   * `/api/music/major` 를 **통째로 다시 받아** 재생수 상위 40개의 id 만 남기고 버리는 것이었다.
+   * 같은 응답을 `songs` 가 이미 들고 있으니 두 번 받을 이유가 없다 — 실측으로 겹 하나 여는 데
+   * 1.5초짜리 요청이 하나 더 붙었고, 둘이 겹쳐 돌면서 서로를 느리게 만들었다.
+   *
+   * 덤으로 레이어 2 부터 나던 400 도 사라진다 — 그 라우트가 누적 범위를 안 보내서 백엔드
+   * `MajorQuery` 의 `accumulated.size() == level-1` 검사에 걸리고 있었다.
+   */
+  const representatives = useMemo(
+    () =>
+      songs
+        ? [...songs]
+            .sort((a, b) => b.weight - a.weight)
+            .slice(0, REPRESENTATIVE_COUNT)
+            .map((p) => p.musicId)
+        : null,
+    [songs],
+  );
   useEffect(() => {
-    if (friends) engine.setFriends(layer, friends);
-  }, [engine, layer, friends]);
-  useEffect(() => {
-    if (representatives) engine.setRepresentatives(representatives.layer, representatives.musicIds);
-  }, [engine, representatives]);
+    // 겹 번호는 songs 를 넣을 때와 **같은 값**을 쓴다 — 둘이 어긋나면 엔진이 남의 겹 커버를 든다
+    if (representatives) engine.setRepresentatives(boxes.length, representatives);
+  }, [engine, boxes.length, representatives]);
 
   // 주변 탐색: 유사곡 10곡이 오면 연출 뷰로 진입, 모드가 꺼지면 복귀
   useEffect(() => {
@@ -242,9 +266,16 @@ export default function MapView({ occlusion }: MapViewProps) {
       engine.stopFollow();
       return;
     }
-    const leader = (friends ?? []).find((f) => f.email === leaderEmail);
+    /**
+     * 따라가기 대상은 **엔진이 들고 있는 목록**에서 찾는다 (S15P21A405-482). 예전에는 폴링 훅이
+     * 준 배열을 봤는데, 지금은 뷰포트 구독이 엔진에 직접 넣는다.
+     *
+     * 따라가기 자체는 아직 붙일 데이터가 없다 — 명세가 "아직 없는 것"으로 적었고 `riderCount`
+     * 도 늘 0 이다. 여기는 그때가 오면 그대로 도는 자리다.
+     */
+    const leader = engine.friends.find((f) => f.email === leaderEmail);
     if (leader) engine.startFollow(leader);
-  }, [engine, leaderEmail, friends]);
+  }, [engine, leaderEmail]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {
@@ -496,12 +527,12 @@ export default function MapView({ occlusion }: MapViewProps) {
   const playSong = useCallback(
     (s: MapPoint) => {
       selectMusic(s.musicId);
-      openSong(s.musicId);
+      openSongFromMap(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", playedMs: 0 }));
+      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
       useTutorialStore.getState().complete("select");
     },
-    [openSong, playWithConfirm, recordPlay, selectMusic],
+    [openSongFromMap, playWithConfirm, recordPlay, selectMusic],
   );
 
   /**
@@ -521,13 +552,13 @@ export default function MapView({ occlusion }: MapViewProps) {
       // 클릭 = **보기만** (S15P21A405-277). 상세를 열고 뷰만 그리로 옮긴다 —
       // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
       selectMusic(s.musicId);
-      openSong(s.musicId);
+      openSongFromMap(s.musicId);
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, openSong, playSong, selectMusic],
+    [engine, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(
@@ -579,7 +610,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       if (gid != null) {
         track("music_clicked", { music_id: gid, source: "ghost", action: "inspect" });
         selectMusic(gid);
-        openSong(gid);
+        openSongFromMap(gid);
         return;
       }
       const hit = engine.hitTest(mx, my);
@@ -615,7 +646,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       pressSong(song);
     },
-    [engine, cancelHold, openFeed, openSong, pressSong, selectMusic],
+    [engine, cancelHold, openFeed, openSongFromMap, pressSong, selectMusic],
   );
   /**
    * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.
@@ -677,7 +708,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       <LayerToast />
       {features.social && <FloatingReactions />}
       <HoverCard engine={engine} song={hoverSong} on={cardOn} />
-      {!songs && <p className="lbl pointer-events-none absolute inset-0 flex items-center justify-center">loading stars</p>}
+      {!songs && <StarfieldPlaceholder width={size.width} height={size.height} failed={songsFailed} />}
     </div>
   );
 }

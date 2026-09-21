@@ -46,10 +46,16 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
   const cover = useMemo(() => (song ? coverFor(song).toDataURL() : null), [song]);
   const cardRef = useRef<HTMLDivElement>(null);
   const musicId = song?.musicId ?? null;
+  /**
+   * `onDetail` 이 있으면 폰이다 (`map-view.tsx` 가 좁은 화면에서만 넘긴다). 폭도 누를 수 있는지도
+   * 이 하나로 갈린다 — 화면 폭을 따로 재면 두 판정이 어긋날 수 있다.
+   */
+  const narrow = onDetail != null;
+  const w = narrow ? HOVER_CARD.wNarrow : HOVER_CARD.w;
 
   useEffect(() => {
     if (musicId == null) return;
-    const { w, h, gap, margin } = HOVER_CARD;
+    const { h, gap, margin } = HOVER_CARD;
     let raf = 0;
     const follow = () => {
       raf = requestAnimationFrame(follow);
@@ -75,23 +81,34 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
     };
     raf = requestAnimationFrame(follow);
     return () => cancelAnimationFrame(raf);
-  }, [engine, musicId, on]);
+  }, [engine, musicId, on, w]);
 
   if (!song) return null;
 
   return (
     // z-[25]: HUD 층(계기판·레일·검색·하단바 20~24) 바로 위. 토스트·배너·다이얼로그(30 이상)보다는 아래다.
-    // pointer-events 는 항상 꺼 둔다 — 이 카드는 읽는 것이지 누르는 것이 아니다
     <div
       ref={cardRef}
+      /*
+       * 폰에서는 **카드 어디를 눌러도 상세로 간다** (S15P21A405-417). 12px 짜리 글자를 정확히
+       * 겨누게 하는 건 손가락한테 하는 요구가 아니다. 데스크톱은 그대로 클릭을 통과시킨다
+       * (S15P21A405-323) — 거기서는 카드가 마우스를 따라다니며 뜨므로, 눌리게 만들면
+       * 카드에 덮인 별을 영영 못 누른다.
+       */
+      onPointerDown={onDetail ? (e) => e.stopPropagation() : undefined}
+      onClick={onDetail}
+      role={narrow ? "button" : undefined}
+      aria-label={narrow && song ? `${song.title} 상세 열기` : undefined}
       style={{
-        width: HOVER_CARD.w,
+        width: w,
         height: HOVER_CARD.h,
         visibility: "hidden",
         opacity: 0,
         transition: `opacity ${HOVER_CARD.fadeMs}ms ease-out`,
       }}
-      className="glass-liquid pointer-events-none absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform"
+      className={`glass-liquid absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform ${
+        narrow ? "pointer-events-auto cursor-pointer" : "pointer-events-none"
+      }`}
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}
       <span
@@ -107,18 +124,16 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
         </p>
       </span>
       {/*
-        카드 전체는 계속 클릭을 통과시킨다 (S15P21A405-323) — 덮인 별을 그냥 누를 수 있어야 한다.
-        **이 버튼만** 이벤트를 받는다. 카드 하나를 통째로 눌리게 만들면 그 아래 별들이 다시 막힌다.
+        카드가 통째로 눌리므로 이건 **버튼이 아니라 표지판**이다 — "여기 누르면 상세로 간다" 를
+        알려 주는 것이 일이다. 그래서 teal 알약으로 확실히 띄운다 (안 보인다는 말이 나왔다).
       */}
       {onDetail && (
-        <button
-          type="button"
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={onDetail}
-          className="pointer-events-auto shrink-0 self-stretch px-2 text-[11.5px] whitespace-nowrap text-ink-2"
+        <span
+          aria-hidden
+          className="shrink-0 rounded-pill border border-teal/40 bg-teal/15 px-2 py-1 text-[11.5px] font-semibold whitespace-nowrap text-teal"
         >
           상세 ›
-        </button>
+        </span>
       )}
     </div>
   );

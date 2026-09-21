@@ -56,7 +56,7 @@ export default function Rail() {
     <div
       data-hud
       data-tabbar
-      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:right-0 max-tablet:bottom-0 max-tablet:left-0 max-tablet:z-[23] max-tablet:gap-0"
+      className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:top-auto max-tablet:right-gutter-sm max-tablet:bottom-hud-b max-tablet:left-gutter-sm max-tablet:z-[23] max-tablet:gap-0"
     >
       {/*
         유리 바닥판. **자리 잡는 상자와 나눠 둔다** (S15P21A405-417) — 유리의 `backdrop-filter`
@@ -64,7 +64,7 @@ export default function Rail() {
         프사가 우상단으로 못 올라가고 바 안에 눌러앉는다 (실측: 화면 아래로 4px 삐져나갔다).
         데스크톱에서는 `contents` 라 상자가 아예 없어 지금과 똑같다.
       */}
-      <div className="contents max-tablet:glass-bar max-tablet:block max-tablet:w-full max-tablet:pb-[env(safe-area-inset-bottom,0px)]">
+      <div className="contents max-tablet:glass-bar max-tablet:block max-tablet:w-full max-tablet:rounded-[22px] max-tablet:rounded-t-none max-tablet:border-t-0">
         {/* 폰에서는 알약이 유리를 벗고 칸 넷을 고르게 벌린다 */}
         <nav
           aria-label="네비"

@@ -20,11 +20,15 @@ export default function BottomBar() {
       <footer
         data-hud
         /*
-         * 좁은 화면에서는 **탭바 바로 위**다 (S15P21A405-417). 맨 아래는 고정 탭바가
-         * 가져가고(`layout/rail.tsx`), 재생바는 그 위에 얹힌다 — 음악 앱들이 쓰는 그 쌓임이다.
-         * 안전영역은 탭바가 이미 먹었으므로 여기서 또 더하면 두 번 밀린다.
+         * 좁은 화면에서는 네비 줄과 **한 상자**다 (S15P21A405-417). 화면 끝까지 붙는 띠로
+         * 만들어 봤더니 지도와 따로 놀았다 — 여백 안에 뜬 둥근 사각형 하나로 되돌리고,
+         * 그 상자의 아랫칸에 네비를 넣는다 (`layout/rail.tsx`).
+         *
+         * `-1px` 은 두 칸의 테두리를 **한 줄로 겹치라**는 뜻이다. 안 겹치면 1px 짜리 틈으로
+         * 뒤의 별이 새어 나와 상자가 둘로 갈라져 보인다. 안전영역은 네비 줄의 `bottom-hud-b` 가
+         * 이미 먹었으므로 여기서 또 더하면 두 번 밀린다.
          */
-        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-0 max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px))] max-tablet:left-0 max-tablet:w-auto"
+        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-gutter-sm max-tablet:bottom-[calc(var(--spacing-hud-b)+var(--spacing-tabbar)-1px)] max-tablet:left-gutter-sm max-tablet:w-auto"
       >
         <PlayerBar />
       </footer>

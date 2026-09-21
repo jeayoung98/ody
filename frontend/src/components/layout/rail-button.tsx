@@ -30,22 +30,11 @@ export default function RailButton({ label, active, onClick, children, badge, di
       aria-pressed={active}
       disabled={disabled}
       onClick={onClick}
-      className={`relative grid h-10 w-10 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-40 max-tablet:flex max-tablet:h-tabbar max-tablet:w-auto max-tablet:flex-1 max-tablet:flex-col max-tablet:justify-center max-tablet:gap-0.5 max-tablet:rounded-none ${
-        active
-          ? /*
-             * 폰에서는 **칠하지 않고 물들인다** (S15P21A405-417). 칸이 화면 폭의 1/5 이라
-             * 그라데이션을 채우면 알약이 아니라 색 블록 하나가 되고, 밑의 글자까지 덮는다.
-             * 아이콘·글자 색만 바꾸는 편이 탭바 문법에 맞는다.
-             */
-            "grad-bg text-void shadow-glow-azure max-tablet:bg-none max-tablet:text-teal max-tablet:shadow-none"
-          : disabled
-            ? "text-ink-3"
-            : "text-ink-3 hover:bg-white/[.07] hover:text-ink"
+      className={`relative grid h-10 w-10 place-items-center rounded-pill transition-all duration-fast disabled:cursor-not-allowed disabled:opacity-40 ${
+        active ? "grad-bg text-void shadow-glow-azure" : disabled ? "text-ink-3" : "text-ink-3 hover:bg-white/[.07] hover:text-ink"
       }`}
     >
       {children}
-      {/* 폰에서만 아이콘 밑에 이름이 붙는다 — 데스크톱은 지금처럼 툴팁·aria 로만 (S15P21A405-434) */}
-      <span className="hidden text-2xs leading-none max-tablet:block">{label}</span>
       {badge != null && badge > 0 && (
         <span
           className={`num absolute top-0.5 right-0.5 grid h-[15px] min-w-[15px] place-items-center rounded-pill px-1 text-[9px] font-semibold ${

@@ -57,12 +57,14 @@ class JourneyControllerTests {
 
 
 
+	private static final String ALBUM_MBID = "0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9";
+
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
 	}
 
 	private static MusicDetail song(long id, String mbid, String youtubeUrl, int duration) {
-		return new MusicDetail(id, mbid, "Love wins all", "IU", 128.4, duration, "The Winning", 2024,
+		return new MusicDetail(id, mbid, "Love wins all", "IU", 128.4, duration, "The Winning", ALBUM_MBID, 2024,
 				youtubeUrl, null, loc(), 1428, 3);
 	}
 

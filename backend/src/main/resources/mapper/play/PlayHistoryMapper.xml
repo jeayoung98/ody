@@ -3,7 +3,7 @@
 <mapper namespace="com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper">
 
 	<!--
-		실제 테이블: public.play_history(id bigint PK, music_id, email NULL, source, played_ms int, played_at)
+		실제 테이블: public.play_history(id bigint PK, music_id, email NULL, source, played_at)
 		play_history.id 는 DEFAULT/시퀀스가 없어 앱이 시퀀스로 채운다(playlist 와 동일). played_at 은 DEFAULT now().
 		FK 없음 → 실 유저 없어도 INSERT 가능(meeting 과 대비).
 	-->
@@ -11,15 +11,27 @@
 		<selectKey keyProperty="id" order="BEFORE" resultType="long">
 			SELECT nextval('play_history_id_seq')
 		</selectKey>
-		INSERT INTO play_history (id, music_id, email, source, played_ms)
-		VALUES (#{id}, #{musicId}, #{email}, #{source}, #{playedMs})
+		INSERT INTO play_history (id, music_id, email, source)
+		VALUES (#{id}, #{musicId}, #{email}, #{source})
 	</insert>
 
-	<update id="updatePlayedMs">
-		UPDATE play_history
-		SET played_ms = #{playedMs}
-		WHERE id = #{id} AND email = #{email}
-	</update>
+	<!-- 기록에 붙일 번호를 필요한 개수만큼 미리 받아온다. 아래 insertBatch 가 쓴다. -->
+	<select id="nextIds" resultType="long">
+		SELECT nextval('play_history_id_seq')
+		  FROM generate_series(1, #{count})
+	</select>
+
+	<!--
+		여러 줄을 한 번에 넣는다. 20명이 따라오면 21줄이 한 문장으로 들어간다.
+		번호는 nextIds 로 미리 받아 온다 — 여기서 또 뽑으면 줄마다 한 번씩 돌게 된다.
+	-->
+	<insert id="insertBatch">
+		INSERT INTO play_history (id, music_id, email, source)
+		VALUES
+		<foreach collection="rows" item="row" separator=",">
+			(#{row.id}, #{row.musicId}, #{row.email}, #{row.source})
+		</foreach>
+	</insert>
 
 	<!--
 		곡별 최초 청취 기록 (S15P21A405-448). music_discovery 는 music_id 가 PK 라 곡당 한 줄뿐이고,
@@ -36,6 +48,13 @@
 	<update id="incrementPlayCnt">
 		UPDATE music
 		SET play_cnt = play_cnt + 1
+		WHERE id = #{musicId}
+	</update>
+
+	<!-- 여럿이 같은 곡으로 옮겨갈 때. +1 을 사람 수만큼 반복하면 같은 줄을 두고 차례를 기다린다. -->
+	<update id="incrementPlayCntBy">
+		UPDATE music
+		SET play_cnt = play_cnt + #{delta}
 		WHERE id = #{musicId}
 	</update>
 

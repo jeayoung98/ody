@@ -26,15 +26,18 @@ public class VideoIdEnricher {
 	 * @param existingVideoId DB 에 이미 저장된 값. {@code null} 이 아니면 그대로 반환하고 호출하지 않는다.
 	 *                        {@link VideoIds#UNPLAYABLE} 도 확정된 판정이므로 다시 묻지 않는다 —
 	 *                        읽기 어댑터가 {@code is_unplayable} 을 이 값으로 번역해 넘긴다
+	 * @param album           앨범명. 있으면 외부 resolver 가 검색어를 하나 더 만들고 공식 Art Track 을
+	 *                        알아본다. 모르면 {@code null}
 	 * @param durationSeconds 원곡 길이(초). 알면 매칭 정확도가 오른다. 모르면 {@code null}
 	 * @return 확정된 videoId. 후보를 못 찾았거나 외부 API 가 실패하면 {@code null}
 	 */
-	public String resolve(long musicId, String artist, String title, String existingVideoId, Integer durationSeconds) {
+	public String resolve(long musicId, String artist, String title, String album, String existingVideoId,
+			Integer durationSeconds) {
 		if (existingVideoId != null) {
 			return existingVideoId;
 		}
 
-		Optional<String> videoId = lookupPort.lookup(artist, title, durationSeconds);
+		Optional<String> videoId = lookupPort.lookup(artist, title, album, durationSeconds);
 		videoId.ifPresent(id -> {
 			if (VideoIds.UNPLAYABLE.equals(id)) {
 				writerPort.markUnplayable(musicId);

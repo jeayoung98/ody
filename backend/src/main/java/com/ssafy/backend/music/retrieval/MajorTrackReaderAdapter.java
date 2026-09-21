@@ -68,6 +68,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 				row.getTitle(),
 				row.getArtist(),
 				VIDEO_ID_NOT_LOADED,
+				row.getAlbumMbid(),
 				playable);
 	}
 

@@ -28,7 +28,7 @@
 	</sql>
 
 	<select id="findById" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album, m.release_year,
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album, m.album_mbid, m.release_year,
 		       m.play_cnt, m.youtube_cnt, m.video_id, m.is_unplayable AS unplayable,
 		<include refid="locationColumns"/>
 		FROM music m
@@ -64,7 +64,7 @@
 		mbid 는 무인덱스라(S15P21A405-313) 정거장·플리 조립은 PK id 로 조회한다.
 	-->
 	<select id="findByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album, m.release_year,
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album, m.album_mbid, m.release_year,
 		       m.play_cnt, m.youtube_cnt, m.video_id, m.is_unplayable AS unplayable,
 		<include refid="locationColumns"/>
 		FROM music m

@@ -84,7 +84,58 @@ public class ViewportService {
 			return recordCurrentScreenResult(startedAt, OpenResult.staleConnection(), cells.size(), 0, 0);
 		}
 
-		// 3. 셀의 곡을 찾고 실제 화면 안에 있는 곡만 남긴다.
+		// 3. 화면 안 곡과 그 곡을 듣는 사람으로 목록을 만든다.
+		Individual individual = createIndividual(email, requestSeq, viewport, cells);
+
+		// 4. 사람이 너무 많으면 한 명씩 대신 자리별 인원수로 바꾼다.
+		if (individual.snapshot() == null) {
+			return recordCurrentScreenResult(startedAt,
+					replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells),
+					cells.size(), individual.candidateCount(), individual.userCount());
+		}
+		return recordCurrentScreenResult(startedAt, OpenResult.snapshot(individual.snapshot()),
+				cells.size(), individual.candidateCount(), individual.userCount());
+	}
+
+	/**
+	 * 저장해 둔 화면 범위로 목록만 다시 만든다. 구독은 건드리지 않는다.
+	 *
+	 * 따라가는 사람에게 인솔자 화면을 옮겨 줄 때 쓴다. 인솔자가 이미 열어 둔 화면이라
+	 * 구독을 다시 손대면 안 되고, 목록에서 빠지는 사람도 인솔자 기준이어야 한다.
+	 *
+	 * @param email 이 목록의 주인. 이 사람은 목록에서 빠진다
+	 * @param mode 저장된 표시 방식
+	 * @param requestSeq 저장된 화면 요청 순번
+	 * @param viewport 저장된 화면 범위
+	 * @return 목록
+	 */
+	public ViewportSnapshot createSnapshot(
+			String email, ViewportMode mode, long requestSeq, ViewportRange viewport) {
+		viewport.validate();
+		List<Cell> cells = ViewportCellCalculator
+				.findCellsInCurrentScreen(viewport, musicPositionCalculator).stream().toList();
+		if (mode == ViewportMode.CLUSTERED
+				|| cells.size() > properties.viewport().clusterThresholdCells()) {
+			return createCellCountSnapshot(email, requestSeq, viewport, cells);
+		}
+		Individual individual = createIndividual(email, requestSeq, viewport, cells);
+		return individual.snapshot() != null
+				? individual.snapshot()
+				: createCellCountSnapshot(email, requestSeq, viewport, cells);
+	}
+
+	/**
+	 * 화면 안 곡과 사용자를 찾아 한 명씩 보여 주는 목록을 만든다.
+	 *
+	 * @param email 요청한 사용자 이메일. 이 사람은 목록에서 빠진다
+	 * @param requestSeq 화면 요청 순번
+	 * @param viewport 화면 범위
+	 * @param cells 화면이 걸치는 셀
+	 * @return 목록과 세어 본 값. 사람이 정원을 넘으면 목록은 null
+	 */
+	private Individual createIndividual(
+			String email, long requestSeq, ViewportRange viewport, List<Cell> cells) {
+		// 1. 셀의 곡을 찾고 실제 화면 안에 있는 곡만 남긴다.
 		Map<Cell, Set<Long>> musicIdsByCell = presenceRepository.findActiveMusicIdsByCell(
 				viewport.layer(), cells);
 		List<Long> candidateMusicIds = musicIdsByCell.values().stream()
@@ -96,24 +147,31 @@ public class ViewportService {
 		List<VisibleMusic> visibleMusic = findVisibleMusic(viewport, candidateMusicIds, locations);
 		List<Long> visibleMusicIds = visibleMusic.stream().map(VisibleMusic::musicId).toList();
 
-		// 4. 화면 안 곡의 사용자를 찾고 나와 중복 사용자를 뺀다.
+		// 2. 화면 안 곡의 사용자를 찾고 나와 중복 사용자를 뺀다.
 		Map<Long, Set<String>> listenersByMusic = presenceRepository.findListenersByMusic(
 				viewport.layer(), visibleMusicIds);
-
 		Map<Long, List<String>> visibleListeners = findVisibleListeners(
 				email, visibleMusicIds, listenersByMusic);
 		int userCount = visibleListeners.values().stream().mapToInt(List::size).sum();
 		if (userCount > properties.viewport().individualUserCap()) {
-			return recordCurrentScreenResult(startedAt,
-					replaceWithCellCountSnapshot(email, epoch, requestSeq, viewport, cells),
-					cells.size(), candidateMusicIds.size(), userCount);
+			return new Individual(null, candidateMusicIds.size(), userCount);
 		}
 
-		// 5. 곡 위치별 사용자 목록을 만들어 돌려준다.
+		// 3. 곡 위치별 사용자 목록을 만든다.
 		List<ViewportMusicGroup> groups = createGroups(visibleMusic, visibleListeners);
-		return recordCurrentScreenResult(startedAt,
-				OpenResult.snapshot(ViewportSnapshot.individual(requestSeq, viewport.layer(), groups)),
-				cells.size(), candidateMusicIds.size(), userCount);
+		return new Individual(
+				ViewportSnapshot.individual(requestSeq, viewport.layer(), groups),
+				candidateMusicIds.size(), userCount);
+	}
+
+	/**
+	 * 한 명씩 보여 주는 목록과 만들면서 세어 본 값.
+	 *
+	 * @param snapshot 목록. 사람이 정원을 넘어 만들지 않았으면 null
+	 * @param candidateCount 확인한 곡 수
+	 * @param userCount 확인한 사용자 수
+	 */
+	private record Individual(ViewportSnapshot snapshot, int candidateCount, int userCount) {
 	}
 
 	/**

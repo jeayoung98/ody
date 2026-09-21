@@ -19,6 +19,8 @@ import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.dto.presence.ViewportRequest;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
+import com.ssafy.backend.realtime.service.ride.RideGuard;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
 import com.ssafy.backend.realtime.service.viewport.ViewportService.OpenResult;
@@ -39,6 +41,8 @@ public class PresenceWebSocketController {
 	private final WebSocketSessionService webSocketSessionService; // 현재 소켓의 접속 번호 조회
 	private final WebSocketErrorService webSocketErrorService; // 개인 오류 큐로 전송
 	private final ViewportService viewportService; // 현재 화면의 사용자 목록 생성
+	private final RideViewportService rideViewportService; // 따라오는 사람에게 같은 화면 전달
+	private final RideGuard rideGuard; // 따라가는 중에는 스스로 조작하지 못하게 막는다
 	private final RealtimeMessageService realtimeMessageService; // 개인 큐로 목록 전송
 
 	/**
@@ -66,6 +70,8 @@ public class PresenceWebSocketController {
 			if (request == null) {
 				throw new IllegalArgumentException("입장 요청이 비어 있다");
 			}
+			// 따라가는 중에 레이어를 옮기면 인솔자와 다른 층에 서게 된다.
+			rideGuard.requireNotRiding(email, "레이어를 옮길");
 			PresenceJoined joined = presenceService.join(email, epoch, request);
 			realtimeMessageService.sendToUser(email, WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.PRESENCE_JOINED, joined);
@@ -120,20 +126,26 @@ public class PresenceWebSocketController {
 			if (request == null) {
 				throw new IllegalArgumentException("화면 요청이 비어 있다");
 			}
+			// 따라가는 중에는 인솔자 화면을 옮겨 받는다. 자기가 화면을 열면 두 화면이 섞인다.
+			rideGuard.requireNotRiding(email, "화면을 바꿀");
 			ViewportRange viewport = request.toViewport();
 			OpenResult result = viewportService.updateCurrentScreen(
 					email, epoch, request.requestSeq(), viewport);
 
 			// 3. 현재 화면 정보가 완성되면 개인 큐로 보낸다.
+			//    따라오는 사람이 있으면 같은 목록을 그대로 한 번 더 보낸다.
 			if (result.status() == OpenStatus.SNAPSHOT) {
 				realtimeMessageService.sendToUser(email, WebSocketDestination.QUEUE_PRESENCE,
 						RealtimeMessageType.VIEWPORT_SNAPSHOT, result.snapshot());
+				rideViewportService.mirrorSnapshot(email, result.snapshot());
 				return;
 			}
 			if (result.status() == OpenStatus.STALE_CONNECTION) {
 				webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_STALE, "이전 소켓에서 보낸 화면 요청이다");
 			}
 			// 오래된 화면 요청은 무시한다.
+		} catch (WebSocketRequestException e) {
+			webSocketErrorService.send(email, e.getCode(), e.getMessage());
 		} catch (IllegalArgumentException e) {
 			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, e.getMessage());
 		}
@@ -162,7 +174,11 @@ public class PresenceWebSocketController {
 			if (request == null) {
 				throw new IllegalArgumentException("화면 닫기 요청이 비어 있다");
 			}
+			// 탑승할 때 이미 닫았다. 여기서 또 닫으면 인솔자 화면까지 끊길 수 있다.
+			rideGuard.requireNotRiding(email, "화면을 닫을");
 			viewportService.closeCurrentScreen(email, epoch, request.validatedRequestSeq());
+		} catch (WebSocketRequestException e) {
+			webSocketErrorService.send(email, e.getCode(), e.getMessage());
 		} catch (IllegalArgumentException e) {
 			webSocketErrorService.send(email, WebSocketErrorCode.PRESENCE_VIEWPORT_INVALID, e.getMessage());
 		}

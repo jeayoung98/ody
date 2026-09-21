@@ -2,6 +2,11 @@ package com.ssafy.backend.realtime.service.play;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -19,7 +24,6 @@ import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
@@ -33,6 +37,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 
 /** 곡 변경 뒤 이전 위치와 새 위치를 알리는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -46,6 +51,7 @@ class MusicPlayServiceTests {
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock PlayHistoryMapper playHistoryMapper;
 	@Mock MeetingService meetingService;
+	@Mock RiderMoveService riderMoveService;
 	@InjectMocks MusicPlayService service;
 
 	@Test
@@ -176,23 +182,29 @@ class MusicPlayServiceTests {
 	}
 
 	@Test
-	@DisplayName("재생 종료는 내 기록이면 재생 시간을 갱신한다")
-	void playEndUpdatesOwnHistory() {
-		when(playHistoryMapper.updatePlayedMs(88L, EMAIL, 123_000L)).thenReturn(1);
+	@DisplayName("따라오는 사람이 있으면 기록을 한 번에 넣고 위치 알림은 한 건만 나간다")
+	void playWithRidersWritesOneBatchAndSendsOneEvent() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, 10L, 2, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(List.of());
+		when(riderMoveService.ridersOf(EMAIL)).thenReturn(List.of("r1@x.com", "r2@x.com"));
+		when(riderMoveService.moveAll(
+				eq(EMAIL), any(), eq(20L), eq(2), eq(placement),
+				anyDouble(), anyDouble(), eq("MAP"))).thenReturn(555L);
 
-		service.playEnd(EMAIL, 88L, 123_000L);
+		PlayResponse response = service.play(EMAIL, 20L, "MAP", 5);
 
-		verify(playHistoryMapper).updatePlayedMs(88L, EMAIL, 123_000L);
-	}
-
-	@Test
-	@DisplayName("남의 기록이거나 없는 기록이면 403 FORBIDDEN 으로 거부한다")
-	void playEndOnForeignOrMissingHistoryIsForbidden() {
-		// 소유자 불일치와 미존재 모두 갱신 행 0 — 존재 유무를 드러내지 않기 위해 같은 코드로 거부한다.
-		when(playHistoryMapper.updatePlayedMs(88L, EMAIL, 123_000L)).thenReturn(0);
-
-		assertThatThrownBy(() -> service.playEnd(EMAIL, 88L, 123_000L))
-				.isInstanceOfSatisfying(CustomException.class,
-						e -> assertThat(e.getErrorCode()).isEqualTo(GlobalErrorCode.FORBIDDEN));
+		// 인솔자 기록도 따라오는 사람들과 같이 들어가므로 한 줄씩 넣는 경로는 타지 않는다
+		assertThat(response.playHistoryId()).isEqualTo(555L);
+		verify(playHistoryMapper, never()).insert(any(PlayHistoryRow.class));
+		verify(playHistoryMapper, never()).incrementPlayCnt(20L);
+		// 따라오는 사람은 지도에 올리지 않아 알림은 인솔자 것 한 건뿐이다
+		verify(realtimeEventService, times(1)).send(any(PositionChanged.class));
 	}
 }

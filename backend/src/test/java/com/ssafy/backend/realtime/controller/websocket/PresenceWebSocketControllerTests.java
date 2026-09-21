@@ -27,6 +27,8 @@ import com.ssafy.backend.realtime.dto.presence.ViewportCloseRequest;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
+import com.ssafy.backend.realtime.service.ride.RideGuard;
+import com.ssafy.backend.realtime.service.ride.RideViewportService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
 import com.ssafy.backend.realtime.service.viewport.ViewportService;
@@ -45,6 +47,8 @@ class PresenceWebSocketControllerTests {
 	@Mock WebSocketSessionService webSocketSessionService;
 	@Mock WebSocketErrorService webSocketErrorService;
 	@Mock ViewportService viewportService;
+	@Mock RideViewportService rideViewportService;
+	@Mock RideGuard rideGuard;
 	@Mock RealtimeMessageService realtimeMessageService;
 
 	private PresenceWebSocketController controller;
@@ -52,7 +56,8 @@ class PresenceWebSocketControllerTests {
 	@BeforeEach
 	void setUp() {
 		controller = new PresenceWebSocketController(
-				presenceService, webSocketSessionService, webSocketErrorService, viewportService, realtimeMessageService);
+				presenceService, webSocketSessionService, webSocketErrorService, viewportService,
+				rideViewportService, rideGuard, realtimeMessageService);
 	}
 
 	@Test
@@ -263,5 +268,96 @@ class PresenceWebSocketControllerTests {
 	/** 첫 레이어(0)의 정상 화면 요청을 만든다. */
 	private static ViewportRequest request(long requestSeq) {
 		return new ViewportRequest(requestSeq, 0, 0.0, 2.0, 0.0, 2.0, List.of());
+	}
+
+	/** 인솔자가 화면을 움직이면 따라오는 사람 화면도 같이 움직여야 한다. */
+	@Test
+	@DisplayName("화면 목록을 보낼 때 따라오는 사람에게도 같은 목록을 넘긴다")
+	void mirrorsSnapshotToRiders() {
+		ViewportRequest request = request(3L);
+		ViewportSnapshot snapshot = ViewportSnapshot.individual(3L, 0, List.of());
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 3L, request.toViewport()))
+				.thenReturn(new OpenResult(OpenStatus.SNAPSHOT, snapshot));
+
+		controller.viewport(request, PRINCIPAL, SESSION_ID);
+
+		verify(rideViewportService).mirrorSnapshot(EMAIL, snapshot);
+	}
+
+	@Test
+	@DisplayName("보낼 목록이 없으면 따라오는 사람에게도 넘기지 않는다")
+	void noSnapshotNoMirror() {
+		ViewportRequest request = request(3L);
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		when(viewportService.updateCurrentScreen(EMAIL, 7L, 3L, request.toViewport()))
+				.thenReturn(new OpenResult(OpenStatus.OLD_REQUEST, null));
+
+		controller.viewport(request, PRINCIPAL, SESSION_ID);
+
+		verifyNoInteractions(rideViewportService);
+	}
+
+	private void givenRiding(String action) {
+		org.mockito.Mockito.doThrow(new WebSocketRequestException(
+				WebSocketErrorCode.RIDE_NOT_CAPTAIN, "따라가는 중에는 " + action + " 수 없다"))
+				.when(rideGuard).requireNotRiding(org.mockito.ArgumentMatchers.anyString(),
+						org.mockito.ArgumentMatchers.anyString());
+	}
+
+	/** 막지 않으면 인솔자는 3층인데 자기는 5층에 서 있게 된다. */
+	@Test
+	@DisplayName("따라가는 중이면 레이어를 옮기지 못한다")
+	void ridingCannotJoin() {
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		givenRiding("레이어를 옮길");
+
+		controller.join(new JoinRequest(3L, 2, 20L), PRINCIPAL, SESSION_ID);
+
+		verifyNoInteractions(presenceService);
+		verify(webSocketErrorService).send(org.mockito.ArgumentMatchers.eq(EMAIL),
+				org.mockito.ArgumentMatchers.eq(WebSocketErrorCode.RIDE_NOT_CAPTAIN),
+				org.mockito.ArgumentMatchers.anyString(),
+				org.mockito.ArgumentMatchers.any());
+	}
+
+	@Test
+	@DisplayName("따라가는 중이면 화면을 바꾸지 못한다")
+	void ridingCannotChangeScreen() {
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		givenRiding("화면을 바꿀");
+
+		controller.viewport(request(3L), PRINCIPAL, SESSION_ID);
+
+		verifyNoInteractions(viewportService, rideViewportService);
+		verify(webSocketErrorService).send(org.mockito.ArgumentMatchers.eq(EMAIL),
+				org.mockito.ArgumentMatchers.eq(WebSocketErrorCode.RIDE_NOT_CAPTAIN),
+				org.mockito.ArgumentMatchers.anyString());
+	}
+
+	@Test
+	@DisplayName("따라가는 중이면 화면을 닫지 못한다")
+	void ridingCannotCloseScreen() {
+		when(webSocketSessionService.findEpoch(SESSION_ID)).thenReturn(Optional.of(7L));
+		givenRiding("화면을 닫을");
+
+		controller.closeViewport(new ViewportCloseRequest(3L), PRINCIPAL, SESSION_ID);
+
+		verifyNoInteractions(viewportService);
+		verify(webSocketErrorService).send(org.mockito.ArgumentMatchers.eq(EMAIL),
+				org.mockito.ArgumentMatchers.eq(WebSocketErrorCode.RIDE_NOT_CAPTAIN),
+				org.mockito.ArgumentMatchers.anyString());
+	}
+
+	/** 접속 유지까지 막으면 따라가는 사람이 만료돼 선단에서 떨어진다. */
+	@Test
+	@DisplayName("따라가는 중에도 접속 유지는 막지 않는다")
+	void ridingStillSendsHeartbeat() {
+		when(presenceService.heartbeat(EMAIL)).thenReturn(true);
+
+		controller.heartbeat(PRINCIPAL);
+
+		verify(presenceService).heartbeat(EMAIL);
+		verifyNoInteractions(rideGuard);
 	}
 }

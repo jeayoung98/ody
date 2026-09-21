@@ -1,8 +1,8 @@
 package com.ssafy.backend.realtime.controller.rest;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -12,19 +12,22 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.common.ApiResponse;
-import com.ssafy.backend.realtime.dto.play.PlayEndRequest;
+import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlayRequest;
 import com.ssafy.backend.realtime.dto.play.PlayResponse;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+import com.ssafy.backend.realtime.service.ride.RideGuard;
 
-/** 재생 선언·종료가 로그인 사용자 기준으로만 처리되는지 검증한다. */
+/** 재생 선언이 로그인 사용자 기준으로만 처리되는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
 class MusicPlayRestControllerTests {
 
 	private static final String EMAIL = "user@x.com";
 
 	@Mock MusicPlayService musicPlayService;
+	@Mock RideGuard rideGuard;
 	@InjectMocks MusicPlayRestController controller;
 
 	@Test
@@ -39,14 +42,21 @@ class MusicPlayRestControllerTests {
 		assertThat(result.data()).isEqualTo(response);
 	}
 
-	@Test
-	@DisplayName("재생 종료는 토큰의 이메일로 처리한다")
-	void playEndUsesPrincipalEmail() {
-		controller.playEnd(new PlayEndRequest(501L, 183_000L), () -> EMAIL);
-
-		verify(musicPlayService).playEnd(EMAIL, 501L, 183_000L);
-	}
-
 	// 인증 없이 부른 경우는 여기서 보지 않는다. 필터 체인이 먼저 401 을 내주므로
 	// 컨트롤러까지 오지 않는다. 그 검증은 SecurityPolicyTests 가 필터 체인째로 한다.
+
+	/** 직접 재생했다고 해서 내려 주지 않는다. 내리는 것은 하차 버튼으로만 한다. */
+	@Test
+	@DisplayName("따라가는 중이면 재생 선언을 거부한다")
+	void ridingCannotPlay() {
+		org.mockito.Mockito.doThrow(new CustomException(RealtimeErrorCode.RIDE_NOT_CAPTAIN))
+				.when(rideGuard).requireNotRidingOnRest(EMAIL);
+
+		assertThatThrownBy(() -> controller.play(
+				new PlayRequest(8812L, PlaySource.MAP, 2), () -> EMAIL))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_CAPTAIN));
+
+		org.mockito.Mockito.verifyNoInteractions(musicPlayService);
+	}
 }

@@ -1,20 +1,27 @@
 package com.ssafy.backend.realtime.repository.redis;
 
+import java.util.Collection;
+import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.core.RedisCallback;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
+import com.ssafy.backend.realtime.dto.ride.RidePanelTab;
 
 import lombok.RequiredArgsConstructor;
 
 /**
  * 따라가기 Redis 키는 여기서만 만든다.
- * ride:captain:{따라가는 사람}(Hash) · ride:riders:{인솔자}(Set) · ride:playback:{인솔자}(Hash).
+ * ride:captain:{따라가는 사람}(Hash) · ride:riders:{인솔자}(Set) · ride:playback:{인솔자}(Hash)
+ * · ride:panel:{인솔자}(Hash).
  *
  * 앞의 두 키는 서로 뒤집은 관계라 항상 같이 바뀌어야 한다. 그 변경은 Lua 가 맡고
  * 여기에는 읽기와 재생 정보 저장만 둔다.
@@ -31,6 +38,7 @@ public class RideRedisRepository {
 	private static final String CAPTAIN_PREFIX = "ride:captain:"; // 내가 따라가는 사람
 	private static final String RIDERS_PREFIX = "ride:riders:"; // 나를 따라오는 사람들
 	private static final String PLAYBACK_PREFIX = "ride:playback:"; // 그룹이 지금 트는 곡
+	private static final String PANEL_PREFIX = "ride:panel:"; // 인솔자가 열어 둔 곡 상세
 
 	/**
 	 * 재생 스냅샷을 통째로 바꾸고 새 순번을 돌려준다.
@@ -146,6 +154,54 @@ public class RideRedisRepository {
 		return res != null ? res : Set.of();
 	}
 
+	/**
+	 * 여러 사람을 한 번에 물어 각자를 따라오는 사람들을 읽는다.
+	 *
+	 * 한 명씩 물으면 사람 수만큼 왕복이 생긴다. 화면 변화 알림은 수신자가 여럿이라
+	 * 그 왕복이 그대로 지연이 된다. 그래서 한 번에 묶어 보낸다.
+	 *
+	 * @param captainEmails 물어볼 사람들
+	 * @return 따라오는 사람이 있는 사람만 담긴 결과. 없으면 아예 빠진다
+	 */
+	public Map<String, Set<String>> ridersOf(Collection<String> captainEmails) {
+		if (captainEmails == null || captainEmails.isEmpty()) {
+			return Map.of();
+		}
+		List<String> targets = List.copyOf(new LinkedHashSet<>(captainEmails));
+		byte[][] keys = targets.stream()
+				.map(email -> redis.getStringSerializer().serialize(RIDERS_PREFIX + email))
+				.toArray(byte[][]::new);
+		List<Object> results = redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : keys) {
+				connection.setCommands().sMembers(key);
+			}
+			return null;
+		});
+
+		Map<String, Set<String>> ridersByCaptain = new LinkedHashMap<>();
+		for (int i = 0; i < targets.size(); i++) {
+			Set<String> riders = toStringSet(i < results.size() ? results.get(i) : null);
+			if (!riders.isEmpty()) {
+				ridersByCaptain.put(targets.get(i), riders);
+			}
+		}
+		return ridersByCaptain;
+	}
+
+	/** 묶어 읽은 결과 한 칸을 사람 목록으로 바꾼다. */
+	private static Set<String> toStringSet(Object value) {
+		if (!(value instanceof Set<?> set)) {
+			return Set.of();
+		}
+		Set<String> result = new LinkedHashSet<>();
+		for (Object item : set) {
+			if (item != null) {
+				result.add(item.toString());
+			}
+		}
+		return result;
+	}
+
 	/** 그룹이 지금 트는 곡을 읽는다. 아직 없으면 null. */
 	public PlaybackSnapshot findPlayback(String captainEmail) {
 		List<Object> v = redis.opsForHash().multiGet(PLAYBACK_PREFIX + captainEmail,
@@ -159,6 +215,35 @@ public class RideRedisRepository {
 				Long.parseLong(v.get(2).toString()),
 				Long.parseLong(v.get(3).toString()),
 				Long.parseLong(v.get(4).toString()));
+	}
+
+	/** 인솔자가 열어 둔 곡 상세. 키가 없으면 닫혀 있다는 뜻이다. */
+	public record PanelSnapshot(long musicId, RidePanelTab tab) {
+	}
+
+	/** 인솔자가 연 곡 상세를 저장한다. 나중에 탄 사람에게 같은 화면을 보여줄 때 쓴다. */
+	public void savePanel(String captainEmail, long musicId, RidePanelTab tab) {
+		redis.opsForHash().putAll(PANEL_PREFIX + captainEmail,
+				Map.of("musicId", Long.toString(musicId), "tab", tab.value()));
+	}
+
+	/** 인솔자가 열어 둔 곡 상세를 읽는다. 닫혀 있으면 null. */
+	public PanelSnapshot findPanel(String captainEmail) {
+		List<Object> v = redis.opsForHash().multiGet(PANEL_PREFIX + captainEmail,
+				List.of("musicId", "tab"));
+		if (v == null || v.get(0) == null || v.get(1) == null) {
+			return null;
+		}
+		RidePanelTab tab = RidePanelTab.from(v.get(1).toString());
+		if (tab == null) {
+			return null;
+		}
+		return new PanelSnapshot(Long.parseLong(v.get(0).toString()), tab);
+	}
+
+	/** 열어 둔 곡 상세를 지운다. 닫힌 상태는 키가 없는 것으로 나타낸다. */
+	public void deletePanel(String captainEmail) {
+		redis.delete(PANEL_PREFIX + captainEmail);
 	}
 
 	/**

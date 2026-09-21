@@ -104,8 +104,8 @@ public class MusicService {
 		NearbyService.NeighborResult result = nearbyService.neighborsOf(detail);
 
 		MusicDetail enrichedDetail = withVideoId(detail,
-				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId(),
-						detail.duration()));
+				videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.album(),
+						detail.videoId(), detail.duration()));
 
 		log.info("[Music] 상세 조회 완료 title={}, artist={}, musicId={}, videoId={}, neighbors={}", enrichedDetail.title(), enrichedDetail.artist(), id, enrichedDetail.videoId(), result.neighbors().size());
 		return new MusicDetailResponse(enrichedDetail, result.neighbors(), result.lowSimilarity());
@@ -113,7 +113,7 @@ public class MusicService {
 
 	private static MusicDetail withVideoId(MusicDetail detail, String videoId) {
 		return new MusicDetail(detail.id(), detail.mbid(), detail.title(), detail.artist(), detail.bpm(),
-				detail.duration(), detail.album(), detail.releaseYear(), detail.youtubeUrl(), videoId,
+				detail.duration(), detail.album(), detail.albumMbid(), detail.releaseYear(), detail.youtubeUrl(), videoId,
 				detail.location(), detail.playCnt(), detail.youtubeCnt());
 	}
 
@@ -133,8 +133,8 @@ public class MusicService {
 
 		List<VideoIdItem> items = details.stream()
 				.map(detail -> new VideoIdItem(detail.id(),
-						videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.videoId(),
-								detail.duration())))
+						videoIdEnricher.resolve(detail.id(), detail.artist(), detail.title(), detail.album(),
+								detail.videoId(), detail.duration())))
 				.toList();
 
 		log.info("[VideoId] 일괄 조회 완료 요청={} 응답={}", musicIds.size(), items.size());

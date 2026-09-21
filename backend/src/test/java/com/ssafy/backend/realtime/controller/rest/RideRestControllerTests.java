@@ -13,6 +13,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.RideRequest;
+import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.service.ride.RideService;
 
@@ -30,7 +31,8 @@ class RideRestControllerTests {
 	@DisplayName("따라가는 사람은 토큰에서, 따라갈 사람은 본문에서 가져온다")
 	void ridePassesPrincipalAndBody() {
 		RideResponse response = new RideResponse(
-				CAPTAIN, 77L, 10877L, 3, -1.25, 1.2, 7, 5, PlaybackState.PLAYING, 42_000L, 4L);
+				CAPTAIN, 77L, 10877L, 3, -1.25, 1.2, 7, 5, PlaybackState.PLAYING, 42_000L, 4L,
+				RidePanelPayload.closed());
 		when(rideService.mount(RIDER, CAPTAIN)).thenReturn(response);
 
 		ApiResponse<RideResponse> result =

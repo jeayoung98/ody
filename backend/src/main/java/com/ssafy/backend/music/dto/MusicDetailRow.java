@@ -21,6 +21,8 @@ public class MusicDetailRow {
 	private Double bpm;
 	private Integer duration;
 	private String album;
+	/** music.album_mbid — 앨범(release) 쪽 MusicBrainz ID. 없으면 null (S15P21A405-520). */
+	private String albumMbid;
 	/** music.release_year (smallint). 없으면 null. */
 	private Integer releaseYear;
 	private Integer playCnt;

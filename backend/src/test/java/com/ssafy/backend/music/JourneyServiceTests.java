@@ -71,7 +71,7 @@ class JourneyServiceTests {
 	}
 
 	private static MusicDetail song(long id, String mbid, Integer duration) {
-		return new MusicDetail(id, mbid, "title-" + id, "artist-" + id, 128.4, duration, "album", 2001,
+		return new MusicDetail(id, mbid, "title-" + id, "artist-" + id, 128.4, duration, "album", "alb-" + id, 2001,
 				"https://youtu.be/" + id, null, loc(id * 0.001), 1428, 3);
 	}
 
@@ -190,7 +190,7 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of(1000L)));
-		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al", 2002,
+		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al", "alb-1000", 2002,
 				null, null, loc(0.5), 1, 0);
 		when(trackReader.findDetailsByIds(anyList())).thenReturn(List.of(notPlayable));
 

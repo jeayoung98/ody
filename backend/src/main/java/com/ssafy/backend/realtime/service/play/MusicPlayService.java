@@ -8,7 +8,6 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
@@ -21,6 +20,7 @@ import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
 import com.ssafy.backend.realtime.dto.play.PlayResponse;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 
@@ -28,7 +28,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 
 /**
- * 곡 재생과 종료를 처리한다.
+ * 곡 재생을 처리한다.
  * 재생하면 곡 위치로 옮기고, 재생 기록과 만남을 저장한다.
  */
 @Slf4j
@@ -43,6 +43,7 @@ public class MusicPlayService {
 	private final RealtimeEventService realtimeEventService;
 	private final PlayHistoryMapper playHistoryMapper;
 	private final MeetingService meetingService;
+	private final RiderMoveService riderMoveService;
 
 	/**
 	 * 곡 위에 사람을 올린 결과.
@@ -81,14 +82,20 @@ public class MusicPlayService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 2. 곡 위에 올리고 기록을 남긴다.
-		Placed placed = placeOnMusic(email, before, musicId, resolvedLayer, source);
+		// 2. 나를 따라오는 사람이 있는지 먼저 본다. 있으면 같이 옮기고 기록도 같이 넣는다.
+		//    따로 넣으면 재생수를 두 번 고치게 된다.
+		List<String> riders = riderMoveService.ridersOf(email);
+		Placed placed = riders.isEmpty()
+				? placeOnMusic(email, before, musicId, resolvedLayer, source)
+				: placeWithRiders(email, before, musicId, resolvedLayer, source, riders);
 
 		// 3. 아무도 들은 적 없는 곡이면 이 사람이 발견자로 기록된다 (주간 발견왕 랭킹, S15P21A405-448).
 		//    이미 기록이 있으면 아무 일도 일어나지 않는다.
+		//    따라오는 사람은 발견자가 될 수 없다 — 찾아간 것이 아니라 따라온 것이다.
 		playHistoryMapper.insertDiscovery(musicId, email);
 
 		// 4. 같은 곡에서 만난 사용자들을 기록한다.
+		//    따라오는 사람은 여기 들어오지 않는다 — 지도에 올리지 않아 애초에 명단에 없다.
 		meetingService.recordMeetings(email, placed.coResidents());
 
 		log.info("[Play] 재생 선언 완료 musicId={} layer={} playHistoryId={}",
@@ -110,6 +117,41 @@ public class MusicPlayService {
 	 */
 	@Transactional
 	public Placed placeOnMusic(String email, PresenceSnapshot before, long musicId, int layer, String source) {
+		Moved moved = moveOntoMusic(email, before, musicId, layer);
+		long playHistoryId = recordPlay(email, musicId, source);
+		notifyMoved(email, before, musicId, layer, moved.placement());
+		return moved.toPlaced(playHistoryId, layer);
+	}
+
+	/**
+	 * 인솔자를 옮기고, 따라오는 사람들도 같이 옮긴 뒤, 기록을 한 번에 넣는다.
+	 *
+	 * 지도에 나가는 위치 변경 알림은 인솔자 것 한 건뿐이다. 따라오는 사람은 지도에 올리지 않아
+	 * 알릴 자리 자체가 없다. 이게 사람이 몇이든 알림이 1건인 이유다.
+	 */
+	private Placed placeWithRiders(String email, PresenceSnapshot before, long musicId, int layer,
+			String source, List<String> riders) {
+		Moved moved = moveOntoMusic(email, before, musicId, layer);
+		long playHistoryId = riderMoveService.moveAll(
+				email, riders, musicId, layer, moved.placement(), moved.rawX(), moved.rawY(), source);
+		notifyMoved(email, before, musicId, layer, moved.placement());
+		return moved.toPlaced(playHistoryId, layer);
+	}
+
+	/** 옮겨진 자리. 기록을 누가 넣을지는 부르는 쪽이 정한다. */
+	private record Moved(Placement placement, double rawX, double rawY, List<String> coResidents) {
+		Placed toPlaced(long playHistoryId, int layer) {
+			return new Placed(playHistoryId, layer, rawX, rawY,
+					placement.cellX(), placement.cellY(), coResidents);
+		}
+	}
+
+	/**
+	 * 사람을 곡 위로 옮기기만 한다. 기록도 알림도 하지 않는다.
+	 *
+	 * @throws CustomException 곡이 없거나 지도에 놓을 수 없는 경우
+	 */
+	private Moved moveOntoMusic(String email, PresenceSnapshot before, long musicId, int layer) {
 		// 1. 곡의 좌표를 찾는다.
 		//    좌표가 없으면 곡 자체가 없는지(404) 곡은 있는데 지도에 못 놓는지(422) 갈라서 알린다.
 		double[] pc = musicLocationService.findLocation(musicId)
@@ -136,10 +178,12 @@ public class MusicPlayService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 4. 재생 기록을 만들고 재생 시간은 0으로 시작한다.
-		long playHistoryId = recordPlay(email, musicId, source);
+		// x·y 는 지도(뷰포트 요청·셀 인원수)와 같은 원시 PC 좌표. 정규화 값은 셀 계산 내부용이다.
+		return new Moved(p, pc[p.axisX() - 1], pc[p.axisY() - 1], coResidents);
+	}
 
-		// 5. 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다.
+	/** 실제 위치가 바뀌었을 때만 화면과 주변사람 목록에 알린다. */
+	private void notifyMoved(String email, PresenceSnapshot before, long musicId, int layer, Placement p) {
 		String oldCell = before.musicId() == null ? null : before.cellX() + ":" + before.cellY();
 		if (before.musicId() == null
 				|| !Objects.equals(before.musicId(), musicId)
@@ -151,10 +195,6 @@ public class MusicPlayService {
 					oldCell, p.cellKey(),
 					p.xNorm(), p.yNorm()));
 		}
-
-		// x·y 는 지도(뷰포트 요청·셀 인원수)와 같은 원시 PC 좌표. 정규화 값은 셀 계산 내부용이다.
-		return new Placed(playHistoryId, layer,
-				pc[p.axisX() - 1], pc[p.axisY() - 1], p.cellX(), p.cellY(), coResidents);
 	}
 
 	/**
@@ -171,30 +211,9 @@ public class MusicPlayService {
 		history.setMusicId(musicId);
 		history.setEmail(email);
 		history.setSource(source);
-		history.setPlayedMs(0L);
 		playHistoryMapper.insert(history);
 		// 재생수: play_history 한 줄 = play_cnt +1. 같은 트랜잭션이라 둘 중 하나만 남지 않는다.
 		playHistoryMapper.incrementPlayCnt(musicId);
 		return history.getId();
-	}
-
-	/**
-	 * 재생 시간을 저장한다. 지도 위치와 노출은 그대로 둔다.
-	 *
-	 * 내 기록이 아니거나 없는 기록이면 403 으로 거부한다. 둘을 구분하지 않는다 —
-	 * 구분하면 남의 기록 ID 가 존재하는지 알아낼 수 있어서(존재 유무 비노출, 계약 §2).
-	 *
-	 * @param email 사용자 이메일
-	 * @param playHistoryId 재생 기록 ID
-	 * @param playedMs 재생한 시간
-	 * @throws CustomException 내 기록이 아니거나 없는 기록이면 FORBIDDEN
-	 */
-	public void playEnd(String email, long playHistoryId, long playedMs) {
-		int updated = playHistoryMapper.updatePlayedMs(playHistoryId, email, playedMs);
-		if (updated == 0) {
-			log.warn("playEnd 거부 reason=FORBIDDEN playHistoryId={}", playHistoryId);
-			throw new CustomException(GlobalErrorCode.FORBIDDEN);
-		}
-		log.info("[Play] 재생 종료 완료 playHistoryId={} playedMs={}", playHistoryId, playedMs);
 	}
 }

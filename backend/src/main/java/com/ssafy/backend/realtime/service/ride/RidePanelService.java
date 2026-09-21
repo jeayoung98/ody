@@ -7,7 +7,6 @@ import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePanelRequest;
-import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
@@ -28,6 +27,7 @@ import lombok.RequiredArgsConstructor;
 public class RidePanelService {
 
 	private final RideRedisRepository rideRedisRepository;
+	private final RideGuard rideGuard; // 따라가는 사람이 보낸 조작을 막는다
 	private final RealtimeMessageService realtimeMessageService; // 따라오는 사람 개인 큐로 발송
 
 	/**
@@ -41,10 +41,7 @@ public class RidePanelService {
 		request.validate();
 
 		// 1. 따라가는 사람이 보낸 조작은 받지 않는다. 받으면 남의 화면을 마음대로 바꾸게 된다.
-		if (rideRedisRepository.findRide(captainEmail) != null) {
-			throw new WebSocketRequestException(WebSocketErrorCode.RIDE_NOT_CAPTAIN,
-					"따라가는 중에는 곡 상세를 바꿀 수 없다");
-		}
+		rideGuard.requireNotRiding(captainEmail, "곡 상세를 바꿀");
 
 		// 2. 지금 상태를 저장한다. 나중에 타는 사람은 이 값으로 같은 화면을 본다.
 		//    닫은 것은 키를 지워서 나타낸다. 값으로 남겨 두면 닫힌 상태도 저장해야 한다.

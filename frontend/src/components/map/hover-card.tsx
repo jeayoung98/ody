@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { HOVER_CARD } from "@/constants";
 import type { MapPoint } from "@/types";
 import type { MapEngine } from "./engine/map-engine";
@@ -42,9 +42,8 @@ interface HoverCardProps {
  * rAF 에서 `style.transform` 만 직접 쓴다 — 리렌더는 곡이 바뀔 때만 일어난다.
  */
 export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps) {
-  // 커버는 캔버스로 만들어 쓰던 것을 그대로 쓴다 (곡마다 같은 그림이어야 지도와 어긋나지 않는다)
-  const cover = useMemo(() => (song ? coverFor(song).toDataURL() : null), [song]);
   const cardRef = useRef<HTMLDivElement>(null);
+  const coverRef = useRef<HTMLSpanElement>(null);
   const musicId = song?.musicId ?? null;
   /**
    * `onDetail` 이 있으면 폰이다 (`map-view.tsx` 가 좁은 화면에서만 넘긴다). 폭도 누를 수 있는지도
@@ -53,6 +52,32 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
   const narrow = onDetail != null;
   const w = narrow ? HOVER_CARD.wNarrow : HOVER_CARD.w;
   const h = narrow ? HOVER_CARD.hNarrow : HOVER_CARD.h;
+
+  /**
+   * 커버를 칠한다. 지도와 **같은 그림**이어야 "아까 그 별" 이 이어진다 (`coverFor`).
+   *
+   * 진짜 앨범 커버는 받아 온 뒤에야 캔버스가 된다 (S15P21A405-518). 지도는 rAF 로 계속 다시
+   * 그려서 저절로 바뀌지만 카드는 한 번 칠하고 끝이라, 도착했는지 잠깐 되물어 본다 —
+   * 이미 있으면 첫 칠에서 끝난다. 곡 상세 배경(`song-cover-backdrop`)과 같은 방식이다.
+   */
+  useEffect(() => {
+    const el = coverRef.current;
+    if (!el || !song) return;
+    let timer = 0;
+    let tries = 0;
+    const paint = () => {
+      el.style.backgroundImage = `url(${coverFor(song).toDataURL()})`;
+    };
+    const poll = () => {
+      timer = 0;
+      if (!song.albumMbid || tries++ > 30) return;
+      paint();
+      timer = window.setTimeout(poll, 150);
+    };
+    paint();
+    timer = window.setTimeout(poll, 150);
+    return () => clearTimeout(timer);
+  }, [song]);
 
   useEffect(() => {
     if (musicId == null) return;
@@ -113,8 +138,8 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}
       <span
-        className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover max-tablet:h-10 max-tablet:w-10"
-        style={cover ? { backgroundImage: `url(${cover})` } : undefined}
+        ref={coverRef}
+        className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover bg-center max-tablet:h-10 max-tablet:w-10"
       />
       <span className="min-w-0 flex-1">
         <p className="truncate text-[12.5px] font-semibold text-ink">{song.title}</p>

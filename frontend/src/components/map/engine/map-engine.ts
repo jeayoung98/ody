@@ -595,6 +595,18 @@ export class MapEngine {
     this.crowdLayer = layer;
   }
 
+  /**
+   * 이 곡의 앨범 ID — 상주 집합에 있으면 (S15P21A405-518).
+   *
+   * 주변 곡 카드처럼 **지도 밖 화면**이 커버를 그릴 때 쓴다. 그쪽 응답(`NeighborTrack`)에는
+   * `albumMbid` 가 없어서, 이미 들고 있는 상주 집합에서 빌려 온다. 이 겹에 없는 곡이면 null 이고
+   * 부르는 쪽은 절차적 커버로 떨어진다.
+   */
+  albumMbidOf(musicId: number): string | null {
+    const i = this.index.get(musicId);
+    return i == null ? null : (this.songs[i].albumMbid ?? null);
+  }
+
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
   setRepresentatives(layer: number, ids: number[]) {
     this.repIds = new Set(ids);

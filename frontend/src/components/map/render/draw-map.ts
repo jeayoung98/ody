@@ -371,8 +371,9 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.font = `500 9.5px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
-    const mag = starMag(it.s);
-    const S = (19 + Math.pow(mag, 1.4) * 14) * grow;
+    // 크기도 글자 밝기도 곡마다 같다 (S15P21A405-518) — 둘 다 weight 에서 나오던 값인데
+    // 실데이터는 weight 가 전부 0 이라 musicId 해시로 굴러가고 있었다. 배율 확대만 남긴다
+    const S = COVER_COUNT.sizePx * grow;
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다
@@ -391,7 +392,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     g.strokeStyle = "rgba(255,255,255,.24)";
     g.lineWidth = 1;
     g.stroke();
-    g.fillStyle = `rgba(233,241,255,${(0.34 + mag * 0.34).toFixed(2)})`;
+    g.fillStyle = "rgba(233,241,255,.58)";
     g.fillText(fitText(g, it.s.title, 88), it.px, it.py + S / 2 + 9);
   }
   g.globalAlpha = 1;

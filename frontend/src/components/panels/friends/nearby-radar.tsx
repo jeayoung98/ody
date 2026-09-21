@@ -74,6 +74,22 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
       </svg>
 
       {/*
+        탐색 빛 (S15P21A405-510). 눈금 위, 사람 아래다 — 사람을 덮으면 읽는 것을 방해한다.
+        **지나가는 자리의 사람을 밝히지 않는다** — 각도는 애초에 무의미해서(좌표가 오지 않는다)
+        빛이 그 사람을 "찾았다" 처럼 보이면 없는 정보를 지어내는 셈이 된다. 분위기만 맡는다.
+      */}
+      <span aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
+        <span
+          className="animate-radar-sweep rounded-pill"
+          style={{
+            width: RADAR.size * 0.92,
+            height: RADAR.size * 0.92,
+            background: "conic-gradient(from 0deg, rgb(79 227 206 / 0.20), rgb(79 227 206 / 0.05) 22deg, transparent 58deg)",
+          }}
+        />
+      </span>
+
+      {/*
         가운데는 나 (S15P21A405-506). 예전에는 `나` 라는 글자 한 자였는데, 둘레의 사람은 전부
         프로필 사진이라 **나만 다른 종류로 읽혔다.** 같은 Avatar 를 쓴다.
 
@@ -83,8 +99,15 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
         숨쉬기는 둘레 사람보다 세게 준다(`--breathe-hi`). 하나뿐이고 옆에 부딪힐 것이 없어서
         화면이 출렁이지 않는다.
       */}
-      {/* 자리잡기와 숨쉬기를 한 요소에 얹지 않는다 — 키프레임의 `transform: scale()` 이 가운데로 미는 translate 를 덮어써서 판 한가운데를 벗어난다 */}
-      <span className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2">
+      {/*
+        **판을 덮는 격자로 가운데를 잡는다** (S15P21A405-510). 예전에는 `top-1/2 left-1/2` 에
+        `-translate-1/2` 를 걸었는데, 그 방식은 요소의 실측 크기에 의존해서 안쪽이 inline 성격이면
+        줄 박스만큼 어긋난다. 격자 가운데는 자식이 어떤 크기든 눈금 원의 중심과 같은 자리다.
+
+        자리잡기와 숨쉬기는 계속 다른 요소다 — 한 요소에 얹으면 키프레임의 `transform: scale()`
+        이 정렬을 덮어쓴다.
+      */}
+      <span className="pointer-events-none absolute inset-0 grid place-items-center">
         <span
           className="animate-breathe grid place-items-center rounded-pill p-[3px] shadow-[0_0_18px_-2px_rgba(79,227,206,.8)] ring-2 ring-teal/80"
           style={{ ["--breathe-hi" as string]: 1.12, animationDuration: "1.9s" }}

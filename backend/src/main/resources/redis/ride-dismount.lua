@@ -7,6 +7,8 @@
 --      넣지 않으면 내린 뒤에도 유령으로 남아 남들 화면과 주변 사람 목록에 안 잡힌다.
 --
 -- 둘을 나누면 그 사이에 "따라가지도 않고 지도에도 없는" 순간이 생긴다.
+-- 다시 넣기 직전에 그 곡에 있던 사람들을 읽어 같이 돌려준다. 내린 뒤에 읽으면
+-- 자기 자신이 섞이고, 그 사이에 남이 들어오면 명단이 어긋난다.
 -- 서 있는 자리는 presence 에 그대로 있다. 인솔자가 마지막으로 있던 곡이다.
 --
 -- KEYS[1] presence:user:{내리는 사람}
@@ -17,7 +19,8 @@
 --   [3] 곡별 청취자 키   [4] 레이어별 청취자 키
 --   [5] 셀별 재생 곡 키  [6] 사용 중인 셀 키   [7] 셀별 사용자 수 키
 --
--- 반환: {'OK', 곡, 레이어, 셀X, 셀Y, 남은 인원} 또는 {'NOT_RIDING'} · {'STALE'}
+-- 반환: {'OK', 곡, 레이어, 셀X, 셀Y, 남은 인원, 그 곡에 있던 사람들...} 또는 {'NOT_RIDING'} · {'STALE'}
+--   그 곡에 있던 사람들은 다시 넣기 전에 읽은 것이다. 만남 계산에 쓴다.
 
 local rider = ARGV[1]
 local captain = ARGV[2]
@@ -59,15 +62,19 @@ end
 redis.call('SREM', KEYS[3], rider)
 redis.call('DEL', KEYS[2])
 
--- 7) 지도에 다시 넣는다. 이제 남들 화면에 한 점으로 보인다.
+-- 7) 다시 넣기 전에 그 곡에 있던 사람들을 읽는다. 만남 계산의 재료다.
 local P_lis, P_ll = ARGV[3], ARGV[4]
 local P_cell, P_cells, P_uc = ARGV[5], ARGV[6], ARGV[7]
 local cellField = cellX .. ':' .. cellY
+local residents = redis.call('SMEMBERS', P_ll .. layer .. ':' .. musicId)
 
+-- 8) 지도에 다시 넣는다. 이제 남들 화면에 한 점으로 보인다.
 redis.call('SADD', P_lis .. musicId, rider)
 redis.call('SADD', P_ll .. layer .. ':' .. musicId, rider)
 redis.call('SADD', P_cell .. layer .. ':' .. cellField, musicId)
 redis.call('SADD', P_cells .. layer, cellField)
 redis.call('HINCRBY', P_uc .. layer, cellField, 1)
 
-return {'OK', musicId, layer, cellX, cellY, tostring(redis.call('SCARD', KEYS[3]))}
+local out = {'OK', musicId, layer, cellX, cellY, tostring(redis.call('SCARD', KEYS[3]))}
+for i = 1, #residents do out[#out + 1] = residents[i] end
+return out

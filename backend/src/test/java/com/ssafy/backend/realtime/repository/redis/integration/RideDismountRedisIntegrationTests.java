@@ -192,6 +192,43 @@ class RideDismountRedisIntegrationTests {
 		assertThat(repository.dismount(rider, captain).status()).isEqualTo(DismountStatus.STALE);
 	}
 
+	/** 내린 사람이 다시 들어간 뒤에 읽으면 자기 자신이 섞이고 그 사이 들어온 남이 빠진다. */
+	@Test
+	@DisplayName("다시 넣기 전에 그 곡에 있던 사람들을 돌려준다")
+	void answersWithResidents() {
+		String captain = user();
+		String rider = user();
+		String outsider = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForSet().add("layer-listeners:" + LAYER + ":" + MUSIC, outsider);
+
+		DismountResult result = repository.dismount(rider, captain);
+
+		assertThat(result.residents()).containsExactly(outsider);
+	}
+
+	/** 인솔자를 빼는 것은 만남을 세는 쪽의 몫이다. 여기서는 있는 그대로 준다. */
+	@Test
+	@DisplayName("그 곡에 있는 인솔자도 명단에 그대로 담는다")
+	void captainStaysInResidents() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForSet().add("layer-listeners:" + LAYER + ":" + MUSIC, captain);
+
+		assertThat(repository.dismount(rider, captain).residents()).containsExactly(captain);
+	}
+
+	@Test
+	@DisplayName("그 곡에 아무도 없으면 빈 명단이다")
+	void emptyResidents() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider, 1L);
+
+		assertThat(repository.dismount(rider, captain).residents()).isEmpty();
+	}
+
 	/** 탑승 뒤 상태를 만든다 — 자리는 presence 에만 있고 지도에는 없다. */
 	private void givenRiding(String captain, String rider, long epoch) {
 		standOnMusic(rider, epoch);

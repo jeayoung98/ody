@@ -617,6 +617,38 @@ class RideServiceTests {
 				List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER), Set.of(CAPTAIN, RIDER, MATE));
 	}
 
+	/** 지도에 못 돌아간 사람도 따라가기가 끝난 것은 마찬가지다. */
+	@Test
+	@DisplayName("지도에 못 돌아간 사람에게도 끝났다고 알린다")
+	void disbandTellsRidersWithoutSpot() {
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, MATE));
+		// MATE 는 서 있는 자리가 없어 지도에 못 돌아갔다.
+		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
+				true, MUSIC, LAYER, 7, 5, List.of(RIDER), List.of(OUTSIDER)));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+
+		service.disband(CAPTAIN);
+
+		verify(realtimeMessageService).sendToUser(eq(MATE), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+		// 남들 화면과 만남에는 실제로 돌아간 사람만 넣는다.
+		verify(viewportDeltaService).sendBulkEnter(List.of(RIDER), LAYER, MUSIC, "7:5");
+	}
+
+	/** 자리를 못 찾으면 어디에 남았다고 할 수가 없다. 등록은 이미 지워졌다. */
+	@Test
+	@DisplayName("돌아갈 자리를 못 찾으면 알리지 않는다")
+	void disbandWithoutSpotNotifiesNobody() {
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER));
+		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
+				true, 0, 0, 0, 0, List.of(), List.of()));
+
+		service.disband(CAPTAIN);
+
+		verifyNoInteractions(realtimeMessageService, viewportDeltaService, meetingService);
+	}
+
 	@Test
 	@DisplayName("따라오던 사람이 없으면 아무에게도 알리지 않는다")
 	void disbandWithoutRidersNotifiesNobody() {

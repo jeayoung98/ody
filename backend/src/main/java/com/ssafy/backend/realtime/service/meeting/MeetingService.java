@@ -94,6 +94,7 @@ public class MeetingService {
 	 * 같은 클래스 안에서 부르므로 @Async 가 걸리지 않는다. 부르는 쪽이 이미 뒤에서 도는 자리다.
 	 */
 	private void recordPair(String actorEmail, String other) {
+		String cooldownKey = null;
 		try {
 			if (other == null || other.equals(actorEmail)) {
 				return; // 자기 자신 방어(applyPlay 가 이미 제외하지만)
@@ -105,16 +106,33 @@ public class MeetingService {
 			// 같은 두 사람은 3분에 한 번만 센다. 여기서 만드는 키가 3분 뒤에 저절로 사라진다.
 			//   키를 새로 만들었으면(true) 3분 안에 센 적이 없다는 뜻 → 센다.
 			//   이미 있으면(false) 3분 안에 이미 셌다는 뜻 → 건너뛴다.
+			String key = COOLDOWN_PREFIX + user1 + ":" + user2;
 			Boolean fresh = redis.opsForValue().setIfAbsent(
-					COOLDOWN_PREFIX + user1 + ":" + user2, "1", Duration.ofSeconds(cooldownSec));
+					key, "1", Duration.ofSeconds(cooldownSec));
 			if (!Boolean.TRUE.equals(fresh)) {
 				return;
 			}
+			// 우리가 만든 잠금이다. 세지 못하면 우리가 풀어야 한다.
+			cooldownKey = key;
 
 			meetingMapper.upsertIncrement(user1, user2);
 		} catch (Exception e) {
+			// 세지 못했으니 3분 잠금도 풀어 준다. 그대로 두면 다시 만나도 3분 동안 안 센다.
+			releaseCooldown(cooldownKey);
 			// 실 유저 없으면 FK 위반(데모/테스트). 한 쌍 실패가 나머지·재생을 막지 않게 로그만(email 미기록).
 			log.warn("만남 기록 실패 — 스킵", e);
+		}
+	}
+
+	/** 세지 못한 쌍의 3분 잠금을 푼다. 이것까지 실패하면 그 쌍만 3분을 기다린다. */
+	private void releaseCooldown(String cooldownKey) {
+		if (cooldownKey == null) {
+			return;
+		}
+		try {
+			redis.delete(cooldownKey);
+		} catch (Exception e) {
+			log.warn("만남 잠금 해제 실패 — 그 쌍은 3분 뒤에 다시 셀 수 있다", e);
 		}
 	}
 

@@ -14,6 +14,8 @@
 -- KEYS[1] presence:user:{내리는 사람}
 -- KEYS[2] ride:captain:{내리는 사람}
 -- KEYS[3] ride:riders:{인솔자}
+-- KEYS[4] ride:playback:{인솔자}
+-- KEYS[5] ride:panel:{인솔자}
 --
 -- ARGV[1] 내리는 사람 email   [2] 인솔자 email
 --   [3] 곡별 청취자 키   [4] 레이어별 청취자 키
@@ -77,6 +79,13 @@ redis.call('SADD', P_cell .. layer .. ':' .. cellField, musicId)
 redis.call('SADD', P_cells .. layer, cellField)
 redis.call('HINCRBY', P_uc .. layer, cellField, 1)
 
-local out = {'OK', musicId, layer, cellX, cellY, tostring(redis.call('SCARD', KEYS[3]))}
+-- 9) 마지막 한 명이 내렸으면 선단이 없어진 것이다. 재생 정보와 열어 둔 곡 상세도 지운다.
+--    남겨 두면 인솔자가 혼자 곡을 바꿔도 갱신되지 않아, 다음에 타는 사람이 옛 곡 정보를 받는다.
+local remaining = redis.call('SCARD', KEYS[3])
+if remaining == 0 then
+  redis.call('DEL', KEYS[4], KEYS[5])
+end
+
+local out = {'OK', musicId, layer, cellX, cellY, tostring(remaining)}
 for i = 1, #residents do out[#out + 1] = residents[i] end
 return out

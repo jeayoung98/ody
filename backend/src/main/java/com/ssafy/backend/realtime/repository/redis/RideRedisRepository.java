@@ -182,6 +182,18 @@ public class RideRedisRepository {
 		}
 	}
 
+	/** 빈 칸이나 숫자가 아닌 값은 0 으로 본다. */
+	private static long numberOrZero(String value) {
+		if (value == null || value.isBlank()) {
+			return 0L;
+		}
+		try {
+			return Long.parseLong(value);
+		} catch (NumberFormatException e) {
+			return 0L;
+		}
+	}
+
 	/**
 	 * 따라가던 사람 한 명이 사라졌을 때 그 사람만 뺀다. 선단은 그대로 둔다.
 	 *
@@ -238,9 +250,11 @@ public class RideRedisRepository {
 		int leftCount = Integer.parseInt(r.get(5));
 		int residentCount = Integer.parseInt(r.get(6));
 		int residentFrom = 7 + leftCount;
+		// 아무도 서 있는 자리를 갖고 있지 않으면 자리 칸이 빈 문자열로 온다. 0 으로 받아
+		// 부르는 쪽이 "돌아갈 자리를 못 찾았다"로 판단하게 한다.
 		return new DisbandResult(true,
-				Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
-				Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
+				numberOrZero(r.get(1)), (int) numberOrZero(r.get(2)),
+				(int) numberOrZero(r.get(3)), (int) numberOrZero(r.get(4)),
 				List.copyOf(r.subList(7, residentFrom)),
 				List.copyOf(r.subList(residentFrom, residentFrom + residentCount)));
 	}
@@ -260,7 +274,9 @@ public class RideRedisRepository {
 		List<String> r = redis.execute(rideDismountScript,
 				List.of(PRESENCE_USER_PREFIX + riderEmail,
 						CAPTAIN_PREFIX + riderEmail,
-						RIDERS_PREFIX + captainEmail),
+						RIDERS_PREFIX + captainEmail,
+						PLAYBACK_PREFIX + captainEmail,
+						PANEL_PREFIX + captainEmail),
 				riderEmail, captainEmail,
 				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX,
 				ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);

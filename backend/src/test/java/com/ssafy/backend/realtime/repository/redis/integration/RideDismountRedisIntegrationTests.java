@@ -96,6 +96,37 @@ class RideDismountRedisIntegrationTests {
 		assertThat(repository.riders(captain)).doesNotContain(rider);
 	}
 
+	/** 남겨 두면 인솔자가 혼자 곡을 바꿔도 갱신되지 않아, 다음에 타는 사람이 옛 곡 정보를 받는다. */
+	@Test
+	@DisplayName("마지막 한 명이 내리면 재생 정보와 곡 상세도 지운다")
+	void lastRiderClearsFleetTraces() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForHash().put("ride:playback:" + captain, "musicId", Long.toString(MUSIC));
+		redis.opsForHash().put("ride:panel:" + captain, "musicId", Long.toString(MUSIC));
+
+		repository.dismount(rider, captain);
+
+		assertThat(redis.hasKey("ride:playback:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:panel:" + captain)).isFalse();
+	}
+
+	@Test
+	@DisplayName("아직 남은 사람이 있으면 재생 정보를 그대로 둔다")
+	void remainingRidersKeepFleetTraces() {
+		String captain = user();
+		String rider = user();
+		String other = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForSet().add("ride:riders:" + captain, other);
+		redis.opsForHash().put("ride:playback:" + captain, "musicId", Long.toString(MUSIC));
+
+		repository.dismount(rider, captain);
+
+		assertThat(redis.hasKey("ride:playback:" + captain)).isTrue();
+	}
+
 	/** 표시가 남으면 지도에 있으면서도 재생·입장이 거부된다. */
 	@Test
 	@DisplayName("내리면 따라가는 중 표시가 사라진다")
@@ -268,6 +299,8 @@ class RideDismountRedisIntegrationTests {
 		keysToDelete.add("presence:user:" + email);
 		keysToDelete.add("ride:captain:" + email);
 		keysToDelete.add("ride:riders:" + email);
+		keysToDelete.add("ride:playback:" + email);
+		keysToDelete.add("ride:panel:" + email);
 		keysToDelete.add("listeners:" + MUSIC);
 		keysToDelete.add("layer-listeners:" + LAYER + ":" + MUSIC);
 		keysToDelete.add("active-song:cell:" + LAYER + ":" + CELL);

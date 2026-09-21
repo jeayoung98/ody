@@ -300,10 +300,12 @@ public class RideService {
 	 * @param captainEmail 사라진 인솔자
 	 */
 	public void disband(String captainEmail) {
-		// 1. 이 인솔자를 따라가던 사람들 + 인솔자 본인의 명단을 먼저 만든다.
-		//    그 곡에 원래 있던 사람들과는 다른 명단이다. 이쪽은 만남에서 뺄 사람들이다.
-		//    흩고 나면 ride:riders 가 비어서 누가 따라갔는지 알 수 없으므로 지금 읽는다.
-		Set<String> fleetMembers = new LinkedHashSet<>(rideRedisRepository.riders(captainEmail));
+		// 1. 이 인솔자를 따라가던 사람들을 먼저 읽는다. 흩고 나면 ride:riders 가 비어
+		//    누가 따라갔는지 알 수 없다. 끝났다는 알림은 이 전원에게 간다.
+		Set<String> riders = new LinkedHashSet<>(rideRedisRepository.riders(captainEmail));
+		//    만남에서 뺄 명단은 여기에 인솔자를 더한 것이다.
+		//    그 곡에 원래 있던 사람들과는 다른 명단이다.
+		Set<String> fleetMembers = new LinkedHashSet<>(riders);
 		fleetMembers.add(captainEmail);
 
 		// 2. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
@@ -311,14 +313,21 @@ public class RideService {
 		if (!result.hadRiders()) {
 			return; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
 		}
+		if (result.musicId() <= 0) {
+			// 아무도 서 있는 자리를 갖고 있지 않았다. 등록은 지웠지만 어디에 남았다고
+			// 알릴 자리가 없다. 여기까지 온 것 자체가 이상하므로 남겨 둔다.
+			log.warn("[Ride] 선단 해체 — 돌아갈 자리를 찾지 못했다 인원={}", riders.size());
+			return;
+		}
 
 		// 3. 따라가던 사람에게 끝났다고 알린다. 남게 된 자리는 스스로 내렸을 때와 같은 모양이다.
+		//    지도에 못 돌아간 사람에게도 보낸다. 끝난 것은 그 사람도 마찬가지다.
 		Spot spot = spotOf(result.musicId(), result.layer());
 		RideEndedPayload ended = new RideEndedPayload(
 				captainEmail, RideEndReason.CAPTAIN_LEFT,
 				result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
-		for (String rider : result.leftRiders()) {
+		for (String rider : riders) {
 			realtimeMessageService.sendToUser(rider, WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.RIDE_ENDED, ended);
 		}

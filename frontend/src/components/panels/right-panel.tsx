@@ -21,8 +21,9 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
  * 넓어 어떻게 놓아도 지도를 가린다. 대신 **내가 열었을 때만 열린다** — 별을 탭하면 작은 카드가
  * 뜨고, 거기 `상세` 를 눌러야 여기로 온다. 안 시켰는데 덮이던 것이 문제였지 덮는 것 자체가 아니었다.
  *
- * **폰에서는 옆으로 밀어도 접힌다** (S15P21A405-417, `use-panel-swipe`). 손잡이가 17px 이라
- * 화면을 통째로 덮는 쪽에서는 매번 그 혀를 겨누게 할 일이 아니다. 접기·펴기 자체는 같은 동작이다.
+ * **폰에서는 아래에서 올라오는 바텀시트다** (S15P21A405-417). 위쪽 손잡이 막대를 누르거나
+ * 위아래로 밀어 접었다 편다 (`use-panel-swipe`). 접으면 제목 줄만 남고 지도가 드러난다 —
+ * 옆구리의 혀는 미는 방향과 어긋나므로 거기서는 숨는다.
  *
  * 왼쪽 가장자리 핸들로 접을 수 있다 (S15P21A405-318). 접으면 오른쪽으로 미끄러져 나가고
  * 핸들만 남는다 — **별자리는 그대로 켜져 있다.** 지도를 넓게 보려고 잠깐 치우는 동작이라
@@ -41,6 +42,7 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
 export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
   const collapsed = usePanelStore((s) => s.collapsed);
+  const toggleCollapsed = usePanelStore((s) => s.toggleCollapsed);
   const panelEnabled = usePanelEnabled();
   // 폰에서 옆으로 밀어 접었다 편다 (S15P21A405-417). 마우스는 무시하므로 데스크톱은 그대로다
   const swipe = usePanelSwipe();
@@ -83,10 +85,34 @@ export default function RightPanel() {
           뭐가 있었다" 를 말하지만, 폰에서는 그 10px 이 지도 위에 남은 부스러기로 보인다.
           손잡이는 몸통 바깥(-17px)에 붙어 있어 통째로 밀어내도 화면 안에 남는다.
         */
-        collapsed ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-full" : ""
-      } max-tablet:right-0 max-tablet:left-[calc(var(--spacing-gutter-sm)+var(--spacing-handle-w))] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
+        /*
+          **폰에서는 아래로 내려간다** (S15P21A405-417). 옆으로 미는 건 데스크톱의 문법이고,
+          화면을 채우는 시트에는 위아래가 맞는다. 통째로 내려보내되 `--spacing-sheet-peek`
+          만큼은 화면에 걸쳐 둔다 — 무엇이 열려 있는지는 읽혀야 한다.
+
+          가로 이동은 0 으로 되돌린다. 안 그러면 데스크톱 값(`calc(100% - 10px)`)이 남아
+          시트가 오른쪽으로도 밀린다.
+        */
+        collapsed
+          ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0 max-tablet:translate-y-[calc(100%_-_var(--spacing-sheet-peek))]"
+          : ""
+      } max-tablet:inset-x-gutter-sm max-tablet:top-[72px] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
     >
       <PanelCollapseHandle />
+      {/*
+        시트 손잡이 막대 (S15P21A405-417). 폰에서만 나온다 — 누르면 접혔다 펴지고, 여기를
+        잡고 위아래로 밀어도 된다(`use-panel-swipe` 가 시트 전체에 걸려 있다).
+        높이를 터치 기준(44)으로 잡되 보이는 것은 가운데 막대 하나다.
+      */}
+      <button
+        type="button"
+        onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+        aria-label={collapsed ? "패널 펼치기" : "패널 접기"}
+        className="hidden shrink-0 items-center justify-center py-2.5 max-tablet:flex"
+      >
+        <span aria-hidden className="h-1 w-10 rounded-pill bg-white/25" />
+      </button>
       {activePanel === "song" && <SongDetailPanel />}
       {activePanel === "playlist" && <PlaylistPanel />}
       {activePanel === "feed" && <FeedPanel />}

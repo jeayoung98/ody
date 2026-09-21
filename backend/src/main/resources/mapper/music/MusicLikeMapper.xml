@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.music.like.MusicLikeMapper">
+
+    <select id="musicExists" resultType="boolean">
+        SELECT EXISTS(SELECT 1 FROM music WHERE id = #{musicId})
+    </select>
+
+    <insert id="insert">
+        INSERT INTO music_like (email, music_id)
+        VALUES (#{email}, #{musicId})
+        ON CONFLICT (email, music_id) DO NOTHING
+    </insert>
+
+    <delete id="delete">
+        DELETE FROM music_like
+        WHERE email = #{email} AND music_id = #{musicId}
+    </delete>
+
+    <select id="findLikedAt" resultType="java.time.OffsetDateTime">
+        SELECT created_at FROM music_like
+        WHERE email = #{email} AND music_id = #{musicId}
+    </select>
+
+    <select id="findAllByEmail" resultType="com.ssafy.backend.music.like.MusicLikeRow">
+        SELECT music_id, created_at AS liked_at
+        FROM music_like
+        WHERE email = #{email}
+        ORDER BY created_at DESC, music_id DESC
+    </select>
+</mapper>

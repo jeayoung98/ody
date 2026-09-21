@@ -1,0 +1,107 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.taste.mapper.TasteAnalysisMapper">
+    <sql id="columns">
+        email, analysis_date, status, requested_at, lease_expires_at, completed_at,
+        liked_set_hash, total_liked_count, valid_music_count, excluded_music_count,
+        report_level, bundle_version, reference_version, axis_label_version,
+        analysis_policy_version, prompt_version, model,
+        axis_stats::text AS axis_stats, findings::text AS findings,
+        summary, narratives::text AS narratives, gms_response_id, failure_code
+    </sql>
+
+    <select id="findLatestSuccess" resultType="com.ssafy.backend.taste.mapper.TasteAnalysisRow">
+        SELECT <include refid="columns"/>
+        FROM taste_analysis
+        WHERE email = #{email} AND status = 'SUCCESS'
+        ORDER BY completed_at DESC
+        LIMIT 1
+    </select>
+
+    <select id="findByDate" resultType="com.ssafy.backend.taste.mapper.TasteAnalysisRow">
+        SELECT <include refid="columns"/>
+        FROM taste_analysis
+        WHERE email = #{email} AND analysis_date = #{analysisDate}
+    </select>
+
+    <select id="findActivePending" resultType="com.ssafy.backend.taste.mapper.TasteAnalysisRow">
+        SELECT <include refid="columns"/>
+        FROM taste_analysis
+        WHERE email = #{email}
+          AND status = 'PENDING'
+          AND lease_expires_at &gt; #{now}
+        ORDER BY requested_at DESC
+        LIMIT 1
+    </select>
+
+    <update id="expireStalePending">
+        UPDATE taste_analysis
+        SET status = 'FAILED',
+            completed_at = #{requestedAt},
+            lease_expires_at = NULL,
+            failure_code = 'LEASE_EXPIRED',
+            updated_at = now()
+        WHERE email = #{email}
+          AND status = 'PENDING'
+          AND lease_expires_at &lt;= #{requestedAt}
+    </update>
+
+    <insert id="claim">
+        INSERT INTO taste_analysis (
+            email, analysis_date, status, requested_at, lease_expires_at, created_at, updated_at)
+        VALUES (
+            #{email}, #{analysisDate}, 'PENDING', #{requestedAt}, #{leaseExpiresAt}, now(), now())
+        ON CONFLICT (email, analysis_date) DO UPDATE
+        SET status = 'PENDING',
+            requested_at = EXCLUDED.requested_at,
+            lease_expires_at = EXCLUDED.lease_expires_at,
+            completed_at = NULL,
+            failure_code = NULL,
+            updated_at = now()
+        WHERE taste_analysis.status = 'FAILED'
+           OR (taste_analysis.status = 'PENDING'
+               AND taste_analysis.lease_expires_at &lt;= EXCLUDED.requested_at)
+    </insert>
+
+    <update id="markSuccess">
+        UPDATE taste_analysis
+        SET status = 'SUCCESS',
+            completed_at = #{completedAt},
+            lease_expires_at = NULL,
+            liked_set_hash = #{likedSetHash},
+            total_liked_count = #{totalLikedCount},
+            valid_music_count = #{validMusicCount},
+            excluded_music_count = #{excludedMusicCount},
+            report_level = #{reportLevel},
+            bundle_version = #{bundleVersion},
+            reference_version = #{referenceVersion},
+            axis_label_version = #{axisLabelVersion},
+            analysis_policy_version = #{analysisPolicyVersion},
+            prompt_version = #{promptVersion},
+            model = #{model},
+            axis_stats = CAST(#{axisStats} AS jsonb),
+            findings = CAST(#{findings} AS jsonb),
+            summary = #{summary},
+            narratives = CAST(#{narratives} AS jsonb),
+            gms_response_id = #{gmsResponseId},
+            failure_code = NULL,
+            updated_at = now()
+        WHERE email = #{email}
+          AND analysis_date = #{analysisDate}
+          AND status = 'PENDING'
+          AND requested_at = #{requestedAt}
+    </update>
+
+    <update id="markFailed">
+        UPDATE taste_analysis
+        SET status = 'FAILED',
+            completed_at = #{completedAt},
+            lease_expires_at = NULL,
+            failure_code = #{failureCode},
+            updated_at = now()
+        WHERE email = #{email}
+          AND analysis_date = #{analysisDate}
+          AND status = 'PENDING'
+          AND requested_at = #{requestedAt}
+    </update>
+</mapper>

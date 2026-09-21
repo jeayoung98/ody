@@ -1,0 +1,323 @@
+openapi: 3.1.0
+info:
+  title: ODY Music Like and Taste Analysis Contract
+  version: 0.1.0-draft
+  description: 팀 승인 전 구현 계약 초안. 모든 endpoint는 현재 인증 주체의 데이터만 다룬다.
+servers:
+  - url: /
+security:
+  - bearerAuth: []
+paths:
+  /api/music/like:
+    post:
+      summary: 개별 곡 좋아요 목표 상태 설정
+      operationId: setMusicLike
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/MusicLikeRequest'
+      responses:
+        '200':
+          description: 같은 상태의 반복 요청도 성공한다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MusicLikeEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '404':
+          description: MUSIC_NOT_FOUND
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+  /api/music/liked:
+    get:
+      summary: 현재 사용자의 좋아요 음악 가상 플레이리스트 조회
+      operationId: getLikedMusic
+      responses:
+        '200':
+          description: 최근 좋아요순 전체 목록. items 순서를 기존 재생 큐에 사용한다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LikedMusicListEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+  /api/taste-analysis:
+    get:
+      summary: 현재 좋아요 분포와 마지막 성공 리포트 조회
+      operationId: getTasteAnalysis
+      responses:
+        '200':
+          description: 좋아요가 0개여도 빈 분포 상태로 반환한다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteAnalysisEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '503':
+          description: TASTE_REFERENCE_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+    post:
+      summary: 현재 snapshot으로 AI 취향 리포트 생성
+      operationId: generateTasteAnalysis
+      description: GMS 실패 시 HTTP 200과 FALLBACK을 반환하며 성공 횟수를 차감하지 않는다.
+      responses:
+        '200':
+          description: 검증된 AI 결과 SUCCESS 또는 통계 기반 FALLBACK
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TasteAnalysisEnvelope'
+        '401':
+          $ref: '#/components/responses/Unauthenticated'
+        '409':
+          description: TASTE_ANALYSIS_IN_PROGRESS. error.details.nextAvailableAt에 현재 lease 만료 시각 제공.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '422':
+          description: TASTE_INSUFFICIENT_SAMPLE. 분포는 GET으로 조회한다.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '429':
+          description: TASTE_DAILY_LIMIT. error.details.nextAvailableAt 제공.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '503':
+          description: TASTE_REFERENCE_UNAVAILABLE
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  responses:
+    Unauthenticated:
+      description: UNAUTHENTICATED
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+  schemas:
+    MusicLikeRequest:
+      type: object
+      additionalProperties: false
+      required: [musicId, liked]
+      properties:
+        musicId: { type: integer, format: int64, minimum: 1 }
+        liked: { type: boolean }
+    MusicLike:
+      type: object
+      required: [musicId, liked]
+      properties:
+        musicId: { type: integer, format: int64 }
+        liked: { type: boolean }
+        likedAt: { type: [string, 'null'], format: date-time }
+    MusicLikeEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/MusicLike' }
+    LikedMusicItem:
+      type: object
+      required: [musicId, title, artist, duration, youtubeUrl, videoId, likedAt]
+      properties:
+        musicId: { type: integer, format: int64 }
+        title: { type: string }
+        artist: { type: [string, 'null'] }
+        duration: { type: [integer, 'null'], minimum: 0 }
+        youtubeUrl: { type: [string, 'null'] }
+        videoId: { type: [string, 'null'] }
+        likedAt: { type: string, format: date-time }
+    LikedMusicListEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data:
+              type: object
+              required: [items]
+              properties:
+                items:
+                  type: array
+                  items: { $ref: '#/components/schemas/LikedMusicItem' }
+    TasteAnalysisEnvelope:
+      allOf:
+        - $ref: '#/components/schemas/SuccessEnvelope'
+        - type: object
+          properties:
+            data: { $ref: '#/components/schemas/TasteAnalysis' }
+    TasteAnalysis:
+      type: object
+      required:
+        - state
+        - counts
+        - reportEligibility
+        - reference
+        - axes
+        - points
+        - generation
+      properties:
+        state:
+          enum: [EMPTY, DISTRIBUTION_ONLY, READY, IN_PROGRESS, FRESH, STALE, FALLBACK]
+        counts:
+          $ref: '#/components/schemas/AnalysisCounts'
+        reportEligibility:
+          type: object
+          required: [eligible, additionalLikesNeeded]
+          properties:
+            eligible: { type: boolean }
+            level: { type: ['string', 'null'], enum: [INITIAL, STANDARD, null] }
+            additionalLikesNeeded: { type: integer, minimum: 0 }
+        reference:
+          $ref: '#/components/schemas/ReferenceVersions'
+        axes:
+          type: array
+          maxItems: 16
+          items: { $ref: '#/components/schemas/AxisStatistics' }
+        points:
+          type: array
+          description: 유효 좋아요 곡의 16차원 좌표. 클라이언트가 고정 8개 축 쌍을 전환한다.
+          items: { $ref: '#/components/schemas/TastePoint' }
+        report:
+          oneOf:
+            - $ref: '#/components/schemas/TasteReport'
+            - type: 'null'
+        generation:
+          $ref: '#/components/schemas/GenerationState'
+    AnalysisCounts:
+      type: object
+      required: [totalLiked, valid, excluded, exclusions]
+      properties:
+        totalLiked: { type: integer, minimum: 0 }
+        valid: { type: integer, minimum: 0 }
+        excluded: { type: integer, minimum: 0 }
+        exclusions:
+          type: object
+          additionalProperties: { type: integer, minimum: 0 }
+    ReferenceVersions:
+      type: object
+      required: [bundleVersion, referenceVersion, axisLabelVersion, analysisPolicyVersion]
+      properties:
+        bundleVersion: { type: string }
+        referenceVersion: { type: string }
+        axisLabelVersion: { type: string }
+        analysisPolicyVersion: { type: string }
+    AxisStatistics:
+      type: object
+      required: [pc, raw, percentile, histogram, label]
+      properties:
+        pc: { type: integer, minimum: 1, maximum: 16 }
+        raw: { $ref: '#/components/schemas/FiveNumberSummary' }
+        percentile:
+          allOf:
+            - $ref: '#/components/schemas/FiveNumberSummary'
+            - type: object
+              required: [iqr]
+              properties:
+                iqr: { type: number, minimum: 0, maximum: 100 }
+        histogram:
+          type: array
+          minItems: 10
+          maxItems: 10
+          items: { type: integer, minimum: 0 }
+        label:
+          type: object
+          required: [status, strength]
+          properties:
+            status: { enum: [VERIFIED, UNVERIFIED, UNLABELED] }
+            strength: { enum: [STRONG, MEDIUM, WEAK, NONE] }
+            low: { type: [string, 'null'] }
+            high: { type: [string, 'null'] }
+    FiveNumberSummary:
+      type: object
+      required: [min, q1, median, q3, max]
+      properties:
+        min: { type: number }
+        q1: { type: number }
+        median: { type: number }
+        q3: { type: number }
+        max: { type: number }
+    TastePoint:
+      type: object
+      required: [musicId, title, artist, coordinates]
+      properties:
+        musicId: { type: integer, format: int64 }
+        title: { type: string }
+        artist: { type: string }
+        coordinates:
+          type: array
+          minItems: 16
+          maxItems: 16
+          items: { type: number }
+    TasteReport:
+      type: object
+      required: [level, aiGenerated, fresh, summary, narratives, analyzedAt, generatedAt, lastRefreshedAt]
+      properties:
+        level: { enum: [INITIAL, STANDARD] }
+        aiGenerated: { type: boolean }
+        fresh: { type: boolean }
+        summary: { type: string }
+        narratives:
+          type: array
+          maxItems: 3
+          items:
+            type: object
+            required: [findingId, text, evidence]
+            properties:
+              findingId: { type: string }
+              text: { type: string }
+              evidence: { type: string }
+        analyzedAt: { type: string, format: date-time }
+        generatedAt: { type: string, format: date-time }
+        lastRefreshedAt: { type: [string, 'null'], format: date-time }
+    GenerationState:
+      type: object
+      required: [status, generatedThisRequest, dailyLimitUsedToday, canRetry]
+      properties:
+        status: { enum: [NOT_REQUESTED, IN_PROGRESS, GENERATED, REUSED, FALLBACK, INELIGIBLE] }
+        generatedThisRequest: { type: boolean }
+        dailyLimitUsedToday: { type: boolean }
+        canRetry: { type: boolean }
+        failureCode: { type: [string, 'null'] }
+        nextAvailableAt: { type: [string, 'null'], format: date-time }
+    SuccessEnvelope:
+      type: object
+      required: [success, data, error]
+      properties:
+        success: { const: true }
+        data: {}
+        error: { type: 'null' }
+    ErrorEnvelope:
+      type: object
+      required: [success, data, error]
+      properties:
+        success: { const: false }
+        data: { type: 'null' }
+        error:
+          type: object
+          required: [code, message]
+          properties:
+            code: { type: string }
+            message: { type: string }
+            details:
+              type: object
+              additionalProperties: true

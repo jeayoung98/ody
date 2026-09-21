@@ -24,6 +24,11 @@ export default function PanelCollapseHandle() {
       expanded={!collapsed}
       onClick={toggleCollapsed}
       title={collapsed ? "패널 펼치기" : "패널 접기"}
+      /*
+       * **폰에서는 숨는다** (S15P21A405-417). 거기서 패널은 옆이 아니라 아래에서 올라오는
+       * 시트라, 옆구리에 붙은 혀는 미는 방향과 어긋난다 — 시트는 제 위쪽 손잡이 막대로 접는다.
+       */
+      hitClassName="max-tablet:hidden"
     />
   );
 }

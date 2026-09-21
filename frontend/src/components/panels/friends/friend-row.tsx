@@ -1,6 +1,7 @@
 "use client";
 
 import UserRow from "@/components/common/user-row";
+import { useBackToMap } from "@/hooks/use-back-to-map";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { NearbyPerson } from "@/types";
 
@@ -20,6 +21,11 @@ import type { NearbyPerson } from "@/types";
  */
 export default function FriendRow({ person }: { person: NearbyPerson }) {
   const openFeed = usePanelStore((s) => s.openFeed);
+  /**
+   * 폰에서 주변 사람은 **제 화면**이다 (S15P21A405-417). 남의 프로필은 지도 위 패널로 뜨므로,
+   * 이 화면에 남아 있으면 눌러도 아무 일이 없어 보인다 — 누르는 순간 지도 탭으로 돌아간다.
+   */
+  const backToMap = useBackToMap();
 
   // 제목은 델타로 들어온 사람에게는 비어 있다 — 서버가 ENTER 에 곡 정보를 주지 않는다 (§6.2)
   const song = person.title ? [person.title, person.artist].filter(Boolean).join(" · ") : "듣는 곡을 불러오는 중";
@@ -29,7 +35,10 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
       nickname={person.nickname ?? "이름 없음"}
       imageUrl={person.imageUrl}
       caption={song}
-      onClick={() => openFeed(person.email)}
+      onClick={() => {
+        openFeed(person.email);
+        backToMap();
+      }}
       right={person.meetingCount > 0 ? <span className="num text-xs text-ink-3">{person.meetingCount}번째</span> : undefined}
     />
   );

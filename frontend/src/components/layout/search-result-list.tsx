@@ -28,6 +28,14 @@ interface SearchResultListProps {
   hasMore: boolean;
   /** 지금 다음 페이지를 받는 중인가 */
   isLoadingMore: boolean;
+  /**
+   * 어디에 놓이는가 (S15P21A405-417).
+   *
+   * `dropdown` (기본) — 지도 위 검색 알약 아래로 떨어지는 떠 있는 상자. 유리·모서리·높이 제한이 있다.
+   * `page` — 검색 전용 화면(`/search`). **상자가 아니라 그냥 목록이다** — 화면이 이미 제 상자라
+   * 유리를 한 겹 더 씌우면 페이지 안에 드롭다운이 떠 있는 꼴이 된다. 높이도 화면이 정한다.
+   */
+  variant?: "dropdown" | "page";
   /** 바닥에 닿으면 부른다. 중복 호출 방지는 호출하는 쪽(useInfiniteQuery)이 한다 */
   onLoadMore: () => void;
 }
@@ -52,6 +60,7 @@ export default function SearchResultList({
   hasMore,
   isLoadingMore,
   onLoadMore,
+  variant = "dropdown",
 }: SearchResultListProps) {
   const { boxRef, onScroll } = useLoadMoreOnBottom({ hasMore, isLoadingMore, count: results.length, onLoadMore });
 
@@ -63,7 +72,7 @@ export default function SearchResultList({
       onScroll={onScroll}
       // 스크롤바를 잡아도 검색창이 포커스를 잃지 않게 (잃으면 목록이 닫힌다)
       onMouseDown={(e) => e.preventDefault()}
-      className="glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[15px]!"
+      className={variant === "page" ? "pt-1" : "glass mt-[7px] max-h-[46vh] overflow-y-auto rounded-[15px]!"}
     >
       {/* 통합 검색에서 입력값을 제목 또는 아티스트 조건으로 굳힌다. */}
       {canPromote && (

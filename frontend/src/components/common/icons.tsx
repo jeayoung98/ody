@@ -60,6 +60,16 @@ export const JourneyIcon = ({ size = 18, ...p }: P) => (
     <path d="M7.6 16.8C11 14 9 10.5 12.4 7.6" />
   </svg>
 );
+/** 하단 탭의 "지도" (S15P21A405-417) — 별 넷을 이은 작은 별자리 */
+export const MapIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4.5 16.5 9 8l4.5 4.5L20 3" />
+    <circle cx="4.5" cy="16.5" r="1.6" />
+    <circle cx="9" cy="8" r="1.6" />
+    <circle cx="13.5" cy="12.5" r="1.6" />
+    <circle cx="20" cy="3" r="1.6" />
+  </svg>
+);
 export const RankIcon = ({ size = 18, ...p }: P) => (
   <svg {...base(size, p)}>
     <path d="M5 20V12M12 20V5M19 20v-6" />

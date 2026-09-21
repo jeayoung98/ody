@@ -9,6 +9,13 @@ interface CollapseHandleProps {
   /** 펼쳐져 있나 (aria) */
   expanded: boolean;
   title: string;
+  /**
+   * 손잡이에 덧붙일 클래스. **누를 수 있는 넓이를 넓히는 용도**다 (S15P21A405-417).
+   *
+   * 모양(폭 17px)은 건드리지 않는다 — 좌하단 계기판과 같은 물건이라 한쪽만 굵어지면 갈린다.
+   * 대신 `after:` 로 투명한 판을 깔아 손가락이 닿는 넓이만 넓힌다. 폰에서만 쓴다.
+   */
+  hitClassName?: string;
 }
 
 /**
@@ -18,6 +25,7 @@ interface CollapseHandleProps {
  * 손으로 옮겨 적고 있다가 22→17 변경을 놓쳤다 (S15P21A405-479).
  */
 export const HANDLE_W = 17;
+/** `tokens.css` 의 `--spacing-handle-w` 와 같은 값이다 — 한쪽을 고치면 다른 쪽도 고친다 */
 const W = HANDLE_W;
 const H = 62;
 /**
@@ -61,7 +69,7 @@ const CLIP = `path("M0 0 L${W - R} ${SLANT} A${R} ${R} 0 0 1 ${W} ${SLANT + R} L
  * 블러로는 뒤를 못 가렸고, 계기판 쪽은 부모가 유리라 블러가 먹지도 않아 좌우가 달라 보였다.
  * 색 하나로 칠해 어디에 붙어 있든 같게 만든다. 값은 `tokens.css` 의 `--glass-handle-bg`.
  */
-export default function CollapseHandle({ side, pointing, onClick, expanded, title }: CollapseHandleProps) {
+export default function CollapseHandle({ side, pointing, onClick, expanded, title, hitClassName = "" }: CollapseHandleProps) {
   const outerRight = side === "right";
   return (
     <button
@@ -71,7 +79,7 @@ export default function CollapseHandle({ side, pointing, onClick, expanded, titl
       title={title}
       aria-label={title}
       style={{ width: W, height: H, [outerRight ? "right" : "left"]: -W }}
-      className="glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-ink-3 transition-colors hover:text-ink"
+      className={`glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-ink-3 transition-colors hover:text-ink ${hitClassName}`}
     >
       {/* 색판. 왼쪽으로 나가는 손잡이는 같은 윤곽을 좌우로 뒤집어 쓴다 */}
       <span aria-hidden style={{ clipPath: CLIP, transform: outerRight ? undefined : "scaleX(-1)" }} className="glass-handle absolute inset-0" />

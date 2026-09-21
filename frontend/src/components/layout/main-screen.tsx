@@ -1,15 +1,18 @@
 "use client";
 
-import { useMemo, type ReactNode } from "react";
+import { useEffect, useMemo, type ReactNode } from "react";
 import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
+import { usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
 import Brand from "./brand";
+import MapActions from "./map-actions";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
@@ -69,17 +72,51 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   useRealtime();
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
-  // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
-  const occludedRight = panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
   /**
-   * 지도가 가려지는 네 변 (S15P21A405-414). 지금 움직이는 것은 우측 패널 하나이고, 위아래는
-   * 늘 덮여 있는 HUD 두께다. 바텀시트가 들어오면 아래가 여기서 움직인다 (S15P21A405-416).
+   * 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318).
    *
-   * **매 렌더 새 객체를 만들면 안 된다** — 받는 쪽 effect 의 의존성이라 값이 같아도 매번 다시 돈다.
+   * **좁은 화면에서는 오른쪽을 아무도 안 가린다** (S15P21A405-417). 패널이 지도를 통째로
+   * 덮거나 아예 닫혀 있거나 둘 중 하나라 "옆으로 비켜 준다" 는 개념이 없다.
+   * 이걸 안 갈랐더니 375px 화면에 "오른쪽 410px 이 가려졌다" 고 알려 주게 돼서,
+   * 엔진이 남은 폭을 최소치 120px 로 잘랐다 — 주변 탐색 고리 반지름이 119 에서 43 으로 줄어
+   * 왼쪽 구석에 찌그러져 보였다 (실측).
    */
+  const narrow = useIsNarrow();
+  const occludedRight = narrow ? 0 : panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
+  /**
+   * 지도가 가려지는 네 변 (S15P21A405-414).
+   * **매 렌더 새 객체를 만들면 안 된다** — 받는 쪽 effect 의 의존성이라 값이 같아도 매번 다시 돈다.
+   *
+   * 재생바 **위**가 어디인지 (S15P21A405-417). 재생바 높이는 재생 상태에 따라 바뀐다 —
+   * 곡이 없으면 한 줄, 재생 중이면 진행바가 붙어 더 높다. 상수로 박으면 그 차이만큼
+   * 위에 얹힌 것이 떠 보이거나 겹치므로 **재서** 쓰고, CSS 변수로 내려 보낸다.
+   * 좁은 화면에서 패널이 이 선 위까지 차지한다 (`panels/right-panel.tsx`).
+   */
+  const playerH = usePlayerBarHeight();
+  const tabBarH = useTabBarHeight();
+  /**
+   * 폰에서 아래로 쌓이는 순서: **네비 줄 → 재생바 → 패널**. 앞의 둘은 한 상자로 읽힌다.
+   *
+   * `-1px` 은 재생바와 탭바가 쓰는 것과 **같은 겹침**이다 — 안 겹치면 1px 짜리 틈으로 지도가
+   * 새어 나와 화면이 갈라져 보인다 (실측으로 잡았다).
+   *
+   * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
+   * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
+   * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
+   */
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - 1px)`;
+  /**
+   * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
+   * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.
+   * 값은 여전히 `max-tablet:` 안에서만 읽히므로 넓은 화면은 한 픽셀도 안 바뀐다.
+   */
+  useEffect(() => {
+    document.documentElement.style.setProperty("--nav-bottom", navBottom);
+  }, [navBottom]);
+  const occludedBottom = narrow ? tabBarH + playerH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
-    () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: HUD_OCCLUSION.bottom, left: 0 }),
-    [occludedRight],
+    () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
+    [occludedRight, occludedBottom],
   );
 
   return (
@@ -94,6 +131,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {features.social && <FollowBanner />}
       <GhostBanner />
       <Rail />
+      {/* 지도 탭에서만 나오는 동작(주변 탐색·여정) — 폰 전용 (S15P21A405-417) */}
+      <MapActions />
       {panelOpen && <RightPanel />}
       <MinimapPanel />
       <BottomBar />

@@ -1,6 +1,7 @@
 "use client";
 
 import { LocateIcon } from "@/components/common/icons";
+import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
@@ -16,6 +17,12 @@ import { track } from "@/lib/analytics/client";
  */
 export default function LocateButton() {
   const canGoHome = useMapStore((s) => s.canGoHome);
+  /**
+   * 재생바는 **모든 탭에 떠 있다** (S15P21A405-417). 랭킹이나 마이페이지를 보다 이걸 누르면
+   * 지도는 그 화면 뒤에서 움직이고 화면에는 아무 일도 안 일어난 것처럼 보인다 —
+   * 누르는 순간 지도 탭으로 옮겨 간다. "내 위치로 가기" 는 곧 지도로 가겠다는 뜻이다.
+   */
+  const backToMap = useBackToMap();
 
   /**
    * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
@@ -27,6 +34,7 @@ export default function LocateButton() {
     const showToast = useToastStore.getState().show;
     const r = useMapStore.getState().goHome();
     track("map_locate_used", { outcome: r });
+    backToMap();
     if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
     else if (r !== "none") {
       const musicId = usePlayerStore.getState().currentMusicId;
@@ -42,7 +50,12 @@ export default function LocateButton() {
       disabled={!canGoHome}
       aria-label="내 위치로 가기"
       title="내 위치로 가기"
-      className="grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent"
+      /*
+       * 폰에서는 **손가락이 닿는 넓이만** 넓힌다 (S15P21A405-417). 보이는 크기는 32 그대로라
+       * 재생바 줄이 안 흔들리고, 투명한 판이 위아래·좌우로 6px 씩 더해 44 를 만든다
+       * (`--spacing-touch`). 32px 짜리 과녁은 손가락으로 겨누기에 작다.
+       */
+      className="relative grid h-8 w-8 shrink-0 place-items-center rounded-full text-ink-2 transition-colors hover:bg-white/10 hover:text-teal disabled:cursor-default disabled:text-ink-4 disabled:hover:bg-transparent max-tablet:after:absolute max-tablet:after:-inset-1.5 max-tablet:after:content-['']"
     >
       <LocateIcon />
     </button>

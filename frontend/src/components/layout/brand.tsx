@@ -12,10 +12,22 @@ import ViewModeCrumb from "./view-mode-crumb";
  */
 export default function Brand() {
   return (
-    <div className="pointer-events-none absolute top-hud-t left-[18px] z-20 flex flex-col gap-[14px]" data-hud>
-      <div className="pointer-events-auto flex items-center gap-2.5">
+    <div className="pointer-events-none absolute top-hud-t left-[18px] z-20 flex flex-col gap-[14px] max-tablet:left-gutter-sm" data-hud>
+      {/*
+        `self-start` 는 좁은 화면에서만 건다 (S15P21A405-417). 이 줄은 `flex-col` 의 자식이라
+        **아래 레이어 자취만큼 가로로 늘어난다** — 워드마크를 감춰 보이는 건 마크 26px 뿐인데
+        상자는 128px 이었다. 상자가 커지면 지도 엔진이 `[data-hud]` 를 재서 그만큼 넓게 비운다
+        (`map-view.tsx` 의 `setObstacles`). 데스크톱에 걸면 그쪽 상자도 420→149 로 바뀌므로 안 건다.
+      */}
+      <div className="pointer-events-auto flex items-center gap-2.5 max-tablet:self-start">
         <span className="grad-bg relative h-[26px] w-[26px] rounded-[10px] shadow-[0_0_22px_-4px_rgba(92,157,255,.75)] after:absolute after:inset-0 after:rounded-[10px] after:bg-[radial-gradient(circle_at_32%_28%,rgba(255,255,255,.95)_0_12%,transparent_42%)] after:content-['']" />
-        <span className="font-display text-2xl leading-none font-bold tracking-[0.26em]">ODY</span>
+        {/*
+          좁은 화면에서는 워드마크를 접는다 (S15P21A405-417). 375px 한 줄에 브랜드(128) ·
+          검색(104) · 레일(222) 이 다 서려면 454px 이 필요해 79px 이 모자란다. 워드마크가
+          102px 이고 **`pointer-events-none` 장식**이라 — 앱 이름은 탭 제목과 스플래시가
+          이미 말한다 — 여기서 가장 먼저 접을 것이다. 마크는 남으므로 자리표시는 유지된다.
+        */}
+        <span className="font-display text-2xl leading-none font-bold tracking-[0.26em] max-tablet:hidden">ODY</span>
       </div>
       {/* 자취와 그 설명은 한 덩어리다 — 붙여 두어야 설명이 무엇에 대한 말인지 바로 읽힌다 */}
       <div className="flex flex-col gap-[2px]">

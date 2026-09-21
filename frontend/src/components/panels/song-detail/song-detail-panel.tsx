@@ -106,8 +106,14 @@ export default function SongDetailPanel() {
       // 커버는 상세 응답을 기다리지 않는다 — musicId 만으로 그려지므로 여는 즉시 깔린다
       bg={musicId != null ? <SongCoverBackdrop musicId={musicId} scrollerRef={bodyRef} reveal={COVER_WINDOW} /> : undefined}
     >
-      {/* 커버를 드러내는 창 */}
-      <div aria-hidden style={{ height: COVER_WINDOW }} />
+      {/*
+        커버를 드러내는 창.
+
+        **시트를 내리면 이 창이 줄어든다** (S15P21A405-417, `globals.css`). 폰에서 접으면
+        화면에 걸리는 건 머리글과 이 창뿐이라 **무슨 곡인지가 안 보였다** — 창을 줄이면
+        제목·가수가 그 자리로 따라 올라온다. 인라인 `height` 라 CSS 쪽은 `!important` 로 덮는다.
+      */}
+      <div aria-hidden data-cover-window style={{ height: COVER_WINDOW }} />
       <div className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]">
         {/* 시트 바닥 — 윗머리는 커버가 비치도록 투명에서 시작한다 */}
         <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />

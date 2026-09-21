@@ -4,8 +4,8 @@ import Box from "@/components/common/box";
 import Button from "@/components/common/button";
 import EmptyState from "@/components/common/empty-state";
 import ErrorMessage from "@/components/common/error-message";
-import Loading from "@/components/common/loading";
 import Note from "@/components/common/note";
+import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
@@ -63,7 +63,7 @@ export default function FriendsPanel() {
           동안만 참이다(= `isFetching && isPending`).
         */}
         {!connected && <EmptyState message="실시간 연결을 기다리는 중이에요. 연결되면 주변 사람이 보여요." />}
-        {connected && isLoading && <Loading />}
+        {connected && isLoading && <SkeletonRows count={4} thumb="circle" />}
         {noPlay && <EmptyState message="곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요." />}
         {temporary && (
           <div className="flex flex-col items-center gap-2 py-4">

@@ -3,7 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Avatar from "@/components/common/avatar";
-import Loading from "@/components/common/loading";
+import Skeleton from "@/components/common/skeleton";
 import { ROUTES } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useUpdateNicknameMutation } from "@/hooks/mutations/use-update-nickname-mutation";
@@ -22,9 +22,35 @@ import NicknameCheckField from "./nickname-check-field";
  */
 export default function ProfileEditForm() {
   const { data: me, isPending } = useMeQuery();
-  if (isPending) return <Loading />;
+  if (isPending) return <EditSkeleton />;
   if (!me) return <p className="text-center text-[12px] text-bad">내 정보를 불러오지 못했어요.</p>;
   return <Fields key={me.email} me={me} />;
+}
+
+/** 내 정보가 올 때까지의 자리 (S15P21A405-503) — 사진 · 닉네임 칸 · 공개 설정 · 버튼 한 쌍 */
+function EditSkeleton() {
+  return (
+    <div aria-hidden className="flex flex-col gap-4">
+      <div className="flex flex-col items-center gap-2">
+        <Skeleton w={64} h={64} />
+        <Skeleton w={64} h={11} />
+        <Skeleton w={182} h={9} />
+      </div>
+      <div className="flex flex-col gap-2">
+        <Skeleton w={48} h={9} />
+        <Skeleton w="100%" h={42} rounded="box" />
+      </div>
+      <Skeleton w="100%" h={66} rounded="box" />
+      <div className="flex gap-2">
+        <div className="flex-1">
+          <Skeleton w="100%" h={44} />
+        </div>
+        <div className="flex-[1.4]">
+          <Skeleton w="100%" h={44} />
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function Fields({ me }: { me: User }) {

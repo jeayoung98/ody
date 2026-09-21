@@ -2,6 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import MarqueeText from "@/components/common/marquee-text";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { coverFor } from "@/components/map/render/sprites";
 import { NO_GENRE_ID } from "@/constants";
 
@@ -20,8 +21,11 @@ interface SongNearbyCardProps {
  * 주변 음악 카드 한 장 (SONG-02, S15P21A405-384).
  *
  * **커버가 카드 전체다.** 아래로 검정 그라데이션을 깔고 그 위에 제목·가수만 얹는다.
- * 커버는 지도가 쓰는 **절차적 커버**를 그대로 가져온다(`coverFor`) — 지도에서 본 그 별의
- * 그림과 같은 그림이라 "아까 그 별" 이 이어진다. 실제 앨범 아트는 아직 없다 (BACKEND-NOTES E-5).
+ * 커버는 지도와 **같은 그림**이다(`coverFor`) — "아까 그 별" 이 이어진다.
+ *
+ * 진짜 앨범 커버도 여기서 뜬다 (S15P21A405-518). 다만 **주변 곡 응답에는 `albumMbid` 가 없어서**
+ * (`NeighborTrack` 필드에 없다) 지도 엔진이 들고 있는 상주 집합에서 빌려 온다. 이 겹에 없는
+ * 곡이면 못 찾고 절차적 커버로 떨어진다 — 백엔드가 그 필드를 실어 주면 이 우회가 없어진다.
  *
  * 순위는 좌상단에 작게. 왼→오 순서만으로는 "몇 번째로 가까운 곡" 이 안 나온다.
  *
@@ -37,8 +41,23 @@ export default function SongNearbyCard({ musicId, title, artist, rank, playing, 
   useEffect(() => {
     const el = coverRef.current;
     if (!el) return;
-    const canvas = coverFor({ musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, playable: true });
-    el.style.backgroundImage = `url(${canvas.toDataURL()})`;
+    const albumMbid = getMapEngine()?.albumMbidOf(musicId) ?? null;
+    const point = { musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, albumMbid, playable: true };
+    let timer = 0;
+    let tries = 0;
+    const paint = () => {
+      el.style.backgroundImage = `url(${coverFor(point).toDataURL()})`;
+    };
+    // 진짜 커버는 받아 온 뒤에야 생긴다 — 도착했는지 잠깐 되물어 본다 (S15P21A405-518)
+    const poll = () => {
+      timer = 0;
+      if (!albumMbid || tries++ > 30) return;
+      paint();
+      timer = window.setTimeout(poll, 150);
+    };
+    paint();
+    timer = window.setTimeout(poll, 150);
+    return () => clearTimeout(timer);
   }, [musicId]);
 
   return (

@@ -250,6 +250,48 @@ public class RideRedisRepository {
 		return ridersByCaptain;
 	}
 
+	/**
+	 * 사람 목록을 넘기면, 그 사람들을 따라오는 인원이 각각 몇 명인지 돌려준다.
+	 *
+	 * 누가 인솔자인지 미리 알 수 없어서 화면에 보이는 사람을 전부 넘긴다.
+	 * ride:riders 가 비어 있으면 인솔자가 아닌 것이고, 그 사람은 결과에서 빠진다.
+	 *
+	 * 뷰포트에 20명이 있다고 할 때, 한 명씩 읽으면 Redis 를 스무 번 다녀와야 해서 한 번에 묶어 보낸다.
+	 * 누가 따라오는지는 필요 없고 몇 명인지만 필요해서 SCARD 로 센다.
+	 *
+	 * @param captainEmails 인원 수를 알고 싶은 사람들
+	 * @return 따라오는 사람이 있는 사람만 담긴다. 없는 사람은 아예 빠진다
+	 */
+	public Map<String, Integer> riderCountsOf(Collection<String> captainEmails) {
+		if (captainEmails == null || captainEmails.isEmpty()) {
+			return Map.of();
+		}
+		List<String> targets = List.copyOf(new LinkedHashSet<>(captainEmails));
+		byte[][] keys = targets.stream()
+				.map(email -> redis.getStringSerializer().serialize(RIDERS_PREFIX + email))
+				.toArray(byte[][]::new);
+		List<Object> results = redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : keys) {
+				connection.setCommands().sCard(key);
+			}
+			return null;
+		});
+
+		Map<String, Integer> countByCaptain = new LinkedHashMap<>();
+		for (int i = 0; i < targets.size(); i++) {
+			int count = toCount(i < results.size() ? results.get(i) : null);
+			if (count > 0) {
+				countByCaptain.put(targets.get(i), count);
+			}
+		}
+		return countByCaptain;
+	}
+
+	/** 묶어 읽은 결과 한 칸을 인원 수로 바꾼다. */
+	private static int toCount(Object value) {
+		return value instanceof Number n ? n.intValue() : 0;
+	}
+
 	/** 묶어 읽은 결과 한 칸을 사람 목록으로 바꾼다. */
 	private static Set<String> toStringSet(Object value) {
 		if (!(value instanceof Set<?> set)) {

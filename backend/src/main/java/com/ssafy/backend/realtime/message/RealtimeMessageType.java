@@ -32,6 +32,8 @@ public enum RealtimeMessageType {
 	RIDE_VIEWPORT_LEAVE,
 	/** 인솔자 화면의 자리별 사람 수. */
 	RIDE_VIEWPORT_CELL_COUNTS,
+	/** 인솔자 화면에 여러 사람이 한꺼번에 나타났다. */
+	RIDE_VIEWPORT_BULK_ENTER,
 	/** 인솔자가 곡 상세를 열거나 닫거나 탭을 바꿨다. */
 	RIDE_PANEL,
 	/** 따라오던 사람이 내렸다. 인솔자에게만 간다. */

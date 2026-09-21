@@ -40,6 +40,7 @@ import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
 import com.ssafy.backend.realtime.dto.ride.RideRiderLeftPayload;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DisbandResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
@@ -54,6 +55,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStat
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+import com.ssafy.backend.realtime.service.viewport.ViewportDeltaService;
 
 /** 따라가기 시작이 무엇을 어떤 순서로 하는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -75,6 +77,7 @@ class RideServiceTests {
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock MeetingService meetingService;
+	@Mock ViewportDeltaService viewportDeltaService;
 	@InjectMocks RideService service;
 
 	private final double[] location = location();
@@ -493,5 +496,66 @@ class RideServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(meetingService);
+	}
+
+	// ── 선단 해체 ───────────────────────────────────────────
+
+	private static final String MATE = "mate@x.com";
+	private static final String OUTSIDER = "outsider@x.com";
+
+	private void givenDisbandOk() {
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, MATE));
+		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
+				true, MUSIC, LAYER, 7, 5, List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER)));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+	}
+
+	@Test
+	@DisplayName("해체하면 따라가던 사람 전원에게 끝났다고 알린다")
+	void disbandTellsEveryRider() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(realtimeMessageService).sendToUser(eq(RIDER), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+		verify(realtimeMessageService).sendToUser(eq(MATE), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+	}
+
+	/** 한 명씩 보내면 받는 쪽이 그 수만큼 다시 그리고 중간 상태가 화면에 보인다. */
+	@Test
+	@DisplayName("남들 화면에는 한 덩어리로 한 번만 알린다")
+	void disbandSendsOneBulkMessage() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(viewportDeltaService).sendBulkEnter(List.of(RIDER, MATE), LAYER, MUSIC, "7:5");
+	}
+
+	/** 선단은 흩기 전에 찍어야 한다. 흩고 나면 ride:riders 가 비어 있다. */
+	@Test
+	@DisplayName("만남은 선단을 뺀 사람들과만 센다")
+	void disbandRecordsMeetingsWithoutFleet() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(meetingService).recordOnDismount(
+				List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER), Set.of(CAPTAIN, RIDER, MATE));
+	}
+
+	@Test
+	@DisplayName("따라오던 사람이 없으면 아무에게도 알리지 않는다")
+	void disbandWithoutRidersNotifiesNobody() {
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of());
+		when(rideRedisRepository.disband(CAPTAIN))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+
+		service.disband(CAPTAIN);
+
+		verifyNoInteractions(realtimeMessageService, viewportDeltaService, meetingService);
 	}
 }

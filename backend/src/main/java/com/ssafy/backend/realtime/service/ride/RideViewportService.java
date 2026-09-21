@@ -8,6 +8,7 @@ import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.realtime.dto.viewport.ViewportCellCounts;
+import com.ssafy.backend.realtime.dto.viewport.ViewportBulkEnter;
 import com.ssafy.backend.realtime.dto.viewport.ViewportDelta;
 import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
@@ -127,6 +128,21 @@ public class RideViewportService {
 			return;
 		}
 		send(riders, rideType, delta);
+	}
+
+	/**
+	 * 여러 사람이 한꺼번에 나타난 것을 따라가는 사람에게도 그대로 넘긴다.
+	 *
+	 * 인솔자가 보는 것과 같은 화면이어야 하므로, 인솔자에게 간 것을 그대로 보낸다.
+	 *
+	 * @param riders 인솔자를 따라가는 사람들
+	 * @param payload 인솔자에게 보낸 것과 같은 내용
+	 */
+	public void mirrorBulkEnter(Set<String> riders, ViewportBulkEnter payload) {
+		if (payload == null) {
+			return;
+		}
+		send(riders, RealtimeMessageType.RIDE_VIEWPORT_BULK_ENTER, payload);
 	}
 
 	/**

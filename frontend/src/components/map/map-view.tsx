@@ -93,6 +93,13 @@ export default function MapView({ occlusion }: MapViewProps) {
   const home = useMapStore((s) => s.home);
   const selectMusic = useMapStore((s) => s.selectMusic);
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
+  // 지도에서 별을 누르는 길만 이걸 쓴다 — 주변 사람을 보는 중이면 패널을 갈아타지 않는다 (S15P21A405-515)
+  const openSongFromMap = usePanelStore((s) => s.openSongFromMap);
+  /**
+   * 카드의 `상세` 버튼은 **명시적 지시**라 `openSongFromMap` 이 아니라 이쪽이다 (S15P21A405-515).
+   * 지도 클릭은 주변 사람을 보는 중이면 패널을 안 갈아타지만, 이건 "이 곡 상세를 보겠다" 를
+   * 손으로 누른 것이다 — 막으면 폰에서 곡 상세로 들어가는 길이 아예 없어진다.
+   */
   const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
@@ -538,12 +545,12 @@ export default function MapView({ occlusion }: MapViewProps) {
     (s: MapPoint) => {
       selectMusic(s.musicId);
       // 폰에서는 재생해도 패널을 열지 않는다 — 지금 듣는 곡은 재생바가 이미 보여 준다
-      if (!narrow) openSong(s.musicId);
+      if (!narrow) openSongFromMap(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
       playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
       useTutorialStore.getState().complete("select");
     },
-    [narrow, openSong, playWithConfirm, recordPlay, selectMusic],
+    [narrow, openSongFromMap, playWithConfirm, recordPlay, selectMusic],
   );
 
   /**
@@ -581,14 +588,14 @@ export default function MapView({ occlusion }: MapViewProps) {
         setHoverSong(s);
         setCardOn(true);
       } else if (!narrow) {
-        openSong(s.musicId);
+        openSongFromMap(s.musicId);
       }
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, cancelHide, narrow, openSong, playSong, selectMusic],
+    [engine, cancelHide, narrow, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(
@@ -640,7 +647,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       if (gid != null) {
         track("music_clicked", { music_id: gid, source: "ghost", action: "inspect" });
         selectMusic(gid);
-        openSong(gid);
+        openSongFromMap(gid);
         return;
       }
       const hit = engine.hitTest(mx, my);
@@ -685,7 +692,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       pressSong(song);
     },
-    [engine, cancelHold, openFeed, openSong, pressSong, selectMusic],
+    [engine, cancelHold, openFeed, openSongFromMap, pressSong, selectMusic],
   );
   /**
    * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.

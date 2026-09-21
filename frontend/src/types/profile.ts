@@ -50,6 +50,14 @@ export interface NearbyUser {
   followingNickname: string | null;
   /** 절차적 아바타 시드 (0~1 여섯 개) */
   avatarSeed: number[];
+  /**
+   * 서버가 준 원시 PC 좌표 (S15P21A405-482). **ERD 에 없다** — 실시간 뷰포트 전용이다.
+   *
+   * 그 사람의 곡이 이 겹 상주 집합에 있으면 엔진이 그 별 자리를 쓰고, 없을 때 이 값으로
+   * 찍는다. 목 시절에는 없으면 이메일 해시로 아무 별에나 붙였는데, 그건 **엉뚱한 자리**였다.
+   */
+  x?: number;
+  y?: number;
 }
 
 /** 랭킹 항목 (사람) */
@@ -77,4 +85,42 @@ export interface ReactionEvent {
   fromEmail: Email;
   reactionKey: string;
   sentAt: ISODateString;
+}
+
+/**
+ * 팔로우 등록·해제 응답 (S15P21A405-489, BACKEND-NOTES A-37·A-38).
+ * `followeeFollowerCnt` 는 **바뀐 뒤** 값이라 화면이 다시 조회하지 않고 바로 쓴다.
+ */
+export interface FollowResponse {
+  followerEmail: string;
+  followeeEmail: string;
+  isFollowing: boolean;
+  followeeFollowerCnt: number;
+}
+
+/**
+ * 팔로워·팔로잉 목록의 한 사람 (A-39).
+ *
+ * `isFollowing` 과 `meetingCnt` 는 목록 소유자가 아니라 **토큰 주체 기준**이다 — 남의 팔로잉
+ * 목록을 봐도 "내가" 그 사람을 구독 중인지가 온다.
+ */
+export interface FollowUserSummary {
+  email: string;
+  name: string | null;
+  nickname: string | null;
+  imageUrl: string | null;
+  isPublic: boolean;
+  isFollowing: boolean;
+  lastActiveAt: string | null;
+  /** ⚠️ 정본 명세에 없는 추가 필드 — 기획 확인 대기 (A-39) */
+  meetingCnt: number;
+}
+
+/** `totalElements`·`totalPages` 가 없다 — 공통 래퍼 결정과 같다 (S15P21A405-255) */
+export interface FollowListResponse {
+  type: "follower" | "following";
+  content: FollowUserSummary[];
+  page: number;
+  size: number;
+  hasNext: boolean;
 }

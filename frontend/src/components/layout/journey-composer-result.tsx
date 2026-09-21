@@ -1,7 +1,6 @@
 "use client";
 
 import { genreColor } from "@/constants/design-tokens";
-import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import type { MusicSearchResult } from "@/types";
 
 interface JourneyComposerResultProps {
@@ -12,10 +11,15 @@ interface JourneyComposerResultProps {
   onPick: () => void;
 }
 
-/** 여정 확장 검색 결과 한 줄. 장르색 막대 · 제목 · 아티스트만 둔다 */
+/**
+ * 여정 확장 검색 결과 한 줄. 색 막대 · 제목 · 아티스트만 둔다.
+ *
+ * **곡 상세 조회를 걷어냈다** (S15P21A405-490). 장르 하나 때문에 줄마다 `useMusicDetailQuery` 를
+ * 걸고 있었는데, 장르가 응답에서 사라져(A-47) 그 조회가 쓸 데가 없어졌다. 검색 결과가 열 줄이면
+ * 요청도 열 개였다 — 색은 예전 폴백대로 곡 id 로 흩뿌린다.
+ */
 export default function JourneyComposerResult({ result, isStart, isEnd, onPick }: JourneyComposerResultProps) {
-  const { data } = useMusicDetailQuery(result.id);
-  const color = genreColor(data?.genres[0]?.id ?? result.id % 10);
+  const color = genreColor(result.id % 10);
   const badge = isStart ? "출발" : isEnd ? "도착" : null;
 
   return (

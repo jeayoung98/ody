@@ -9,6 +9,7 @@ import { formatDuration } from "@/lib/format";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import type { PlaylistDetail } from "@/types";
+import { useMapStore } from "@/stores/use-map-store";
 
 /** 플리 제목 · 무드 태그 3개 · 곡 수 · 만든 사람 · 총 재생 시간 · 순차재생 · 좋아요 */
 export default function PlaylistHeader({ playlist }: { playlist: PlaylistDetail }) {
@@ -22,7 +23,7 @@ export default function PlaylistHeader({ playlist }: { playlist: PlaylistDetail 
     const ids = playlist.items.map((it) => it.musicId);
     startActivity("playlist", String(playlist.id), () => {
       playQueue({ kind: "playlist", playlistId: playlist.id }, ids);
-      if (ids[0] != null) recordPlay.mutate({ musicId: ids[0], source: "PLAYLIST", playedMs: 0 });
+      if (ids[0] != null) recordPlay.mutate({ musicId: ids[0], source: "PLAYLIST", layer: useMapStore.getState().layer });
     });
   };
 
@@ -43,7 +44,8 @@ export default function PlaylistHeader({ playlist }: { playlist: PlaylistDetail 
         <Button variant="primary" className="flex-1" onClick={handlePlayAll} disabled={playlist.items.length === 0}>
           <PlayIcon size={13} /> 순차 재생
         </Button>
-        <Button active={playlist.isLiked} onClick={() => like.mutate(playlist.id)} disabled={like.isPending}>
+        {/* 지금 상태의 **반대**를 목표로 보낸다 — 서버가 뒤집지 않는다 (S15P21A405-492) */}
+        <Button active={playlist.isLiked} onClick={() => like.mutate({ playlistId: playlist.id, liked: !playlist.isLiked })} disabled={like.isPending}>
           {playlist.isLiked ? "♥" : "♡"} <span className="num">{playlist.likeCnt ?? 0}</span>
         </Button>
       </div>

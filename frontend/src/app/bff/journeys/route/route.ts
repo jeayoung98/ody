@@ -16,7 +16,6 @@ function toJourneyRoute(res: BackendJourneyResponse, startId: number, endId: num
       duration: stop.duration,
       // 엔진이 주는 step 은 최종 목록 기준 0부터 1씩 증가하는 연속값이다
       order: stop.step,
-      genreName: stop.genres?.[0] ?? null,
       pc: toPcArray(stop.location),
     })),
   };

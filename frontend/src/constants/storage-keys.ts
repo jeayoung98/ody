@@ -39,4 +39,9 @@ export const STORAGE_KEYS = {
    * 문맥마다 키를 따로 두지 않는 이유는 힌트가 늘어날 때 키가 문맥 수만큼 곱해지기 때문이다.
    */
   playHintSeen: "ody:hint-play-seen",
+  /**
+   * 새로고침 너머로 들고 가는 쿼리 캐시 (S15P21A405-504). 내 정보·프로필·내 플리 등
+   * **지난 값을 먼저 보여 줘도 되는 것**만 들어간다. 넣고 빼는 쪽은 [`query-persist`](../lib/query-persist.ts).
+   */
+  queryCache: "ody:query-cache",
 } as const;

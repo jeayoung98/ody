@@ -58,7 +58,6 @@ export function useRideMutation() {
         imageUrl: target.imageUrl,
         musicId: r.musicId,
         snapshotSeq: r.snapshotSeq,
-        playHistoryId: r.playHistoryId,
       });
       useFollowStore.getState().setLeaderViewingMusicId(r.panel.open ? r.panel.musicId : null);
       // 인솔자가 다른 겹에 있으면 거기부터 간다 (S15P21A405-560)

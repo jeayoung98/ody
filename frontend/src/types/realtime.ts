@@ -103,12 +103,6 @@ export interface PlayResponse {
   cellY: number;
 }
 
-export interface PlayEndRequest {
-  playHistoryId: number;
-  /** 실제로 들은 시간(ms), 0 이상. 여러 번 보내도 되고 마지막 값이 남는다 */
-  playedMs: number;
-}
-
 // ── 뷰포트 (지도 위 사람) ──────────────────────────────────────────────────
 
 export interface LayerBound {
@@ -391,14 +385,11 @@ export interface RideTrackPayload {
   playable: boolean;
   serverTs: number;
   /**
-   * **이 곡에 대한 내 재생 기록 번호** (3차 계약 §3, S15P21A405-545).
+   * 이 곡에 대한 내 재생 기록 번호 (3차 계약 §3).
    *
-   * 곡이 바뀔 때마다 새 번호가 온다. 들고 있던 번호로 앞 곡의 종료를 보내고 이 번호로 갈아
-   * 끼우면 곡별 청취시간이 남는다 — 안 하면 탑승부터 하차까지가 한 건으로 묻힌다.
-   *
-   * **`null` 일 수 있다.** 서버가 기록 번호를 못 받았을 때다. 그래도 곡 알림은 보낸다 —
-   * 안 보내면 이미 서버에서 옮겨진 사람이 **옛 곡을 계속 듣는 채로** 남기 때문이다.
-   * 그때는 이 곡의 들은 시간만 못 남기고 재생은 평소대로 한다.
+   * **받긴 받되 쓰지 않는다** (S15P21A405-571). 곡별 청취시간을 남기려고 들고 있던 값인데
+   * `PATCH /api/music/play/end` 가 배포에서 없어졌다 — 몇 초 들었는지를 안 남기기로 했다.
+   * 서버가 여전히 보내는 필드라 타입에서 지우지는 않는다. 지우면 계약과 어긋난다.
    */
   playHistoryId: number | null;
 }

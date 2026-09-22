@@ -494,7 +494,68 @@
  */
 /* 경계는 tokens.css 의 --breakpoint-tablet 과 같은 선이다 — 미디어 쿼리는 var() 를 못 쓴다. 한쪽을 고치면 둘 다 고친다 */
 @media (width < 900px) {
-  [data-sheet][data-collapsed] [data-cover-window] {
+  /*
+   * **단마다 내려보내는 거리가 다르다** (S15P21A405-416). 값이 셋이라 컴포넌트의 클래스 한
+   * 줄로는 못 적는다 — 거기서는 `data-snap` 만 달고 거리는 여기서 고른다.
+   *
+   * `translate` 를 쓴다(구식 `transform: translate()` 가 아니라). 시트는 가로 이동도 같이
+   * 받는데(데스크톱 접기) 한 속성에 둘을 섞으면 서로 덮어쓴다. 별도 속성이라 겹치지 않고,
+   * `transition-[translate]` 도 그대로 먹는다.
+   */
+  [data-sheet][data-snap="1"] {
+    translate: 0 calc(100% - var(--spacing-sheet-s1));
+  }
+  [data-sheet][data-snap="2"] {
+    translate: 0 calc(100% - var(--spacing-sheet-s2));
+  }
+  [data-sheet][data-snap="3"] {
+    translate: 0 0;
+  }
+  /*
+   * 커버 창은 **3 단에서만** 편다. 1·2 단은 걸리는 높이가 112·238px 인데 커버가 188px 이라,
+   * 펴 두면 그 자리를 커버가 다 먹고 무슨 곡인지가 안 보인다 (S15P21A405-417 에서 겪었다).
+   */
+  [data-sheet]:not([data-snap="3"]) [data-cover-window] {
     height: 0 !important;
+  }
+
+  /*
+   * **1 단은 틈을 줄인다** (S15P21A405-547).
+   *
+   * 1 단에 걸려야 하는 것은 머리글(곡 상세·신고·닫기)과 제목·가수, 그리고 바로 누를 ＋·▶
+   * 까지다. 그런데 머리글 아래 여백(12) + 본문 위 여백(14) 이 26px 을 먹어서, 112px 안에서
+   * **버튼과 가수 줄이 6~8px 씩 잘린 채 걸렸다** (실측). 커버 창을 접어도 그 여백은 남는다.
+   *
+   * 3 단에서는 그 여백이 커버 사진과 글 사이의 숨 쉴 자리라 그대로 둔다 — 1 단에서만 줄인다.
+   */
+  [data-sheet][data-snap="1"] header {
+    padding-bottom: 2px;
+  }
+  [data-sheet][data-snap="1"] .scroll-quiet,
+  [data-sheet][data-snap="1"] [data-cover-window] + div {
+    padding-top: 0px;
+  }
+  /*
+   * 앨범 줄과 칩 줄은 그 아래다 — 남겨 두면 줄 머리만 몇 px 걸쳐서 **잘린 채** 보인다.
+   * 접으면 1 단은 제목·가수와 ＋·▶ 로 딱 끝나고, 둘 다 2 단에서 돌아온다.
+   */
+  [data-sheet][data-snap="1"] [data-sheet-album],
+  [data-sheet][data-snap="1"] [data-sheet-chips] {
+    display: none;
+  }
+
+  /*
+   * **3 단에서만 굴린다** (S15P21A405-547).
+   *
+   * 1·2 단은 **걸쳐 놓은 자리**지 읽는 자리가 아니다. 거기서도 굴러가면 화면에 112·238px 만
+   * 걸린 채 내용이 저 혼자 흘러서, 지금 보고 있는 것이 곡의 어디쯤인지 알 수가 없다.
+   * 게다가 시트를 위아래로 밀어 단을 옮기는 동작과 **같은 손짓이라 서로 먹는다** —
+   * 굴릴 데가 없으면 그 손짓은 전부 단 옮기기로 간다.
+   *
+   * 굴림을 막아도 `scrollTop` 은 0 이라 `use-panel-swipe` 의 "내용이 굴러 있으면 스크롤로
+   * 본다" 판정은 그대로 통과한다.
+   */
+  [data-sheet]:not([data-snap="3"]) .scroll-quiet {
+    overflow-y: hidden;
   }
 }

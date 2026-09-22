@@ -25,6 +25,15 @@ export interface BotEpisode {
    * 없기 때문이다(엔진은 지금 겹의 상주 집합만 들고 있다). 부르는 쪽이 겹이 맞는 순간에 채운다.
    */
   musicId: number | null;
+  /**
+   * **곡 상세를 열어 둔 곡** (S15P21A405-551). `null` 이면 아무것도 안 열어 둔 상태다.
+   *
+   * 틀고 있는 곡(`musicId`)과 **다를 수 있다.** 실제 사용자도 그렇다 — 한 곡을 틀어 놓고 옆
+   * 별을 눌러 보는 일이 흔하고, 데이터와 소켓이 애초에 그렇게 갈라져 있다
+   * (`NearbyUser.viewingMusicId` · `RIDE_PANEL`). 봇에 이 칸이 없으면 따라가는 사람은
+   * "상세만 바뀌는" 경우를 영영 못 본다.
+   */
+  viewingMusicId: number | null;
   startedAt: number;
   endsAt: number;
 }
@@ -81,6 +90,7 @@ export function nextEpisode(seed: number, prev: BotEpisode | null, now: number, 
     online,
     layer,
     musicId: null,
+    viewingMusicId: null,
     startedAt: now,
     endsAt: now + Math.round(between(r(5), online ? BOTS.listenMs : BOTS.offlineMs)),
   };
@@ -110,4 +120,28 @@ export function dropSong<T extends { episode: BotEpisode }>(bots: readonly T[], 
  */
 export function setSong<T extends { email: string; episode: BotEpisode }>(bots: readonly T[], email: string, musicId: number): T[] {
   return bots.map((b) => (b.email === email ? { ...b, episode: { ...b.episode, musicId } } : b));
+}
+
+/**
+ * 새 곡을 틀었을 때 **상세를 열어 둘 것인가** (S15P21A405-551).
+ *
+ * 사람은 틀자마자 상세를 닫아 두기도 하고 켜 둔 채 듣기도 한다. 늘 열어 두면 따라가는 사람의
+ * 우측 패널이 한 번도 안 닫혀 "닫힌다" 는 것 자체를 못 보고, 늘 닫아 두면 상세가 따라온다는
+ * 사실을 못 본다. 그래서 갈라 둔다.
+ *
+ * **여기서 만드는 것은 "본다" 뿐이다.** 다른 곡을 눌러 보는 경우는 그 곡을 고를 수 있는
+ * 쪽(지도 상주 집합을 아는 쪽)이 정한다.
+ */
+export function opensDetail(seed: number, index: number): boolean {
+  return rnd(seed, index, 11) < BOTS.opensDetailChance;
+}
+
+/**
+ * 이 봇이 지금 **다른 곡을 눌러 볼 것인가** — 틀고 있는 곡은 그대로 두고 상세만 옮기는 경우.
+ *
+ * 매 판단마다 굴리므로 확률을 낮게 둔다. `tick` 이 3초마다 도는데 여기서 크게 잡으면 우측
+ * 패널이 쉴 새 없이 갈아 끼워져 읽을 수가 없다.
+ */
+export function browsesAway(seed: number, index: number, salt: number): boolean {
+  return rnd(seed, index, 300 + (salt % 97)) < BOTS.browseChance;
 }

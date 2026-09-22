@@ -178,3 +178,41 @@ test("찾아서 넘긴 곡은 봇 상태에도 되쓴다 (S15P21A405-549)", () =
   assert.equal(next[0].episode.endsAt, ep.endsAt);
   assert.equal(next[0].episode.online, true);
 });
+
+
+// ── 보는 곡과 틀고 있는 곡 (S15P21A405-551) ───────────────────────────────
+
+test("새 에피소드는 상세를 안 열어 둔 채로 시작한다", () => {
+  // 곡이 붙을 때 열지 말지가 정해진다 — 여기서 미리 정하면 곡도 없는데 상세만 열린다
+  for (const bot of BOT_ROSTER) assert.equal(nextEpisode(bot.seed, null, T0, 0).viewingMusicId, null);
+});
+
+test("상세를 열어 두는 봇과 안 여는 봇이 섞인다", () => {
+  const { opensDetail } = require("../src/lib/bots/sim.ts");
+  let open = 0;
+  let shut = 0;
+  for (const bot of BOT_ROSTER) {
+    for (let i = 0; i < 40; i++) {
+      if (opensDetail(bot.seed, i)) open++;
+      else shut++;
+    }
+  }
+
+  /**
+   * 늘 열어 두면 따라가는 사람의 우측 패널이 한 번도 안 닫혀 "닫힌다" 는 것 자체를 못 보고,
+   * 늘 닫아 두면 상세가 따라온다는 사실을 못 본다. 둘 다 나와야 한다.
+   */
+  assert.ok(open > 0 && shut > 0, `한쪽으로 쏠렸다 (열림 ${open} / 닫힘 ${shut})`);
+  assert.ok(open > shut, "대체로는 열어 둔다 — 따라가기의 볼거리가 상세다");
+});
+
+test("옆 곡을 눌러 보는 일은 드물게 일어난다", () => {
+  const { browsesAway } = require("../src/lib/bots/sim.ts");
+  let yes = 0;
+  const N = 3000;
+  for (let i = 0; i < N; i++) if (browsesAway(7919, i % 50, i)) yes++;
+
+  assert.ok(yes > 0, "한 번도 안 일어나면 '상세만 바뀜' 을 영영 못 본다");
+  // tick 이 3초마다 도므로 자주 일어나면 우측 패널이 쉴 새 없이 갈아 끼워진다
+  assert.ok(yes < N * 0.1, `너무 자주 눌러 본다 (${yes}/${N})`);
+});

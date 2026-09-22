@@ -6,12 +6,13 @@ import { BOTS, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
 import { BOT_ROSTER } from "@/lib/bots/roster";
-import { dropSong, nextEpisode, rnd, type BotEpisode } from "@/lib/bots/sim";
+import { browsesAway, dropSong, nextEpisode, opensDetail, rnd, type BotEpisode } from "@/lib/bots/sim";
 import { subscribePlayback } from "@/lib/playback-events";
 import { endRide, playFrom } from "@/lib/realtime/ride";
 import { useBotStore, type BotLive } from "@/stores/use-bot-store";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
+import { usePanelStore } from "@/stores/use-panel-store";
 import { useToastStore } from "@/stores/use-toast-store";
 
 /**
@@ -54,7 +55,19 @@ export function useBots(enabled: boolean): void {
         // 겹이 나와 맞는 순간에 곡이 붙는다 — 다른 겹은 엔진이 상주 집합을 안 들고 있어 고를 수 없다
         if (episode.online && episode.musicId == null) {
           const picked = pickSong(episode.layer, map.layer, map.myMusicId);
-          if (picked != null) episode = { ...episode, musicId: picked };
+          // 새 곡을 틀면 상세는 그 곡으로 (열어 둘 때만). 사람도 틀면서 상세를 같이 여는 일이 많다
+          if (picked != null) {
+            episode = { ...episode, musicId: picked, viewingMusicId: opensDetail(seedInfo.seed, episode.index) ? picked : null };
+          }
+        }
+
+        /**
+         * **틀고 있는 곡은 그대로 두고 옆 곡을 눌러 보는** 경우 (S15P21A405-551).
+         * 실사용자의 `RIDE_PANEL` 에 해당한다 — 재생은 안 건드리고 우측 패널만 바뀐다.
+         */
+        if (episode.online && episode.musicId != null && browsesAway(seedInfo.seed, episode.index, now / 1000)) {
+          const looked = pickSong(episode.layer, map.layer, episode.musicId);
+          if (looked != null) episode = { ...episode, viewingMusicId: looked };
         }
 
         return { ...seedInfo, episode };
@@ -160,6 +173,24 @@ function syncRide(before: Map<string, BotEpisode>, next: BotLive[], showToast: (
   }
 
   const was = before.get(leader.email);
+
+  /**
+   * **보고 있는 곡이 바뀌었다** — 실사용자의 `RIDE_PANEL` 자리다 (S15P21A405-551).
+   * 재생은 건드리지 않는다. 상세만 바뀌는 경우가 실제로 있고, 그때 소리까지 갈아 끼우면
+   * 인솔자가 옆 곡을 눌러 볼 때마다 따라가는 사람의 음악이 끊긴다.
+   */
+  const viewing = leader.episode.viewingMusicId;
+  if (was?.viewingMusicId !== viewing) {
+    ride.setLeaderViewingMusicId(viewing);
+    const panel = usePanelStore.getState();
+    if (viewing == null) panel.close();
+    else {
+      getMapEngine()?.rideViewing(viewing);
+      useMapStore.getState().selectMusic(viewing);
+      panel.openSong(viewing);
+    }
+  }
+
   const musicId = leader.episode.musicId;
   if (musicId == null || was?.musicId === musicId) return null;
 

@@ -143,6 +143,7 @@ export default function MapView({ occlusion }: MapViewProps) {
   const leaderNickname = useFollowStore((s) => s.leaderNickname);
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
   const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
+  const leaderViewingMusicId = useFollowStore((s) => s.leaderViewingMusicId);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**
@@ -349,7 +350,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         isOnline: true,
         isPublic: true,
         musicId: leaderMusicId,
-        viewingMusicId: leaderMusicId,
+        // 인솔자가 옆 곡을 눌러 보는 동안은 서 있는 곡과 다르다 (§551)
+        viewingMusicId: leaderViewingMusicId ?? leaderMusicId,
         genreId: engine.genreOf(leaderMusicId) ?? NO_GENRE_ID,
         meetingCount: 0,
         // 인솔자 본인의 동승 인원은 우리에게 오지 않는다 (2차 명세 §14). 0 으로 둔다
@@ -359,7 +361,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       },
       true,
     );
-  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, layer]);
+  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, layer]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {

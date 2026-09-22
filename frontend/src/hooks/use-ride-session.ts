@@ -80,6 +80,8 @@ export function useRideSession(): void {
     const stopPanel = onType<RidePanelPayload>(["RIDE_PANEL"], (p) => {
       if (!useFollowStore.getState().leaderEmail) return;
       const panel = usePanelStore.getState();
+      // 스토어에도 남긴다 — 겹이 바뀌면 `map-view` 가 이 값으로 따라가기를 다시 건다 (§551)
+      useFollowStore.getState().setLeaderViewingMusicId(p.open ? p.musicId : null);
       if (!p.open || p.musicId == null) {
         panel.close();
         return;

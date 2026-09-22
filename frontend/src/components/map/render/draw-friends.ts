@@ -5,8 +5,13 @@ import { avatarFor, ME_AVATAR, trailOf } from "./sprites";
 
 const TEAL: readonly [number, number, number] = [79, 227, 206];
 
-/** 프로필을 바이저(유리창) 안에 넣은 우주 헬멧 */
-function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R: number, u: NearbyUser) {
+/**
+ * 프로필을 바이저(유리창) 안에 넣은 우주 헬멧.
+ *
+ * **패널에서도 쓴다** (S15P21A405-536) — `common/helmet-avatar`. 지도와 목록이 같은 사람을
+ * 다른 그림으로 보여 주면 목록에서 본 사람을 지도에서 못 찾는다. 베껴 두면 한쪽만 바뀐다.
+ */
+export function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R: number, u: NearbyUser) {
   const fade = g.globalAlpha;
   g.save();
   g.beginPath();
@@ -27,7 +32,8 @@ function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R: numbe
   g.stroke();
 }
 
-function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], hot: boolean) {
+/** 헬멧 테두리와 좌우 통신 포드. `drawVisor` 와 짝이다 — 패널도 이 둘을 같이 부른다 */
+export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], hot: boolean) {
   g.beginPath();
   g.arc(px, py, R * 1.3, 0, 6.284);
   g.fillStyle = "rgba(186,206,240,.13)";

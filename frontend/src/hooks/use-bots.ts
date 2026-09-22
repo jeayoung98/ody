@@ -9,7 +9,6 @@ import { endRide, playFrom } from "@/lib/realtime/ride";
 import { useBotStore, type BotLive } from "@/stores/use-bot-store";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
-import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
 
 /**
@@ -40,7 +39,7 @@ export function useBots(enabled: boolean): void {
         let episode = was == null || now >= was.endsAt ? nextEpisode(seedInfo.seed, was, now, map.layer) : was;
 
         /**
-         * **처음 등장할 때는 에피소드 중간부터 시작한다.** 안 그러면 여덟 명이 같은 순간에
+         * **처음 등장할 때는 에피소드 중간부터 시작한다.** 안 그러면 여섯 명이 같은 순간에
          * 곡을 갈아타 한꺼번에 움직이는 것이 눈에 띈다 — 사람이 아니라 태엽으로 보인다.
          */
         if (was == null) {
@@ -94,11 +93,14 @@ export function useBots(enabled: boolean): void {
  * **절반 넘게 내 곡 근처에서 고른다.** 주변 사람 패널은 "내가 듣는 곡과 비슷한 곡을 듣는 사람"
  * 이라, 아무 데서나 고르면 봇은 지도에만 보이고 그 패널에는 영영 안 뜬다 — 정작 따라가기를
  * 누르는 자리가 거기다. 사람이 인기 있는 구역에 몰리는 것은 실제로도 그러하다.
+ *
+ * **소리가 없는 곡은 아예 안 고른다.** 봇을 따라갔는데 아무것도 안 들리면 따라가기가 고장 난
+ * 것처럼 보인다 — 실사용자는 그런 곡에 설 수 있지만 봇은 시연이 목적이라 피해 간다.
  */
 function pickSong(layer: number, myLayer: number, myMusicId: number | null): number | null {
   const engine = getMapEngine();
   if (layer !== myLayer || !engine?.ready) return null;
-  const songs = engine.songs;
+  const songs = engine.songs.filter((s) => s.playable);
   if (songs.length === 0) return null;
 
   const mine = myMusicId != null ? engine.pointOf(myMusicId) : null;
@@ -140,7 +142,6 @@ function syncRide(before: Map<string, BotEpisode>, next: BotLive[], showToast: (
   ride.setLeaderMusicId(musicId);
   useMapStore.getState().setMyMusicId(musicId);
   getMapEngine()?.rideTo(musicId);
-  // 소리 없는 곡은 자리만 옮긴다 — 실사용자 따라가기의 `playable` 처리와 같다
-  if (getMapEngine()?.pointOf(musicId)?.playable) playFrom(musicId, 0, true);
-  else usePlayerStore.getState().pause();
+  // 봇은 소리 있는 곡만 고르므로(`pickSong`) 여기서 재생 가부를 따지지 않는다
+  playFrom(musicId, 0, true);
 }

@@ -48,11 +48,11 @@ const between = (r: number, range: readonly [number, number]) => range[0] + r * 
  * 다음 겹. **사람 있는 쪽으로 끌리고, 가끔 떠난다.**
  *
  * 규칙이 두 줄인 이유가 있다. "가끔 옮긴다" 한 줄로 두면 여덟 겹에 고르게 흩어져 내 화면에는
- * 평균 한 명이 남는다 — 만날 수가 없다는 원래 문제가 그대로 돌아온다. 반대로 늘 따라오게 하면
- * 겹을 옮길 때마다 여덟 명이 통째로 순간이동해 사람이 아니라 그림자로 보인다.
+ * 평균 한 명도 안 남는다 — 만날 수가 없다는 원래 문제가 그대로 돌아온다. 반대로 늘 따라오게
+ * 하면 겹을 옮길 때마다 전원이 통째로 순간이동해 사람이 아니라 그림자로 보인다.
  *
  * 그래서 **내 겹에 있으면 가끔 떠나고, 딴 데 있으면 자주 돌아온다.** 이 두 확률의 비가 곧
- * 정착 비율이다 — 지금 값이면 여덟 중 예닐곱이 내 겹에 있고 한둘은 딴 데 가 있다.
+ * 정착 비율이다 — 지금 값이면 여섯 중 네다섯이 내 겹에 있고 한둘은 딴 데 가 있다.
  */
 export function nextLayer(prev: BotEpisode | null, preferredLayer: number, r: (salt: number) => number): number {
   const home = clampLayer(preferredLayer);
@@ -68,7 +68,7 @@ const clampLayer = (n: number) => Math.min(LAYER_COUNT - 1, Math.max(0, Math.flo
  * 이 봇의 다음 에피소드.
  *
  * **자리를 비운 다음에는 반드시 돌아온다.** 오프라인이 연달아 붙으면 한 번 사라진 봇이 십수 분
- * 넘게 안 보이는데, 여덟 명뿐이라 그 사이 화면이 도로 비어 버린다.
+ * 넘게 안 보이는데, 여섯 명뿐이라 그 사이 화면이 도로 비어 버린다.
  */
 export function nextEpisode(seed: number, prev: BotEpisode | null, now: number, preferredLayer: number): BotEpisode {
   const index = (prev?.index ?? -1) + 1;

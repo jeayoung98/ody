@@ -1,8 +1,9 @@
 "use client";
 
-import Avatar from "@/components/common/avatar";
+import HelmetAvatar from "@/components/common/helmet-avatar";
 import { RADAR } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
+import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { NearbyPerson } from "@/types";
 
@@ -60,6 +61,8 @@ export function sizeOf(meetingCount: number, max: number): number {
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
   const openFeed = usePanelStore((s) => s.openFeed);
   const { data: me } = useMeQuery();
+  // 내 헬멧 색도 내가 듣는 곡의 장르를 따라간다 — 지도의 내 표식과 같은 규칙이다
+  const myMusicId = useMapStore((s) => s.myMusicId);
 
   // 빈 배열이면 Math.max 가 -Infinity 라 0 을 함께 넣는다
   const maxDistance = Math.max(...people.map((p) => p.distance).filter(Number.isFinite), 0);
@@ -93,7 +96,8 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
 
       {/*
         가운데는 나 (S15P21A405-506). 예전에는 `나` 라는 글자 한 자였는데, 둘레의 사람은 전부
-        프로필 사진이라 **나만 다른 종류로 읽혔다.** 같은 Avatar 를 쓴다.
+        프로필 사진이라 **나만 다른 종류로 읽혔다.** 둘레와 같은 것을 쓴다 — 지금은 우주복
+        헬멧이다 (S15P21A405-536). 둘레가 전부 헬멧인데 나만 맨 얼굴이면 같은 문제가 돌아온다.
 
         **글자 라벨은 붙이지 않는다.** 잠깐 `나` 를 아래에 달았다가 뺐다 — 가운데라는 자리와
         테두리가 이미 "이게 너" 라고 말하고 있어서, 판 한가운데의 글자는 설명이 아니라 얼룩이었다.
@@ -114,7 +118,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           className="animate-breathe grid place-items-center rounded-pill p-[3px] shadow-[0_0_18px_-2px_rgba(79,227,206,.8)] ring-2 ring-teal/80"
           style={{ ["--breathe-hi" as string]: 1.12, animationDuration: "1.9s" }}
         >
-          <Avatar src={me?.imageUrl} name={me?.nickname ?? me?.name} size={32} />
+          <HelmetAvatar email={me?.email ?? "me"} imageUrl={me?.imageUrl} musicId={myMusicId} size={44} />
         </span>
       </span>
 
@@ -130,7 +134,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
             type="button"
             onClick={() => openFeed(p.email)}
             title={`${p.nickname ?? "이름 없음"}${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
-            className={`absolute grid place-items-center rounded-pill border border-teal/70 bg-void-3 transition-colors hover:border-teal ${breathes ? "animate-breathe" : ""}`}
+            className={`absolute grid place-items-center rounded-pill transition-opacity hover:opacity-80 ${breathes ? "animate-breathe" : ""}`}
             style={{
               width: d,
               height: d,
@@ -142,9 +146,12 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
               animationDuration: breathes ? `${2.2 + (i % 5) * 0.35}s` : undefined,
             }}
           >
-            <Avatar src={p.imageUrl} name={p.nickname} size={d - 6} />
-            {/* 헬멧 바이저 — 지도 위 우주인과 같은 물건으로 읽히게 하는 표시다 */}
-            <span aria-hidden className="pointer-events-none absolute top-[22%] right-[12%] left-[12%] h-[26%] rounded-pill bg-teal/15 ring-1 ring-teal/30" />
+            {/*
+              **지도에 찍히는 그 우주복 헬멧 그대로다** (S15P21A405-536). 예전에는 동그란 사진에
+              가짜 바이저 띠를 얹어 "헬멧처럼" 보이게 했는데, 지도의 진짜 헬멧과 닮지 않아서
+              레이더에서 본 사람을 지도에서 찾을 때 도움이 안 됐다. 사진은 바이저 안에 들어간다.
+            */}
+            <HelmetAvatar email={p.email} imageUrl={p.imageUrl} musicId={p.musicId} size={d} online />
           </button>
         );
       })}

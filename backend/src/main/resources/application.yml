@@ -53,7 +53,8 @@ ody:
     zone: ${TASTE_ANALYSIS_ZONE:Asia/Seoul}
     gms:
       base-url: ${GMS_BASE_URL:https://gms.ssafy.io/gmsapi/api.openai.com/v1}
-      key: ${GMS_KEY:}
+      # 운영은 GMS_API_KEY 로 주입돼 있다. 예전 이름(GMS_KEY)도 받아 둔다 [S15P21A405-512]
+      key: ${GMS_API_KEY:${GMS_KEY:}}
       model: ${GMS_MODEL:gpt-4.1}
       connect-timeout-ms: ${GMS_CONNECT_TIMEOUT_MS:2000}
       read-timeout-ms: ${GMS_READ_TIMEOUT_MS:25000}

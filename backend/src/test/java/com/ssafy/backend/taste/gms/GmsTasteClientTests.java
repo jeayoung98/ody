@@ -159,4 +159,19 @@ class GmsTasteClientTests {
                 "pc1-high", "CONSISTENT_BIAS", 1, "HIGH", 30,
                 "PC1 중앙 백분위 80.0, IQR 20.0", "강렬한");
     }
+
+    @Test
+    void baseUrl_withoutV1_getsV1Appended() {
+        assertThat(GmsTasteClient.normalizeBaseUrl("https://gms.ssafy.io/gmsapi/api.openai.com"))
+                .isEqualTo("https://gms.ssafy.io/gmsapi/api.openai.com/v1/");
+    }
+
+    @Test
+    void baseUrl_withV1_isNotDoubled() {
+        assertThat(GmsTasteClient.normalizeBaseUrl("https://gms.ssafy.io/gmsapi/api.openai.com/v1"))
+                .isEqualTo("https://gms.ssafy.io/gmsapi/api.openai.com/v1/");
+        assertThat(GmsTasteClient.normalizeBaseUrl("https://gms.ssafy.io/gmsapi/api.openai.com/v1/"))
+                .isEqualTo("https://gms.ssafy.io/gmsapi/api.openai.com/v1/");
+    }
+
 }

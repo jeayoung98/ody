@@ -179,7 +179,7 @@ BUILD SUCCESSFUL in 2m 10s
 | 실제 DDL 적용 | ✅ **운영 적용 완료** (2026-09-22, §2). staging 은 미적용 | — |
 | Mapper SQL 실제 실행 | **미검증.** 테이블은 생겼지만 INSERT/UPDATE 를 한 번도 보내지 않았다(운영에 테스트 행을 넣지 않음). T049는 SQL·XML **문자열 계약 테스트**이고 저장소에 Testcontainers 의존성이 없다 | staging 에서 실제 요청으로 확인 |
 | 동시 claim·partial unique index·lease 회수 | **미검증.** JVM 테스트는 mock mapper 기준이고, §2는 식 평가까지다 | 실제 테이블에서 동시 요청 재현 |
-| 실제 GMS 호출 | **미검증.** `GmsTasteClientTests`는 MockRestServiceServer 기반이다. 실제 `GMS_KEY`로 호출한 적이 없다 | Infra의 secret 주입 + staging 1회 호출 |
+| 실제 GMS 호출 | **미검증.** `GmsTasteClientTests`는 MockRestServiceServer 기반이다. 실제 key 로 호출한 적이 없다. 운영 `GMS_BASE_URL` 에 `/v1` 이 빠져 있어 404 가 날 것으로 **추론**했을 뿐 확인하지 못했다 — 코드에서 보정했다 | 기준 산출물 도착 후 staging 1회 호출 |
 | `taste-reference-v1.json` | **없음.** 기본 설정에서 취향 분석 API는 `TASTE_REFERENCE_UNAVAILABLE`(503)을 반환한다. 테스트는 fixture로만 통과한다 | Data 파트의 승인된 기준 산출물 |
 | 축 라벨 (`low`/`high`) | **영구히 안 올 수 있다.** 데이터 스펙 14(축 라벨)는 ⬜ 미착수 + **컷 후보**이고, 선행인 스펙 13(장르 계층)도 ⬜ 미착수다. 장르 테이블은 이미 드롭됐다(S15P21A405-475). 라벨 범위도 PC1~PC4 네 축뿐이라 16축 전제와 어긋난다 | 데이터·기획 결정. `BACKEND-NOTES`에 **산출물 분리 제안**을 올려 뒀다 — 분위수만으로 분포를 살리는 안 |
 | SC-003 성능 (분포/기존 리포트 p95 3초, 신규 생성 p95 30초) | **미측정.** 동시 사용자 10명·100회 측정 없음 (T065) | Infra + 실제 환경 |
@@ -209,6 +209,9 @@ BUILD SUCCESSFUL in 2m 10s
 
 ### Infra 파트
 
-- 운영 서버 secret 환경변수로 **`GMS_KEY`** 를 주입하고(`GMS_API_KEY` 아님) `gms.ssafy.io:443` outbound HTTPS를 허용한다.
+- GMS key 는 **운영 `/etc/ody/backend.env` 에 `GMS_API_KEY` 로 이미 들어와 있다**(2026-09-22 확인). 코드가 `GMS_API_KEY` 를 먼저 읽고 없으면 예전 이름 `GMS_KEY` 로 넘어간다.
+- ⚠️ 운영 `GMS_BASE_URL` 이 `.../api.openai.com` 으로 **`/v1` 없이** 들어와 있다. 요청은 상대 경로 `responses` 로 보내므로 그대로면 `/responses` 로 나간다. **코드에서 `/v1` 을 붙여 흡수**했지만(`GmsTasteClient.normalizeBaseUrl`) 원본을 고치는 편이 맞다 — Infra 확인 필요.
+- ⚠️ 운영 `GMS_MODEL` 이 **`gpt-4o`** 다. 코드 기본값은 `gpt-4.1` 이라 **운영은 `gpt-4o` 로 돈다.** 어느 쪽이 팀 결정인지 확인이 필요하다.
+- `gms.ssafy.io:443` outbound HTTPS를 허용한다.
 - 실제 GMS staging 호출과 key·Authorization header 비노출을 검증한다.
 - Actuator/Prometheus 지표 노출과 SC-003 성능을 측정한다.

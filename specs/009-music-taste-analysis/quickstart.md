@@ -41,7 +41,7 @@
 
 ```text
 GMS_BASE_URL=https://gms.ssafy.io/gmsapi/api.openai.com/v1
-GMS_KEY=<secret>
+GMS_API_KEY=<secret>
 GMS_MODEL=gpt-4.1
 GMS_CONNECT_TIMEOUT_MS=<agreed value>
 GMS_READ_TIMEOUT_MS=<agreed value under 30s UX target>
@@ -49,7 +49,7 @@ TASTE_REFERENCE_RESOURCE=classpath:taste/taste-reference-v1.json
 TASTE_ANALYSIS_ZONE=Asia/Seoul
 ```
 
-`GMS_KEY`는 환경변수 또는 운영 secret store로만 주입한다. test profile은 실제 GMS를 호출하지 않고 로컬 HTTP server를 사용한다.
+`GMS_API_KEY`(예전 이름 `GMS_KEY` 도 인식)는 환경변수 또는 운영 secret store로만 주입한다. test profile은 실제 GMS를 호출하지 않고 로컬 HTTP server를 사용한다.
 
 ## 대표 수동 확인
 

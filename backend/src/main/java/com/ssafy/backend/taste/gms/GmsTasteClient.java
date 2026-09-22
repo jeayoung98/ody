@@ -45,9 +45,31 @@ public class GmsTasteClient {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofMillis(connectTimeoutMs));
         requestFactory.setReadTimeout(Duration.ofMillis(readTimeoutMs));
-        String normalizedBaseUrl = baseUrl.endsWith("/") ? baseUrl : baseUrl + "/";
+        String normalizedBaseUrl = normalizeBaseUrl(baseUrl);
         this.restClient = RestClient.builder().baseUrl(normalizedBaseUrl).requestFactory(requestFactory).build();
         this.outputSchema = readSchema(this.objectMapper);
+    }
+
+    /**
+     * base URL 이 {@code /v1} 으로 끝나도록 맞춘다. 요청은 상대 경로 {@code responses} 로 보내므로
+     * {@code /v1} 은 base URL 이 들고 있어야 한다.
+     *
+     * <p>2026-09-22 운영 {@code GMS_BASE_URL} 이 {@code .../api.openai.com} 으로 {@code /v1} 없이 들어와 있었다.
+     * GMS 는 OpenAI 주소를 그대로 잇는 프록시라 {@code /v1/responses} 가 맞는 경로인데, 값에 따라
+     * {@code /responses} 로 나갈 수 있어 여기서 흡수한다.
+     *
+     * <p>ponytail: 운영 env 를 고치는 대신 코드가 보정한다. GMS 가 경로 규칙을 바꾸면 이 보정을 걷어내고
+     * env 를 정본으로 되돌린다.
+     */
+    static String normalizeBaseUrl(String baseUrl) {
+        String trimmed = baseUrl.strip();
+        while (trimmed.endsWith("/")) {
+            trimmed = trimmed.substring(0, trimmed.length() - 1);
+        }
+        if (!trimmed.endsWith("/v1")) {
+            trimmed = trimmed + "/v1";
+        }
+        return trimmed + "/";
     }
 
     public GmsTasteOutput generate(String level, List<TasteFinding> findings) {

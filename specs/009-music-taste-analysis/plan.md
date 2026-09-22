@@ -159,7 +159,7 @@ data/                        # Data 파트 요청 범위
 
 ## Deployment and Rollback
 
-배포 순서는 승인된 기준 산출물, DB SQL, GMS 환경변수, Backend, smoke test, Frontend다. `GMS_KEY`, `GMS_MODEL`, base URL, connect/read timeout을 배포 시 주입하며 key는 저장소나 로그에 남기지 않는다.
+배포 순서는 승인된 기준 산출물, DB SQL, GMS 환경변수, Backend, smoke test, Frontend다. `GMS_API_KEY`(예전 이름 `GMS_KEY` 도 인식), `GMS_MODEL`, base URL, connect/read timeout을 배포 시 주입하며 key는 저장소나 로그에 남기지 않는다. base URL 은 `/v1` 유무와 무관하게 `GmsTasteClient` 가 보정한다.
 
 롤백은 이전 Backend와 기준 산출물 조합으로 되돌린다. 새 테이블은 기존 기능과 독립적이므로 즉시 삭제하지 않는다. 기준 bundle이 맞지 않으면 취향 API만 503으로 닫고 기존 음악 기능은 계속 제공한다.
 

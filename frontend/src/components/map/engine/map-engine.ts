@@ -2957,8 +2957,19 @@ export class MapEngine {
     if (!f) return;
     // 서버가 몰면 인솔자의 다음 동작을 지어내지 않는다 — 소켓이 알려줄 때만 움직인다
     if (!f.driven && !f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
-    // 뷰는 인솔자가 "보고 있는 곡"만 좇는다. 우주선이 날아오는 동안(mv)에는 고정 (SOCIAL-07)
-    if (!f.mv) this.trackViewing(f);
+    /**
+     * 뷰는 인솔자가 **보고 있는 곡**을 좇는다 (SOCIAL-07).
+     *
+     * **비행 중에도 멈추지 않는다** (S15P21A405-576). 명세는 "우주선이 오는 동안 뷰는 움직이지
+     * 않는다" 고 적는데, 그건 **인솔자가 곡을 클릭해 내 뷰가 먼저 가 있다는 전제** 위의 말이다.
+     * 그 순서에서는 목적지가 이미 화면 한복판이라 여기서 좇아도 **어차피 제자리다** — 같은
+     * 점으로 보간하는 것이라 한 픽셀도 안 움직인다.
+     *
+     * 문제는 서버가 모는 길이다. 인솔자가 상세를 안 열고 바로 재생하면 `RIDE_TRACK` 하나로
+     * 뷰 목표와 비행이 동시에 잡히고, 여기서 멈추면 **비행 2.4초를 목적지가 화면 밖 1000px 에
+     * 있는 채로 보낸다.** 명세가 전제한 "먼저 이동" 이 없는 경우라 뷰가 배와 함께 간다.
+     */
+    this.trackViewing(f);
     if (!f.mv) return;
     const m = f.mv;
     const at = atArc(m, now);
@@ -2967,8 +2978,13 @@ export class MapEngine {
     /**
      * 나는 선미 바로 뒤. 호 위에서 **조금 뒤처진 지점**을 그대로 쓴다 — `atArc` 는 시간으로
      * 받으므로, 진행도를 직접 깎으려면 여기서 한 번 더 편다.
+     *
+     * **도착하면 뒤처짐을 거둔다** (S15P21A405-576). 안 거두면 비행이 끝난 자리가 호의 94%
+     * 지점이고, 그대로 굳는다 — 카메라는 목적지 별을 한복판에 잡는데 **내 표식만 72px 옆에
+     * 남아** 곡을 옮길 때마다 같은 만큼 어긋났다. 이 엔진의 다른 비행(`travelToId`)과
+     * 하차(`stopFollow`)는 둘 다 끝점으로 붙이고 있었고, 여기만 빠져 있었다.
      */
-    const back = Math.max(0, easeInOut(t) - 0.06);
+    const back = t >= 1 ? 1 : Math.max(0, easeInOut(t) - 0.06);
     const qb = 1 - back;
     this.me.x = qb * qb * m.ax + 2 * qb * back * m.cx + back * back * m.bx;
     this.me.y = qb * qb * m.ay + 2 * qb * back * m.cy + back * back * m.by;

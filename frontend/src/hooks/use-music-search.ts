@@ -8,6 +8,7 @@ import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-se
 import { useSearchAnalytics } from "@/hooks/use-search-analytics";
 import { musicToMapPoint } from "@/lib/map-point";
 import { useMapStore } from "@/stores/use-map-store";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import type { MapPoint, MusicSearchResult, SearchCondition } from "@/types";
@@ -101,6 +102,8 @@ export function useMusicSearch({ visible, source }: { visible: boolean; source: 
    */
   const select = (r: MusicSearchResult) => {
     analytics.select(r.id, results.findIndex((item) => item.id === r.id) + 1);
+    // 결과 줄이 이미 알고 있던 제목·아티스트를 넘겨 둔다 (S15P21A405-585)
+    rememberMusicHints([r]);
     openSong(r.id);
     void revealOnMap(r.id);
   };

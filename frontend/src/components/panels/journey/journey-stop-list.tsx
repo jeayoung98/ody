@@ -6,6 +6,7 @@ import SectionTitle from "@/components/common/section-title";
 import TrackRow from "@/components/common/track-row";
 import { JOURNEY_MAX_SONGS } from "@/constants";
 import { useStartActivity } from "@/hooks/use-start-activity";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import type { JourneyRoute } from "@/types";
@@ -28,10 +29,13 @@ export default function JourneyStopList({ route }: { route: JourneyRoute | null 
    * 버튼이 트는 것은 단일 재생이 아니라 **그 자리부터의 여정 재생**이다 — 큐가 그대로라 이전·다음으로
    * 계속 이어갈 수 있다. 다른 활동(따라가기·플리)이 돌고 있으면 `startActivity` 가 먼저 확인을 받는다 (ACT-01).
    */
-  const playFrom = (index: number) =>
+  const playFrom = (index: number) => {
+    // 큐 전체를 넘긴다 — 다음 곡으로 넘어가도 재생바가 제목을 기다리지 않는다 (S15P21A405-585)
+    rememberMusicHints(route.stops);
     startActivity("journey", `${route.startMusicId}-${route.endMusicId}`, () =>
       playQueue({ kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId }, ids, index),
     );
+  };
 
   return (
     <div className="flex flex-col gap-2">

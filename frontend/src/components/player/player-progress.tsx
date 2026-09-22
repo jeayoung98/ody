@@ -3,6 +3,7 @@
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format";
 import { publishSeek } from "@/lib/realtime/ride";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { getPlayer } from "./player-registry";
 import WaveformBars from "./waveform-bars";
@@ -93,8 +94,17 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   const duration = clock.duration;
   const value = Math.min(scrub ?? clock.t, duration || Infinity);
   const ratio = duration > 0 ? value / duration : 0;
-  /** 옮길 수 있으려면 들을 수 있는 곡이어야 하고, 플레이어가 길이를 알려줬어야 한다 */
-  const seekable = canPlay && duration > 0;
+  /**
+   * 옮길 수 있으려면 들을 수 있는 곡이어야 하고, 플레이어가 길이를 알려줬어야 한다.
+   *
+   * **따라가는 중에도 못 옮긴다** (S15P21A405-567). 옮기면 서버의 선단 상태와 내 소리가
+   * 갈라지는데 **서버는 그 사실을 모른다** — 다음 `RIDE_PLAYBACK` 이 올 때까지 조용히 어긋난
+   * 채로 남는다. 정지 버튼을 막은 이유와 같다.
+   *
+   * 지금 위치와 길이는 그대로 보여 준다. 못 트는 곡에서 바만 잠그는 방식과 같다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
+  const seekable = canPlay && duration > 0 && !riding;
   /** 읽어 주는 길이는 곡 정보로 미리 채워도 된다 — 눈금과 달리 틀려도 옮겨지는 자리가 바뀌지 않는다 */
   const shownDuration = duration || (durationSec != null && durationSec > 0 ? durationSec : 0);
 

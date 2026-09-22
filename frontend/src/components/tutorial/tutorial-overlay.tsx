@@ -214,8 +214,20 @@ export default function TutorialOverlay() {
           <TutorialSpotlight spotlight={step.spotlight} />
         </div>
       )}
-      {/* 안내 카드는 언제나 맨 위다 — 이게 가리면 무엇을 하라는 건지 읽을 수가 없다 */}
-      <div className="pointer-events-none absolute inset-0 z-[60]">
+      {/*
+        안내 카드. 데스크톱에서는 맨 위다 — 지도 옆에 패널이 서므로 카드가 위에 떠 있어도
+        무엇 하나 가리지 않는다.
+
+        **폰에서는 이것도 내린다** (S15P21A405-532). 곡 상세가 화면을 통째로 덮는데 그 위에
+        카드가 얹히면 **두 화면이 겹쳐 보인다.** 요청은 "곡 상세 위로는 아무것도 올라오면
+        안 된다" 였고, 카드도 예외가 아니다.
+
+        **대가가 있다.** 곡 상세가 열려 있는 동안에는 안내를 읽을 수 없다. 그런데 폰에서는
+        그 다음 단계가 어차피 막혀 있다 — 가리키는 대상(`주변 탐색`, `map-actions`)이
+        곡 상세가 열리면 함께 숨기 때문이다. 카드를 어디에 두든 같다. 그 흐름을 제대로
+        고치는 것은 S15P21A405-418(튜토리얼 모바일 대응)이 맡는다.
+      */}
+      <div className="pointer-events-none absolute inset-0 z-[60] max-tablet:z-[19]">
         <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
           <TutorialStepCard
             index={stepIndex}

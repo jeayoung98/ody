@@ -13,6 +13,7 @@ import com.ssafy.backend.realtime.dto.presence.UserDisplay;
 import com.ssafy.backend.realtime.dto.viewport.ViewportBulkEnter;
 import com.ssafy.backend.realtime.dto.viewport.ViewportDelta;
 import com.ssafy.backend.realtime.dto.viewport.ViewportMode;
+import com.ssafy.backend.realtime.dto.viewport.ViewportRiderCount;
 import com.ssafy.backend.realtime.dto.viewport.ViewportUser;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
@@ -132,6 +133,56 @@ public class ViewportDeltaService {
 			rideViewportService.mirrorDelta(ridersByReceiver.get(receiver), type, payload);
 		}
 		recordDelta(startedAt, candidateCount, receiverCount, types.size());
+	}
+
+	/**
+	 * 한 사람의 따라오는 인원수가 바뀌었다고 그 자리를 보고 있는 사람들에게 알린다.
+	 *
+	 * 선단은 남들 화면에 인솔자 한 점으로만 보인다. 몇 명이 붙어 있는지가 선단임을 아는
+	 * 유일한 표시인데, 지금까지는 인솔자가 곡을 바꿔야만 갱신됐다. 스무 명이 타고 내려도
+	 * 구경하는 쪽에는 계속 같은 수로 보였다.
+	 *
+	 * 자리가 바뀐 것이 아니라 숫자만 바뀐 것이라 위치 변경 알림을 쓰지 않는다.
+	 *
+	 * @param email 인원수가 바뀐 사람
+	 * @param layer 그 사람이 있는 레이어
+	 * @param musicId 그 사람이 있는 곡
+	 * @param cell 그 곡이 있는 자리
+	 * @param riderCount 바뀐 뒤의 인원수
+	 */
+	public void sendRiderCount(String email, int layer, long musicId, String cell, int riderCount) {
+		Set<String> receivers = new LinkedHashSet<>(
+				viewportRepository.findUsersWatchingCells(layer, cell, layer, cell));
+		receivers.remove(email);
+		if (receivers.isEmpty()) {
+			return;
+		}
+
+		// 개별 사용자 방식인 화면만 남긴다. 묶음 방식은 사람을 하나씩 그리지 않는다.
+		Map<String, ViewportMeta> metas = new LinkedHashMap<>(
+				viewportRepository.findMetaByEmails(receivers));
+		metas.entrySet().removeIf(entry -> entry.getValue().mode() != ViewportMode.INDIVIDUAL);
+		if (metas.isEmpty()) {
+			return;
+		}
+
+		double[] location = musicLocationService.findLocation(musicId).orElse(null);
+		if (location == null) {
+			return;
+		}
+		metas.entrySet().removeIf(entry -> !isVisible(entry.getValue(), layer, location));
+		if (metas.isEmpty()) {
+			return;
+		}
+
+		Map<String, Set<String>> ridersByReceiver = rideViewportService.ridersOf(metas.keySet());
+		for (Map.Entry<String, ViewportMeta> entry : metas.entrySet()) {
+			ViewportRiderCount payload = new ViewportRiderCount(
+					entry.getValue().requestSeq(), email, riderCount);
+			realtimeMessageService.sendToUser(entry.getKey(), WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.VIEWPORT_RIDER_COUNT, payload);
+			rideViewportService.mirrorRiderCount(ridersByReceiver.get(entry.getKey()), payload);
+		}
 	}
 
 	/**

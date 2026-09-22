@@ -2,6 +2,7 @@ package com.ssafy.backend.realtime.service.presence;
 
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -30,10 +31,12 @@ import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.ride.RideService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.PresenceJoined;
 import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.LeaveResult;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 
 /** 곡 청취자 진입과 퇴장 알림을 검증한다. */
@@ -48,22 +51,28 @@ class PresenceServiceTests {
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock PlayHistoryMapper playHistoryMapper; // 첫 입장 때 마지막 재생곡
 	@Mock RideService rideService; // 나가는 사람의 따라가기 정리
+	@Mock RiderMoveService riderMoveService; // 인솔자가 층을 옮기면 따라오는 사람도 옮김
 	@InjectMocks PresenceService service;
 
 	@BeforeEach
 	void setUp() {
 		ReflectionTestUtils.setField(service, "ttlMs", 45_000L);
+		// 따로 정하지 않은 테스트에서는 정리가 실제로 일어난 것으로 본다.
+		lenient().when(presenceRepository.applyLeave(anyString(), anyLong()))
+				.thenReturn(new LeaveResult(true, List.of()));
+		lenient().when(presenceRepository.applyLeaveExpired(anyString(), anyLong()))
+				.thenReturn(new LeaveResult(true, List.of()));
 	}
 
 	@Test
-	@DisplayName("다른 탭 없이 다시 연결하면 이전 위치를 지우고 퇴장을 알린 뒤 새 접속을 만든다")
+	@DisplayName("다시 연결하면 이전 위치를 지우고 퇴장을 알린 뒤 새 접속을 만든다")
 	void reconnectRemovesPreviousPositionBeforeConnecting() {
 		when(presenceRepository.snapshot(EMAIL))
 				.thenReturn(new PresenceSnapshot(20L, 2, 3, 4, 7L));
 		when(presenceRepository.applyLeave(EMAIL, 7L))
-				.thenReturn(List.of("20", "2", "3", "4", "7"));
+				.thenReturn(new LeaveResult(true, List.of("20", "2", "3", "4", "7")));
 
-		service.connect(EMAIL, 8L, false);
+		service.connect(EMAIL, 8L);
 
 		verify(presenceRepository).applyLeave(EMAIL, 7L);
 		verify(presenceRepository).connect(EMAIL, 8L, 45_000L);
@@ -75,25 +84,39 @@ class PresenceServiceTests {
 	}
 
 	@Test
-	@DisplayName("첫 연결은 정리 없이 새 접속만 만든다")
+	@DisplayName("첫 연결은 지울 것이 없어 퇴장을 알리지 않는다")
 	void firstConnectCreatesPresenceWithoutLeave() {
 		when(presenceRepository.snapshot(EMAIL)).thenReturn(null);
 
-		service.connect(EMAIL, 1L, false);
+		service.connect(EMAIL, 1L);
 
 		verify(presenceRepository).connect(EMAIL, 1L, 45_000L);
+		verify(presenceRepository, never()).applyLeave(anyString(), anyLong());
 		verifyNoInteractions(realtimeEventService);
 	}
 
+	/** 탭을 여러 개 켜도 마지막 것만 산다. 앞의 탭 자리를 남겨 두면 지도에 유령이 생긴다. */
 	@Test
-	@DisplayName("다른 탭이 남아 있으면 이전 위치를 읽지도 지우지도 않는다")
-	void connectKeepsPositionWhenOtherTabRemains() {
-		service.connect(EMAIL, 9L, true);
+	@DisplayName("앞의 탭이 남아 있어도 이전 위치를 지운다")
+	void connectAlwaysClearsPreviousPosition() {
+		when(presenceRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(20L, 2, 3, 4, 7L));
 
+		service.connect(EMAIL, 9L);
+
+		verify(presenceRepository).applyLeave(EMAIL, 7L);
 		verify(presenceRepository).connect(EMAIL, 9L, 45_000L);
-		verify(presenceRepository, never()).snapshot(EMAIL);
-		verify(presenceRepository, never()).applyLeave(anyString(), anyLong());
-		verifyNoInteractions(realtimeEventService);
+	}
+
+	/** 재연결하면 단독으로 돌아온다. 따라가기 정보가 남으면 조작이 막힌 채 갇힌다. */
+	@Test
+	@DisplayName("다시 연결하면 따라가기도 끊는다")
+	void connectCleansUpRide() {
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(null);
+
+		service.connect(EMAIL, 3L);
+
+		verify(rideService).onUserGone(EMAIL);
 	}
 
 	@Test
@@ -230,7 +253,7 @@ class PresenceServiceTests {
 	@DisplayName("직접 종료로 사용자를 지우면 퇴장을 알린다")
 	void leavePublishesRemovedPosition() {
 		when(presenceRepository.applyLeave(EMAIL, 7L))
-				.thenReturn(List.of("20", "2", "3", "4", "7"));
+				.thenReturn(new LeaveResult(true, List.of("20", "2", "3", "4", "7")));
 
 		service.leave(EMAIL, 7L);
 
@@ -245,7 +268,7 @@ class PresenceServiceTests {
 	@DisplayName("만료된 사용자를 지우면 퇴장을 알린다")
 	void expiredLeavePublishesRemovedPosition() {
 		when(presenceRepository.applyLeaveExpired(EMAIL, 1000L))
-				.thenReturn(List.of("20", "2", "3", "4", "7"));
+				.thenReturn(new LeaveResult(true, List.of("20", "2", "3", "4", "7")));
 
 		service.leaveExpired(EMAIL, 1000L);
 
@@ -259,7 +282,8 @@ class PresenceServiceTests {
 	@Test
 	@DisplayName("지운 사용자가 없으면 퇴장을 알리지 않는다")
 	void noRemovedPresenceDoesNotPublishLeave() {
-		when(presenceRepository.applyLeave(EMAIL, 7L)).thenReturn(List.of());
+		when(presenceRepository.applyLeave(EMAIL, 7L))
+				.thenReturn(new LeaveResult(true, List.of()));
 
 		service.leave(EMAIL, 7L);
 
@@ -281,5 +305,46 @@ class PresenceServiceTests {
 		service.leaveExpired(EMAIL, 1000L);
 
 		verify(rideService).onUserGone(EMAIL);
+	}
+
+	/** 앞의 탭이 닫힌 것뿐이다. 그 사람은 아직 접속해 있으니 선단을 해제하면 안 된다. */
+	@Test
+	@DisplayName("옛 접속의 종료 요청이면 아무것도 건드리지 않는다")
+	void staleLeaveTouchesNothing() {
+		when(presenceRepository.applyLeave(EMAIL, 7L))
+				.thenReturn(new LeaveResult(false, List.of()));
+
+		service.leave(EMAIL, 7L);
+
+		verifyNoInteractions(realtimeEventService, rideService);
+	}
+
+	/** 만료 목록을 읽은 뒤 heartbeat 가 도착했다. 아직 살아 있다. */
+	@Test
+	@DisplayName("만료 전이면 아무것도 건드리지 않는다")
+	void notExpiredYetTouchesNothing() {
+		when(presenceRepository.applyLeaveExpired(EMAIL, 1000L))
+				.thenReturn(new LeaveResult(false, List.of()));
+
+		service.leaveExpired(EMAIL, 1000L);
+
+		verifyNoInteractions(realtimeEventService, rideService);
+	}
+
+	/** 안 옮기면 인솔자는 새 층, 따라오는 사람은 옛 층에 남아 선단이 갈라진다. */
+	@Test
+	@DisplayName("레이어를 옮기면 따라오는 사람도 같은 곳으로 옮긴다")
+	void joinMovesRidersToNewLayer() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRepository.snapshot(EMAIL)).thenReturn(new PresenceSnapshot(20L, 1, 1, 1, 7L));
+		when(presenceRepository.join(EMAIL, 7L, 20L, 1, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(true);
+
+		service.join(EMAIL, 7L, new JoinRequest(2L, 2, 99L));
+
+		verify(riderMoveService).moveToLayer(EMAIL, 20L, 2, placement);
 	}
 }

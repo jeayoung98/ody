@@ -15,10 +15,9 @@ import org.springframework.stereotype.Component;
  * 흐름: CONNECT → register, 발송 → nextMessageSeq, LEAVE → findEpoch, DISCONNECT → unregister.
  * 같은 email로 다시 연결하면 새 연결이 최신 상태를 맡고, 이전 연결 요청은 epoch 비교로 무시한다.
  *
- * 멀티탭: 여러 탭이 한 위치를 공유하고 조종권은 마지막에 연결한 탭이 갖는다.
- * 그래서 CONNECT 때 {@link #hasOtherSession}으로 다른 탭이 남았는지 보고,
- * 남아 있으면 이전 위치를 지우지 않는다(지우면 지도에서 잠깐 사라지고 듣던 곡을 잃는다).
- * 정리 여부는 세션 수가 아니라 epoch 비교로 판정하므로, 옛 탭이 끊겨도 최신 위치는 지워지지 않는다.
+ * 탭이 여러 개여도 사는 것은 마지막에 연결한 하나뿐이다. 앞의 탭은 접속 번호가 달라져
+ * 그 뒤로 보내는 요청이 전부 거부되고, 그 탭이 닫혀도 최신 접속의 상태는 건드리지 않는다.
+ * 여러 탭이 한 위치를 나눠 쓰는 일은 없다.
  */
 @Component
 public class WebSocketSessionService {
@@ -47,7 +46,7 @@ public class WebSocketSessionService {
 		return Optional.ofNullable(removed);
 	}
 
-	/** 같은 사용자의 다른 세션이 남아 있는지 확인한다. */
+	/** 같은 사용자의 다른 세션이 남아 있는지 확인한다. 메시지 순번을 언제 버릴지 정할 때 쓴다. */
 	public boolean hasOtherSession(String email, String excludedSessionId) {
 		return sessions.entrySet().stream()
 				.anyMatch(e -> e.getValue().email().equals(email) && !e.getKey().equals(excludedSessionId));

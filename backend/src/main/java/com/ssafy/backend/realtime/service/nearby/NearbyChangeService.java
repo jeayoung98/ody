@@ -1,6 +1,9 @@
 package com.ssafy.backend.realtime.service.nearby;
 
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 
@@ -13,7 +16,9 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
+import com.ssafy.backend.realtime.dto.nearby.NearbyRiderCount;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
 import com.ssafy.backend.realtime.repository.redis.NearbyRedisRepository;
 import com.ssafy.backend.realtime.dto.presence.UserDisplay;
@@ -85,6 +90,70 @@ public class NearbyChangeService {
 		}
 
 		refreshOwnPanel(event);
+	}
+
+	/**
+	 * 한 사람의 따라오는 인원수가 바뀌었다고 그 곡을 보고 있는 사람들에게 알린다.
+	 *
+	 * 곡도 자리도 그대로라 목록에서 옮길 것은 없다. 숫자만 바꾸면 된다.
+	 *
+	 * @param email 인원수가 바뀐 사람
+	 * @param musicId 그 사람이 있는 곡
+	 * @param riderCount 바뀐 뒤의 인원수
+	 */
+	public void sendRiderCount(String email, long musicId, int riderCount) {
+		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(musicId));
+		receivers.remove(email);
+		if (receivers.isEmpty()) {
+			return;
+		}
+		NearbyRiderCount payload = new NearbyRiderCount(email, riderCount, musicId);
+		for (String receiver : receivers) {
+			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.NEARBY_RIDER_COUNT, payload);
+		}
+	}
+
+	/**
+	 * 한 곡에 여러 사람이 한꺼번에 나타났다고 알린다.
+	 *
+	 * 선단이 흩어질 때 쓴다. 해체는 위치 변경 알림을 거치지 않고 지도 인덱스를 직접 바꾸기 때문에,
+	 * 주변사람 목록은 그대로 두면 아무것도 모른다. 패널을 다시 열면 보이는데 열어 둔 채로는
+	 * 안 보여서, 목록과 실제가 어긋난 채 남는다.
+	 *
+	 * 한 명씩 알리면 사람 수만큼 알림이 나가므로 받는 사람마다 한 덩어리로 보낸다.
+	 * 만난 횟수는 받는 사람마다 달라서 덩어리도 받는 사람마다 따로 만든다.
+	 *
+	 * @param emails 나타난 사람들
+	 * @param musicId 나타난 곡
+	 */
+	public void sendEnteredTogether(List<String> emails, long musicId) {
+		if (emails == null || emails.isEmpty()) {
+			return;
+		}
+		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(musicId));
+		receivers.removeAll(emails);
+		if (receivers.isEmpty()) {
+			return;
+		}
+
+		// 닉네임과 따라오는 인원수는 받는 사람과 무관하다. 한 번만 읽는다.
+		Map<String, UserDisplay> displayByEmail = new LinkedHashMap<>();
+		emails.forEach(email -> displayByEmail.computeIfAbsent(email, userDisplayService::find));
+		Map<String, Integer> riderCounts = riderCountService.countAll(emails);
+
+		for (String receiver : receivers) {
+			List<NearbyChange> people = emails.stream()
+					.map(email -> {
+						UserDisplay who = displayByEmail.get(email);
+						return new NearbyChange(email, who.nickname(), who.imageUrl(),
+								meetingService.countWith(receiver, email),
+								riderCounts.getOrDefault(email, 0), musicId);
+					})
+					.toList();
+			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.NEARBY_BULK_ENTER, new NearbyBulkEnter(musicId, people));
+		}
 	}
 
 	/**

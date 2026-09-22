@@ -21,6 +21,7 @@ import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.data.redis.serializer.RedisSerializer;
 
 import com.ssafy.backend.realtime.geometry.ViewportCellCalculator.Cell;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.LeaveResult;
 
 /** 사용자 이탈 스크립트에 주변사람 정리 값을 전달하는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -118,7 +119,8 @@ class PresenceRedisRepositoryTests {
 				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(removed);
 
-		assertThat(repository.applyLeave("user@x.com", 7L)).isEqualTo(removed);
+		assertThat(repository.applyLeave("user@x.com", 7L))
+				.isEqualTo(new LeaveResult(true, removed));
 		verify(redis).execute(leaveScript,
 				List.of("presence:user:user@x.com", "presence:expiry",
 						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
@@ -139,7 +141,8 @@ class PresenceRedisRepositoryTests {
 				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(removed);
 
-		assertThat(repository.applyLeaveExpired("user@x.com", 1000L)).isEqualTo(removed);
+		assertThat(repository.applyLeaveExpired("user@x.com", 1000L))
+				.isEqualTo(new LeaveResult(true, removed));
 		verify(redis).execute(leaveScript,
 				List.of("presence:user:user@x.com", "presence:expiry",
 						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),

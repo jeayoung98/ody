@@ -8,7 +8,7 @@
 --
 -- KEYS[1] ride:captain:{사라진 사람}
 --
--- ARGV[1] 사라진 사람 email   [2] 따라오는 사람들 키
+-- ARGV[1] 사라진 사람 email   [2] 따라오는 사람들 키   [3] 그 사람의 접속 정보 키
 --
 -- 반환: {'OK', 인솔자, 남은 인원} 또는 {'NOT_RIDING'}
 
@@ -23,5 +23,7 @@ end
 local ridersKey = P_riders .. captain
 redis.call('SREM', ridersKey, rider)
 redis.call('DEL', KEYS[1])
+-- riding 표시도 지운다. 지도에는 안 넣지만, 표시가 남으면 그 뒤 재생·입장이 거부된다.
+redis.call('HDEL', ARGV[3], 'riding')
 
 return {'OK', captain, tostring(redis.call('SCARD', ridersKey))}

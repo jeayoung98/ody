@@ -11,10 +11,16 @@ public enum RealtimeMessageType {
 	VIEWPORT_MOVE,
 	VIEWPORT_LEAVE,
 	VIEWPORT_CELL_COUNTS,
+	/** 화면에 보이는 누군가의 따라오는 인원수가 바뀌었다. 자리는 그대로다. */
+	VIEWPORT_RIDER_COUNT,
 	NEARBY_SNAPSHOT,
 	NEARBY_ENTER,
 	NEARBY_MOVE,
 	NEARBY_LEAVE,
+	/** 선단이 흩어져 여러 사람이 한 곡에 한꺼번에 나타났다. */
+	NEARBY_BULK_ENTER,
+	/** 주변사람 목록에 있는 누군가의 따라오는 인원수가 바뀌었다. */
+	NEARBY_RIDER_COUNT,
 	/** 인솔자가 곡을 바꿨다. 따라가는 사람은 그 곡으로 옮겨 처음부터 튼다. */
 	RIDE_TRACK,
 	/** 인솔자가 재생·정지·구간 이동을 했다. */
@@ -34,6 +40,8 @@ public enum RealtimeMessageType {
 	RIDE_VIEWPORT_CELL_COUNTS,
 	/** 인솔자 화면에 여러 사람이 한꺼번에 나타났다. */
 	RIDE_VIEWPORT_BULK_ENTER,
+	/** 인솔자 화면에 보이는 누군가의 따라오는 인원수가 바뀌었다. */
+	RIDE_VIEWPORT_RIDER_COUNT,
 	/** 인솔자가 곡 상세를 열거나 닫거나 탭을 바꿨다. */
 	RIDE_PANEL,
 	/** 따라오던 사람이 내렸다. 인솔자에게만 간다. */

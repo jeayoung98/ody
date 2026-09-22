@@ -40,6 +40,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnap
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.service.nearby.NearbyChangeService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
 
@@ -75,6 +76,7 @@ public class RideService {
 	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
 	private final MeetingService meetingService; // 하차 시점 만남 기록
 	private final ViewportDeltaService viewportDeltaService; // 해체를 한 덩어리로 알림
+	private final NearbyChangeService nearbyChangeService; // 해체를 주변사람 목록에도 알림
 
 	/**
 	 * 따라가기를 시작한다.
@@ -104,49 +106,124 @@ public class RideService {
 			throw new CustomException(toErrorCode(mounted.status()));
 		}
 
-		// 4. 인솔자가 서 있는 곡의 자리를 계산한다.
-		Spot spot = spotOf(mounted.musicId(), mounted.layer());
-		Placement placement = spot.placement();
+		// 여기서부터는 등록이 이미 끝나 있다. 아래에서 터지면 등록만 남아
+		// "따라가는 중인데 지도에도 있는" 상태가 되므로 되돌린다.
+		boolean placed = false;
+		try {
+			// 4. 인솔자가 서 있는 곡의 자리를 계산한다.
+			Spot spot = spotOf(mounted.musicId(), mounted.layer());
+			Placement placement = spot.placement();
 
-		// 5. 그 자리로 옮기되 지도에는 넣지 않는다. 서 있던 자리에서는 빠진다.
-		boolean moved = presenceRedisRepository.applyRidePlacement(
-				riderEmail, before.epoch(),
-				before.musicId(), before.layer(), before.cellX(), before.cellY(),
-				mounted.musicId(), mounted.layer(),
-				placement.xNorm(), placement.yNorm(), placement.cellX(), placement.cellY());
-		if (!moved) {
-			log.warn("따라가기 STALE reason={}", WebSocketErrorCode.PRESENCE_STALE);
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			// 5. 그 자리로 옮기되 지도에는 넣지 않는다. 서 있던 자리에서는 빠진다.
+			placed = presenceRedisRepository.applyRidePlacement(
+					riderEmail, before.epoch(),
+					before.musicId(), before.layer(), before.cellX(), before.cellY(),
+					mounted.musicId(), mounted.layer(),
+					placement.xNorm(), placement.yNorm(), placement.cellX(), placement.cellY());
+			if (!placed) {
+				log.warn("따라가기 STALE reason={}", WebSocketErrorCode.PRESENCE_STALE);
+				throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			}
+
+			// 6. 혼자 보던 화면과 주변사람 구독을 끊는다.
+			//    이제부터는 인솔자가 보는 것을 옮겨 받는다. 안 끊으면 두 동네 소식이 섞여 들어온다.
+			rideSubscriptionService.closeOwnViews(riderEmail, before.epoch());
+
+			// 7. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
+			//    따라가는 사람이 그 곡의 발견자가 될 수 없고, 따라붙은 것은 만남이 아니다.
+			long playHistoryId = musicPlayService.recordPlay(
+					riderEmail, mounted.musicId(), PlaySource.FOLLOW.name());
+
+			// 8. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
+			//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
+			notifyLeftMap(riderEmail, before);
+
+			// 9. 인솔자가 보고 있는 화면을 한 번 보낸다.
+			//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
+			//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
+			rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
+
+				// 10. 인솔자를 보고 있는 사람들에게 인원수가 늘었다고 알린다.
+			notifyRiderCount(captainEmail, rideRedisRepository.riderCount(captainEmail));
+
+			// 11. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+			RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
+
+			log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",
+					mounted.musicId(), mounted.layer(), playback.snapshotSeq());
+			return new RideResponse(captainEmail, playHistoryId,
+					mounted.musicId(), mounted.layer(),
+					spot.rawX(), spot.rawY(), placement.cellX(), placement.cellY(),
+					playback.state(), playback.positionMs(), playback.snapshotSeq(),
+					openPanel(captainEmail));
+		} catch (RuntimeException e) {
+			undoMount(riderEmail, captainEmail, placed);
+			throw e;
 		}
+	}
 
-		// 6. 혼자 보던 화면과 주변사람 구독을 끊는다.
-		//    이제부터는 인솔자가 보는 것을 옮겨 받는다. 안 끊으면 두 동네 소식이 섞여 들어온다.
-		rideSubscriptionService.closeOwnViews(riderEmail, before.epoch());
+	/**
+	 * 따라오는 인원수가 바뀌었다고 인솔자를 보고 있는 사람들에게 알린다.
+	 *
+	 * 남들 화면에서 선단은 인솔자 한 점이고, 몇 명이 붙어 있는지가 선단임을 아는 유일한
+	 * 표시다. 그런데 그 숫자는 인솔자가 곡을 바꿀 때만 갱신됐다. 스무 명이 타고 내려도
+	 * 구경하는 쪽에는 계속 같은 수로 보인다.
+	 *
+	 * 인솔자가 지도에 없으면 보여 줄 자리가 없으니 아무것도 하지 않는다.
+	 *
+	 * @param captainEmail 인원수가 바뀐 인솔자
+	 * @param riderCount 바뀐 뒤의 인원수
+	 */
+	private void notifyRiderCount(String captainEmail, int riderCount) {
+		PresenceSnapshot captain = presenceRedisRepository.snapshot(captainEmail);
+		if (captain == null || captain.musicId() == null || captain.layer() == null) {
+			return;
+		}
+		String cell = captain.cellX() + ":" + captain.cellY();
+		notifyQuietly("인원수 화면 알림", () -> viewportDeltaService.sendRiderCount(
+				captainEmail, captain.layer(), captain.musicId(), cell, riderCount));
+		notifyQuietly("인원수 주변사람 알림", () -> nearbyChangeService.sendRiderCount(
+				captainEmail, captain.musicId(), riderCount));
+	}
 
-		// 7. 재생 기록을 남긴다. 발견자와 만남은 남기지 않는다 —
-		//    따라가는 사람이 그 곡의 발견자가 될 수 없고, 따라붙은 것은 만남이 아니다.
-		long playHistoryId = musicPlayService.recordPlay(
-				riderEmail, mounted.musicId(), PlaySource.FOLLOW.name());
+	/**
+	 * 알림 한 건이 실패해도 나머지를 막지 않게 감싼다.
+	 *
+	 * 여기까지 왔으면 Redis 는 이미 바뀐 뒤다. 알림 하나가 터졌다고 나머지를 건너뛰면
+	 * 상태는 바뀌었는데 아무도 모르는 쪽이 늘어난다.
+	 *
+	 * @param what 실패했을 때 로그에 남길 이름
+	 */
+	private void notifyQuietly(String what, Runnable action) {
+		try {
+			action.run();
+		} catch (RuntimeException e) {
+			log.warn("[Ride] {} 실패 — 상태는 이미 바뀌었다", what, e);
+		}
+	}
 
-		// 8. 서 있던 자리가 있었으면 그 자리에서 사라졌음을 알린다.
-		//    지도에 다시 넣지 않으므로 이 사람에 대한 알림은 이 한 건으로 끝난다.
-		notifyLeftMap(riderEmail, before);
-
-		// 9. 인솔자가 보고 있는 화면을 한 번 보낸다.
-		//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
-		//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
-		rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
-
-		// 10. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
-		RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
-
-		log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",
-				mounted.musicId(), mounted.layer(), playback.snapshotSeq());
-		return new RideResponse(captainEmail, playHistoryId,
-				mounted.musicId(), mounted.layer(),
-				spot.rawX(), spot.rawY(), placement.cellX(), placement.cellY(),
-				playback.state(), playback.positionMs(), playback.snapshotSeq(),
-				openPanel(captainEmail));
+	/**
+	 * 등록만 해 놓고 뒤에서 실패한 따라가기를 되돌린다.
+	 *
+	 * 자리를 이미 옮겼는지에 따라 되돌리는 방법이 다르다. 옮기기 전이면 아직 지도에 있으므로
+	 * 등록만 지우면 되고, 옮긴 뒤면 지도에서 빠져 있으므로 다시 넣어야 한다.
+	 * 반대로 하면 지도에 두 번 들어가 그 자리 인원수가 하나 늘어난 채 남는다.
+	 *
+	 * 화면과 주변사람 구독은 되살리지 않는다. 실패를 받은 쪽이 다시 요청한다.
+	 *
+	 * @param placed 자리를 이미 옮겼으면 true
+	 */
+	private void undoMount(String riderEmail, String captainEmail, boolean placed) {
+		try {
+			if (placed) {
+				rideRedisRepository.dismount(riderEmail, captainEmail);
+			} else {
+				rideRedisRepository.riderLeave(riderEmail);
+			}
+		} catch (RuntimeException e) {
+			// 되돌리기까지 실패하면 등록이 남는다. 접속이 끊길 때 정리된다.
+			log.warn("따라가기 되돌리기 실패 — 등록이 남을 수 있다", e);
+		}
 	}
 
 	/**
@@ -189,33 +266,45 @@ public class RideService {
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}
 
-		// 3. 선단이 누구인지 먼저 찍어 둔다. 내리고 나면 ride:riders 에서 빠져 읽어도 늦다.
-		//    만남을 셀 때 이 사람들을 뺀다 — 따라다닌 것은 만남이 아니기 때문이다.
-		Set<String> fleetMembers = new LinkedHashSet<>(rideRedisRepository.riders(ride.captainEmail()));
-		fleetMembers.add(ride.captainEmail());
-
-		// 4. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
+		// 3. 등록을 지우고 지도에 다시 넣는다. 한 번에 끝난다.
 		DismountResult result = rideRedisRepository.dismount(riderEmail, ride.captainEmail());
 		if (result.status() == DismountStatus.NOT_RIDING) {
 			throw new CustomException(RealtimeErrorCode.RIDE_NOT_RIDING);
 		}
 		if (result.status() != DismountStatus.OK) {
 			log.info("하차 거부 reason={}", result.status());
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			// 접속이 없는 것과 상태가 어긋난 것은 받는 쪽이 할 일이 다르다.
+			// 앞은 다시 연결해야 하고, 뒤는 화면을 새로 고치면 된다.
+			throw new CustomException(result.status() == DismountStatus.NOT_CONNECTED
+					? RealtimeErrorCode.PRESENCE_ERROR
+					: RealtimeErrorCode.RIDE_STALE);
 		}
+
+		// 4. 만남에서 뺄 명단을 만든다. 인솔자 + 남은 동료 + 나 자신이다.
+		//    남은 동료는 스크립트가 등록을 지운 뒤에 읽어 준 것이라, 자바에서 따로 읽을 때처럼
+		//    그 사이에 새로 탄 사람이 빠지는 일이 없다.
+		Set<String> fleetMembers = new LinkedHashSet<>(result.remainingMates());
+		fleetMembers.add(ride.captainEmail());
+		fleetMembers.add(riderEmail);
 
 		// 5. 지도에 나타났음을 알린다. 이전 자리는 없다 — 따라가는 동안 지도에 없었기 때문이다.
 		Spot spot = spotOf(result.musicId(), result.layer());
-		notifyEnteredMap(riderEmail, presence.epoch(), result, spot);
+		notifyQuietly("하차 지도 등장 알림",
+				() -> notifyEnteredMap(riderEmail, presence.epoch(), result, spot));
 
 		// 6. 인솔자에게 누가 내렸는지 알린다. 남은 인원도 같이 보낸다.
-		realtimeMessageService.sendToUser(ride.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
+		notifyQuietly("하차 인솔자 알림", () -> realtimeMessageService.sendToUser(
+				ride.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.RIDE_RIDER_LEFT,
-				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+				new RideRiderLeftPayload(riderEmail, result.remainingRiders())));
 
-		// 7. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
+		// 7. 인솔자를 보고 있는 사람들에게 인원수가 줄었다고 알린다.
+		notifyRiderCount(ride.captainEmail(), result.remainingRiders());
+
+		// 8. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
 		//    명단은 지도에 다시 들어가기 전에 찍힌 것이라 자기 자신이 섞여 있지 않다.
-		meetingService.recordOnDismount(List.of(riderEmail), result.residents(), fleetMembers);
+		notifyQuietly("하차 만남 기록", () ->
+				meetingService.recordOnDismount(List.of(riderEmail), result.residents(), fleetMembers));
 
 		log.info("[Ride] 하차 musicId={} layer={} 남은인원={}",
 				result.musicId(), result.layer(), result.remainingRiders());
@@ -254,6 +343,7 @@ public class RideService {
 		realtimeMessageService.sendToUser(result.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.RIDE_RIDER_LEFT,
 				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+		notifyRiderCount(result.captainEmail(), result.remainingRiders());
 		log.info("[Ride] 따라가던 사람 이탈 남은인원={}", result.remainingRiders());
 	}
 
@@ -268,36 +358,52 @@ public class RideService {
 	 * @param captainEmail 사라진 인솔자
 	 */
 	public void disband(String captainEmail) {
-		// 1. 이 인솔자를 따라가던 사람들 + 인솔자 본인의 명단을 먼저 만든다.
-		//    그 곡에 원래 있던 사람들과는 다른 명단이다. 이쪽은 만남에서 뺄 사람들이다.
-		//    흩고 나면 ride:riders 가 비어서 누가 따라갔는지 알 수 없으므로 지금 읽는다.
-		Set<String> fleetMembers = new LinkedHashSet<>(rideRedisRepository.riders(captainEmail));
-		fleetMembers.add(captainEmail);
-
-		// 2. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
+		// 1. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
+		//    누가 따라가고 있었는지도 스크립트가 같이 돌려준다. 자바에서 따로 읽으면
+		//    그 사이에 새로 탄 사람이 명단에서 빠져 같은 선단인데 만남으로 세어진다.
 		DisbandResult result = rideRedisRepository.disband(captainEmail);
 		if (!result.hadRiders()) {
 			return; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
 		}
+		if (result.musicId() <= 0) {
+			// 아무도 서 있는 자리를 갖고 있지 않았다. 등록은 지웠지만 어디에 남았다고
+			// 알릴 자리가 없다. 여기까지 온 것 자체가 이상하므로 남겨 둔다.
+			log.warn("[Ride] 선단 해체 — 돌아갈 자리를 찾지 못했다 인원={}", result.riders().size());
+			return;
+		}
+
+		// 2. 만남에서 뺄 명단은 따라가던 전원에 인솔자를 더한 것이다.
+		//    그 곡에 원래 있던 사람들과는 다른 명단이다.
+		Set<String> fleetMembers = new LinkedHashSet<>(result.riders());
+		fleetMembers.add(captainEmail);
 
 		// 3. 따라가던 사람에게 끝났다고 알린다. 남게 된 자리는 스스로 내렸을 때와 같은 모양이다.
+		//    지도에 못 돌아간 사람에게도 보낸다. 끝난 것은 그 사람도 마찬가지다.
 		Spot spot = spotOf(result.musicId(), result.layer());
 		RideEndedPayload ended = new RideEndedPayload(
 				captainEmail, RideEndReason.CAPTAIN_LEFT,
 				result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
-		for (String rider : result.leftRiders()) {
-			realtimeMessageService.sendToUser(rider, WebSocketDestination.QUEUE_PRESENCE,
-					RealtimeMessageType.RIDE_ENDED, ended);
+		for (String rider : result.riders()) {
+			notifyQuietly("해체 알림", () -> realtimeMessageService.sendToUser(
+					rider, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.RIDE_ENDED, ended));
 		}
 
 		// 4. 남들 화면에는 한 덩어리로 알린다. 한 명씩 보내면 그 수만큼 다시 그린다.
-		viewportDeltaService.sendBulkEnter(result.leftRiders(), result.layer(), result.musicId(),
-				result.cellX() + ":" + result.cellY());
+		notifyQuietly("해체 화면 알림", () ->
+				viewportDeltaService.sendBulkEnter(result.leftRiders(), result.layer(),
+						result.musicId(), result.cellX() + ":" + result.cellY()));
 
-		// 5. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
+		// 5. 주변사람 목록에도 알린다. 해체는 위치 변경 알림을 거치지 않아
+		//    이걸 안 보내면 패널을 열어 둔 사람의 목록에 이 사람들이 끝내 안 나타난다.
+		notifyQuietly("해체 주변사람 알림", () ->
+				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.musicId()));
+
+		// 6. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
 		//    한 명이 스스로 내릴 때와 같은 함수다. 두 벌로 두면 한쪽만 고쳐진다.
-		meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers);
+		notifyQuietly("해체 만남 기록", () ->
+				meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers));
 
 		log.info("[Ride] 선단 해체 musicId={} layer={} 내린인원={}",
 				result.musicId(), result.layer(), result.leftRiders().size());
@@ -376,8 +482,8 @@ public class RideService {
 			case CHAIN -> RealtimeErrorCode.RIDE_CHAIN_FORBIDDEN;
 			case CAPTAIN_INACTIVE -> RealtimeErrorCode.RIDE_CAPTAIN_INACTIVE;
 			case FULL -> RealtimeErrorCode.RIDE_FULL;
-			// STALE 은 재연결 전 탭이 보낸 요청이다. 다시 연결하면 풀린다.
-			default -> RealtimeErrorCode.PRESENCE_ERROR;
+			// STALE 은 읽은 뒤에 접속 번호가 바뀐 것이다. 화면을 새로 고치면 풀린다.
+			default -> RealtimeErrorCode.RIDE_STALE;
 		};
 	}
 }

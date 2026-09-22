@@ -69,7 +69,7 @@ class GmsTasteSecurityTests {
     private GmsTasteClient client(int readTimeoutMs) {
         return new GmsTasteClient(
                 "http://localhost:" + server.getAddress().getPort() + "/v1",
-                SECRET, "gpt-4.1", 1000, readTimeoutMs);
+                SECRET, "gpt-4o", 1000, readTimeoutMs);
     }
 
     private static TasteFinding finding() {

@@ -54,7 +54,7 @@ class GmsTasteClientTests {
         server.start();
         GmsTasteClient client = new GmsTasteClient(
                 "http://localhost:" + server.getAddress().getPort() + "/v1",
-                "secret", "gpt-4.1", 1000, 1000);
+                "secret", "gpt-4o", 1000, 1000);
 
         GmsTasteOutput result = client.generate("STANDARD", List.of(finding()), 40);
 
@@ -152,7 +152,7 @@ class GmsTasteClientTests {
     private GmsTasteClient client(int readTimeoutMs) {
         return new GmsTasteClient(
                 "http://localhost:" + server.getAddress().getPort() + "/v1",
-                "secret", "gpt-4.1", 1000, readTimeoutMs);
+                "secret", "gpt-4o", 1000, readTimeoutMs);
     }
 
     private static TasteFinding finding() {

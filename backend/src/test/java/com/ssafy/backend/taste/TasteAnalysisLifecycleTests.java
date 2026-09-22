@@ -58,7 +58,7 @@ class TasteAnalysisLifecycleTests {
         AnalysisSnapshot changed = snapshot(11);
         when(queryService.snapshot(EMAIL)).thenReturn(requested, changed);
         when(mapper.claim(eq(EMAIL), any(), any(), any())).thenReturn(1);
-        when(gmsClient.model()).thenReturn("gpt-4.1");
+        when(gmsClient.model()).thenReturn("gpt-4o");
         when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt())).thenReturn(output());
         stubSuccessfulTransition();
 

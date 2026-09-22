@@ -60,7 +60,7 @@ class TasteAnalysisGenerationServiceTests {
                 hasher, gmsClient, new GmsTasteOutputValidator(), CLOCK,
                 "Asia/Seoul", meterRegistry);
         when(queryService.snapshot("me@example.com")).thenReturn(snapshot(current()));
-        when(gmsClient.model()).thenReturn("gpt-4.1");
+        when(gmsClient.model()).thenReturn("gpt-4o");
     }
 
     @Test

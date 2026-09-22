@@ -3,6 +3,7 @@
 import { useEffect } from "react";
 import { BOTS, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { isKnownArtist } from "@/lib/bots/known-artists";
 import { BOT_ROSTER } from "@/lib/bots/roster";
 import { nextEpisode, rnd, type BotEpisode } from "@/lib/bots/sim";
 import { endRide, playFrom } from "@/lib/realtime/ride";
@@ -96,11 +97,18 @@ export function useBots(enabled: boolean): void {
  *
  * **소리가 없는 곡은 아예 안 고른다.** 봇을 따라갔는데 아무것도 안 들리면 따라가기가 고장 난
  * 것처럼 보인다 — 실사용자는 그런 곡에 설 수 있지만 봇은 시연이 목적이라 피해 간다.
+ *
+ * **아는 가수의 곡을 먼저 본다** (S15P21A405-543). 662만 곡에서 무작위로 돌리면 사람이 모르는
+ * 곡만 나오는데, 시연에서 "누가 이 곡을 듣고 있다" 는 아는 곡일 때만 사람으로 읽힌다.
+ * 그 겹에 아는 곡이 거의 없으면 **평소대로 고른다** — 한두 곡에 여섯이 겹쳐 서느니 모르는
+ * 곡이라도 흩어지는 편이 낫다.
  */
 function pickSong(layer: number, myLayer: number, myMusicId: number | null): number | null {
   const engine = getMapEngine();
   if (layer !== myLayer || !engine?.ready) return null;
-  const songs = engine.songs.filter((s) => s.playable);
+  const playable = engine.songs.filter((s) => s.playable);
+  const known = playable.filter((s) => isKnownArtist(s.artist));
+  const songs = known.length >= BOTS.knownMin ? known : playable;
   if (songs.length === 0) return null;
 
   const mine = myMusicId != null ? engine.pointOf(myMusicId) : null;

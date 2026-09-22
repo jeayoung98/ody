@@ -89,12 +89,18 @@ BUILD SUCCESSFUL in 2m 10s
 
 | 확인한 것 | 결과 |
 |---|---|
-| `music_like`·`taste_analysis` 존재 여부 | **둘 다 없음** (2026-09-22 09:09 KST, 전체 스키마 기준). `music`, `playlist_like`는 존재 |
-| `ROW(...) IS NOT NULL` 필수값 검사 | SELECT로 식을 평가해 의도대로 동작함을 확인 |
+| 두 테이블 존재 여부 | **2026-09-22 14:13 KST 운영 적용 완료.** 09:09 조회에서는 없었고, Backend 가 `--single-transaction`으로 직접 적용했다 |
+| `music_like` 구조 | PK `(email, music_id)`, FK 2개(`music.id`·`user.email`, 둘 다 ON DELETE CASCADE), `(email, created_at DESC, music_id DESC)` 인덱스 — 카탈로그 확인 |
+| `taste_analysis` 구조 | PK `(email, analysis_date)`, CHECK 3개, FK 1개 — 카탈로그 확인 |
+| PENDING partial unique index | `ux_taste_analysis_active_user` UNIQUE, predicate `status = 'PENDING'` — 카탈로그에서 predicate까지 확인 |
+| 최신 SUCCESS 조회 인덱스 | `ix_taste_analysis_latest_success`, predicate `status = 'SUCCESS'` — 확인 |
+| `ROW(...) IS NOT NULL` 필수값 검사 | SELECT로 식을 평가. 전부 채우면 통과, 한 칸이라도 SQL NULL이면 거부 |
 | PENDING의 NULL lease 거부 | SELECT로 식을 평가해 거부됨을 확인 |
+| ⚠️ jsonb `'null'` 리터럴 | **통과한다.** JSON `null`은 SQL NULL이 아니므로 ROW 검사를 빠져나간다. 컬럼별 `IS NOT NULL`을 쓰던 이전 버전과 같은 성질이라 회귀는 아니지만, 애플리케이션이 JSON `null`을 저장하지 않는다는 전제가 있다 |
 
-**이것은 DDL 적용·Mapper SQL 실행·동시 claim 검증을 대체하지 않는다.** 식이 맞다는 것과
-그 식이 걸린 테이블에서 동시 요청이 의도대로 직렬화된다는 것은 다른 이야기다.
+**DDL은 적용됐지만 Mapper SQL 실행·동시 claim 검증은 여전히 남아 있다.** 제약과 인덱스가 카탈로그에
+존재한다는 것과, 그 테이블에서 실제 동시 요청이 의도대로 직렬화된다는 것은 다른 이야기다.
+운영에 테스트 행을 넣지 않았으므로 INSERT/UPDATE 경로는 한 번도 실행되지 않았다.
 
 ## 3. finding 임계값 보정 근거 (2026-09-22 실측)
 
@@ -170,8 +176,8 @@ BUILD SUCCESSFUL in 2m 10s
 | 항목 | 현재 상태 | 필요한 것 |
 |---|---|---|
 | 실제 사용자 좋아요 분포 | **없음.** §3 의 임계값 보정은 합성 취향 기준이다. `music_like` 에 실데이터가 쌓이면 재확인한다 | 배포 후 |
-| 실제 DDL 적용 | **미실행.** staging·운영 어디에도 두 테이블이 없다 | Data/DB 파트 |
-| Mapper SQL 실제 실행 | **미검증.** T049는 `taste_analysis_001_table.sql`과 `TasteAnalysisMapper.xml`의 **문자열 계약 테스트**다. 저장소에 Testcontainers 의존성이 없어 실제 DB에 SQL을 보내는 테스트가 없다 | Data/DB 파트가 staging PostgreSQL에서 재현 |
+| 실제 DDL 적용 | ✅ **운영 적용 완료** (2026-09-22, §2). staging 은 미적용 | — |
+| Mapper SQL 실제 실행 | **미검증.** 테이블은 생겼지만 INSERT/UPDATE 를 한 번도 보내지 않았다(운영에 테스트 행을 넣지 않음). T049는 SQL·XML **문자열 계약 테스트**이고 저장소에 Testcontainers 의존성이 없다 | staging 에서 실제 요청으로 확인 |
 | 동시 claim·partial unique index·lease 회수 | **미검증.** JVM 테스트는 mock mapper 기준이고, §2는 식 평가까지다 | 실제 테이블에서 동시 요청 재현 |
 | 실제 GMS 호출 | **미검증.** `GmsTasteClientTests`는 MockRestServiceServer 기반이다. 실제 `GMS_KEY`로 호출한 적이 없다 | Infra의 secret 주입 + staging 1회 호출 |
 | `taste-reference-v1.json` | **없음.** 기본 설정에서 취향 분석 API는 `TASTE_REFERENCE_UNAVAILABLE`(503)을 반환한다. 테스트는 fixture로만 통과한다 | Data 파트의 승인된 기준 산출물 |

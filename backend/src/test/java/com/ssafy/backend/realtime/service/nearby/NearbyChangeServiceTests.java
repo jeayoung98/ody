@@ -37,7 +37,6 @@ import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
 import com.ssafy.backend.realtime.dto.nearby.NearbyRiderCount;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
-import com.ssafy.backend.realtime.service.nearby.NearbyMusicService;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.repository.redis.NearbyRedisRepository;
@@ -55,7 +54,6 @@ class NearbyChangeServiceTests {
 	@Mock UserDisplayService userDisplayService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock RealtimeEventService realtimeEventService;
-	@Mock NearbyMusicService nearbyMusicService;
 	@Mock MeetingService meetingService;
 	@Mock RiderCountService riderCountService;
 	@Mock PresenceRedisRepository presenceRepository;
@@ -87,7 +85,6 @@ class NearbyChangeServiceTests {
 				RealtimeMessageType.NEARBY_ENTER,
 				new NearbyChange(ACTOR, "노래하는 사람", "image", 2, 4, 20L, 3.0, 4.0));
 		verifyNoMoreInteractions(realtimeMessageService);
-		verifyNoInteractions(nearbyMusicService);
 	}
 
 	/**

@@ -9,7 +9,7 @@
 | `drill.mp4` | 파고들기 | 계속 확대 → 다음 레이어로 파고들기 → 새 축 2개로 재정렬 |
 | `nearby.mp4` | 주변 탐색 | 곡 선택 → 이웃 10곡이 선으로 이어짐 |
 | `journey.mp4` | 여정 | 출발·도착 지정 → 경로 생성 → 별을 하나씩 건너가기 |
-| `follow.mp4` | 따라가기 | 탑승 → 화면이 따라 움직임 → 하차. **지금은 카드가 잠겨 있다** (`ody:guide-follow`) |
+| `follow.mp4` | 따라가기 | 탑승 → 화면이 따라 움직임 → 하차 |
 
 ## GIF 를 쓰지 않는다
 
@@ -43,8 +43,5 @@ Win + Alt + R      녹화 시작 / 정지 (Xbox Game Bar)
 localStorage.setItem("ody:survey-mode", "false"); location.reload();
 ```
 
-따라가기 카드를 보려면 하나 더 켠다.
-
-```js
-localStorage.setItem("ody:guide-follow", "true"); location.reload();
-```
+따라가기 카드도 그냥 보인다 (S15P21A405-564). 예전에는 `ody:guide-follow` 를 따로 켜야
+했는데, 탑승이 실제로 도는 기능이 되면서 그 잠금을 걷었다.

@@ -12,7 +12,11 @@ import org.springframework.stereotype.Component;
  * <p>임계값은 <b>표본 크기에 따라 달라진다</b>. 통계는 코퍼스 101분위로 변환한 백분위(0~100) 위에서
  * 재므로, 좋아요가 코퍼스 무작위 표본이면 백분위는 정의상 균등분포가 된다. 그 균등분포에서 우연히
  * 나오는 값이 곧 "취향이 없을 때의 잡음"이고, 아래 표는 그 잡음 분포의 분위수다
- * (BIAS·DIVERSE 는 상위 5%, CONSISTENT 는 하위 5%). 즉 축당 오탐률이 표본 크기와 무관하게 5% 로 고정된다.
+ * (BIAS·DIVERSE 는 상위 1.5%, CONSISTENT 는 하위 1.5%). 즉 축당 오탐률이 표본 크기와 무관하게 1.5% 로 고정된다.
+ *
+ * <p><b>1.5% 인 이유는 다중검정 보정이다.</b> 후보 축이 16개이므로 축당 1.5% 면 취향이 없는 사용자에게
+ * 우연히 걸리는 축이 평균 0.24개다. 등급으로 5축만 쓰던 때의 5% x 5축 = 0.25 와 같은 수준을 유지한다.
+ * 후보 축 수를 바꾸면 이 값도 같이 바꿔야 한다.
  *
  * <p>고정값(치우침 15 / 넓음 50 / 좁음 30)을 쓰면 표본이 작을수록 잡음이 커져서, 2026-09-22 실측 기준
  * 10곡 사용자는 취향이 전혀 없어도 16축 중 7개가 걸렸고 넓음은 좋아요가 늘수록 오히려 더 걸렸다.
@@ -26,12 +30,12 @@ public class TasteFindingSelector {
 
     /** 잡음 분포 분위수 표. 사이 값은 log(n) 선형보간한다. */
     private static final double[] SAMPLE_SIZES = {10, 15, 20, 30, 50, 100, 300};
-    /** |중앙 백분위 - 50| 상위 5% — 이보다 크면 치우침이 잡음으로 설명되지 않는다 */
-    private static final double[] BIAS_CUT = {26.5, 23.6, 20.1, 17.0, 13.3, 9.7, 5.6};
-    /** IQR 상위 5% — 이보다 넓으면 무작위 표본보다도 넓다 */
-    private static final double[] DIVERSE_CUT = {63.1, 62.5, 62.4, 61.1, 59.2, 57.1, 54.4};
-    /** IQR 하위 5% — 이보다 좁으면 무작위 표본보다 뚜렷하게 모여 있다 */
-    private static final double[] CONSISTENT_CUT = {19.8, 25.6, 28.6, 32.6, 36.8, 40.9, 44.9};
+    /** |중앙 백분위 - 50| 상위 1.5% — 이보다 크면 치우침이 잡음으로 설명되지 않는다 */
+    private static final double[] BIAS_CUT = {31.4, 28.1, 24.4, 20.6, 16.5, 11.9, 7.0};
+    /** IQR 상위 1.5% — 이보다 넓으면 무작위 표본보다도 넓다 */
+    private static final double[] DIVERSE_CUT = {69.8, 68.3, 67.7, 65.3, 62.8, 59.7, 55.9};
+    /** IQR 하위 1.5% — 이보다 좁으면 무작위 표본보다 뚜렷하게 모여 있다 */
+    private static final double[] CONSISTENT_CUT = {14.8, 20.8, 24.0, 28.5, 33.5, 38.4, 43.4};
 
     public List<TasteFinding> select(List<TasteAxisStatistics> statistics, int sampleSize) {
         double biasCut = interpolate(BIAS_CUT, sampleSize);
@@ -40,7 +44,7 @@ public class TasteFindingSelector {
 
         List<TasteFinding> candidates = new ArrayList<>();
         for (TasteAxisStatistics axis : statistics) {
-            if (axis.label() == null || !axis.label().usableForNarrative()) {
+            if (axis.label() == null || !axis.label().hasUsableWords()) {
                 continue;
             }
             double median = axis.percentile().median();
@@ -61,7 +65,7 @@ public class TasteFindingSelector {
         if (candidates.isEmpty()) {
             return List.of(new TasteFinding(
                     "balanced", "BALANCED", null, "CENTER", 0,
-                    "검증된 축에서 뚜렷한 편향이나 넓은 분포가 발견되지 않음",
+                    "어느 축에서도 뚜렷한 편향이나 넓은 분포가 발견되지 않음",
                     "뚜렷한 한 방향보다 여러 특성을 고르게 듣는 경향"));
         }
         return List.copyOf(candidates.subList(0, Math.min(3, candidates.size())));

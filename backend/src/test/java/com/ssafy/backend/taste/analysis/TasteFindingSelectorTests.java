@@ -10,8 +10,7 @@ import com.ssafy.backend.taste.reference.TasteReference;
 
 class TasteFindingSelectorTests {
 
-    /** 잡음 기준 임계값은 표본 크기에 따라 달라진다. 이 테스트는 30곡 기준(치우침 17.0 / 넓음 61.1 / 좁음 32.6). */
-    private static final int N = 30;
+    private static final int N = 30;  // 30곡 기준: 치우침 20.6 / 넓음 65.3 / 좁음 28.5
 
     private final TasteFindingSelector selector = new TasteFindingSelector();
 
@@ -32,10 +31,25 @@ class TasteFindingSelectorTests {
     }
 
     @Test
-    void unverifiedAxis_isNotNarrated() {
-        List<TasteFinding> findings = selector.select(List.of(axis(1, 90, 10, "UNVERIFIED", "STRONG")), N);
+    void unverifiedAxis_isStillNarrated() {
+        // 등급·검증 상태로 거르지 않는다. 뜰지 말지는 그 사용자의 분포가 정한다.
+        List<TasteFinding> findings = selector.select(List.of(axis(1, 90, 10, "UNVERIFIED", "WEAK")), N);
 
-        assertThat(findings).singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
+        assertThat(findings.get(0).type()).isEqualTo("CONSISTENT_BIAS");
+    }
+
+    @Test
+    void axisWithoutWords_isNotNarrated() {
+        TasteAxisStatistics unlabeled = new TasteAxisStatistics(
+                1,
+                new TasteAxisStatistics.Summary(0, 1, 2, 3, 4),
+                new TasteAxisStatistics.PercentileSummary(0, 84, 90, 96, 100, 12),
+                List.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
+                0.1,
+                new TasteReference.Label("UNLABELED", "NONE", null, null, "test"));
+
+        assertThat(selector.select(List.of(unlabeled), N))
+                .singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
     }
 
     @Test

@@ -170,8 +170,8 @@ class TasteAnalysisGenerationServiceTests {
         TasteAxisStatistics axis = new TasteAxisStatistics(
                 1,
                 new TasteAxisStatistics.Summary(0, 1, 2, 3, 4),
-                // 10곡 기준 좁음 임계는 19.8 이다. CONSISTENT_BIAS 로 분류되도록 IQR 15 로 둔다.
-                new TasteAxisStatistics.PercentileSummary(50, 72.5, 80, 87.5, 100, 15),
+                // 10곡 기준 치우침 31.4 / 좁음 14.8. CONSISTENT_BIAS 로 분류되도록 중앙 85, IQR 12.
+                new TasteAxisStatistics.PercentileSummary(50, 79, 85, 91, 100, 12),
                 List.of(0, 0, 0, 0, 0, 0, 0, 1, 8, 1), 0.1, label);
         List<TasteAnalysisResponse.Point> points = IntStream.range(0, 10)
                 .mapToObj(id -> new TasteAnalysisResponse.Point(

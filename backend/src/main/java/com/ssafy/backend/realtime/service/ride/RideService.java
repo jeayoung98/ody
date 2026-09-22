@@ -22,6 +22,7 @@ import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.dto.ride.RideRiderJoinedPayload;
 import com.ssafy.backend.realtime.dto.ride.RideRiderLeftPayload;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
@@ -43,6 +44,7 @@ import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.service.nearby.NearbyChangeService;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+import com.ssafy.backend.realtime.service.user.UserDisplayService;
 
 import com.ssafy.backend.realtime.service.viewport.ViewportDeltaService;
 
@@ -77,6 +79,7 @@ public class RideService {
 	private final MeetingService meetingService; // 하차 시점 만남 기록
 	private final ViewportDeltaService viewportDeltaService; // 해체를 한 덩어리로 알림
 	private final NearbyChangeService nearbyChangeService; // 해체를 주변사람 목록에도 알림
+	private final UserDisplayService userDisplayService; // 탑승 알림에 실을 이름
 
 	/**
 	 * 따라가기를 시작한다.
@@ -143,10 +146,19 @@ public class RideService {
 			//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
 			rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
 
-				// 10. 인솔자를 보고 있는 사람들에게 인원수가 늘었다고 알린다.
-			notifyRiderCount(captainEmail, rideRedisRepository.riderCount(captainEmail));
+			// 10. 인솔자에게 누가 탔는지 알린다. 인솔자가 인원수를 아는 유일한 길이다.
+			//     아래 11번은 인솔자 자리를 보는 사람들에게 가는 것이라 인솔자 본인은 빠진다.
+			int riderCount = rideRedisRepository.riderCount(captainEmail);
+			notifyQuietly("탑승 인솔자 알림", () -> realtimeMessageService.sendToUser(
+					captainEmail, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.RIDE_RIDER_JOINED,
+					new RideRiderJoinedPayload(
+							riderEmail, userDisplayService.find(riderEmail).nickname(), riderCount)));
 
-			// 11. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+			// 11. 인솔자를 보고 있는 사람들에게 인원수가 늘었다고 알린다.
+			notifyRiderCount(captainEmail, riderCount);
+
+			// 12. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
 			RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
 
 			log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",

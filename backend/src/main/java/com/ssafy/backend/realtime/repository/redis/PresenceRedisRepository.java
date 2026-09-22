@@ -1,7 +1,9 @@
 package com.ssafy.backend.realtime.repository.redis;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -64,6 +66,53 @@ public class PresenceRedisRepository {
 	 * 하트비트 — presence:expiry 만료 시각 갱신(존재할 때만, ZADD XX CH).
 	 * @return true=갱신됨(살아있음), false=만료큐에 없음(이미 sweep 됨 → STALE, 클라 resync 필요).
 	 */
+	/**
+	 * 그 사람의 접속 정보가 남아 있는지.
+	 *
+	 * 접속 정보는 소켓이 붙을 때 생기고 45초 동안 신호가 없으면 스스로 사라진다.
+	 * 그래서 남아 있다는 것이 곧 접속 중이라는 뜻이다.
+	 *
+	 * @param email 확인할 사람
+	 * @return 접속 정보가 있으면 true
+	 */
+	public boolean isConnected(String email) {
+		return Boolean.TRUE.equals(redis.hasKey(PRESENCE_USER_PREFIX + email));
+	}
+
+	/**
+	 * 여러 사람의 접속 여부를 한 번에 읽는다.
+	 *
+	 * 목록 한 쪽에 스무 명이 오른다고 할 때, 한 명씩 물으면 Redis 를 스무 번 다녀와야 해서
+	 * 한 번에 묶어 보낸다.
+	 *
+	 * @param emails 확인할 사람들
+	 * @return 접속해 있는 사람만 담긴다. 없는 사람은 아예 빠진다
+	 */
+	public Map<String, Boolean> connectedOf(Collection<String> emails) {
+		if (emails == null || emails.isEmpty()) {
+			return Map.of();
+		}
+		List<String> targets = List.copyOf(new LinkedHashSet<>(emails));
+		byte[][] keys = targets.stream()
+				.map(email -> redis.getStringSerializer().serialize(PRESENCE_USER_PREFIX + email))
+				.toArray(byte[][]::new);
+		List<Object> results = redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : keys) {
+				connection.keyCommands().exists(key);
+			}
+			return null;
+		});
+
+		Map<String, Boolean> onlineByEmail = new LinkedHashMap<>();
+		for (int i = 0; i < targets.size(); i++) {
+			Object value = i < results.size() ? results.get(i) : null;
+			if (Boolean.TRUE.equals(value)) {
+				onlineByEmail.put(targets.get(i), true);
+			}
+		}
+		return onlineByEmail;
+	}
+
 	public boolean touch(String email, long ttlMs) {
 		long score = System.currentTimeMillis() + ttlMs;
 		Long n = redis.execute(TOUCH_SCRIPT, List.of(EXPIRY_KEY), Long.toString(score), email);

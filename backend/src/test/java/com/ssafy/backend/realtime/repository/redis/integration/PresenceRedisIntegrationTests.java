@@ -6,6 +6,7 @@ import static org.mockito.Mockito.verify;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;
+import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 
@@ -602,6 +603,62 @@ class PresenceRedisIntegrationTests {
 		key("presence:user:" + email);
 		expiryEmails.add(email);
 		repository.connect(email, epoch, 60_000L);
+	}
+
+	// ── 접속 여부 ─────────────────────────────────────────
+
+	@Test
+	@DisplayName("접속하면 접속 중으로, 나가면 아닌 것으로 읽힌다")
+	void connectedFlipsOnLeave() {
+		TestData data = testData();
+		key("presence:user:" + data.email());
+		expiryEmails.add(data.email());
+
+		assertThat(repository.isConnected(data.email())).isFalse();
+
+		repository.connect(data.email(), 1L, 45_000L);
+		assertThat(repository.isConnected(data.email())).isTrue();
+
+		repository.applyLeave(data.email(), 1L);
+		assertThat(repository.isConnected(data.email())).isFalse();
+	}
+
+	@Test
+	@DisplayName("여러 사람을 한 번에 물으면 접속한 사람만 담긴다")
+	void connectedOfKeepsOnlyOnline() {
+		TestData online = testData();
+		TestData offline = testData();
+		key("presence:user:" + online.email());
+		key("presence:user:" + offline.email());
+		expiryEmails.add(online.email());
+
+		repository.connect(online.email(), 1L, 45_000L);
+
+		assertThat(repository.connectedOf(List.of(online.email(), offline.email())))
+				.containsOnlyKeys(online.email())
+				.containsEntry(online.email(), true);
+	}
+
+	/** 빈 입력에 Redis 를 다녀오면 목록이 비었을 때마다 헛걸음을 한다. */
+	@Test
+	@DisplayName("빈 목록이면 읽지 않는다")
+	void connectedOfSkipsEmptyInput() {
+		assertThat(repository.connectedOf(List.of())).isEmpty();
+		assertThat(repository.connectedOf(null)).isEmpty();
+	}
+
+	/** 같은 사람이 목록에 두 번 들어와도 한 번만 묻고 한 칸만 돌려준다. */
+	@Test
+	@DisplayName("같은 사람이 겹쳐 들어와도 한 번만 센다")
+	void connectedOfDeduplicates() {
+		TestData data = testData();
+		key("presence:user:" + data.email());
+		expiryEmails.add(data.email());
+		repository.connect(data.email(), 1L, 45_000L);
+
+		assertThat(repository.connectedOf(List.of(data.email(), data.email())))
+				.hasSize(1)
+				.containsEntry(data.email(), true);
 	}
 
 	private void trackJoinKeys(String email, long musicId, int layer, String cell) {

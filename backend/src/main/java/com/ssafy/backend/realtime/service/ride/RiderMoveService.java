@@ -73,16 +73,28 @@ public class RiderMoveService {
 		//    시작 시각을 안 고치면 앞 곡 기준으로 계산해 엉뚱한 지점부터 듣게 된다.
 		rideRedisRepository.savePlayback(captainEmail, musicId, PlaybackState.PLAYING, 0L, now);
 
-		// 3. 옮겨진 사람에게만 새 곡을 알린다.
-		//    기록보다 먼저 한다. 사람은 이미 Redis 에서 옮겨졌으니, 기록이 실패해도
-		//    듣는 곡만큼은 맞아야 한다. 뒤에 두면 기록이 터질 때 옛 곡을 계속 듣는다.
-		notifyTrack(moved, musicId, layer, rawX, rawY, now);
-
-		// 4. 인솔자와 옮겨진 사람들의 기록을 한 문장으로 넣고 재생수도 한 번에 올린다.
+		// 3. 기록 번호를 먼저 받는다. 넣기 전에 받아 두면 알림에 같이 실을 수 있다.
+		//    맨 앞이 인솔자고 그 뒤가 옮겨진 사람들이다.
 		List<String> listeners = new ArrayList<>();
 		listeners.add(captainEmail);
 		listeners.addAll(moved);
-		List<Long> ids = insertPlayHistory(listeners, musicId, source);
+		List<Long> ids;
+		try {
+			ids = playHistoryMapper.nextIds(listeners.size());
+		} catch (RuntimeException e) {
+			// 번호를 못 받아도 곡은 알려야 한다. 사람은 이미 Redis 에서 옮겨진 뒤라,
+			// 안 알리면 옛 곡을 계속 듣는 채로 남는다.
+			notifyTrack(moved, null, musicId, layer, rawX, rawY, now);
+			throw e;
+		}
+
+		// 4. 옮겨진 사람에게만 새 곡을 알린다.
+		//    기록을 넣기 전에 한다. 사람은 이미 Redis 에서 옮겨졌으니, 기록이 실패해도
+		//    듣는 곡만큼은 맞아야 한다. 뒤에 두면 기록이 터질 때 옛 곡을 계속 듣는다.
+		notifyTrack(moved, ids, musicId, layer, rawX, rawY, now);
+
+		// 5. 인솔자와 옮겨진 사람들의 기록을 한 문장으로 넣고 재생수도 한 번에 올린다.
+		insertPlayHistory(listeners, ids, musicId, source);
 		playHistoryMapper.incrementPlayCntBy(musicId, listeners.size());
 
 		log.info("[Ride] 곡 이동 musicId={} layer={} riders={}", musicId, layer, moved.size());
@@ -148,16 +160,15 @@ public class RiderMoveService {
 	/**
 	 * 들은 사람들의 기록을 한 번에 넣는다.
 	 *
-	 * 번호를 먼저 받아 두는 이유는 넣은 뒤에 돌려받지 않아도 되기 때문이다.
+	 * 번호는 부르는 쪽이 미리 받아서 넘긴다. 곡 알림에 같이 실어야 해서 넣기 전에 필요하다.
 	 * 인솔자 번호는 응답에 실어야 해서 순서를 그대로 지킨다.
 	 *
 	 * 출처는 첫 번째(인솔자)만 넘어온 값을 쓰고 나머지는 FOLLOW 다. 따라온 사람은
 	 * 지도에서 고른 것도 재생목록에서 고른 것도 아니다. 탈 때 남긴 기록과도 같은 값이 된다.
 	 *
-	 * @return 넣은 순서 그대로의 기록 번호. 첫 번째가 인솔자다
+	 * @param ids 미리 받아 둔 기록 번호. listeners 와 순서가 같아야 한다
 	 */
-	private List<Long> insertPlayHistory(List<String> listeners, long musicId, String source) {
-		List<Long> ids = playHistoryMapper.nextIds(listeners.size());
+	private void insertPlayHistory(List<String> listeners, List<Long> ids, long musicId, String source) {
 		List<PlayHistoryRow> rows = new ArrayList<>();
 		for (int i = 0; i < listeners.size(); i++) {
 			PlayHistoryRow row = new PlayHistoryRow();
@@ -168,20 +179,29 @@ public class RiderMoveService {
 			rows.add(row);
 		}
 		playHistoryMapper.insertBatch(rows);
-		return ids;
 	}
 
-	/** 새 곡을 각자에게 알린다. 소리를 틀 수 있는 곡인지는 한 번만 확인해 모두에게 같은 값을 보낸다. */
-	private void notifyTrack(List<String> riders, long musicId, int layer,
+	/**
+	 * 새 곡을 각자에게 알린다.
+	 *
+	 * 기록 번호만 사람마다 다르다. 곡과 자리와 소리를 틀 수 있는지는 모두에게 같으므로
+	 * 한 번만 계산해 돌려 쓰고, 번호만 갈아 끼운다.
+	 *
+	 * @param ids 인솔자를 맨 앞에 둔 기록 번호. 번호를 못 받았으면 null 이고, 그때는
+	 *            번호 없이 곡만 알린다 — 사람은 이미 옮겨진 뒤라 알리는 것 자체를 거를 수 없다
+	 */
+	private void notifyTrack(List<String> riders, List<Long> ids, long musicId, int layer,
 			double rawX, double rawY, long now) {
 		if (riders.isEmpty()) {
 			return;
 		}
 		boolean playable = musicLocationService.playable(musicId);
-		RideTrackPayload payload = new RideTrackPayload(musicId, layer, rawX, rawY, playable, now);
-		for (String rider : riders) {
-			realtimeMessageService.sendToUser(rider, WebSocketDestination.QUEUE_PRESENCE,
-					RealtimeMessageType.RIDE_TRACK, payload);
+		for (int i = 0; i < riders.size(); i++) {
+			// ids 의 맨 앞은 인솔자다. 따라오는 사람은 그 다음부터라 하나씩 밀려 있다.
+			Long playHistoryId = ids == null ? null : ids.get(i + 1);
+			realtimeMessageService.sendToUser(riders.get(i), WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.RIDE_TRACK,
+					new RideTrackPayload(musicId, layer, rawX, rawY, playable, now, playHistoryId));
 		}
 	}
 }

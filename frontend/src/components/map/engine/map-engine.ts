@@ -3068,7 +3068,7 @@ export class MapEngine {
     const leader: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
     const cands: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
     for (const u of this.friends) {
-      if (!u.isOnline || !u.isPublic) continue;
+      if (!u.isOnline) continue;
       const isLeader = isLeaderOf(u);
       let w = this.friendPos.get(u.email);
       // 인솔자 자리는 `stepFollow` 의 우주선 비행이 정한다 — 여기서 건드리면 그 비행이 끊긴다

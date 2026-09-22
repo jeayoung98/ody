@@ -183,7 +183,6 @@ export const ME_AVATAR: NearbyUser = {
   nickname: "나",
   imageUrl: null,
   isOnline: true,
-  isPublic: true,
   musicId: 0,
   viewingMusicId: 0,
   genreId: 0,

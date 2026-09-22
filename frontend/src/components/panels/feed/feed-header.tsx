@@ -39,7 +39,7 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
   const isRiding = leaderEmail === profile.email;
   /** 이 사람을 **구독 중인가** (오래 남는 관계). 서버가 준 값이다 */
   const isFollowing = profile.isFollowing;
-  const canRide = !isMe && profile.isOnline && profile.isPublic && !isRiding;
+  const canRide = !isMe && profile.isOnline && !isRiding;
 
   /**
    * 구독 — **실연동이다** (S15P21A405-489). 해제는 팔로우 중이 아니어도 200 이라 먼저 확인하지
@@ -67,7 +67,7 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-xl font-semibold">{profile.nickname ?? profile.name ?? "익명"}</p>
           <p className="mt-[3px] text-[11.5px] text-ink-2">
-            {profile.isOnline ? (profile.isPublic ? "공개 · 접속 중" : "비공개 · 접속 중") : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
+            {profile.isOnline ? "접속 중" : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
           </p>
           {profile.nowPlaying && (
             <button type="button" onClick={() => openSong(profile.nowPlaying!.id)} className="mt-0.5 block max-w-full truncate text-xs text-teal hover:underline">
@@ -93,11 +93,6 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
             {isRiding ? "🚀 탑승 중" : "🚀 따라가기"}
           </Button>
           {!profile.isOnline && <Note>오프라인이라 따라갈 수 없습니다.</Note>}
-          {profile.isOnline && !profile.isPublic && (
-            <Note>
-              비공개 계정이라 따라가기를 시작할 수 없습니다. <span className="text-ink-4">SOCIAL-06</span>
-            </Note>
-          )}
         </div>
       )}
     </div>

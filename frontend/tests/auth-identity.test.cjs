@@ -73,5 +73,15 @@ test("백엔드에 없는 것은 목으로 채우지 않는다 (A-35)", () => {
   assert.equal(p.nowPlaying, null);
   assert.equal(p.meetingCount, null);
   assert.equal(p.followingTarget, null);
-  assert.deepEqual(p.dashboard, { exploredCount: 0, discoveredCount: 0, moodPreference: [] });
+  /**
+   * 0 이 아니라 null 이다 (S15P21A405-531). 예전에는 0 을 넣었는데, 그것도 목이다 —
+   * "한 곡도 안 들었다" 는 없는 사실을 화면에 적는 셈이었다. 모르면 모른다고 두고 화면이 가린다.
+   */
+  assert.deepEqual(p.dashboard, { exploredCount: null, discoveredCount: null, moodPreference: [] });
+});
+
+test("재생한 곡 수는 백엔드가 주면 그대로 쓴다 (S15P21A405-531)", () => {
+  assert.equal(toUserProfile(detail({ playedMusicCnt: 137 })).dashboard.exploredCount, 137);
+  // 0 곡도 진짜 0 이면 보여 준다 — 가려야 하는 것은 "모름" 이지 "없음" 이 아니다
+  assert.equal(toUserProfile(detail({ playedMusicCnt: 0 })).dashboard.exploredCount, 0);
 });

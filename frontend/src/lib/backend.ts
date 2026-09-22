@@ -466,6 +466,12 @@ export interface BackendUserDetail {
   followingCnt: number;
   isFollowing: boolean;
   isMe: boolean;
+  /**
+   * 이 사람이 재생을 누른 곡 수 (S15P21A405-531). 배포 스키마의 `UserDetailResponse` 에 있는데
+   * 여기 없어서 **받고도 버리고 있었다** — 마이페이지의 탐험한 곡 수가 늘 0 이던 이유다.
+   * 옛 배포에는 없을 수 있어 optional 로 둔다.
+   */
+  playedMusicCnt?: number;
 }
 
 export function toUser(u: BackendUserDetail): User {
@@ -513,7 +519,15 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
     nowPlaying: null,
     meetingCount: null,
     followingTarget: null,
-    dashboard: { exploredCount: 0, discoveredCount: 0, moodPreference: [] },
+    dashboard: {
+      exploredCount: u.playedMusicCnt ?? null,
+      /**
+       * **처음 재생한 곡 수는 배포 API 어디에도 없다** (S15P21A405-531). 0 을 넣으면 "한 곡도
+       * 발견 못 했다" 는 없는 사실이 되므로 모른다는 뜻의 null 로 둔다 — 화면이 그 줄을 안 그린다.
+       */
+      discoveredCount: null,
+      moodPreference: [],
+    },
   };
 }
 

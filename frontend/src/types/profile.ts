@@ -21,10 +21,13 @@ export interface UserProfile extends User {
 }
 
 export interface ProfileDashboard {
-  /** 탐험한 곡 수 (재생 누른 곡 수) */
-  exploredCount: number;
-  /** 발견한 곡 수 (처음 재생한 곡) */
-  discoveredCount: number;
+  /**
+   * 탐험한 곡 수 (재생 누른 곡). **`null` 은 모른다는 뜻이고 0 과 다르다** (S15P21A405-531) —
+   * 화면은 null 이면 그 줄을 그리지 않는다.
+   */
+  exploredCount: number | null;
+  /** 발견한 곡 수 (처음 재생한 곡). 배포 API 에 아직 없어 늘 null 이다 */
+  discoveredCount: number | null;
   /** 선호 분위기 퍼센티지 */
   moodPreference: { mood: string; percent: number }[];
 }

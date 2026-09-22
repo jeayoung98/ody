@@ -457,7 +457,6 @@ export interface BackendUserDetail {
   email: string;
   name: string | null;
   nickname: string | null;
-  isPublic: boolean;
   tutorialCompleted: boolean;
   lastActiveAt: string | null;
   createdAt: string;
@@ -484,7 +483,6 @@ export function toUser(u: BackendUserDetail): User {
     email: u.email,
     name: u.name,
     nickname: u.nickname,
-    isPublic: u.isPublic,
     tutorialCompleted: u.tutorialCompleted,
     lastActiveAt: u.lastActiveAt,
     createdAt: u.createdAt,

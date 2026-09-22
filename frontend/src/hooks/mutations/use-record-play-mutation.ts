@@ -1,6 +1,6 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { API_ENDPOINTS } from "@/constants";
+import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
 import { sendJoinNow } from "@/hooks/use-presence-join";
 import { ApiError } from "@/lib/api";
 import type { PlayRequest, PlayResponse } from "@/types";
@@ -20,6 +20,7 @@ import type { PlayRequest, PlayResponse } from "@/types";
  * 그 뒤에도 실패하면 그때 호출자에게 던진다.
  */
 export function useRecordPlayMutation() {
+  const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: PlayRequest): Promise<PlayResponse> => {
       // presence 가 살아 있어야 200 이 온다. 만료 상태에서 누르면 422 라 미리 깨워 둔다
@@ -32,6 +33,23 @@ export function useRecordPlayMutation() {
         sendJoinNow(input.layer);
         return await post(input);
       }
+    },
+    /**
+     * **틀었으면 그 곡의 재생수가 바로 올라야 한다** (S15P21A405-573).
+     *
+     * 곡 상세는 `staleTime: Infinity` 다 (S15P21A405-514). 그 이유는 지금도 맞다 — 제목·
+     * 아티스트·주성분 16개·가까운 10곡은 세션 중에 안 바뀐다. **그런데 `playCnt` 는 바뀌고,
+     * 심지어 내가 눌러서 바뀐다.** `invalidateQueries` 는 `staleTime` 을 무시하고 다시 받으므로
+     * 514 가 막아 둔 것(같은 곡 26번 조회)은 그대로 두고 **방금 튼 곡 하나만** 새로 받는다.
+     *
+     * 자리가 여기인 이유는 S15P21A405-569 다. 선언이 한 곳으로 모여서 큐 자동 넘김·여정·
+     * 플리·주변 탐색이 전부 이 `onSuccess` 를 탄다. 호출부마다 붙일 일이 아니다.
+     *
+     * 남이 튼 것은 여전히 안 보인다 — 내가 안 누르면 무효화할 계기가 없다. 소켓이 필요한 일이고
+     * 곡 상세의 재생수에 그만한 값어치가 있는지는 별개 판단이다.
+     */
+    onSuccess: (_, input) => {
+      void qc.invalidateQueries({ queryKey: QUERY_KEYS.music.detail(input.musicId) });
     },
   });
 }

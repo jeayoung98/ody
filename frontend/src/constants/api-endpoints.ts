@@ -64,8 +64,6 @@ export const API_ENDPOINTS = {
     nickname: "/bff/user/nickname",
     /** 실연동 → `PATCH /api/user/image`. **파일**을 올린다 — 주소 문자열은 받지 않는다 */
     image: "/bff/user/image",
-    /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
-    publicVisibility: "/bff/user/public",
     /**
      * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
      * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
@@ -105,11 +103,10 @@ export const API_ENDPOINTS = {
     search: "/bff/music/search",
     /**
      * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.
-     * 이 호출이 곧 내 위치 이동이다. 응답의 `playHistoryId` 를 보관했다가 종료에 쓴다.
+     * 이 호출이 곧 내 위치 이동이다.
      */
     play: "/bff/music/play",
     /** 재생 종료. 위치는 바뀌지 않고 들은 시간만 남긴다 */
-    playEnd: "/bff/music/play/end",
     /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
     videoId: (id: number) => `/bff/music/${id}/video-id`,
     /**

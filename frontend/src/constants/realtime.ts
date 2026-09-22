@@ -75,7 +75,6 @@ export const REALTIME = {
  * 큰 값을 보내면 서버에서 실패한다. 곡 길이를 알면 그걸로 자르고, 모르면 이 값으로 자른다.
  * 30분은 우리 곡 길이 분포에서 넉넉한 상한이다 — 이보다 긴 재생은 방치로 본다.
  */
-export const PLAY_END = { maxMs: 30 * 60 * 1000 } as const;
 
 /**
  * 겹 사용자 전체 조회 (S15P21A405-537, BACKEND-NOTES §5).

@@ -125,7 +125,7 @@ function fromLayer(
       nickname: u.nickname,
       imageUrl: u.imageUrl,
       /**
-       * 이 응답에는 **만남 횟수가 없다** (백엔드 명세: `isPublic`·`viewingMusicId`·`genreId`·
+       * 이 응답에는 **만남 횟수가 없다** (백엔드 명세: `viewingMusicId`·`genreId`·
        * `meetCount` 는 안 온다). 0 이면 화면이 그 자리를 안 그린다 — 지어내지 않는다.
        */
       meetingCount: 0,

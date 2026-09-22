@@ -49,3 +49,15 @@ const panelsFor = (f: typeof FEATURES): Record<string, boolean> => ({
  * 계속 바뀐 것으로 보고 무한 렌더에 빠진다.
  */
 export const PANEL_ENABLED = panelsFor(FEATURES);
+
+/**
+ * 설문 모드에서 보여 줄 기능 — **랭킹만 뺀다** (S15P21A405-570).
+ *
+ * 테스터에게 물어보는 것은 탐색이라 랭킹 탭이 자리만 차지한다. 다시 기능 표시를 가르는
+ * 축이 생긴 셈인데, 예전(S15P21A405-333)처럼 네 기능을 통째로 감추던 것과는 범위가 다르다 —
+ * 나머지는 설문 모드에서도 그대로 쓴다.
+ */
+export const SURVEY_FEATURES: Features = { ...FEATURES, chart: false };
+
+/** {@link PANEL_ENABLED} 와 같은 이유로 미리 만든다 */
+export const SURVEY_PANEL_ENABLED = panelsFor(SURVEY_FEATURES);

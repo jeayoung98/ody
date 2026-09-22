@@ -8,13 +8,12 @@ import { ROUTES } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useUpdateNicknameMutation } from "@/hooks/mutations/use-update-nickname-mutation";
 import { useUpdateProfileImageMutation } from "@/hooks/mutations/use-update-profile-image-mutation";
-import { useUpdateVisibilityMutation } from "@/hooks/mutations/use-update-visibility-mutation";
 import type { ApiError } from "@/lib/api";
 import type { User } from "@/types";
 import NicknameCheckField from "./nickname-check-field";
 
 /**
- * 프로필 수정 (USER-02, S15P21A405-470) — 닉네임 · 프로필 이미지 · 공개 설정.
+ * 프로필 수정 (USER-02, S15P21A405-470) — 닉네임 · 프로필 이미지.
  *
  * 내 정보가 올 때까지 기다렸다가 그리는 이유: 입력칸의 첫 값이 지금 값이어야 하는데,
  * `useState` 초기값은 첫 렌더 때 한 번만 읽힌다. 안쪽 컴포넌트를 `key` 로 다시 만들어
@@ -27,7 +26,7 @@ export default function ProfileEditForm() {
   return <Fields key={me.email} me={me} />;
 }
 
-/** 내 정보가 올 때까지의 자리 (S15P21A405-503) — 사진 · 닉네임 칸 · 공개 설정 · 버튼 한 쌍 */
+/** 내 정보가 올 때까지의 자리 (S15P21A405-503) — 사진 · 닉네임 칸 · 버튼 한 쌍 */
 function EditSkeleton() {
   return (
     <div aria-hidden className="flex flex-col gap-4">
@@ -40,7 +39,6 @@ function EditSkeleton() {
         <Skeleton w={48} h={9} />
         <Skeleton w="100%" h={42} rounded="box" />
       </div>
-      <Skeleton w="100%" h={66} rounded="box" />
       <div className="flex gap-2">
         <div className="flex-1">
           <Skeleton w="100%" h={44} />
@@ -57,11 +55,9 @@ function Fields({ me }: { me: User }) {
   const router = useRouter();
   const saveNickname = useUpdateNicknameMutation();
   const saveImage = useUpdateProfileImageMutation();
-  const saveVisibility = useUpdateVisibilityMutation();
 
   const [nickname, setNickname] = useState(me.nickname ?? "");
   const [file, setFile] = useState<File | null>(null);
-  const [isPublic, setIsPublic] = useState(me.isPublic);
   const [nicknameOk, setNicknameOk] = useState(false);
   const pickFile = useRef<HTMLInputElement>(null);
 
@@ -71,10 +67,9 @@ function Fields({ me }: { me: User }) {
   useEffect(() => () => void (preview && URL.revokeObjectURL(preview)), [preview]);
 
   const nicknameChanged = nickname.trim() !== (me.nickname ?? "").trim();
-  const visibilityChanged = isPublic !== me.isPublic;
-  const dirty = nicknameChanged || file !== null || visibilityChanged;
-  const pending = saveNickname.isPending || saveImage.isPending || saveVisibility.isPending;
-  const error = (saveNickname.error ?? saveImage.error ?? saveVisibility.error) as ApiError | null;
+  const dirty = nicknameChanged || file !== null;
+  const pending = saveNickname.isPending || saveImage.isPending;
+  const error = (saveNickname.error ?? saveImage.error) as ApiError | null;
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -83,11 +78,10 @@ function Fields({ me }: { me: User }) {
     if (nicknameChanged && !nicknameOk) return;
 
     try {
-      // 셋 다 백엔드 엔드포인트가 다르다. 앞이 실패하면 뒤는 보내지 않는다 —
+      // 둘 다 백엔드 엔드포인트가 다르다. 앞이 실패하면 뒤는 보내지 않는다 —
       // 닉네임이 중복이라 막혔는데 사진만 바뀌어 있으면 무엇이 저장됐는지 알 수 없다
       if (nicknameChanged) await saveNickname.mutateAsync(nickname.trim());
       if (file) await saveImage.mutateAsync(file);
-      if (visibilityChanged) await saveVisibility.mutateAsync(isPublic);
       router.replace(ROUTES.home);
     } catch {
       // 오류 문구는 아래에서 보여준다
@@ -112,14 +106,6 @@ function Fields({ me }: { me: User }) {
       </div>
 
       <NicknameCheckField value={nickname} onChange={setNickname} onStatus={useCallback((v: boolean) => setNicknameOk(v), [])} current={me.nickname} />
-
-      <label className="flex cursor-pointer items-start gap-2.5 rounded-[13px] border border-line bg-white/[.03] px-3.5 py-3">
-        <input type="checkbox" checked={isPublic} onChange={(e) => setIsPublic(e.target.checked)} className="mt-0.5 h-4 w-4 accent-teal" />
-        <span className="min-w-0">
-          <span className="block text-[12.5px] font-medium">공개 계정</span>
-          <span className="mt-0.5 block text-[11px] leading-[1.5] text-ink-3">끄면 다른 사람이 내 프로필을 열거나 나를 따라올 수 없어요.</span>
-        </span>
-      </label>
 
       {error && <p className="text-[11.5px] text-bad">{error.message}</p>}
 

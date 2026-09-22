@@ -27,6 +27,14 @@ export const MouseWheelIcon = ({ size = 40, ...p }: P) => (
     <path d="M12 6.5v3" />
   </svg>
 );
+/** 점점점 — 더 볼 것이 있다는 표시. 누르면 옵션 메뉴가 뜬다 (S15P21A405-524) */
+export const MoreIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2.6}>
+    <path d="M5 12h.01" />
+    <path d="M12 12h.01" />
+    <path d="M19 12h.01" />
+  </svg>
+);
 /** 내 위치로 가기 — 지도 앱의 "현재 위치" 조준선 */
 export const LocateIcon = ({ size = 16, ...p }: P) => (
   <svg {...base(size, p)}>
@@ -58,6 +66,16 @@ export const JourneyIcon = ({ size = 18, ...p }: P) => (
     <circle cx="5.5" cy="18.5" r="2.4" />
     <circle cx="18.5" cy="5.5" r="2.4" />
     <path d="M7.6 16.8C11 14 9 10.5 12.4 7.6" />
+  </svg>
+);
+/** 하단 탭의 "지도" (S15P21A405-417) — 별 넷을 이은 작은 별자리 */
+export const MapIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4.5 16.5 9 8l4.5 4.5L20 3" />
+    <circle cx="4.5" cy="16.5" r="1.6" />
+    <circle cx="9" cy="8" r="1.6" />
+    <circle cx="13.5" cy="12.5" r="1.6" />
+    <circle cx="20" cy="3" r="1.6" />
   </svg>
 );
 export const RankIcon = ({ size = 18, ...p }: P) => (

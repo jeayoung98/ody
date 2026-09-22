@@ -190,8 +190,15 @@ export default function TutorialOverlay() {
         시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
       */}
       {step.veil && !(zooming && wheeled) && <TutorialSpotlight spotlight={step.spotlight} />}
-      {step.hint === "wheel" && !wheeled && <WheelHint />}
-      {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
+      {/*
+        손짓(휠 안내·별 반짝임)은 **지도에 붙는 것**이라 패널 아래에 깔린다 (S15P21A405-417).
+        오버레이 전체가 z-60 이라 패널(z-20)·시트·탭바 위로 그대로 떠올랐는데, 폰에서는
+        시트가 화면을 덮으므로 그 위에 별 반짝임이 뚫고 나왔다. 안내 카드만 위에 남는다.
+      */}
+      <div className="pointer-events-none absolute inset-0 z-[19]">
+        {step.hint === "wheel" && !wheeled && <WheelHint />}
+        {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
+      </div>
       <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
         <TutorialStepCard
           index={stepIndex}

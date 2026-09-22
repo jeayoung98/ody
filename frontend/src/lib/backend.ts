@@ -297,6 +297,8 @@ interface BackendMusicSummary {
   /** 장르 **이름** 배열. genreId 가 없다 — 지도 색칠에 필요하다 (BACKEND-NOTES B-21) */
   /** 검색 URL. 재생 URL 이 아니다 (규칙 6) */
   youtubeUrl: string | null;
+  /** 이 곡이 실린 앨범의 MusicBrainz 릴리스 ID (S15P21A405-518) */
+  albumMbid?: string | null;
   location: BackendLocation | null;
 }
 
@@ -366,6 +368,11 @@ export interface BackendMapPoint {
    * 그래서 아래에서 null 로 받아 둔다.
    */
   youtubeUrl?: string | null;
+  /**
+   * 이 곡이 실린 앨범의 MusicBrainz **릴리스** ID (S15P21A405-518).
+   * 2026-09-21 배포 확인 — 스키마에 `albumMbid` 로 있고 지도 응답 100건 전부 값이 차 있다.
+   */
+  albumMbid?: string | null;
   playable: boolean;
 }
 
@@ -383,6 +390,7 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
     title: p.title,
     artist: p.artist ?? null,
     youtubeUrl: p.youtubeUrl ?? null,
+    albumMbid: p.albumMbid ?? null,
     playable: p.playable,
   };
 }
@@ -406,6 +414,7 @@ export function toMusic(res: BackendMusicDetail): Music {
   return {
     id: res.id,
     mbid: res.mbid,
+    albumMbid: res.albumMbid ?? null,
     title: res.title,
     artist: res.artist,
     releaseYear: res.releaseYear ?? null,
@@ -457,6 +466,12 @@ export interface BackendUserDetail {
   followingCnt: number;
   isFollowing: boolean;
   isMe: boolean;
+  /**
+   * 이 사람이 재생을 누른 곡 수 (S15P21A405-531). 배포 스키마의 `UserDetailResponse` 에 있는데
+   * 여기 없어서 **받고도 버리고 있었다** — 마이페이지의 탐험한 곡 수가 늘 0 이던 이유다.
+   * 옛 배포에는 없을 수 있어 optional 로 둔다.
+   */
+  playedMusicCnt?: number;
 }
 
 export function toUser(u: BackendUserDetail): User {
@@ -504,7 +519,15 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
     nowPlaying: null,
     meetingCount: null,
     followingTarget: null,
-    dashboard: { exploredCount: 0, discoveredCount: 0, moodPreference: [] },
+    dashboard: {
+      exploredCount: u.playedMusicCnt ?? null,
+      /**
+       * **처음 재생한 곡 수는 배포 API 어디에도 없다** (S15P21A405-531). 0 을 넣으면 "한 곡도
+       * 발견 못 했다" 는 없는 사실이 되므로 모른다는 뜻의 null 로 둔다 — 화면이 그 줄을 안 그린다.
+       */
+      discoveredCount: null,
+      moodPreference: [],
+    },
   };
 }
 

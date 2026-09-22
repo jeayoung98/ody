@@ -595,6 +595,20 @@ export class MapEngine {
     this.crowdLayer = layer;
   }
 
+  /**
+   * 이 곡의 상주 집합 원소 — 이 겹에 있으면 (S15P21A405-518·527).
+   *
+   * **지도 밖 화면이 이미 들고 있는 값을 빌려 쓰는 창구다.** 곡 상세를 열 때 제목·가수·앨범
+   * 커버는 이 점에 다 들어 있는데, 그걸 안 쓰면 `/bff/music/{id}` 를 기다리는 동안 화면이 빈다.
+   * 주변 곡 카드도 마찬가지다 — 그쪽 응답(`NeighborTrack`)에는 `albumMbid` 가 아예 없다.
+   *
+   * 이 겹에 없는 곡(고스트·검색 결과)이면 null 이고, 부르는 쪽이 평소대로 응답을 기다린다.
+   */
+  pointOf(musicId: number): MapPoint | null {
+    const i = this.index.get(musicId);
+    return i == null ? null : this.songs[i];
+  }
+
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
   setRepresentatives(layer: number, ids: number[]) {
     this.repIds = new Set(ids);
@@ -1394,10 +1408,24 @@ export class MapEngine {
     return !!this.constellation && !this.constellation.exitingAt;
   }
 
+  /**
+   * 좌하단 계기판이 가리는 폭. **화면에 계기판이 없으면 0 이다** (S15P21A405-417).
+   *
+   * 좁은 화면에서는 계기판을 걷어냈는데(`minimap/minimap-panel.tsx`) 이 값이 260 으로
+   * 남아 있어서, 375px 폰에서 별자리를 놓을 폭이 `375 − 45 − 260 = 70px` 이 됐다.
+   * 경로가 점 하나로 뭉쳐 보이던 원인이다. 화면에 무엇이 떠 있는지는 엔진이 모르므로
+   * 재는 쪽(`map-view.tsx`)이 알려 준다.
+   */
+  private instrumentInset: number = CONSTELLATION.instrumentInsetPx;
+
+  setInstrumentInset(px: number) {
+    this.instrumentInset = px;
+  }
+
   /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
   private constellationRect() {
     const base = this.freeRect();
-    const x0 = base.x0 + CONSTELLATION.instrumentInsetPx;
+    const x0 = base.x0 + this.instrumentInset;
     const y1 = base.y1 - 20;
     return { x0, y0: base.y0, x1: base.x1, y1, cx: (x0 + base.x1) / 2, cy: (base.y0 + y1) / 2 };
   }

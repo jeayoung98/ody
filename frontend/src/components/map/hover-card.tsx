@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useRef } from "react";
 import { HOVER_CARD } from "@/constants";
 import type { MapPoint } from "@/types";
 import type { MapEngine } from "./engine/map-engine";
@@ -14,6 +14,14 @@ interface HoverCardProps {
   song: MapPoint | null;
   /** 켜져 있나. 꺼지면 사라지는 중이다 — 다 사라질 때까지는 그대로 붙어 있는다 */
   on: boolean;
+  /**
+   * 상세로 들어가는 길 (S15P21A405-417). **좁은 화면에서만 준다.**
+   *
+   * 폰에서는 별을 탭해도 패널을 열지 않는다 — 열면 지도를 덮어서 다음 별을 못 찾고,
+   * 그래서 두 번 탭 재생도 주변 탐색 결과 보기도 막혔다. 대신 이 카드가 뜨고,
+   * 상세가 **정말 보고 싶을 때만** 이 버튼으로 들어간다.
+   */
+  onDetail?: () => void;
 }
 
 /**
@@ -33,15 +41,47 @@ interface HoverCardProps {
  * 자리는 카메라가 움직일 때마다 바뀐다. 매 프레임 setState 하면 지도 전체가 리렌더되므로
  * rAF 에서 `style.transform` 만 직접 쓴다 — 리렌더는 곡이 바뀔 때만 일어난다.
  */
-export default function HoverCard({ engine, song, on }: HoverCardProps) {
-  // 커버는 캔버스로 만들어 쓰던 것을 그대로 쓴다 (곡마다 같은 그림이어야 지도와 어긋나지 않는다)
-  const cover = useMemo(() => (song ? coverFor(song).toDataURL() : null), [song]);
+export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
+  const coverRef = useRef<HTMLSpanElement>(null);
   const musicId = song?.musicId ?? null;
+  /**
+   * `onDetail` 이 있으면 폰이다 (`map-view.tsx` 가 좁은 화면에서만 넘긴다). 폭도 누를 수 있는지도
+   * 이 하나로 갈린다 — 화면 폭을 따로 재면 두 판정이 어긋날 수 있다.
+   */
+  const narrow = onDetail != null;
+  const w = narrow ? HOVER_CARD.wNarrow : HOVER_CARD.w;
+  const h = narrow ? HOVER_CARD.hNarrow : HOVER_CARD.h;
+
+  /**
+   * 커버를 칠한다. 지도와 **같은 그림**이어야 "아까 그 별" 이 이어진다 (`coverFor`).
+   *
+   * 진짜 앨범 커버는 받아 온 뒤에야 캔버스가 된다 (S15P21A405-518). 지도는 rAF 로 계속 다시
+   * 그려서 저절로 바뀌지만 카드는 한 번 칠하고 끝이라, 도착했는지 잠깐 되물어 본다 —
+   * 이미 있으면 첫 칠에서 끝난다. 곡 상세 배경(`song-cover-backdrop`)과 같은 방식이다.
+   */
+  useEffect(() => {
+    const el = coverRef.current;
+    if (!el || !song) return;
+    let timer = 0;
+    let tries = 0;
+    const paint = () => {
+      el.style.backgroundImage = `url(${coverFor(song).toDataURL()})`;
+    };
+    const poll = () => {
+      timer = 0;
+      if (!song.albumMbid || tries++ > 30) return;
+      paint();
+      timer = window.setTimeout(poll, 150);
+    };
+    paint();
+    timer = window.setTimeout(poll, 150);
+    return () => clearTimeout(timer);
+  }, [song]);
 
   useEffect(() => {
     if (musicId == null) return;
-    const { w, h, gap, margin } = HOVER_CARD;
+    const { gap, margin } = HOVER_CARD;
     let raf = 0;
     const follow = () => {
       raf = requestAnimationFrame(follow);
@@ -67,37 +107,74 @@ export default function HoverCard({ engine, song, on }: HoverCardProps) {
     };
     raf = requestAnimationFrame(follow);
     return () => cancelAnimationFrame(raf);
-  }, [engine, musicId, on]);
+  }, [engine, musicId, on, w, h]);
 
   if (!song) return null;
 
   return (
     // z-[25]: HUD 층(계기판·레일·검색·하단바 20~24) 바로 위. 토스트·배너·다이얼로그(30 이상)보다는 아래다.
-    // pointer-events 는 항상 꺼 둔다 — 이 카드는 읽는 것이지 누르는 것이 아니다
     <div
       ref={cardRef}
+      /*
+       * 폰에서는 **카드 어디를 눌러도 상세로 간다** (S15P21A405-417). 12px 짜리 글자를 정확히
+       * 겨누게 하는 건 손가락한테 하는 요구가 아니다. 데스크톱은 그대로 클릭을 통과시킨다
+       * (S15P21A405-323) — 거기서는 카드가 마우스를 따라다니며 뜨므로, 눌리게 만들면
+       * 카드에 덮인 별을 영영 못 누른다.
+       */
+      onPointerDown={onDetail ? (e) => e.stopPropagation() : undefined}
+      onClick={onDetail}
+      role={narrow ? "button" : undefined}
+      aria-label={narrow && song ? `${song.title} 상세 열기` : undefined}
       style={{
-        width: HOVER_CARD.w,
-        height: HOVER_CARD.h,
+        width: w,
+        height: h,
         visibility: "hidden",
         opacity: 0,
         transition: `opacity ${HOVER_CARD.fadeMs}ms ease-out`,
       }}
-      className="glass-liquid pointer-events-none absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform"
+      className={`glass-liquid absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform ${
+        narrow ? "pointer-events-auto cursor-pointer" : "pointer-events-none"
+      }`}
     >
       {/* 커버는 캔버스에서 만든 data URL 이다 — 최적화할 원본이 없으니 배경으로 깐다 */}
       <span
-        className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover"
-        style={cover ? { backgroundImage: `url(${cover})` } : undefined}
+        ref={coverRef}
+        className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover bg-center max-tablet:h-10 max-tablet:w-10"
       />
       <span className="min-w-0 flex-1">
         <p className="truncate text-[12.5px] font-semibold text-ink">{song.title}</p>
-        <p className="truncate text-[10.5px] text-ink-2">{song.artist ?? "-"}</p>
-        <p className={`num truncate text-2xs ${song.playable ? "text-ink-3" : "text-warn"}`}>
-          ▶ {song.weight.toLocaleString()}
-          {song.playable ? "" : " · 재생 불가"}
+        <p className="truncate text-[10.5px] text-ink-2">
+          {song.artist ?? "-"}
+          {/*
+            **재생 불가는 폰에서도 보여야 한다** (S15P21A405-417). 이 표시는 원래 재생수 줄에
+            붙어 있었는데, 카드를 줄이면서 그 줄을 빼는 바람에 폰에서만 사라졌다 —
+            누르면 안 들리는 곡을 미리 알려 주는 유일한 자리다.
+          */}
+          {!song.playable && <span className="text-warn"> · 재생 불가</span>}
         </p>
+        {/*
+          재생수 줄은 **폰에서 뺀다** (S15P21A405-417). 카드가 자리를 너무 먹는다는 말이 나왔고,
+          이 줄은 상세에 들어가면 그대로 다시 보인다 — 덮은 별 하나를 되찾는 편이 낫다.
+        */}
+        {!narrow && (
+          <p className={`num truncate text-2xs ${song.playable ? "text-ink-3" : "text-warn"}`}>
+            ▶ {song.weight.toLocaleString()}
+            {song.playable ? "" : " · 재생 불가"}
+          </p>
+        )}
       </span>
+      {/*
+        카드가 통째로 눌리므로 이건 **버튼이 아니라 표지판**이다 — "여기 누르면 상세로 간다" 를
+        알려 주는 것이 일이다. 그래서 teal 알약으로 확실히 띄운다 (안 보인다는 말이 나왔다).
+      */}
+      {onDetail && (
+        <span
+          aria-hidden
+          className="shrink-0 rounded-pill border border-teal/40 bg-teal/15 px-2 py-1 text-[11.5px] font-semibold whitespace-nowrap text-teal"
+        >
+          상세 ›
+        </span>
+      )}
     </div>
   );
 }

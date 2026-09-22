@@ -149,6 +149,61 @@
   }
 }
 
+/*
+ * 폰 맨 아래 고정 탭바의 바닥판 (S15P21A405-417).
+ *
+ * 유리는 `glass-liquid` 와 같은데 **모서리를 안 깎는다** — 둥글기는 쓰는 쪽이 정한다.
+ * 재생바 아래에 붙어 한 상자의 아랫칸이 되므로, 위는 각지고 아래만 둥글어야 한다.
+ *
+ * 따로 만든 이유는 `glass-liquid` 가 `@layer components` 라 `max-tablet:` 같은 변형이
+ * 안 붙기 때문이다. 폰에서만 켜야 하므로 변형이 붙는 `@utility` 여야 한다.
+ */
+@utility glass-bar {
+  background: var(--glass-sheen), var(--glass-tint);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 12px 32px -16px rgb(0 0 0 / 0.8);
+}
+/*
+ * 유리를 벗긴다 (S15P21A405-417). 폰 하단 탭바는 **바 하나만** 유리다 —
+ * 그 안의 알약이 제 유리를 그대로 쓰면 유리 위에 유리가 겹쳐 테두리가 두 겹으로 보이고,
+ * 블러도 두 번 걸려 뒤의 별이 뭉갠 것처럼 흐려진다. 바 안에서만 쓴다.
+ */
+@utility glass-off {
+  background: none;
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+}
+/*
+ * 폰에서는 **유리 너머로 별이 비치지 않는다** (S15P21A405-417).
+ *
+ * 유리 밑칠은 10% 뿐이라 뒤가 그대로 보인다. 데스크톱에서는 HUD 가 작고 지도가 옆에 있어
+ * 그게 멋이지만, 폰에서는 패널이 화면을 통째로 덮고 아래 상자가 가로를 다 먹는다 — 그 위로
+ * 별과 곡 이름이 그대로 떠올라 **UI 와 지도가 겹쳐 읽힌다.** 실제로 곡 이름이 네비 줄
+ * 한가운데 떠 있었다. 밑칠만 불투명한 남색으로 바꾸면 무늬(sheen)·블러·테두리는 그대로고
+ * 뒤만 막힌다.
+ *
+ * **미디어 쿼리 하나로 끝낸다.** 컴포넌트마다 `max-tablet:bg-*` 를 붙이면 빠뜨리는 곳이
+ * 반드시 생기고(유리를 쓰는 곳이 패널·재생바·네비·검색·브랜드·카드로 여섯 갈래다),
+ * 유틸리티끼리 어느 쪽이 이기는지도 생성 순서에 달린다. 넓은 화면은 이 블록에 안 들어온다.
+ */
+@media (width < 768px) {
+  :root {
+    --glass-tint: var(--color-void-2);
+  }
+  .glass {
+    background:
+      linear-gradient(var(--color-glass), var(--color-glass)),
+      var(--color-void-2);
+  }
+}
+
 @utility lbl {
   font-family: var(--font-mono);
   font-size: 9.5px;
@@ -463,4 +518,19 @@ html.ody-dev .small-screen-gate {
 .animate-wave {
   animation: wave 0.9s ease-in-out infinite;
   transform-origin: center;
+}
+
+/*
+ * 바텀시트를 **내렸을 때** 곡 상세의 커버 창을 줄인다 (S15P21A405-417).
+ *
+ * 접으면 화면에 걸리는 건 머리글(`곡 상세`)과 커버 창뿐이라 **무슨 곡인지가 안 보였다** —
+ * 커버만 188px 그대로 깔려 있었다. 창을 없애면 제목·가수·칩이 그 자리로 따라 올라온다.
+ * 펴면 원래대로 돌아간다.
+ *
+ * 인라인 `height` 를 덮어야 해서 `!important` 다. 폰에서만, 접힌 시트 안에서만 먹는다.
+ */
+@media (width < 768px) {
+  [data-sheet][data-collapsed] [data-cover-window] {
+    height: 0 !important;
+  }
 }

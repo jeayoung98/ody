@@ -4,6 +4,7 @@ import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
+import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -301,6 +302,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
  */
 let coverIdx: number[] = [];
 let coverLayer = -1;
+/** 지난 프레임의 카메라. 미는 중인지 확대하는 중인지를 여기서 가른다 (S15P21A405-529) */
+let coverCam = { cx: Number.NaN, cy: Number.NaN, s: Number.NaN };
 
 /**
  * 대표성이 가장 높은 몇 곡은 앨범 커버로 띄운다.
@@ -317,7 +320,10 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   e.coverHits = [];
   if (e.anim) return;
   const f = e.freeRect();
+  /** 새로 올릴 때 가장자리에서 띄워 둘 거리(px) */
   const M = 42;
+  /** 이미 그린 커버를 놓아 주는 선 — 그림이 통째로 화면 밖으로 나가면 (S15P21A405-529) */
+  const KEEP = COVER_COUNT.sizePx;
   const grow = clamp(0.86 + Math.log(Math.max(1, e.cam.s / 100)) * 0.13, 0.85, 1.35);
   if (e.coverAlpha < 0.01) return;
 
@@ -325,16 +331,39 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (coverLayer !== e.layer) {
     coverIdx = [];
     coverLayer = e.layer;
+    // 겹이 바뀐 것은 미는 것이 아니다 — 곧바로 채우게 카메라 기억도 비운다 (S15P21A405-529)
+    coverCam = { cx: Number.NaN, cy: Number.NaN, s: Number.NaN };
   }
 
   const n = e.cam.s < COVER_COUNT.nearScale ? COVER_COUNT.far : COVER_COUNT.near;
   const gap2 = COVER_COUNT.minGapPx * COVER_COUNT.minGapPx;
-  /** 아직 이 겹에 살아 있고 화면 안(여백 M)인가 */
-  const usable = (i: number) => {
+
+  /**
+   * **미는 동안에는 새 커버를 올리지 않는다** (S15P21A405-529).
+   *
+   * 예전에는 밀면서 가장자리 커버가 내려가고 그 자리를 다른 곡이 채우기를 반복했다 — 화면이
+   * 계속 깜빡였다. 미는 것은 "지금 있는 것을 계속 보겠다" 는 뜻이지 새 그림을 달라는 게 아니다.
+   *
+   * **배율이 바뀌면 예외다.** 줌은 보이는 범위 자체가 달라지는 일이라 새로 뽑는 것이 맞고,
+   * 사용자도 그때는 바뀌기를 기대한다. 줌은 커서 기준이라 cx·cy 도 같이 움직이므로 배율을 먼저 본다.
+   */
+  const zooming = e.cam.s !== coverCam.s;
+  const panning = !zooming && (e.cam.cx !== coverCam.cx || e.cam.cy !== coverCam.cy);
+  coverCam = { cx: e.cam.cx, cy: e.cam.cy, s: e.cam.s };
+  /**
+   * 아직 이 겹에 살아 있고 화면 안인가.
+   *
+   * **지킬 때와 올릴 때 기준이 다르다** (히스테리시스, S15P21A405-529). 예전에는 둘 다 여백
+   * 42px 이라, 화면 안에 멀쩡히 보이는 커버가 가장자리에 닿는 순간 내려갔다가 조금만 되밀면
+   * 다시 올라왔다. 올릴 때는 안쪽에 편히 들어와야 하고(`M`), **이미 그린 것은 화면 밖으로
+   * 완전히 나갈 때까지 남긴다**(`-KEEP`).
+   */
+  const usable = (i: number, forNew = false) => {
     if (!e.subset[i]) return false;
+    const m = forNew ? M : -KEEP;
     const px = e.pos[i * 2];
     const py = e.pos[i * 2 + 1];
-    return px > f.x0 + M && px < f.x1 - M && py > f.y0 + M && py < f.y1 - M;
+    return px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m;
   };
   /** 이미 고른 것들과 충분히 떨어져 있는가 (줌아웃하면 별이 모여 커버가 겹친다) */
   const spaced = (i: number, picked: number[]) =>
@@ -346,17 +375,49 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     if (picked.length >= n) break;
     if (usable(i) && spaced(i, picked)) picked.push(i);
   }
-  // ② 남는 자리만 새로 채운다. 후보는 예전과 같다 (백엔드 대표곡 → 없으면 격자 대표곡)
-  if (picked.length < n) {
+  /*
+   * ② 남는 자리를 **화면 전체에 고루** 채운다 (S15P21A405-518).
+   *
+   * 예전에는 후보를 배열 순서대로 훑어 앞에서부터 집었다. `weight` 정렬이 붙어 있었지만
+   * 실데이터는 전부 0 이라 정렬이 아무것도 안 하고, 결국 **상주 집합이 담겨 온 순서**가 곧
+   * 우선순위였다 — 그 순서가 좌표와 상관있어서 커버가 화면 왼쪽에만 우르르 몰렸다.
+   * 최소 간격(`spaced`)은 54px 겹침만 막을 뿐 "고루 퍼짐" 을 만들지는 못한다.
+   *
+   * 그래서 **화면을 커버 수만큼 칸으로 나누고 칸마다 하나씩** 집는다. 이미 커버가 있는 칸은
+   * 건너뛰므로 새 커버는 늘 비어 있는 쪽으로 간다.
+   */
+  if (picked.length < n && !panning) {
     const candidates = new Set<number>();
     for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
-    if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
-    const fill = [...candidates].filter((i) => !picked.includes(i)).sort((a, b) => e.songs[b].weight - e.songs[a].weight);
+    /**
+     * 격자 대표곡을 **늘 함께 넣는다.** 예전에는 후보가 모자랄 때만 더했는데, 대표곡 40곡이
+     * 한쪽에 뭉쳐 있으면 개수는 충분하면서 자리는 비는 일이 생긴다. `chosen` 은 86px 월드
+     * 격자에서 칸마다 하나씩 뽑은 것이라 화면에 고르게 흩어져 있다.
+     */
+    for (const i of e.chosen) candidates.add(i);
+
+    // 칸마다 하나씩 (규칙과 검사는 `cover-spread.ts`)
+    const at = (i: number) => ({ x: e.pos[i * 2], y: e.pos[i * 2 + 1] });
+    const { cols, rows } = gridFor(n, f);
+    const taken = new Set(picked.map((i) => cellOf(at(i).x, at(i).y, f, cols, rows)));
+    /*
+     * 같은 칸에 여럿이면 `spreadOrder` 가 **먼저 온 것**을 남긴다. 그래서 넣기 전에 줄을
+     * 세워 둔다 — 앨범 ID 있음 > 재생수 > 받은 순서 (S15P21A405-528).
+     */
+    const fill = spreadOrder(
+      [...candidates]
+        .filter((i) => !picked.includes(i) && usable(i, true))
+        .sort(byCoverPriority((i) => e.songs[i].albumMbid != null, (i) => e.songs[i].weight)),
+      at,
+      f,
+      n,
+      taken,
+    );
     // 처음(들고 있던 게 없다)에는 한 번에 채운다. 그 뒤로는 한 칸씩만 — 위 주석 참고
     let room = coverIdx.length === 0 ? n : COVER_COUNT.fillPerFrame;
     for (const i of fill) {
       if (picked.length >= n || room <= 0) break;
-      if (usable(i) && spaced(i, picked)) {
+      if (spaced(i, picked)) {
         picked.push(i);
         room--;
       }
@@ -371,8 +432,9 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.font = `500 9.5px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
-    const mag = starMag(it.s);
-    const S = (19 + Math.pow(mag, 1.4) * 14) * grow;
+    // 크기도 글자 밝기도 곡마다 같다 (S15P21A405-518) — 둘 다 weight 에서 나오던 값인데
+    // 실데이터는 weight 가 전부 0 이라 musicId 해시로 굴러가고 있었다. 배율 확대만 남긴다
+    const S = COVER_COUNT.sizePx * grow;
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다
@@ -391,7 +453,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     g.strokeStyle = "rgba(255,255,255,.24)";
     g.lineWidth = 1;
     g.stroke();
-    g.fillStyle = `rgba(233,241,255,${(0.34 + mag * 0.34).toFixed(2)})`;
+    g.fillStyle = "rgba(233,241,255,.58)";
     g.fillText(fitText(g, it.s.title, 88), it.px, it.py + S / 2 + 9);
   }
   g.globalAlpha = 1;

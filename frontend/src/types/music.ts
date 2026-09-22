@@ -30,6 +30,13 @@ export interface Music {
   id: Id;
   /** MusicBrainz recording MBID(36자 UUID) 또는 SHA-1 경로 해시 폴백(40자) */
   mbid: string;
+  /**
+   * 이 곡이 실린 **앨범**의 MusicBrainz 릴리스 ID (S15P21A405-518). `mbid` 는 곡(recording) 쪽이라
+   * 앨범 커버를 못 찾는다 — 커버를 여는 열쇠는 이 값이다 (`render/cover-art`).
+   *
+   * 2026-09-21 배포 확인 — 지도 응답 100건 전부 값이 있었다. 그래도 없는 곡은 절차적 커버로 떨어진다.
+   */
+  albumMbid?: string | null;
   /** 곡명 */
   title: string;
   /** 아티스트명 */

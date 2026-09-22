@@ -25,6 +25,17 @@ import { useEffect, type RefObject } from "react";
  * 막힌다** — `click` 은 별개의 이벤트라 그대로 뒤따라 오고, 탭바가 그걸로 화면을 옮긴다.
  * 그래서 바깥 `pointerdown` 을 잡은 뒤 **뒤따르는 `click` 한 번**까지 같이 삼킨다.
  *
+ * ## 삼키는 쪽은 이 훅의 수명 밖에 둔다
+ *
+ * 처음에는 `click` 도 아래 `useEffect` 안에서 들었는데 **안 먹었다.** `pointerdown` 에서
+ * 닫으면 React 가 곧바로 다시 그리고, `enabled` 가 false 가 되면서 **정리 함수가 먼저 돌아
+ * 리스너를 떼어 버린다.** 그 뒤에 오는 `click` 은 삼킬 사람이 없다 — 시트는 닫히는데 탭은
+ * 그대로 눌려 화면이 넘어갔다 (실측: 시트 닫힘 + 주소가 `/chart` 로 바뀜).
+ *
+ * 그래서 삼키는 리스너는 `pointerdown` 을 잡은 그 자리에서 **직접 걸고 스스로 뗀다.**
+ * 이 훅이 그 사이에 사라져도 살아남는다. `click` 이 끝내 안 오는 경우(스크롤로 취소 등)를
+ * 대비해 시한도 같이 건다 — 안 그러면 다음에 엉뚱한 누름 하나를 먹는다.
+ *
  * @param ref      이 요소 **안쪽**을 누른 것은 바깥으로 치지 않는다
  * @param onDismiss 바깥을 눌렀을 때 부른다
  * @param enabled  꺼 두면 아무것도 듣지 않는다 (데스크톱·닫혀 있을 때)
@@ -33,39 +44,44 @@ export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismis
   useEffect(() => {
     if (!enabled) return;
 
-    /** 바깥 누름을 잡았다. 뒤따라 오는 click 한 번을 삼켜야 한다 */
-    let swallowClick = false;
-
     const isOutside = (target: EventTarget | null) => {
       const el = ref.current;
       if (!el) return false;
       return !(target instanceof Node) || !el.contains(target);
     };
 
+    /**
+     * 뒤따라 오는 `click` 한 번을 삼킨다. **이 훅이 사라진 뒤에 와도 삼켜야** 하므로
+     * `useEffect` 정리와 엮지 않고 스스로 뗀다 (위 주석 참고).
+     *
+     * `preventDefault` 도 부른다 — 링크처럼 기본 동작을 가진 요소가 바깥에 있으면 전파를
+     * 막는 것만으로는 안 멈춘다.
+     */
+    const swallowNextClick = () => {
+      let timer = 0;
+      const off = () => {
+        document.removeEventListener("click", swallow, true);
+        window.clearTimeout(timer);
+      };
+      const swallow = (e: MouseEvent) => {
+        e.stopPropagation();
+        e.preventDefault();
+        off();
+      };
+      document.addEventListener("click", swallow, true);
+      // click 이 끝내 안 오는 경우(끌다가 취소 등)를 대비한 시한. 없으면 다음 누름을 먹는다
+      timer = window.setTimeout(off, 700);
+    };
+
     const onPointerDown = (e: PointerEvent) => {
       if (!isOutside(e.target)) return;
-      swallowClick = true;
       e.stopPropagation();
       e.preventDefault();
+      swallowNextClick();
       onDismiss();
     };
 
-    /**
-     * `preventDefault` 를 여기서도 부른다 — 링크처럼 기본 동작을 가진 요소가 바깥에 있으면
-     * 전파를 막는 것만으로는 안 멈춘다.
-     */
-    const onClick = (e: MouseEvent) => {
-      if (!swallowClick) return;
-      swallowClick = false;
-      e.stopPropagation();
-      e.preventDefault();
-    };
-
     document.addEventListener("pointerdown", onPointerDown, true);
-    document.addEventListener("click", onClick, true);
-    return () => {
-      document.removeEventListener("pointerdown", onPointerDown, true);
-      document.removeEventListener("click", onClick, true);
-    };
+    return () => document.removeEventListener("pointerdown", onPointerDown, true);
   }, [ref, onDismiss, enabled]);
 }

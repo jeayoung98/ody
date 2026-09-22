@@ -7,12 +7,15 @@ import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -32,16 +35,28 @@ import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
 import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.message.RealtimeMessageService;
+import com.ssafy.backend.realtime.message.RealtimeMessageType;
+import com.ssafy.backend.realtime.message.WebSocketDestination;
+import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.ride.RideRiderLeftPayload;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DisbandResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountStatus;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.Ride;
+import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.RiderLeaveResult;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStatus;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+import com.ssafy.backend.realtime.service.viewport.ViewportDeltaService;
 
 /** 따라가기 시작이 무엇을 어떤 순서로 하는지 검증한다. */
 @ExtendWith(MockitoExtension.class)
@@ -61,6 +76,9 @@ class RideServiceTests {
 	@Mock RideSubscriptionService rideSubscriptionService;
 	@Mock RideViewportService rideViewportService;
 	@Mock RealtimeEventService realtimeEventService;
+	@Mock RealtimeMessageService realtimeMessageService;
+	@Mock MeetingService meetingService;
+	@Mock ViewportDeltaService viewportDeltaService;
 	@InjectMocks RideService service;
 
 	private final double[] location = location();
@@ -347,5 +365,230 @@ class RideServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(rideViewportService);
+	}
+
+	// ── 하차 ───────────────────────────────────────────────
+
+	private void givenRiding() {
+		when(rideRedisRepository.findRide(RIDER)).thenReturn(new Ride(CAPTAIN, 5L));
+		when(presenceRedisRepository.snapshot(RIDER)).thenReturn(standingAt(MUSIC, LAYER));
+	}
+
+	private void givenDismountOk(int remaining) {
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, remaining, List.of()));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+	}
+
+	@Test
+	@DisplayName("따라가는 중이 아니면 내릴 것도 없다")
+	void notRidingIsRejected() {
+		when(rideRedisRepository.findRide(RIDER)).thenReturn(null);
+
+		assertThatThrownBy(() -> service.dismount(RIDER))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_RIDING));
+
+		verify(rideRedisRepository, never()).dismount(anyString(), anyString());
+	}
+
+	@Test
+	@DisplayName("내리면 인솔자가 마지막으로 있던 자리를 돌려준다")
+	void dismountAnswersWithSpot() {
+		givenRiding();
+		givenDismountOk(2);
+
+		DismountResponse response = service.dismount(RIDER);
+
+		assertThat(response.musicId()).isEqualTo(MUSIC);
+		assertThat(response.layer()).isEqualTo(LAYER);
+		assertThat(response.cellX()).isEqualTo(7);
+		assertThat(response.cellY()).isEqualTo(5);
+	}
+
+	/** 따라가는 동안 지도에 없었으니 이전 자리가 있으면 안 된다. */
+	@Test
+	@DisplayName("지도에 새로 나타났다고 알린다")
+	void notifiesEnteredMap() {
+		givenRiding();
+		givenDismountOk(2);
+
+		service.dismount(RIDER);
+
+		ArgumentCaptor<PositionChanged> captor = ArgumentCaptor.forClass(PositionChanged.class);
+		verify(realtimeEventService).send(captor.capture());
+		PositionChanged event = captor.getValue();
+		assertThat(event.oldMusicId()).isNull();
+		assertThat(event.oldLayer()).isNull();
+		assertThat(event.oldCell()).isNull();
+		assertThat(event.newMusicId()).isEqualTo(MUSIC);
+		assertThat(event.newCell()).isEqualTo("7:5");
+	}
+
+	@Test
+	@DisplayName("인솔자에게 누가 내렸는지와 남은 인원을 알린다")
+	void notifiesCaptain() {
+		givenRiding();
+		givenDismountOk(3);
+
+		service.dismount(RIDER);
+
+		verify(realtimeMessageService).sendToUser(CAPTAIN, WebSocketDestination.QUEUE_PRESENCE,
+				RealtimeMessageType.RIDE_RIDER_LEFT, new RideRiderLeftPayload(RIDER, 3));
+	}
+
+	/** 재생 명령을 보내면 듣던 곡이 끊긴다. 기록을 또 남기면 같은 곡이 두 번 쌓인다. */
+	@Test
+	@DisplayName("재생 명령도 재생 기록도 만들지 않는다")
+	void dismountTouchesNeitherPlaybackNorHistory() {
+		givenRiding();
+		givenDismountOk(0);
+
+		service.dismount(RIDER);
+
+		verifyNoInteractions(musicPlayService, ridePlaybackService);
+		verify(realtimeMessageService, never()).sendToUser(
+				anyString(), anyString(), eq(RealtimeMessageType.RIDE_PLAYBACK), any());
+		verify(realtimeMessageService, never()).sendToUser(
+				anyString(), anyString(), eq(RealtimeMessageType.RIDE_TRACK), any());
+	}
+
+	@Test
+	@DisplayName("그 사이에 상태가 바뀌었으면 알리지 않는다")
+	void staleDismountNotifiesNobody() {
+		givenRiding();
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenReturn(new DismountResult(DismountStatus.STALE, 0, 0, 0, 0, 0, List.of()));
+
+		assertThatThrownBy(() -> service.dismount(RIDER))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(realtimeEventService, realtimeMessageService);
+	}
+
+	/** 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이 성립한다. */
+	@Test
+	@DisplayName("내리면 그 곡에 있던 사람들과 만남을 센다")
+	void dismountRecordsMeetings() {
+		String mate = "mate@example.com";
+		String outsider = "outsider@example.com";
+		givenRiding();
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, mate));
+		when(rideRedisRepository.dismount(RIDER, CAPTAIN))
+				.thenReturn(new DismountResult(DismountStatus.OK, MUSIC, LAYER, 7, 5, 1,
+						List.of(CAPTAIN, outsider)));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+
+		service.dismount(RIDER);
+
+		// 선단은 내리기 전에 찍어야 한다. 내린 뒤에 읽으면 본인이 빠져 있다.
+		verify(meetingService).recordOnDismount(
+				List.of(RIDER), List.of(CAPTAIN, outsider), Set.of(CAPTAIN, RIDER, mate));
+	}
+
+	@Test
+	@DisplayName("내릴 것이 없으면 만남도 세지 않는다")
+	void rejectedDismountRecordsNothing() {
+		when(rideRedisRepository.findRide(RIDER)).thenReturn(null);
+
+		assertThatThrownBy(() -> service.dismount(RIDER))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(meetingService);
+	}
+
+	// ── 선단 해체 ───────────────────────────────────────────
+
+	private static final String MATE = "mate@x.com";
+	private static final String OUTSIDER = "outsider@x.com";
+
+	private void givenDisbandOk() {
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of(RIDER, MATE));
+		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
+				true, MUSIC, LAYER, 7, 5, List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER)));
+		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
+	}
+
+	@Test
+	@DisplayName("해체하면 따라가던 사람 전원에게 끝났다고 알린다")
+	void disbandTellsEveryRider() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(realtimeMessageService).sendToUser(eq(RIDER), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+		verify(realtimeMessageService).sendToUser(eq(MATE), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+	}
+
+	/** 한 명씩 보내면 받는 쪽이 그 수만큼 다시 그리고 중간 상태가 화면에 보인다. */
+	@Test
+	@DisplayName("남들 화면에는 한 덩어리로 한 번만 알린다")
+	void disbandSendsOneBulkMessage() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(viewportDeltaService).sendBulkEnter(List.of(RIDER, MATE), LAYER, MUSIC, "7:5");
+	}
+
+	/** 선단은 흩기 전에 찍어야 한다. 흩고 나면 ride:riders 가 비어 있다. */
+	@Test
+	@DisplayName("만남은 선단을 뺀 사람들과만 센다")
+	void disbandRecordsMeetingsWithoutFleet() {
+		givenDisbandOk();
+
+		service.disband(CAPTAIN);
+
+		verify(meetingService).recordOnDismount(
+				List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER), Set.of(CAPTAIN, RIDER, MATE));
+	}
+
+	@Test
+	@DisplayName("따라오던 사람이 없으면 아무에게도 알리지 않는다")
+	void disbandWithoutRidersNotifiesNobody() {
+		when(rideRedisRepository.riders(CAPTAIN)).thenReturn(Set.of());
+		when(rideRedisRepository.disband(CAPTAIN))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+
+		service.disband(CAPTAIN);
+
+		verifyNoInteractions(realtimeMessageService, viewportDeltaService, meetingService);
+	}
+
+	// ── 따라가던 사람이 사라짐 ─────────────────────────────
+
+	/** 스스로 내린 것이 아니라 사라진 것이라 지도에 넣으면 유령이 된다. */
+	@Test
+	@DisplayName("따라가던 사람이 사라지면 인솔자에게 알리고 지도에는 넣지 않는다")
+	void goneRiderIsRemovedWithoutReturningToMap() {
+		when(rideRedisRepository.riders(RIDER)).thenReturn(Set.of());
+		when(rideRedisRepository.disband(RIDER))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+		when(rideRedisRepository.riderLeave(RIDER)).thenReturn(new RiderLeaveResult(CAPTAIN, 1));
+
+		service.onUserGone(RIDER);
+
+		verify(realtimeMessageService).sendToUser(eq(CAPTAIN), anyString(),
+				eq(RealtimeMessageType.RIDE_RIDER_LEFT), eq(new RideRiderLeftPayload(RIDER, 1)));
+		verifyNoInteractions(realtimeEventService, viewportDeltaService);
+	}
+
+	@Test
+	@DisplayName("따라가지도 이끌지도 않던 사람이 나가면 아무 일도 없다")
+	void goneStrangerChangesNothing() {
+		when(rideRedisRepository.riders(RIDER)).thenReturn(Set.of());
+		when(rideRedisRepository.disband(RIDER))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of()));
+		when(rideRedisRepository.riderLeave(RIDER)).thenReturn(null);
+
+		service.onUserGone(RIDER);
+
+		verifyNoInteractions(realtimeMessageService, realtimeEventService,
+				viewportDeltaService, meetingService);
 	}
 }

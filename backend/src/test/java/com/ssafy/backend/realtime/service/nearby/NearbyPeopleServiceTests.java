@@ -2,6 +2,7 @@ package com.ssafy.backend.realtime.service.nearby;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -78,7 +79,7 @@ class NearbyPeopleServiceTests {
         when(userDisplayService.find("u2@x.com")).thenReturn(new UserDisplay("nick2", "img2"));
         when(meetingService.countWith(ME, "u1@x.com")).thenReturn(4);
         when(meetingService.countWith(ME, "u2@x.com")).thenReturn(1);
-        when(riderCountService.count("u1@x.com")).thenReturn(2);
+        when(riderCountService.countAll(anyCollection())).thenReturn(Map.of("u1@x.com", 2));
 
         NearbySnapshot res = service.open(ME);
 

@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.service.nearby;
 
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -87,6 +88,14 @@ public class NearbyPeopleService {
 
 		// 5) 곡마다 듣는 사람을 꺼내 사람 한 명씩 목록에 넣는다. 나 자신은 뺀다.
 		//    곡이 가까운 순으로 와 있어서 이 순서대로 넣으면 목록도 자연히 가까운 순이 된다.
+		// 따라오는 인원 수는 한 번에 읽는다. 한 명씩 읽으면 목록에 오르는 사람 수만큼 Redis 를 다녀와야 한다.
+		Set<String> listenerEmails = new LinkedHashSet<>();
+		for (NearbyMusic song : songs) {
+			listenerEmails.addAll(listenersByMusic.getOrDefault(song.musicId(), Set.of()));
+		}
+		listenerEmails.remove(email);
+		Map<String, Integer> riderCountByEmail = riderCountService.countAll(listenerEmails);
+
 		List<NearbyPerson> people = new ArrayList<>();
 		for (NearbyMusic song : songs) {
 			Set<String> listeners = listenersByMusic.getOrDefault(song.musicId(), Set.of());
@@ -97,7 +106,8 @@ public class NearbyPeopleService {
 				UserDisplay who = userDisplayService.find(listener);
 				people.add(new NearbyPerson(
 						listener, who.nickname(), who.imageUrl(),
-						meetingService.countWith(email, listener), riderCountService.count(listener),
+						meetingService.countWith(email, listener),
+						riderCountByEmail.getOrDefault(listener, 0),
 						song.musicId(), song.title(), song.artist(), song.distance()));
 			}
 		}

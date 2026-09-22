@@ -34,6 +34,13 @@ public class RideRedisRepository {
 	// presence 쪽 키는 PresenceRedisRepository 와 같은 문자열이다. 접속 번호와 현재 곡을
 	// 따라가기 시작 검사에서 같이 봐야 해서, 두 저장소를 오가지 않고 한 스크립트에 넘긴다.
 	private static final String PRESENCE_USER_PREFIX = "presence:user:";
+	// 지도 인덱스 키. 내릴 때 여기에 다시 넣어야 남들 화면에 보인다.
+	// PresenceRedisRepository 와 같은 문자열이다 — 같은 인덱스를 가리킨다.
+	private static final String LISTENERS_PREFIX = "listeners:";
+	private static final String LAYER_LISTENERS_PREFIX = "layer-listeners:";
+	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:";
+	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:";
+	private static final String USERCOUNT_PREFIX = "cell:usercount:";
 
 	private static final String CAPTAIN_PREFIX = "ride:captain:"; // 내가 따라가는 사람
 	private static final String RIDERS_PREFIX = "ride:riders:"; // 나를 따라오는 사람들
@@ -53,6 +60,9 @@ public class RideRedisRepository {
 
 	private final StringRedisTemplate redis;
 	private final DefaultRedisScript<List> rideMountScript;
+	private final DefaultRedisScript<List> rideDismountScript;
+	private final DefaultRedisScript<List> rideDisbandScript;
+	private final DefaultRedisScript<List> rideRiderLeaveScript;
 
 	/** 따라가기 시작 결과. 거부면 musicId·layer 는 의미 없다. */
 	public record MountResult(MountStatus status, long musicId, int layer) {
@@ -133,6 +143,143 @@ public class RideRedisRepository {
 		};
 	}
 
+	/**
+	 * 하차 결과. 성공이면 내린 자리와 남은 인원이 같이 온다.
+	 *
+	 * @param residents 내린 사람이 지도에 다시 들어가기 전, 그 곡에 있던 사람들. 만남 계산에 쓴다
+	 */
+	public record DismountResult(DismountStatus status, long musicId, int layer,
+			int cellX, int cellY, int remainingRiders, List<String> residents) {
+
+		/** 실패 결과를 만든다. */
+		private static DismountResult of(DismountStatus status) {
+			return new DismountResult(status, 0, 0, 0, 0, 0, List.of());
+		}
+	}
+
+	/** 하차가 거부된 이유. */
+	public enum DismountStatus {
+		/** 성공. */
+		OK,
+		/** 따라가는 중이 아니다. 이미 내려졌을 수도 있다. */
+		NOT_RIDING,
+		/** 지금 연결에서 만든 탑승이 아니거나 그 사이에 갈아탔다. */
+		STALE
+	}
+
+	/**
+	 * 해체 결과.
+	 *
+	 * @param leftRiders 지도에 다시 넣은 사람들. 접속이 이미 끊긴 사람은 빠진다
+	 * @param residents 아무도 다시 넣기 전, 그 곡에 있던 사람들. 만남 계산에 쓴다
+	 */
+	public record DisbandResult(boolean hadRiders, long musicId, int layer, int cellX, int cellY,
+			List<String> leftRiders, List<String> residents) {
+
+		/** 따라오던 사람이 없었던 결과. */
+		private static DisbandResult empty() {
+			return new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of());
+		}
+	}
+
+	/**
+	 * 따라가던 사람 한 명이 사라졌을 때 그 사람만 뺀다. 선단은 그대로 둔다.
+	 *
+	 * @param riderEmail 사라진 사람
+	 * @param remainingRiders 그 사람을 뺀 뒤 남은 인원
+	 */
+	public record RiderLeaveResult(String captainEmail, int remainingRiders) {
+	}
+
+	/**
+	 * 따라가던 사람 한 명을 선단에서 뺀다.
+	 *
+	 * 지도에 다시 넣지 않는다. 사라진 사람이라 넣으면 유령이 된다.
+	 * 스스로 내리는 것(dismount)과 다른 점이 그것이다.
+	 *
+	 * @param riderEmail 사라진 사람
+	 * @return 인솔자와 남은 인원. 따라가는 중이 아니었으면 null
+	 */
+	@SuppressWarnings("unchecked")
+	public RiderLeaveResult riderLeave(String riderEmail) {
+		List<String> r = redis.execute(rideRiderLeaveScript,
+				List.of(CAPTAIN_PREFIX + riderEmail),
+				riderEmail, RIDERS_PREFIX);
+
+		if (r == null || r.size() < 3 || !"OK".equals(r.get(0))) {
+			return null;
+		}
+		return new RiderLeaveResult(r.get(1), Integer.parseInt(r.get(2)));
+	}
+
+	/**
+	 * 인솔자 한 명의 선단을 흩는다. 그를 따라가던 사람 전원이 인솔자의 마지막 곡에 남는다.
+	 *
+	 * 한 명씩 나눠 하면 그 사이에 따라가지도 않고 지도에도 없는 사람이 생긴다.
+	 * 스무 명이면 그 구간이 스무 배 길다. 그래서 한 스크립트에서 끝낸다.
+	 *
+	 * @param captainEmail 사라진 인솔자
+	 * @return 내린 사람들과 그 곡에 원래 있던 사람들. 따라오던 사람이 없었으면 빈 결과
+	 */
+	@SuppressWarnings("unchecked")
+	public DisbandResult disband(String captainEmail) {
+		List<String> r = redis.execute(rideDisbandScript,
+				List.of(RIDERS_PREFIX + captainEmail,
+						PLAYBACK_PREFIX + captainEmail,
+						PANEL_PREFIX + captainEmail),
+				captainEmail, PRESENCE_USER_PREFIX, CAPTAIN_PREFIX,
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX,
+				ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+
+		if (r == null || r.isEmpty() || !"OK".equals(r.get(0))) {
+			return DisbandResult.empty();
+		}
+		// 여섯·일곱 번째 칸이 각각 몇 명인지를 말해 준다. 그 뒤로 내린 사람들, 그 뒤로 원래 있던 사람들.
+		int leftCount = Integer.parseInt(r.get(5));
+		int residentCount = Integer.parseInt(r.get(6));
+		int residentFrom = 7 + leftCount;
+		return new DisbandResult(true,
+				Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
+				Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
+				List.copyOf(r.subList(7, residentFrom)),
+				List.copyOf(r.subList(residentFrom, residentFrom + residentCount)));
+	}
+
+	/**
+	 * 따라가기를 끝내고 지도에 다시 넣는다.
+	 *
+	 * 등록 지우기와 지도 복귀를 한 번에 한다. 나누면 그 사이에
+	 * "따라가지도 않고 지도에도 없는" 순간이 생긴다.
+	 *
+	 * @param riderEmail 내리는 사람
+	 * @param captainEmail 따라가던 사람. 실제와 다르면 거부한다
+	 * @return 성공이면 돌아간 자리·남은 인원·그 곡에 있던 사람들, 아니면 거부 사유
+	 */
+	@SuppressWarnings("unchecked")
+	public DismountResult dismount(String riderEmail, String captainEmail) {
+		List<String> r = redis.execute(rideDismountScript,
+				List.of(PRESENCE_USER_PREFIX + riderEmail,
+						CAPTAIN_PREFIX + riderEmail,
+						RIDERS_PREFIX + captainEmail),
+				riderEmail, captainEmail,
+				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX,
+				ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX);
+
+		// 빈 응답은 스크립트가 못 돈 것이다. 아무것도 안 지워졌으니 거부로 본다.
+		if (r == null || r.isEmpty()) {
+			return DismountResult.of(DismountStatus.STALE);
+		}
+		return switch (r.get(0)) {
+			// 여섯 번째 칸까지가 자리와 남은 인원이고, 그 뒤는 전부 그 곡에 있던 사람들이다.
+			case "OK" -> new DismountResult(DismountStatus.OK,
+					Long.parseLong(r.get(1)), Integer.parseInt(r.get(2)),
+					Integer.parseInt(r.get(3)), Integer.parseInt(r.get(4)),
+					Integer.parseInt(r.get(5)), List.copyOf(r.subList(6, r.size())));
+			case "NOT_RIDING" -> DismountResult.of(DismountStatus.NOT_RIDING);
+			default -> DismountResult.of(DismountStatus.STALE);
+		};
+	}
+
 	/** 내가 누구를 따라가는지 읽는다. 안 따라가면 null. */
 	public Ride findRide(String riderEmail) {
 		List<Object> v = redis.opsForHash().multiGet(CAPTAIN_PREFIX + riderEmail, List.of("captain", "epoch"));
@@ -186,6 +333,48 @@ public class RideRedisRepository {
 			}
 		}
 		return ridersByCaptain;
+	}
+
+	/**
+	 * 사람 목록을 넘기면, 그 사람들을 따라오는 인원이 각각 몇 명인지 돌려준다.
+	 *
+	 * 누가 인솔자인지 미리 알 수 없어서 화면에 보이는 사람을 전부 넘긴다.
+	 * ride:riders 가 비어 있으면 인솔자가 아닌 것이고, 그 사람은 결과에서 빠진다.
+	 *
+	 * 뷰포트에 20명이 있다고 할 때, 한 명씩 읽으면 Redis 를 스무 번 다녀와야 해서 한 번에 묶어 보낸다.
+	 * 누가 따라오는지는 필요 없고 몇 명인지만 필요해서 SCARD 로 센다.
+	 *
+	 * @param captainEmails 인원 수를 알고 싶은 사람들
+	 * @return 따라오는 사람이 있는 사람만 담긴다. 없는 사람은 아예 빠진다
+	 */
+	public Map<String, Integer> riderCountsOf(Collection<String> captainEmails) {
+		if (captainEmails == null || captainEmails.isEmpty()) {
+			return Map.of();
+		}
+		List<String> targets = List.copyOf(new LinkedHashSet<>(captainEmails));
+		byte[][] keys = targets.stream()
+				.map(email -> redis.getStringSerializer().serialize(RIDERS_PREFIX + email))
+				.toArray(byte[][]::new);
+		List<Object> results = redis.executePipelined((RedisCallback<Object>) connection -> {
+			for (byte[] key : keys) {
+				connection.setCommands().sCard(key);
+			}
+			return null;
+		});
+
+		Map<String, Integer> countByCaptain = new LinkedHashMap<>();
+		for (int i = 0; i < targets.size(); i++) {
+			int count = toCount(i < results.size() ? results.get(i) : null);
+			if (count > 0) {
+				countByCaptain.put(targets.get(i), count);
+			}
+		}
+		return countByCaptain;
+	}
+
+	/** 묶어 읽은 결과 한 칸을 인원 수로 바꾼다. */
+	private static int toCount(Object value) {
+		return value instanceof Number n ? n.intValue() : 0;
 	}
 
 	/** 묶어 읽은 결과 한 칸을 사람 목록으로 바꾼다. */

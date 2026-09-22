@@ -4,12 +4,14 @@ import java.security.Principal;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.common.ApiResponse;
+import com.ssafy.backend.realtime.dto.ride.DismountResponse;
 import com.ssafy.backend.realtime.dto.ride.RideRequest;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.service.ride.RideService;
@@ -42,5 +44,17 @@ public class RideRestController {
 	@PostMapping("/ride")
 	public ApiResponse<RideResponse> ride(@Valid @RequestBody RideRequest request, Principal principal) {
 		return ApiResponse.success(rideService.mount(principal.getName(), request.captainEmail()));
+	}
+
+	/**
+	 * 하차. 따라가는 동안 막아 둔 것 중에 이것만 열려 있다 — 나갈 수 없는 상태는 그 자체로 결함이다.
+	 * 인솔자가 마지막으로 있던 곡에 그대로 남고, 듣던 곡은 끊기지 않는다.
+	 */
+	@Operation(summary = "하차",
+			description = "따라가기를 끝낸다. 인솔자가 마지막으로 있던 곡에 단독으로 남고 "
+					+ "서버는 어떤 재생 명령도 보내지 않는다. 따라가는 중이 아니면 거부한다.")
+	@DeleteMapping("/ride")
+	public ApiResponse<DismountResponse> dismount(Principal principal) {
+		return ApiResponse.success(rideService.dismount(principal.getName()));
 	}
 }

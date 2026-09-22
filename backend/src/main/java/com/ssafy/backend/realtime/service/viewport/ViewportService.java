@@ -434,13 +434,13 @@ public class ViewportService {
 			List<VisibleMusic> visibleMusic,
 			Map<Long, List<String>> listenersByMusic) {
 		Map<String, UserDisplay> displayByEmail = new LinkedHashMap<>();
-		Map<String, Integer> riderCountByEmail = new LinkedHashMap<>();
-		listenersByMusic.values().stream()
+		List<String> emails = listenersByMusic.values().stream()
 				.flatMap(List::stream)
-				.forEach(email -> {
-					displayByEmail.computeIfAbsent(email, userDisplayService::find);
-					riderCountByEmail.computeIfAbsent(email, riderCountService::count);
-				});
+				.distinct()
+				.toList();
+		emails.forEach(email -> displayByEmail.computeIfAbsent(email, userDisplayService::find));
+		// 따라오는 인원 수는 한 번에 읽는다. 한 명씩 읽으면 화면에 보이는 사람 수만큼 Redis 를 다녀와야 한다.
+		Map<String, Integer> riderCountByEmail = riderCountService.countAll(emails);
 
 		List<ViewportMusicGroup> groups = new ArrayList<>();
 		visibleMusic.stream()
@@ -450,7 +450,8 @@ public class ViewportService {
 							.map(email -> {
 								UserDisplay display = displayByEmail.get(email);
 								return new ViewportUser(
-										email, display.nickname(), display.imageUrl(), riderCountByEmail.get(email));
+										email, display.nickname(), display.imageUrl(),
+										riderCountByEmail.getOrDefault(email, 0));
 							})
 							.toList();
 					if (!users.isEmpty()) {

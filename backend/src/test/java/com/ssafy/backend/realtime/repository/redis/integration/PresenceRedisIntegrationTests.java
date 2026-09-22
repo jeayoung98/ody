@@ -31,6 +31,7 @@ import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
+import com.ssafy.backend.realtime.service.ride.RideService;
 
 /** 실제 Redis에서 사용자 배치와 상태 관리를 검증한다. */
 @EnabledIfEnvironmentVariable(named = "RUN_REDIS_INTEGRATION", matches = "true")
@@ -269,7 +270,8 @@ class PresenceRedisIntegrationTests {
 				mock(MusicLocationService.class),
 				mock(MusicPositionCalculator.class),
 				eventService,
-				mock(PlayHistoryMapper.class));
+				mock(PlayHistoryMapper.class),
+				mock(RideService.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 다른 탭이 남아 있지 않은 재연결이므로 이전 위치를 지운다.
@@ -303,7 +305,8 @@ class PresenceRedisIntegrationTests {
 				mock(MusicLocationService.class),
 				mock(MusicPositionCalculator.class),
 				eventService,
-				mock(PlayHistoryMapper.class));
+				mock(PlayHistoryMapper.class),
+				mock(RideService.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 다른 탭이 살아 있으므로 접속 번호만 올리고 위치는 건드리지 않는다.

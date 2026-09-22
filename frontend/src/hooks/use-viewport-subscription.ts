@@ -4,8 +4,18 @@ import { useEffect, useRef, useState } from "react";
 import { NO_GENRE_ID, REALTIME } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { expect, onConnectionChange, onType, send, settle } from "@/lib/realtime/stomp-client";
+import { isRiding } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
-import type { CrowdCell, LayerBox, NearbyUser, ViewportCellCounts, ViewportDelta, ViewportSnapshot } from "@/types";
+import type {
+  CrowdCell,
+  LayerBox,
+  NearbyUser,
+  ViewportBulkEnter,
+  ViewportCellCounts,
+  ViewportDelta,
+  ViewportRiderCount,
+  ViewportSnapshot,
+} from "@/types";
 
 /**
  * 지도 위 사람 (S15P21A405-482, 실시간 작업명세 §5).
@@ -36,7 +46,7 @@ export function toViewportRequest(seq: number, boxes: readonly LayerBox[], view:
 }
 
 /** 절차적 아바타 시드 — 목 시절과 같은 방식이라 같은 사람은 같은 얼굴이다 */
-function seedOf(email: string): number[] {
+export function seedOf(email: string): number[] {
   let h = 2166136261;
   for (const ch of email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
   return Array.from({ length: 6 }, (_, i) => {
@@ -86,9 +96,15 @@ function toNearbyUser(p: {
  * 컴포넌트 밖에 둔다 — 스토어와 엔진에서 직접 읽으므로 렌더 상태가 필요 없고, 타임아웃에서
  * 자기 자신을 다시 부르는 자리(§12.3)라 `useCallback` 안에서는 자기 참조가 안 된다.
  */
-function pushViewport(): void {
+export function pushViewport(): void {
   const e = getMapEngine();
   if (!e) return;
+  /**
+   * **따라가는 동안에는 내 화면을 만들지 않는다** (2차 명세 §4.2·§6, S15P21A405-530).
+   * 인솔자가 받은 화면을 `RIDE_VIEWPORT*` 로 옮겨 받으므로 내 요청은 보낼 이유도 없고,
+   * 서버가 `RIDE_NOT_CAPTAIN` 으로 거부한다.
+   */
+  if (isRiding()) return;
   viewportSeq += 1;
   const ok = send(REALTIME.send.viewport, toViewportRequest(viewportSeq, useMapStore.getState().boxes, e.viewBox()));
   // 응답도 오류도 없으면 한 번 더 보낸다. 소켓은 조용히 실패할 수 있다
@@ -103,6 +119,8 @@ export function useViewportSubscription(enabled: boolean): void {
   const [crowd, setCrowd] = useState<CrowdCell[]>([]);
   /** 지금 모드. 반대 모드의 프레임을 버리는 기준이다 */
   const mode = useRef<ViewportSnapshot["mode"] | null>(null);
+  /** 옮겨 받은 화면(`RIDE_VIEWPORT*`)의 마지막 번호. **인솔자의 번호라 내 것과 섞지 않는다** */
+  const ridingSeq = useRef(0);
 
   // 겹이 바뀌면 다시 보낸다. **join 다음이다** — 순서가 바뀌면 내 표식이 이전 겹에 남는다 (§3.2).
   // `prefetchBoxes` 만으로는 보내지 않는다. layer·boxes 가 실제로 바뀐 뒤다
@@ -117,10 +135,23 @@ export function useViewportSubscription(enabled: boolean): void {
 
   useEffect(() => {
     if (!enabled) return;
-    const stopSnap = onType<ViewportSnapshot>(["VIEWPORT_SNAPSHOT"], (p) => {
-      settle(VIEWPORT_KEY);
-      // 늦게 도착한 옛 화면의 결과다 (§5.2)
-      if (p.requestSeq !== viewportSeq) return;
+
+    /**
+     * **`RIDE_VIEWPORT*` 는 내 번호로 거르면 안 된다** (2차 명세 §4.2, S15P21A405-530).
+     * 그 `requestSeq` 는 **인솔자의** 화면 요청 번호다. 내 번호와 견주면 전부 버려져 지도가
+     * 통째로 비고, 오류도 안 뜬다 — 이름을 가른 이유가 바로 이것이다.
+     *
+     * 대신 옮겨 받은 것끼리만 단조성을 본다. 인솔자가 화면을 옮기면 번호가 오르므로, 그보다
+     * 작은 번호는 늦게 도착한 옛 화면이다.
+     */
+    const fresh = (requestSeq: number, ride: boolean) => {
+      if (!ride) return requestSeq === viewportSeq;
+      if (requestSeq < ridingSeq.current) return false;
+      ridingSeq.current = requestSeq;
+      return true;
+    };
+
+    const applySnapshot = (p: ViewportSnapshot) => {
       mode.current = p.mode;
       if (p.mode === "INDIVIDUAL") {
         const next = new Map<string, NearbyUser>();
@@ -131,34 +162,78 @@ export function useViewportSubscription(enabled: boolean): void {
         setCrowd(p.cells.map((c) => ({ x: c.x, y: c.y, count: c.count })));
         setPeople(new Map());
       }
+    };
+
+    const stopSnap = onType<ViewportSnapshot>(["VIEWPORT_SNAPSHOT", "RIDE_VIEWPORT"], (p, msg) => {
+      const ride = msg.type === "RIDE_VIEWPORT";
+      if (!ride) settle(VIEWPORT_KEY);
+      // 늦게 도착한 옛 화면의 결과다 (§5.2)
+      if (!fresh(p.requestSeq, ride)) return;
+      applySnapshot(p);
     });
 
     // 개별 델타는 INDIVIDUAL 일 때만 온다 (§5.3)
-    const stopDelta = onType<ViewportDelta>(["VIEWPORT_ENTER", "VIEWPORT_MOVE", "VIEWPORT_LEAVE"], (p, msg) => {
-      if (p.requestSeq !== viewportSeq || mode.current !== "INDIVIDUAL") return;
+    const stopDelta = onType<ViewportDelta>(
+      ["VIEWPORT_ENTER", "VIEWPORT_MOVE", "VIEWPORT_LEAVE", "RIDE_VIEWPORT_ENTER", "RIDE_VIEWPORT_MOVE", "RIDE_VIEWPORT_LEAVE"],
+      (p, msg) => {
+        const ride = msg.type.startsWith("RIDE_");
+        if (!fresh(p.requestSeq, ride) || mode.current !== "INDIVIDUAL") return;
+        setPeople((prev) => {
+          const next = new Map(prev);
+          if (msg.type === "VIEWPORT_LEAVE" || msg.type === "RIDE_VIEWPORT_LEAVE") {
+            next.delete(p.email);
+            return next;
+          }
+          // LEAVE 가 아니면 좌표가 온다. 없으면 그릴 수 없으니 무시한다
+          if (p.musicId == null || p.x == null || p.y == null) return prev;
+          next.set(p.email, toNearbyUser({ ...p, musicId: p.musicId, x: p.x, y: p.y }));
+          return next;
+        });
+      },
+    );
+
+    // 뭉치는 5초마다 **통째로 교체**된다. 0 인 자리는 아예 오지 않는다 (§5.4)
+    const stopCells = onType<ViewportCellCounts>(["VIEWPORT_CELL_COUNTS", "RIDE_VIEWPORT_CELL_COUNTS"], (p, msg) => {
+      if (!fresh(p.requestSeq, msg.type.startsWith("RIDE_")) || mode.current !== "CLUSTERED") return;
+      setCrowd(p.cells.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+    });
+
+    /**
+     * 선단이 흩어져 여럿이 **한 자리에** 나타났다 (2차 명세 §7.2).
+     *
+     * 좌표는 하나뿐이다 — 전원이 인솔자의 마지막 곡에 남기 때문이다. 한 덩어리로 받았으니
+     * **한 번만 다시 그린다.** 한 명씩 `setPeople` 을 부르면 이 메시지를 만든 의미가 없어진다.
+     */
+    const stopBulk = onType<ViewportBulkEnter>(["VIEWPORT_BULK_ENTER", "RIDE_VIEWPORT_BULK_ENTER"], (p, msg) => {
+      if (!fresh(p.requestSeq, msg.type.startsWith("RIDE_")) || mode.current !== "INDIVIDUAL") return;
       setPeople((prev) => {
         const next = new Map(prev);
-        if (msg.type === "VIEWPORT_LEAVE") {
-          next.delete(p.email);
-          return next;
-        }
-        // LEAVE 가 아니면 좌표가 온다. 없으면 그릴 수 없으니 무시한다
-        if (p.musicId == null || p.x == null || p.y == null) return prev;
-        next.set(p.email, toNearbyUser({ ...p, musicId: p.musicId, x: p.x, y: p.y }));
+        for (const u of p.users) next.set(u.email, toNearbyUser({ ...u, musicId: p.musicId, x: p.x, y: p.y }));
         return next;
       });
     });
 
-    // 뭉치는 5초마다 **통째로 교체**된다. 0 인 자리는 아예 오지 않는다 (§5.4)
-    const stopCells = onType<ViewportCellCounts>(["VIEWPORT_CELL_COUNTS"], (p) => {
-      if (p.requestSeq !== viewportSeq || mode.current !== "CLUSTERED") return;
-      setCrowd(p.cells.map((c) => ({ x: c.x, y: c.y, count: c.count })));
+    /**
+     * 인원수만 바뀌었다 (2차 명세 §7.1). **자리는 건드리지 않는다** — 좌표가 오지 않는다.
+     * 이게 없으면 스무 명이 타고 내려도 구경하는 쪽에는 계속 같은 수로 보인다.
+     */
+    const stopRiders = onType<ViewportRiderCount>(["VIEWPORT_RIDER_COUNT", "RIDE_VIEWPORT_RIDER_COUNT"], (p, msg) => {
+      if (!fresh(p.requestSeq, msg.type.startsWith("RIDE_"))) return;
+      setPeople((prev) => {
+        const had = prev.get(p.email);
+        if (!had || had.riderCount === p.riderCount) return prev;
+        const next = new Map(prev);
+        next.set(p.email, { ...had, riderCount: p.riderCount });
+        return next;
+      });
     });
 
     return () => {
       stopSnap();
       stopDelta();
       stopCells();
+      stopBulk();
+      stopRiders();
     };
   }, [enabled]);
 
@@ -174,6 +249,8 @@ export function useViewportSubscription(enabled: boolean): void {
   useEffect(() => {
     if (!enabled) return;
     return () => {
+      // 따라가는 중이면 이 경로도 막혀 있다 (2차 명세 §6). 서버가 이미 내 구독을 끊어 뒀다
+      if (isRiding()) return;
       send(REALTIME.send.viewportClose, { requestSeq: viewportSeq });
     };
   }, [enabled]);

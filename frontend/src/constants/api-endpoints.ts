@@ -156,6 +156,15 @@ export const API_ENDPOINTS = {
   realtime: {
     /** 주변 사람 목록 열기. 본문 없음. 이 호출이 곧 실시간 구독 시작이다 */
     nearby: "/bff/realtime/nearby",
+    /**
+     * 탑승(POST, 본문 `{captainEmail}`)과 하차(DELETE, 본문 없음)가 **같은 경로**다
+     * (S15P21A405-530) — 백엔드 `POST·DELETE /api/realtime/ride`.
+     *
+     * **소켓이 아니라 REST 인 이유**가 계약에 적혀 있다: 소켓으로 보내면 거부당했을 때 아무
+     * 응답도 오지 않아 버튼만 안 먹는 것처럼 보인다. 거부 사유(`RIDE_FULL` · `RIDE_SELF` …)가
+     * 사용자에게 보여야 하는 경로다.
+     */
+    ride: "/bff/realtime/ride",
   },
 
   constellation: {

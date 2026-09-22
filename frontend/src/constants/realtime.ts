@@ -32,7 +32,21 @@ export const REALTIME = {
     viewport: "/app/presence/viewport",
     viewportClose: "/app/presence/viewport/close",
     nearbyClose: "/app/nearby/close",
+    /**
+     * 따라가기 — **인솔자만 보낸다** (S15P21A405-530). 동승자가 보내면 서버가
+     * `RIDE_NOT_CAPTAIN` 으로 거부한다. 탑승·하차 자체는 소켓이 아니라 REST 다.
+     */
+    ridePlayback: "/app/ride/playback",
+    ridePanel: "/app/ride/panel",
   },
+
+  /**
+   * 인솔자가 재생바를 끌 때의 발행 간격 제한(ms) (명세 D10). 3초 드래그에 6건쯤 나간다.
+   * **마지막 위치는 반드시 나간다** — 안 그러면 동승자가 끌다 만 자리에 멈춘다.
+   */
+  rideSeekThrottleMs: 500,
+  /** 한 인솔자를 따라갈 수 있는 최대 인원 (2차 명세 §10). 넘으면 `RIDE_FULL` 이다 */
+  maxRiders: 20,
   /**
    * heartbeat 주기. 45초를 넘기면 남들 화면에서 내가 사라진다.
    *

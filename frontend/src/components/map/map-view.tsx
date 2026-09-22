@@ -2,14 +2,14 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useViewportSubscription } from "@/hooks/use-viewport-subscription";
+import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
@@ -109,6 +109,9 @@ export default function MapView({ occlusion }: MapViewProps) {
   const playWithConfirm = usePlaySong();
   const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
+  const leaderNickname = useFollowStore((s) => s.leaderNickname);
+  const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
+  const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**
@@ -287,22 +290,45 @@ export default function MapView({ occlusion }: MapViewProps) {
     engine.travelTo(currentMusicId);
   }, [engine, currentMusicId]);
 
-  // 따라가기 (SOCIAL-06 ~ 09)
+  /**
+   * 따라가기 (SOCIAL-06 ~ 09, S15P21A405-530).
+   *
+   * **인솔자 표식은 서버 목록에 없다.** 옮겨 받는 화면(`RIDE_VIEWPORT*`)은 인솔자 기준으로
+   * 만들어져 인솔자 자신이 빠져 있다 (2차 명세 §4.2). 그래서 `engine.friends` 에서 찾지 않고
+   * 탑승 응답이 준 값으로 **직접 만들어** 넘긴다.
+   *
+   * `driven: true` 로 켠다 — 엔진 안의 목(인솔자가 스스로 다음 곡을 고르는 시늉)을 멈추고,
+   * 곡 이동은 `RIDE_TRACK` 이 올 때만 일어나게 한다. 엔진의 `follow` 는 그대로 두는데,
+   * 팬·줌·레이어 이동·내 위치로 가기를 막는 잠금이 거기 달려 있기 때문이다 (§6).
+   *
+   * `leaderMusicId` 를 의존성에 둔 이유는 **겹이 바뀌면 다시 걸어야** 하기 때문이다 —
+   * `startFollow` 는 그 곡이 지금 겹의 상주 집합에 있을 때만 켜진다.
+   */
   useEffect(() => {
-    if (!leaderEmail) {
+    if (!leaderEmail || leaderMusicId == null) {
       engine.stopFollow();
       return;
     }
-    /**
-     * 따라가기 대상은 **엔진이 들고 있는 목록**에서 찾는다 (S15P21A405-482). 예전에는 폴링 훅이
-     * 준 배열을 봤는데, 지금은 뷰포트 구독이 엔진에 직접 넣는다.
-     *
-     * 따라가기 자체는 아직 붙일 데이터가 없다 — 명세가 "아직 없는 것"으로 적었고 `riderCount`
-     * 도 늘 0 이다. 여기는 그때가 오면 그대로 도는 자리다.
-     */
-    const leader = engine.friends.find((f) => f.email === leaderEmail);
-    if (leader) engine.startFollow(leader);
-  }, [engine, leaderEmail]);
+    engine.startFollow(
+      {
+        email: leaderEmail,
+        nickname: leaderNickname,
+        imageUrl: leaderImageUrl,
+        // 목록에 있다는 것이 곧 접속 중이라는 뜻이고(명세 §5.6), 비공개 계정은 아직 없다
+        isOnline: true,
+        isPublic: true,
+        musicId: leaderMusicId,
+        viewingMusicId: leaderMusicId,
+        genreId: engine.genreOf(leaderMusicId) ?? NO_GENRE_ID,
+        meetingCount: 0,
+        // 인솔자 본인의 동승 인원은 우리에게 오지 않는다 (2차 명세 §14). 0 으로 둔다
+        riderCount: 0,
+        followingNickname: null,
+        avatarSeed: seedOf(leaderEmail),
+      },
+      true,
+    );
+  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, layer]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {

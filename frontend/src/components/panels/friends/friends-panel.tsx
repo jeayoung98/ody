@@ -7,6 +7,7 @@ import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
+import { useFollowStore } from "@/stores/use-follow-store";
 import PanelCloseButton from "../panel-close-button";
 import FriendRow from "./friend-row";
 import NearbyRadar from "./nearby-radar";
@@ -26,9 +27,16 @@ export default function FriendsPanel() {
    * 그러면 소켓이 나중에 붙어도 다시 렌더되지 않아 `enabled` 가 false 로 굳었다.
    */
   const connected = useRealtimeConnected();
-  const { data, isLoading, error, refetch } = useNearbyPeopleQuery(connected);
+  /**
+   * **따라가는 동안에는 부르지 않는다** (2차 실시간 명세 §6, S15P21A405-530).
+   * `POST /api/realtime/nearby` 가 409 `RIDE_NOT_CAPTAIN` 으로 거부되는 경로다 — 부르면 패널에
+   * 오류만 뜬다. 내 곡이 아니라 인솔자의 곡을 듣고 있으니 "내 주변" 이라는 기준 자체가 없다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
+  const live = connected && !riding;
+  const { data, isLoading, error, refetch } = useNearbyPeopleQuery(live);
   // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
-  useNearbyPeopleLive(connected, refetch);
+  useNearbyPeopleLive(live, refetch);
 
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */
@@ -44,7 +52,9 @@ export default function FriendsPanel() {
    * 바뀔 때마다 패널 높이가 출렁이고 레이더와 가운데의 내가 밀려 올라간다 — 안내 한 줄 때문에
    * 화면의 중심이 움직이는 셈이었다. 이제 레이더 **위에 떠서** 흐름을 건드리지 않는다.
    */
-  const notice = noPlay
+  const notice = riding
+    ? "따라가는 동안에는 주변 사람을 볼 수 없어요. 내리면 다시 보여요."
+    : noPlay
     ? "곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요."
     : temporary
       ? "지금은 목록을 만들지 못했어요."

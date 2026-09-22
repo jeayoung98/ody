@@ -4,7 +4,8 @@ import { useEffect, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS, REALTIME } from "@/constants";
 import { onConnectionChange, onType, send } from "@/lib/realtime/stomp-client";
-import type { NearbyChange, NearbyPerson, NearbySnapshot } from "@/types";
+import { isRiding } from "@/stores/use-follow-store";
+import type { NearbyBulkEnter, NearbyChange, NearbyPerson, NearbyRiderCount, NearbySnapshot } from "@/types";
 
 /**
  * 주변 사람 목록을 소켓 델타로 갱신한다 (S15P21A405-482, 실시간 작업명세 §6.2).
@@ -67,9 +68,50 @@ export function useNearbyPeopleLive(open: boolean, refetch: () => void): void {
       });
     });
 
+    /**
+     * 선단이 흩어져 여럿이 한꺼번에 들어왔다 (2차 명세 §7.2, S15P21A405-530).
+     * **한 덩어리로 받았으니 한 번만 다시 그린다** — 한 명씩 넣으면 이 메시지의 의미가 없다.
+     * `requestSeq` 가 없고 좌표도 없다. 자리는 `musicId` 하나로 전원이 같다.
+     */
+    const stopBulk = onType<NearbyBulkEnter>(["NEARBY_BULK_ENTER"], (p) => {
+      put((people) => {
+        const next = people.filter((x) => !p.people.some((n) => n.email === x.email));
+        const at = next.findIndex((x) => x.musicId === p.musicId);
+        const near = at >= 0 ? next[at] : null;
+        const fresh = p.people.map((n) => ({
+          email: n.email,
+          nickname: n.nickname,
+          imageUrl: n.imageUrl,
+          meetingCount: n.meetingCount ?? 0,
+          riderCount: n.riderCount ?? 0,
+          musicId: p.musicId,
+          // 같은 곡에 이미 아는 사람이 있으면 그 곡의 제목·거리를 그대로 쓴다 (같은 곡이니 같다)
+          title: near?.title ?? "",
+          artist: near?.artist ?? null,
+          distance: near?.distance ?? Number.POSITIVE_INFINITY,
+        }));
+        if (at < 0) return [...next, ...fresh];
+        next.splice(at + 1, 0, ...fresh);
+        return next;
+      });
+    });
+
+    /** 인원수만 바뀌었다 (§7.1). 자리는 그대로 두고 숫자만 갈아 끼운다 */
+    const stopRiders = onType<NearbyRiderCount>(["NEARBY_RIDER_COUNT"], (p) => {
+      put((people) => {
+        const at = people.findIndex((x) => x.email === p.email);
+        if (at < 0 || people[at].riderCount === p.riderCount) return people;
+        const next = [...people];
+        next[at] = { ...next[at], riderCount: p.riderCount };
+        return next;
+      });
+    });
+
     return () => {
       stopSnap();
       stopDelta();
+      stopBulk();
+      stopRiders();
     };
   }, [open, qc]);
 
@@ -90,6 +132,8 @@ export function useNearbyPeopleLive(open: boolean, refetch: () => void): void {
   useEffect(() => {
     if (!open) return;
     return () => {
+      // 따라가는 중이면 이 경로도 막혀 있다 (2차 명세 §6). 서버가 이미 내 구독을 끊어 뒀다
+      if (isRiding()) return;
       send(REALTIME.send.nearbyClose);
     };
   }, [open]);

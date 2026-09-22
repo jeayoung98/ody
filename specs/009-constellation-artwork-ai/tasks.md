@@ -49,7 +49,7 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 - [X] T001 DDL 작성 — `backend/src/main/resources/db/artwork_001_tables.sql`. plan.md "데이터 모델" 의 테이블 4개·시퀀스 3개·인덱스 4개. `CREATE INDEX CONCURRENTLY` 는 트랜잭션 밖에서 한 줄씩 실행하도록 주석으로 안내(`playlist_like_001` 과 같은 방식)
 - [X] T002 DDL 실행 — **사람이 DBeaver 로 실행한다**(운영 쓰기). 실행 뒤 `SELECT count(*) FROM artwork_round, artwork, artwork_point, artwork_like` 가 모두 0으로 성립하는지 확인
 - [X] T003 1회차 행 삽입 — `artwork_round(theme='고양이', theme_prompt=…, starts_at, ends_at)`. `theme_prompt` 는 "이 별자리 그림이 고양이를 얼마나 닮았는지 0~100 으로 채점하고 한국어 한 줄 평을 달아라" 취지. **사람이 실행**
-- [ ] T003b **`artwork_002_anchors.sql` 실행** — `is_anchor` 칼럼 추가 + 1회차 루브릭 v6 교체 + 기준 그림 4행(64 좌표). **사람이 DBeaver 로 실행.** 끝의 SELECT 가 `4 | 64 | true` 여야 한다. **이거 전까지 채점은 기준 없이 돌아 변별력이 떨어진다**(WARN 로그)
+- [X] T003b **`artwork_002_anchors.sql` 실행** — `is_anchor` 칼럼 추가 + 1회차 루브릭 v6 교체 + 기준 그림 4행(64 좌표). **사람이 DBeaver 로 실행.** 끝의 SELECT 가 `4 | 64 | true` 여야 한다. **이거 전까지 채점은 기준 없이 돌아 변별력이 떨어진다**(WARN 로그)
 
 ---
 

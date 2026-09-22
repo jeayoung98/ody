@@ -22,6 +22,7 @@ import SongNearbyList from "./song-nearby-list";
 import SongPcList from "./song-pc-list";
 import SongRelatedPlaylists from "./song-related-playlists";
 import SongReportButton from "./song-report-button";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /**
  * 시트 앞의 빈 칸 = 커버를 드러내는 창(px). 정사각 커버의 위쪽 절반쯤으로, 여기에 헤더 높이가
@@ -73,6 +74,12 @@ export default function SongDetailPanel() {
    * **왜 안 되는지, 무엇을 해 주면 되는지**(신고) 한 줄이다.
    */
   const { blocked } = usePlayability(musicId);
+  /**
+   * 지도가 이미 아는 것 (S15P21A405-527). 별을 눌러 들어왔으면 제목·가수가 상주 집합에 있다 —
+   * 상세 응답을 기다리는 동안 그걸 그대로 보여 준다. 없으면(고스트·검색 결과) null 이고
+   * 스켈레톤이 예전처럼 막대로 자리만 잡는다.
+   */
+  const known = musicId != null ? getMapEngine()?.pointOf(musicId) : null;
   const dead = blocked === PLAYBACK_BLOCKED.noVideo;
 
   // 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다
@@ -119,7 +126,7 @@ export default function SongDetailPanel() {
         <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
         <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />
 
-        {isPending && <SongDetailSkeleton />}
+        {isPending && <SongDetailSkeleton title={known?.title} artist={known?.artist} />}
         {isError && <ErrorMessage />}
         {data && (
           <>

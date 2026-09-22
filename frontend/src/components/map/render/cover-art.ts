@@ -24,6 +24,12 @@ const RELEASE = (mbid: string) => `https://coverartarchive.org/release/${mbid}/f
 const keyOf = (musicId: number, size: number) => `${musicId}:${size}`;
 
 const ready = new Map<string, HTMLCanvasElement>();
+/**
+ * 받아 둔 원본 이미지 (곡 단위). **크기가 달라도 다시 받지 않는다** (S15P21A405-527) —
+ * 호버 카드가 104px 로 본 곡을 눌러 상세를 열면 512px 이 필요한데, 이미 디코딩해 둔 이 이미지로
+ * 그 자리에서 구우면 된다. 브라우저 캐시를 다시 태우는 것보다 한 박자 빠르다.
+ */
+const source = new Map<number, HTMLImageElement>();
 const failed = new Set<number>();
 const loading = new Set<string>();
 
@@ -46,7 +52,16 @@ export function albumCover(musicId: number, albumMbid: string | null | undefined
   const key = keyOf(musicId, size);
   const hit = ready.get(key);
   if (hit) return hit;
-  if (failed.has(musicId) || loading.has(key)) return null;
+  if (failed.has(musicId)) return null;
+
+  // 원본을 이미 받아 뒀으면 이 크기로만 다시 구우면 된다 — 요청도 기다림도 없다
+  const had = source.get(musicId);
+  if (had) {
+    const baked = bake(had, size);
+    ready.set(key, baked);
+    return baked;
+  }
+  if (loading.has(key)) return null;
 
   loading.add(key);
   const load = (url: string, onFail: () => void) => {
@@ -55,7 +70,11 @@ export function albumCover(musicId: number, albumMbid: string | null | undefined
     img.crossOrigin = "anonymous";
     img.onload = () => {
       loading.delete(key);
-      if (ready.size > 300) ready.clear();
+      if (ready.size > 300) {
+        ready.clear();
+        source.clear();
+      }
+      source.set(musicId, img);
       ready.set(key, bake(img, size));
     };
     img.onerror = onFail;

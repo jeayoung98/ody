@@ -241,8 +241,9 @@ class RideDismountRedisIntegrationTests {
 		assertThat(redis.hasKey("ride:captain:" + rider)).isTrue();
 	}
 
+	/** 소켓이 끊긴 뒤 들어온 요청이다. 상태가 어긋난 것과는 받는 쪽이 할 일이 다르다. */
 	@Test
-	@DisplayName("접속 정보가 없으면 거부한다")
+	@DisplayName("접속 정보가 없으면 접속 없음으로 거부한다")
 	void noPresenceIsRejected() {
 		String captain = user();
 		String rider = user();
@@ -250,7 +251,8 @@ class RideDismountRedisIntegrationTests {
 		redis.opsForHash().put("ride:captain:" + rider, "captain", captain);
 		redis.opsForHash().put("ride:captain:" + rider, "epoch", "1");
 
-		assertThat(repository.dismount(rider, captain).status()).isEqualTo(DismountStatus.STALE);
+		assertThat(repository.dismount(rider, captain).status())
+				.isEqualTo(DismountStatus.NOT_CONNECTED);
 	}
 
 	/** 내린 사람이 다시 들어간 뒤에 읽으면 자기 자신이 섞이고 그 사이 들어온 남이 빠진다. */

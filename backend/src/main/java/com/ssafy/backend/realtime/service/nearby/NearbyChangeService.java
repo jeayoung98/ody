@@ -18,6 +18,7 @@ import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
+import com.ssafy.backend.realtime.dto.nearby.NearbyRiderCount;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
 import com.ssafy.backend.realtime.repository.redis.NearbyRedisRepository;
 import com.ssafy.backend.realtime.dto.presence.UserDisplay;
@@ -89,6 +90,28 @@ public class NearbyChangeService {
 		}
 
 		refreshOwnPanel(event);
+	}
+
+	/**
+	 * 한 사람의 따라오는 인원수가 바뀌었다고 그 곡을 보고 있는 사람들에게 알린다.
+	 *
+	 * 곡도 자리도 그대로라 목록에서 옮길 것은 없다. 숫자만 바꾸면 된다.
+	 *
+	 * @param email 인원수가 바뀐 사람
+	 * @param musicId 그 사람이 있는 곡
+	 * @param riderCount 바뀐 뒤의 인원수
+	 */
+	public void sendRiderCount(String email, long musicId, int riderCount) {
+		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(musicId));
+		receivers.remove(email);
+		if (receivers.isEmpty()) {
+			return;
+		}
+		NearbyRiderCount payload = new NearbyRiderCount(email, riderCount, musicId);
+		for (String receiver : receivers) {
+			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
+					RealtimeMessageType.NEARBY_RIDER_COUNT, payload);
+		}
 	}
 
 	/**

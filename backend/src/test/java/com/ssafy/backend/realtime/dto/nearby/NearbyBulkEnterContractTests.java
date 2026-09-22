@@ -44,4 +44,15 @@ class NearbyBulkEnterContractTests {
 
 		assertThat(json.get("people")).hasSize(2);
 	}
+
+	@Test
+	@DisplayName("NEARBY_RIDER_COUNT 의 JSON 키가 계약과 같다")
+	void riderCountKeys() throws Exception {
+		NearbyRiderCount payload = new NearbyRiderCount("a@example.com", 3, 4927L);
+
+		JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(payload));
+
+		assertThat(json.fieldNames()).toIterable()
+				.containsExactlyInAnyOrder("email", "riderCount", "musicId");
+	}
 }

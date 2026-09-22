@@ -44,4 +44,16 @@ class ViewportBulkEnterContractTests {
 
 		assertThat(json.get("users")).hasSize(2);
 	}
+
+	/** 자리가 아니라 숫자만 바뀐다. 위치를 실으면 받는 쪽이 옮겨 그린다. */
+	@Test
+	@DisplayName("VIEWPORT_RIDER_COUNT 는 자리를 싣지 않는다")
+	void riderCountKeys() throws Exception {
+		ViewportRiderCount payload = new ViewportRiderCount(7L, "a@example.com", 3);
+
+		JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(payload));
+
+		assertThat(json.fieldNames()).toIterable()
+				.containsExactlyInAnyOrder("requestSeq", "email", "riderCount");
+	}
 }

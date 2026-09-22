@@ -132,7 +132,8 @@ class RideServiceTests {
 		assertErrorCode(MountStatus.ALREADY_RIDING, RealtimeErrorCode.RIDE_ALREADY_RIDING);
 		assertErrorCode(MountStatus.CHAIN, RealtimeErrorCode.RIDE_CHAIN_FORBIDDEN);
 		assertErrorCode(MountStatus.CAPTAIN_INACTIVE, RealtimeErrorCode.RIDE_CAPTAIN_INACTIVE);
-		assertErrorCode(MountStatus.STALE, RealtimeErrorCode.PRESENCE_ERROR);
+		// 읽은 뒤에 접속 번호가 바뀐 것이다. 접속이 없는 것과 달리 새로 고치면 풀린다.
+		assertErrorCode(MountStatus.STALE, RealtimeErrorCode.RIDE_STALE);
 	}
 
 	/**
@@ -578,6 +579,39 @@ class RideServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		verifyNoInteractions(meetingService);
+	}
+
+	// ── 따라오는 인원수를 남들에게 알린다 ───────────────────
+
+	/** 남들 화면에서 선단은 한 점이라, 이 숫자가 선단임을 아는 유일한 표시다. */
+	@Test
+	@DisplayName("내리면 인솔자를 보는 사람들에게 줄어든 인원수를 알린다")
+	void dismountPushesRiderCount() {
+		givenRiding();
+		givenDismountOk(2);
+		when(presenceRedisRepository.snapshot(CAPTAIN))
+				.thenReturn(new PresenceSnapshot(MUSIC, LAYER, 7, 5, 9L));
+
+		service.dismount(RIDER);
+
+		verify(viewportDeltaService).sendRiderCount(CAPTAIN, LAYER, MUSIC, "7:5", 2);
+		verify(nearbyChangeService).sendRiderCount(CAPTAIN, MUSIC, 2);
+	}
+
+	/** 인솔자가 지도에 없으면 보여 줄 자리가 없다. */
+	@Test
+	@DisplayName("인솔자가 지도에 없으면 인원수를 알리지 않는다")
+	void riderCountIsNotPushedWithoutCaptainSpot() {
+		givenRiding();
+		givenDismountOk(2);
+		when(presenceRedisRepository.snapshot(CAPTAIN))
+				.thenReturn(new PresenceSnapshot(null, null, null, null, 9L));
+
+		service.dismount(RIDER);
+
+		verify(viewportDeltaService, never()).sendRiderCount(
+				anyString(), anyInt(), anyLong(), anyString(), anyInt());
+		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyLong(), anyInt());
 	}
 
 	// ── 선단 해체 ───────────────────────────────────────────

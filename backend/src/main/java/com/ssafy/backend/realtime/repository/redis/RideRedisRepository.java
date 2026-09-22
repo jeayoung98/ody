@@ -169,7 +169,9 @@ public class RideRedisRepository {
 		OK,
 		/** 따라가는 중이 아니다. 이미 내려졌을 수도 있다. */
 		NOT_RIDING,
-		/** 지금 연결에서 만든 탑승이 아니거나 그 사이에 갈아탔다. */
+		/** 접속 정보가 없다. 소켓이 끊긴 뒤 들어온 요청이다. */
+		NOT_CONNECTED,
+		/** 그 사이에 갈아탔거나, 이전 연결에서 만든 탑승이거나, 서 있는 자리가 없다. */
 		STALE
 	}
 
@@ -313,6 +315,8 @@ public class RideRedisRepository {
 			// 그 뒤로 남은 동료들, 그 뒤로 그 곡에 있던 사람들.
 			case "OK" -> dismounted(r);
 			case "NOT_RIDING" -> DismountResult.of(DismountStatus.NOT_RIDING);
+			case "NOT_CONNECTED" -> DismountResult.of(DismountStatus.NOT_CONNECTED);
+			// 모르는 값이나 빈 응답은 스크립트가 못 돈 것이다. 아무것도 안 지워졌으니 거부로 본다.
 			default -> DismountResult.of(DismountStatus.STALE);
 		};
 	}

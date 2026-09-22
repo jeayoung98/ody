@@ -143,7 +143,10 @@ public class RideService {
 			//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
 			rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
 
-			// 10. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
+				// 10. 인솔자를 보고 있는 사람들에게 인원수가 늘었다고 알린다.
+			notifyRiderCount(captainEmail, rideRedisRepository.riderCount(captainEmail));
+
+			// 11. 어디서부터 틀지 읽는다. 여기서 받은 번호가 이 응답의 기준이 된다.
 			RidePlayback playback = resolvePlayback(captainEmail, mounted.musicId());
 
 			log.info("[Ride] 따라가기 시작 musicId={} layer={} snapshotSeq={}",
@@ -157,6 +160,30 @@ public class RideService {
 			undoMount(riderEmail, captainEmail, placed);
 			throw e;
 		}
+	}
+
+	/**
+	 * 따라오는 인원수가 바뀌었다고 인솔자를 보고 있는 사람들에게 알린다.
+	 *
+	 * 남들 화면에서 선단은 인솔자 한 점이고, 몇 명이 붙어 있는지가 선단임을 아는 유일한
+	 * 표시다. 그런데 그 숫자는 인솔자가 곡을 바꿀 때만 갱신됐다. 스무 명이 타고 내려도
+	 * 구경하는 쪽에는 계속 같은 수로 보인다.
+	 *
+	 * 인솔자가 지도에 없으면 보여 줄 자리가 없으니 아무것도 하지 않는다.
+	 *
+	 * @param captainEmail 인원수가 바뀐 인솔자
+	 * @param riderCount 바뀐 뒤의 인원수
+	 */
+	private void notifyRiderCount(String captainEmail, int riderCount) {
+		PresenceSnapshot captain = presenceRedisRepository.snapshot(captainEmail);
+		if (captain == null || captain.musicId() == null || captain.layer() == null) {
+			return;
+		}
+		String cell = captain.cellX() + ":" + captain.cellY();
+		notifyQuietly("인원수 화면 알림", () -> viewportDeltaService.sendRiderCount(
+				captainEmail, captain.layer(), captain.musicId(), cell, riderCount));
+		notifyQuietly("인원수 주변사람 알림", () -> nearbyChangeService.sendRiderCount(
+				captainEmail, captain.musicId(), riderCount));
 	}
 
 	/**
@@ -246,7 +273,11 @@ public class RideService {
 		}
 		if (result.status() != DismountStatus.OK) {
 			log.info("하차 거부 reason={}", result.status());
-			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
+			// 접속이 없는 것과 상태가 어긋난 것은 받는 쪽이 할 일이 다르다.
+			// 앞은 다시 연결해야 하고, 뒤는 화면을 새로 고치면 된다.
+			throw new CustomException(result.status() == DismountStatus.NOT_CONNECTED
+					? RealtimeErrorCode.PRESENCE_ERROR
+					: RealtimeErrorCode.RIDE_STALE);
 		}
 
 		// 4. 만남에서 뺄 명단을 만든다. 인솔자 + 남은 동료 + 나 자신이다.
@@ -267,7 +298,10 @@ public class RideService {
 				RealtimeMessageType.RIDE_RIDER_LEFT,
 				new RideRiderLeftPayload(riderEmail, result.remainingRiders())));
 
-		// 7. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
+		// 7. 인솔자를 보고 있는 사람들에게 인원수가 줄었다고 알린다.
+		notifyRiderCount(ride.captainEmail(), result.remainingRiders());
+
+		// 8. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
 		//    명단은 지도에 다시 들어가기 전에 찍힌 것이라 자기 자신이 섞여 있지 않다.
 		notifyQuietly("하차 만남 기록", () ->
 				meetingService.recordOnDismount(List.of(riderEmail), result.residents(), fleetMembers));
@@ -309,6 +343,7 @@ public class RideService {
 		realtimeMessageService.sendToUser(result.captainEmail(), WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.RIDE_RIDER_LEFT,
 				new RideRiderLeftPayload(riderEmail, result.remainingRiders()));
+		notifyRiderCount(result.captainEmail(), result.remainingRiders());
 		log.info("[Ride] 따라가던 사람 이탈 남은인원={}", result.remainingRiders());
 	}
 
@@ -447,8 +482,8 @@ public class RideService {
 			case CHAIN -> RealtimeErrorCode.RIDE_CHAIN_FORBIDDEN;
 			case CAPTAIN_INACTIVE -> RealtimeErrorCode.RIDE_CAPTAIN_INACTIVE;
 			case FULL -> RealtimeErrorCode.RIDE_FULL;
-			// STALE 은 재연결 전 탭이 보낸 요청이다. 다시 연결하면 풀린다.
-			default -> RealtimeErrorCode.PRESENCE_ERROR;
+			// STALE 은 읽은 뒤에 접속 번호가 바뀐 것이다. 화면을 새로 고치면 풀린다.
+			default -> RealtimeErrorCode.RIDE_STALE;
 		};
 	}
 }

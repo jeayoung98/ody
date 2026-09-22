@@ -34,6 +34,7 @@ import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
 import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
+import com.ssafy.backend.realtime.dto.nearby.NearbyRiderCount;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
 import com.ssafy.backend.realtime.service.nearby.NearbyMusicService;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
@@ -248,5 +249,21 @@ class NearbyChangeServiceTests {
 		service.sendEnteredTogether(List.of(), 100L);
 
 		verifyNoInteractions(nearbyRepository, realtimeMessageService);
+	}
+
+	/** 곡도 자리도 그대로다. 목록에서 숫자만 바꾸면 된다. */
+	@Test
+	@DisplayName("인원수 변화를 그 곡을 보는 사람들에게 알린다")
+	void riderCountReachesSubscribers() {
+		when(nearbyRepository.subscribers(100L))
+				.thenReturn(Set.of("watcher@x.com", "captain@x.com"));
+
+		service.sendRiderCount("captain@x.com", 100L, 3);
+
+		verify(realtimeMessageService).sendToUser(eq("watcher@x.com"), anyString(),
+				eq(RealtimeMessageType.NEARBY_RIDER_COUNT),
+				eq(new NearbyRiderCount("captain@x.com", 3, 100L)));
+		verify(realtimeMessageService, never()).sendToUser(eq("captain@x.com"), anyString(),
+				eq(RealtimeMessageType.NEARBY_RIDER_COUNT), any());
 	}
 }

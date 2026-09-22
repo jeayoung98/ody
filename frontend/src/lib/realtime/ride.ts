@@ -1,6 +1,8 @@
 "use client";
 
-import { REALTIME } from "@/constants";
+import { API_ENDPOINTS, REALTIME } from "@/constants";
+import { api } from "@/lib/api";
+import { endOf, type SongRecord } from "@/lib/realtime/ride-record";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { getPlayer } from "@/components/player/player-registry";
 import { sendJoinNow } from "@/hooks/use-presence-join";
@@ -101,6 +103,23 @@ export function cancelPendingSeek(): void {
   unsubscribePlayback = null;
 }
 
+/**
+ * 지금 곡의 종료를 보낸다 (3차 계약 §3, S15P21A405-545).
+ *
+ * **기다리지 않는다.** 곡을 옮기는 일이 기록 보고 때문에 늦어지면 안 된다 — 서버는 이미
+ * 사람을 옮겨 놨고, 화면이 따라가는 것이 먼저다. 실패해도 재생을 막지 않는다.
+ *
+ * 번호가 없으면 아무것도 안 보낸다. 번호 없는 종료는 400 이고, 번호를 추측해 보내면
+ * 남의 기록을 건드린다.
+ */
+export function reportSongEnd(rec: SongRecord | null, now = Date.now()): void {
+  const body = endOf(rec, now);
+  if (!body) return;
+  void api<null>(API_ENDPOINTS.music.playEnd, { method: "PATCH", body: JSON.stringify(body) }).catch(() => {
+    // 들은 시간 하나가 안 남는 것뿐이다. 사용자가 할 수 있는 일이 없어 알리지 않는다
+  });
+}
+
 // ── 탑승이 끝났다 ──────────────────────────────────────────────────────────
 
 /**
@@ -115,6 +134,12 @@ export function cancelPendingSeek(): void {
  */
 export function endRide(at: { musicId: number | null; layer: number }): void {
   cancelPendingSeek();
+  /**
+   * **마지막 곡의 종료를 여기서 보낸다** (3차 계약 §3). 안 보내면 곡을 여러 번 바꾼 뒤
+   * 내렸을 때 앞 곡들은 다 남았는데 마지막 것만 비는, 알아채기 어려운 구멍이 된다.
+   * `stop()` 보다 **먼저** 불러야 한다 — 그 뒤에는 번호가 지워지고 없다.
+   */
+  reportSongEnd(useFollowStore.getState());
   useFollowStore.getState().stop();
   const engine = getMapEngine();
   engine?.stopFollow();

@@ -56,6 +56,7 @@ export type RealtimeMessageType =
   | "RIDE_VIEWPORT_CELL_COUNTS"
   | "RIDE_VIEWPORT_BULK_ENTER"
   | "RIDE_VIEWPORT_RIDER_COUNT"
+  | "RIDE_RIDER_JOINED"
   | "RIDE_RIDER_LEFT"
   | "RIDE_ENDED"
   | "PRESENCE_ERROR";
@@ -349,21 +350,16 @@ export interface RideResponse {
   playback: RidePlaybackState;
   positionMs: number;
   /**
-   * 재생 스냅샷의 번호.
+   * 인솔자의 재생 정보 버전. **거르는 데 쓰지 않는다** — 디버깅용이다.
    *
-   * **2차 명세 §4.1 은 "봉투 `seq ≤ snapshotSeq` 면 버린다" 고 적었지만 그대로 하면 안 된다.**
-   * 배포 백엔드에서 둘은 **서로 다른 카운터**다 —
-   * `snapshotSeq` 는 인솔자별 Redis 해시의 `HINCRBY ride:playback:{captain} snapshotSeq`,
-   * 봉투 `seq` 는 **내 소켓 세션**의 메시지 번호(`nextMessageSeq(userId)`)다.
+   * 봉투 `seq` 와 **다른 카운터다.** 이쪽은 인솔자 한 명의 재생 정보가 몇 번 바뀌었나이고
+   * (`HINCRBY ride:playback:{인솔자}`), 봉투 `seq` 는 내 소켓에 몇 번째 메시지인가다
+   * (`nextMessageSeq(나)`, 연결마다 0). 2차 명세는 둘을 견주라고 적었지만 그대로 하면 한참
+   * 틀고 있던 인솔자에 방금 접속한 사람이 타는 순간 초반 `RIDE_PLAYBACK` 이 전부 버려진다.
    *
-   * 견주면 조용히 망가진다. 한참 틀고 있던 인솔자(`snapshotSeq` 가 이미 큼)에 방금 접속한
-   * 사람(`seq` 가 1부터)이 타면 **초반 `RIDE_PLAYBACK` 이 전부 버려진다** — 오류도 안 뜬다.
-   * 그래서 보관만 하고 거르는 데 쓰지 않는다. 순서 보장은 `stomp-client` 의 봉투 `seq` 비교가
-   * 이미 하고 있다.
-   *
-   * 백엔드에 요청해 둔 항목이다 — **BACKEND-NOTES A-48, "재생 스냅샷 번호와 소켓 메시지 번호를
-   * 견주지 않도록 정리해 달라"**. `RIDE_PLAYBACK` payload 에 `snapshotSeq` 가 같이 오면 그때는
-   * 견줄 수 있다. 그 전까지 이 값은 디버깅용이다.
+   * **백엔드가 문구를 고쳤다** (3차 계약 §1, S15P21A405-545). `RIDE_PLAYBACK` 에 이 값을
+   * 싣지 않기로 확정됐고, 순서 보장은 봉투 `seq` 단조성이 이미 한다. 같은 이름이지만
+   * `NearbySnapshot.snapshotSeq` 는 **봉투 seq 가 맞다** — 그쪽 규칙은 그대로다.
    */
   snapshotSeq: number;
   /** 중간에 타도 같은 화면을 보게 하려고 인솔자가 열어 둔 곡 상세를 함께 준다 */
@@ -394,6 +390,31 @@ export interface RideTrackPayload {
   y: number;
   playable: boolean;
   serverTs: number;
+  /**
+   * **이 곡에 대한 내 재생 기록 번호** (3차 계약 §3, S15P21A405-545).
+   *
+   * 곡이 바뀔 때마다 새 번호가 온다. 들고 있던 번호로 앞 곡의 종료를 보내고 이 번호로 갈아
+   * 끼우면 곡별 청취시간이 남는다 — 안 하면 탑승부터 하차까지가 한 건으로 묻힌다.
+   *
+   * **`null` 일 수 있다.** 서버가 기록 번호를 못 받았을 때다. 그래도 곡 알림은 보낸다 —
+   * 안 보내면 이미 서버에서 옮겨진 사람이 **옛 곡을 계속 듣는 채로** 남기 때문이다.
+   * 그때는 이 곡의 들은 시간만 못 남기고 재생은 평소대로 한다.
+   */
+  playHistoryId: number | null;
+}
+
+/**
+ * `RIDE_RIDER_JOINED` — 누가 나를 따라오기 시작했다 (3차 계약 §2, S15P21A405-545).
+ *
+ * **인솔자에게만 온다.** `RIDE_RIDER_LEFT` 와 짝이다. 구경꾼에게 가는 인원수 알림은 설계상
+ * 인솔자가 빠지므로(요청자 제외), 인솔자가 제 선단의 인원을 아는 길은 이것뿐이다.
+ */
+export interface RideRiderJoinedPayload {
+  email: string;
+  /** **탈 때는 처음 보는 사람이라** 이름이 같이 온다. 내릴 때와 다른 점이다. 없을 수 있다 */
+  nickname: string | null;
+  /** 탄 **뒤의** 인원 */
+  riderCount: number;
 }
 
 /**

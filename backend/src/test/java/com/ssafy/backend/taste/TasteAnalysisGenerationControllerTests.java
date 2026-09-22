@@ -93,7 +93,7 @@ class TasteAnalysisGenerationControllerTests {
                 state,
                 new TasteAnalysisResponse.Counts(30, 30, 0, Map.of()),
                 new TasteAnalysisResponse.Eligibility(true, level, 0),
-                new TasteAnalysisResponse.ReferenceVersions("bundle", "reference", "labels", "taste-v1"),
+                "taste-v1",
                 List.of(), List.of(),
                 new TasteAnalysisResponse.Report(
                         level, aiGenerated, true, "요약", List.of(), completedAt, completedAt, completedAt),

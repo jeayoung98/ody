@@ -8,11 +8,7 @@ CREATE TABLE IF NOT EXISTS public.taste_analysis (
     liked_set_hash          char(64),
     valid_music_count       int4,
     report_level            varchar(16),
-    bundle_version          varchar(128),
-    reference_version       varchar(128),
-    axis_label_version      varchar(128),
-    analysis_policy_version varchar(64),
-    prompt_version          varchar(64),
+    analysis_version        varchar(128),
     model                   varchar(128),
     axis_stats              jsonb,
     findings                jsonb,
@@ -42,8 +38,7 @@ CREATE TABLE IF NOT EXISTS public.taste_analysis (
          AND completed_at IS NOT NULL
          -- ROW IS NOT NULL은 아래 모든 필드가 채워졌는지 검사한다.
          AND ROW(liked_set_hash, valid_music_count,
-                 report_level, bundle_version, reference_version, axis_label_version,
-                 analysis_policy_version, prompt_version, model,
+                 report_level, analysis_version, model,
                  axis_stats, findings, summary, narratives) IS NOT NULL
          AND failure_code IS NULL))
 );

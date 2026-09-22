@@ -4,8 +4,7 @@
     <sql id="columns">
         email, analysis_date, status, requested_at, lease_expires_at, completed_at,
         liked_set_hash, valid_music_count,
-        report_level, bundle_version, reference_version, axis_label_version,
-        analysis_policy_version, prompt_version, model,
+        report_level, analysis_version, model,
         axis_stats::text AS axis_stats, findings::text AS findings,
         summary, narratives::text AS narratives, gms_response_id, failure_code
     </sql>
@@ -69,11 +68,7 @@
             liked_set_hash = #{likedSetHash},
             valid_music_count = #{validMusicCount},
             report_level = #{reportLevel},
-            bundle_version = #{bundleVersion},
-            reference_version = #{referenceVersion},
-            axis_label_version = #{axisLabelVersion},
-            analysis_policy_version = #{analysisPolicyVersion},
-            prompt_version = #{promptVersion},
+            analysis_version = #{analysisVersion},
             model = #{model},
             axis_stats = CAST(#{axisStats} AS jsonb),
             findings = CAST(#{findings} AS jsonb),

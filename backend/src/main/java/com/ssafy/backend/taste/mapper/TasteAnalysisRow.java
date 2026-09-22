@@ -18,11 +18,7 @@ public class TasteAnalysisRow {
     private String likedSetHash;
     private int validMusicCount;
     private String reportLevel;
-    private String bundleVersion;
-    private String referenceVersion;
-    private String axisLabelVersion;
-    private String analysisPolicyVersion;
-    private String promptVersion;
+    private String analysisVersion;
     private String model;
     private String axisStats;
     private String findings;

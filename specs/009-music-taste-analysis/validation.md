@@ -6,6 +6,8 @@
 
 최신 통합 검증(2026-09-22): Claude 후속 작업 `9a3b2e1a`와 DDL 정리 `910e4ac2`를 현재 브랜치에서 병합했다. `backend/gradlew.bat test build` 성공(1분 15초). 아래 `47fce630` 집계는 이전 실행 기록이다. 목록 응답은 `content`, 좋아요 DB 시각 컬럼은 `created_at`이며 최신 DDL은 CONCURRENTLY와 lease 전용 index를 사용하지 않는다. 후속 작업은 이 통합본을 기준으로 진행한다.
 
+구조 단순화 후에는 기준 데이터·축 라벨·분석 정책·프롬프트 버전을 `analysisVersion` 하나로 관리한다. API와 DB도 이 값 하나만 노출·저장하며, 해당 요소 중 결과에 영향을 주는 변경이 있으면 `TASTE_ANALYSIS_VERSION`을 올리고 같은 버전의 기준 산출물을 배포한다. `backend/gradlew.bat test build` 성공(1분 16초).
+
 `origin/backend/dev`는 그 뒤 `1eda4e60`까지 전진했지만 변경 파일이 전부 `realtime/ride` 계열이라
 이 브랜치(`taste`, `music/like`)와 **겹치는 파일이 0개**다. 그래서 리베이스하지 않고 `64b7bb1f` 기준을 유지했다.
 

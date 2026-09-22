@@ -10,7 +10,7 @@ public record TasteAnalysisResponse(
         String state,
         Counts counts,
         Eligibility reportEligibility,
-        ReferenceVersions reference,
+        String analysisVersion,
         List<TasteAxisStatistics> axes,
         List<Point> points,
         Report report,
@@ -20,13 +20,6 @@ public record TasteAnalysisResponse(
     }
 
     public record Eligibility(boolean eligible, String level, int additionalLikesNeeded) {
-    }
-
-    public record ReferenceVersions(
-            String bundleVersion,
-            String referenceVersion,
-            String axisLabelVersion,
-            String analysisPolicyVersion) {
     }
 
     public record Point(long musicId, String title, String artist, List<Double> coordinates) {

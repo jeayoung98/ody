@@ -20,17 +20,17 @@ public class TasteReferenceLoader implements TasteReferenceProvider {
     private final ObjectMapper objectMapper;
     private final ResourceLoader resourceLoader;
     private final String resourceLocation;
-    private final String expectedBundle;
+    private final String expectedAnalysisVersion;
     private volatile TasteReference reference;
 
     public TasteReferenceLoader(
             ResourceLoader resourceLoader,
             @Value("${ody.taste.reference-resource}") String resourceLocation,
-            @Value("${ody.serving.bundle}") String expectedBundle) {
+            @Value("${ody.taste.analysis-version}") String expectedAnalysisVersion) {
         this.objectMapper = new ObjectMapper().findAndRegisterModules();
         this.resourceLoader = resourceLoader;
         this.resourceLocation = resourceLocation;
-        this.expectedBundle = expectedBundle;
+        this.expectedAnalysisVersion = expectedAnalysisVersion;
     }
 
     @PostConstruct
@@ -42,10 +42,9 @@ public class TasteReferenceLoader implements TasteReferenceProvider {
         }
         try (var input = resource.getInputStream()) {
             TasteReference loaded = objectMapper.readValue(input, TasteReference.class);
-            TasteReferenceValidator.validate(loaded, expectedBundle);
+            TasteReferenceValidator.validate(loaded, expectedAnalysisVersion);
             reference = loaded;
-            log.info("[Taste] 기준 산출물 로드 완료 referenceVersion={} bundleVersion={}",
-                    loaded.referenceVersion(), loaded.bundleVersion());
+            log.info("[Taste] 기준 산출물 로드 완료 analysisVersion={}", loaded.analysisVersion());
         } catch (IOException | IllegalArgumentException error) {
             log.error("[Taste] 기준 산출물 검증 실패 resource={} error={}", resourceLocation, error.getMessage());
         }

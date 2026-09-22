@@ -14,20 +14,20 @@ class TasteReferenceLoaderTests {
 
     @Test
     void validatesSixteenMonotonicAxes() {
-        TasteReferenceValidator.validate(reference("v2.1-pca16", axes()), "v2.1-pca16");
+        TasteReferenceValidator.validate(reference("taste-v1", axes()), "taste-v1");
     }
 
     @Test
     void testFixture_matchesProductionReferenceContract() {
-        TasteReferenceValidator.validate(TasteFixtures.reference(), "v2.1-pca16");
+        TasteReferenceValidator.validate(TasteFixtures.reference(), "taste-v1");
     }
 
     @Test
-    void rejectsBundleMismatch() {
+    void rejectsAnalysisVersionMismatch() {
         assertThatThrownBy(() -> TasteReferenceValidator.validate(
-                reference("other", axes()), "v2.1-pca16"))
+                reference("other", axes()), "taste-v1"))
                 .isInstanceOf(IllegalArgumentException.class)
-                .hasMessageContaining("bundle");
+                .hasMessageContaining("version");
     }
 
     @Test
@@ -36,12 +36,12 @@ class TasteReferenceLoaderTests {
         invalid.set(0, axis(1, List.of(0.0, 2.0, 1.0)));
 
         assertThatThrownBy(() -> TasteReferenceValidator.validate(
-                reference("v2.1-pca16", invalid), "v2.1-pca16"))
+                reference("taste-v1", invalid), "taste-v1"))
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
-    private static TasteReference reference(String bundle, List<TasteReference.Axis> axes) {
-        return new TasteReference("taste-reference-v1", "test-v1", bundle, "labels-v1", 100,
+    private static TasteReference reference(String analysisVersion, List<TasteReference.Axis> axes) {
+        return new TasteReference("taste-reference-v1", analysisVersion, 100,
                 OffsetDateTime.parse("2026-09-21T00:00:00Z"),
                 new TasteReference.Lineage("manifest", "a".repeat(64), "abcdef0", "config"), axes);
     }

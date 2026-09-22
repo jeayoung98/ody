@@ -50,7 +50,7 @@ class TasteAnalysisQueryControllerTests {
                 "EMPTY",
                 new TasteAnalysisResponse.Counts(0, 0, 0, Map.of()),
                 new TasteAnalysisResponse.Eligibility(false, null, 10),
-                new TasteAnalysisResponse.ReferenceVersions("bundle", "reference", "labels", "taste-v1"),
+                "taste-v1",
                 List.of(), List.of(), null,
                 new TasteAnalysisResponse.Generation("INELIGIBLE", false, false, false, null, null));
         when(service.get("me@example.com")).thenReturn(response);
@@ -59,6 +59,7 @@ class TasteAnalysisQueryControllerTests {
                         .principal(new UsernamePasswordAuthenticationToken("me@example.com", null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.state").value("EMPTY"))
+                .andExpect(jsonPath("$.data.analysisVersion").value("taste-v1"))
                 .andExpect(jsonPath("$.data.reportEligibility.additionalLikesNeeded").value(10));
     }
 
@@ -68,7 +69,7 @@ class TasteAnalysisQueryControllerTests {
                 "FALLBACK",
                 new TasteAnalysisResponse.Counts(10, 10, 0, Map.of()),
                 new TasteAnalysisResponse.Eligibility(true, "INITIAL", 0),
-                new TasteAnalysisResponse.ReferenceVersions("bundle", "reference", "labels", "taste-v1"),
+                "taste-v1",
                 List.of(), List.of(), null,
                 new TasteAnalysisResponse.Generation(
                         "FALLBACK", false, false, true, "GMS_REQUEST_FAILED", null));

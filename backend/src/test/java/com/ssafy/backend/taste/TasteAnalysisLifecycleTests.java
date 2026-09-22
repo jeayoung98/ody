@@ -127,7 +127,7 @@ class TasteAnalysisLifecycleTests {
     void sameSnapshot_reusesSuccessWithoutClaiming() {
         AnalysisSnapshot snapshot = snapshot(10);
         String hash = new TasteSnapshotHasher().hash(
-                snapshot.likedMusicIds(), snapshot.response().reference(), "taste-prompt-v1");
+                snapshot.likedMusicIds(), snapshot.response().analysisVersion());
         when(queryService.snapshot(EMAIL)).thenReturn(snapshot);
         when(mapper.findLatestSuccess(EMAIL)).thenReturn(successRow(hash, LocalDate.of(2026, 9, 21)));
 
@@ -148,7 +148,7 @@ class TasteAnalysisLifecycleTests {
         when(mapper.markSuccess(
                 eq(EMAIL), any(), any(), any(), anyString(), anyInt(),
                 anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
-                anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
+                anyString(), anyString()))
                 .thenReturn(1);
     }
 
@@ -167,7 +167,7 @@ class TasteAnalysisLifecycleTests {
         TasteAnalysisResponse response = new TasteAnalysisResponse(
                 "READY", new TasteAnalysisResponse.Counts(count, count, 0, Map.of()),
                 new TasteAnalysisResponse.Eligibility(true, count < 30 ? "INITIAL" : "STANDARD", 0),
-                new TasteAnalysisResponse.ReferenceVersions("bundle", "reference", "labels", "taste-v1"),
+                "taste-v1",
                 List.of(axis), points, null,
                 new TasteAnalysisResponse.Generation("NOT_REQUESTED", false, false, false, null, null));
         return new AnalysisSnapshot(response, points.stream().map(TasteAnalysisResponse.Point::musicId).toList());

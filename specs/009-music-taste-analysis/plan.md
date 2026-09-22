@@ -39,7 +39,7 @@
 | III. Test Before Done | PASS | API, 통계 경계, 동시성, KST 날짜, GMS 실패/스키마 검증을 자동화한다. |
 | IV. Data Reproducibility | PASS | 기준 산출물에 bundle·reference·label 버전, 모집단 수, 생성 시점, source manifest/checksum을 기록한다. |
 | V. Coordinate Stability | PASS | 기존 16차원 좌표만 읽고 사용자별 PCA를 수행하지 않는다. bundle 불일치는 요청을 실패시킨다. |
-| VI. Exploration Consistency | PASS | 탐색 상태와 무관하게 같은 좋아요 집합·기준 버전은 같은 통계를 만든다. |
+| VI. Exploration Consistency | PASS | 탐색 상태와 무관하게 같은 좋아요 집합·analysisVersion은 같은 통계를 만든다. |
 | VII. Experiment Isolation | PASS | 미검증 축 라벨은 서술 후보에서 제외하며 기준 산출물 승격은 데이터 팀 승인 대상으로 둔다. |
 | VIII. Observability | PASS | 결과·실패 원인·GMS 지연·제한 거절을 메트릭으로 수집하고 PII와 원문 payload는 기록하지 않는다. |
 | IX. No Silent Assumption | PASS with implementation gate | 축 라벨, API, 새 기능 명세는 팀 합의 전 확정으로 취급하지 않는다. 임계값은 `taste-v1`로 명시한다. |
@@ -76,7 +76,7 @@ Phase 1 설계도 위 원칙을 충족한다. 구현 전 차단 항목은 (1) �
 - 일관된 편향, 편향, 다양성 순으로 정렬하고 효과 크기와 PC 번호로 안정 정렬하여 최대 3개 선택
 - 후보가 없으면 검증 가능한 범위에서 균형/다양성 기본 finding 생성
 
-임계값과 정렬 규칙은 `analysisPolicyVersion=taste-v1`에 묶는다. LLM 출력은 finding ID별 문구만 허용하며 숫자와 방향의 진실 원천은 Backend가 된다.
+기준 데이터·축 라벨·임계값·정렬 규칙·프롬프트는 `analysisVersion=taste-v1`에 묶는다. 이들 중 결과에 영향을 주는 요소를 바꾸면 버전을 함께 올린다. LLM 출력은 finding ID별 문구만 허용하며 숫자와 방향의 진실 원천은 Backend가 된다.
 
 ### 4. GMS generation
 
@@ -88,7 +88,7 @@ Spring `RestClient`로 `https://gms.ssafy.io/gmsapi/api.openai.com/v1/responses`
 
 `taste_analysis`의 기본키는 `(email, analysis_date)`이며 날짜는 요청 수락 시점의 `Asia/Seoul` 날짜다. `PENDING`, `SUCCESS`, `FAILED` 상태와 lease를 둔다.
 
-1. 현재 snapshot hash와 version tuple을 계산한다. 최신 성공 결과와 모두 같으면 GMS를 호출하거나 시각을 갱신하지 않고 `REUSED`로 반환한다.
+1. 현재 좋아요 ID와 `analysisVersion`의 snapshot hash를 계산한다. 최신 성공 결과와 같으면 GMS를 호출하거나 시각을 갱신하지 않고 `REUSED`로 반환한다.
 2. 재사용할 결과가 없으면 짧은 트랜잭션에서 해당 날짜 row를 조건부 claim한다.
 3. 같은 사용자의 다른 날짜에 유효한 `PENDING`이 있으면 자정이 지나도 중복 생성을 409로 막는다.
 4. 해당 날짜에 `SUCCESS`가 있으나 현재 입력은 달라졌으면 429와 다음 KST 갱신 가능 시점을 반환한다.

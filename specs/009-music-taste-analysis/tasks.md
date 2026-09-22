@@ -145,7 +145,7 @@ description: "AI 기반 좋아요 음악 분포 및 취향 분석 리포트 구�
 
 ### Tests for User Story 3
 
-- [X] T048 [P] [US3] 정렬된 유효 music ID와 version tuple의 SHA-256 안정성·변경 감지를 `backend/src/test/java/com/ssafy/backend/taste/analysis/TasteSnapshotHasherTests.java`에 작성하고 실패를 확인한다
+- [X] T048 [P] [US3] 정렬된 전체 좋아요 music ID와 `analysisVersion`의 SHA-256 안정성·변경 감지를 `backend/src/test/java/com/ssafy/backend/taste/analysis/TasteSnapshotHasherTests.java`에 작성하고 실패를 확인한다
 - [X] T049 [P] [US3] PENDING/SUCCESS/FAILED claim, partial unique PENDING, FAILED 재시도, lease 만료 회수를 검증하는 mapper 테스트를 `backend/src/test/java/com/ssafy/backend/taste/TasteAnalysisClaimMapperTests.java`에 작성하고 실패를 확인한다
   - ⚠️ 현재 테스트는 SQL/XML **문자열 계약 수준**이다. 실제 PostgreSQL에서 partial unique index·동시 claim·lease 회수를 실행하지 않았다(저장소에 Testcontainers 없음). 실 DB 검증은 Data/DB 파트 몫이며 `validation.md` §2에 미검증으로 남겨 뒀다.
 - [X] T050 [P] [US3] 같은 입력 REUSED, 변경 입력 당일 429, 생성 중 좋아요 변경의 즉시 stale, 동시 요청 409, 실패 재시도, KST 자정, 마지막 갱신 시각 보존을 `backend/src/test/java/com/ssafy/backend/taste/TasteAnalysisLifecycleTests.java`에 작성하고 실패를 확인한다

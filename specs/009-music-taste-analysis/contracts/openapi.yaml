@@ -171,7 +171,7 @@ components:
         - state
         - counts
         - reportEligibility
-        - reference
+        - analysisVersion
         - axes
         - points
         - generation
@@ -187,8 +187,7 @@ components:
             eligible: { type: boolean }
             level: { type: ['string', 'null'], enum: [INITIAL, STANDARD, null] }
             additionalLikesNeeded: { type: integer, minimum: 0 }
-        reference:
-          $ref: '#/components/schemas/ReferenceVersions'
+        analysisVersion: { type: string }
         axes:
           type: array
           maxItems: 16
@@ -213,14 +212,6 @@ components:
         exclusions:
           type: object
           additionalProperties: { type: integer, minimum: 0 }
-    ReferenceVersions:
-      type: object
-      required: [bundleVersion, referenceVersion, axisLabelVersion, analysisPolicyVersion]
-      properties:
-        bundleVersion: { type: string }
-        referenceVersion: { type: string }
-        axisLabelVersion: { type: string }
-        analysisPolicyVersion: { type: string }
     AxisStatistics:
       type: object
       required: [pc, raw, percentile, histogram, label]

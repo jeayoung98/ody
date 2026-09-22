@@ -33,14 +33,10 @@ Deletion of a row represents `liked=false`. 이벤트 횟수나 가중치는 저
 | requested_at | timestamptz | 현재 attempt 시작 |
 | lease_expires_at | timestamptz | PENDING 복구 기준 |
 | completed_at | timestamptz nullable | 성공/실패 종료 |
-| liked_set_hash | char(64) nullable | 좌표 유효 여부와 무관한 전체 좋아요 music ID와 version tuple의 SHA-256 |
+| liked_set_hash | char(64) nullable | 전체 좋아요 music ID와 analysis version의 SHA-256 |
 | valid_music_count | integer nullable | 좌표 검증을 통과한 수 |
 | report_level | varchar nullable | `INITIAL` 또는 `STANDARD` |
-| bundle_version | varchar nullable | 서빙 PCA bundle |
-| reference_version | varchar nullable | percentile 기준 |
-| axis_label_version | varchar nullable | 검증 라벨 |
-| analysis_policy_version | varchar nullable | finding 규칙, 최초 `taste-v1` |
-| prompt_version | varchar nullable | GMS prompt/schema 버전 |
+| analysis_version | varchar nullable | 기준 데이터·축 라벨·분석 규칙·프롬프트를 묶은 버전 |
 | model | varchar nullable | 실제 요청 모델 |
 | axis_stats | jsonb nullable | 16축 snapshot 통계 |
 | findings | jsonb nullable | Backend가 결정한 finding |
@@ -60,7 +56,7 @@ Indexes:
 Constraints:
 
 - `valid_music_count`는 0 이상
-- SUCCESS는 `completed_at`, 모든 version, hash, stats, findings, summary, narratives를 요구
+- SUCCESS는 `completed_at`, analysis version, hash, stats, findings, summary, narratives를 요구
 - FAILED는 `failure_code`를 요구하고 성공 결과 필드는 소비 가능한 결과로 간주하지 않음
 - PENDING lease는 필수이며 requested_at 이후
 
@@ -99,16 +95,8 @@ SUCCESS: 해당 analysis_date에는 terminal, 추가 생성 불가
 
 같은 사용자의 PENDING은 날짜와 관계없이 하나만 허용한다. 사용자별 partial unique index와 날짜별 조건부 UPSERT가 이를 보장한다. 만료된 PENDING은 먼저 FAILED로 전환한다. 외부 GMS 호출 동안 lock/transaction은 유지하지 않는다.
 
-`REUSED`는 저장 상태가 아니다. 현재 snapshot hash와 version tuple이 최신 SUCCESS와 같을 때 API가 계산해 반환하며 새 row, 새 생성 시각, 새 quota 사용을 만들지 않는다. 같은 날짜 SUCCESS가 있어도 입력이 달라 재사용할 수 없을 때만 새 생성 요청을 일일 제한으로 거절한다.
+`REUSED`는 저장 상태가 아니다. 현재 snapshot hash와 analysis version이 최신 SUCCESS와 같을 때 API가 계산해 반환하며 새 row, 새 생성 시각, 새 quota 사용을 만들지 않는다. 같은 날짜 SUCCESS가 있어도 입력이 달라 재사용할 수 없을 때만 새 생성 요청을 일일 제한으로 거절한다.
 
 ## Derived freshness
 
-`fresh`는 저장 필드가 아니라 조회 시 계산한다. 현재 전체 좋아요 ID hash와 다음 version tuple이 성공 snapshot과 모두 같을 때 true다.
-
-- bundleVersion
-- referenceVersion
-- axisLabelVersion
-- analysisPolicyVersion
-- promptVersion
-
-좋아요가 추가/삭제되거나 어느 버전이 바뀌면 기존 성공 리포트는 남지만 `fresh=false`다.
+`fresh`는 저장 필드가 아니라 조회 시 계산한다. 현재 전체 좋아요 ID hash와 `analysisVersion`이 성공 snapshot과 모두 같을 때 true다. 기준 데이터·축 라벨·분석 규칙·프롬프트 중 결과에 영향을 주는 요소를 바꾸면 `analysisVersion`을 올린다. 좋아요 또는 이 버전이 바뀌면 기존 성공 리포트는 남지만 `fresh=false`다.

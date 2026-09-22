@@ -8,12 +8,12 @@ final class TasteReferenceValidator {
     private TasteReferenceValidator() {
     }
 
-    static void validate(TasteReference reference, String expectedBundle) {
+    static void validate(TasteReference reference, String expectedAnalysisVersion) {
         if (!"taste-reference-v1".equals(reference.schemaVersion())) {
             throw new IllegalArgumentException("unsupported taste reference schema");
         }
-        if (!expectedBundle.equals(reference.bundleVersion())) {
-            throw new IllegalArgumentException("taste reference bundle mismatch");
+        if (!expectedAnalysisVersion.equals(reference.analysisVersion())) {
+            throw new IllegalArgumentException("taste analysis version mismatch");
         }
         if (reference.populationCount() < 1 || reference.axes() == null || reference.axes().size() != 16) {
             throw new IllegalArgumentException("taste reference must contain 16 axes");

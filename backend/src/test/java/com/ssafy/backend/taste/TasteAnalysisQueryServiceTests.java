@@ -137,10 +137,7 @@ class TasteAnalysisQueryServiceTests {
         when(mapper.findLikedMusic("me@example.com")).thenReturn(rows);
         String hash = new TasteSnapshotHasher().hash(
                 rows.stream().map(TasteMusicRow::getMusicId).toList(),
-                new TasteAnalysisResponse.ReferenceVersions(
-                        reference.bundleVersion(), reference.referenceVersion(),
-                        reference.axisLabelVersion(), "taste-v1"),
-                "taste-prompt-v1");
+                reference.analysisVersion());
         TasteAnalysisRow latest = new TasteAnalysisRow();
         latest.setAnalysisDate(java.time.LocalDate.of(2026, 9, 21));
         latest.setLikedSetHash(hash);
@@ -177,7 +174,7 @@ class TasteAnalysisQueryServiceTests {
                         IntStream.rangeClosed(0, 100).mapToObj(i -> (double) i).toList(),
                         new TasteReference.Label("VERIFIED", "MEDIUM", "low", "high", "test")))
                 .toList();
-        return new TasteReference("taste-reference-v1", "test-v1", "v2.1-pca16", "labels-v1", 101,
+        return new TasteReference("taste-reference-v1", "taste-v1", 101,
                 OffsetDateTime.parse("2026-09-21T00:00:00Z"),
                 new TasteReference.Lineage("manifest", "a".repeat(64), "abcdef0", "config"), axes);
     }

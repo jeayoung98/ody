@@ -70,8 +70,7 @@ class TasteAnalysisGenerationServiceTests {
                 List.of(new GmsTasteOutput.Narrative("pc1-consistent_bias", "강렬한 쪽에 모여 있어요."))));
         when(mapper.markSuccess(
                 eq("me@example.com"), any(), any(), any(), any(), any(Integer.class),
-                any(), any(), any(), any(), any(), any(), any(), any(),
-                any(), any(), any(), eq("resp_1"))).thenReturn(1);
+                any(), any(), any(), any(), any(), any(), any(), eq("resp_1"))).thenReturn(1);
 
         TasteAnalysisResponse response = service.generate("me@example.com");
 
@@ -87,7 +86,7 @@ class TasteAnalysisGenerationServiceTests {
                 "DISTRIBUTION_ONLY",
                 new TasteAnalysisResponse.Counts(9, 9, 0, Map.of()),
                 new TasteAnalysisResponse.Eligibility(false, null, 1),
-                eligible.reference(), eligible.axes(), eligible.points().subList(0, 9),
+                eligible.analysisVersion(), eligible.axes(), eligible.points().subList(0, 9),
                 null, new TasteAnalysisResponse.Generation(
                         "INELIGIBLE", false, false, false, null, null));
         when(queryService.snapshot("me@example.com")).thenReturn(snapshot(insufficient));
@@ -122,7 +121,7 @@ class TasteAnalysisGenerationServiceTests {
         TasteAnalysisResponse current = current();
         String hash = hasher.hash(
                 current.points().stream().map(TasteAnalysisResponse.Point::musicId).toList(),
-                current.reference(), "taste-prompt-v1");
+                current.analysisVersion());
         TasteAnalysisRow latest = successfulRow(hash);
         when(mapper.findLatestSuccess("me@example.com")).thenReturn(latest);
 
@@ -181,7 +180,7 @@ class TasteAnalysisGenerationServiceTests {
                 "READY",
                 new TasteAnalysisResponse.Counts(10, 10, 0, Map.of()),
                 new TasteAnalysisResponse.Eligibility(true, "INITIAL", 0),
-                new TasteAnalysisResponse.ReferenceVersions("bundle", "reference", "labels", "taste-v1"),
+                "taste-v1",
                 List.of(axis), points, null,
                 new TasteAnalysisResponse.Generation("NOT_REQUESTED", false, false, false, null, null));
     }

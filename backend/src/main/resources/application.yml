@@ -48,6 +48,7 @@ ody:
     length-max-s: 1200
     far-endpoint-dist: 10.7    # 끝점 거리가 넘으면 먼 여정 (D3, 004)
   taste:
+    analysis-version: ${TASTE_ANALYSIS_VERSION:taste-v1}
     reference-resource: ${TASTE_REFERENCE_RESOURCE:classpath:taste/taste-reference-v1.json}
     zone: ${TASTE_ANALYSIS_ZONE:Asia/Seoul}
     gms:

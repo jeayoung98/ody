@@ -36,7 +36,6 @@ import io.micrometer.core.instrument.Timer;
 @Service
 public class TasteAnalysisGenerationService {
 
-    static final String PROMPT_VERSION = "taste-prompt-v1";
     private static final Duration LEASE_DURATION = Duration.ofSeconds(60);
 
     private final TasteAnalysisQueryService queryService;
@@ -84,9 +83,7 @@ public class TasteAnalysisGenerationService {
             throw new CustomException(TasteErrorCode.TASTE_INSUFFICIENT_SAMPLE);
         }
 
-        String hash = hasher.hash(
-                requestedSnapshot.likedMusicIds(),
-                current.reference(), PROMPT_VERSION);
+        String hash = hasher.hash(requestedSnapshot.likedMusicIds(), current.analysisVersion());
         TasteAnalysisRow latest = mapper.findLatestSuccess(email);
         if (latest != null && hash.equals(latest.getLikedSetHash())) {
             meterRegistry.counter("ody.taste.generation.outcomes", "outcome", "reused").increment();
@@ -114,9 +111,7 @@ public class TasteAnalysisGenerationService {
                     email, analysisDate, requestedAt, completedAt, hash,
                     current.counts().valid(),
                     current.reportEligibility().level(),
-                    current.reference().bundleVersion(), current.reference().referenceVersion(),
-                    current.reference().axisLabelVersion(), current.reference().analysisPolicyVersion(),
-                    PROMPT_VERSION, gmsClient.model(),
+                    current.analysisVersion(), gmsClient.model(),
                     json(current.axes()), json(findings), summary, json(narratives), generated.responseId());
             if (updated != 1) {
                 throw new IllegalStateException("taste analysis success transition failed");
@@ -154,7 +149,7 @@ public class TasteAnalysisGenerationService {
     private boolean isCurrentSnapshot(String email, String requestedHash) {
         TasteAnalysisQueryService.AnalysisSnapshot current = queryService.snapshot(email);
         String currentHash = hasher.hash(
-                current.likedMusicIds(), current.response().reference(), PROMPT_VERSION);
+                current.likedMusicIds(), current.response().analysisVersion());
         return requestedHash.equals(currentHash);
     }
 
@@ -218,7 +213,7 @@ public class TasteAnalysisGenerationService {
             TasteAnalysisResponse.Report report,
             TasteAnalysisResponse.Generation generation) {
         return new TasteAnalysisResponse(
-                state, current.counts(), current.reportEligibility(), current.reference(),
+                state, current.counts(), current.reportEligibility(), current.analysisVersion(),
                 current.axes(), current.points(), report, generation);
     }
 

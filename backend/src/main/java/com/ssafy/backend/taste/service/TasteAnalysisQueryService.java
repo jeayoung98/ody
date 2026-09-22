@@ -33,8 +33,6 @@ import io.micrometer.core.instrument.MeterRegistry;
 @Service
 public class TasteAnalysisQueryService {
 
-    static final String ANALYSIS_POLICY_VERSION = "taste-v1";
-
     private final TasteMusicMapper musicMapper;
     private final TasteReferenceProvider referenceProvider;
     private final TasteStatisticsCalculator calculator;
@@ -102,9 +100,7 @@ public class TasteAnalysisQueryService {
                         rows.size(), valid, excluded,
                         excluded == 0 ? Map.of() : Map.of("MISSING_OR_INVALID_LOCATION", excluded)),
                 new TasteAnalysisResponse.Eligibility(valid >= 10, level, Math.max(0, 10 - valid)),
-                new TasteAnalysisResponse.ReferenceVersions(
-                        reference.bundleVersion(), reference.referenceVersion(),
-                        reference.axisLabelVersion(), ANALYSIS_POLICY_VERSION),
+                reference.analysisVersion(),
                 axes,
                 List.copyOf(points),
                 null,
@@ -119,7 +115,7 @@ public class TasteAnalysisQueryService {
         }
         TasteAnalysisResponse inProgress = new TasteAnalysisResponse(
                 "IN_PROGRESS",
-                withLatestReport.counts(), withLatestReport.reportEligibility(), withLatestReport.reference(),
+                withLatestReport.counts(), withLatestReport.reportEligibility(), withLatestReport.analysisVersion(),
                 withLatestReport.axes(), withLatestReport.points(), withLatestReport.report(),
                 new TasteAnalysisResponse.Generation(
                         "IN_PROGRESS", false, withLatestReport.generation().dailyLimitUsedToday(),
@@ -133,8 +129,7 @@ public class TasteAnalysisQueryService {
         if (latest == null) {
             return current;
         }
-        String currentHash = hasher.hash(
-                likedMusicIds, current.reference(), TasteAnalysisGenerationService.PROMPT_VERSION);
+        String currentHash = hasher.hash(likedMusicIds, current.analysisVersion());
         boolean fresh = currentHash.equals(latest.getLikedSetHash());
         OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), zoneId);
         boolean usedToday = latest.getAnalysisDate().equals(now.toLocalDate());
@@ -147,7 +142,7 @@ public class TasteAnalysisQueryService {
                 usedToday ? now.toLocalDate().plusDays(1).atStartOfDay(zoneId).toOffsetDateTime() : null);
         return new TasteAnalysisResponse(
                 fresh ? "FRESH" : "STALE",
-                current.counts(), current.reportEligibility(), current.reference(),
+                current.counts(), current.reportEligibility(), current.analysisVersion(),
                 current.axes(), current.points(), report, generation);
     }
 

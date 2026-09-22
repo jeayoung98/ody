@@ -6,9 +6,7 @@
   "additionalProperties": false,
   "required": [
     "schemaVersion",
-    "referenceVersion",
-    "bundleVersion",
-    "axisLabelVersion",
+    "analysisVersion",
     "populationCount",
     "generatedAt",
     "lineage",
@@ -16,9 +14,7 @@
   ],
   "properties": {
     "schemaVersion": { "const": "taste-reference-v1" },
-    "referenceVersion": { "type": "string", "minLength": 1 },
-    "bundleVersion": { "type": "string", "minLength": 1 },
-    "axisLabelVersion": { "type": "string", "minLength": 1 },
+    "analysisVersion": { "type": "string", "minLength": 1 },
     "populationCount": { "type": "integer", "minimum": 1 },
     "generatedAt": { "type": "string", "format": "date-time" },
     "lineage": {

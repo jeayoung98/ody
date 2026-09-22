@@ -5,9 +5,7 @@ import java.util.List;
 
 public record TasteReference(
         String schemaVersion,
-        String referenceVersion,
-        String bundleVersion,
-        String axisLabelVersion,
+        String analysisVersion,
         long populationCount,
         OffsetDateTime generatedAt,
         Lineage lineage,

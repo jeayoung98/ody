@@ -91,6 +91,34 @@
 | A-50 | `GET /api/taste-analysis` | 없음 (인증 주체 기준) | `{ state, counts{ totalLiked, valid, excluded, exclusions }, reportEligibility{ eligible, level, additionalLikesNeeded }, analysisVersion, axes[], points[{ musicId, title, artist, coordinates[16] }], report{ level, aiGenerated, fresh, summary, narratives[{ findingId, text, evidence }], analyzedAt, generatedAt, lastRefreshedAt }, generation{ status, generatedThisRequest, dailyLimitUsedToday, canRetry, failureCode, nextAvailableAt } }` | 현재 좋아요 곡의 **기존 PC 좌표** 통계와 마지막 성공 리포트를 함께 준다. PCA 재학습·좌표 재산출은 이 기능 범위가 아니다. 유효 곡 10개 미만은 분포만, 10~29 `INITIAL`, 30 이상 `STANDARD`. `report.fresh=false` 면 좋아요나 분석 버전이 바뀌어 리포트가 STALE 이라는 뜻이다. 오류: 기준 산출물 없으면 503 `TASTE_REFERENCE_UNAVAILABLE` | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** · **기준 산출물 필요** |
 | A-51 | `POST /api/taste-analysis` | 없음 (인증 주체 기준) | A-50 과 같은 스키마 | 성공·재사용·fallback 모두 **200** 이다(201 아님) — 같은 요청이 결과에 따라 201/200 을 오가지 않게 통일했고, 신규 생성 여부는 `generation.status` 로 구분한다(2026-09-22 확정). 사용자가 **버튼을 눌렀을 때만** 리포트를 생성한다. 성공한 생성만 KST 기준 1일 1회 한도를 차감한다. 같은 snapshot 이면 저장 결과를 재사용한다(`generation.status=REUSED`, GMS 미호출). GMS 실패는 `FALLBACK` 으로 내려가고 **한도를 차감하지 않으며 같은 날 재시도할 수 있다**. 오류: 생성 진행 중 409 `TASTE_ANALYSIS_IN_PROGRESS`(`error.details.nextAvailableAt` = lease 만료 시각), 유효 곡 10개 미만 422 `TASTE_INSUFFICIENT_SAMPLE`, 당일 한도 소진 429 `TASTE_DAILY_LIMIT`(`error.details.nextAvailableAt` = 다음 KST 자정), 기준 산출물 없음 503 `TASTE_REFERENCE_UNAVAILABLE` | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** · **기준 산출물·`GMS_KEY` 필요** |
 
+> **취향 분석 기준 산출물을 둘로 쪼개자는 제안 (2026-09-22, BE2) — 협의 필요, 미구현**
+>
+> 현재 `taste-reference-v1.json` 은 **축별 101분위**와 **축 라벨**을 한 파일에 담고, 둘 중 하나라도 없으면
+> 취향 분석 API 2개가 `TASTE_REFERENCE_UNAVAILABLE`(503) 로 멈춘다. 그런데 이 둘은 성질이 전혀 다르다.
+>
+> | | 101분위 · explainedVariance · lineage | 축 라벨 (`low`/`high`) |
+> | --- | --- | --- |
+> | 만드는 방법 | `music.location` 집계 — **SQL 한 번** | 태그 log-odds + **사람 3명 검수** |
+> | 선행 조건 | 없음 | 데이터 스펙 13(장르 계층) → 14(축 라벨) |
+> | 현재 상태 | 언제든 생성 가능 | 스펙 13·14 **둘 다 ⬜ 미착수**, 14 는 **컷 후보** |
+>
+> 2026-09-22 에 BE 가 운영 `music.location` 28,065곡 표본으로 101분위를 직접 만들어 봤다 — 쿼리 하나에
+> 수초다. 반면 라벨은 스펙 13 선행이 걸려 있고, 장르 테이블이 이미 드롭돼(S15P21A405-475, 변경 제안 27)
+> 13 을 살릴 동기 자체가 불확실하다.
+>
+> **제안**: 분위수 산출물과 라벨 산출물을 분리하고, 라벨을 **선택**으로 만든다. 그러면 두 단계로 동작한다.
+>
+> - **분위수만 있을 때** — 분포 차트·축별 통계·백분위가 전부 동작한다. 축 이름은 `PC3` 같은 중립 표기로
+>   내리고 **근거 문장·태그는 비활성**한다(`report` 없이 `state=DISTRIBUTION_ONLY` 유지).
+> - **분위수 + 라벨** — 지금 설계대로 문장·태그까지 동작한다.
+>
+> 이러면 스펙 14 가 컷돼도 취향 분석의 **분포 부분은 살아남는다.** 지금 구조에서는 라벨이 영구히 안 오면
+> 기능 전체가 503 으로 멈춘다. ⚠️ 라벨이 PC1~PC4 네 축만 오는 경우도 이 분리로 자연히 처리된다 —
+> 나머지 12축은 `unlabeled` 로 두면 통계는 나가고 문장에서만 빠진다.
+>
+> **Data 파트 확인 필요**: 분위수 산출물을 라벨과 떼어 먼저 줄 수 있는지. **기획 확인 필요**: 축 이름 없는
+> 분포 차트만으로 이 기능을 1차 배포할 수 있는지.
+
 > **A-5 곡 수 개정 (2026-09-13, BE2)** — 여정 응답의 `musicCnt` 범위가 **12~22 에서 2~20 으로** 바뀐다.
 > 무작위 쌍 기준 **중앙값이 12곡에서 6곡**이 되고, **중간 곡 없이 출발·도착 2곡만 나가는 응답이 정상**이다(오류 아님).
 >

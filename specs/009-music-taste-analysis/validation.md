@@ -2,7 +2,19 @@
 
 검증일: 2026-09-22
 브랜치: `backend/feat/S15P21A405-512-music-taste-analysis`
-검증 커밋: `5dfcd963` (기준 `origin/backend/dev` 커밋 `64b7bb1f` 위)
+검증 커밋: `47fce630` (기준 `origin/backend/dev` 커밋 `64b7bb1f` 위)
+
+`origin/backend/dev`는 그 뒤 `1eda4e60`까지 전진했지만 변경 파일이 전부 `realtime/ride` 계열이라
+이 브랜치(`taste`, `music/like`)와 **겹치는 파일이 0개**다. 그래서 리베이스하지 않고 `64b7bb1f` 기준을 유지했다.
+
+### 이 문서 기준 커밋 이후 변경
+
+| 커밋 | 내용 |
+|---|---|
+| `22f1c88e` | 검증 수준 분리, 기준 커밋·테스트 집계 갱신, T049 주석, plan p95 통일 |
+| `3c0ca853` | 좋아요 목록 `albumMbid` 협의 항목 철회 (FE 소비처 확인 결과 불필요) |
+| `c599114b` | **`LikedMusicResponse` 응답 필드 `items` → `content`** (저장소 목록 응답 규약에 맞춤). `BACKEND-NOTES`의 `TASTE_INSUFFICIENT_SAMPLE` 상태코드를 422로 정정 |
+| `47fce630` | `POST /api/taste-analysis`가 항상 200인 근거 기록 |
 
 ## 검증 수준 구분
 
@@ -26,17 +38,18 @@
 | GMS 요청 최소화 | 통과 | `/v1/responses`, Bearer 인증, `store=false`, strict schema 사용; 이메일·곡 ID·제목 미전송 |
 | GMS grounding | 통과 | unknown finding, 승인 axisPhrase 누락, 근거 없는 장르 추론을 거부하고 fallback 처리 |
 | 기준 산출물 오류 격리 | 통과 | 로더 검증 실패가 애플리케이션 기동을 막지 않고 취향 API에서 503 처리 |
-| 개별 곡 좋아요 | 통과 | target-state 멱등 처리, 취소, 없는 곡 오류, 최근 좋아요순 가상 플레이리스트 검증 |
+| 개별 곡 좋아요 | 통과 | target-state 멱등 처리, 취소, 없는 곡 오류, 최근 좋아요순 가상 플레이리스트 검증. 목록 응답 래퍼는 `content` (저장소 목록 응답 규약) |
 
 실행 결과:
 
 ```text
 backend/gradlew.bat cleanTest test build
-BUILD SUCCESSFUL in 1m 33s
+BUILD SUCCESSFUL in 1m 8s
 ```
 
-`backend/build/test-results/test/*.xml` 집계: 총 832개 중 72개는 기존 조건부 테스트로 skipped,
-실행된 760개는 failure 0, error 0.
+`47fce630`에서 실행했다. `backend/build/test-results/test/*.xml` 집계: 총 832개 중 72개는 기존 조건부
+테스트로 skipped, 실행된 760개는 failure 0, error 0. `items` → `content` 리네임(`c599114b`) 전후로
+개수 변동은 없고, 응답 필드명을 검증하는 `MusicLikeControllerTests`/`MusicLikeServiceTests`도 함께 통과했다.
 
 ## 2. 아직 검증하지 않은 것 (완료로 표시하지 않는다)
 

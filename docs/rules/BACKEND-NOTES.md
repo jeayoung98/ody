@@ -436,14 +436,47 @@ S15P21A405-489 에서 실연동했다. 따라가기는 `RideRestController` 로 
 **배포본(`origin/backend/jenkins`, `backend/dev` 와 realtime 디렉터리가 동일)을 직접 읽고 대조한**
 결과다. 배포 스웨거(`/api/v3/api-docs`)에 `POST·DELETE /api/realtime/ride` 가 실제로 있는 것도 확인했다.
 
+> **번호를 A-48 부터 시작한다.** 이 표의 마지막 행은 A-40 이지만 **A-41 ~ A-47 은 이미 코드가
+> 쓰고 있다** — 행만 안 적혔을 뿐이다 (A-41·A-43·A-44 는 플레이리스트 좋아요 S15P21A405-492,
+> A-47 은 곡 재생가능 여부). 비어 보인다고 다시 쓰면 한 번호가 두 가지를 가리킨다.
+> **행이 빠진 그 일곱 개는 누군가 채워야 한다** — 코드에서 `A-4` 로 grep 하면 나온다.
+
 | # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
 | --- | --- | --- | --- | --- |
-| A-41 | **`snapshotSeq` 와 봉투 `seq` 는 다른 카운터다** | 명세 §4.1 은 "봉투 `seq ≤ snapshotSeq` 면 버린다" 고 적었는데, 코드에서 `snapshotSeq` 는 `HINCRBY ride:playback:{captain} snapshotSeq`(인솔자별 Redis 카운터)이고 봉투 `seq` 는 `webSocketSessionService.nextMessageSeq(userId)`(내 세션 카운터)다 | **그대로 하면 조용히 망가진다.** 한참 틀던 인솔자(`snapshotSeq` 가 큼)에 방금 접속한 사람(`seq` 가 1부터)이 타면 초반 `RIDE_PLAYBACK` 이 전부 버려지고 오류도 안 뜬다. 프론트는 이 비교를 **적용하지 않았다** — 순서 보장은 봉투 `seq` 단조성으로 이미 하고 있다 | **협의 전 — 명세 정정 또는 payload 에 `snapshotSeq` 동봉 필요** |
-| A-42 | `RIDE_RIDER_JOINED` 가 없다 | `RealtimeMessageType` 에 `RIDE_RIDER_LEFT` 만 있다. 명세 §14 도 "아직 없는 것" 으로 적고 있다 | 인솔자가 **누가 탔는지 모른다.** 뷰포트·주변사람 목록은 요청자를 제외하므로 인솔자 자신의 `riderCount` 를 받을 길도 없다. 프론트는 `RIDE_RIDER_LEFT` 의 값만 믿고, 그 전에는 숫자를 **아예 안 보여 준다** | 협의 전 |
-| A-43 | 인원수 델타 네 종이 배포에 없다 | 명세 §2.3·§7.1 의 `VIEWPORT_RIDER_COUNT` · `NEARBY_RIDER_COUNT` · `NEARBY_BULK_ENTER` · `RIDE_VIEWPORT_RIDER_COUNT` 가 배포 enum 에 없다 (있는 것은 `VIEWPORT_BULK_ENTER` · `RIDE_VIEWPORT_BULK_ENTER` 뿐) | 구경하는 쪽에서 **인원수가 갱신되지 않는다** — 인솔자가 곡을 바꿔야만 숫자가 바뀐다. 프론트는 타입과 처리기를 미리 넣어 뒀으므로 서버가 보내기 시작하면 코드 수정 없이 반영된다 | 협의 전 |
-| A-44 | `RIDE_STALE` 오류 코드가 없다 | 명세 §3.3 에 409 `RIDE_STALE` 이 있으나 `RealtimeErrorCode` 에 없다. 같은 상황(epoch 불일치)이 `PRESENCE_ERROR` 로 나간다 | 프론트가 "화면 새로 고침" 안내와 "잠시 후 재시도" 를 가를 수 없다. 자리는 만들어 뒀고 지금은 `PRESENCE_ERROR` 안내로 떨어진다 | 협의 전 |
-| A-45 | 곡 상세 `tab` 값에 대응하는 UI 가 없다 | `RidePanelTab` 은 `nearby`·`info`·`playlists` 를 요구하는데 **우리 곡 상세에는 탭이 없다** (한 장짜리 스크롤) | 기능상 문제는 없다. 프론트는 열 때 `info` 로 고정해 싣고, 받는 쪽은 탭을 보지 않고 그 곡 상세를 연다 (명세 FR-035 의 `nearby` 폴백과 결과가 같다) | 프론트 결정 — 백엔드 조치 불필요 |
-| A-46 | 따라가는 동안의 **곡별** 재생시간을 보낼 수 없다 | `RIDE_TRACK` 으로 곡이 바뀌면 서버가 새 `play_history` 를 만들지만 **그 번호가 프론트에 오지 않는다** (명세 §8.7 이 같은 말을 한다) | 탑승 중 곡별 청취시간이 남지 않는다. 프론트는 탑승 때 받은 `playHistoryId` 만 들고 있다 | 협의 전 |
+| A-48 | **`snapshotSeq` 와 봉투 `seq` 는 다른 카운터다** | 명세 §4.1 은 "봉투 `seq ≤ snapshotSeq` 면 버린다" 고 적었는데, 코드에서 `snapshotSeq` 는 `HINCRBY ride:playback:{captain} snapshotSeq`(인솔자별 Redis 카운터)이고 봉투 `seq` 는 `webSocketSessionService.nextMessageSeq(userId)`(내 세션 카운터)다 | **그대로 하면 조용히 망가진다.** 한참 틀던 인솔자(`snapshotSeq` 가 큼)에 방금 접속한 사람(`seq` 가 1부터)이 타면 초반 `RIDE_PLAYBACK` 이 전부 버려지고 오류도 안 뜬다. 프론트는 이 비교를 **적용하지 않았다** — 순서 보장은 봉투 `seq` 단조성으로 이미 하고 있다 | **협의 전 — 명세 정정 또는 payload 에 `snapshotSeq` 동봉 필요** |
+| A-49 | `RIDE_RIDER_JOINED` 가 없다 | `RealtimeMessageType` 에 `RIDE_RIDER_LEFT` 만 있다. 명세 §14 도 "아직 없는 것" 으로 적고 있다 | 인솔자가 **누가 탔는지 모른다.** 뷰포트·주변사람 목록은 요청자를 제외하므로 인솔자 자신의 `riderCount` 를 받을 길도 없다. 프론트는 `RIDE_RIDER_LEFT` 의 값만 믿고, 그 전에는 숫자를 **아예 안 보여 준다** | 협의 전 |
+| A-50 | 인원수 델타 네 종이 배포에 없다 | 명세 §2.3·§7.1 의 `VIEWPORT_RIDER_COUNT` · `NEARBY_RIDER_COUNT` · `NEARBY_BULK_ENTER` · `RIDE_VIEWPORT_RIDER_COUNT` 가 배포 enum 에 없다 (있는 것은 `VIEWPORT_BULK_ENTER` · `RIDE_VIEWPORT_BULK_ENTER` 뿐) | 구경하는 쪽에서 **인원수가 갱신되지 않는다** — 인솔자가 곡을 바꿔야만 숫자가 바뀐다. 프론트는 타입과 처리기를 미리 넣어 뒀으므로 서버가 보내기 시작하면 코드 수정 없이 반영된다 | 협의 전 |
+| A-51 | `RIDE_STALE` 오류 코드가 없다 | 명세 §3.3 에 409 `RIDE_STALE` 이 있으나 `RealtimeErrorCode` 에 없다. 같은 상황(epoch 불일치)이 `PRESENCE_ERROR` 로 나간다 | 프론트가 "화면 새로 고침" 안내와 "잠시 후 재시도" 를 가를 수 없다. 자리는 만들어 뒀고 지금은 `PRESENCE_ERROR` 안내로 떨어진다 | 협의 전 |
+| A-52 | 곡 상세 `tab` 값에 대응하는 UI 가 없다 | `RidePanelTab` 은 `nearby`·`info`·`playlists` 를 요구하는데 **우리 곡 상세에는 탭이 없다** (한 장짜리 스크롤) | 기능상 문제는 없다. 프론트는 열 때 `info` 로 고정해 싣고, 받는 쪽은 탭을 보지 않고 그 곡 상세를 연다 (명세 FR-035 의 `nearby` 폴백과 결과가 같다) | 프론트 결정 — 백엔드 조치 불필요 |
+| A-53 | 따라가는 동안의 **곡별** 재생시간을 보낼 수 없다 | `RIDE_TRACK` 으로 곡이 바뀌면 서버가 새 `play_history` 를 만들지만 **그 번호가 프론트에 오지 않는다** (명세 §8.7 이 같은 말을 한다) | 탑승 중 곡별 청취시간이 남지 않는다. 프론트는 탑승 때 받은 `playHistoryId` 만 들고 있다 | 협의 전 |
 
-**요청** A-41 이 가장 급합니다 — 명세대로 구현하면 따라가기 재생 동기화가 **오류 없이** 멈춥니다.
-`RIDE_PLAYBACK` payload 에 `snapshotSeq` 를 실어 주시거나, 명세에서 그 비교를 빼 주세요.
+### 백엔드에 드리는 요청
+
+**① 재생 스냅샷 번호와 소켓 메시지 번호를 견주지 않도록 정리해 주세요 (A-48). 가장 급합니다.**
+2차 명세 §4.1 이 "봉투 `seq` 가 `snapshotSeq` 이하면 버려라" 라고 적었는데, 지금 배포본에서 그
+둘은 **세는 대상이 다릅니다.** `snapshotSeq` 는 인솔자 한 사람의 재생 스냅샷이 몇 번 바뀌었는지
+세는 Redis 값이고, 봉투 `seq` 는 받는 사람의 소켓 연결에 몇 번째로 보낸 메시지인지 세는 값입니다.
+견주면 **오랫동안 틀고 있던 인솔자에게 방금 접속한 사람이 탈 때 초반 재생 이벤트가 전부
+버려집니다.** 오류도 안 나고 로그도 안 남아서, 증상은 "따라가기 재생만 안 맞는다" 로 보입니다.
+→ `RIDE_PLAYBACK` payload 에 `snapshotSeq` 를 같이 실어 주시거나, 명세에서 그 비교를 빼 주세요.
+
+**② 누가 탔는지 알리는 이벤트를 만들어 주세요 (A-49).**
+지금은 내릴 때(`RIDE_RIDER_LEFT`)만 옵니다. 인솔자는 **자기를 몇 명이 따라오는지 알 길이 없습니다** —
+뷰포트·주변사람 목록은 요청한 본인을 빼고 주기 때문에 거기서도 자기 `riderCount` 를 못 받습니다.
+프론트는 틀린 숫자를 띄우지 않으려고 **인원수를 아예 안 보여 주고** 있습니다.
+
+**③ 인원수만 바뀌었을 때의 알림 네 종을 열어 주세요 (A-50).**
+`VIEWPORT_RIDER_COUNT` · `NEARBY_RIDER_COUNT` · `NEARBY_BULK_ENTER` · `RIDE_VIEWPORT_RIDER_COUNT`
+입니다. 없으면 **구경하는 사람 화면에서 동승 인원이 갱신되지 않습니다** — 인솔자가 곡을 바꿔야만
+숫자가 따라옵니다. 프론트는 받는 코드를 미리 넣어 뒀으니 보내기 시작하면 그대로 반영됩니다.
+
+**④ 상태가 어긋났을 때의 오류 코드를 갈라 주세요 (A-51).**
+명세에는 `RIDE_STALE` 이 있는데 배포본에는 없고, 같은 상황이 `PRESENCE_ERROR` 로 옵니다.
+프론트가 **"화면을 새로 고치세요" 와 "잠시 후 다시 해보세요" 를 가를 수 없습니다.**
+
+**⑤ 따라가는 동안 바뀐 곡의 재생 기록 번호를 내려 주세요 (A-53).**
+인솔자를 따라 곡이 바뀌면 서버가 새 `play_history` 를 만드는데 그 번호가 프론트에 오지 않습니다.
+그래서 **탑승 중에는 곡별로 얼마나 들었는지 남길 수 없습니다.** 지금은 탈 때 받은 번호 하나로
+탑승부터 하차까지를 한 건으로 볼 수밖에 없습니다.
+
+A-52(곡 상세 탭)는 **백엔드가 하실 일이 없습니다.** 프론트 쪽 기록용으로만 적어 둔 항목입니다.

@@ -494,7 +494,28 @@
  */
 /* 경계는 tokens.css 의 --breakpoint-tablet 과 같은 선이다 — 미디어 쿼리는 var() 를 못 쓴다. 한쪽을 고치면 둘 다 고친다 */
 @media (width < 900px) {
-  [data-sheet][data-collapsed] [data-cover-window] {
+  /*
+   * **단마다 내려보내는 거리가 다르다** (S15P21A405-416). 값이 셋이라 컴포넌트의 클래스 한
+   * 줄로는 못 적는다 — 거기서는 `data-snap` 만 달고 거리는 여기서 고른다.
+   *
+   * `translate` 를 쓴다(구식 `transform: translate()` 가 아니라). 시트는 가로 이동도 같이
+   * 받는데(데스크톱 접기) 한 속성에 둘을 섞으면 서로 덮어쓴다. 별도 속성이라 겹치지 않고,
+   * `transition-[translate]` 도 그대로 먹는다.
+   */
+  [data-sheet][data-snap="1"] {
+    translate: 0 calc(100% - var(--spacing-sheet-s1));
+  }
+  [data-sheet][data-snap="2"] {
+    translate: 0 calc(100% - var(--spacing-sheet-s2));
+  }
+  [data-sheet][data-snap="3"] {
+    translate: 0 0;
+  }
+  /*
+   * 커버 창은 **3 단에서만** 편다. 1·2 단은 걸리는 높이가 112·238px 인데 커버가 188px 이라,
+   * 펴 두면 그 자리를 커버가 다 먹고 무슨 곡인지가 안 보인다 (S15P21A405-417 에서 겪었다).
+   */
+  [data-sheet]:not([data-snap="3"]) [data-cover-window] {
     height: 0 !important;
   }
 }

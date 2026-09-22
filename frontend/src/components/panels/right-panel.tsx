@@ -44,20 +44,23 @@ import SongDetailPanel from "./song-detail/song-detail-panel";
  */
 export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
-  const collapsed = usePanelStore((s) => s.collapsed);
-  const toggleCollapsed = usePanelStore((s) => s.toggleCollapsed);
+  const snap = usePanelStore((s) => s.snap);
+  /** 데스크톱은 1(접힘)·3(펼침) 두 자리만 쓴다 — 여는 자리인 2 도 거기서는 펼친 것이다 */
+  const collapsed = snap === 1;
+  const raiseSnap = usePanelStore((s) => s.raiseSnap);
+  const lowerSnap = usePanelStore((s) => s.lowerSnap);
   const panelEnabled = usePanelEnabled();
-  // 폰에서 옆으로 밀어 접었다 편다 (S15P21A405-417). 마우스는 무시하므로 데스크톱은 그대로다
+  // 폰에서 위아래로 밀어 단을 옮긴다 (S15P21A405-417, 416). 마우스는 무시하므로 데스크톱은 그대로다
   const swipe = usePanelSwipe();
-  const close = usePanelStore((s) => s.close);
   const panelRef = useRef<HTMLElement>(null);
   /**
-   * 폰에서 **바깥을 누르면 닫는다** (S15P21A405-532). X 버튼 하나로만 닫히던 것을 앱 문법에 맞춘다.
+   * 폰에서 **바깥을 누르면 한 단 내려온다** (S15P21A405-532, S15P21A405-416).
    *
-   * **펼쳐져 있을 때만이다.** 접힌 시트는 지도를 보라고 비켜 준 상태라, 거기서도 바깥 누름을
-   * 먹으면 별을 하나도 고를 수 없게 된다 — 누를 때마다 시트가 닫힐 뿐이다.
+   * 처음에는 어느 단이든 바로 닫았는데, 그러면 **펼쳐 놓고 지도를 한 번 보려는 동작이 매번
+   * 닫기가 된다.** 그래서 2·3 단은 1 단으로 내려오고, 이미 1 단이면 그때 닫는다
+   * (`lowerSnap`). 어느 단에서든 걸어 둬야 하므로 조건에서 단을 빼 뒀다.
    */
-  useDismissOnOutside(panelRef, close, useIsNarrow() && activePanel != null && !collapsed);
+  useDismissOnOutside(panelRef, lowerSnap, useIsNarrow() && activePanel != null);
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다
@@ -99,19 +102,23 @@ export default function RightPanel() {
           손잡이는 몸통 바깥(-17px)에 붙어 있어 통째로 밀어내도 화면 안에 남는다.
         */
         /*
-          **폰에서는 아래로 내려간다** (S15P21A405-417). 옆으로 미는 건 데스크톱의 문법이고,
-          화면을 채우는 시트에는 위아래가 맞는다. 통째로 내려보내되 `--spacing-sheet-peek`
-          만큼은 화면에 걸쳐 둔다 — 무엇이 열려 있는지는 읽혀야 한다.
+          **폰에서는 아래로 내려간다** (S15P21A405-417, S15P21A405-416). 옆으로 미는 건
+          데스크톱의 문법이고, 화면을 채우는 시트에는 위아래가 맞는다.
+
+          내려보내는 거리가 **단마다 다르다.** 값이 셋이라 여기 한 줄로는 못 적어서
+          `globals.css` 의 `[data-sheet][data-snap]` 가 맡는다 — 아래 `data-snap` 참고.
 
           가로 이동은 0 으로 되돌린다. 안 그러면 데스크톱 값(`calc(100% - 10px)`)이 남아
           시트가 오른쪽으로도 밀린다.
         */
-        collapsed
-          ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0 max-tablet:translate-y-[calc(100%_-_var(--spacing-sheet-peek))]"
-          : ""
+        collapsed ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0" : ""
       } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
       data-sheet
-      data-collapsed={collapsed ? "" : undefined}
+      /*
+        폰에서 내려보내는 거리를 CSS 가 이 값으로 고른다 (S15P21A405-416). 데스크톱은 안 본다 —
+        거기서는 위 `collapsed` 가 가로 이동을 그대로 맡는다.
+      */
+      data-snap={snap}
     >
       <PanelCollapseHandle />
       {/*
@@ -121,9 +128,13 @@ export default function RightPanel() {
       */}
       <button
         type="button"
-        onClick={toggleCollapsed}
-        aria-expanded={!collapsed}
-        aria-label={collapsed ? "패널 펼치기" : "패널 접기"}
+        /*
+          **한 번 누르면 한 단 올라간다** (S15P21A405-416). 1→2→3 이고, 꼭대기에서 한 번 더
+          누르면 1 로 내려온다 — 손가락만으로 왕복이 되어야 한다. 끌어서 세우는 길은 따로 있다.
+        */
+        onClick={raiseSnap}
+        aria-expanded={snap === 3}
+        aria-label={snap === 3 ? "시트 내리기" : "시트 올리기"}
         /*
           **시트 위에 얹는다** (S15P21A405-417). 흐름에 두면 그만큼 자리를 차지하면서 제 바닥이
           필요해지는데, 그 바닥을 깔았더니 내용 위에 검은 띠 한 줄이 생겼다. 절대 배치로

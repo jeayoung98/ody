@@ -53,7 +53,7 @@ function hideComposer() {
 const open = (panel: PanelType, patch: object = {}) => {
   syncMapView(panel);
   hideComposer();
-  return { activePanel: panel, back: null, collapsed: false, ...patch } as const;
+  return { activePanel: panel, back: null, snap: OPEN_SNAP, ...patch } as const;
 };
 
 /**
@@ -64,6 +64,26 @@ const open = (panel: PanelType, patch: object = {}) => {
  * 더 거슬러 올라가는 길은 지도가 대신한다.
  */
 export type PanelReturn = { panel: "journey" } | { panel: "playlist"; playlistId: number } | { panel: "song"; musicId: number } | { panel: "friends" };
+
+/**
+ * 폰에서 시트가 설 수 있는 **세 자리** (S15P21A405-416). 숫자가 클수록 많이 올라온다.
+ *
+ * | 단 | 보이는 것 | 높이 |
+ * | --- | --- | --- |
+ * | 1 | 머리글과 곡 제목 줄 | `--spacing-sheet-s1` |
+ * | 2 | 칩과 "출발점으로 · 도착점으로" 까지 | `--spacing-sheet-s2` |
+ * | 3 | 전부 (지금까지의 "펼침") | 화면 높이 |
+ *
+ * 2 를 **여는 자리**로 둔다 — 곡이 무엇인지와 바로 할 수 있는 일까지는 보이되 지도도 절반쯤
+ * 남는다. 지도를 덮어 버리면 다음 별을 못 찾는다는 것이 폰 배치의 출발점이었다.
+ *
+ * 세 자리 모두 **화면을 다 덮지는 않는다.** 덮으면 뒤로 가는 길을 따로 만들어야 하는데,
+ * 지금 구조는 지도가 늘 뒤에 살아 있는 것을 전제로 서 있다.
+ */
+export type SheetSnap = 1 | 2 | 3;
+
+/** 여는 자리. 위 표 참고 */
+const OPEN_SNAP: SheetSnap = 2;
 
 interface PanelState {
   /** 열려 있는 우측 패널. null이면 닫힘 */
@@ -77,13 +97,17 @@ interface PanelState {
   /** 뒤로가기로 돌아갈 자리. null이면 뒤로가기를 그리지 않는다 */
   back: PanelReturn | null;
   /**
-   * 패널이 접혀 있는가 (S15P21A405-318).
+   * 시트가 어느 **단**에 있는가 (S15P21A405-416).
    *
-   * **닫기와 다르다.** 닫으면 패널도 별자리도 사라지지만, 접으면 둘 다 살아 있고 패널만
+   * **닫기와 다르다.** 닫으면 패널도 별자리도 사라지지만, 내리면 둘 다 살아 있고 패널만
    * 화면 밖으로 미끄러진다 — 별자리를 넓게 보려고 잠깐 치우는 동작이다.
    * 지도 가림 폭도 이 값을 따라간다 (`main-screen.tsx`).
+   *
+   * **데스크톱은 1 과 3 만 쓴다.** 거기서는 패널이 옆으로 접히는 두 상태뿐이라
+   * `snap !== 1` 이면 전부 "펼침" 으로 그린다 — 그래서 여는 순간의 2 도 데스크톱에서는
+   * 예전과 똑같이 펼쳐진 패널이다.
    */
-  collapsed: boolean;
+  snap: SheetSnap;
 
   openSong: (musicId: number) => void;
   /**
@@ -112,8 +136,21 @@ interface PanelState {
   /** 네비바 토글: 같은 패널이면 닫고, 다르면 연다 */
   toggle: (panel: PanelType) => void;
   close: () => void;
-  /** 패널을 접었다 폈다 (S15P21A405-318). 별자리·패널 종류는 건드리지 않는다 */
+  /** 패널을 접었다 폈다 (S15P21A405-318). 데스크톱 손잡이 — 1 과 3 만 오간다 */
   toggleCollapsed: () => void;
+  /**
+   * 시트를 **한 단 올린다** (S15P21A405-416). 손잡이를 눌렀을 때.
+   * 1→2→3 이고, 꼭대기에서 한 번 더 누르면 1 로 내려온다 — 그래야 손가락만으로 왕복이 된다.
+   */
+  raiseSnap: () => void;
+  /**
+   * 바깥을 눌렀을 때 (S15P21A405-416). **2·3 단은 1 단으로 내려오고, 1 단이면 닫는다.**
+   * 예전에는 어느 단이든 바로 닫혔는데, 그러면 펼쳐 놓고 지도를 한 번 보려는 동작이
+   * 매번 닫기가 된다.
+   */
+  lowerSnap: () => void;
+  /** 드래그로 단을 직접 정한다 (S15P21A405-416) */
+  setSnap: (snap: SheetSnap) => void;
   /**
    * 자리를 비켜 준다 (S15P21A405-404). 지도를 움직이는 동안 불린다.
    * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
@@ -129,15 +166,15 @@ export const usePanelStore = create<PanelState>()(
       playlistId: null,
       profileEmail: null,
       back: null,
-      collapsed: false,
+      snap: OPEN_SNAP,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
 
       openSongFromMap: (musicId) => {
-        const { activePanel, collapsed } = get();
+        const { activePanel, snap } = get();
         if (activePanel === "friends") {
           // 펼쳐 있으면 고정 — 레이더를 보면서 곡만 바꾼다
-          if (!collapsed) return;
+          if (snap !== 1) return;
           // 접어 뒀으면 보여 줄 것이 없으니 상세를 연다. 대신 돌아갈 자리를 남긴다 —
           // 접기는 "잠깐 치우기" 라서, 상세를 열고 끝나면 레이더가 통째로 사라진 셈이 된다
           set(open("song", { musicId, back: { panel: "friends" } }), false, "openSongFromMap/fromFriends");
@@ -159,10 +196,10 @@ export const usePanelStore = create<PanelState>()(
       goBack: () => {
         const back = get().back;
         if (!back) return;
-        if (back.panel === "journey") set({ activePanel: "journey", back: null, collapsed: false }, false, "goBack/journey");
-        else if (back.panel === "friends") set({ activePanel: "friends", back: null, collapsed: false }, false, "goBack/friends");
-        else if (back.panel === "song") set({ activePanel: "song", musicId: back.musicId, back: null, collapsed: false }, false, "goBack/song");
-        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, collapsed: false }, false, "goBack/playlist");
+        if (back.panel === "journey") set({ activePanel: "journey", back: null, snap: OPEN_SNAP }, false, "goBack/journey");
+        else if (back.panel === "friends") set({ activePanel: "friends", back: null, snap: OPEN_SNAP }, false, "goBack/friends");
+        else if (back.panel === "song") set({ activePanel: "song", musicId: back.musicId, back: null, snap: OPEN_SNAP }, false, "goBack/song");
+        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, snap: OPEN_SNAP }, false, "goBack/playlist");
       },
 
       openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
@@ -183,11 +220,20 @@ export const usePanelStore = create<PanelState>()(
 
       close: () => {
         hideMapView();
-        set({ activePanel: null, back: null, collapsed: false }, false, "close");
+        set({ activePanel: null, back: null, snap: OPEN_SNAP }, false, "close");
       },
 
       /** 접기는 닫기가 아니다 — 별자리도 열린 패널도 그대로 두고 자리만 비켜 준다 */
-      toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed }), false, "toggleCollapsed"),
+      toggleCollapsed: () => set((s) => ({ snap: s.snap === 1 ? 3 : 1 }) as const, false, "toggleCollapsed"),
+
+      raiseSnap: () => set((s) => ({ snap: (s.snap === 3 ? 1 : s.snap + 1) as SheetSnap }), false, "raiseSnap"),
+
+      lowerSnap: () => {
+        if (get().snap === 1) return void get().close();
+        set({ snap: 1 }, false, "lowerSnap");
+      },
+
+      setSnap: (snap) => set((s) => (s.snap === snap ? {} : { snap }), false, "setSnap"),
 
       /**
        * 드래그 중에 매 프레임 불릴 수 있다. **바뀔 때만 set 한다** — 같은 값을 계속 넣으면
@@ -199,7 +245,7 @@ export const usePanelStore = create<PanelState>()(
          * 지도를 보려는 사람에게 맞는 동작인데, 주변 사람은 지도를 움직이며 **같이** 보는 화면이다.
          * 조금만 끌어도 접히면 레이더가 계속 사라진다. 접기 버튼은 그대로 도므로 치우고 싶으면 치운다.
          */
-        set((s) => (s.activePanel && s.activePanel !== "friends" && !s.collapsed ? { collapsed: true } : {}), false, "collapse"),
+        set((s) => (s.activePanel && s.activePanel !== "friends" && s.snap !== 1 ? { snap: 1 as SheetSnap } : {}), false, "collapse"),
     }),
     { name: "panel-store" },
   ),

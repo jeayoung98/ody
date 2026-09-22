@@ -20,7 +20,7 @@ test("주변 사람을 펼쳐 두면 지도에서 곡을 눌러도 패널이 그
 test("접어 두면 상세를 열되 돌아갈 자리로 주변 사람을 남긴다", () => {
   panel().openFriends();
   panel().toggleCollapsed();
-  assert.equal(panel().collapsed, true);
+  assert.equal(panel().snap, 1, "데스크톱 손잡이는 1(접힘) 과 3(펼침) 을 오간다");
 
   panel().openSongFromMap(42);
   assert.equal(panel().activePanel, "song");
@@ -52,9 +52,9 @@ test("다른 패널에서는 지도 클릭이 예전 그대로 상세로 간다"
 test("지도를 끌어도 주변 사람은 접히지 않는다 — 다른 패널은 접힌다", () => {
   panel().openFriends();
   panel().collapse();
-  assert.equal(panel().collapsed, false, "지도를 움직이며 같이 보는 화면이다");
+  assert.notEqual(panel().snap, 1, "지도를 움직이며 같이 보는 화면이다");
 
   panel().openChart();
   panel().collapse();
-  assert.equal(panel().collapsed, true, "나머지는 지도에 자리를 비켜 준다");
+  assert.equal(panel().snap, 1, "나머지는 지도에 자리를 비켜 준다");
 });

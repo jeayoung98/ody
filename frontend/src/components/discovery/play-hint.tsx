@@ -79,7 +79,7 @@ export default function PlayHint() {
    */
   const narrow = useIsNarrow();
   const activePanel = usePanelStore((s) => s.activePanel);
-  const panelCollapsed = usePanelStore((s) => s.collapsed);
+  const panelSnap = usePanelStore((s) => s.snap);
   // 서버와 첫 클라이언트 렌더는 비어 있다 — 저장소를 render 중에 읽으면 하이드레이션이 깨진다
   const hydrated = useSyncExternalStore(
     () => () => {},
@@ -211,7 +211,7 @@ export default function PlayHint() {
   // 홈에서만. 튜토리얼 화면도 MainScreen 을 쓰므로 여기서 갈라야 겹치지 않는다
   if (pathname !== ROUTES.home) return null;
   // 폰에서 시트가 펼쳐져 있으면 미룬다 — 위 주석 참고
-  if (narrow && activePanel != null && !panelCollapsed) return null;
+  if (narrow && activePanel != null && panelSnap > 1) return null;
   if (!pending || !context || !at) return null;
 
   return (

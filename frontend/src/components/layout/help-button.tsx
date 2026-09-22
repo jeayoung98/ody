@@ -39,8 +39,9 @@ export default function HelpButton() {
    */
   const narrow = useIsNarrow();
   const activePanel = usePanelStore((s) => s.activePanel);
-  const collapsed = usePanelStore((s) => s.collapsed);
-  const sheetUp = activePanel != null && !collapsed;
+  // 1 단(제목 줄만)이면 지도가 넉넉히 남으므로 도움말을 그대로 둔다 (S15P21A405-416)
+  const snap = usePanelStore((s) => s.snap);
+  const sheetUp = activePanel != null && snap > 1;
   const close = () => {
     track("help_closed");
     setAnalyticsContext({ help_open: false });

@@ -356,6 +356,13 @@ export class MapEngine {
   /** 레이어 전환 시 커버·프로필 페이드. 모프 중 0으로, 새 레이어 데이터가 오면 1로 */
   coverAlpha = 0;
   friendAlpha = 0;
+  /**
+   * **나를 따라오는 인원** (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
+   *
+   * 스토어(`use-follow-store.followerCount`)를 엔진이 직접 읽지 않는다 — 엔진은 화면 밖 상태를
+   * 모르는 채로 두는 것이 이 클래스의 전제다. 넣어 주는 쪽은 `map-view` 다.
+   */
+  myRiders = 0;
   follow: FollowState | null = null;
   onFollowEnd: ((reason: string) => void) | null = null;
   onArrive: ((musicId: number) => void) | null = null;
@@ -603,6 +610,11 @@ export class MapEngine {
   }
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
+  /** 나를 따라오는 인원 (S15P21A405-557). 화면 쪽 스토어를 엔진이 직접 읽지 않으려고 둔 통로다 */
+  setMyRiders(n: number) {
+    this.myRiders = Math.max(0, n);
+  }
+
   setFriends(layer: number, friends: NearbyUser[]) {
     /**
      * **겹이 바뀔 때만 자리를 비운다** (S15P21A405-553). 좌표계가 겹마다 다르므로 그때는

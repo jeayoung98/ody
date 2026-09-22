@@ -1,7 +1,15 @@
 import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
-import { drawFriends } from "./draw-friends";
+import { drawFriends, drawQueue, drawShip } from "./draw-friends";
+
+/**
+ * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
+ * 남의 우주선(12.5~15)과 같은 눈높이로 둔다 — 내 것만 크면 축척이 어긋나 보인다.
+ */
+const ME_SHIP_R = 13;
+/** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
+const TEAL_RGB: readonly [number, number, number] = [79, 227, 206];
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
 import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
@@ -923,8 +931,23 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
     g.stroke();
     g.globalCompositeOperation = "source-over";
   }
-  drawMeMarker(g, px, py, e.time);
-  g.globalCompositeOperation = "source-over";
+  /**
+   * **누가 나를 따라오면 나도 우주선이다** (S15P21A405-557).
+   *
+   * 예전에는 내가 따라갈 때만 우주선 뒤에 줄이 섰다 — 인솔자 쪽은 제 선단을 볼 길이 없어서
+   * 혼자 다니는 것과 구분이 안 됐다. 그리는 모양은 따라갈 때와 같고 '나' 자리만 다르다.
+   *
+   * 기수는 **날아온 방향**을 쓴다. 서 있을 때는 방향이랄 것이 없으므로 위를 본다.
+   */
+  if (e.myRiders > 0) {
+    const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang, e.time, e.myRiders, 0);
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
+    g.globalCompositeOperation = "source-over";
+  } else {
+    drawMeMarker(g, px, py, e.time);
+    g.globalCompositeOperation = "source-over";
+  }
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillStyle = "rgba(79,227,206,.95)";

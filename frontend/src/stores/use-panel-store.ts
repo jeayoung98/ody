@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useFollowStore } from "./use-follow-store";
 import { devtools } from "zustand/middleware";
 import type { PanelType } from "@/constants";
 import { useJourneyStore } from "./use-journey-store";
@@ -206,7 +207,24 @@ export const usePanelStore = create<PanelState>()(
         else set(open(panel), false, `toggle/${panel}`);
       },
 
+      /**
+       * **따라가는 중에는 닫히지 않고 1 단으로 내려온다** (S15P21A405-557).
+       *
+       * 따라가는 사람은 **곡을 직접 고를 수가 없다.** 상세를 없애 버리면 인솔자가 다음 조작을
+       * 할 때까지 우측이 통째로 빈 화면이고, 스스로 다시 띄울 방법도 없다. 내려 두면 자리는
+       * 비켜 주면서 인솔자가 곡을 옮길 때 그대로 되살아난다.
+       *
+       * 다른 패널(주변 사람·랭킹 등)을 닫을 때도 **내려간 상세로 돌아온다** — 그게 따라가는
+       * 동안의 기본 화면이다.
+       */
       close: () => {
+        const ride = useFollowStore.getState();
+        const riding = ride.leaderViewingMusicId ?? ride.leaderMusicId;
+        if (ride.leaderEmail && riding != null) {
+          syncMapView("song");
+          set({ activePanel: "song", musicId: riding, back: null, snap: 1 }, false, "close/riding");
+          return;
+        }
         hideMapView();
         set({ activePanel: null, back: null, snap: OPEN_SNAP }, false, "close");
       },

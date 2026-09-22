@@ -148,7 +148,7 @@ public class NearbyChangeService {
 						UserDisplay who = displayByEmail.get(email);
 						return new NearbyChange(email, who.nickname(), who.imageUrl(),
 								meetingService.countWith(receiver, email),
-								riderCounts.getOrDefault(email, 0), musicId);
+								riderCounts.getOrDefault(email, 0), musicId, null, null, null);
 					})
 					.toList();
 			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
@@ -225,7 +225,7 @@ public class NearbyChangeService {
 	 * @param actorEmail 목록에서 지울 사용자 이메일
 	 */
 	private void sendLeave(Set<String> receivers, String actorEmail) {
-		NearbyChange payload = new NearbyChange(actorEmail, null, null, null, null, null);
+		NearbyChange payload = new NearbyChange(actorEmail, null, null, null, null, null, null, null, null);
 		for (String receiver : receivers) {
 			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.NEARBY_LEAVE, payload);
@@ -248,7 +248,8 @@ public class NearbyChangeService {
 			NearbyChange payload = new NearbyChange(
 					actorEmail, who.nickname(), who.imageUrl(),
 					meetingService.countWith(receiver, actorEmail), riderCount,
-					musicId);
+					// 자리는 4단계에서 채운다. 지금은 곡만 바꾼다
+					musicId, null, null, null);
 			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE, type, payload);
 		}
 	}

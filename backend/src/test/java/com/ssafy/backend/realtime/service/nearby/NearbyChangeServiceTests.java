@@ -76,13 +76,13 @@ class NearbyChangeServiceTests {
 
 		verify(realtimeMessageService).sendToUser("leave@x.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.NEARBY_LEAVE,
-				new NearbyChange(ACTOR, null, null, null, null, null));
+				new NearbyChange(ACTOR, null, null, null, null, null, null, null, null));
 		verify(realtimeMessageService).sendToUser("enter@x.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.NEARBY_ENTER,
-				new NearbyChange(ACTOR, "노래하는 사람", "image", 2, 4, 20L));
+				new NearbyChange(ACTOR, "노래하는 사람", "image", 2, 4, 20L, null, null, null));
 		verify(realtimeMessageService).sendToUser("move@x.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.NEARBY_MOVE,
-				new NearbyChange(ACTOR, "노래하는 사람", "image", 3, 4, 20L));
+				new NearbyChange(ACTOR, "노래하는 사람", "image", 3, 4, 20L, null, null, null));
 		verifyNoMoreInteractions(realtimeMessageService);
 		verifyNoInteractions(nearbyMusicService);
 	}
@@ -96,7 +96,7 @@ class NearbyChangeServiceTests {
 
 		verify(realtimeMessageService).sendToUser("receiver@x.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.NEARBY_LEAVE,
-				new NearbyChange(ACTOR, null, null, null, null, null));
+				new NearbyChange(ACTOR, null, null, null, null, null, null, null, null));
 		verifyNoMoreInteractions(realtimeMessageService);
 		verifyNoInteractions(userDisplayService, meetingService, riderCountService);
 		verify(nearbyRepository, never()).hasSubscription(ACTOR);
@@ -113,7 +113,7 @@ class NearbyChangeServiceTests {
 
 		verify(realtimeMessageService).sendToUser("receiver@x.com", WebSocketDestination.QUEUE_PRESENCE,
 				RealtimeMessageType.NEARBY_ENTER,
-				new NearbyChange(ACTOR, "들어온 사람", "image", 0, 0, 20L));
+				new NearbyChange(ACTOR, "들어온 사람", "image", 0, 0, 20L, null, null, null));
 		verifyNoMoreInteractions(realtimeMessageService);
 	}
 
@@ -135,8 +135,9 @@ class NearbyChangeServiceTests {
 			return true;
 		}).when(nearbyRepository).closeSubscriptions(viewer, 1L);
 		when(nearbyRepository.subscribers(20L)).thenAnswer(invocation -> Set.copyOf(activeSubscribers));
+		// 이 시험이 보는 것은 닫기 한 가지뿐이라, 닫기가 안 쓰는 이웃은 null 로 둔다.
 		NearbyPeopleService closeService = new NearbyPeopleService(
-				presenceRepository, nearbyMusicService, nearbyRepository, userDisplayService, meetingService, riderCountService, webSocketSessionService);
+				presenceRepository, null, null, null, nearbyRepository, meetingService, webSocketSessionService, null);
 
 		closeService.close(viewer, 1L);
 		service.handlePositionChanged(change(null, 20L));

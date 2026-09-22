@@ -254,7 +254,7 @@ class ViewportDeltaServiceTests {
 				.toList();
 		return new RealtimeProperties(
 				new RealtimeProperties.Presence(15_000, 45_000, 10_000, 60_000),
-				new RealtimeProperties.Nearby(10),
+				new RealtimeProperties.Nearby(10, 12),
 				new RealtimeProperties.ViewportSettings(16, 36, 20, 64, 250, 5_000),
 				ranges);
 	}

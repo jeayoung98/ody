@@ -52,5 +52,7 @@ public enum RealtimeMessageType {
 	RIDE_ENDED,
 	/** 선단이 흩어져 여러 사람이 한 자리에 한꺼번에 나타났다. */
 	VIEWPORT_BULK_ENTER,
+	/** 같은 층의 누군가가 나에게 반응(이모지)을 보냈다. 받는 사람에게만 간다. */
+	REACTION,
 	PRESENCE_ERROR
 }

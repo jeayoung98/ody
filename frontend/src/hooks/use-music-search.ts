@@ -1,13 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { SEARCH_DEBOUNCE_MS } from "@/constants";
+import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query";
 import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
 import { useSearchAnalytics } from "@/hooks/use-search-analytics";
+import { musicToMapPoint } from "@/lib/map-point";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
-import type { MusicSearchResult, SearchCondition } from "@/types";
+import type { MapPoint, MusicSearchResult, SearchCondition } from "@/types";
 
 /**
  * 검색이 들고 있는 상태 (S15P21A405-399).
@@ -76,8 +79,9 @@ export function useMusicSearch({ visible, source }: { visible: boolean; source: 
     pages: query.data?.pages.length ?? 0,
     source,
   });
-  const focusMusic = useMapStore((s) => s.focusMusic);
+  const revealMusic = useMapStore((s) => s.revealMusic);
   const openSong = usePanelStore((s) => s.openSong);
+  const qc = useQueryClient();
 
   const reset = () => {
     setInput("");
@@ -87,13 +91,39 @@ export function useMusicSearch({ visible, source }: { visible: boolean; source: 
 
   /**
    * 고른 곡을 지도에 띄우고 상세를 연다.
-   * 이 겹에 있으면 확대해 가고, 없으면 고스트별로 띄운다 — 레이어를 자동으로 옮기지 않는다
-   * (SEARCH-01, MAP-12).
+   *
+   * **지도를 그 곡까지 데려간다** (S15P21A405-581). 이 겹에 있으면 확대해 가고, 없으면 그 곡이
+   * 상주하는 가장 가까운 위 겹까지 올라간다. 어느 겹에도 없으면 최상위에서 그 자리에 띄운다.
+   * SEARCH-01 은 "레이어를 자동으로 옮기지 않는다" 로 확정돼 있어 **기획 확인이 필요하다** —
+   * FEATURES.md 변경 제안에 올려 두었다.
+   *
+   * 상세를 **먼저** 연다. 좌표를 기다리는 동안 화면이 멎어 있으면 안 눌린 것으로 읽힌다.
    */
   const select = (r: MusicSearchResult) => {
     analytics.select(r.id, results.findIndex((item) => item.id === r.id) + 1);
     openSong(r.id);
-    focusMusic(r.id);
+    void revealOnMap(r.id);
+  };
+
+  /**
+   * 좌표를 구해 지도에 띄운다.
+   *
+   * 검색 결과에는 좌표가 없고, 지도는 그 겹의 상주 집합만 들고 있어 카탈로그에서 찾은 곡을 대개
+   * 모른다. **좌표는 곡 상세에 있다** — 방금 연 패널이 받는 바로 그 응답이라 새로 요청이 나가는
+   * 일은 드물고, 새 API 도 필요 없다.
+   *
+   * 조회가 실패해도 삼키고 넘어간다. `revealMusic` 이 좌표 없이도 할 수 있는 만큼은 한다 —
+   * 이미 아는 곡이면 그대로 데려가고, 모르면 고스트별로 떨어진다.
+   */
+  const revealOnMap = async (musicId: number) => {
+    let point: MapPoint | null = null;
+    try {
+      const detail = await qc.fetchQuery(musicDetailQueryOptions(musicId));
+      point = musicToMapPoint(detail);
+    } catch {
+      /* 좌표 없이 간다 */
+    }
+    revealMusic(musicId, point);
   };
 
   /** 입력값을 조건으로 굳힌다. 남은 입력은 비우고 포커스는 유지해 다음 조건을 바로 받는다 */

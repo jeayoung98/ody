@@ -71,3 +71,20 @@ test("이미 커버가 선 칸은 건너뛴다 — 새 커버는 빈 쪽으로 �
 
   assert.deepEqual(order, [2], "이미 찬 칸의 후보는 아예 빠진다");
 });
+
+test("커버 자리는 앨범 ID 있는 곡부터, 그다음 재생수, 그다음 받은 순서", () => {
+  const { byCoverPriority } = require("../src/components/map/render/cover-spread.ts");
+  // weight 가 전부 0 인 실데이터를 흉내 낸다 — 그때 남는 기준이 '받은 순서' 다
+  const songs = [
+    { id: "a", album: false, w: 0 },
+    { id: "b", album: true, w: 0 },
+    { id: "c", album: false, w: 9 },
+    { id: "d", album: true, w: 0 },
+    { id: "e", album: true, w: 5 },
+  ];
+  const order = [...songs].sort(byCoverPriority((s) => s.album, (s) => s.w)).map((s) => s.id);
+
+  assert.deepEqual(order, ["e", "b", "d", "c", "a"]);
+  assert.ok(order.indexOf("b") < order.indexOf("c"), "재생수 9 라도 앨범 ID 없으면 뒤로 간다");
+  assert.ok(order.indexOf("b") < order.indexOf("d"), "동점이면 받은 순서를 지킨다");
+});

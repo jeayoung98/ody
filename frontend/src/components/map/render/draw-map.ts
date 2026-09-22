@@ -4,7 +4,7 @@ import type { MapEngine } from "../engine/map-engine";
 import { drawFriends } from "./draw-friends";
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
-import { cellOf, gridFor, spreadOrder } from "./cover-spread";
+import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -372,8 +372,14 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     const at = (i: number) => ({ x: e.pos[i * 2], y: e.pos[i * 2 + 1] });
     const { cols, rows } = gridFor(n, f);
     const taken = new Set(picked.map((i) => cellOf(at(i).x, at(i).y, f, cols, rows)));
+    /*
+     * 같은 칸에 여럿이면 `spreadOrder` 가 **먼저 온 것**을 남긴다. 그래서 넣기 전에 줄을
+     * 세워 둔다 — 앨범 ID 있음 > 재생수 > 받은 순서 (S15P21A405-528).
+     */
     const fill = spreadOrder(
-      [...candidates].filter((i) => !picked.includes(i) && usable(i)),
+      [...candidates]
+        .filter((i) => !picked.includes(i) && usable(i))
+        .sort(byCoverPriority((i) => e.songs[i].albumMbid != null, (i) => e.songs[i].weight)),
       at,
       f,
       n,

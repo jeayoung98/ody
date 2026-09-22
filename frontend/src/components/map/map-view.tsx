@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { CONSTELLATION, HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
@@ -31,6 +31,9 @@ import { useViewport } from "./use-viewport";
 import { ANALYTICS } from "@/constants/analytics";
 import { analyticsContext, track, trackOnce } from "@/lib/analytics/client";
 import { nearbyResults } from "@/lib/analytics/flows";
+import { albumCover } from "./render/cover-art";
+import { byCoverPriority } from "./render/cover-spread";
+import { COVER_PX } from "./render/sprites";
 
 interface MapViewProps {
   /** 우측 패널·레일 등으로 가려진 폭(px). 중앙 계산에서 제외한다 */
@@ -220,16 +223,23 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 덤으로 레이어 2 부터 나던 400 도 사라진다 — 그 라우트가 누적 범위를 안 보내서 백엔드
    * `MajorQuery` 의 `accumulated.size() == level-1` 검사에 걸리고 있었다.
    */
-  const representatives = useMemo(
-    () =>
-      songs
-        ? [...songs]
-            .sort((a, b) => b.weight - a.weight)
-            .slice(0, REPRESENTATIVE_COUNT)
-            .map((p) => p.musicId)
-        : null,
+  const repPoints = useMemo(
+    () => (songs ? [...songs].sort(byCoverPriority((p) => p.albumMbid != null, (p) => p.weight)).slice(0, REPRESENTATIVE_COUNT) : null),
     [songs],
   );
+  const representatives = useMemo(() => repPoints?.map((p) => p.musicId) ?? null, [repPoints]);
+  /**
+   * **커버를 미리 받아 둔다** (S15P21A405-528). 한 장에 2.4~3.4초가 걸리는데(리다이렉트 두 번 +
+   * archive.org 응답), 예전에는 그리려고 볼 때 비로소 받기 시작해서 지도가 자리잡은 뒤에 또
+   * 그만큼 기다렸다. 후보가 정해지는 순간 시작해 두면 그릴 때는 이미 와 있다.
+   *
+   * 앞쪽만 데운다 — 화면에 동시에 뜨는 커버는 스무 개 남짓이고, 마흔 장을 한꺼번에 부르면
+   * 같은 호스트에 줄이 서서 앞엣것까지 늦어진다.
+   */
+  useEffect(() => {
+    if (!repPoints) return;
+    for (const p of repPoints.slice(0, COVER_COUNT.near)) albumCover(p.musicId, p.albumMbid, COVER_PX);
+  }, [repPoints]);
   useEffect(() => {
     // 겹 번호는 songs 를 넣을 때와 **같은 값**을 쓴다 — 둘이 어긋나면 엔진이 남의 겹 커버를 든다
     if (representatives) engine.setRepresentatives(boxes.length, representatives);

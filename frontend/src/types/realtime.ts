@@ -218,6 +218,23 @@ export interface ViewportRiderCount {
   riderCount: number;
 }
 
+/**
+ * `GET /api/realtime/layers/{layer}/users` 응답 — 그 겹에서 **재생 중인 사람 전부**
+ * (S15P21A405-537, BACKEND-NOTES §5).
+ *
+ * **화면 범위와 무관하다.** 소켓 `VIEWPORT_SNAPSHOT` 은 보이는 범위만 주고 칸이 36개를 넘으면
+ * "N명" 뭉치(`CLUSTERED`)로 바꾸는데, 지도는 줌과 상관없이 사람을 전부 한 명씩 그리기로 했다.
+ *
+ * **`groups` 모양이 `ViewportSnapshot.groups` 와 같다.** 백엔드가 같은 레코드를 재사용해서
+ * 일부러 맞춰 줬다 — 그래서 `NearbyUser` 로 옮기는 변환기를 하나만 둔다.
+ *
+ * 좌표를 모르는 곡(위치가 없는 곡)의 사람은 **응답에서 빠진다.** 빈 목록이 정상일 수 있다.
+ */
+export interface LayerUsersSnapshot {
+  layer: number;
+  groups: ViewportMusicGroup[];
+}
+
 // ── 주변 사람 패널 ─────────────────────────────────────────────────────────
 
 /**

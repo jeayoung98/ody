@@ -32,7 +32,7 @@ function login() {
 function fill(client) {
   client.setQueryData(QUERY_KEYS.auth.me, { email: "me@ody.kr", nickname: "루나" });
   client.setQueryData(QUERY_KEYS.user.profile("me@ody.kr"), { nickname: "루나", followerCount: 7, isOnline: true });
-  client.setQueryData(QUERY_KEYS.playlist.mine, [{ id: 1, playlistName: "밤" }]);
+  client.setQueryData(QUERY_KEYS.playlist.mine(null), [{ id: 1, playlistName: "밤" }]);
   client.setQueryData(QUERY_KEYS.map.songs([{ layer: 1, xMin: 0, yMin: 0, xMax: 1, yMax: 1 }]), [{ musicId: 1 }]);
   client.setQueryData(QUERY_KEYS.music.search({ mode: "all", query: "aespa" }), []);
 }

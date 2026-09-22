@@ -1,16 +1,18 @@
 "use client";
 
+import { closestCenter, DndContext, KeyboardSensor, PointerSensor, useSensor, useSensors, type DragEndEvent } from "@dnd-kit/core";
+import { SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import EmptyState from "@/components/common/empty-state";
 import IconButton from "@/components/common/icon-button";
-import { ChevronDownIcon, CloseIcon, PlayIcon } from "@/components/common/icons";
+import { CloseIcon, PlayIcon } from "@/components/common/icons";
 import SectionTitle from "@/components/common/section-title";
-import TrackRow from "@/components/common/track-row";
 import { useRemovePlaylistItemMutation } from "@/hooks/mutations/use-remove-playlist-item-mutation";
 import { moveItem, useReorderPlaylistItemsMutation } from "@/hooks/mutations/use-reorder-playlist-items-mutation";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import type { PlaylistDetail } from "@/types";
+import PlaylistSortableRow from "./playlist-sortable-row";
 
 interface PlaylistTrackListProps {
   playlist: PlaylistDetail;
@@ -18,7 +20,13 @@ interface PlaylistTrackListProps {
   editable: boolean;
 }
 
-/** 곡 목록 컴포넌트 (숫자 버전) */
+/**
+ * 곡 목록 (숫자 버전). 내 플리면 **손잡이를 잡고 끌어** 순서를 바꾼다 (S15P21A405-540).
+ *
+ * 순서가 바뀌면 **눌린 즉시 화면에 반영된다.** 서버를 다녀온 뒤에 그리면 놓은 줄이 원래 자리로
+ * 돌아갔다가 뒤늦게 다시 옮겨 가는 것이 보인다. 되돌리는 일은 요청이 실패했을 때만 일어난다
+ * (`use-reorder-playlist-items-mutation` 의 `onMutate`·`onError`).
+ */
 export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackListProps) {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playQueue = usePlayerStore((s) => s.playQueue);
@@ -30,15 +38,25 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
   const ids = playlist.items.map((it) => it.musicId);
 
   /**
-   * 한 칸 옮긴다 (S15P21A405-540). **바뀐 곡이 아니라 전체 순서를 보낸다** — 백엔드가 부분
-   * 지시를 받지 않고 목록을 통째로 다시 매긴다.
+   * **누르기와 끌기를 가른다.** 손잡이를 그냥 누르기만 해도 끌기로 잡히면 초점이 튀고 화면이
+   * 흔들린다. 4px 은 손가락이 떨리는 정도는 누르기로, 옮기려는 움직임은 끌기로 갈라 준다.
    *
-   * 보내는 중에도 다음 누름을 막지 않는다. 한 칸씩 여러 번 눌러 옮기는 것이 이 버튼을 쓰는
-   * 방식이라, 왕복마다 잠그면 두 칸 옮기는 데 두 번을 기다려야 한다. 캐시는 이미 눌린 대로
-   * 앞서 가 있으므로 다음 요청도 그 순서에서 출발한다.
+   * 키보드 감지기를 같이 단다. 버튼 두 개를 손잡이 하나로 바꾸면서 **키보드로 순서를 못 바꾸게
+   * 되는 것**이 유일한 손실이었는데, 이 한 줄이 그 자리를 메운다 —
+   * 손잡이에서 스페이스로 집고 화살표로 옮긴다.
    */
-  const move = (from: number, to: number) => {
-    const next = moveItem(ids, from, to);
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates }),
+  );
+
+  /**
+   * 놓았다. **바뀐 곡이 아니라 새 순서 전체를 보낸다** — 백엔드가 부분 지시를 받지 않고
+   * `musicIdList` 를 통째로 다시 매긴다.
+   */
+  const handleDragEnd = ({ active, over }: DragEndEvent) => {
+    if (!over || active.id === over.id) return;
+    const next = moveItem(ids, ids.indexOf(Number(active.id)), ids.indexOf(Number(over.id)));
     if (next === ids) return;
     reorder.mutate({ playlistId: playlist.id, musicIds: [...next] });
   };
@@ -58,81 +76,52 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
       {playlist.items.length === 0 ? (
         <EmptyState message="아직 담은 곡이 없습니다. 지도에서 곡을 고르고 ＋ 플리 를 누르세요." />
       ) : (
-        <div className="-mx-1.5 flex flex-col gap-0.5">
-          {playlist.items.map((it, i) => (
-            <TrackRow
-              key={it.musicId}
-              index={i + 1}
-              title={it.music.title}
-              artist={it.music.artist}
-              duration={it.music.duration}
-              active={it.musicId === currentMusicId}
-              onClick={() => {
-                openSong(it.musicId);
-                playFrom(i);
-              }}
-              actions={
-                <>
-                  <IconButton
-                    label="이 곡부터 재생"
-                    size={26}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      playFrom(i);
-                    }}
-                  >
-                    <PlayIcon size={13} />
-                  </IconButton>
-                  {editable && (
+        <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd}>
+          <SortableContext items={ids} strategy={verticalListSortingStrategy}>
+            <div className="-mx-1.5 flex flex-col gap-0.5">
+              {playlist.items.map((it, i) => (
+                <PlaylistSortableRow
+                  key={it.musicId}
+                  item={it}
+                  index={i + 1}
+                  active={it.musicId === currentMusicId}
+                  editable={editable}
+                  onClick={() => {
+                    openSong(it.musicId);
+                    playFrom(i);
+                  }}
+                  actions={
                     <>
-                      {/*
-                        위·아래 한 칸씩 (S15P21A405-540). 끌어서 옮기는 것이 손에는 더 편하지만,
-                        그러려면 포인터·터치·키보드를 전부 다시 짜야 한다. 버튼은 그 셋이 공짜로
-                        따라오고 스크린리더에서도 읽힌다 — 끌기는 이게 부족할 때 얹는다.
-
-                        **첫 곡의 위로와 마지막 곡의 아래로는 잠근다.** 눌러도 아무 일이 없으면
-                        고장으로 보인다.
-                      */}
                       <IconButton
-                        label="위로 옮기기"
+                        label="이 곡부터 재생"
                         size={26}
-                        disabled={i === 0}
                         onClick={(e) => {
                           e.stopPropagation();
-                          move(i, i - 1);
+                          playFrom(i);
                         }}
                       >
-                        <ChevronDownIcon size={13} className="rotate-180" />
+                        <PlayIcon size={13} />
                       </IconButton>
-                      <IconButton
-                        label="아래로 옮기기"
-                        size={26}
-                        disabled={i === playlist.items.length - 1}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          move(i, i + 1);
-                        }}
-                      >
-                        <ChevronDownIcon size={13} />
-                      </IconButton>
-                      <IconButton
-                        label="삭제"
-                        size={26}
-                        disabled={remove.isPending}
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          remove.mutate({ playlistId: playlist.id, musicId: it.musicId });
-                        }}
-                      >
-                        <CloseIcon size={13} />
-                      </IconButton>
+                      {editable && (
+                        <IconButton
+                          label="삭제"
+                          size={26}
+                          disabled={remove.isPending}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            remove.mutate({ playlistId: playlist.id, musicId: it.musicId });
+                          }}
+                        >
+                          <CloseIcon size={13} />
+                        </IconButton>
+                      )}
                     </>
-                  )}
-                </>
-              }
-            />
-          ))}
-        </div>
+                  }
+                />
+              ))}
+            </div>
+          </SortableContext>
+        </DndContext>
       )}
     </div>
   );

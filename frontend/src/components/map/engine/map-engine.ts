@@ -4,6 +4,7 @@ import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, Near
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
+import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
 import { wheelIntent } from "./ride-zoom";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
@@ -349,6 +350,13 @@ export class MapEngine {
    * 다시 놓게 된다 — 그게 뚝 사라졌다 뚝 나타나던 원인이다.
    */
   private friendPos = new Map<string, { x: number; y: number; heading: number; mv?: Arc }>();
+  /**
+   * 지난 프레임의 **표식 배치** — 누가 제 모습으로 서고 누가 그 자리에 묶였는지 (S15P21A405-566).
+   * 배율이 그대로면 이걸 다시 쓴다. 자리만 갱신하므로 사람이 움직여도 묶임이 안 흔들린다.
+   */
+  private friendPlan: FriendPlanEntry[] | null = null;
+  /** 그 배치를 정할 때의 배율. 이 값이 바뀌면 다시 정한다 */
+  private friendPlanScale = Number.NaN;
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
   visFriends: VisibleFriend[] = [];
@@ -2267,6 +2275,19 @@ export class MapEngine {
     this.myId = id;
     this.playingId = id;
     this.home = { musicId: id, boxes: [...this.boxes] };
+    /**
+     * **앞서 누른 별을 놓아 준다** (S15P21A405-566).
+     *
+     * 예전에는 이 두 줄이 아래 `isAlive` 검사 **뒤에** 있었다. 그래서 지금 겹 상주 집합에 없는
+     * 곡을 재생하면(주변 탐색 카드·검색·이웃 목록에서 고른 곡이 흔히 그렇다) 그 검사에서
+     * 빠져나가며 `centerHoldId` 가 **직전에 누른 별에 그대로 남았다.** 가운데 고정이 매 프레임
+     * 그리로 당기니, 카메라가 새 곡 쪽으로 가다가 이전 곡으로 되돌아갔다.
+     *
+     * "나는 지금 이 곡을 튼다" 는 곧 "앞서 보던 별은 놓는다" 는 뜻이다 — 자리를 잡을 수 있든
+     * 없든 그 사실은 같다.
+     */
+    this.centerLock = true;
+    this.centerHoldId = null;
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다 (`travelTo` 와 같은 처리)
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
     const w = this.worldOf(id)!;
@@ -2291,6 +2312,19 @@ export class MapEngine {
      */
     this.playingId = id;
     this.home = { musicId: id, boxes: [...this.boxes] };
+    /**
+     * **앞서 누른 별을 놓아 준다** (S15P21A405-566).
+     *
+     * 예전에는 이 두 줄이 아래 `isAlive` 검사 **뒤에** 있었다. 그래서 지금 겹 상주 집합에 없는
+     * 곡을 재생하면(주변 탐색 카드·검색·이웃 목록에서 고른 곡이 흔히 그렇다) 그 검사에서
+     * 빠져나가며 `centerHoldId` 가 **직전에 누른 별에 그대로 남았다.** 가운데 고정이 매 프레임
+     * 그리로 당기니, 카메라가 새 곡 쪽으로 가다가 이전 곡으로 되돌아갔다.
+     *
+     * "나는 지금 이 곡을 튼다" 는 곧 "앞서 보던 별은 놓는다" 는 뜻이다 — 자리를 잡을 수 있든
+     * 없든 그 사실은 같다.
+     */
+    this.centerLock = true;
+    this.centerHoldId = null;
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
     // 여기부터는 좌표가 있어야 한다 — 지도에 없는 곡은 데려갈 자리가 없다
@@ -2317,8 +2351,6 @@ export class MapEngine {
       return;
     }
     this.travelToId = id;
-    this.centerLock = true;
-    this.centerHoldId = null;
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
     const dx = to.x - this.me.x;
@@ -3084,8 +3116,37 @@ export class MapEngine {
       owner.set(`${cx},${cy}`, this.visFriends.length);
       this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader, stacked: [] });
     };
+    /**
+     * **배율이 그대로면 지난 배치를 그대로 쓴다** (S15P21A405-566).
+     *
+     * 위 `place` 는 화면 좌표로 칸을 나눈다. 그 좌표는 사람이 움직이거나 지도를 밀기만 해도
+     * 바뀌므로, 매 프레임 다시 정하면 칸 경계를 넘나들 때마다 묶임이 붙었다 떨어졌다 한다 —
+     * 그게 깜빡임이다. 자리는 아래에서 매 프레임 갱신하되 **누가 대표인지만** 붙들어 둔다.
+     *
+     * 앨범 커버가 먼저 쓰던 규칙과 같다 (S15P21A405-529).
+     */
+    const byEmail = new Map([...leader, ...cands].map((c) => [c.u.email, c]));
+    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys())) : null;
+    this.friendPlanScale = this.cam.s;
+
+    if (keep) {
+      for (const entry of keep) {
+        const c = byEmail.get(entry.marker)!;
+        this.visFriends.push({
+          user: c.u,
+          px: c.px,
+          py: c.py,
+          heading: c.heading,
+          isLeader: isLeaderOf(c.u),
+          stacked: entry.stacked.map((e) => byEmail.get(e)!.u),
+        });
+      }
+      return;
+    }
+
     for (const c of leader) place(c, true);
     for (const i of spread) place(cands[i], false);
+    this.friendPlan = this.visFriends.map((v) => ({ marker: v.user.email, stacked: v.stacked.map((u) => u.email) }));
   }
 
   /**

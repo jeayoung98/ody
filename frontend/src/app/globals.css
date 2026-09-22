@@ -529,11 +529,11 @@
    * 3 단에서는 그 여백이 커버 사진과 글 사이의 숨 쉴 자리라 그대로 둔다 — 1 단에서만 줄인다.
    */
   [data-sheet][data-snap="1"] header {
-    padding-bottom: 4px;
+    padding-bottom: 2px;
   }
   [data-sheet][data-snap="1"] .scroll-quiet,
   [data-sheet][data-snap="1"] [data-cover-window] + div {
-    padding-top: 4px;
+    padding-top: 0px;
   }
   /*
    * 앨범 줄과 칩 줄은 그 아래다 — 남겨 두면 줄 머리만 몇 px 걸쳐서 **잘린 채** 보인다.
@@ -542,5 +542,20 @@
   [data-sheet][data-snap="1"] [data-sheet-album],
   [data-sheet][data-snap="1"] [data-sheet-chips] {
     display: none;
+  }
+
+  /*
+   * **3 단에서만 굴린다** (S15P21A405-547).
+   *
+   * 1·2 단은 **걸쳐 놓은 자리**지 읽는 자리가 아니다. 거기서도 굴러가면 화면에 112·238px 만
+   * 걸린 채 내용이 저 혼자 흘러서, 지금 보고 있는 것이 곡의 어디쯤인지 알 수가 없다.
+   * 게다가 시트를 위아래로 밀어 단을 옮기는 동작과 **같은 손짓이라 서로 먹는다** —
+   * 굴릴 데가 없으면 그 손짓은 전부 단 옮기기로 간다.
+   *
+   * 굴림을 막아도 `scrollTop` 은 0 이라 `use-panel-swipe` 의 "내용이 굴러 있으면 스크롤로
+   * 본다" 판정은 그대로 통과한다.
+   */
+  [data-sheet]:not([data-snap="3"]) .scroll-quiet {
+    overflow-y: hidden;
   }
 }

@@ -112,7 +112,7 @@ public class TasteAnalysisGenerationService {
             List<TasteAnalysisResponse.Narrative> narratives = toNarratives(generated, findings);
             int updated = mapper.markSuccess(
                     email, analysisDate, requestedAt, completedAt, hash,
-                    current.counts().totalLiked(), current.counts().valid(), current.counts().excluded(),
+                    current.counts().valid(),
                     current.reportEligibility().level(),
                     current.reference().bundleVersion(), current.reference().referenceVersion(),
                     current.reference().axisLabelVersion(), current.reference().analysisPolicyVersion(),

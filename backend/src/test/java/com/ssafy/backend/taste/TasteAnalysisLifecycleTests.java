@@ -146,7 +146,7 @@ class TasteAnalysisLifecycleTests {
 
     private void stubSuccessfulTransition() {
         when(mapper.markSuccess(
-                eq(EMAIL), any(), any(), any(), anyString(), anyInt(), anyInt(), anyInt(),
+                eq(EMAIL), any(), any(), any(), anyString(), anyInt(),
                 anyString(), anyString(), anyString(), anyString(), anyString(), anyString(),
                 anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(1);

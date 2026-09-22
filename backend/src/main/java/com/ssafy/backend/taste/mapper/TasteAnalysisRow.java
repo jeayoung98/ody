@@ -16,9 +16,7 @@ public class TasteAnalysisRow {
     private OffsetDateTime leaseExpiresAt;
     private OffsetDateTime completedAt;
     private String likedSetHash;
-    private int totalLikedCount;
     private int validMusicCount;
-    private int excludedMusicCount;
     private String reportLevel;
     private String bundleVersion;
     private String referenceVersion;

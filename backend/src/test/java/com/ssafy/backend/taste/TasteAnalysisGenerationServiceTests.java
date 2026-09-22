@@ -69,8 +69,8 @@ class TasteAnalysisGenerationServiceTests {
                 "resp_1", "강렬한 음악을 즐겨요.",
                 List.of(new GmsTasteOutput.Narrative("pc1-consistent_bias", "강렬한 쪽에 모여 있어요."))));
         when(mapper.markSuccess(
-                eq("me@example.com"), any(), any(), any(), any(), any(Integer.class), any(Integer.class),
-                any(Integer.class), any(), any(), any(), any(), any(), any(), any(), any(),
+                eq("me@example.com"), any(), any(), any(), any(), any(Integer.class),
+                any(), any(), any(), any(), any(), any(), any(), any(),
                 any(), any(), any(), eq("resp_1"))).thenReturn(1);
 
         TasteAnalysisResponse response = service.generate("me@example.com");

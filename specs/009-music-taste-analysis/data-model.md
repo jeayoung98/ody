@@ -34,9 +34,7 @@ Deletion of a row represents `liked=false`. 이벤트 횟수나 가중치는 저
 | lease_expires_at | timestamptz | PENDING 복구 기준 |
 | completed_at | timestamptz nullable | 성공/실패 종료 |
 | liked_set_hash | char(64) nullable | 좌표 유효 여부와 무관한 전체 좋아요 music ID와 version tuple의 SHA-256 |
-| total_liked_count | integer nullable | 생성 snapshot의 전체 좋아요 수 |
 | valid_music_count | integer nullable | 좌표 검증을 통과한 수 |
-| excluded_music_count | integer nullable | 제외 수 |
 | report_level | varchar nullable | `INITIAL` 또는 `STANDARD` |
 | bundle_version | varchar nullable | 서빙 PCA bundle |
 | reference_version | varchar nullable | percentile 기준 |
@@ -61,7 +59,7 @@ Indexes:
 
 Constraints:
 
-- count는 모두 0 이상이며 `total = valid + excluded`
+- `valid_music_count`는 0 이상
 - SUCCESS는 `completed_at`, 모든 version, hash, stats, findings, summary, narratives를 요구
 - FAILED는 `failure_code`를 요구하고 성공 결과 필드는 소비 가능한 결과로 간주하지 않음
 - PENDING lease는 필수이며 requested_at 이후

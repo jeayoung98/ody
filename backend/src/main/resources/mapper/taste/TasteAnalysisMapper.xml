@@ -3,7 +3,7 @@
 <mapper namespace="com.ssafy.backend.taste.mapper.TasteAnalysisMapper">
     <sql id="columns">
         email, analysis_date, status, requested_at, lease_expires_at, completed_at,
-        liked_set_hash, total_liked_count, valid_music_count, excluded_music_count,
+        liked_set_hash, valid_music_count,
         report_level, bundle_version, reference_version, axis_label_version,
         analysis_policy_version, prompt_version, model,
         axis_stats::text AS axis_stats, findings::text AS findings,
@@ -67,9 +67,7 @@
             completed_at = #{completedAt},
             lease_expires_at = NULL,
             liked_set_hash = #{likedSetHash},
-            total_liked_count = #{totalLikedCount},
             valid_music_count = #{validMusicCount},
-            excluded_music_count = #{excludedMusicCount},
             report_level = #{reportLevel},
             bundle_version = #{bundleVersion},
             reference_version = #{referenceVersion},

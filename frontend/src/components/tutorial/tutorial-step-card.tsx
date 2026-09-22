@@ -1,4 +1,6 @@
 import Button from "@/components/common/button";
+import { CloseIcon } from "@/components/common/icons";
+import IconButton from "@/components/common/icon-button";
 
 interface TutorialStepCardProps {
   index: number;
@@ -28,6 +30,22 @@ export default function TutorialStepCard({ index, total, title, description, onC
         <span className="lbl">
           {index + 1} / {total}
         </span>
+        {/*
+          **나가는 길을 눈에 보이게 둔다** (S15P21A405-532). 여기서 나가는 길은 아래쪽 11px
+          짜리 "건너뛰기" 글자 하나뿐이었는데, 그 크기는 **손가락으로 겨눌 수 있는 표적이
+          아니다** (iOS HIG 44pt · Material 48dp). 폰에서 튜토리얼을 못 빠져나온다는 말이 나왔다.
+
+          폰에서는 `::after` 로 **보이는 크기는 그대로 두고 누를 수 있는 넓이만** 44px 로
+          넓힌다(28 + 8·2). 상자 안이 아니라 바깥으로 자라므로 줄 높이가 안 바뀐다 —
+          `player/locate-button.tsx` 가 쓰는 것과 같은 방법이다.
+        */}
+        <IconButton
+          label="튜토리얼 닫기"
+          onClick={onSkip}
+          className="relative -mr-1.5 text-ink-4 hover:text-ink max-tablet:after:absolute max-tablet:after:-inset-2 max-tablet:after:content-['']"
+        >
+          <CloseIcon />
+        </IconButton>
       </div>
       <h3 className="m-0 font-display text-[16.5px] font-semibold text-balance">{title}</h3>
       <p className="m-0 text-[12.5px] leading-[1.62] text-ink-2">{description}</p>

@@ -264,7 +264,9 @@ artwork
   like_cnt       int4         NOT NULL DEFAULT 0    -- artwork_like 의 집계 사본
   evaluated_at   timestamptz  NULL
   created_at     timestamptz  NOT NULL DEFAULT now()
-  CONSTRAINT UQ_ARTWORK_ROUND_EMAIL UNIQUE (round_id, email)   -- 회차당 1작품 (SC-005)
+  -- 회차당 1작품 (SC-005). 001 에서는 테이블 UNIQUE 였으나 002 에서 부분 유니크 인덱스로 바꿨다 —
+  -- 기준 그림(is_anchor) 4장이 같은 시스템 email 로 들어가기 때문이다. 사람에게는 그대로 걸린다.
+  -- CREATE UNIQUE INDEX uq_artwork_round_email ON artwork (round_id, email) WHERE is_anchor = false
 
 -- 스냅샷 좌표. 작품당 2~30행. playlist_item 과 같은 모양.
 artwork_point

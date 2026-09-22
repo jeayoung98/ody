@@ -9,6 +9,13 @@
 -- 1) 기준 그림 표시 칼럼.
 ALTER TABLE public.artwork ADD COLUMN IF NOT EXISTS is_anchor boolean NOT NULL DEFAULT false;
 
+-- 1-b) "회차당 1작품" 은 사람에게만 적용된다. 기준 그림 4장은 같은 시스템 email 로 들어가므로
+--      테이블 제약을 부분 유니크 인덱스로 바꾼다. 사용자 중복 제출은 여전히 여기서 막힌다(spec SC-005).
+ALTER TABLE public.artwork DROP CONSTRAINT IF EXISTS "UQ_ARTWORK_ROUND_EMAIL";
+CREATE UNIQUE INDEX IF NOT EXISTS uq_artwork_round_email
+    ON public.artwork (round_id, email)
+    WHERE is_anchor = false;
+
 -- 2) 1회차 채점 기준 문장을 v6 로 교체한다. 그림 솜씨가 아니라 배치를 보게 하고, 빠진 부위별 상한과
 --    "닫힌 형태 없으면 9 이하" 규칙을 못 박고, 기준 그림과 대조하라고 지시한다.
 --    "구간 안에서 위치를 정하라" 는 넣지 않는다 — 진단 v4 에서 같은 그림에 다른 점수가 나온 원인이다.

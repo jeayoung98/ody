@@ -4,9 +4,10 @@
 realtime:
   presence:
     heartbeat-interval-ms: 15000
-    ttl-ms: 45000
+    ttl-ms: 120000  # 백그라운드 탭 heartbeat 실측 간격(53~61초)보다 길어야 한다. 45초면 탭을 다른 곳에 두면 만료된다
     sweep-interval-ms: 5000
     recount-interval-ms: 60000
+    ride-orphan-sweep-interval-ms: 30000  # 접속 없이 남은 ride:captain 정리 주기
   nearby:
     neighbor-k: 10
     panel-cap: 12                  # 주변사람 패널에 올릴 최대 인원 (가까운 순)

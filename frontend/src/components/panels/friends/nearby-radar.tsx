@@ -42,7 +42,9 @@ export function radiusOf(distance: number, max: number): number {
  * 서버 집계가 아직 협의 전이라(BACKEND-NOTES S-5) 값이 안 올 수 있는데, 그때 크기를 억지로
  * 벌리면 없는 차이를 지어내는 것이 된다.
  *
- * `riderCount` 는 쓰지 않았다. 따라가기가 미구현이라 **항상 0** 이다.
+ * `riderCount` 는 아직 레이더에 안 그린다. 값 자체는 실값이 됐지만(S15P21A405-530) 헬멧 크기가
+ * 이미 만남 횟수를 나타내고 있어서, 같은 도형에 두 가지 뜻을 얹으면 둘 다 안 읽힌다.
+ * 동승 표시는 지도 쪽(`draw-friends`)이 우주선 줄로 맡는다.
  */
 export function sizeOf(meetingCount: number, max: number): number {
   if (!(max > 0)) return RADAR.sizeMin;

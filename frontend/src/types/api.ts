@@ -27,7 +27,32 @@ export type ImplementedErrorCode =
   /** 422 — 소켓 미연결 · 첫 배치인데 layer 없음 · 곡 좌표 없음 · 재생 없이 주변 사람 요청 */
   | "PRESENCE_ERROR"
   /** 503 — 주변 사람의 비슷한 곡 계산이 일시적으로 실패했다. **영구 오류가 아니다** */
-  | "SERVICE_UNAVAILABLE";
+  | "SERVICE_UNAVAILABLE"
+  // 따라가기 = 탑승 (S15P21A405-530, backend RealtimeErrorCode)
+  /**
+   * 사유마다 **사용자가 할 일이 다르다.** 잠시 뒤 다시 하면 되는 것(`RIDE_CAPTAIN_INACTIVE`·
+   * `RIDE_FULL`)과 아무리 해도 안 되는 것(`RIDE_SELF`)을 한 코드로 뭉치면 안내를 가를 수 없다.
+   */
+  /** 409 — 따라갈 사람이 곡 위에 없다 */
+  | "RIDE_CAPTAIN_INACTIVE"
+  /** 400 — 자기 자신을 골랐다 */
+  | "RIDE_SELF"
+  /** 409 — 이미 누군가를 따라가는 중이다. 갈아타려면 먼저 내려야 한다 */
+  | "RIDE_ALREADY_RIDING"
+  /** 409 — 줄줄이 따라가기. 나를 따라오는 사람이 있거나 상대가 남을 따라가는 중이다 */
+  | "RIDE_CHAIN_FORBIDDEN"
+  /** 409 — 자리가 다 찼다 (최대 20명) */
+  | "RIDE_FULL"
+  /** 409 — 따라가는 중이 아닌데 내리려 했다. **조용히 넘긴다** — 이미 `RIDE_ENDED` 로 끝났을 수 있다 */
+  | "RIDE_NOT_RIDING"
+  /** 409 — 따라가는 중이라 스스로 할 수 없는 동작이다 */
+  | "RIDE_NOT_CAPTAIN"
+  /**
+   * 409 — 그 사이 상태가 바뀌었다 (2차 명세 §3.3).
+   * **배포본에는 아직 없다** — 백엔드 `RealtimeErrorCode` 에 없고 같은 상황이 `PRESENCE_ERROR`
+   * 로 나온다. 명세대로 자리를 만들어 두되 지금 도착하는 코드는 `PRESENCE_ERROR` 다.
+   */
+  | "RIDE_STALE";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =

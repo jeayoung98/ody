@@ -8,7 +8,7 @@ import { ChevronLeftIcon, CloseIcon } from "@/components/common/icons";
 import IconButton from "@/components/common/icon-button";
 import { NEARBY_COUNT, ROUTES, STORAGE_KEYS } from "@/constants";
 import { useSurveyMode } from "@/hooks/use-survey-mode";
-import { readStorage, removeStorage } from "@/lib/storage";
+import { removeStorage } from "@/lib/storage";
 
 interface GuideCard {
   key: string;
@@ -20,8 +20,6 @@ interface GuideCard {
    * (실측: 2582x1556 GIF 69MB). 파일이 없으면 자리만 비운다.
    */
   clip: string;
-  /** 없으면 항상 보인다. `false` 면 그 카드만 빠지고 점·번호가 자동으로 줄어든다 */
-  when?: boolean;
 }
 
 /**
@@ -35,39 +33,13 @@ interface GuideCard {
  * *별을 누르면 내가 그리로 가고, 거기서 확대하면 파고든다* 는 **하나의 흐름**이라 한 장에 담는다.
  * 주변 탐색과 여정은 목적이 달라 나눈다 — 하나는 "이 곡 옆에 뭐가 있지", 하나는 "여기서 저기까지".
  *
- * **따라가기는 카드가 없다.** 아직 배포에 안 나가는 기능이라 설명부터 읽히면 찾아 나섰다가 없어서
- * 버그로 읽힌다 (S15P21A405-333 과 같은 이유). 기능이 열리는 시점에 카드를 한 장 더한다 —
- * `features.social` 로 거는 길도 있지만 그건 설문 모드에 따라 켜졌다 꺼졌다 해서 기준이 못 된다.
+ * **따라가기 카드가 열렸다** (S15P21A405-530). 탑승·하차가 배포 백엔드에 올라가 실제로 도므로,
+ * 켜야 보이던 조건(`showFollowCard`·`ody:guide-follow`·`GuideCard.when`)을 함께 걷어냈다 —
+ * 조건부 카드는 지금 하나도 없고, 쓰지 않는 갈래는 다음 사람이 해석해야 할 짐이다.
  *
  * 모듈 상수가 아니라 함수다 (S15P21A405-387) — 설문 모드는 런타임에 바뀌어서, 모듈이 처음
  * 불릴 때 한 번 굳히면 모드를 꺼도 설명이 감춘 상태 그대로 남는다.
  */
-/**
- * **따라가기 카드를 띄울지** (S15P21A405-436). — REMOVE-WITH-FOLLOW
- *
- * 기능이 아직 배포에 안 나가서 기본이 꺼짐이다. 설명부터 읽히면 찾아 나섰다가 없어서 버그로
- * 읽힌다 (S15P21A405-333 과 같은 이유). 확인할 사람은 자기 브라우저에서 켠다:
- * `localStorage.setItem("ody:guide-follow", "true")`.
- *
- * ## 따라가기가 배포에 나가면 걷어낸다
- *
- * **`REMOVE-WITH-FOLLOW` 로 grep 하면 지울 곳이 다 나온다.** 세 군데다:
- *
- * 1. 이 함수 (`showFollowCard`)
- * 2. 따라가기 카드의 `when: showFollowCard()` 줄 — 줄만 지우면 카드가 항상 뜬다
- * 3. `constants/storage-keys.ts` 의 `guideFollow` 키
- *
- * 다 지우고 나면 `GuideCard.when` 과 `.filter(...)` 도 쓰는 데가 없어진다. 나중에 또 이런
- * 조건부 카드가 생길 수 있으니 그건 판단해서 둔다.
- *
- * **카드 내용은 이미 다 써 뒀다** — 그때 새로 만들 것이 없다.
- *
- * 렌더 중에 저장소를 읽어도 되는 이유: 이 다이얼로그는 도움말 버튼을 눌러야 마운트되므로
- * **하이드레이션이 끝난 뒤에만** 그려진다. 서버·클라이언트 첫 렌더가 갈릴 일이 없다.
- */
-function showFollowCard() {
-  return readStorage<boolean>(STORAGE_KEYS.guideFollow) === true;
-}
 
 function guideCards(): GuideCard[] {
   return [
@@ -114,9 +86,8 @@ function guideCards(): GuideCard[] {
       title: "따라가기",
       clip: "/guide/follow.mp4",
       body: "다른 사람의 우주선에 **탑승**해 탐색 여정을 함께해요. 탑승 중엔 지도 조작이 잠기고 **하차** 버튼으로 내릴 수 있어요.",
-      when: showFollowCard(), // REMOVE-WITH-FOLLOW — 이 줄만 지우면 카드가 항상 뜬다
     },
-  ].filter((c) => c.when !== false);
+  ];
 }
 
 /** `**굵게**` 만 해석한다 — 문구에서 한두 단어를 짚는 용도다 */

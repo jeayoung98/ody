@@ -68,3 +68,20 @@ export function spreadOrder(
   }
   return [...first.values(), ...rest];
 }
+
+/**
+ * 커버 자리를 누구에게 먼저 줄지 (S15P21A405-528).
+ *
+ * **앨범 ID 있음 > 재생수 높음 > 받은 순서.**
+ *
+ * 첫 조건이 실질적으로 전부다. `albumMbid` 가 없는 곡은 아무리 상위여도 절차적 그림밖에 못
+ * 그리는데, 커버 자리는 화면에 열몇 개뿐이라 그 자리를 진짜 그림에게 주는 편이 낫다.
+ * `weight` 는 지금 실데이터가 전부 0 이라 사실상 동점이고, 그러면 받은 순서가 남는다 —
+ * 그건 안정 정렬이 알아서 지켜 준다.
+ */
+export function byCoverPriority<T>(hasAlbum: (v: T) => boolean, weightOf: (v: T) => number) {
+  return (a: T, b: T) => {
+    const d = Number(hasAlbum(b)) - Number(hasAlbum(a));
+    return d !== 0 ? d : weightOf(b) - weightOf(a);
+  };
+}

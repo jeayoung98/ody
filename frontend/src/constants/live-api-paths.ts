@@ -27,6 +27,15 @@
  *
  * 주석 처리된 목록은 2026-09-12 에 `https://j15a405.p.ssafy.io` 로 실호출해 도달을 확인한 것이다.
  */
+/**
+ * **따라가기(`/api/realtime/ride`)는 여기 넣지 않았다** (S15P21A405-530).
+ *
+ * 2차 실시간 작업명세 §2.2 는 이 목록에 추가하라고 적었지만, 그러면 **로컬에서만 전부 터진다** —
+ * 위에 적힌 `Origin` 함정 그대로다. 그래서 `/bff/realtime/ride` 라우트 핸들러가 중계한다.
+ * 호출자의 Bearer 토큰은 `backendFetch` 가 그대로 넘기므로 "누가 타는가" 도 어긋나지 않는다.
+ *
+ * 백엔드 CORS 허용 목록에 `http://localhost:3000` 이 들어가면 그때 옮긴다.
+ */
 export const LIVE_API_PATHS: readonly string[] = [
   // "/api/auth/signup",
   // "/api/auth/login",

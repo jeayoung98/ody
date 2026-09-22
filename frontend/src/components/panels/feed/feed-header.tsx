@@ -4,6 +4,7 @@ import Avatar from "@/components/common/avatar";
 import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import { useFollowMutation, useUnfollowMutation } from "@/hooks/mutations/use-follow-mutation";
+import { useRideMutation } from "@/hooks/mutations/use-ride-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -28,7 +29,7 @@ function StatInline({ label, value }: { label: string; value: number | string })
  */
 export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
-  const startRide = useFollowStore((s) => s.start);
+  const ride = useRideMutation();
   const follow = useFollowMutation();
   const unfollow = useUnfollowMutation();
   const openSong = usePanelStore((s) => s.openSong);
@@ -48,8 +49,16 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
   const pending = follow.isPending || unfollow.isPending;
   const handleFollow = () => (isFollowing ? unfollow : follow).mutate(profile.email);
 
-  // ACT-01: 다른 활동(여정·플리 재생, 다른 사람 탑승)이 진행 중이면 확인 후 멈추고 시작한다
-  const handleRide = () => startActivity("follow", profile.email, () => startRide(profile.email, profile.nickname));
+  /**
+   * 탑승 — **실연동이다** (S15P21A405-530). 예전에는 이 화면 안에서만 도는 로컬 상태였다.
+   * 거부 사유(`RIDE_FULL` · `RIDE_CAPTAIN_INACTIVE` …)는 훅이 토스트로 알린다.
+   *
+   * ACT-01: 다른 활동(여정·플리 재생, 다른 사람 탑승)이 진행 중이면 확인 후 멈추고 시작한다.
+   */
+  const handleRide = () =>
+    startActivity("follow", profile.email, () =>
+      ride.mutate({ email: profile.email, nickname: profile.nickname, imageUrl: profile.imageUrl }),
+    );
 
   return (
     <div className="flex flex-col gap-3">
@@ -80,7 +89,7 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
           <Button variant={isFollowing ? "secondary" : "primary"} onClick={handleFollow} disabled={pending}>
             {isFollowing ? "팔로잉" : "팔로우"}
           </Button>
-          <Button variant="secondary" onClick={handleRide} disabled={!canRide}>
+          <Button variant="secondary" onClick={handleRide} disabled={!canRide || ride.isPending}>
             {isRiding ? "🚀 탑승 중" : "🚀 따라가기"}
           </Button>
           {!profile.isOnline && <Note>오프라인이라 따라갈 수 없습니다.</Note>}
@@ -89,8 +98,6 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
               비공개 계정이라 따라가기를 시작할 수 없습니다. <span className="text-ink-4">SOCIAL-06</span>
             </Note>
           )}
-          {/* 없는 API 를 부르는 것처럼 보이지 않게 한 줄 밝혀 둔다 (S15P21A405-489) */}
-          <Note>따라가기는 아직 이 화면 안에서만 도는 기능이에요. 서버 연동 전입니다.</Note>
         </div>
       )}
     </div>

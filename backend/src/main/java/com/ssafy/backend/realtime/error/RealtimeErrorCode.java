@@ -19,13 +19,6 @@ public enum RealtimeErrorCode implements ErrorCode {
 	/** 실시간 처리 중에 난 그 밖의 오류. */
 	PRESENCE_ERROR(HttpStatus.UNPROCESSABLE_ENTITY, "PRESENCE_ERROR", "실시간 처리 중 오류가 발생했습니다."),
 
-	/**
-	 * 주변 사람 목록을 만들 때 쓰는 이웃곡 찾기가 아직 준비되지 않았거나 실패했다.
-	 * 빈 목록으로 내보내면 "아무도 없다"로 보이기 때문에 그렇게 숨기지 않고 이 코드로 알린다.
-	 */
-	SERVICE_UNAVAILABLE(HttpStatus.SERVICE_UNAVAILABLE, "SERVICE_UNAVAILABLE",
-			"일시적으로 요청을 처리할 수 없습니다. 잠시 후 다시 시도해 주세요."),
-
 	// 아래는 따라가기가 거부되는 사유들이다.
 
 	/** 따라갈 사람이 곡 위에 없다. 잠시 뒤 다시 하면 된다. */

@@ -662,7 +662,7 @@ class RideServiceTests {
 		service.dismount(RIDER);
 
 		verify(viewportDeltaService).sendRiderCount(CAPTAIN, LAYER, MUSIC, "7:5", 2);
-		verify(nearbyChangeService).sendRiderCount(CAPTAIN, MUSIC, 2);
+		verify(nearbyChangeService).sendRiderCount(CAPTAIN, LAYER, MUSIC, 2);
 	}
 
 	/** 인솔자가 지도에 없으면 보여 줄 자리가 없다. */
@@ -678,7 +678,7 @@ class RideServiceTests {
 
 		verify(viewportDeltaService, never()).sendRiderCount(
 				anyString(), anyInt(), anyLong(), anyString(), anyInt());
-		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyLong(), anyInt());
+		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyInt(), anyLong(), anyInt());
 	}
 
 	// ── 선단 해체 ───────────────────────────────────────────
@@ -739,7 +739,7 @@ class RideServiceTests {
 
 		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
-		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
+		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), LAYER, MUSIC);
 	}
 
 	/** 여기까지 왔으면 Redis 는 이미 바뀐 뒤다. 하나가 터졌다고 나머지를 건너뛰면 안 된다. */
@@ -752,7 +752,7 @@ class RideServiceTests {
 
 		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
-		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
+		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), LAYER, MUSIC);
 		verify(meetingService).recordOnDismount(any(), any(), any());
 	}
 

@@ -111,32 +111,43 @@ class NearbyRedisIntegrationTests {
 		TestKeys data = testKeys();
 		String presenceKey = key("presence:user:" + data.email());
 		String metaKey = key("nearby:meta:" + data.email());
-		String firstSubscribers = key("nearby:subscribers:" + data.music1());
-		String sharedSubscribers = key("nearby:subscribers:" + data.music2());
-		String newSubscribers = key("nearby:subscribers:" + data.music3());
+		String firstLayerSubscribers = key("nearby:layer-subscribers:" + data.layer());
+		String secondLayerSubscribers = key("nearby:layer-subscribers:" + (data.layer() + 1));
 
 		redis.opsForHash().put(presenceKey, "epoch", "1");
-		assertThat(nearbyRepository.replaceSubscriptions(
-				data.email(), 1L, List.of(data.music1(), data.music2()))).isTrue();
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 1L, data.layer())).isTrue();
 
 		redis.opsForHash().put(presenceKey, "epoch", "2");
-		assertThat(nearbyRepository.replaceSubscriptions(
-				data.email(), 2L, List.of(data.music2(), data.music3()))).isTrue();
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 2L, data.layer() + 1)).isTrue();
 
-		assertThat(redis.opsForSet().isMember(firstSubscribers, data.email())).isFalse();
-		assertThat(redis.opsForSet().isMember(sharedSubscribers, data.email())).isTrue();
-		assertThat(redis.opsForSet().isMember(newSubscribers, data.email())).isTrue();
+		// 층을 옮기면 옛 층에서 빠진다.
+		assertThat(redis.opsForSet().isMember(firstLayerSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(secondLayerSubscribers, data.email())).isTrue();
 		assertThat(redis.opsForHash().get(metaKey, "epoch")).isEqualTo("2");
+		assertThat(redis.opsForHash().get(metaKey, "layer")).isEqualTo(Integer.toString(data.layer() + 1));
 
 		assertThat(nearbyRepository.closeSubscriptions(data.email(), 1L)).isFalse();
 		assertThat(redis.hasKey(metaKey)).isTrue();
-		assertThat(redis.opsForSet().isMember(sharedSubscribers, data.email())).isTrue();
-		assertThat(redis.opsForSet().isMember(newSubscribers, data.email())).isTrue();
+		assertThat(redis.opsForSet().isMember(secondLayerSubscribers, data.email())).isTrue();
 
 		assertThat(nearbyRepository.closeSubscriptions(data.email(), 2L)).isTrue();
 		assertThat(redis.hasKey(metaKey)).isFalse();
-		assertThat(redis.opsForSet().isMember(sharedSubscribers, data.email())).isFalse();
-		assertThat(redis.opsForSet().isMember(newSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(secondLayerSubscribers, data.email())).isFalse();
+	}
+
+	/** 같은 층을 다시 열면 뺐다 넣는 일이 없다. 그 사이에 오는 변경을 놓치지 않는다. */
+	@Test
+	@DisplayName("같은 층을 다시 열어도 구독이 끊기지 않는다")
+	void reopeningSameLayerKeepsSubscription() {
+		TestKeys data = testKeys();
+		String presenceKey = key("presence:user:" + data.email());
+		String layerSubscribers = key("nearby:layer-subscribers:" + data.layer());
+
+		redis.opsForHash().put(presenceKey, "epoch", "1");
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 1L, data.layer())).isTrue();
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 1L, data.layer())).isTrue();
+
+		assertThat(redis.opsForSet().isMember(layerSubscribers, data.email())).isTrue();
 	}
 
 	@Test
@@ -145,18 +156,18 @@ class NearbyRedisIntegrationTests {
 		TestKeys data = testKeys();
 		String presenceKey = key("presence:user:" + data.email());
 		String metaKey = key("nearby:meta:" + data.email());
-		String staleSubscribers = key("nearby:subscribers:" + data.music1());
-		String currentSubscribers = key("nearby:subscribers:" + data.music2());
+		String staleLayerSubscribers = key("nearby:layer-subscribers:" + data.layer());
+		String currentLayerSubscribers = key("nearby:layer-subscribers:" + (data.layer() + 1));
 
 		redis.opsForHash().put(presenceKey, "epoch", "2");
-		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 2L, List.of(data.music2()))).isTrue();
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 2L, data.layer() + 1)).isTrue();
 
-		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 1L, List.of(data.music1()))).isFalse();
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 1L, data.layer())).isFalse();
 
-		assertThat(redis.opsForSet().isMember(staleSubscribers, data.email())).isFalse();
-		assertThat(redis.opsForSet().isMember(currentSubscribers, data.email())).isTrue();
+		assertThat(redis.opsForSet().isMember(staleLayerSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(currentLayerSubscribers, data.email())).isTrue();
 		assertThat(redis.opsForHash().get(metaKey, "epoch")).isEqualTo("2");
-		assertThat(redis.opsForHash().get(metaKey, "musicIds")).isEqualTo(Long.toString(data.music2()));
+		assertThat(redis.opsForHash().get(metaKey, "layer")).isEqualTo(Integer.toString(data.layer() + 1));
 	}
 
 	@Test
@@ -170,8 +181,7 @@ class NearbyRedisIntegrationTests {
 		String activeCellsKey = key("active-song:cells:" + data.layer());
 		String userCountKey = key("cell:usercount:" + data.layer());
 		String metaKey = key("nearby:meta:" + data.email());
-		String subscribers1 = key("nearby:subscribers:" + data.music1());
-		String subscribers2 = key("nearby:subscribers:" + data.music2());
+		String subscribersKey = key("nearby:layer-subscribers:" + data.layer());
 		expiryEmail = data.email();
 
 		redis.opsForHash().putAll(presenceKey, java.util.Map.of(
@@ -184,9 +194,8 @@ class NearbyRedisIntegrationTests {
 		redis.opsForSet().add(activeCellsKey, "3:4");
 		redis.opsForHash().put(userCountKey, "3:4", "1");
 		redis.opsForHash().putAll(metaKey, java.util.Map.of(
-				"epoch", "7", "musicIds", data.music1() + "," + data.music2()));
-		redis.opsForSet().add(subscribers1, data.email());
-		redis.opsForSet().add(subscribers2, data.email());
+				"epoch", "7", "layer", Integer.toString(data.layer())));
+		redis.opsForSet().add(subscribersKey, data.email());
 
 		assertThat(presenceRepository.applyLeave(data.email(), 7L).removed()).containsExactly(
 				Long.toString(data.music1()), Integer.toString(data.layer()), "3", "4", "7");
@@ -199,8 +208,7 @@ class NearbyRedisIntegrationTests {
 		assertThat(redis.opsForSet().isMember(activeCellsKey, "3:4")).isFalse();
 		assertThat(redis.opsForHash().get(userCountKey, "3:4")).isNull();
 		assertThat(redis.hasKey(metaKey)).isFalse();
-		assertThat(redis.opsForSet().isMember(subscribers1, data.email())).isFalse();
-		assertThat(redis.opsForSet().isMember(subscribers2, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(subscribersKey, data.email())).isFalse();
 	}
 
 	@Test
@@ -209,13 +217,13 @@ class NearbyRedisIntegrationTests {
 		TestKeys data = testKeys();
 		String presenceKey = key("presence:user:" + data.email());
 		String metaKey = key("nearby:meta:" + data.email());
-		String subscribersKey = key("nearby:subscribers:" + data.music1());
+		String subscribersKey = key("nearby:layer-subscribers:" + data.layer());
 
 		redis.opsForHash().putAll(presenceKey, java.util.Map.of(
 				"epoch", "2", "musicId", Long.toString(data.music1()),
 				"layer", Integer.toString(data.layer()), "cellX", "3", "cellY", "4"));
 		redis.opsForHash().putAll(metaKey, java.util.Map.of(
-				"epoch", "2", "musicIds", Long.toString(data.music1())));
+				"epoch", "2", "layer", Integer.toString(data.layer())));
 		redis.opsForSet().add(subscribersKey, data.email());
 
 		assertThat(presenceRepository.applyLeave(data.email(), 1L).applied()).isFalse();
@@ -230,7 +238,7 @@ class NearbyRedisIntegrationTests {
 		TestKeys data = testKeys();
 		String presenceKey = key("presence:user:" + data.email());
 		String metaKey = key("nearby:meta:" + data.email());
-		String subscribersKey = key("nearby:subscribers:" + data.music1());
+		String subscribersKey = key("nearby:layer-subscribers:" + data.layer());
 		long sweepTime = System.currentTimeMillis();
 		expiryEmail = data.email();
 
@@ -239,7 +247,7 @@ class NearbyRedisIntegrationTests {
 				"layer", Integer.toString(data.layer()), "cellX", "3", "cellY", "4"));
 		redis.opsForZSet().add("presence:expiry", data.email(), sweepTime + 60_000);
 		redis.opsForHash().putAll(metaKey, java.util.Map.of(
-				"epoch", "2", "musicIds", Long.toString(data.music1())));
+				"epoch", "2", "layer", Integer.toString(data.layer())));
 		redis.opsForSet().add(subscribersKey, data.email());
 
 		assertThat(presenceRepository.applyLeaveExpired(data.email(), sweepTime).applied()).isFalse();
@@ -259,16 +267,14 @@ class NearbyRedisIntegrationTests {
 		String activeCellsKey = key("active-song:cells:" + data.layer());
 		String userCountKey = key("cell:usercount:" + data.layer());
 		String metaKey = key("nearby:meta:" + data.email());
-		String firstSubscribers = key("nearby:subscribers:" + data.music1());
-		String secondSubscribers = key("nearby:subscribers:" + data.music2());
+		String subscribersKey = key("nearby:layer-subscribers:" + data.layer());
 		long sweepTime = System.currentTimeMillis();
 		expiryEmail = data.email();
 
 		presenceRepository.connect(data.email(), 7L, 60_000L);
 		assertThat(presenceRepository.join(data.email(), 7L, null, null, null, null,
 				data.music1(), data.layer(), 0.3, 0.4, 3, 4)).isTrue();
-		assertThat(nearbyRepository.replaceSubscriptions(
-				data.email(), 7L, List.of(data.music1(), data.music2()))).isTrue();
+		assertThat(nearbyRepository.replaceSubscriptions(data.email(), 7L, data.layer())).isTrue();
 		redis.opsForZSet().add("presence:expiry", data.email(), sweepTime - 1);
 
 		assertThat(presenceRepository.applyLeaveExpired(data.email(), sweepTime).removed()).containsExactly(
@@ -282,8 +288,7 @@ class NearbyRedisIntegrationTests {
 		assertThat(redis.opsForSet().isMember(activeCellsKey, "3:4")).isFalse();
 		assertThat(redis.opsForHash().get(userCountKey, "3:4")).isNull();
 		assertThat(redis.hasKey(metaKey)).isFalse();
-		assertThat(redis.opsForSet().isMember(firstSubscribers, data.email())).isFalse();
-		assertThat(redis.opsForSet().isMember(secondSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(subscribersKey, data.email())).isFalse();
 	}
 
 	@Test
@@ -292,22 +297,19 @@ class NearbyRedisIntegrationTests {
 		TestKeys data = testKeys();
 		String presenceKey = key("presence:user:" + data.email());
 		String metaKey = key("nearby:meta:" + data.email());
-		String firstSubscribers = key("nearby:subscribers:" + data.music1());
-		String secondSubscribers = key("nearby:subscribers:" + data.music2());
+		String subscribersKey = key("nearby:layer-subscribers:" + data.layer());
 		expiryEmail = data.email();
 
 		redis.opsForHash().putAll(metaKey, java.util.Map.of(
-				"epoch", "7", "musicIds", data.music1() + "," + data.music2()));
-		redis.opsForSet().add(firstSubscribers, data.email());
-		redis.opsForSet().add(secondSubscribers, data.email());
+				"epoch", "7", "layer", Integer.toString(data.layer())));
+		redis.opsForSet().add(subscribersKey, data.email());
 		redis.opsForZSet().add("presence:expiry", data.email(), System.currentTimeMillis() - 1);
 
 		assertThat(redis.hasKey(presenceKey)).isFalse();
 		assertThat(presenceRepository.applyLeave(data.email(), 7L).removed()).isEmpty();
 
 		assertThat(redis.hasKey(metaKey)).isFalse();
-		assertThat(redis.opsForSet().isMember(firstSubscribers, data.email())).isFalse();
-		assertThat(redis.opsForSet().isMember(secondSubscribers, data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(subscribersKey, data.email())).isFalse();
 		assertThat(redis.opsForZSet().score("presence:expiry", data.email())).isNull();
 	}
 

@@ -7,6 +7,7 @@ import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
 import { botAsNearbyPerson } from "@/lib/bots/adapt";
 import { distanceBetween, pickNearby, radiusFromNeighbors, type Placed, type Point } from "@/lib/nearby-from-layer";
 import { useBotStore } from "@/stores/use-bot-store";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type { LayerUsersSnapshot, NearbyPerson } from "@/types";
 
@@ -32,6 +33,15 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
   const layer = useMapStore((s) => s.layer);
   const myMusicId = useMapStore((s) => s.myMusicId);
   /**
+   * **따라가는 중에는 인솔자 곡이 기준이다** (S15P21A405-557).
+   *
+   * 내 곡은 인솔자를 따라 같이 옮겨지지만, 그 갱신이 한 박자 늦을 수 있고 무엇보다 이 화면이
+   * 말하는 "주변" 은 **지금 내가 실려 가고 있는 곳의 주변**이다. 서버 `nearby` 는 이때
+   * 거부되므로(`RIDE_NOT_CAPTAIN`) 겹 사용자 조회로 만든 목록이 유일한 재료다.
+   */
+  const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
+  const anchorMusicId = leaderMusicId ?? myMusicId;
+  /**
    * 지도가 이미 부르고 있는 그 조회다. 키가 같아 요청이 두 번 나가지 않는다 — 패널이 열려
    * 있든 아니든 지도가 폴링하고 있으므로, 여기서는 캐시를 읽는 셈이다.
    */
@@ -53,12 +63,12 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
      * 쪽에만 있어서, 사람은 가까운 이만 뜨는데 봇은 겹 반대편에 있어도 떴다 — 같은 목록 안에서
      * 두 종류가 다른 규칙으로 뽑히면 "내 곡과 비슷한 곡을 듣는 사람" 이라는 설명이 깨진다.
      */
-    const ctx = nearbyContext(layer, myMusicId);
+    const ctx = nearbyContext(layer, anchorMusicId);
 
     // 지금 겹에 있고, 경계 안에 있는 봇만
     for (const bot of bots) {
       if (bot.episode.layer !== layer || seen.has(bot.email)) continue;
-      const as = botAsNearbyPerson(bot, myMusicId);
+      const as = botAsNearbyPerson(bot, anchorMusicId);
       if (!as || !ctx || as.distance > ctx.radius) continue;
       merged.push(as);
       seen.add(as.email);
@@ -66,7 +76,7 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
 
     for (const p of fromLayer(layerUsers, ctx, seen)) merged.push(p);
     return merged.sort((a, b) => a.distance - b.distance);
-  }, [enabled, fromServer, bots, layer, myMusicId, layerUsers]);
+  }, [enabled, fromServer, bots, layer, anchorMusicId, layerUsers]);
 }
 
 /**

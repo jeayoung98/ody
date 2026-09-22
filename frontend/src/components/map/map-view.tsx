@@ -144,6 +144,14 @@ export default function MapView({ occlusion }: MapViewProps) {
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
   const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
   const leaderViewingMusicId = useFollowStore((s) => s.leaderViewingMusicId);
+  /**
+   * 나를 따라오는 인원 (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
+   * 엔진은 스토어를 모르므로 여기서 넣어 준다.
+   */
+  const followerCount = useFollowStore((s) => s.followerCount);
+  useEffect(() => {
+    engine.setMyRiders(followerCount);
+  }, [engine, followerCount]);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**

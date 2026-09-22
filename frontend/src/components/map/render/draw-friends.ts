@@ -66,7 +66,7 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
 }
 
 /** 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향) */
-function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
@@ -114,7 +114,7 @@ function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number
 }
 
 /** 탑승 후 선미 뒤로 줄줄이 달리는 동승자 (나 + 다른 사람들) */
-function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
+export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
   const rr = R * 0.5;

@@ -19,6 +19,35 @@ interface BackendVideoIdBatch {
 const NOT_FOUND = "none";
 
 /**
+ * 백엔드 답 한 줄을 **세 갈래**로 읽는다 (S15P21A405-556).
+ *
+ * | 받은 것 | 뜻 | `lookup` |
+ * | --- | --- | --- |
+ * | 줄이 없다 (`undefined`) | 그 곡이 DB 에 없다 | `notFound` |
+ * | `videoId: "none"` · `""` | 찾아봤는데 영상이 없다 | `notFound` |
+ * | `videoId: null` | **아직 안 찾아봤다** | `unsearched` |
+ * | `videoId: "abc123"` | 있다 | `found` |
+ *
+ * **줄이 없는 경우가 새로 생겼다.** 재생 불가 곡을 DB 에서 지우기로 하면서(S15P21A405-534)
+ * 삭제된 곡은 `items` 에서 통째로 빠진다. 예전에는 이 경우도 "아직 모름" 으로 봤는데, 그러면
+ * 없는 곡에 "잠시 후 다시 눌러 주세요" 가 **영원히** 뜨고 `retryable` 이라 누를 때마다
+ * 재조회가 나간다 — 답이 바뀔 일이 없는데 계속 묻는 셈이다.
+ *
+ * `unsearched` 만 다시 물을 값이 있다. 나머지 둘은 `PLAYBACK_BLOCKED.noVideo` 가 받아
+ * 문구·재시도 차단·신고 안내를 제자리에 둔다.
+ *
+ * 순수 함수로 빼 둔 것은 **시험할 수 있게** 하기 위해서다. 라우트 안에 삼항으로 묻어 두면
+ * 세 갈래가 지켜지는지 배포 백엔드를 불러 보기 전에는 알 수 없고, 이건 백엔드와의 계약이라
+ * 말로만 두면 다음에 또 뒤집힌다.
+ */
+export function videoIdLookup(item: { videoId: string | null } | undefined): VideoIdLookup {
+  if (item == null) return "notFound";
+  const raw = item.videoId;
+  if (raw === NOT_FOUND || raw === "") return "notFound";
+  return raw ? "found" : "unsearched";
+}
+
+/**
  * GET /bff/music/{id}/video-id — 곡 하나의 `videoId` (SONG-03).
  *
  * 백엔드는 `POST /api/music/videoid` 로 **목록**을 받지만, 여기서는 **언제나 한 곡만** 보낸다.
@@ -50,11 +79,10 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   const upstream = "/api/music/videoid";
   try {
     const data = await backendPost<BackendVideoIdBatch>(upstream, { musicIds: [musicId] });
-    // 한 곡만 보냈으므로 답도 한 줄이다. 곡 자체가 없으면 items 가 비어 온다 — 그것도 "아직 모름" 이다
-    const raw = data.items?.find((v) => v.musicId === musicId)?.videoId ?? null;
-    // 빈 문자열은 `"none"` 과 같게 본다 — 검색 결과가 비었다는 뜻이다
-    const lookup: VideoIdLookup = raw === NOT_FOUND || raw === "" ? "notFound" : raw ? "found" : "unsearched";
-    return okLive({ musicId, videoId: lookup === "found" ? raw : null, lookup }, upstream);
+    // 한 곡만 보냈으므로 답도 한 줄이다. 그 줄을 어떻게 읽는지는 `videoIdLookup` 이 전부 쥔다
+    const item = data.items?.find((v) => v.musicId === musicId);
+    const lookup = videoIdLookup(item);
+    return okLive({ musicId, videoId: lookup === "found" ? (item?.videoId ?? null) : null, lookup }, upstream);
   } catch (e) {
     const err = e as BackendError;
     return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);

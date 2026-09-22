@@ -3,6 +3,8 @@ import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
+import { shouldRestartFollow } from "./follow-restart";
+import { wheelIntent } from "./ride-zoom";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -356,7 +358,24 @@ export class MapEngine {
   /** 레이어 전환 시 커버·프로필 페이드. 모프 중 0으로, 새 레이어 데이터가 오면 1로 */
   coverAlpha = 0;
   friendAlpha = 0;
+  /**
+   * **나를 따라오는 인원** (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
+   *
+   * 스토어(`use-follow-store.followerCount`)를 엔진이 직접 읽지 않는다 — 엔진은 화면 밖 상태를
+   * 모르는 채로 두는 것이 이 클래스의 전제다. 넣어 주는 쪽은 `map-view` 다.
+   */
+  myRiders = 0;
   follow: FollowState | null = null;
+  /**
+   * `follow` 를 건 시점의 겹. 좌표계가 겹마다 달라서, 겹이 바뀌면 다시 걸어야 한다
+   * (S15P21A405-559). `follow` 안에 두지 않은 이유는 그 타입이 명세가 정한 모양이기 때문이다.
+   */
+  private followLayer = -1;
+  /**
+   * 따라가는 중에 **사용자가 배율을 직접 잡았는가** (S15P21A405-562).
+   * 탈 때마다 풀린다 — 지난 탑승의 배율을 다음 탑승까지 끌고 가면 처음 타는 사람과 화면이 다르다.
+   */
+  private rideZoomHeld = false;
   onFollowEnd: ((reason: string) => void) | null = null;
   onArrive: ((musicId: number) => void) | null = null;
   /** 인솔자가 보고 있는 곡이 바뀌면 알린다 (우측 패널에 상세를 띄우기 위해) */
@@ -603,6 +622,11 @@ export class MapEngine {
   }
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
+  /** 나를 따라오는 인원 (S15P21A405-557). 화면 쪽 스토어를 엔진이 직접 읽지 않으려고 둔 통로다 */
+  setMyRiders(n: number) {
+    this.myRiders = Math.max(0, n);
+  }
+
   setFriends(layer: number, friends: NearbyUser[]) {
     /**
      * **겹이 바뀔 때만 자리를 비운다** (S15P21A405-553). 좌표계가 겹마다 다르므로 그때는
@@ -1951,16 +1975,31 @@ export class MapEngine {
   // ------------------------------------------------------------------ input
   /** 휠. 게이트가 열리면 배율은 멈추고 압력만 찬다 */
   wheel(deltaY: number, mx: number, my: number): "zoom" | "pressure" | "blocked" {
-    if (this.anim || this.pending || this.follow) return "blocked";
+    if (this.anim || this.pending) return "blocked";
     // 확대·축소도 "내가 화면을 움직인" 것이다 — 가운데 고정을 푼다
     this.centerLock = false;
     this.centerHoldId = null;
     const zoomIn = deltaY < 0;
-    const canDig = zoomIn && this.gateOpen();
+    /**
+     * **따라가는 중에는 배율만 열고 겹 이동은 막는다** (S15P21A405-562).
+     *
+     * 확대·축소는 내가 어디를 볼지의 문제라 선단이 어디로 가느냐와 상관이 없다. 반면 겹은
+     * 인솔자가 정하는 것이고(§560), 따라가는 사람이 혼자 파고들면 선단에서 떨어져 나간다.
+     * 압력 자체를 안 채운다 — `descend` 가 어차피 막지만, 차기만 하고 안 열리는 계기는
+     * 눌러도 아무 일이 없는 것처럼 보인다.
+     */
+    const riding = this.follow != null;
     // 파고든 겹에서는 진입 배율이 곧 축소 한계다 — 거기서 더 줄이려 하면 바로 떠오르기다
     const riseAt = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.riseScaleRatio;
-    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * riseAt;
-    if (canDig || canRise) {
+    const intent = wheelIntent({
+      riding,
+      zoomIn,
+      gateOpen: this.gateOpen(),
+      zoomedOutEnough: this.cam.s <= this.entryS * riseAt,
+      hasStack: this.stack.length > 0,
+    });
+    const canDig = intent === "dig";
+    if (intent !== "zoom") {
       this.pressureDir = canDig ? 1 : -1;
       // 압력이 차는 동안 카메라는 멈춰 있으므로 지금 상자가 곧 파고들 때의 상자다 — 미리 받게 알린다
       if (canDig && !this.prefetch) this.prefetch = [...this.boxes, this.drillBox()];
@@ -1974,6 +2013,8 @@ export class MapEngine {
     this.camTarget = null;
     this.touched = true;
     this.prefetch = null;
+    // 사용자가 배율을 잡았다 — 이 뒤로 `trackViewing` 은 배율을 되돌리지 않는다 (§562)
+    if (riding) this.rideZoomHeld = true;
     const w = this.screenToWorld(mx, my);
     const want = this.cam.s * Math.exp(-deltaY * WHEEL_ZOOM);
     // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게).
@@ -2479,6 +2520,19 @@ export class MapEngine {
    */
   startFollow(leader: NearbyUser, driven = false) {
     if (!this.index.has(leader.musicId)) return;
+    /**
+     * **이미 같은 사람을 같은 겹에서 따라가는 중이면 다시 걸지 않는다** (S15P21A405-559).
+     *
+     * 이 메서드는 진행 중인 우주선 비행(`mv`)을 지우고 처음부터 세운다. 그런데 부르는 쪽은
+     * 인솔자의 곡이 바뀔 때마다 다시 부르고 있었다 — `rideTo` 가 방금 건 비행이 곧바로
+     * 취소돼서 **화면만 옮겨가고 우주선은 제자리에 멈춰 있었다.**
+     *
+     * 곡을 옮기는 것은 `rideTo` 가 맡는 일이다. 여기서는 표시 정보만 갱신하고 비켜난다.
+     */
+    if (!shouldRestartFollow(this.follow ? { email: this.follow.leader.email, layer: this.followLayer } : null, { email: leader.email, layer: this.layer })) {
+      this.follow!.leader = { ...this.follow!.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      return;
+    }
     this.travelToId = null;
     this.camTarget = null;
     // 별자리는 다른 활동이므로 함께 사라진다 (ACT-01)
@@ -2497,6 +2551,8 @@ export class MapEngine {
       mv: null,
       visited: [],
     };
+    this.followLayer = this.layer;
+    this.rideZoomHeld = false;
     // 서버가 몰 때는 우측 패널을 소켓의 `RIDE_PANEL` 이 정한다 — 여기서 열면 그걸 덮어쓴다
     if (!driven) this.onLeaderViewingChange?.(viewingMusicId);
   }
@@ -2523,6 +2579,7 @@ export class MapEngine {
   }
 
   stopFollow() {
+    this.rideZoomHeld = false;
     if (!this.follow) return;
     const f = this.follow;
     this.follow = null;
@@ -2597,19 +2654,53 @@ export class MapEngine {
   /** 인솔자가 레이어를 바꾼다 — 따라가는 사람도 같은 레이어로 전환 (모프) */
   private leaderChangesLayer(f: FollowState): boolean {
     const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
-    const target = this.layer + dir;
-    if (target < 0 || target >= LAYER_COUNT) return false;
-    const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
+    // 목은 **방향만** 고른다. 옮기는 일 자체는 서버가 모는 길과 같은 입구를 쓴다 (§560)
+    if (!this.rideToLayer(this.layer + dir)) return false;
+    f.phase = "view";
+    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+    return true;
+  }
+
+  /**
+   * **인솔자를 따라 겹을 옮긴다** (S15P21A405-560).
+   *
+   * 탑승 응답과 `RIDE_TRACK` 이 `layer` 를 같이 주는데 그 값을 버리고 있었다 — 인솔자가
+   * 파고들면 따라가는 사람만 제자리에 남고, 그 겹에 없는 곡을 가리키는 바람에 우주선까지
+   * 사라졌다. 옮기는 몸통은 원래 목 안에 갇혀 있던 것을 그대로 꺼낸 것이다.
+   *
+   * **누적 범위(`boxes`)를 같이 맞춘다.** 그 겹의 상주 집합을 받아 오는 키라서, 안 맞추면
+   * 화면만 바뀌고 별이 안 온다. 파고들 때는 지금 보이는 범위를 한 칸 쌓고, 떠오를 때는 자른다.
+   *
+   * 한 번에 여러 겹을 뛰면 쌓는 칸이 모자라지만, 인솔자는 한 겹씩 움직인다 — 그때는 같은
+   * 범위를 반복해 채운다. 정확한 조상 범위는 다음 조회가 바로잡는다.
+   */
+  rideToLayer(target: number, anchorMusicId?: number): boolean {
+    if (target < 0 || target >= LAYER_COUNT || target === this.layer) return false;
+    const f = this.follow;
+    /**
+     * 기준 곡을 **받을 수 있게 열어 둔다.** 탑승 직후에는 `follow` 가 아직 안 걸려 있다 —
+     * 그건 스토어가 바뀐 뒤 화면이 거는 것이라 한 박자 늦는다. 그때는 응답이 준 곡을 쓴다.
+     */
+    const anchor = anchorMusicId ?? f?.viewingMusicId;
+    const at = anchor == null ? null : this.index.get(anchor);
+    if (at == null) return false;
+
+    const view = { x: this.songs[at].pc[target * 2], y: this.songs[at].pc[target * 2 + 1] };
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
     const cam: MapCamera = { s, cx: view.x - (fr.cx - this.W / 2) / s, cy: view.y + (fr.cy - this.H / 2) / s };
-    // 인솔자를 따라 겹을 옮겨도 누적 범위는 맞춰 둔다 (그 겹 상주 집합을 받아야 하므로)
-    this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
-    // 우주선·내 위치는 새 레이어 좌표로 옮긴다
-    this.friendPos.delete(f.leader.email);
-    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
-    f.phase = "view";
-    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+
+    if (target > this.layer) {
+      const box = this.viewBox();
+      const grown = [...this.boxes];
+      while (grown.length < target) grown.push(box);
+      this.boxes = grown;
+    } else {
+      this.boxes = this.boxes.slice(0, target);
+    }
+    // 우주선·내 위치는 새 겹 좌표로 다시 잡힌다
+    if (f) this.friendPos.delete(f.leader.email);
+    this.morph(target, cam, this.subset, `${f?.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
     return true;
   }
 
@@ -2852,8 +2943,14 @@ export class MapEngine {
     const view = this.worldOf(f.viewingMusicId);
     if (!view) return;
     const fr = this.freeRect();
-    const targetS = this.entryS * FOLLOW.zoomMul;
-    this.cam.s = this.cam.s * Math.pow(targetS / this.cam.s, 0.06);
+    /**
+     * **사용자가 배율을 만졌으면 그대로 둔다** (S15P21A405-562). 자리(중심)는 계속 인솔자를
+     * 따라가고 배율만 손을 뗀다 — 안 그러면 휠을 돌려도 다음 프레임에 도로 끌려간다.
+     */
+    if (!this.rideZoomHeld) {
+      const targetS = this.entryS * FOLLOW.zoomMul;
+      this.cam.s = this.cam.s * Math.pow(targetS / this.cam.s, 0.06);
+    }
     this.cam.cx = lerp(this.cam.cx, view.x - (fr.cx - this.W / 2) / this.cam.s, 0.06);
     this.cam.cy = lerp(this.cam.cy, view.y + (fr.cy - this.H / 2) / this.cam.s, 0.06);
     this.project();

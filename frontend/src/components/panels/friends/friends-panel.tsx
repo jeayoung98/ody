@@ -44,7 +44,7 @@ export default function FriendsPanel() {
    * 소켓이 안 붙어도 목록이 찬다 — 지도에는 사람이 보이는데 이 패널만 비어 있는 것이
    * 두 화면이 같은 사실을 다르게 말하는 상황이라 제일 나쁘다.
    */
-  const people = useNearbyList(data?.people, !riding);
+  const people = useNearbyList(data?.people, true);
 
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */
@@ -60,8 +60,13 @@ export default function FriendsPanel() {
    * 바뀔 때마다 패널 높이가 출렁이고 레이더와 가운데의 내가 밀려 올라간다 — 안내 한 줄 때문에
    * 화면의 중심이 움직이는 셈이었다. 이제 레이더 **위에 떠서** 흐름을 건드리지 않는다.
    */
+  /**
+   * **따라가는 동안에도 보여 준다** (S15P21A405-557). 예전에는 통째로 막았다 — 서버 `nearby`
+   * 가 `RIDE_NOT_CAPTAIN` 으로 거부하기 때문이다. 지금은 겹 사용자 조회로 **인솔자 곡 기준**
+   * 목록을 만들 수 있어서, 막는 대신 무엇을 보고 있는지만 알려 준다.
+   */
   const notice = riding
-    ? "따라가는 동안에는 주변 사람을 볼 수 없어요. 내리면 다시 보여요."
+    ? "따라가는 중이라 인솔자 곡 주변을 보고 있어요."
     : noPlay
     ? "곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요."
     : temporary

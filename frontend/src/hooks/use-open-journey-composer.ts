@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback } from "react";
+import { RIDING_JOURNEY_BLOCKED } from "@/constants";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { isRiding } from "@/stores/use-follow-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 
 /**
@@ -40,6 +43,15 @@ export function useOpenJourneyComposer() {
 
   return useCallback(
     (target?: "start" | "end") => {
+      /**
+       * **따라가는 중에는 막는다** (S15P21A405-557). 여정은 출발·도착을 직접 골라야 하는데
+       * 따라가는 동안에는 지도를 만질 수 없다 — 열어 줘도 그 다음에 할 수 있는 것이 없다.
+       * ACT-01 의 "멈추고 시작할까요" 를 묻지 않는 이유가 이것이다.
+       */
+      if (isRiding()) {
+        useToastStore.getState().show(RIDING_JOURNEY_BLOCKED);
+        return;
+      }
       closePanel();
       /**
        * **`target` 을 안 넘기면 스토어가 고른다** (S15P21A405-547). `openComposer` 가

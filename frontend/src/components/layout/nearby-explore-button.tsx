@@ -3,6 +3,7 @@
 import { CoronaIcon } from "@/components/common/icons";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -42,7 +43,13 @@ export default function NearbyExploreButton() {
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
 
-  const target = selectedMusicId ?? currentMusicId;
+  /**
+   * **따라가는 중에는 인솔자 곡이 중심이다** (S15P21A405-557). 따라가는 사람은 별을 고를 수
+   * 없어서 `selectedMusicId` 가 내가 타기 전에 눌러 둔 곡에 멈춰 있다 — 그대로 쓰면 지금
+   * 실려 가는 곳과 상관없는 데를 펼친다.
+   */
+  const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
+  const target = leaderMusicId ?? selectedMusicId ?? currentMusicId;
   const active = viewMode === "nearby";
   const disabled = !active && target == null;
 

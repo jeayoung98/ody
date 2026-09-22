@@ -48,20 +48,23 @@ import { useEffect, type RefObject } from "react";
  * @param ref      이 요소 **안쪽**을 누른 것은 바깥으로 치지 않는다
  * @param onDismiss 바깥을 눌렀을 때 부른다
  * @param enabled  꺼 두면 아무것도 듣지 않는다 (데스크톱·닫혀 있을 때)
- * @param only     주면 **이 선택자 안쪽을 누른 것만** 센다. 없으면 바깥 전부
+ * @param counts   주면 **이 판정이 참인 누름만** 센다. 없으면 바깥 전부
  */
-export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismiss: () => void, enabled: boolean, only?: string): void {
+export function useDismissOnOutside(
+  ref: RefObject<HTMLElement | null>,
+  onDismiss: () => void,
+  enabled: boolean,
+  counts?: (e: PointerEvent) => boolean,
+): void {
   useEffect(() => {
     if (!enabled) return;
 
-    const isOutside = (target: EventTarget | null) => {
+    const isOutside = (e: PointerEvent) => {
       const el = ref.current;
       if (!el) return false;
-      if (!(target instanceof Node)) return true;
-      if (el.contains(target)) return false;
-      // 셀 자리를 정해 뒀으면 그 안쪽을 누른 것만 바깥으로 친다
-      if (only) return target instanceof Element ? !!target.closest(only) : false;
-      return true;
+      if (e.target instanceof Node && el.contains(e.target)) return false;
+      // 판정을 정해 뒀으면 그것이 참일 때만 바깥으로 친다
+      return counts ? counts(e) : true;
     };
 
     /**
@@ -88,7 +91,7 @@ export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismis
     };
 
     const onPointerDown = (e: PointerEvent) => {
-      if (!isOutside(e.target)) return;
+      if (!isOutside(e)) return;
       e.stopPropagation();
       e.preventDefault();
       swallowNextClick();
@@ -97,5 +100,5 @@ export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismis
 
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [ref, onDismiss, enabled, only]);
+  }, [ref, onDismiss, enabled, counts]);
 }

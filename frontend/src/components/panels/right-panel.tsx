@@ -1,6 +1,7 @@
 "use client";
 
-import { useRef } from "react";
+import { useCallback, useRef } from "react";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useDismissOnOutside } from "@/hooks/use-dismiss-on-outside";
 import { usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
@@ -61,10 +62,30 @@ export default function RightPanel() {
    *
    * **세는 자리는 지도뿐이다** (`[data-map]`). 시트 밖 전부를 세던 때는 탭바와 재생바 버튼까지
    * 같이 삼켜서 **하단 UI 가 통째로 안 눌렸다** — 시트는 거의 항상 열려 있으므로 사실상
-   * 상시였다. 지도를 누른 것은 지도를 보겠다는 뜻이고, HUD 버튼을 누른 것은 그 버튼을
-   * 쓰겠다는 뜻이라 서로 다른 말이다.
+   * 상시였다.
+   *
+   * 지도 안에서도 **무엇을 눌렀는지로 가른다.**
+   *
+   * | | 빈 공간 | 별·사람 |
+   * | --- | --- | --- |
+   * | 3 단 | 1 단으로 | 1 단으로 — **고르지 않는다** |
+   * | 1·2 단 | 내려감·닫힘 | 그대로 흘려보낸다 → 그 대상 상세가 2 단으로 열린다 |
+   *
+   * 3 단은 화면을 거의 덮은 상태라 그 뒤가 눌리면 안 된다 — 무엇을 눌렀든 내려오는 것이
+   * 먼저다. 1·2 단은 지도를 보라고 비켜 준 상태라, 거기서 별을 고르는 것은 시트를 치우려는
+   * 동작이 아니라 **다음 곡을 고르는 동작**이다. 막으면 두 번 눌러야 한다.
    */
-  useDismissOnOutside(panelRef, lowerSnap, useIsNarrow() && activePanel != null, "[data-map]");
+  const dismissOnMap = useCallback(
+    (e: PointerEvent) => {
+      if (!(e.target instanceof Element) || !e.target.closest("[data-map]")) return false;
+      if (snap === 3) return true;
+      const engine = getMapEngine();
+      // 별도 사람도 아닌 빈 하늘을 눌렀을 때만 내려온다
+      return engine?.hitTest(e.clientX, e.clientY) == null && engine?.hitFriend?.(e.clientX, e.clientY) == null;
+    },
+    [snap],
+  );
+  useDismissOnOutside(panelRef, lowerSnap, useIsNarrow() && activePanel != null, dismissOnMap);
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다

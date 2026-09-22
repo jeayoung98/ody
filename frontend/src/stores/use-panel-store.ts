@@ -176,7 +176,13 @@ export const usePanelStore = create<PanelState>()(
         const { activePanel, playlistId } = get();
         const back: PanelReturn | null =
           activePanel === "journey" ? { panel: "journey" } : activePanel === "playlist" && playlistId != null ? { panel: "playlist", playlistId } : null;
-        set(open("song", { musicId, back }), false, "openSongFromList");
+        /**
+         * **3 단으로 연다** (S15P21A405-593). 목록에서 곡을 골라 들어간 것은 그 곡을 지금
+         * 보겠다는 뜻인데, 여는 자리(2 단)로 열면 시트가 도리어 **내려가면서** 상세가 떠서
+         * 방금 누른 것이 작아지는 것처럼 보인다. 지도에서 별을 눌러 여는 길(2 단)과 다른 이유는
+         * 그쪽은 지도를 보며 곡을 갈아 끼우는 동작이라 지도가 남아야 하기 때문이다.
+         */
+        set(open("song", { musicId, back, snap: 3 }), false, "openSongFromList");
       },
 
       openNeighborSong: (musicId, fromMusicId) =>

@@ -30,7 +30,7 @@ export default function FollowBanner() {
   if (!leaderEmail) {
     if (followerCount <= 0) return null;
     return (
-      <div className="glass-liquid animate-tin pointer-events-none absolute top-[72px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-2.5 rounded-pill! px-3.5 py-[9px]">
+      <div className="glass-liquid animate-tin pointer-events-none absolute top-[72px] left-1/2 z-30 max-tablet:z-[19] flex -translate-x-1/2 items-center gap-2.5 rounded-pill! px-3.5 py-[9px]">
         <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-teal shadow-[0_0_12px_#4fe3ce]" />
         <div className="text-sm">
           🚀 <b className="num font-semibold">{followerCount}</b>명이 따라오는 중
@@ -40,7 +40,7 @@ export default function FollowBanner() {
   }
 
   return (
-    <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
+    <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 max-tablet:z-[19] flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
       <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-violet shadow-[0_0_12px_#a67cff]" />
       <div>
         <div className="text-sm">

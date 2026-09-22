@@ -4,7 +4,14 @@ import { useCallback, useRef, type PointerEvent } from "react";
 import { usePanelStore, type SheetSnap } from "@/stores/use-panel-store";
 
 /** 한 단 옮기는 데 필요한 최소 거리(px). 이보다 짧으면 그냥 탭이거나 세로 스크롤의 흔들림이다 */
-const DIST = 56;
+/**
+ * 단을 옮기는 데 필요한 세로 거리(px).
+ *
+ * **56 에서 올렸다** (S15P21A405-593). 1·2 단은 본문 스크롤이 꺼져 있어서 세로로 끄는 것이
+ * 전부 단 이동으로 읽힌다 — 화면을 눈으로 따라가며 살짝 문지르는 정도에도 시트가 오르내렸다.
+ * 손가락 하나 길이쯤은 끌어야 "옮기려는 뜻" 으로 본다.
+ */
+const DIST = 96;
 /** 세로가 가로보다 이만큼 길어야 "위아래로 민 것" 으로 본다 */
 const RATIO = 1.3;
 /** 이 안에서 손을 떼면 **탭**으로 본다. 손가락은 가만히 있어도 몇 px 흔들린다 */

@@ -22,14 +22,14 @@ class NearbyBulkEnterContractTests {
 	@DisplayName("NEARBY_BULK_ENTER 의 JSON 키가 계약과 같다")
 	void bulkEnterKeys() throws Exception {
 		NearbyBulkEnter payload = new NearbyBulkEnter(4927L,
-				List.of(new NearbyChange("a@example.com", "A", null, 3, 2, 4927L, null, null, null)));
+				List.of(new NearbyChange("a@example.com", "A", null, 3, 2, 4927L, null, null)));
 
 		JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(payload));
 
 		assertThat(json.fieldNames()).toIterable().containsExactlyInAnyOrder("musicId", "people");
 		assertThat(json.get("people").get(0).fieldNames()).toIterable()
 				.containsExactlyInAnyOrder(
-						"email", "nickname", "imageUrl", "meetingCount", "riderCount", "musicId", "x", "y", "distance");
+						"email", "nickname", "imageUrl", "meetingCount", "riderCount", "musicId", "x", "y");
 	}
 
 	/** 한 명씩 보내면 받는 쪽이 그 수만큼 목록을 다시 그린다. 한 덩어리여야 하는 이유다. */
@@ -37,8 +37,8 @@ class NearbyBulkEnterContractTests {
 	@DisplayName("여러 사람이 한 덩어리에 담긴다")
 	void manyPeopleInOneMessage() throws Exception {
 		NearbyBulkEnter payload = new NearbyBulkEnter(4927L, List.of(
-				new NearbyChange("a@example.com", "A", null, 0, 0, 4927L, null, null, null),
-				new NearbyChange("b@example.com", "B", null, 1, 0, 4927L, null, null, null)));
+				new NearbyChange("a@example.com", "A", null, 0, 0, 4927L, null, null),
+				new NearbyChange("b@example.com", "B", null, 1, 0, 4927L, null, null)));
 
 		JsonNode json = objectMapper.readTree(objectMapper.writeValueAsString(payload));
 

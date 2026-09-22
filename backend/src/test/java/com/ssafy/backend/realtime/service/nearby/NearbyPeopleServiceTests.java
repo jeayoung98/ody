@@ -2,7 +2,7 @@ package com.ssafy.backend.realtime.service.nearby;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyList;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.inOrder;
@@ -89,14 +89,9 @@ class NearbyPeopleServiceTests {
 	private void givenMyself(double x, double y) {
 		when(presenceRepository.snapshot(ME)).thenReturn(new PresenceSnapshot(100L, LAYER, 0, 0, 1L));
 		lenient().when(musicLocationService.findLocation(100L)).thenReturn(Optional.of(at(x, y)));
-		lenient().when(nearbyRepository.replaceSubscriptions(anyString(), anyLong(), anyList()))
+		lenient().when(nearbyRepository.replaceSubscriptions(anyString(), anyLong(), anyInt()))
 				.thenReturn(true);
 		lenient().when(webSocketSessionService.currentMessageSeq(ME)).thenReturn(7L);
-	}
-
-	@SuppressWarnings("unchecked")
-	private static List<Long> anyList() {
-		return org.mockito.ArgumentMatchers.anyList();
 	}
 
 	@Test
@@ -212,7 +207,7 @@ class NearbyPeopleServiceTests {
 		service.open(ME);
 
 		InOrder order = inOrder(nearbyRepository, webSocketSessionService);
-		order.verify(nearbyRepository).replaceSubscriptions(ME, 1L, List.of(500L));
+		order.verify(nearbyRepository).replaceSubscriptions(ME, 1L, LAYER);
 		order.verify(webSocketSessionService).currentMessageSeq(ME);
 	}
 
@@ -221,7 +216,7 @@ class NearbyPeopleServiceTests {
 	void staleEpochIsRejected() {
 		when(presenceRepository.snapshot(ME)).thenReturn(new PresenceSnapshot(100L, LAYER, 0, 0, 1L));
 		when(layerUsersService.findAll(LAYER, ME)).thenReturn(new LayerUsersSnapshot(LAYER, List.of()));
-		when(nearbyRepository.replaceSubscriptions(ME, 1L, List.of())).thenReturn(false);
+		when(nearbyRepository.replaceSubscriptions(ME, 1L, LAYER)).thenReturn(false);
 
 		assertThatThrownBy(() -> service.open(ME))
 				.isInstanceOfSatisfying(CustomException.class,
@@ -237,7 +232,7 @@ class NearbyPeopleServiceTests {
 	void missingMySpotStillAnswers() {
 		when(presenceRepository.snapshot(ME)).thenReturn(new PresenceSnapshot(100L, LAYER, 0, 0, 1L));
 		when(musicLocationService.findLocation(100L)).thenReturn(Optional.empty());
-		when(nearbyRepository.replaceSubscriptions(ME, 1L, List.of(500L))).thenReturn(true);
+		when(nearbyRepository.replaceSubscriptions(ME, 1L, LAYER)).thenReturn(true);
 		when(webSocketSessionService.currentMessageSeq(ME)).thenReturn(7L);
 		when(layerUsersService.findAll(LAYER, ME)).thenReturn(new LayerUsersSnapshot(LAYER, List.of(
 				new ViewportMusicGroup(500L, 3.0, 4.0, List.of(user("u2@x.com"))))));

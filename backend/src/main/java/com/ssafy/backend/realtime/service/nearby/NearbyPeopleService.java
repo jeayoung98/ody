@@ -80,10 +80,8 @@ public class NearbyPeopleService {
 		// 2) 그 층 사람 전부를 곡 위치별로 읽는다. 지도가 쓰는 코드와 같은 것이다.
 		LayerUsersSnapshot onThisLayer = layerUsersService.findAll(layer, email);
 
-		// 3) 목록을 만드는 사이에 생기는 변경도 받도록 구독을 먼저 바꾼다.
-		//    지금은 곡별 구독이라 이 층에서 지금 재생 중인 곡들을 그대로 넘긴다.
-		List<Long> musicIds = onThisLayer.groups().stream().map(ViewportMusicGroup::musicId).toList();
-		if (!nearbyRepository.replaceSubscriptions(email, me.epoch(), musicIds)) {
+		// 3) 목록을 만드는 사이에 생기는 변경도 받도록 구독을 먼저 바꾼다. 층 하나면 된다.
+		if (!nearbyRepository.replaceSubscriptions(email, me.epoch(), layer)) {
 			log.warn("주변사람 목록 거부 reason={}", WebSocketErrorCode.PRESENCE_STALE);
 			throw new CustomException(RealtimeErrorCode.PRESENCE_ERROR);
 		}

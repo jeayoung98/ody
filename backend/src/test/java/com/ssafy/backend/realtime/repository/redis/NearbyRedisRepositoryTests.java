@@ -31,19 +31,19 @@ class NearbyRedisRepositoryTests {
 	}
 
 	@Test
-	@DisplayName("구독 교체는 현재 상태와 구독 정보 키를 함께 전달한다")
+	@DisplayName("구독 교체는 현재 상태·구독 정보 키와 층을 전달한다")
 	void replaceSubscriptionsPassesKeysAndValues() {
 		when(redis.execute(replaceScript,
 				List.of("presence:user:user@x.com", "nearby:meta:user@x.com"),
-				"user@x.com", "7", "nearby:subscribers:", "10,20"))
+				"user@x.com", "7", "nearby:layer-subscribers:", "2"))
 				.thenReturn(1L);
 
-		boolean replaced = repository.replaceSubscriptions("user@x.com", 7L, List.of(10L, 20L));
+		boolean replaced = repository.replaceSubscriptions("user@x.com", 7L, 2);
 
 		assertThat(replaced).isTrue();
 		verify(redis).execute(replaceScript,
 				List.of("presence:user:user@x.com", "nearby:meta:user@x.com"),
-				"user@x.com", "7", "nearby:subscribers:", "10,20");
+				"user@x.com", "7", "nearby:layer-subscribers:", "2");
 	}
 
 	@Test
@@ -51,7 +51,7 @@ class NearbyRedisRepositoryTests {
 	void closeSubscriptionsPassesEpochAndKey() {
 		when(redis.execute(closeScript,
 				List.of("nearby:meta:user@x.com"),
-				"user@x.com", "7", "nearby:subscribers:"))
+				"user@x.com", "7", "nearby:layer-subscribers:"))
 				.thenReturn(1L);
 
 		boolean closed = repository.closeSubscriptions("user@x.com", 7L);
@@ -59,6 +59,6 @@ class NearbyRedisRepositoryTests {
 		assertThat(closed).isTrue();
 		verify(redis).execute(closeScript,
 				List.of("nearby:meta:user@x.com"),
-				"user@x.com", "7", "nearby:subscribers:");
+				"user@x.com", "7", "nearby:layer-subscribers:");
 	}
 }

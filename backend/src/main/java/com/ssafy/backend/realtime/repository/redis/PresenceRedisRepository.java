@@ -39,7 +39,7 @@ public class PresenceRedisRepository {
 	private static final String ACTIVE_CELL_PREFIX = "active-song:cell:"; // 셀별 재생 중인 곡
 	private static final String ACTIVE_CELLS_PREFIX = "active-song:cells:"; // 레이어별 사용 중인 셀
 	private static final String USERCOUNT_PREFIX = "cell:usercount:"; // 레이어와 셀별 사용자 수
-	private static final String NEARBY_SUBSCRIBERS_PREFIX = "nearby:subscribers:"; // 곡별 주변사람 변경 수신자
+	private static final String NEARBY_SUBSCRIBERS_PREFIX = "nearby:layer-subscribers:"; // 층별 주변사람 변경 수신자
 	private static final String NEARBY_META_PREFIX = "nearby:meta:"; // 사용자별 주변사람 구독 곡
 	private static final String VIEWPORT_CELL_PREFIX = "viewport:cell:"; // 셀별 화면 변경 수신자
 	private static final String VIEWPORT_CLUSTERED_PREFIX = "viewport:clustered:"; // 셀별 인원수 화면 사용자

@@ -116,7 +116,7 @@ class PresenceRedisRepositoryTests {
 						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "7", "",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:"))
+				"cell:usercount:", "nearby:layer-subscribers:", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(removed);
 
 		assertThat(repository.applyLeave("user@x.com", 7L))
@@ -126,7 +126,7 @@ class PresenceRedisRepositoryTests {
 						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "7", "",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:");
+				"cell:usercount:", "nearby:layer-subscribers:", "viewport:cell:", "viewport:clustered:");
 	}
 
 	@Test
@@ -138,7 +138,7 @@ class PresenceRedisRepositoryTests {
 						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "", "1000",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:"))
+				"cell:usercount:", "nearby:layer-subscribers:", "viewport:cell:", "viewport:clustered:"))
 				.thenReturn(removed);
 
 		assertThat(repository.applyLeaveExpired("user@x.com", 1000L))
@@ -148,6 +148,6 @@ class PresenceRedisRepositoryTests {
 						"nearby:meta:user@x.com", "viewport:meta:user@x.com"),
 				"user@x.com", "", "1000",
 				"listeners:", "layer-listeners:", "active-song:cell:", "active-song:cells:",
-				"cell:usercount:", "nearby:subscribers:", "viewport:cell:", "viewport:clustered:");
+				"cell:usercount:", "nearby:layer-subscribers:", "viewport:cell:", "viewport:clustered:");
 	}
 }

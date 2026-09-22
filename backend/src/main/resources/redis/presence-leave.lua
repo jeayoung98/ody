@@ -13,7 +13,7 @@
 -- ARGV[6] 셀별 재생 곡 키
 -- ARGV[7] 사용 중인 셀 키
 -- ARGV[8] 셀별 사용자 수 키
--- ARGV[9] 곡별 주변사람 구독 키
+-- ARGV[9] 층별 주변사람 구독 키
 -- ARGV[10] 셀별 화면 구독 키
 -- ARGV[11] 셀별 인원수 화면 구독 키
 --
@@ -25,10 +25,11 @@ local email     = ARGV[1]
 local epoch     = ARGV[2]
 local sweepTime = ARGV[3]
 
+-- 주변사람 구독은 층 하나다 (S15P21A405-582). 예전에는 곡마다 등록해 목록을 되풀이했다.
 local function removeNearbySubscriptions()
-  local musicIds = redis.call('HGET', KEYS[3], 'musicIds') or ''
-  for musicId in string.gmatch(musicIds, '[^,]+') do
-    redis.call('SREM', ARGV[9] .. musicId, email)
+  local layer = redis.call('HGET', KEYS[3], 'layer')
+  if layer then
+    redis.call('SREM', ARGV[9] .. layer, email)
   end
   redis.call('DEL', KEYS[3])
 end

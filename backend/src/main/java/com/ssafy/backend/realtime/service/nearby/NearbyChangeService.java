@@ -20,7 +20,9 @@ import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
 import com.ssafy.backend.realtime.dto.nearby.NearbyRiderCount;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.repository.redis.NearbyRedisRepository;
+import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.dto.presence.UserDisplay;
 import com.ssafy.backend.realtime.service.user.UserDisplayService;
 
@@ -41,6 +43,8 @@ public class NearbyChangeService {
 	private final MeetingService meetingService; // 두 사용자 만난 횟수
 	private final RiderCountService riderCountService; // 따라오는 사용자 수
 	private final NearbyPeopleService nearbyPeopleService; // 본인 구독과 목록 다시 만들기
+	private final MusicLocationService musicLocationService; // 알림에 실을 곡 자리
+	private final MusicPositionCalculator musicPositionCalculator; // 층별 표시축
 
 	/**
 	 * 서비스가 시작되면 곡 변경 알림을 구독한다.
@@ -51,45 +55,73 @@ public class NearbyChangeService {
 	}
 
 	/**
-	 * 주변사람 : 곡 변경을 ENTER·MOVE·LEAVE로 나눠 전달한다.
-	 * @param event 곡을 바꾼 사용자와 이전·현재 곡
+	 * 주변사람 : 자리 변경을 ENTER·MOVE·LEAVE 로 나눠 전달한다.
+	 *
+	 * 기준이 층이라 판정이 집합 연산에서 층 비교로 바뀌었다 (S15P21A405-582).
+	 * 한 사람은 층 하나만 구독하므로, 층이 다르면 두 구독자 집합은 서로 겹치지 않는다 —
+	 * 옛 층 사람에게는 LEAVE 만, 새 층 사람에게는 ENTER 만 간다.
+	 *
+	 * @param event 자리를 옮긴 사용자와 이전·현재 층·곡
 	 */
 	void handlePositionChanged(PositionChanged event) {
-		// 곡이 같으면 주변사람 목록은 바뀌지 않는다.
-		if (Objects.equals(event.oldMusicId(), event.newMusicId())) {
+		boolean sameLayer = Objects.equals(event.oldLayer(), event.newLayer());
+
+		// 층도 곡도 그대로면 목록에서 바뀔 것이 없다.
+		if (sameLayer && Objects.equals(event.oldMusicId(), event.newMusicId())) {
 			return;
 		}
 
-		// 이전·현재 곡 구독자를 비교해야 LEAVE·ENTER·MOVE 수신자를 나눌 수 있다.
-		Set<String> oldSubscribers = subscribers(event.oldMusicId());
-		Set<String> newSubscribers = subscribers(event.newMusicId());
-
-		Set<String> leaveReceivers = findLeaveReceivers(oldSubscribers, newSubscribers); // 목록에서 뺄 사람
-		Set<String> enterReceivers = findEnterReceivers(oldSubscribers, newSubscribers); // 목록에 넣을 사람
-		Set<String> moveReceivers = findMoveReceivers(oldSubscribers, newSubscribers);   // 현재 곡을 바꿀 사람
-
-		// 주변사람 목록은 본인을 보여주지 않는다.
-		leaveReceivers.remove(event.email());
-		enterReceivers.remove(event.email());
-		moveReceivers.remove(event.email());
-
-		// 받을 사람이 있을 때만 변경 알림을 보낸다.
-		if (!leaveReceivers.isEmpty() || !enterReceivers.isEmpty() || !moveReceivers.isEmpty()) {
-			// LEAVE는 목록에서 지울 이메일만 보낸다.
-			sendLeave(leaveReceivers, event.email());
-
-			// ENTER·MOVE는 목록에 보여줄 정보까지 보낸다.
-			if (!enterReceivers.isEmpty() || !moveReceivers.isEmpty()) {
-				UserDisplay who = userDisplayService.find(event.email());
-				int riderCount = riderCountService.count(event.email());
-				sendCurrent(enterReceivers, event.email(), who, riderCount,
-						RealtimeMessageType.NEARBY_ENTER, event.newMusicId());
-				sendCurrent(moveReceivers, event.email(), who, riderCount,
-						RealtimeMessageType.NEARBY_MOVE, event.newMusicId());
-			}
+		if (sameLayer) {
+			// 같은 층에서 곡만 바꿨다. 목록에 그대로 있고 자리만 옮긴다.
+			sendToLayer(event, event.newLayer(), RealtimeMessageType.NEARBY_MOVE);
+		} else {
+			// 층을 옮겼다. 떠난 층에서는 사라지고 닿은 층에서는 나타난다.
+			Set<String> left = new LinkedHashSet<>(subscribers(event.oldLayer()));
+			left.remove(event.email());
+			sendLeave(left, event.email());
+			sendToLayer(event, event.newLayer(), RealtimeMessageType.NEARBY_ENTER);
 		}
 
-		refreshOwnPanel(event);
+		refreshOwnPanel(event, sameLayer);
+	}
+
+	/**
+	 * 그 층을 보고 있는 사람들에게 지금 모습을 보낸다.
+	 *
+	 * 자리는 한 번만 구해 전원이 나눠 쓴다. 곡이 같으면 자리도 같기 때문이다.
+	 * 거리는 싣지 않는다 — 받는 사람마다 다른 값이라, 여기서 구하려면 사람 수만큼 조회가 돈다.
+	 * 받는 쪽은 자기 자리를 알고 있으므로 좌표만 있으면 스스로 잰다.
+	 */
+	private void sendToLayer(PositionChanged event, Integer layer, RealtimeMessageType type) {
+		if (layer == null || event.newMusicId() == null) {
+			return; // 닿은 곳이 없다. 퇴장은 위에서 LEAVE 로 이미 알렸다
+		}
+		Set<String> receivers = new LinkedHashSet<>(subscribers(layer));
+		receivers.remove(event.email()); // 목록은 본인을 보여주지 않는다
+		if (receivers.isEmpty()) {
+			return;
+		}
+
+		UserDisplay who = userDisplayService.find(event.email());
+		int riderCount = riderCountService.count(event.email());
+		double[] spot = spotOf(event.newMusicId(), layer);
+		sendCurrent(receivers, event.email(), who, riderCount, type, event.newMusicId(), spot);
+	}
+
+	/**
+	 * 그 곡의 층 표시 좌표. 못 구하면 null 이고, 그때는 자리 없이 알린다 —
+	 * 누가 들어왔는지는 여전히 알려야 한다.
+	 */
+	private double[] spotOf(long musicId, int layer) {
+		try {
+			int[] axes = musicPositionCalculator.findAxes(layer);
+			return musicLocationService.findLocation(musicId)
+					.filter(pc -> pc.length >= axes[1])
+					.map(pc -> new double[] {pc[axes[0] - 1], pc[axes[1] - 1]})
+					.orElse(null);
+		} catch (IllegalArgumentException e) {
+			return null;
+		}
 	}
 
 	/**
@@ -101,8 +133,8 @@ public class NearbyChangeService {
 	 * @param musicId 그 사람이 있는 곡
 	 * @param riderCount 바뀐 뒤의 인원수
 	 */
-	public void sendRiderCount(String email, long musicId, int riderCount) {
-		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(musicId));
+	public void sendRiderCount(String email, int layer, long musicId, int riderCount) {
+		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(layer));
 		receivers.remove(email);
 		if (receivers.isEmpty()) {
 			return;
@@ -127,11 +159,11 @@ public class NearbyChangeService {
 	 * @param emails 나타난 사람들
 	 * @param musicId 나타난 곡
 	 */
-	public void sendEnteredTogether(List<String> emails, long musicId) {
+	public void sendEnteredTogether(List<String> emails, int layer, long musicId) {
 		if (emails == null || emails.isEmpty()) {
 			return;
 		}
-		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(musicId));
+		Set<String> receivers = new LinkedHashSet<>(nearbyRepository.subscribers(layer));
 		receivers.removeAll(emails);
 		if (receivers.isEmpty()) {
 			return;
@@ -141,6 +173,10 @@ public class NearbyChangeService {
 		Map<String, UserDisplay> displayByEmail = new LinkedHashMap<>();
 		emails.forEach(email -> displayByEmail.computeIfAbsent(email, userDisplayService::find));
 		Map<String, Integer> riderCounts = riderCountService.countAll(emails);
+		// 한 곡에 같이 나타난 사람들이라 자리도 하나다. 한 번만 구해 전원이 나눠 쓴다.
+		double[] spot = spotOf(musicId, layer);
+		Double x = spot == null ? null : spot[0];
+		Double y = spot == null ? null : spot[1];
 
 		for (String receiver : receivers) {
 			List<NearbyChange> people = emails.stream()
@@ -148,7 +184,7 @@ public class NearbyChangeService {
 						UserDisplay who = displayByEmail.get(email);
 						return new NearbyChange(email, who.nickname(), who.imageUrl(),
 								meetingService.countWith(receiver, email),
-								riderCounts.getOrDefault(email, 0), musicId, null, null, null);
+								riderCounts.getOrDefault(email, 0), musicId, x, y);
 					})
 					.toList();
 			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
@@ -157,11 +193,19 @@ public class NearbyChangeService {
 	}
 
 	/**
-	 * 주변사람 조회 패널이 열린 상태로 본인의 곡이 바뀌면 구독과 목록을 다시 만든다.
-	 * @param event 본인의 곡 변경 정보
+	 * 본인이 층을 옮기면 구독과 목록을 다시 만든다.
+	 *
+	 * 같은 층에서 곡만 바꿀 때는 하지 않는다 (S15P21A405-582). 기준이 층이라 목록에 담길
+	 * 사람이 그대로이기 때문이다. 바뀌는 것은 내 자리에서 잰 거리뿐이고, 받는 쪽은 자기가
+	 * 어디로 옮겼는지 알고 있으므로 스스로 다시 잰다.
+	 *
+	 * 예전에는 곡을 바꿀 때마다 기준곡이 달라져 목록을 통째로 다시 만들었다.
+	 *
+	 * @param event 본인의 자리 변경 정보
+	 * @param sameLayer 층이 그대로인지
 	 */
-	private void refreshOwnPanel(PositionChanged event) {
-		if (event.newMusicId() == null || !nearbyRepository.hasSubscription(event.email())) { // 패널이 열렸는지 확인
+	private void refreshOwnPanel(PositionChanged event, boolean sameLayer) {
+		if (sameLayer || event.newMusicId() == null || !nearbyRepository.hasSubscription(event.email())) {
 			return;
 		}
 
@@ -175,47 +219,8 @@ public class NearbyChangeService {
 	 * @param musicId 조회할 곡 ID
 	 * @return 곡 변화를 구독한 사용자들
 	 */
-	private Set<String> subscribers(Long musicId) {
-		return musicId == null ? Set.of() : nearbyRepository.subscribers(musicId);
-	}
-
-	/**
-	 * 이전 곡만 구독한 LEAVE 수신자를 찾는다.
-	 *
-	 * @param oldSubscribers 이전 곡 구독자
-	 * @param newSubscribers 현재 곡 구독자
-	 * @return 목록에서 사용자를 뺄 수신자들
-	 */
-	private Set<String> findLeaveReceivers(Set<String> oldSubscribers, Set<String> newSubscribers) {
-		Set<String> result = new LinkedHashSet<>(oldSubscribers);
-		result.removeAll(newSubscribers);
-		return result;
-	}
-
-	/**
-	 * 현재 곡만 구독한 ENTER 수신자를 찾는다.
-	 *
-	 * @param oldSubscribers 이전 곡 구독자
-	 * @param newSubscribers 현재 곡 구독자
-	 * @return 목록에 사용자를 넣을 수신자들
-	 */
-	private Set<String> findEnterReceivers(Set<String> oldSubscribers, Set<String> newSubscribers) {
-		Set<String> result = new LinkedHashSet<>(newSubscribers);
-		result.removeAll(oldSubscribers);
-		return result;
-	}
-
-	/**
-	 * 이전·현재 곡을 모두 구독한 MOVE 수신자를 찾는다.
-	 *
-	 * @param oldSubscribers 이전 곡 구독자
-	 * @param newSubscribers 현재 곡 구독자
-	 * @return 목록에서 현재 곡을 바꿀 수신자들
-	 */
-	private Set<String> findMoveReceivers(Set<String> oldSubscribers, Set<String> newSubscribers) {
-		Set<String> result = new LinkedHashSet<>(oldSubscribers);
-		result.retainAll(newSubscribers);
-		return result;
+	private Set<String> subscribers(Integer layer) {
+		return layer == null ? Set.of() : nearbyRepository.subscribers(layer);
 	}
 
 	/**
@@ -225,7 +230,7 @@ public class NearbyChangeService {
 	 * @param actorEmail 목록에서 지울 사용자 이메일
 	 */
 	private void sendLeave(Set<String> receivers, String actorEmail) {
-		NearbyChange payload = new NearbyChange(actorEmail, null, null, null, null, null, null, null, null);
+		NearbyChange payload = new NearbyChange(actorEmail, null, null, null, null, null, null, null);
 		for (String receiver : receivers) {
 			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE,
 					RealtimeMessageType.NEARBY_LEAVE, payload);
@@ -243,13 +248,14 @@ public class NearbyChangeService {
 	 * @param musicId 현재 곡 ID
 	 */
 	private void sendCurrent(Set<String> receivers, String actorEmail, UserDisplay who, int riderCount,
-			RealtimeMessageType type, Long musicId) {
+			RealtimeMessageType type, Long musicId, double[] spot) {
+		Double x = spot == null ? null : spot[0];
+		Double y = spot == null ? null : spot[1];
 		for (String receiver : receivers) {
 			NearbyChange payload = new NearbyChange(
 					actorEmail, who.nickname(), who.imageUrl(),
 					meetingService.countWith(receiver, actorEmail), riderCount,
-					// 자리는 4단계에서 채운다. 지금은 곡만 바꾼다
-					musicId, null, null, null);
+					musicId, x, y);
 			realtimeMessageService.sendToUser(receiver, WebSocketDestination.QUEUE_PRESENCE, type, payload);
 		}
 	}

@@ -113,7 +113,7 @@
 | S-1 | 따라가기 동기화 — 인솔자의 동작을 **세 종류 이벤트로 따로** 보내야 한다 (SOCIAL-07): ① `leader:view` = 곡 클릭(`viewingMusicId`) ② `leader:play` = 재생 시작(`playingMusicId`) ③ `leader:layer` = 레이어 전환(`layer`) | 뷰는 ①에서 먼저 움직이고, 우주선은 ②가 와야 출발한다. 두 개를 한 이벤트로 합쳐 보내면 이 연출이 불가능하다 | 협의 전 |
 | S-2 | 따라가기 자동 종료: 인솔자 접속 종료·비공개 전환 시 (SOCIAL-10-1) | 서버가 알려줘야 한다 | 협의 전 |
 | S-3 | 접속 상태·현재 탐색 좌표 실시간 관리 (USER-03) | 주변 사람 목록의 실시간성 | 협의 전 |
-| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 협의 전 |
+| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 백엔드 반영 · 프론트 반영 필요 (S15P21A405-590, §7) |
 | S-5 | 따라가는 인원 수 (SOCIAL-11), 만난 횟수 카운팅 (SOCIAL-05) | 서버 집계 필요 | 협의 전 |
 | S-6 | `/app/presence/join {requestSeq, layer, musicId}`: 최초 입장은 요청 곡, 이후 레이어 이동은 서버 현재 곡 유지. 성공 `PRESENCE_JOINED`, 실패 개인 오류 큐. 프론트는 ACK 뒤 viewport·새 곡 play 진행 | REST와 STOMP 사이 처리 순서를 ACK로 보장하고 이전 소켓 요청을 epoch로 차단 | 백엔드 반영 · 프론트 반영 필요 (S15P21A405-423) |
 
@@ -258,3 +258,56 @@
 - 채점 이미지는 **서버가 저장된 좌표로 렌더한다.** 프론트가 캔버스 이미지를 보내는 API 는 없고 앞으로도 두지 않는다(점수 조작 방지).
 - ⚠️ **DB 담당**: `backend/src/main/resources/db/artwork_001_tables.sql` 적용 필요 — 테이블 4개·시퀀스 2개·인덱스 4개와 1회차 행이 들어 있다. 적용 전에는 작품 API 전부가 실패한다.
 - ⚠️ **인프라**: 배포 호스트 env 에 `GMS_BASE_URL`·`GMS_API_KEY`·`GMS_MODEL` 필요. 비어 있어도 서버는 뜨고 작품만 `FAILED` 로 남는다.
+
+---
+
+## 7. 반응하기 — 프론트 전달 (S15P21A405-590, 2026-09-22)
+
+SOCIAL-02(반응하기)·SOCIAL-04(전송 제한)의 백엔드다. 대상 범위는 주변 사람과 같은 기준 — **나와 같은 층에 서 있는 사람**(582). 기록은 남기지 않고 받는 사람 개인 큐로 바로 넘긴다. 기존 코드는 수정하지 않았다(enum 두 곳에 값 추가만).
+
+### 7-1. 전송 (REST)
+
+| 항목 | 값 |
+| --- | --- |
+| 경로 | `POST /api/realtime/reactions` |
+| 인증 | Bearer 필수. 보낸 사람은 토큰 주체(email) |
+| body | `{ "toEmail": "you@x.com", "reactionKey": "fire" }` |
+| `reactionKey` | `^[a-z_]{1,32}$`. 이모지 목록은 프론트 `constants/reactions.ts` 소유 — 서버는 형식만 검사 |
+| 성공 | `200 { success: true, data: null }` |
+| 프로파일 | `realtime` 에서만 뜬다 |
+
+거부 코드 — 어느 것인지로 화면 문구를 갈라야 한다.
+
+| HTTP | code | 뜻 | 프론트가 할 일 |
+| --- | --- | --- | --- |
+| 400 | `REACTION_SELF` | 자기 자신 | 버튼을 미리 막는다 |
+| 400 | `INVALID_INPUT` | body 형식 위반 | 개발 중에만 난다 |
+| 422 | `PRESENCE_ERROR` | **내가** 층 위에 없다(접속 끊김) | 따라가기와 같다 — 소켓 재연결 |
+| 409 | `REACTION_NOT_NEARBY` | 상대가 접속이 없거나 다른 층 | 주변 사람 목록을 새로 받는다. 토스트 "지금은 보낼 수 없어요" |
+| 429 | `REACTION_COOLDOWN` | 같은 사람에게 5초 안 재전송 | 프론트 `REACTION_COOLDOWN_MS`(5초) 가 먼저 막으므로 정상 흐름에서는 안 난다 |
+
+### 7-2. 수신 (소켓)
+
+받는 사람 개인 큐 `/user/queue/presence` 로, 봉투 `type` 은 `REACTION`.
+
+```json
+{ "type": "REACTION", "seq": 17,
+  "payload": { "fromEmail": "me@x.com", "reactionKey": "fire", "sentAt": "2026-09-22T13:40:12.345Z" } }
+```
+
+- `types/profile.ts` 의 `ReactionEvent` 와 필드가 같다(`id` 는 스토어가 붙인다).
+- 보낸 사람 닉네임·사진은 **담지 않는다.** 주변 사람 목록(`NearbyPerson`)에서 `fromEmail` 로 찾는다. 같은 층이라 목록에 있다 — 없으면(상한 12명 밖) 이모지만 띄운다.
+- 소켓이 끊긴 사람에게 보낸 반응은 사라진다. 다시 보내지 않는다.
+
+### 7-3. 프론트 반영 필요
+
+1. `hooks/mutations/use-send-reaction-mutation.ts` 가 부르는 `API_ENDPOINTS.user.reaction(email)` (`/api/users/{email}/reactions`, Next 목 라우트) → `POST /api/realtime/reactions` 로 전환. 목 라우트 `app/api/users/[email]/reactions/route.ts` 제거.
+2. 소켓 `REACTION` 수신 핸들러 → `useReactionStore.push({ reactionKey, mine: false, fromEmail, nickname })`. `hooks/use-mock-friend-reactions.ts` 와 `MOCK_FRIEND_REACTION_INTERVAL_MS` 제거.
+3. 대상 지정 UI — 지금 `ReactionPicker.onPick` 에 `toEmail` 이 안 넘어와 서버로 아무것도 안 간다. 주변 사람 패널 항목(또는 지도 아바타)에서 보내는 흐름이 필요하다.
+4. `types/api.ts` 에 에러 코드 3개 추가: `REACTION_SELF` `REACTION_NOT_NEARBY` `REACTION_COOLDOWN`.
+
+### 7-4. 전제·주의
+
+- 따라가는 동안에도 보낼 수 있다(B-5 의 차단 목록에 없다). 라이더는 인솔자 층에 있으므로 같은 층 검사는 그대로 통한다.
+- 쿨다운은 **방향이 있다.** 내가 그에게 5초에 한 번, 그가 나에게 5초에 한 번. `realtime.reaction.cooldown-sec`(기본 5) 로 조정.
+- 비공개(isPublic=false) 사용자에게도 층이 같으면 간다. 프론트 목록에 안 뜨면 대상으로 고를 수 없으니 실질적으로 막힌다. 서버 차단이 필요하면 그때 추가.

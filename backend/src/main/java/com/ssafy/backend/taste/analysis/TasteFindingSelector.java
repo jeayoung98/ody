@@ -99,7 +99,7 @@ public class TasteFindingSelector {
             TasteAxisStatistics axis, String type, String direction, double effectSize) {
         String phrase = "LOW".equals(direction) ? axis.label().low()
                 : "HIGH".equals(direction) ? axis.label().high()
-                : axis.label().low() + "부터 " + axis.label().high();
+                : axis.label().low() + TasteFinding.PHRASE_SEPARATOR + axis.label().high();
         String id = "pc" + axis.pc() + "-" + type.toLowerCase(java.util.Locale.ROOT);
         String evidence = "PC%d 중앙 백분위 %.1f, IQR %.1f"
                 .formatted(axis.pc(), axis.percentile().median(), axis.percentile().iqr());

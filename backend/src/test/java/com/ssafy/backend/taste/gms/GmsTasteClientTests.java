@@ -129,8 +129,8 @@ class GmsTasteClientTests {
     @Test
     void unknownFindingId_isRejectedAfterClientParsing() {
         GmsTasteOutput output = new GmsTasteOutput(
-                "resp_1", "강렬한 요약",
-                List.of(new GmsTasteOutput.Narrative("invented", "근거 없는 설명")));
+                "resp_1", "강렬한 음악을 즐겨요.",
+                List.of(new GmsTasteOutput.Narrative("invented", "근거 없는 설명이에요.")));
 
         assertThatThrownBy(() -> new GmsTasteOutputValidator().validate(output, List.of(finding())))
                 .isInstanceOf(IllegalArgumentException.class)

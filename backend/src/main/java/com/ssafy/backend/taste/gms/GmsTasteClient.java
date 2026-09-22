@@ -20,17 +20,27 @@ import com.ssafy.backend.taste.analysis.TasteFinding;
 public class GmsTasteClient {
 
     private static final String INSTRUCTIONS = """
-            제공된 finding 과 수치만 근거로 한국어 음악 취향 문장을 작성하세요.
-            장르, 가수, 곡, 감정, 성격은 언급하지 말고 새 수치를 만들지 마세요.
+            제공된 finding 만 근거로 한국어 음악 취향 문장을 작성하세요.
+            읽는 사람은 자기 취향을 보는 본인입니다. 모든 문장을 해요체로 끝내세요.
+            "~합니다", "~이다" 로 끝내지 말고 "~해요", "~네요", "~보여요" 처럼 씁니다.
+            사용자, 이 사람, 이 개인 같은 3인칭 호칭을 쓰지 마세요.
 
-            summary 는 한 문장입니다. finding 을 축별로 나열하지 말고 하나의 취향으로 엮어 설명하세요.
+            axisPhrase 는 그 사람이 기울어 있는 쪽 그 자체입니다.
+            반대쪽을 지어내 견주지 마세요. "A 보다 B", "덜", "아닌", "반대로" 는 뜻을 뒤집습니다.
+            axisPhrase 에 " / " 가 있으면 한 축의 양 끝이라는 뜻입니다.
+            이때는 두 표현을 모두 그대로 쓰되 " / " 는 자연스러운 우리말로 이으세요.
+
+            숫자를 문장에 쓰지 마세요. evidence 는 근거일 뿐 문장에 옮기지 않습니다.
+            장르, 가수, 곡 제목, 감정, 성격도 언급하지 마세요.
+
+            summary 는 한 문장입니다. finding 을 축별로 나열하지 말고 하나의 취향으로 엮으세요.
             제공된 axisPhrase 중 하나 이상을 그대로 포함하고 160자를 넘지 마세요.
 
             각 narrative 는 finding 하나를 설명하며 그 finding 의 axisPhrase 를 그대로 포함해야 합니다.
-            type 이 CONSISTENT_BIAS 면 한쪽으로 꾸준히, BIAS 면 기울었지만 폭도 함께, DIVERSE 면 폭넓게 듣는다는 뜻입니다.
-            evidence 의 IQR 은 작을수록 모여 있고 클수록 퍼져 있다는 뜻입니다.
+            type 이 CONSISTENT_BIAS 면 그쪽으로 꾸준히, BIAS 면 그쪽으로 기울었지만 폭도 함께,
+            DIVERSE 면 양 끝을 폭넓게 듣는다는 뜻입니다.
 
-            sampleSize 가 30 미만이거나 reportLevel 이 INITIAL 이면 단정하지 말고 잠정적인 표현을 쓰세요.
+            sampleSize 가 30 미만이거나 reportLevel 이 INITIAL 이면 단정하지 말고 잠정적으로 쓰세요.
             narratives 는 findingId 와 정확히 대응해야 합니다.
             """;
 
@@ -89,7 +99,6 @@ public class GmsTasteClient {
                 "findings", findings.stream().map(finding -> Map.of(
                         "findingId", finding.id(),
                         "type", finding.type(),
-                        "direction", finding.direction(),
                         "evidence", finding.evidence(),
                         "axisPhrase", finding.axisPhrase())).toList());
         Map<String, Object> request = Map.of(

@@ -1532,6 +1532,29 @@ export class MapEngine {
     return i != null && this.subset[i] === 1;
   }
 
+  /**
+   * 곡 하나를 **이 자리에서 조용히 뺀다** (S15P21A405-544). 못 튼다고 판명된 곡에 쓴다.
+   *
+   * `setLayerSongs` 에 한 곡 짧은 목록을 다시 주는 길도 있지만 그러면 **겹 전환 연출이 통째로
+   * 다시 돈다** — 곡 하나 빠졌다고 지도가 모프하고 "상주 N곡" 안내까지 뜬다. 여기는 마스크
+   * 한 칸만 끄고 다시 그린다.
+   *
+   * 전환 중이면 **도착할 집합에서도** 뺀다. 안 그러면 전환이 끝나는 순간 그 별이 되살아난다.
+   *
+   * @returns 실제로 뺐으면 true. 이 겹에 없던 곡이면 false
+   */
+  hideSong(musicId: number): boolean {
+    const i = this.index.get(musicId);
+    if (i == null) return false;
+    const inAnim = this.anim != null && this.anim.subset[i] === 1;
+    if (this.subset[i] !== 1 && !inAnim) return false;
+    this.subset[i] = 0;
+    if (this.anim) this.anim.subset[i] = 0;
+    this.rebuildAliveIdx();
+    this.project();
+    return true;
+  }
+
   private centerMost() {
     let b = 0;
     let bd = 1e9;

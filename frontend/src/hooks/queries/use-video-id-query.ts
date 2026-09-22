@@ -1,6 +1,8 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS, PLAYBACK_BLOCKED, QUERY_KEYS, type PlaybackBlocked } from "@/constants";
+import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import type { VideoIdLookup } from "@/types";
 
 interface VideoIdResult {
@@ -42,12 +44,28 @@ export function useVideoIdQuery(musicId: number | null) {
  */
 export function usePlayability(musicId: number | null): { canPlay: boolean; blocked: PlaybackBlocked | null; retry: () => void } {
   const { status, data, refetch } = useVideoIdQuery(musicId);
+  const markUnplayable = useUnplayableStore((s) => s.markUnplayable);
 
   /** 막힌 이유가 다시 시도해볼 만한 것이면 버튼을 누를 때 한 번 더 물어본다 */
   const retry = () => void refetch();
 
+  /**
+   * **찾아봤는데 없는 곡은 화면에서 뺀다** (S15P21A405-544). 지도의 별과 검색 결과가 이 표시를
+   * 보고 그 곡을 지운다 — 눌러도 아무 일이 없는 별을 또 만나지 않게 하려는 것이다.
+   *
+   * **`notFound` 만이다.** `unsearched`(아직 안 찾아봄)와 조회 실패는 다시 물으면 채워질 수
+   * 있어서, 그걸 같이 숨기면 멀쩡한 곡을 버리게 된다.
+   *
+   * 렌더 중이 아니라 effect 에서 표시한다. 판정은 아래 분기 한 곳에만 두고 싶은데, 그 자리는
+   * 렌더 중이라 다른 컴포넌트의 상태를 건드릴 수 없다.
+   */
+  const noVideo = status === "success" && data.lookup === "notFound";
+  useEffect(() => {
+    if (noVideo && musicId != null) markUnplayable(musicId);
+  }, [noVideo, musicId, markUnplayable]);
+
   if (status === "error") return { canPlay: false, blocked: PLAYBACK_BLOCKED.lookupFailed, retry };
-  if (status === "success" && data.lookup === "notFound") return { canPlay: false, blocked: PLAYBACK_BLOCKED.noVideo, retry };
+  if (noVideo) return { canPlay: false, blocked: PLAYBACK_BLOCKED.noVideo, retry };
   if (status === "success" && data.lookup === "unsearched") return { canPlay: false, blocked: PLAYBACK_BLOCKED.notSearched, retry };
   return { canPlay: true, blocked: null, retry };
 }

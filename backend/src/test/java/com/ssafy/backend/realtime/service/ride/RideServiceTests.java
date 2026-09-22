@@ -40,6 +40,8 @@ import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.presence.UserDisplay;
+import com.ssafy.backend.realtime.dto.ride.RideRiderJoinedPayload;
 import com.ssafy.backend.realtime.dto.ride.RideRiderLeftPayload;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DisbandResult;
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.DismountResult;
@@ -58,6 +60,7 @@ import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.MountStat
 import com.ssafy.backend.realtime.repository.redis.RideRedisRepository.PanelSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.play.MusicPlayService;
+import com.ssafy.backend.realtime.service.user.UserDisplayService;
 import com.ssafy.backend.realtime.service.viewport.ViewportDeltaService;
 
 /** 따라가기 시작이 무엇을 어떤 순서로 하는지 검증한다. */
@@ -82,6 +85,7 @@ class RideServiceTests {
 	@Mock MeetingService meetingService;
 	@Mock ViewportDeltaService viewportDeltaService;
 	@Mock NearbyChangeService nearbyChangeService;
+	@Mock UserDisplayService userDisplayService;
 	@InjectMocks RideService service;
 
 	private final double[] location = location();
@@ -248,6 +252,66 @@ class RideServiceTests {
 		assertThatThrownBy(() -> service.mount(RIDER, CAPTAIN))
 				.isInstanceOfSatisfying(CustomException.class,
 						e -> assertThat(e.getErrorCode()).isEqualTo(expected));
+	}
+
+	/**
+	 * 인솔자가 인원수를 아는 길이 이것뿐이다.
+	 * 남들 화면에 나가는 인원수 알림은 인솔자 자리를 보는 사람들에게 가는 것이라 본인은 빠진다.
+	 */
+	@Test
+	@DisplayName("탈 때 인솔자에게 누가 탔는지 알린다")
+	void mountTellsCaptainWhoJoined() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(0L, 1L);
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(3);
+		when(userDisplayService.find(RIDER)).thenReturn(new UserDisplay("연희", null));
+
+		service.mount(RIDER, CAPTAIN);
+
+		verify(realtimeMessageService).sendToUser(
+				eq(CAPTAIN), eq(WebSocketDestination.QUEUE_PRESENCE),
+				eq(RealtimeMessageType.RIDE_RIDER_JOINED),
+				eq(new RideRiderJoinedPayload(RIDER, "연희", 3)));
+	}
+
+	/** 이름이 없는 사람도 탈 수 있다. 여기서 터지면 탑승 자체가 되돌려진다. */
+	@Test
+	@DisplayName("이름이 없어도 탑승 알림은 나간다")
+	void mountTellsCaptainEvenWithoutNickname() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(0L, 1L);
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(1);
+		when(userDisplayService.find(RIDER)).thenReturn(new UserDisplay(null, null));
+
+		service.mount(RIDER, CAPTAIN);
+
+		verify(realtimeMessageService).sendToUser(
+				eq(CAPTAIN), anyString(), eq(RealtimeMessageType.RIDE_RIDER_JOINED),
+				eq(new RideRiderJoinedPayload(RIDER, null, 1)));
+	}
+
+	/**
+	 * 알림이 실패해도 탑승은 이미 끝나 있다.
+	 * 여기서 예외가 올라가면 되돌리기가 돌아 멀쩡한 탑승이 취소된다.
+	 */
+	@Test
+	@DisplayName("탑승 알림이 실패해도 따라가기는 성립한다")
+	void mountSurvivesFailedJoinNotice() {
+		givenStanding(20999L, 1);
+		givenMountOk();
+		givenPlacement();
+		givenPlaybackAt(0L, 1L);
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(1);
+		when(userDisplayService.find(RIDER)).thenThrow(new IllegalStateException("이름 조회 실패"));
+
+		RideResponse response = service.mount(RIDER, CAPTAIN);
+
+		assertThat(response.captainEmail()).isEqualTo(CAPTAIN);
+		verify(rideRedisRepository, never()).dismount(anyString(), anyString());
 	}
 
 	private void givenStanding(Long musicId, Integer layer) {

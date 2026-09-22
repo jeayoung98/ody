@@ -171,6 +171,30 @@ class RidePayloadContractTests {
 	}
 
 	@Test
+	@DisplayName("RIDE_RIDER_JOINED payload 의 JSON 키가 계약과 같다")
+	void rideRiderJoinedPayloadKeys() throws Exception {
+		RideRiderJoinedPayload payload = new RideRiderJoinedPayload("rider@x.com", "연희", 3);
+
+		String json = objectMapper.writeValueAsString(payload);
+
+		assertThat(objectMapper.readTree(json).fieldNames())
+				.toIterable()
+				.containsExactlyInAnyOrder("email", "nickname", "riderCount");
+		assertThat(objectMapper.readTree(json).get("riderCount").asInt()).isEqualTo(3);
+	}
+
+	/** 이름은 비어 있을 수 있다. 키까지 빠지면 받는 쪽이 모양을 가늠할 수 없다. */
+	@Test
+	@DisplayName("이름이 없어도 키는 그대로 나간다")
+	void joinedKeepsNicknameKeyWhenEmpty() throws Exception {
+		String json = objectMapper.writeValueAsString(
+				new RideRiderJoinedPayload("rider@x.com", null, 1));
+
+		assertThat(objectMapper.readTree(json).has("nickname")).isTrue();
+		assertThat(objectMapper.readTree(json).get("nickname").isNull()).isTrue();
+	}
+
+	@Test
 	@DisplayName("RIDE_RIDER_LEFT payload 의 JSON 키가 계약과 같다")
 	void rideRiderLeftPayloadKeys() throws Exception {
 		RideRiderLeftPayload payload = new RideRiderLeftPayload("rider@x.com", 3);

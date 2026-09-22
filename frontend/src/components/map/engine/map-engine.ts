@@ -3,6 +3,7 @@ import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
+import { shouldRestartFollow } from "./follow-restart";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -364,6 +365,11 @@ export class MapEngine {
    */
   myRiders = 0;
   follow: FollowState | null = null;
+  /**
+   * `follow` 를 건 시점의 겹. 좌표계가 겹마다 달라서, 겹이 바뀌면 다시 걸어야 한다
+   * (S15P21A405-559). `follow` 안에 두지 않은 이유는 그 타입이 명세가 정한 모양이기 때문이다.
+   */
+  private followLayer = -1;
   onFollowEnd: ((reason: string) => void) | null = null;
   onArrive: ((musicId: number) => void) | null = null;
   /** 인솔자가 보고 있는 곡이 바뀌면 알린다 (우측 패널에 상세를 띄우기 위해) */
@@ -2491,6 +2497,19 @@ export class MapEngine {
    */
   startFollow(leader: NearbyUser, driven = false) {
     if (!this.index.has(leader.musicId)) return;
+    /**
+     * **이미 같은 사람을 같은 겹에서 따라가는 중이면 다시 걸지 않는다** (S15P21A405-559).
+     *
+     * 이 메서드는 진행 중인 우주선 비행(`mv`)을 지우고 처음부터 세운다. 그런데 부르는 쪽은
+     * 인솔자의 곡이 바뀔 때마다 다시 부르고 있었다 — `rideTo` 가 방금 건 비행이 곧바로
+     * 취소돼서 **화면만 옮겨가고 우주선은 제자리에 멈춰 있었다.**
+     *
+     * 곡을 옮기는 것은 `rideTo` 가 맡는 일이다. 여기서는 표시 정보만 갱신하고 비켜난다.
+     */
+    if (!shouldRestartFollow(this.follow ? { email: this.follow.leader.email, layer: this.followLayer } : null, { email: leader.email, layer: this.layer })) {
+      this.follow!.leader = { ...this.follow!.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      return;
+    }
     this.travelToId = null;
     this.camTarget = null;
     // 별자리는 다른 활동이므로 함께 사라진다 (ACT-01)
@@ -2509,6 +2528,7 @@ export class MapEngine {
       mv: null,
       visited: [],
     };
+    this.followLayer = this.layer;
     // 서버가 몰 때는 우측 패널을 소켓의 `RIDE_PANEL` 이 정한다 — 여기서 열면 그걸 덮어쓴다
     if (!driven) this.onLeaderViewingChange?.(viewingMusicId);
   }

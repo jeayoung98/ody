@@ -4,6 +4,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import java.util.ArrayList;
+import java.util.List;
+
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
@@ -244,5 +247,57 @@ class RidePayloadContractTests {
 				.containsExactlyInAnyOrder(
 						"captainEmail", "reason", "musicId", "layer", "x", "y", "cellX", "cellY");
 		assertThat(objectMapper.readTree(json).get("reason").asText()).isEqualTo("CAPTAIN_LEFT");
+	}
+
+	/**
+	 * 사유가 둘이 됐다. 받는 쪽이 문구를 가르는 근거가 이 글자라, 철자가 바뀌면 조용히 옛 문구가 나간다.
+	 * 키가 아니라 값을 보는 이유다.
+	 */
+	@Test
+	@DisplayName("인솔자가 스스로 끝내면 사유가 CAPTAIN_ENDED 로 나간다")
+	void captainEndedReasonKeepsItsName() throws Exception {
+		RideEndedPayload payload = new RideEndedPayload(
+				"captain@example.com", RideEndReason.CAPTAIN_ENDED,
+				4927L, 3, -1.2542783, 1.2062433, 7, 5);
+
+		String json = objectMapper.writeValueAsString(payload);
+
+		assertThat(objectMapper.readTree(json).get("reason").asText()).isEqualTo("CAPTAIN_ENDED");
+	}
+
+	/** 사유가 늘어도 나머지 칸은 그대로여야 한다. 받는 쪽은 두 경우에 같은 처리를 한다. */
+	@Test
+	@DisplayName("사유가 달라도 나머지 키는 같다")
+	void bothReasonsCarryTheSameFields() throws Exception {
+		RideEndedPayload left = new RideEndedPayload(
+				"captain@example.com", RideEndReason.CAPTAIN_LEFT,
+				4927L, 3, -1.2542783, 1.2062433, 7, 5);
+		RideEndedPayload ended = new RideEndedPayload(
+				"captain@example.com", RideEndReason.CAPTAIN_ENDED,
+				4927L, 3, -1.2542783, 1.2062433, 7, 5);
+
+		List<String> leftKeys = new ArrayList<>();
+		objectMapper.readTree(objectMapper.writeValueAsString(left)).fieldNames().forEachRemaining(leftKeys::add);
+
+		assertThat(objectMapper.readTree(objectMapper.writeValueAsString(ended)).fieldNames())
+				.toIterable()
+				.containsExactlyInAnyOrderElementsOf(leftKeys);
+	}
+
+	/**
+	 * 해체 응답의 값은 전부 내려간 사람들 이야기다. 인솔자 자신은 안 움직인다.
+	 * 하차 응답과 필드 이름이 겹쳐서, 그쪽처럼 자리 값이 붙는 것을 막아 둔다.
+	 */
+	@Test
+	@DisplayName("해체 응답의 JSON 키가 계약과 같다")
+	void disbandResponseKeys() throws Exception {
+		DisbandResponse response = new DisbandResponse(3, 4927L, 3);
+
+		String json = objectMapper.writeValueAsString(response);
+
+		assertThat(objectMapper.readTree(json).fieldNames())
+				.toIterable()
+				.containsExactlyInAnyOrder("riderCount", "musicId", "layer");
+		assertThat(objectMapper.readTree(json).get("riderCount").asInt()).isEqualTo(3);
 	}
 }

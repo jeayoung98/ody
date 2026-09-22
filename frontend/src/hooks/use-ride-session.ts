@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS, RIDE_DROPPED, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
 import { endRide, playFrom, positionNow, reportSongEnd, syncPlayback } from "@/lib/realtime/ride";
 import { onTrackChange } from "@/lib/realtime/ride-record";
@@ -52,6 +53,13 @@ export function useRideSession(): void {
       ride.setSongRecord(next.playHistoryId, next.songStartedAt);
 
       ride.setLeaderMusicId(p.musicId);
+      /**
+       * **겹도 같이 따라간다** (S15P21A405-560). 알림이 `layer` 를 주는데 버리고 있었다 —
+       * 인솔자가 파고들면 나만 제자리에 남고, 그 겹에 없는 곡을 가리켜 우주선까지 사라졌다.
+       * 자리를 옮기기 **전에** 부른다. 겹이 바뀌면 좌표계가 달라지기 때문이다.
+       */
+      const toLayer = rideLayerTarget(useMapStore.getState().layer, p.layer);
+      if (toLayer != null) getMapEngine()?.rideToLayer(toLayer);
       useMapStore.getState().setMyMusicId(p.musicId);
       // 우주선이 이전 곡에서 새 곡으로 날아온다. 재생은 아래에서 따로 건다
       getMapEngine()?.rideTo(p.musicId);

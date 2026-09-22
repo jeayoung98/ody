@@ -518,4 +518,29 @@
   [data-sheet]:not([data-snap="3"]) [data-cover-window] {
     height: 0 !important;
   }
+
+  /*
+   * **1 단은 틈을 줄인다** (S15P21A405-547).
+   *
+   * 1 단에 걸려야 하는 것은 머리글(곡 상세·신고·닫기)과 제목·가수, 그리고 바로 누를 ＋·▶
+   * 까지다. 그런데 머리글 아래 여백(12) + 본문 위 여백(14) 이 26px 을 먹어서, 112px 안에서
+   * **버튼과 가수 줄이 6~8px 씩 잘린 채 걸렸다** (실측). 커버 창을 접어도 그 여백은 남는다.
+   *
+   * 3 단에서는 그 여백이 커버 사진과 글 사이의 숨 쉴 자리라 그대로 둔다 — 1 단에서만 줄인다.
+   */
+  [data-sheet][data-snap="1"] header {
+    padding-bottom: 4px;
+  }
+  [data-sheet][data-snap="1"] .scroll-quiet,
+  [data-sheet][data-snap="1"] [data-cover-window] + div {
+    padding-top: 4px;
+  }
+  /*
+   * 앨범 줄과 칩 줄은 그 아래다 — 남겨 두면 줄 머리만 몇 px 걸쳐서 **잘린 채** 보인다.
+   * 접으면 1 단은 제목·가수와 ＋·▶ 로 딱 끝나고, 둘 다 2 단에서 돌아온다.
+   */
+  [data-sheet][data-snap="1"] [data-sheet-album],
+  [data-sheet][data-snap="1"] [data-sheet-chips] {
+    display: none;
+  }
 }

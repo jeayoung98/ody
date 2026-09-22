@@ -159,7 +159,7 @@
    * 단이 둘에서 셋으로 늘어난 이유는 여는 자리를 가운데에 두기 위해서다 — 열자마자 지도를
    * 덮어 버리면 다음 별을 못 찾는다 (`use-panel-store.ts` 의 `SheetSnap`).
    */
-  --spacing-sheet-s1: 112px;
+  --spacing-sheet-s1: 120px;
   --spacing-sheet-s2: 238px;
 
   /* ---------- 안전 영역 (S15P21A405-420) ---------- */

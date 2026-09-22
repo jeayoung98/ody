@@ -45,7 +45,16 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
             className="font-display text-3xl leading-[1.2] font-semibold text-ink drop-shadow-[0_2px_8px_rgba(4,6,13,.85)]"
           />
           <MarqueeText text={music.artist ?? "Unknown"} className="text-sm text-ink-2 drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]" />
-          {music.album && <MarqueeText text={music.album} className="text-xs text-ink-3 drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]" />}
+          {/*
+            앨범 줄은 **1 단에서 접는다** (S15P21A405-547). 1 단에 걸리는 것은 "무슨 곡인지와
+            바로 누를 것" 까지다 — 제목·가수·＋·▶. 앨범까지 넣으면 한 줄이 반쯤 잘린 채
+            걸린다. 접는 자리는 `globals.css` 의 `[data-snap="1"]` 규칙이다.
+          */}
+          {music.album && (
+            <span data-sheet-album>
+              <MarqueeText text={music.album} className="text-xs text-ink-3 drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]" />
+            </span>
+          )}
         </div>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
         {features.playlist && (
@@ -62,7 +71,12 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         먼저 말하고**(시계 = 곡 길이, 달력 = 발매년도, ▶ = 누적 재생), 마우스를 올리면 이름이
         글자로 뜬다 (S15P21A405-384). 장르·무드는 값 자체가 이름이라 아이콘이 필요 없다.
       */}
-      <div className="flex flex-wrap gap-[5px]">
+      {/*
+        `data-sheet-chips` 는 **1 단에서 접으려고** 단 표식이다 (S15P21A405-547). 1 단에 걸리는
+        것은 제목·가수와 ＋·▶ 까지고, 칩은 2 단부터다 — 안 접으면 줄 머리만 8px 걸쳐서 잘린
+        채 보인다 (실측). 접는 규칙은 `globals.css` 의 `[data-snap="1"]` 에 있다.
+      */}
+      <div data-sheet-chips className="flex flex-wrap gap-[5px]">
         {/* 장르 칩은 걷어냈다 — 이름을 읽을 원천이 없어졌다 (S15P21A405-490, A-47) */}
         {(music.moods ?? []).map((m) => (
           <Tag key={m} tone="teal" title="무드">

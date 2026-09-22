@@ -32,7 +32,21 @@ export const REALTIME = {
     viewport: "/app/presence/viewport",
     viewportClose: "/app/presence/viewport/close",
     nearbyClose: "/app/nearby/close",
+    /**
+     * 따라가기 — **인솔자만 보낸다** (S15P21A405-530). 동승자가 보내면 서버가
+     * `RIDE_NOT_CAPTAIN` 으로 거부한다. 탑승·하차 자체는 소켓이 아니라 REST 다.
+     */
+    ridePlayback: "/app/ride/playback",
+    ridePanel: "/app/ride/panel",
   },
+
+  /**
+   * 인솔자가 재생바를 끌 때의 발행 간격 제한(ms) (명세 D10). 3초 드래그에 6건쯤 나간다.
+   * **마지막 위치는 반드시 나간다** — 안 그러면 동승자가 끌다 만 자리에 멈춘다.
+   */
+  rideSeekThrottleMs: 500,
+  /** 한 인솔자를 따라갈 수 있는 최대 인원 (2차 명세 §10). 넘으면 `RIDE_FULL` 이다 */
+  maxRiders: 20,
   /**
    * heartbeat 주기. 45초를 넘기면 남들 화면에서 내가 사라진다.
    *
@@ -62,6 +76,31 @@ export const REALTIME = {
  * 30분은 우리 곡 길이 분포에서 넉넉한 상한이다 — 이보다 긴 재생은 방치로 본다.
  */
 export const PLAY_END = { maxMs: 30 * 60 * 1000 } as const;
+
+/**
+ * 겹 사용자 전체 조회 (S15P21A405-537, BACKEND-NOTES §5).
+ *
+ * **밀어 주는 이벤트가 없어서 주기로 다시 묻는다.** 백엔드가 제안한 10초를 그대로 쓴다 —
+ * 격자 전체를 파이프라인 한 번으로 읽는 조회라 이 간격에서 부담이 되지 않는다고 적혀 있다.
+ * 소켓 델타가 생기면(백엔드 후속) 이 폴링은 없어진다.
+ */
+export const LAYER_USERS = {
+  pollMs: 10_000,
+  /**
+   * 주변 사람 패널에 넣을 **"가깝다" 의 경계** — 내 곡에서 `k` 번째로 가까운 곡까지의 거리
+   * (S15P21A405-541). 한 겹에 곡이 1,000개(`LAYER_SONG_COUNT`) 이므로 대략 가까운 쪽 8% 다.
+   *
+   * PC 값에 고정 숫자를 안 쓰는 이유는 `lib/nearby-from-layer.ts` 의 `radiusFromNeighbors` 에
+   * 적어 뒀다 — 겹마다 축의 퍼짐이 달라서 같은 숫자가 겹마다 다른 넓이를 뜻한다.
+   */
+  neighborK: 80,
+  /**
+   * 겹 조회에서 패널에 넣을 최대 인원. 서버 주변 사람 응답이 최대 10명
+   * (`realtime.nearby.neighbor-k`) 이라 그와 비슷한 규모로 맞춘다 — 인기 구역에서 수십 줄이
+   * 쌓이면 레이더도 목록도 못 읽는다.
+   */
+  maxInPanel: 12,
+} as const;
 
 /**
  * 주변 사람 레이더 (S15P21A405-496).

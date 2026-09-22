@@ -88,3 +88,46 @@ test("커버 자리는 앨범 ID 있는 곡부터, 그다음 재생수, 그다�
   assert.ok(order.indexOf("b") < order.indexOf("c"), "재생수 9 라도 앨범 ID 없으면 뒤로 간다");
   assert.ok(order.indexOf("b") < order.indexOf("d"), "동점이면 받은 순서를 지킨다");
 });
+
+// ── 지도 위 사람에게도 같은 규칙을 쓴다 (S15P21A405-542) ───────────────────
+// 사람은 비슷한 곡끼리 붙어 서는데(그게 이 지도의 원리다), 예전에는 받은 순서대로 집어서
+// 한쪽에 몰린 무리가 자리를 다 차지하고 그 밖이 비어 보였다.
+
+test("지난 프레임에 서 있던 사람이 같은 칸을 다투면 이긴다 — 밀 때 안 깜빡인다", () => {
+  const { keptFirst } = require("../src/components/map/render/cover-spread.ts");
+  const cands = [{ id: "new1" }, { id: "old" }, { id: "new2" }];
+  const order = keptFirst(cands, (c) => c.id === "old");
+
+  assert.deepEqual(order, [1, 0, 2], "서 있던 사람이 맨 앞, 나머지는 원래 순서 그대로");
+  // 한 칸에 셋이 다 들어가는 경우 — spreadOrder 는 먼저 만난 것을 그 칸 주인으로 삼는다
+  const at = () => ({ x: 30, y: 30 });
+  const picked = spreadOrder(order, at, RECT, 12);
+  assert.equal(picked[0], 1, "칸 주인이 그대로 'old' 여야 자리가 안 바뀐다");
+});
+
+test("한쪽에 몰린 사람 20명을 뽑아도 반대쪽이 통째로 비지 않는다", () => {
+  // 왼쪽 위에 40명, 오른쪽 아래에 4명. 예전 규칙이면 앞 20명이 전부 왼쪽 위였다
+  const pts = [];
+  for (let i = 0; i < 40; i++) pts.push({ x: 40 + (i % 8) * 18, y: 40 + Math.floor(i / 8) * 18 });
+  for (let i = 0; i < 4; i++) pts.push({ x: 1300 + i * 20, y: 760 });
+
+  const order = keptFirstIdentity(pts.length);
+  const picked = spreadOrder(order, (i) => pts[i], RECT, 20).slice(0, 20);
+  const rightBottom = picked.filter((i) => i >= 40).length;
+
+  assert.ok(rightBottom > 0, "오른쪽 아래 사람이 한 명도 안 뽑혔다 — 몰린 쪽이 다 차지했다");
+  /**
+   * **네 명이 다 뽑히지는 않는다.** 그 넷이 든 칸은 두 개뿐이고(1600x900 을 20칸으로 나누면
+   * 한 칸이 266x225 다) 칸마다 하나씩만 앞세우기 때문이다. 한 칸에 몰린 나머지는 뒤로 밀리고,
+   * 자리가 남을 때만 들어온다 — 그게 이 함수가 하는 일이고 여기서 고칠 것이 아니다.
+   */
+  assert.equal(rightBottom, 2, "떨어진 무리가 든 칸 수만큼은 반드시 뽑힌다");
+  const leftTop = picked.filter((i) => i < 40).length;
+  assert.ok(leftTop < 40, "몰린 쪽이 상한을 다 먹으면 안 된다");
+});
+
+/** 아직 아무도 안 서 있던 첫 프레임 */
+function keptFirstIdentity(n) {
+  const { keptFirst } = require("../src/components/map/render/cover-spread.ts");
+  return keptFirst(Array.from({ length: n }, (_, i) => i), () => false);
+}

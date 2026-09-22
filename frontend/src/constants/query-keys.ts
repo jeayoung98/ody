@@ -75,6 +75,8 @@ export const QUERY_KEYS = {
    */
   realtime: {
     nearby: ["realtime", "nearby"] as const,
+    /** 겹이 바뀌면 다른 목록이다 — 키에 겹을 넣어야 옮길 때 이전 겹 사람이 잠깐 남지 않는다 */
+    layerUsers: (layer: number) => ["realtime", "layerUsers", layer] as const,
   },
 
 } as const;

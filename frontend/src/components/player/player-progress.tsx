@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format";
+import { publishSeek } from "@/lib/realtime/ride";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { getPlayer } from "./player-registry";
 import WaveformBars from "./waveform-bars";
@@ -101,6 +102,12 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
     if (!seekable || scrub == null) return;
     track("play_seeked", { music_id: musicId, from_sec: Math.round(clock.t), to_sec: Math.round(next) });
     getPlayer()?.seekTo(next, true);
+    /**
+     * 따라오는 사람들에게 같은 자리로 옮기라고 알린다 (2차 실시간 명세 §5.1, S15P21A405-530).
+     * **놓았을 때 한 번만 나간다** — 끄는 내내 보내면 그대로 다 전달된다. 여기가 커밋 지점이라
+     * 이미 한 번이지만, 키보드 화살표 연타처럼 잦은 커밋도 있어 발행 간격을 한 겹 더 둔다.
+     */
+    publishSeek(Math.round(next * 1000));
     pendingSeek.current = { t: next, until: Date.now() + SEEK_SETTLE_MS };
     setClock((c) => ({ ...c, t: next }));
     setScrub(null);

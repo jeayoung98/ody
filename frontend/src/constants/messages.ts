@@ -64,3 +64,33 @@ export type PlaybackBlocked = (typeof PLAYBACK_BLOCKED)[keyof typeof PLAYBACK_BL
 
 /** 못 트는 곡을 자동으로 넘겼을 때 (S15P21A405-364). 조용히 넘기면 곡이 사라진 것으로 보인다 */
 export const SKIPPED_UNPLAYABLE = "재생할 수 없는 곡을 건너뛰었어요";
+
+/**
+ * 따라가기(탑승)가 거부됐을 때의 안내 (2차 실시간 명세 §3.3, S15P21A405-530).
+ *
+ * **사유마다 사용자가 할 일이 다르다.** 잠시 뒤 다시 하면 되는 것과 아무리 해도 안 되는 것을
+ * 한 문구로 뭉치면 "다시 해 보라" 는 말이 빈말이 된다.
+ *
+ * `RIDE_NOT_RIDING` 은 여기 없다 — **조용히 넘기는** 사유다. 이미 `RIDE_ENDED` 로 끝나 있어서
+ * 내릴 것이 없었던 경우이고, 사용자 입장에서는 눌러서 내려진 것이 맞다.
+ */
+export const RIDE_REJECTED = {
+  RIDE_SELF: "자기 자신은 따라갈 수 없어요",
+  RIDE_CAPTAIN_INACTIVE: "지금은 따라갈 수 없는 사용자예요",
+  RIDE_ALREADY_RIDING: "이미 따라가는 중이에요. 먼저 내려 주세요",
+  RIDE_CHAIN_FORBIDDEN: "따라가기는 한 단계까지만 가능해요",
+  RIDE_FULL: "따라가는 인원이 가득 찼어요",
+  RIDE_NOT_CAPTAIN: "따라가는 중에는 할 수 없어요. 먼저 내려 주세요",
+  RIDE_STALE: "상태가 바뀌었어요. 화면을 새로 고친 뒤 다시 시도해 주세요",
+  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  UNKNOWN: "따라가기를 시작하지 못했어요",
+} as const;
+
+/** 인솔자가 사라져 따라가기가 끝났다 (§4.3). 조용히 끊으면 왜 멈췄는지 알 수 없다 */
+export const RIDE_ENDED_BY_CAPTAIN = (who: string) => `${who} 님이 떠나 따라가기가 끝났어요`;
+
+/** 재연결·새 탭으로 서버 쪽 탑승이 끊겼다 (§8.3). **자동으로 다시 태우지 않는다** */
+export const RIDE_DROPPED = "따라가기가 끊겼어요. 다시 눌러 주세요";
+
+/** 따라가는 동안 막힌 조작을 눌렀다 (§6). 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다 */
+export const RIDING_LOCKED = "따라가는 중에는 직접 고를 수 없어요. 하차하면 다시 돼요";

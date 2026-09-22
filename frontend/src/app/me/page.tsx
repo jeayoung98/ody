@@ -7,7 +7,7 @@ import FeedPanel from "@/components/panels/feed/feed-panel";
  */
 export default function MePage() {
   return (
-    <PanelScreen>
+    <PanelScreen panel="feed">
       <FeedPanel />
     </PanelScreen>
   );

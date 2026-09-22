@@ -175,7 +175,7 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | A-1-1 | `MapPoint.genreId` | — | 장르를 모르는 곡은 **무장르 인덱스(10)** 로 내려준다. 음수 금지 | 실데이터는 662만 중 6.6만(1.0%)만 장르가 있다. 0 으로 채우면 지도가 전부 "앰비언트" 색이 된다. 프론트는 `GENRE_NAMES[10] = "무장르"` · `GENRE_COLORS[10] = rgb(126,138,158)` 회청색을 쓰고, 백엔드 응답에 genreId 가 없을 때의 fallback 도 10 이다 (`lib/backend.ts` `toMapPoint`). **2026-09-12 BE 문의 ↔ FE 확정.** 멜론 코드 29종 → 10색 대응표는 **보류** (A-1-2) | 확정 (프론트 반영 완료 · **배포는 아직 0** → 백엔드 `genreIdOf` 교체 대기) |
 | A-1-2 | 장르 체계 (멜론 대분류 29종 ↔ FE `GENRE_NAMES` 10종) | — | 29종을 10종으로 접는 표, 또는 `GENRE_NAMES` 를 29종으로 늘리기 | 두 체계가 서로 다르다 — 멜론은 록/메탈을 한 코드로 묶는데 FE 는 `록`·`메탈` 이 따로고, 멜론의 발라드·댄스·트로트·OST·국악·인디에 대응하는 FE 항목이 없다. **어느 쪽에 맞출지 정해지지 않아 보류** (2026-09-12). 그동안 장르가 붙은 1.0% 도 무장르(10)로 내려도 지도는 깨지지 않는다 | **보류** (팀 결정 대기) |
 | A-2 | `GET /api/map/layers/{layer}/representatives` | layer | `{ layer, musicIds[] }` | 레이어마다 **다른 대표곡**을 앨범 커버로 띄운다. 선별 기준은 백엔드가 정함 | 협의 전 |
-| A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | 협의 전 |
+| A-3 | ~~`GET /api/users/nearby?layer={n}`~~ → **`GET /api/realtime/layers/{layer}/users`** | `layer` (0-based, 경로) | `{ layer, groups[] }` — `groups` 모양이 소켓 `VIEWPORT_SNAPSHOT` 의 것과 같다 | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다 (SOCIAL-01). 경로·응답이 요청과 다르게 구현됐다 | ✅ **구현·연동 완료** (백엔드 S15P21A405-533 / 프론트 S15P21A405-537, 2026-09-22). 상세는 아래 §6 |
 | A-4 | `NearbyUser` 응답 | — | `viewingMusicId` **추가 필요** | 따라가기 시 좌표 두 개가 필요하다: `musicId`=재생 중(우주선 위치), `viewingMusicId`=인솔자가 보고 있는 상세 곡(뷰포트·우측 패널 기준) (SOCIAL-07) | 협의 전 |
 | A-5 | `GET /api/music/journey?start=&end=` | 두 곡 ID | `{musicCnt, totalDuration, path:[{step, …MusicDetail}]}` | **16차원 임베딩 거리 기준** 경로 (PATH-01). 프론트가 기대하던 `/api/journeys/route` + `JourneyRoute` 와 경로·형태가 다르다. **`path[].location`(pc1~16) 이 반드시 채워져 있어야 한다** — 경로 곡은 지도 상주 집합 밖일 수 있어서 프론트가 좌표를 알 길이 이것뿐이고, 비면 별자리(PATH-01)가 그려지지 않는다 (S15P21A405-264) | ✅ 구현·도달 가능 · 프론트가 훅에서 변환해 반영 완료 (2026-09-12) |
 | A-6 | `GET /api/map/nearby/{musicId}` | musicId | `{ center, neighbors[10] }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10) | 협의 전 |
@@ -218,7 +218,7 @@ GET /api/playlist/detail?playlistId=1                500  INTERNAL_SERVER_ERROR
 | --- | --- | --- | --- |
 | A-33 | `GET /api/music/detail` 응답에 **발매년도가 없다** | `id` | 기존 필드 + `releaseYear` (또는 발매일) | 곡 상세 제목 아래 칩 줄에 발매년도를 넣기로 했다 (SONG-02, S15P21A405-384). ERD 에는 있는 값인데 상세 응답에 안 실려 프론트는 `toMusic` 에서 `releaseYear: null` 로 못 박고 있다(`lib/backend.ts`). 칩은 이미 붙여 뒀고 값이 오면 그대로 뜬다 — **지금은 영영 안 뜬다.** BPM·곡 길이·누적 재생은 잘 온다 | 협의 전 — BE 요청 필요 |
 | A-34 | ~~비 ASCII(한글) 닉네임을 거부한다~~ **재현되지 않음 — 취소** | `PATCH /api/user/profile` · `GET /api/users/nickname-available` | — | 2026-09-18 15:1x 에 한글 닉네임이 `PATCH /api/user/profile` 에서 `400 INVALID_INPUT`, 중복확인에서 500 으로 보여 검증 정규식이 ASCII 전용이라고 적었다. **같은 날 16:0x 재확인 결과 전부 정상이다**: `별하나` 저장 200, `테스트닉`·`별하나둘` 중복확인 200. 그 사이에 user 테이블을 타는 엔드포인트가 전부 500 이 되는 장애가 있었으므로(그때는 `/api/music/major` 까지 500), **처음 관찰은 그 장애 구간에 걸린 것으로 본다.** 백엔드 쪽에 할 일 없음 — 기록만 남긴다. 다시 보이면 이 항목을 되살린다 | 취소 (2026-09-18 재확인) |
-| A-35 | **마이페이지·프로필에 필요한 값이 배포 API 에 없다** | `GET /api/user/detail?email=` | 지금: email·name·nickname·isPublic·tutorialCompleted·lastActiveAt·createdAt·imageUrl·followerCnt·followingCnt·isFollowing·isMe | 프론트 `UserProfile`(USER-02/04) 이 쓰는 값 중 **다음이 아예 없다**: 지금 듣는 곡(`nowPlaying`), 나와 만난 횟수(`meetingCount`), 따라가는 대상(`followingTarget`), 대시보드 통계(탐험한 곡 수·발견한 곡 수·선호 분위기), 온라인 여부. **팔로우·반응 API 자체도 배포 스펙 34개 경로에 없다** (`/api/user/{email}/follow` 계열). 2026-09-18 실연동 때 목으로 채우지 않고 **빈 값으로 뒀다** — 목을 섞으면 실데이터인 줄 알고 보게 된다. 그래서 지금 마이페이지 대시보드는 0 으로 보인다. 온라인 여부만 `lastActiveAt` 이 5분 이내면 접속 중으로 **가늠해서** 쓴다(`toUserProfile`). 소켓 접속자 목록이 생기면 그걸로 바꾼다. `updatedAt` 도 응답에 없어서 프론트 타입을 nullable 로 바꿨다 | 요청됨 (2026-09-18, S15P21A405-462) |
+| A-35 | **마이페이지·프로필에 필요한 값이 배포 API 에 없다** | `GET /api/user/detail?email=` | 지금: email·name·nickname·isPublic·tutorialCompleted·lastActiveAt·createdAt·imageUrl·followerCnt·followingCnt·isFollowing·isMe | 프론트 `UserProfile`(USER-02/04) 이 쓰는 값 중 **다음이 아예 없다**: 지금 듣는 곡(`nowPlaying`), 나와 만난 횟수(`meetingCount`), 따라가는 대상(`followingTarget`), 대시보드 통계(탐험한 곡 수·발견한 곡 수·선호 분위기), 온라인 여부. **팔로우·반응 API 자체도 배포 스펙 34개 경로에 없다** (`/api/user/{email}/follow` 계열). 2026-09-18 실연동 때 목으로 채우지 않고 **빈 값으로 뒀다** — 목을 섞으면 실데이터인 줄 알고 보게 된다. 그래서 지금 마이페이지 대시보드는 0 으로 보인다. 온라인 여부는 **해소됐다 (2026-09-22)** — `GET /api/user/detail` 과 `GET /api/user/follow/list` 에 `isOnline` 이 생겼다(배포 스웨거에서 확인). 소켓 생존 기준(45초 수명·15초 갱신)이고, `lastActiveAt` 은 **로그인 시각**이라 다른 값이다. 5분 창 추정은 걷어냈다 (S15P21A405-545). `updatedAt` 도 응답에 없어서 프론트 타입을 nullable 로 바꿨다 | 요청됨 (2026-09-18, S15P21A405-462) |
 | A-36 | **화면은 있는데 배포 API 에 아예 없는 기능들** | — | — | 2026-09-18 배포 스펙 34개 경로를 전수 대조한 결과, 프론트 화면·훅·BFF 라우트가 다 있는데 **백엔드에 대응 경로가 없는 것**이 아래다. **(1) 플리 좋아요** — 토글도 `좋아요한 플리 목록`도 없다. 마이페이지의 그 섹션은 지금 빈 목록이고, 좋아요 버튼은 501 `NOT_IMPLEMENTED` 로 실패한다(목으로 켜 두면 새로고침 때 꺼져서 '가끔 저장이 안 되는' 고장으로 보인다). **(2) 플리 무드 태그·소유자·생성/수정 시각** — `PlaylistDetailResponse`·`PlaylistSearchResponse` 에 없다. 소유자가 없으니 `isMine` 이 늘 false 라 남의 플리와 내 플리를 구분하지 못한다. **(3) 차트(인기 플리·유저 랭킹) (4) 주변 사용자 (5) 따라가기 (6) 반응 (7) 재생 기록(play_history)** — 경로 자체가 없다. 이 여섯은 **목을 남겨 뒀고** 라우트 첫 줄에 목이라고 못 박아 뒀다(`⚠ 목이다`). 화면이 이미 다 있어서 API 가 생기면 그 파일만 바꾸면 된다. **지표·시연에 이 값을 쓰면 안 된다.** 우선순위를 정해 주면 프론트는 그 순서로 붙인다 | 요청됨 (2026-09-18, S15P21A405-468) |
 | A-37 | **프로필 사진 삭제 API** | — | — | `PATCH /api/user/image` 는 `file` 이 필수라 **사진을 지우는 길이 없다.** 지금은 다른 사진으로 덮는 것만 된다. 예전 `PATCH /api/user/profile` 은 `imageUrl: null` 로 지울 수 있었고 화면도 "비우면 지워집니다" 로 안내했는데, 경로가 갈리면서 그 길이 없어져 프론트에서 그 안내를 걷어냈다. `DELETE /api/user/image` 든 `file` 없는 PATCH 든 지우는 방법이 하나 필요하다 | 요청됨 (2026-09-18, S15P21A405-474) |
 | A-26 | 사람×문항 중복 저장의 원자성 확인 | `origin/backend/dev`의 346 구현은 `findAnsweredId` 후 `upsert`이고 UNIQUE는 `(session_id, rank)`다. 여러 탭의 동시 제출에는 중복 행이 가능하다. 프론트는 단일 탭 중복 제출을 막고 동일 본문으로 재시도하지만 DB 수준 보장은 할 수 없다. 사람 식별/집계 또는 원자적 저장 방안 확인 필요 | 협의 전 — BE 요청 필요 |
@@ -427,3 +427,110 @@ S15P21A405-489 에서 실연동했다. 따라가기는 `RideRestController` 로 
 
 **요청 ①** `realtime` 프로파일을 배포에 켜주세요 — 지금은 실시간 세 기능과 탑승이 전부 안 됩니다.
 **요청 ②** 따라가기 소켓 이벤트(S-1·S-2)를 열어주세요. REST 탑승만으로는 기능이 성립하지 않습니다.
+
+---
+
+## 따라가기(탑승) 연동에서 나온 협의 항목 (S15P21A405-530, 2026-09-22)
+
+프론트가 2차 실시간 작업명세(`프론트_실시간_작업명세_2_따라가기`)대로 탑승·하차를 붙이면서
+**배포본(`origin/backend/jenkins`, `backend/dev` 와 realtime 디렉터리가 동일)을 직접 읽고 대조한**
+결과다. 배포 스웨거(`/api/v3/api-docs`)에 `POST·DELETE /api/realtime/ride` 가 실제로 있는 것도 확인했다.
+
+> **번호를 A-48 부터 시작한다.** 이 표의 마지막 행은 A-40 이지만 **A-41 ~ A-47 은 이미 코드가
+> 쓰고 있다** — 행만 안 적혔을 뿐이다 (A-41·A-43·A-44 는 플레이리스트 좋아요 S15P21A405-492,
+> A-47 은 곡 재생가능 여부). 비어 보인다고 다시 쓰면 한 번호가 두 가지를 가리킨다.
+> **행이 빠진 그 일곱 개는 누군가 채워야 한다** — 코드에서 `A-4` 로 grep 하면 나온다.
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-48 | **`snapshotSeq` 와 봉투 `seq` 는 다른 카운터다** | 명세 §4.1 은 "봉투 `seq ≤ snapshotSeq` 면 버린다" 고 적었는데, 코드에서 `snapshotSeq` 는 `HINCRBY ride:playback:{captain} snapshotSeq`(인솔자별 Redis 카운터)이고 봉투 `seq` 는 `webSocketSessionService.nextMessageSeq(userId)`(내 세션 카운터)다 | **그대로 하면 조용히 망가진다.** 한참 틀던 인솔자(`snapshotSeq` 가 큼)에 방금 접속한 사람(`seq` 가 1부터)이 타면 초반 `RIDE_PLAYBACK` 이 전부 버려지고 오류도 안 뜬다. 프론트는 이 비교를 **적용하지 않았다** — 순서 보장은 봉투 `seq` 단조성으로 이미 하고 있다 | **해소 (2026-09-22, 3차 계약 §1)** — 백엔드가 **명세 문구를 고쳤다.** `RIDE_PLAYBACK` 에 `snapshotSeq` 를 싣지 않기로 확정했고, 순서 보장은 봉투 `seq` 단조성이 한다. 프론트는 바꿀 것이 없었다 — 비교를 적용하지 않은 판단이 맞았다. `NearbySnapshot.snapshotSeq` 는 봉투 seq 가 맞으므로 그쪽 규칙(1차 §6.1)은 그대로다 |
+| A-49 | `RIDE_RIDER_JOINED` 가 없다 | `RealtimeMessageType` 에 `RIDE_RIDER_LEFT` 만 있다. 명세 §14 도 "아직 없는 것" 으로 적고 있다 | 인솔자가 **누가 탔는지 모른다.** 뷰포트·주변사람 목록은 요청자를 제외하므로 인솔자 자신의 `riderCount` 를 받을 길도 없다 | **해소 (2026-09-22, 3차 계약 §2)** — `RIDE_RIDER_JOINED {email, nickname, riderCount}` 추가. `origin/backend/jenkins` 에서 `RideRiderJoinedPayload` 확인. 탈 때는 처음 보는 사람이라 이름이 같이 온다. 프론트는 인원수 숨김 처리를 걷고 선장 쪽 표시를 붙였다 (S15P21A405-545) |
+| A-50 | 인원수 델타 네 종이 배포에 없다 | ~~명세 §2.3·§7.1 의 네 종이 배포 enum 에 없다~~ **들어왔다** (2026-09-22, `58a415eb` "따라오는 인원수를 밀어 주고 거부 사유를 코드로 나눈다"). `VIEWPORT_RIDER_COUNT` · `NEARBY_RIDER_COUNT` · `RIDE_VIEWPORT_RIDER_COUNT` 가 enum 에 생겼고 탑승·하차·이탈 세 곳에서 인솔자를 보는 사람들에게 나간다. `NEARBY_BULK_ENTER` 도 있다 | — | ✅ 해소 (2026-09-22) · 프론트는 이미 받는 코드가 있어 추가 작업 없음 |
+| A-51 | `RIDE_STALE` 오류 코드가 없다 | ~~`RealtimeErrorCode` 에 없다~~ **생겼다** (2026-09-22, `58a415eb`). 409 `RIDE_STALE` = "그 사이 상태가 어긋났다, 새로 고치면 풀린다", 접속이 없는 경우는 `PRESENCE_ERROR` 로 떼어 냈다 | — | ✅ 해소 (2026-09-22) · 프론트 `ApiErrorCode` 와 안내 문구 반영 완료 |
+| A-52 | 곡 상세 `tab` 값에 대응하는 UI 가 없다 | `RidePanelTab` 은 `nearby`·`info`·`playlists` 를 요구하는데 **우리 곡 상세에는 탭이 없다** (한 장짜리 스크롤) | 기능상 문제는 없다. 프론트는 열 때 `info` 로 고정해 싣고, 받는 쪽은 탭을 보지 않고 그 곡 상세를 연다 (명세 FR-035 의 `nearby` 폴백과 결과가 같다) | 프론트 결정 — 백엔드 조치 불필요 |
+| A-53 | 따라가는 동안의 **곡별** 재생시간을 보낼 수 없다 | `RIDE_TRACK` 으로 곡이 바뀌면 서버가 새 `play_history` 를 만들지만 **그 번호가 프론트에 오지 않는다** (명세 §8.7 이 같은 말을 한다) | 탑승 중 곡별 청취시간이 남지 않는다 | **해소 (2026-09-22, 3차 계약 §3)** — `RIDE_TRACK.playHistoryId: Long` 추가. `origin/backend/jenkins` 의 `RideTrackPayload` 에서 확인. 기록 번호를 못 받으면 `null` 로 오고 곡 알림 자체는 그대로 나간다 — 안 보내면 이미 서버에서 옮겨진 사람이 옛 곡에 남기 때문이다. 프론트는 앞 곡 종료를 보내고 번호를 갈아 끼운다 (S15P21A405-545) |
+
+### 백엔드에 드리는 요청 (2026-09-22 재배포 후 남은 것만)
+
+재배포본(`origin/backend/jenkins`)을 다시 읽고 대조했다. **다섯 개 중 둘은 해소됐다** —
+인원수 델타 네 종(A-50)과 `RIDE_STALE`(A-51)이 `58a415eb` 로 들어왔다. 아래 셋이 남았다.
+
+> **확인 필요: 실행 중인 빌드가 최신이 아닐 수 있다.** 배포 스웨거에 `58a415eb` 다음 커밋
+> (`a68c77d3`)이 추가한 `GET /api/realtime/layers/{layer}/users` 가 **안 보인다.** 그 컨트롤러는
+> `@Profile("realtime")` 이고 같은 프로파일의 `/api/realtime/ride` 는 보이므로, 빌드에 있었다면
+> 목록에 떠야 한다. 즉 지금 도는 서버는 `a68c77d3` 이전이다. A-50·A-51 은 그보다 앞선
+> `58a415eb` 라 포함됐을 가능성이 높지만, 그 커밋은 REST 경로를 안 건드려서 스웨거로는
+> 구분되지 않는다. **인프라에 지금 배포된 커밋 해시를 확인해 주시면 좋겠다.**
+
+**① 재생 스냅샷 번호와 소켓 메시지 번호를 견주지 않도록 정리해 주세요 (A-48). 가장 급합니다.**
+재배포본에서도 그대로다. `RidePlaybackPayload` 는 여전히 `event`·`state`·`positionMs`·`serverTs`
+넷뿐이고 `snapshotSeq` 가 없다. `snapshotSeq` 는 여전히 `HINCRBY ride:playback:{captain}`
+(인솔자별 Redis 값)이고, 봉투 `seq` 는 받는 사람 소켓의 메시지 번호다. 세는 대상이 다르다.
+그런데 `RideResponse` 주석은 아직 **"snapshotSeq 는 이 응답이 언제 것인지다. 이보다 작은 소켓
+이벤트는 버린다"** 라고 적혀 있다. 그대로 따르면 **오래 틀던 인솔자에게 방금 접속한 사람이 탈 때
+초반 `RIDE_PLAYBACK` 이 전부 버려진다.** 오류도 로그도 안 남는다.
+→ `RIDE_PLAYBACK` payload 에 `snapshotSeq` 를 실어 주시거나, 그 주석과 명세 §4.1 에서 비교를 빼 주세요.
+프론트는 위험해서 그 비교를 **적용하지 않았다.** 순서는 봉투 `seq` 단조성으로 이미 지킨다.
+
+**② 누가 탔는지 인솔자에게 알리는 이벤트를 만들어 주세요 (A-49).**
+`58a415eb` 가 인원수 알림을 넣었지만 **받는 쪽이 구경하는 사람들이다.**
+`ViewportDeltaService.sendRiderCount` 가 `receivers.remove(email)` 로 인솔자 본인을 빼고,
+`RideService.notifyRiderCount` 도 그 경로만 쓴다. `RIDE_RIDER_JOINED` 는 아직 `spec.md` 에만 있고
+enum 에는 없다. 결국 **인솔자는 지금도 자기를 몇 명이 따라오는지 알 수 없다** — 누가 내릴 때
+(`RIDE_RIDER_LEFT`) 처음으로 숫자를 받는다. 프론트는 틀린 숫자를 띄우지 않으려고 인원수를
+**아예 안 보여 주고** 있다.
+
+**③ 따라가는 동안 바뀐 곡의 재생 기록 번호를 내려 주세요 (A-53).**
+`RideTrackPayload` 도 그대로다 — `musicId`·`layer`·`x`·`y`·`playable`·`serverTs` 뿐이다.
+인솔자를 따라 곡이 바뀌면 서버가 새 `play_history` 를 만드는데 그 번호가 프론트에 오지 않아,
+**탑승 중에는 곡별로 얼마나 들었는지 남길 수 없다.** 지금은 탈 때 받은 번호 하나로
+탑승부터 하차까지를 한 건으로 볼 수밖에 없다.
+
+A-52(곡 상세 탭)는 **백엔드가 하실 일이 없다.** 프론트 처리 방식을 기록만 해 둔 항목이다.
+
+---
+
+## 겹 사용자 전체 조회 연동 (S15P21A405-537, 2026-09-22)
+
+백엔드가 `GET /api/realtime/layers/{layer}/users` 를 열었다 (S15P21A405-533). 그쪽 브랜치의
+BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리된 것과 남은 것을 적는다.
+
+### 붙인 방식
+
+- `/bff/realtime/layers/{layer}/users` 라우트가 중계한다. **호출자 토큰으로 부른다** — 응답에서
+  요청자 본인이 빠지므로 서비스 토큰으로 부르면 모두가 같은 사람을 뺀 목록을 받아 자기 자신이
+  지도에 두 번 그려진다.
+- 지도 사람 표시의 **바탕**이 이 조회다. 소켓 `VIEWPORT_*` · `RIDE_VIEWPORT_*` 델타는 그 위에
+  얹는다. 합치는 규칙은 `use-viewport-subscription.ts` 의 `mergePeople` 에 있고 시험이 붙어 있다.
+- 폴링 10초 (백엔드 제안 그대로). **밀어 주는 이벤트가 없어서** 다른 실시간 조회와 달리 폴링이 맞다.
+- **"N명" 뭉치(`CLUSTERED`)를 지도에 그리던 길을 걷어냈다.** 줌과 상관없이 전원 개별로 그리기로 한
+  팀 결정과 양립하지 않는다 — 그 모드에서는 개별로 그릴 재료가 아예 오지 않는다.
+  엔진의 `setCrowd` 는 지우지 않고 안 부르기만 한다. 되살릴 일이 생기면 그 한 줄이다.
+
+### 백엔드에 남는 것
+
+| # | 항목 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- |
+| A-54 | 이 조회의 **소켓 델타** | 10초 폴링이 유일한 갱신이라, 그 사이에 들어온 사람은 화면 밖에 있으면 최대 10초 늦게 보인다. 화면 안이면 기존 `VIEWPORT_*` 델타가 메운다 | 백엔드 후속 예정 |
+| A-55 | 응답에 `isPublic` 이 없다 | 비공개 계정을 서버가 거르지 않는다. 프론트는 전원 공개로 가정하고 `true` 로 채운다 — 비공개 정책이 확정되면 그 가정이 깨진다 | 협의 전 |
+| A-4 | 응답에 `viewingMusicId` 가 없다 | 그 사람이 **보고 있는 곡**과 **듣고 있는 곡**을 가를 수 없다. 프론트는 둘을 같게 둔다 | 협의 전 (기존 항목) |
+| A-56 | 따라가는 중 **겹 알림이 없다** | 인솔자가 층을 옮기면 나도 옮겨지는데 알림이 없어(2차 명세 §8.4) `useMapStore.layer` 가 그대로다. 그 상태로 이 조회를 부르면 **엉뚱한 겹**을 묻는다. 그동안은 `RIDE_VIEWPORT*` 가 메우고, 하차 응답의 `layer` 로 바로잡힌다 | 협의 전 |
+
+**요청** A-56 이 실제로 겪는 문제다. 인솔자가 층을 옮길 때 동승자에게도 겹 번호를 한 번
+알려 주시면(`RIDE_TRACK` 에 이미 `layer` 가 있으니 **곡이 그대로일 때도** 보내 주시는 형태면
+충분합니다) 이 조회가 맞는 겹을 묻게 됩니다.
+
+---
+
+## 플레이리스트 곡 편집 — 프론트 연동 결과 (S15P21A405-540, 2026-09-22)
+
+곡 목록에서 곡을 빼고 순서를 바꾸는 길을 붙였다. 순서 변경은 `POST /api/playlist/music/reorder`
+를 `/bff/playlists/{id}/order` 가 중계한다. **새 순서의 전체 목록**을 `musicIdList` 로 보낸다.
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-57 | **`GET /api/playlist/detail` 응답에 소유자가 없다** | `PlaylistDetailResponse` 는 `playlistId`·`playlistName`·`musicCnt`·`totalDuration`·`likeCnt`·`isLiked`·`musics` 뿐이다. 소유자 이메일도 닉네임도 없다 | **편집 UI 가 자기 플리에서도 안 떴다.** BFF 가 `email` 을 `null` 로 채우고 화면은 그걸 내 이메일과 견줬으니 늘 남의 플리였다. 지금은 **내 플리 목록(`/api/playlist/search?email=`)에 그 `id` 가 있는지**로 우회한다 — 목록을 한 번 더 받아야 하고, 남의 플리 화면에서는 "누가 만든 것인지" 를 아예 못 보여 준다. 응답에 `email` 과 `nickname` 을 넣어 주시면 우회를 걷어낸다 | 협의 전 |
+| A-58 | 순서 변경이 **부분 지시를 받지 않는다** | `musicIdList` 를 통째로 받아 그대로 다시 매긴다. "3번을 1번으로" 같은 요청이 없다 | 문제는 아니다. 다만 두 사람이 같은 플리를 동시에 고치면 **나중 요청이 먼저 것을 통째로 덮는다.** 지금 규모에서는 일어나지 않아 그대로 둔다 | 확인함 · 조치 불필요 |
+
+**요청** A-57 하나입니다. 상세 응답에 소유자(이메일 또는 닉네임)를 넣어 주시면 목록을 한 번 더
+받는 우회가 없어지고, 남의 플리에서 만든 사람을 보여 줄 수 있습니다.

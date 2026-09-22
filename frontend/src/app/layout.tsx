@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import SmallScreenGate from "@/components/layout/small-screen-gate";
 import { devModeScript } from "@/constants/dev-mode";
 import { TEST_TOOLS } from "@/constants/test-tools";
 import AppShell from "@/components/layout/app-shell";
@@ -38,8 +37,15 @@ export const viewport: Viewport = {
 };
 
 /**
- * 폰트는 next/font 대신 <link> 로 불러온다.
- * canvas 텍스트에서 실제 font-family 이름("IBM Plex Sans KR" 등)을 그대로 써야 하기 때문.
+ * 폰트는 next/font 대신 `<link>` 로 불러온다.
+ *
+ * **캔버스 때문이다.** 지도 글자는 `g.font = "600 11px <가족이름>"` 처럼 **문자열로** 가족을
+ * 적어야 하는데, `next/font` 는 이름을 해시로 바꾼 CSS 변수만 준다. 실제 이름을 그대로
+ * 쓸 수 있어야 DOM 글자와 지도 글자가 같은 서체로 보인다.
+ *
+ * **Pretendard 하나만 쓴다** (S15P21A405-538). 구글 폰트에는 없어서 jsDelivr 가 출처다.
+ * `dynamic-subset` 은 한글을 쓰는 글자만 조각으로 받아 오는 판이라, 통짜 한글 폰트를 받는 것보다
+ * 훨씬 가볍다 — 한글 폰트는 통짜로 받으면 수 MB 다.
  */
 export default function RootLayout({ children }: { children: ReactNode }) {
   return (
@@ -55,24 +61,17 @@ export default function RootLayout({ children }: { children: ReactNode }) {
           `<head>` 에서 막고 도는 이유는 `constants/dev-mode.ts` 주석에 있다.
         */}
         {TEST_TOOLS && <script dangerouslySetInnerHTML={{ __html: devModeScript }} />}
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
+        <link rel="preconnect" href="https://cdn.jsdelivr.net" crossOrigin="anonymous" />
         {/* App Router 루트 레이아웃이라 모든 페이지에 적용된다 — pages/_document 기준 규칙은 해당 없음 */}
-        {/* eslint-disable-next-line @next/next/no-page-custom-font */}
         <link
           rel="stylesheet"
-          href="https://fonts.googleapis.com/css2?family=Familjen+Grotesk:ital,wght@0,400..700;1,400..700&family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+KR:wght@300;400;500;600;700&display=swap"
+          href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css"
         />
       </head>
       <body className="h-full">
         <QueryProvider>
           <AppShell>{children}</AppShell>
         </QueryProvider>
-        {/*
-          좁은 화면 차단 (S15P21A405-379). **루트 레이아웃에 둔다** — 지도·튜토리얼·로그인 등
-          모든 경로에 같이 걸려야 한다. 순수 CSS 라 JS 보다 먼저, JS 없이도 동작한다
-        */}
-        <SmallScreenGate />
       </body>
     </html>
   );

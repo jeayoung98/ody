@@ -1,6 +1,10 @@
 "use client";
 
-import type { ReactNode } from "react";
+import { useRouter } from "next/navigation";
+import { useEffect, type ReactNode } from "react";
+import { ROUTES } from "@/constants";
+import { usePanelEnabled } from "@/hooks/use-features";
+import type { PanelType } from "@/constants";
 
 /**
  * 하단 탭이 여는 **하위 화면**의 껍데기 (S15P21A405-417). 검색 화면(`search-screen.tsx`)과
@@ -22,9 +26,30 @@ import type { ReactNode } from "react";
  * 아래는 재생바 위에서 끝난다 (`--nav-bottom`) — 듣던 곡은 어느 탭에서도 계속 보인다.
  * 탭바(z-23)는 그 아래에 그대로 떠 있다.
  */
-export default function PanelScreen({ children }: { children: ReactNode }) {
+export default function PanelScreen({ panel, children }: { panel: PanelType; children: ReactNode }) {
+  const router = useRouter();
+  const panelEnabled = usePanelEnabled();
+  const enabled = panelEnabled[panel];
+
+  /**
+   * **감춘 기능은 주소로도 못 연다** (S15P21A405-419).
+   *
+   * 우측 패널은 `right-panel.tsx` 가 같은 판정으로 막는다 — "레일에서만 막으면 플레이어바
+   * 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다" 는 이유였다. 탭 화면은 **제 주소**가
+   * 있으므로 그 길이 하나 더 생긴 셈이다: 탭바에서 칸이 빠져 있어도 `/chart` 를 직접 치면
+   * 열린다. 데스크톱에서 막아 둔 것이 폰에서 새면 안 되므로 여기서도 같은 판정을 쓴다.
+   *
+   * 지금은 `features.ts` 가 전부 켜져 있어 아무것도 안 걸린다 (S15P21A405-480) — 다시 무언가를
+   * 감출 때 이 화면을 따로 챙기지 않아도 되게 미리 걸어 둔다.
+   */
+  useEffect(() => {
+    if (!enabled) router.replace(ROUTES.home);
+  }, [enabled, router]);
+
+  if (!enabled) return null;
+
   return (
-    <main className="fixed inset-x-0 top-0 bg-void bottom-[var(--nav-bottom)] z-[22] flex flex-col pt-hud-t [&>section]:min-h-0 [&>section]:flex-1 [&>section]:rounded-none! [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none [&>section]:backdrop-filter-none">
+    <main className="fixed inset-x-0 top-0 bottom-[var(--nav-bottom)] z-[22] flex flex-col bg-void pt-hud-t [&>section]:min-h-0 [&>section]:flex-1 [&>section]:rounded-none! [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none [&>section]:backdrop-filter-none">
       {children}
     </main>
   );

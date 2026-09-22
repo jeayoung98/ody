@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { REALTIME, STORAGE_KEYS } from "@/constants";
 import { readStorage } from "@/lib/storage";
 import { expect, onConnectionChange, onType, send, settle } from "@/lib/realtime/stomp-client";
+import { isRiding } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type { PresenceErrorPayload, PresenceJoined } from "@/types";
 
@@ -38,6 +39,15 @@ function anchorMusicId(): number {
  * 연결 전이면 `send` 가 false 를 주고 조용히 버려진다. 연결되면 훅이 다시 보낸다.
  */
 export function sendJoinNow(layer?: number): void {
+  /**
+   * **따라가는 동안에는 보내지 않는다** (2차 명세 §6, S15P21A405-530). 서버가
+   * `RIDE_NOT_CAPTAIN` 으로 거부하는 경로라, 보내면 오류 큐만 시끄럽고 내 자리는 그대로다.
+   * 겹이 바뀌거나 탭이 돌아올 때마다 도는 자리라 여기서 한 번 막으면 전부 막힌다.
+   *
+   * **하차·강제 종료 직후에는 보내야 한다.** 그 길은 `endRide` 가 탑승 상태를 먼저 지운 뒤
+   * 이 함수를 부르므로 이 문을 그냥 지나간다.
+   */
+  if (isRiding()) return;
   const at = layer ?? useMapStore.getState().layer;
   lastLayer = at;
   joinSeq += 1;

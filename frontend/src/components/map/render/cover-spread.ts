@@ -85,3 +85,20 @@ export function byCoverPriority<T>(hasAlbum: (v: T) => boolean, weightOf: (v: T)
     return d !== 0 ? d : weightOf(b) - weightOf(a);
   };
 }
+
+/**
+ * **지난번에 뽑힌 것을 앞세운 색인 순서** (S15P21A405-542).
+ *
+ * `spreadOrder` 는 한 칸에 여럿이 몰리면 **먼저 만난 것**을 그 칸의 주인으로 삼는다. 그런데
+ * 칸 경계는 화면에 걸려 있어서 카메라가 움직이면 같이 움직인다 — 후보 순서가 그대로여도
+ * 누가 어느 칸에 드느냐가 프레임마다 바뀌고, 그러면 지도를 미는 동안 사람이 깜빡인다.
+ *
+ * 이미 서 있던 쪽을 먼저 보게 하면 그 사람이 제 칸을 계속 지킨다. 안정 정렬이라 같은 무리
+ * 안에서는 원래 순서가 유지된다 — 새로 들어오는 쪽도 매 프레임 자리를 다투지 않는다.
+ */
+export function keptFirst<T>(items: readonly T[], kept: (v: T) => boolean): number[] {
+  const stay: number[] = [];
+  const rest: number[] = [];
+  items.forEach((v, i) => (kept(v) ? stay : rest).push(i));
+  return [...stay, ...rest];
+}

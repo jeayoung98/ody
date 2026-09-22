@@ -24,12 +24,6 @@ export const STORAGE_KEYS = {
    * 읽는 쪽은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나다.
    */
   surveyMode: "ody:survey-mode",
-  /**
-   * 좁은 화면 게이트를 넘는다 (S15P21A405-421). `false` 면 넘고, 없으면 게이트가 산다 —
-   * 값 규칙을 `surveyMode` 와 맞춰 뒀다. 읽는 쪽은 CSS 라 [`dev-mode.ts`](./dev-mode.ts) 의
-   * 인라인 스크립트가 `<html>` 클래스로 옮긴다. 게이트를 걷어낼 때(S15P21A405-419) 같이 지운다.
-   */
-  gateOff: "ody:gate-off",
   /** 없거나 `true`면 분석 전송, `false`면 이 브라우저의 GA4·PostHog 수집을 모두 끈다. */
   analyticsMode: "ody:analytics-mode",
   /** `true`일 때 이 브라우저의 GA4 이벤트만 DebugView 대상으로 표시한다. */
@@ -38,20 +32,12 @@ export const STORAGE_KEYS = {
    * 발견 힌트를 이미 본 문맥들 (S15P21A405-393). `["map","nearby","journey"]` 꼴의 배열.
    * 문맥마다 키를 따로 두지 않는 이유는 힌트가 늘어날 때 키가 문맥 수만큼 곱해지기 때문이다.
    */
-  /**
-   * 가이드에 **따라가기 카드**를 띄울지 (S15P21A405-436). 없거나 `false` 면 안 띄운다.
-   * 기능이 아직 배포에 안 나가서 기본이 꺼짐이고, 확인할 사람만 자기 브라우저에서 켠다.
-   *
-   * ```js
-   * localStorage.setItem("ody:guide-follow", "true");   // 보기
-   * localStorage.removeItem("ody:guide-follow");        // 원래대로
-   * ```
-   *
-   * 기능이 열리면 이 키를 지우고 카드를 그냥 띄운다. `features.social` 로 걸지 않는 이유는
-   * 그 값이 설문 모드에 따라 켜졌다 꺼졌다 해서 "배포에 나갔는가" 의 기준이 못 되기 때문이다.
-   */
-  guideFollow: "ody:guide-follow", // REMOVE-WITH-FOLLOW
   playHintSeen: "ody:hint-play-seen",
+  /**
+   * 내가 구독한 데모 봇 목록 (S15P21A405-536). 봇 계정은 서버에 없어서 구독 관계를 보낼 곳이
+   * 없다 — 이 브라우저에만 남는다.
+   */
+  botFollowing: "ody:bot-following",
   /**
    * 새로고침 너머로 들고 가는 쿼리 캐시 (S15P21A405-504). 내 정보·프로필·내 플리 등
    * **지난 값을 먼저 보여 줘도 되는 것**만 들어간다. 넣고 빼는 쪽은 [`query-persist`](../lib/query-persist.ts).

@@ -6,6 +6,8 @@ import { useFeatures } from "@/hooks/use-features";
 import { connect, disconnect } from "@/lib/realtime/stomp-client";
 import { readStorage, subscribeStorage } from "@/lib/storage";
 import { usePresenceJoin } from "./use-presence-join";
+import { useRideCaptain } from "./use-ride-captain";
+import { useRideSession } from "./use-ride-session";
 
 /**
  * 실시간 전체의 시작점 (S15P21A405-482).
@@ -36,4 +38,11 @@ export function useRealtime(): void {
   }, [social]);
 
   usePresenceJoin();
+  /**
+   * 따라가기 (S15P21A405-530). **소켓과 같은 수명이다** — 지도 화면이 아니라 여기에 두는 이유는
+   * `RIDE_ENDED` 가 지도를 안 보고 있을 때도 와야 하기 때문이다. 패널만 열어 둔 채 인솔자가
+   * 나가면, 지도 컴포넌트에 달려 있었으면 아무도 그 소식을 못 듣는다.
+   */
+  useRideSession();
+  useRideCaptain();
 }

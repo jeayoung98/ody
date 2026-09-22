@@ -18,9 +18,22 @@ import type { MusicDetail } from "@/types";
  */
 export function useMusicDetailQuery(musicId: number | null) {
   return useQuery({
-    queryKey: QUERY_KEYS.music.detail(musicId ?? -1),
-    queryFn: () => api<MusicDetail>(API_ENDPOINTS.music.detail(musicId!)),
+    ...musicDetailQueryOptions(musicId ?? -1),
     enabled: musicId != null,
-    staleTime: Infinity,
   });
+}
+
+/**
+ * 훅 밖에서도 같은 조회를 쓸 수 있게 빼 둔다 (S15P21A405-581).
+ *
+ * 검색 결과를 고르면 지도가 그 곡의 좌표를 알아야 하는데, 좌표는 이 응답에 들어 있다.
+ * **키와 `staleTime` 을 여기 한 벌만 둔다** — 두 벌이 되면 키가 어긋나는 순간 같은 곡을 두 번
+ * 받고, `staleTime: Infinity` 로 아낀 것(S15P21A405-514)이 조용히 새어 나간다.
+ */
+export function musicDetailQueryOptions(musicId: number) {
+  return {
+    queryKey: QUERY_KEYS.music.detail(musicId),
+    queryFn: () => api<MusicDetail>(API_ENDPOINTS.music.detail(musicId)),
+    staleTime: Infinity,
+  };
 }

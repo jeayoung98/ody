@@ -50,7 +50,7 @@
 | --- | --- | --- | --- | --- | --- |
 | A-1 | `GET /api/map/songs` | 없음 (또는 뷰포트·게이트 파라미터) | `MapPoint[]` = `{ musicId, pc[16], genreId, weight, title, artist, playable }` | 지도 렌더링·재투영의 원본. 실서비스는 레이어 0 스트리밍 + 게이트 이하 상주 집합 통째 전송 | 협의 전 |
 | A-2 | `GET /api/map/layers/{layer}/representatives` | layer | `{ layer, musicIds[] }` | 레이어마다 **다른 대표곡**을 앨범 커버로 띄운다. 선별 기준은 백엔드가 정함 | 협의 전 |
-| A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | 협의 전 |
+| A-3 | `GET /api/users/nearby?layer={n}` | layer | `NearbyUser[]` | 지금 있는 **영역(레이어)의 사용자만** 내려줘야 한다. 레이어마다 다른 사람이 보임 (SOCIAL-01) | ✅ **구현됨 (S15P21A405-533, backend/dev MR 대기)** — 경로·응답 모양은 요청과 다르다. `GET /api/realtime/layers/{layer}/users`, 곡 위치별 묶음. 상세는 §5 |
 | A-4 | `NearbyUser` 응답 | — | `viewingMusicId` **추가 필요** | 따라가기 시 좌표 두 개가 필요하다: `musicId`=재생 중(우주선 위치), `viewingMusicId`=인솔자가 보고 있는 상세 곡(뷰포트·우측 패널 기준) (SOCIAL-07) | 협의 전 |
 | A-5 | **`GET /api/music/journey?start=&end=`** | 두 곡 ID | `{ musicCnt, totalDuration, path[] }` — **`musicCnt` 2~20, 중앙값 6** | **16차원 임베딩 거리 기준**으로 경로를 뽑아야 한다. 2D 평면 직선으로 뽑으면 레이어 0에서 일직선이 되어 별자리 모양이 안 나온다 (PATH-01) | ✅ 구현됨 (S15P21A405-61) · **2026-09-13 곡 수 개정(007/286)** — 아래 참조 |
 | A-6 | ~~`GET /api/map/nearby/{musicId}`~~ → **`GET /api/music/nearby`** | `id` | `{ center, neighbors[], lowSimilarity }` | 주변 탐색. 유사도는 16차원 거리 기준 (MAP-10). **경로 폐기** — `map/nearby/{musicId}` 는 좌표 기준 탐색을 표현할 수 없다. 계약은 api-spec §3.5 | ✅ 구현됨 (S15P21A405-59) · 이름은 BE3·팀 협의 중(`/music/neighbors` 와 구분 필요) |
@@ -116,3 +116,56 @@
 | S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 협의 전 |
 | S-5 | 따라가는 인원 수 (SOCIAL-11), 만난 횟수 카운팅 (SOCIAL-05) | 서버 집계 필요 | 협의 전 |
 | S-6 | `/app/presence/join {requestSeq, layer, musicId}`: 최초 입장은 요청 곡, 이후 레이어 이동은 서버 현재 곡 유지. 성공 `PRESENCE_JOINED`, 실패 개인 오류 큐. 프론트는 ACK 뒤 viewport·새 곡 play 진행 | REST와 STOMP 사이 처리 순서를 ACK로 보장하고 이전 소켓 요청을 epoch로 차단 | 백엔드 반영 · 프론트 반영 필요 (S15P21A405-423) |
+
+---
+
+## 5. 레이어 사용자 전체 조회 — 프론트 전달 (S15P21A405-533, 2026-09-22)
+
+지도가 **줌 레벨과 무관하게 다른 사용자를 전부 개별 아바타로** 그리기로 했다(팀 결정). 소켓 `VIEWPORT_SNAPSHOT` 은 화면 범위 안만 주고 셀이 36개를 넘으면 인원수(CLUSTERED)로 바뀌므로 이 용도에 맞지 않아, 레이어 전체를 한 번에 돌려주는 REST 를 따로 추가했다. 기존 코드는 수정하지 않았다. A-3 의 실제 구현이다.
+
+### 5-1. 엔드포인트
+
+| 항목 | 값 |
+| --- | --- |
+| 경로 | `GET /api/realtime/layers/{layer}/users` |
+| 인증 | Bearer 필수 (`SecurityConfig` 기본 거부 대상). 토큰 주체(email)는 목록에서 빠진다 |
+| `layer` | **0-based** (프론트 `LAYER_COUNT` 와 같다). 0~7 밖이면 `400 INVALID_INPUT` |
+| 프로파일 | `realtime` 프로파일에서만 뜬다. 꺼진 배포에서는 404 |
+| 실시간 | **push 없음.** 레이어 전환 시 + 주기 폴링(10초 제안)으로 다시 부른다. 소켓 델타는 후속 |
+
+### 5-2. 응답
+
+```json
+{ "success": true, "data": {
+  "layer": 1,
+  "groups": [
+    { "musicId": 10877, "x": 5.02, "y": -1.37,
+      "users": [
+        { "email": "a@x.com", "nickname": "off_beat", "imageUrl": "https://...", "riderCount": 2 },
+        { "email": "b@x.com", "nickname": null,       "imageUrl": null,          "riderCount": 0 }
+      ] }
+  ] } }
+```
+
+- `groups[]` 모양은 소켓 `VIEWPORT_SNAPSHOT`(INDIVIDUAL) 의 `groups` 와 **같다** (`ViewportMusicGroup`·`ViewportUser` 재사용). 변환기 하나로 둘 다 처리한다.
+- `x`·`y` 는 그 레이어 표시축의 **원시 PC 값** — 레이어 l 이면 `pc[2l]`·`pc[2l+1]`. `MapPoint.pc` 와 같은 좌표계라 지도에 바로 찍는다. 같은 곡을 듣는 사람은 같은 자리다.
+- `musicId` 만으로도 위치를 알 수 있다(FE 가 곡 인덱스로 찍는 현재 방식 유지 가능). `x`·`y` 는 그 곡이 지도 상주 집합 밖일 때를 위한 것.
+- 좌표를 모르는 곡(`music.location` 없음)의 사용자는 **빠진다**. 서버 로그 WARN.
+- `nickname`·`imageUrl` 은 null 가능. 대체 표시는 FE 몫.
+- `riderCount` = 지금 그 사람을 따라가는 인원 수.
+
+### 5-3. `NearbyUser` 매핑 (`frontend/src/types/profile.ts`)
+
+| `NearbyUser` 필드 | 출처 |
+| --- | --- |
+| `email` `nickname` `imageUrl` `musicId` `riderCount` | 응답 그대로 |
+| `isOnline` | 목록에 있으면 `true` (재생 중인 사람만 온다) |
+| `isPublic` | **응답에 없음.** 비공개 계정 필터를 서버에서 안 한다. 필요하면 백엔드에 요청 |
+| `viewingMusicId` `genreId` `meetCount` | **응답에 없음.** FE 기본값 처리 (A-4 는 별건으로 남는다) |
+
+### 5-4. 전제·주의
+
+- Redis 가 채워지는 전제: 사용자가 `POST /api/music/play`(재생 선언) 또는 `/app/presence/join` 을 거쳐야 레이어에 배치된다. FE 가 재생 선언을 안 보내면 목록이 빈다 — 기존 `POST /api/realtime/nearby` 와 같은 전제.
+- 목 라우트 `GET /bff/users/nearby?layer=` 를 이 API 로 갈아탈 때 **`layer` 그대로 넘기면 된다**(둘 다 0-based).
+- 격자 16×16 셀 전부를 파이프라인 1회로 읽는다. 현재 규모에서 충분. 사용자 수 제한(`individual-user-cap`)은 이 API 에 **적용하지 않는다** — 전부 준다.
+- `email` 이 응답에 있다. 계약서 §0 "payload 에 email 금지" 와 어긋나지만, `users` PK 가 email 이고 FE 가 email 을 아바타 키로 쓰며 backend/dev 의 `ViewportUser` 도 이미 email 을 실어 보내므로 그 관례를 따랐다.

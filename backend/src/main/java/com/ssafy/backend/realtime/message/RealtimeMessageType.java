@@ -44,6 +44,8 @@ public enum RealtimeMessageType {
 	RIDE_VIEWPORT_RIDER_COUNT,
 	/** 인솔자가 곡 상세를 열거나 닫거나 탭을 바꿨다. */
 	RIDE_PANEL,
+	/** 누가 따라오기 시작했다. 인솔자에게만 간다. */
+	RIDE_RIDER_JOINED,
 	/** 따라오던 사람이 내렸다. 인솔자에게만 간다. */
 	RIDE_RIDER_LEFT,
 	/** 인솔자가 사라져 따라가기가 끝났다. 따라가던 사람에게만 간다. */

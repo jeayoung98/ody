@@ -8,6 +8,7 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.follow.service.FollowService;
+import com.ssafy.backend.presence.OnlineStatusService;
 import com.ssafy.backend.user.NicknamePolicy;
 import com.ssafy.backend.user.dto.NicknameUpdateRequest;
 import com.ssafy.backend.user.dto.NicknameUpdateResponse;
@@ -28,6 +29,7 @@ public class UserService {
 	private final UserMapper userMapper;
 	private final AuthMapper authMapper;
 	private final FollowService followService;
+	private final OnlineStatusService onlineStatusService; // 접속 여부는 소켓이 안다
 
 	/**
 	 * 사용자 상세 조회 (정본 §2.1). 본인 조회도 이 API(email == 토큰 주체 → isMe:true).
@@ -54,6 +56,7 @@ public class UserService {
 		int followerCnt = followService.countFollowers(targetEmail);
 		int followingCnt = followService.countFollowings(targetEmail);
 		boolean isFollowing = !isMe && followService.isFollowing(requesterEmail, targetEmail);
+		boolean isOnline = onlineStatusService.isOnline(targetEmail);
 
 		log.info("[User] 상세 조회 완료 targetEmail={} isMe={}", targetEmail, isMe);
 		return new UserDetailResponse(
@@ -69,7 +72,8 @@ public class UserService {
 				followingCnt,
 				isFollowing,
 				isMe,
-				playedMusicCnt);
+				playedMusicCnt,
+				isOnline);
 	}
 
 	/**

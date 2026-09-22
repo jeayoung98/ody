@@ -193,6 +193,65 @@ class RiderMoveServiceTests {
 		assertThat(sent.playable()).isTrue();
 	}
 
+	/**
+	 * 번호가 사람마다 다른 유일한 값이다. 하나를 만들어 돌려 쓰면 모두가 인솔자 번호를 받아
+	 * 곡별 청취시간이 한 사람 것으로 몰린다.
+	 */
+	@Test
+	@DisplayName("따라오는 사람마다 자기 재생 기록 번호를 받는다")
+	void everyRiderGetsOwnPlayHistoryId() {
+		List<String> riders = givenRiders(2);
+
+		moveAll(riders);
+
+		ArgumentCaptor<RideTrackPayload> payload = ArgumentCaptor.forClass(RideTrackPayload.class);
+		verify(realtimeMessageService).sendToUser(
+				eq(riders.get(0)), anyString(), eq(RealtimeMessageType.RIDE_TRACK), payload.capture());
+		assertThat(payload.getValue().playHistoryId()).isEqualTo(9001L);
+
+		ArgumentCaptor<RideTrackPayload> second = ArgumentCaptor.forClass(RideTrackPayload.class);
+		verify(realtimeMessageService).sendToUser(
+				eq(riders.get(1)), anyString(), eq(RealtimeMessageType.RIDE_TRACK), second.capture());
+		assertThat(second.getValue().playHistoryId()).isEqualTo(9002L);
+	}
+
+	/** 맨 앞 번호는 인솔자 것이다. 따라오는 사람에게 주면 남의 기록에 시간을 쌓는다. */
+	@Test
+	@DisplayName("인솔자 번호는 따라오는 사람에게 가지 않는다")
+	void captainIdNeverGoesToRiders() {
+		List<String> riders = givenRiders(3);
+
+		long captainId = moveAll(riders);
+
+		ArgumentCaptor<RideTrackPayload> payload = ArgumentCaptor.forClass(RideTrackPayload.class);
+		verify(realtimeMessageService, times(3)).sendToUser(
+				anyString(), anyString(), eq(RealtimeMessageType.RIDE_TRACK), payload.capture());
+		assertThat(payload.getAllValues())
+				.extracting(RideTrackPayload::playHistoryId)
+				.doesNotContain(captainId)
+				.doesNotHaveDuplicates();
+	}
+
+	/** 번호를 못 받아도 곡은 알려야 한다. 안 알리면 옛 곡을 계속 듣는 채로 남는다. */
+	@Test
+	@DisplayName("번호를 못 받으면 번호 없이 곡만 알린다")
+	void notifiesWithoutIdWhenNumbersFail() {
+		List<String> riders = givenRiders(1);
+		given(playHistoryMapper.nextIds(2)).willThrow(new IllegalStateException("번호 실패"));
+
+		try {
+			moveAll(riders);
+		} catch (IllegalStateException ignored) {
+			// 실패는 그대로 올라간다
+		}
+
+		ArgumentCaptor<RideTrackPayload> payload = ArgumentCaptor.forClass(RideTrackPayload.class);
+		verify(realtimeMessageService).sendToUser(
+				eq(riders.get(0)), anyString(), eq(RealtimeMessageType.RIDE_TRACK), payload.capture());
+		assertThat(payload.getValue().playHistoryId()).isNull();
+		assertThat(payload.getValue().musicId()).isEqualTo(MUSIC_ID);
+	}
+
 	@Test
 	@DisplayName("소리를 틀 수 없는 곡은 한 번만 확인해 모두에게 같은 값을 보낸다")
 	void checksPlayableOnce() {

@@ -1,6 +1,7 @@
 package com.ssafy.backend.follow.service;
 
 import java.util.List;
+import java.util.Map;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -15,6 +16,7 @@ import com.ssafy.backend.follow.dto.FollowType;
 import com.ssafy.backend.follow.dto.FollowUserRow;
 import com.ssafy.backend.follow.dto.FollowUserSummary;
 import com.ssafy.backend.follow.mapper.FollowMapper;
+import com.ssafy.backend.presence.OnlineStatusService;
 import com.ssafy.backend.user.dto.UserProfileRow;
 import com.ssafy.backend.user.mapper.UserMapper;
 
@@ -37,6 +39,7 @@ public class FollowService {
 
 	private final FollowMapper followMapper;
 	private final UserMapper userMapper;
+	private final OnlineStatusService onlineStatusService; // 접속 여부는 소켓이 안다
 
 	/**
 	 * 팔로우 등록. 자기 자신·없는 사용자·이미 팔로우한 상대는 각각 다른 오류다.
@@ -110,9 +113,12 @@ public class FollowService {
 				: followMapper.findFollowings(targetEmail, requesterEmail, limit, offset);
 
 		boolean hasNext = rows.size() > PAGE_SIZE;
-		List<FollowUserSummary> content = rows.stream()
-				.limit(PAGE_SIZE)
-				.map(FollowService::toSummary)
+		List<FollowUserRow> shown = rows.stream().limit(PAGE_SIZE).toList();
+		// 접속 여부는 한 번에 묶어 묻는다. 한 명씩 물으면 목록에 오르는 사람 수만큼 왕복이 생긴다.
+		Map<String, Boolean> onlineByEmail = onlineStatusService.onlineOf(
+				shown.stream().map(FollowUserRow::getEmail).toList());
+		List<FollowUserSummary> content = shown.stream()
+				.map(row -> toSummary(row, onlineByEmail.getOrDefault(row.getEmail(), false)))
 				.toList();
 
 		log.info("[Follow] 목록 조회 완료 targetEmail={} type={} page={} size={}",
@@ -143,7 +149,7 @@ public class FollowService {
 		return row;
 	}
 
-	private static FollowUserSummary toSummary(FollowUserRow row) {
+	private static FollowUserSummary toSummary(FollowUserRow row, boolean isOnline) {
 		return new FollowUserSummary(
 				row.getEmail(),
 				row.getName(),
@@ -152,6 +158,7 @@ public class FollowService {
 				row.isPublic(),
 				row.isFollowing(),
 				row.getLastActiveAt(),
-				row.getMeetingCnt());
+				row.getMeetingCnt(),
+				isOnline);
 	}
 }

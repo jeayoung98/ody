@@ -118,7 +118,7 @@ class FollowControllerTests {
 	void list_returnsContentWithMeetingCount() throws Exception {
 		FollowUserSummary item = new FollowUserSummary(
 				"you@gmail.com", "김철수", "철수형", "https://cdn.example.com/a.png", true, false,
-				OffsetDateTime.parse("2026-09-07T11:20:31+09:00"), 5);
+				OffsetDateTime.parse("2026-09-07T11:20:31+09:00"), 5, true);
 		when(followService.list(eq("me@gmail.com"), eq("following"), eq(0), eq("me@gmail.com")))
 				.thenReturn(new FollowListResponse("following", List.of(item), 0, 20, false));
 

@@ -4,16 +4,23 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.clearInvocations;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.mockito.ArgumentCaptor;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
+import com.ssafy.backend.presence.OnlineStatusService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.ride.RideRiderJoinedPayload;
+import com.ssafy.backend.realtime.dto.ride.RideTrackPayload;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 
 /**
@@ -37,6 +44,8 @@ import com.ssafy.backend.realtime.message.RealtimeMessageType;
 		"realtime.viewport.cell-counts-interval-ms=3600000",
 })
 class RealtimeScenarioRedisIntegrationTests extends RealtimeScenarioSupport {
+
+	@Autowired OnlineStatusService onlineStatusService;
 
 	// ── 탭은 마지막 것만 산다 ───────────────────────────────
 
@@ -147,6 +156,99 @@ class RealtimeScenarioRedisIntegrationTests extends RealtimeScenarioSupport {
 		assertThat(response.musicId()).isEqualTo(SONG_A);
 		assertThat(redis.opsForSet()
 				.isMember("layer-listeners:" + OTHER_LAYER + ":" + SONG_A, rider)).isTrue();
+	}
+
+	// ── 인솔자가 아는 것 ───────────────────────────────────
+
+	/** 인솔자가 인원수를 아는 길이 이것뿐이다. 없으면 누가 내릴 때까지 모른다. */
+	@Test
+	@DisplayName("누가 타면 인솔자에게 이름과 인원수가 간다")
+	void mountTellsCaptain() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+
+		rideService.mount(rider, captain);
+
+		ArgumentCaptor<RideRiderJoinedPayload> sent =
+				ArgumentCaptor.forClass(RideRiderJoinedPayload.class);
+		verify(realtimeMessageService).sendToUser(
+				eq(captain), anyString(), eq(RealtimeMessageType.RIDE_RIDER_JOINED), sent.capture());
+		assertThat(sent.getValue().email()).isEqualTo(rider);
+		assertThat(sent.getValue().riderCount()).isEqualTo(1);
+	}
+
+	@Test
+	@DisplayName("두 명이 타면 인원수가 하나씩 올라간다")
+	void secondMountCountsTwo() {
+		String captain = stand(SONG_A);
+		String first = stand(SONG_B);
+		String second = stand(SONG_C);
+
+		rideService.mount(first, captain);
+		rideService.mount(second, captain);
+
+		ArgumentCaptor<RideRiderJoinedPayload> sent =
+				ArgumentCaptor.forClass(RideRiderJoinedPayload.class);
+		verify(realtimeMessageService, times(2)).sendToUser(
+				eq(captain), anyString(), eq(RealtimeMessageType.RIDE_RIDER_JOINED), sent.capture());
+		assertThat(sent.getAllValues())
+				.extracting(RideRiderJoinedPayload::riderCount)
+				.containsExactly(1, 2);
+	}
+
+	// ── 따라가는 동안의 기록 ───────────────────────────────
+
+	/**
+	 * 번호가 사람마다 다른 유일한 값이다. 하나를 돌려 쓰면 곡별 청취시간이 한 사람에게 몰린다.
+	 */
+	@Test
+	@DisplayName("인솔자가 곡을 바꾸면 각자 다른 기록 번호를 받는다")
+	void trackCarriesOwnPlayHistoryId() {
+		String captain = stand(SONG_A);
+		String first = stand(SONG_B);
+		String second = stand(SONG_C);
+		rideService.mount(first, captain);
+		rideService.mount(second, captain);
+		clearInvocations(realtimeMessageService);
+
+		musicPlayService.play(captain, SONG_C, "MAP", LAYER);
+
+		assertThat(trackIdOf(first))
+				.isNotNull()
+				.isNotEqualTo(trackIdOf(second));
+	}
+
+	// ── 접속 여부 ──────────────────────────────────────────
+
+	/** 따라가는 사람은 지도에서 빠져 있다. 그래도 접속은 하고 있다. */
+	@Test
+	@DisplayName("따라가는 사람도 접속 중으로 나온다")
+	void riderIsStillOnline() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+
+		assertThat(onlineStatusService.isOnline(rider)).isTrue();
+		assertThat(redis.opsForSet().isMember("listeners:" + SONG_A, rider)).isFalse();
+	}
+
+	@Test
+	@DisplayName("접속을 끊으면 접속 중이 아니게 된다")
+	void leavingGoesOffline() {
+		String email = stand(SONG_A);
+		assertThat(onlineStatusService.isOnline(email)).isTrue();
+
+		presenceService.leave(email, 1L);
+
+		assertThat(onlineStatusService.isOnline(email)).isFalse();
+	}
+
+	/** 그 사람에게 간 곡 변경 알림의 기록 번호. */
+	private Long trackIdOf(String email) {
+		ArgumentCaptor<RideTrackPayload> sent = ArgumentCaptor.forClass(RideTrackPayload.class);
+		verify(realtimeMessageService).sendToUser(
+				eq(email), anyString(), eq(RealtimeMessageType.RIDE_TRACK), sent.capture());
+		return sent.getValue().playHistoryId();
 	}
 
 	// ── 선단의 흔적 ────────────────────────────────────────

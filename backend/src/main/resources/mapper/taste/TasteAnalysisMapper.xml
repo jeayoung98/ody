@@ -39,8 +39,7 @@
         SET status = 'FAILED',
             completed_at = #{requestedAt},
             lease_expires_at = NULL,
-            failure_code = 'LEASE_EXPIRED',
-            updated_at = now()
+            failure_code = 'LEASE_EXPIRED'
         WHERE email = #{email}
           AND status = 'PENDING'
           AND lease_expires_at &lt;= #{requestedAt}
@@ -48,16 +47,15 @@
 
     <insert id="claim">
         INSERT INTO taste_analysis (
-            email, analysis_date, status, requested_at, lease_expires_at, created_at, updated_at)
+            email, analysis_date, status, requested_at, lease_expires_at)
         VALUES (
-            #{email}, #{analysisDate}, 'PENDING', #{requestedAt}, #{leaseExpiresAt}, now(), now())
+            #{email}, #{analysisDate}, 'PENDING', #{requestedAt}, #{leaseExpiresAt})
         ON CONFLICT (email, analysis_date) DO UPDATE
         SET status = 'PENDING',
             requested_at = EXCLUDED.requested_at,
             lease_expires_at = EXCLUDED.lease_expires_at,
             completed_at = NULL,
-            failure_code = NULL,
-            updated_at = now()
+            failure_code = NULL
         WHERE taste_analysis.status = 'FAILED'
            OR (taste_analysis.status = 'PENDING'
                AND taste_analysis.lease_expires_at &lt;= EXCLUDED.requested_at)
@@ -84,8 +82,7 @@
             summary = #{summary},
             narratives = CAST(#{narratives} AS jsonb),
             gms_response_id = #{gmsResponseId},
-            failure_code = NULL,
-            updated_at = now()
+            failure_code = NULL
         WHERE email = #{email}
           AND analysis_date = #{analysisDate}
           AND status = 'PENDING'
@@ -97,8 +94,7 @@
         SET status = 'FAILED',
             completed_at = #{completedAt},
             lease_expires_at = NULL,
-            failure_code = #{failureCode},
-            updated_at = now()
+            failure_code = #{failureCode}
         WHERE email = #{email}
           AND analysis_date = #{analysisDate}
           AND status = 'PENDING'

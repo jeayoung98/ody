@@ -151,7 +151,7 @@ description: "AI 기반 좋아요 음악 분포 및 취향 분석 리포트 구�
 
 ### Backend implementation for User Story 3
 
-- [X] T052 [P] [US3] user별 활성 PENDING partial unique index와 lease index를 `backend/src/main/resources/db/taste_analysis_001_table.sql`에 추가한다
+- [X] T052 [P] [US3] user별 PENDING partial unique index를 `backend/src/main/resources/db/taste_analysis_001_table.sql`에 추가한다. 사용자별 lease 회수도 이 index를 사용한다.
 - [X] T053 [P] [US3] canonical ID/version 직렬화와 SHA-256을 `backend/src/main/java/com/ssafy/backend/taste/analysis/TasteSnapshotHasher.java`에 구현하고 T048을 통과시킨다
 - [X] T054 [US3] 조건부 claim·FAILED 재시도·lease 회수·SUCCESS terminal SQL을 `backend/src/main/resources/mapper/taste/TasteAnalysisMapper.xml`에 구현하고 T049를 통과시킨다
 - [X] T055 [US3] `Clock`과 `ZoneId.of("Asia/Seoul")`로 REUSED/429/409/재시도 상태 전이를 `backend/src/main/java/com/ssafy/backend/taste/service/TasteAnalysisGenerationService.java`에 구현하고 T050을 통과시킨다

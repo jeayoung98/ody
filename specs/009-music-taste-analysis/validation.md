@@ -34,6 +34,10 @@ BUILD SUCCESSFUL in 1m 1s
 
 ## 배포 전 필수 항목
 
+2026-09-22 구조 리뷰: 운영 `ody` DB에서 두 테이블이 아직 없음을 재확인했다. `taste_analysis`의 미사용 `created_at`/`updated_at`과 전체 lease 검색용 index를 제거하고 Mapper를 동기화했다. 상태별 무결성 CHECK는 유지하면서 성공 필수 필드를 ROW 검사로 묶고 NULL lease를 명시적으로 거부한다. `music_like`는 3개 컬럼을 유지하며 신규 테이블의 index를 일반 CREATE INDEX로 변경했다. 전달했던 최초 SQL 대신 현재 수정본을 사용해야 하며, 두 파일 모두 이제 CONCURRENTLY를 사용하지 않는다. 운영 DB 변경은 수행하지 않았다.
+
+구조 리뷰 검증: `backend/gradlew.bat test build` 성공(57초). PostgreSQL 읽기 전용 SELECT로 ROW 필수값 검사 및 NULL lease 거부를 확인했다. 실제 DDL 적용·Mapper SQL 실행·동시성 통합 검증을 대체하지 않는다.
+
 ### Data/DB 파트
 
 - 승인된 `taste-reference-v1.json`과 checksum/lineage를 생성해 Backend에 전달한다. 전달 전에는 기존 API만 정상 기동하고 취향 분석 API는 `TASTE_REFERENCE_UNAVAILABLE`을 반환한다.

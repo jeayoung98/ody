@@ -11,5 +11,5 @@ CREATE TABLE IF NOT EXISTS public.music_like (
 );
 
 -- 같은 시각에도 music_id로 순서를 고정한다.
-CREATE INDEX CONCURRENTLY IF NOT EXISTS ix_music_like_email_created
+CREATE INDEX IF NOT EXISTS ix_music_like_email_created
     ON public.music_like (email, created_at DESC, music_id DESC);

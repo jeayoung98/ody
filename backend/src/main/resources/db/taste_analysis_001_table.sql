@@ -22,8 +22,6 @@ CREATE TABLE IF NOT EXISTS public.taste_analysis (
     narratives              jsonb,
     gms_response_id         varchar(255),
     failure_code            varchar(64),
-    created_at              timestamptz NOT NULL DEFAULT now(),
-    updated_at              timestamptz NOT NULL DEFAULT now(),
     CONSTRAINT "PK_TASTE_ANALYSIS" PRIMARY KEY (email, analysis_date),
     CONSTRAINT "FK_user_TO_taste_analysis" FOREIGN KEY (email)
         REFERENCES public."user"(email) ON DELETE CASCADE,
@@ -34,6 +32,7 @@ CREATE TABLE IF NOT EXISTS public.taste_analysis (
          AND total_liked_count = valid_music_count + excluded_music_count)),
     CONSTRAINT ck_taste_analysis_state CHECK (
         (status = 'PENDING'
+         AND lease_expires_at IS NOT NULL
          AND lease_expires_at > requested_at
          AND completed_at IS NULL)
         OR
@@ -45,21 +44,11 @@ CREATE TABLE IF NOT EXISTS public.taste_analysis (
         (status = 'SUCCESS'
          AND lease_expires_at IS NULL
          AND completed_at IS NOT NULL
-         AND liked_set_hash IS NOT NULL
-         AND total_liked_count IS NOT NULL
-         AND valid_music_count IS NOT NULL
-         AND excluded_music_count IS NOT NULL
-         AND report_level IS NOT NULL
-         AND bundle_version IS NOT NULL
-         AND reference_version IS NOT NULL
-         AND axis_label_version IS NOT NULL
-         AND analysis_policy_version IS NOT NULL
-         AND prompt_version IS NOT NULL
-         AND model IS NOT NULL
-         AND axis_stats IS NOT NULL
-         AND findings IS NOT NULL
-         AND summary IS NOT NULL
-         AND narratives IS NOT NULL
+         -- ROW IS NOT NULL은 아래 모든 필드가 채워졌는지 검사한다.
+         AND ROW(liked_set_hash, total_liked_count, valid_music_count, excluded_music_count,
+                 report_level, bundle_version, reference_version, axis_label_version,
+                 analysis_policy_version, prompt_version, model,
+                 axis_stats, findings, summary, narratives) IS NOT NULL
          AND failure_code IS NULL))
 );
 
@@ -70,7 +59,3 @@ CREATE UNIQUE INDEX IF NOT EXISTS ux_taste_analysis_active_user
 CREATE INDEX IF NOT EXISTS ix_taste_analysis_latest_success
     ON public.taste_analysis (email, completed_at DESC)
     WHERE status = 'SUCCESS';
-
-CREATE INDEX IF NOT EXISTS ix_taste_analysis_pending_lease
-    ON public.taste_analysis (lease_expires_at)
-    WHERE status = 'PENDING';

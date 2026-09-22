@@ -10,13 +10,13 @@ import org.junit.jupiter.api.Test;
 class TasteAnalysisClaimMapperTests {
 
     @Test
-    void schema_enforcesOnePendingAnalysisPerUserAndIndexesLease() throws IOException {
+    void schema_enforcesOnePendingAnalysisPerUserWithRequiredLease() throws IOException {
         String ddl = resource("/db/taste_analysis_001_table.sql");
 
         assertThat(ddl)
                 .contains("CREATE UNIQUE INDEX IF NOT EXISTS ux_taste_analysis_active_user")
                 .contains("WHERE status = 'PENDING'")
-                .contains("CREATE INDEX IF NOT EXISTS ix_taste_analysis_pending_lease")
+                .contains("lease_expires_at IS NOT NULL")
                 .contains("lease_expires_at > requested_at");
     }
 

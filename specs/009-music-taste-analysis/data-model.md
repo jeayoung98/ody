@@ -13,7 +13,7 @@
 Indexes:
 
 - Primary key `(email, music_id)`: 중복 제거와 target-state 멱등성
-- `(email, created_at DESC, music_id)`: 사용자 목록 조회
+- `(email, created_at DESC, music_id DESC)`: 사용자 목록 조회
 
 Deletion of a row represents `liked=false`. 이벤트 횟수나 가중치는 저장하지 않는다.
 
@@ -33,7 +33,7 @@ Deletion of a row represents `liked=false`. 이벤트 횟수나 가중치는 저
 | requested_at | timestamptz | 현재 attempt 시작 |
 | lease_expires_at | timestamptz | PENDING 복구 기준 |
 | completed_at | timestamptz nullable | 성공/실패 종료 |
-| liked_set_hash | char(64) nullable | 정렬된 유효 music ID와 version tuple의 SHA-256 |
+| liked_set_hash | char(64) nullable | 좌표 유효 여부와 무관한 전체 좋아요 music ID와 version tuple의 SHA-256 |
 | total_liked_count | integer nullable | 생성 snapshot의 전체 좋아요 수 |
 | valid_music_count | integer nullable | 좌표 검증을 통과한 수 |
 | excluded_music_count | integer nullable | 제외 수 |
@@ -50,21 +50,21 @@ Deletion of a row represents `liked=false`. 이벤트 횟수나 가중치는 저
 | narratives | jsonb nullable | finding ID별 설명 |
 | gms_response_id | varchar nullable | 운영 추적용 provider response ID |
 | failure_code | varchar nullable | 분류된 실패 코드, 원문/비밀정보 금지 |
-| created_at | timestamptz | row 생성 |
-| updated_at | timestamptz | 마지막 상태 변경 |
 
 Indexes:
 
 - Primary key `(email, analysis_date)`
 - 최신 성공 조회용 partial index `(email, completed_at DESC) WHERE status='SUCCESS'`
-- stale lease 운영 점검용 partial index `(lease_expires_at) WHERE status='PENDING'`
+- 사용자별 생성 중복 방지용 partial unique index `(email) WHERE status='PENDING'`
+
+만료 회수는 사용자별 PENDING 한 건을 찾아 처리하므로 위 unique index를 사용한다. 전체 만료 행을 검색하는 별도 작업이 없어 lease 전용 index는 두지 않는다. 시각은 `requested_at`, `completed_at`으로 관리한다.
 
 Constraints:
 
 - count는 모두 0 이상이며 `total = valid + excluded`
 - SUCCESS는 `completed_at`, 모든 version, hash, stats, findings, summary, narratives를 요구
 - FAILED는 `failure_code`를 요구하고 성공 결과 필드는 소비 가능한 결과로 간주하지 않음
-- PENDING lease는 requested_at 이후
+- PENDING lease는 필수이며 requested_at 이후
 
 ## Value Object: AxisStatistics
 
@@ -99,13 +99,13 @@ NONE ──claim──> PENDING ──validated save──> SUCCESS
 SUCCESS: 해당 analysis_date에는 terminal, 추가 생성 불가
 ```
 
-같은 사용자의 유효 PENDING은 날짜와 관계없이 하나만 허용한다. DB가 이를 직접 보장할 수 있도록 user 단위 advisory lock 또는 조건부 claim SQL을 같은 transaction에서 사용한다. 외부 GMS 호출 동안 lock/transaction은 유지하지 않는다.
+같은 사용자의 PENDING은 날짜와 관계없이 하나만 허용한다. 사용자별 partial unique index와 날짜별 조건부 UPSERT가 이를 보장한다. 만료된 PENDING은 먼저 FAILED로 전환한다. 외부 GMS 호출 동안 lock/transaction은 유지하지 않는다.
 
 `REUSED`는 저장 상태가 아니다. 현재 snapshot hash와 version tuple이 최신 SUCCESS와 같을 때 API가 계산해 반환하며 새 row, 새 생성 시각, 새 quota 사용을 만들지 않는다. 같은 날짜 SUCCESS가 있어도 입력이 달라 재사용할 수 없을 때만 새 생성 요청을 일일 제한으로 거절한다.
 
 ## Derived freshness
 
-`fresh`는 저장 필드가 아니라 조회 시 계산한다. 현재 유효 좋아요 ID hash와 다음 version tuple이 성공 snapshot과 모두 같을 때 true다.
+`fresh`는 저장 필드가 아니라 조회 시 계산한다. 현재 전체 좋아요 ID hash와 다음 version tuple이 성공 snapshot과 모두 같을 때 true다.
 
 - bundleVersion
 - referenceVersion

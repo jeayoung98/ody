@@ -58,7 +58,7 @@ interface MainScreenProps {
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
-  const panelCollapsed = usePanelStore((s) => s.collapsed);
+  const panelCollapsed = usePanelStore((s) => s.snap) === 1;
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   /**
    * 감춘 기능의 패널은 열려 있어도 화면에 없다 (S15P21A405-333). 여기서도 같은 판정을 써야

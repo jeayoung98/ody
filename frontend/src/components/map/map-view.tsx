@@ -803,6 +803,7 @@ export default function MapView({ occlusion }: MapViewProps) {
   return (
     <div
       data-analytics-manual
+      data-map
       ref={ref}
       /*
        * `touch-none` 은 브라우저의 기본 제스처를 전부 끈다 (S15P21A405-415) — 스크롤·고무줄·

@@ -113,6 +113,7 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
 
   return (
     // z-[25]: HUD 층(계기판·레일·검색·하단바 20~24) 바로 위. 토스트·배너·다이얼로그(30 이상)보다는 아래다.
+    // 폰에서는 z-[19] 로 내린다 — 아래 className 주석 참고.
     <div
       ref={cardRef}
       /*
@@ -132,7 +133,18 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
         opacity: 0,
         transition: `opacity ${HOVER_CARD.fadeMs}ms ease-out`,
       }}
-      className={`glass-liquid absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform ${
+      /*
+       * **폰에서는 HUD 아래로 내린다** (S15P21A405-532).
+       *
+       * 데스크톱에서 z-25 인 이유는 카드가 지도 위를 마우스를 따라 떠다녀서, HUD 에 가리면
+       * 화면 가장자리에서 읽을 수 없기 때문이다. 폰에는 그 전제가 없다 — 카드는 누른 별
+       * 자리에 서고, 그 위로 바텀시트(z-20)·탭바(z-23)·탭 화면(z-22)이 화면을 덮는다.
+       * z-25 로 두면 시트를 열어 둔 채 카드가 그 위에 얹혀 **UI 를 뚫고 나온 것처럼** 보인다.
+       *
+       * `map-view.tsx` 의 뿌리는 z 를 안 갖는다(쌓임 맥락을 안 만든다). 그래서 여기 숫자가
+       * 패널·탭바와 **같은 맥락에서** 비교되고, 이 한 줄로 순서가 바뀐다.
+       */
+      className={`glass-liquid absolute top-0 left-0 z-[25] flex items-center gap-3 px-2.5 will-change-transform max-tablet:z-[19] ${
         narrow ? "pointer-events-auto cursor-pointer" : "pointer-events-none"
       }`}
     >

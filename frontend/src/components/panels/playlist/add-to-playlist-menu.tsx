@@ -1,10 +1,13 @@
 "use client";
 
+import { useRef } from "react";
 import Box from "@/components/common/box";
 import EmptyState from "@/components/common/empty-state";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useAddPlaylistItemMutation } from "@/hooks/mutations/use-add-playlist-item-mutation";
 import { useMyPlaylistsQuery } from "@/hooks/queries/use-my-playlists-query";
+import { useDismissOnOutside } from "@/hooks/use-dismiss-on-outside";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import CreatePlaylistForm from "./create-playlist-form";
 
 interface AddToPlaylistMenuProps {
@@ -17,12 +20,19 @@ export default function AddToPlaylistMenu({ musicId, onDone }: AddToPlaylistMenu
   const { data, isPending } = useMyPlaylistsQuery();
   const add = useAddPlaylistItemMutation();
 
+  /**
+   * 폰에서는 **바깥을 눌러도 닫힌다** (S15P21A405-532). 데스크톱은 그대로 둔다 — 거기서는
+   * 목록이 패널 안에 얌전히 붙어 있고 ＋ 를 한 번 더 누르면 닫힌다.
+   */
+  const menuRef = useRef<HTMLDivElement>(null);
+  useDismissOnOutside(menuRef, onDone, useIsNarrow());
+
   const handleAdd = (playlistId: number) => {
     add.mutate({ playlistId, musicId }, { onSuccess: onDone });
   };
 
   return (
-    <div className="absolute top-full left-0 z-20 mt-2 w-full">
+    <div ref={menuRef} className="absolute top-full left-0 z-20 mt-2 w-full">
       <Box title="플레이리스트에 추가" flush className="shadow-[0_24px_60px_-20px_#000]">
         <div className="max-h-56 overflow-y-auto p-1.5">
           {isPending && <SkeletonRows count={3} thumb="none" sub={false} />}

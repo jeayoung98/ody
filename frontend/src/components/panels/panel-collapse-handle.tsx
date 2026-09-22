@@ -13,7 +13,8 @@ import { usePanelStore } from "@/stores/use-panel-store";
  * 닫기(✕)는 별자리까지 같이 끈다 (S15P21A405-316).
  */
 export default function PanelCollapseHandle() {
-  const collapsed = usePanelStore((s) => s.collapsed);
+  // 데스크톱 손잡이는 1(접힘)·3(펼침) 두 자리만 쓴다 (S15P21A405-416)
+  const collapsed = usePanelStore((s) => s.snap) === 1;
   const toggleCollapsed = usePanelStore((s) => s.toggleCollapsed);
 
   return (

@@ -32,10 +32,14 @@ export default function BottomTabs() {
   const pathname = usePathname();
   const panelEnabled = usePanelEnabled();
 
+  /**
+   * **지도가 첫 칸이다** (S15P21A405-532). 기본 화면이자 다른 탭에서 돌아오는 자리인데
+   * 가운데 있으면 "여기가 홈" 이라는 것이 안 읽힌다 — 앱 탭바는 왼쪽 끝이 홈 자리다.
+   */
   const tabs: TabDef[] = [
+    { href: ROUTES.home, label: "지도", icon: <MapIcon />, enabled: true },
     { href: ROUTES.friends, label: "주변 사람", icon: <FriendsIcon />, enabled: panelEnabled.friends },
     { href: ROUTES.chart, label: "랭킹", icon: <RankIcon />, enabled: panelEnabled.chart },
-    { href: ROUTES.home, label: "지도", icon: <MapIcon />, enabled: true },
     { href: ROUTES.me, label: "마이페이지", icon: <UserIcon />, enabled: panelEnabled.feed },
   ];
 

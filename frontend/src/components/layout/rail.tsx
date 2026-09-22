@@ -39,7 +39,7 @@ export default function Rail() {
   const pressJourney = () => {
     if (composerOpen) closeComposer();
     else if (hasJourney) toggle("journey");
-    else openComposer("start");
+    else openComposer();
   };
   const panelEnabled = usePanelEnabled();
 

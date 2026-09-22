@@ -25,6 +25,7 @@ description: "AI 기반 좋아요 음악 분포 및 취향 분석 리포트 구�
 - `(Data branch)` 태스크는 Data 담당자가 별도 Jira 이슈와 `data/<type>/<key>-<desc>` 브랜치에서 수행한다.
 - `(Frontend branch)` 태스크는 Frontend 담당자가 별도 Jira 이슈와 `frontend/<type>/<key>-<desc>` 브랜치에서 수행한다.
 - 개별 곡 좋아요가 S15P21A405-512 범위에 포함되는지 먼저 확인하고, 범위 밖이면 해당 Backend 작업도 별도 이슈·브랜치로 분리한다.
+- ⚠️ **T001–T003 승인 게이트는 미완료 상태에서 Phase 2 이후 구현이 선행됐다.** 공개 동작은 승인 전까지 확정으로 취급하지 않는다. T002 중 Backend 몫(현재 구현된 endpoint·상태·오류 코드를 `docs/rules/BACKEND-NOTES.md` A-48~A-51, E-8~E-9로 공유)은 반영했고, Frontend 합의와 `docs/rules/FEATURES.md` 반영은 남아 있다.
 
 ## Phase 1: Setup and Contract Approval
 
@@ -146,6 +147,7 @@ description: "AI 기반 좋아요 음악 분포 및 취향 분석 리포트 구�
 
 - [X] T048 [P] [US3] 정렬된 유효 music ID와 version tuple의 SHA-256 안정성·변경 감지를 `backend/src/test/java/com/ssafy/backend/taste/analysis/TasteSnapshotHasherTests.java`에 작성하고 실패를 확인한다
 - [X] T049 [P] [US3] PENDING/SUCCESS/FAILED claim, partial unique PENDING, FAILED 재시도, lease 만료 회수를 검증하는 mapper 테스트를 `backend/src/test/java/com/ssafy/backend/taste/TasteAnalysisClaimMapperTests.java`에 작성하고 실패를 확인한다
+  - ⚠️ 현재 테스트는 SQL/XML **문자열 계약 수준**이다. 실제 PostgreSQL에서 partial unique index·동시 claim·lease 회수를 실행하지 않았다(저장소에 Testcontainers 없음). 실 DB 검증은 Data/DB 파트 몫이며 `validation.md` §2에 미검증으로 남겨 뒀다.
 - [X] T050 [P] [US3] 같은 입력 REUSED, 변경 입력 당일 429, 생성 중 좋아요 변경의 즉시 stale, 동시 요청 409, 실패 재시도, KST 자정, 마지막 갱신 시각 보존을 `backend/src/test/java/com/ssafy/backend/taste/TasteAnalysisLifecycleTests.java`에 작성하고 실패를 확인한다
 - [X] T051 [P] [US3] GET의 FRESH/STALE/IN_PROGRESS와 409/429 `nextAvailableAt` 계약을 `backend/src/test/java/com/ssafy/backend/taste/TasteAnalysisStateControllerTests.java`에 작성하고 실패를 확인한다
 

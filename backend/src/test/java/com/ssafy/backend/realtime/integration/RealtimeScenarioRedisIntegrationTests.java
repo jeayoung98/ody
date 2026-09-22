@@ -1,6 +1,7 @@
 package com.ssafy.backend.realtime.integration;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.any;
@@ -16,12 +17,20 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 
+import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.presence.OnlineStatusService;
 import com.ssafy.backend.realtime.dto.presence.JoinRequest;
+import com.ssafy.backend.realtime.dto.ride.DisbandResponse;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.ride.RideEndReason;
+import com.ssafy.backend.realtime.dto.ride.RideEndedPayload;
+import com.ssafy.backend.realtime.dto.ride.RidePlaybackEvent;
+import com.ssafy.backend.realtime.dto.ride.RidePlaybackRequest;
 import com.ssafy.backend.realtime.dto.ride.RideRiderJoinedPayload;
 import com.ssafy.backend.realtime.dto.ride.RideTrackPayload;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
+import com.ssafy.backend.realtime.service.ride.RidePlaybackService;
 
 /**
  * 실시간 기능 전체를 실제 Redis 와 실제 Lua 로 돌려 본다.
@@ -46,6 +55,7 @@ import com.ssafy.backend.realtime.message.RealtimeMessageType;
 class RealtimeScenarioRedisIntegrationTests extends RealtimeScenarioSupport {
 
 	@Autowired OnlineStatusService onlineStatusService;
+	@Autowired RidePlaybackService ridePlaybackService;
 
 	// ── 탭은 마지막 것만 산다 ───────────────────────────────
 
@@ -295,5 +305,100 @@ class RealtimeScenarioRedisIntegrationTests extends RealtimeScenarioSupport {
 				eq(RealtimeMessageType.RIDE_ENDED), any());
 		verify(realtimeMessageService).sendToUser(eq(second), anyString(),
 				eq(RealtimeMessageType.RIDE_ENDED), any());
+	}
+
+	// ── 인솔자가 스스로 해체 ───────────────────────────────
+
+	/**
+	 * 끊겨서 흩어지는 것과 자리가 다르다. 인솔자가 살아 있으므로 그 곡에는 인솔자까지 셋이 남는다.
+	 * 끊김 쪽은 인솔자가 빠져 둘이 남는다 — 같은 스크립트를 쓰지만 결과가 갈리는 유일한 자리다.
+	 */
+	@Test
+	@DisplayName("스스로 풀면 전원이 지도로 돌아오고 인솔자는 제자리에 남는다")
+	void captainDisbandKeepsCaptainOnTheMap() {
+		String captain = stand(SONG_A);
+		String first = stand(SONG_B);
+		String second = stand(SONG_C);
+		rideService.mount(first, captain);
+		rideService.mount(second, captain);
+		String cell = cellOf(captain);
+
+		DisbandResponse response = rideService.disbandByCaptain(captain);
+
+		assertThat(response.riderCount()).isEqualTo(2);
+		assertThat(redis.opsForSet().isMember("listeners:" + SONG_A, captain, first, second))
+				.containsValues(true, true, true);
+		assertThat(cellCount(LAYER, cell)).isEqualTo(3); // 인솔자까지 셋이다
+		assertThat(redis.hasKey("ride:riders:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:captain:" + first)).isFalse();
+		assertThat(redis.hasKey("ride:captain:" + second)).isFalse();
+	}
+
+	/** 받는 쪽이 문구를 가르는 근거다. 끊김과 같은 값이 나가면 살아 있는 인솔자를 나갔다고 알린다. */
+	@Test
+	@DisplayName("스스로 풀면 사유가 CAPTAIN_ENDED 로 간다")
+	void captainDisbandSendsEndedReason() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+		clearInvocations(realtimeMessageService);
+
+		rideService.disbandByCaptain(captain);
+
+		ArgumentCaptor<Object> sent = ArgumentCaptor.forClass(Object.class);
+		verify(realtimeMessageService).sendToUser(eq(rider), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), sent.capture());
+		assertThat(((RideEndedPayload) sent.getValue()).reason())
+				.isEqualTo(RideEndReason.CAPTAIN_ENDED);
+	}
+
+	/**
+	 * 이 한 줄이 이 기능에서 제일 조용히 망가지는 자리다.
+	 *
+	 * 해체 스크립트는 따라오는 사람이 없어도 재생 정보와 열어 둔 곡 상세를 지운다. 끊긴 사람에게는
+	 * 맞는 정리지만, 살아 있는 인솔자의 것을 지우면 다음에 타는 사람이 곡을 처음부터 듣는다.
+	 * 그래서 거부는 스크립트 앞에서 나야 한다.
+	 */
+	@Test
+	@DisplayName("따라오는 사람이 없으면 거부하고 재생 정보를 건드리지 않는다")
+	void rejectedDisbandKeepsThePlaybackSnapshot() {
+		String captain = stand(SONG_A);
+		// 따라오는 사람이 없어도 인솔자는 재생 조작을 보낸다. 나중에 타는 사람을 위해 서버가 저장해 둔다.
+		ridePlaybackService.relay(captain, new RidePlaybackRequest(RidePlaybackEvent.SEEK, 40000L));
+		assertThat(redis.hasKey("ride:playback:" + captain)).isTrue();
+
+		assertThatThrownBy(() -> rideService.disbandByCaptain(captain))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_CAPTAIN));
+
+		assertThat(redis.hasKey("ride:playback:" + captain)).isTrue();
+	}
+
+	/** 푼 뒤에는 인솔자가 아니다. 버튼을 두 번 눌러도 두 번째는 막혀야 한다. */
+	@Test
+	@DisplayName("두 번 풀면 두 번째는 거부한다")
+	void disbandingTwiceIsRejected() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+		rideService.disbandByCaptain(captain);
+
+		assertThatThrownBy(() -> rideService.disbandByCaptain(captain))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_CAPTAIN));
+	}
+
+	/** 푼 사람은 다시 탈 수 있어야 한다. 흔적이 남아 있으면 줄줄이 따라가기로 막힌다. */
+	@Test
+	@DisplayName("풀린 사람은 곧바로 다시 탈 수 있다")
+	void disbandedRiderCanMountAgain() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+		rideService.disbandByCaptain(captain);
+
+		rideService.mount(rider, captain);
+
+		assertThat(redis.opsForSet().isMember("ride:riders:" + captain, rider)).isTrue();
 	}
 }

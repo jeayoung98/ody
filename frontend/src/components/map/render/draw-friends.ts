@@ -1,6 +1,7 @@
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
 import type { MapEngine } from "../engine/map-engine";
+import { drawCropped, photoFor } from "@/lib/avatar-photo";
 import { avatarFor, ME_AVATAR, trailOf } from "./sprites";
 
 const TEAL: readonly [number, number, number] = [79, 227, 206];
@@ -17,7 +18,13 @@ export function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R
   g.beginPath();
   g.arc(px, py, R, 0, 6.284);
   g.clip();
-  g.drawImage(avatarFor(u), px - R, py - R, R * 2, R * 2);
+  /**
+   * **프로필 사진이 있으면 그것이 바이저 안에 들어간다** (S15P21A405-536). 없거나 아직
+   * 안 받아졌으면 절차적 그림이다 — 기다리느라 빈 헬멧을 그리지 않는다.
+   */
+  const photo = photoFor(u.imageUrl);
+  if (photo) drawCropped(g, photo, px - R, py - R, R * 2);
+  else g.drawImage(avatarFor(u), px - R, py - R, R * 2, R * 2);
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = 0.3 * fade;
   g.fillStyle = "#dfeaff";

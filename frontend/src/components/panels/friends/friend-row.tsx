@@ -1,6 +1,5 @@
 "use client";
 
-import HelmetAvatar from "@/components/common/helmet-avatar";
 import UserRow from "@/components/common/user-row";
 import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useStartActivity } from "@/hooks/use-start-activity";
@@ -51,8 +50,6 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
     <UserRow
       nickname={person.nickname ?? "이름 없음"}
       imageUrl={person.imageUrl}
-      // 지도에 찍히는 그 헬멧 그대로 (S15P21A405-536). 목록과 지도에서 같은 사람이 같아 보인다
-      avatar={<HelmetAvatar email={person.email} musicId={person.musicId} />}
       caption={song}
       onClick={() => {
         openFeed(person.email);

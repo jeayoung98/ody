@@ -40,7 +40,12 @@ function portrait(hue: number, i: number): string {
   const cx = 18 + ((i * 37) % 30);
   const cy = 16 + ((i * 53) % 30);
   const r = 17 + ((i * 29) % 15);
-  const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  /**
+   * **`width`·`height` 를 빼면 안 된다.** `<img>` 는 CSS 크기로 그려 주지만, 캔버스
+   * (`drawImage`)는 이미지의 **고유 크기**를 본다 — `viewBox` 만 있는 SVG 는 그 값이 0 이라
+   * 헬멧 바이저 안이 새까맣게 나온다. 눈으로 목록만 보면 멀쩡해 보여서 찾기 어려운 함정이다.
+   */
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="64" height="64" viewBox="0 0 64 64">
 <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1">
 <stop offset="0" stop-color="hsl(${hue} 62% 46%)"/><stop offset="1" stop-color="hsl(${far} 58% 30%)"/>
 </linearGradient></defs>
@@ -58,17 +63,22 @@ function portrait(hue: number, i: number): string {
  */
 export const BOT_ROSTER: BotSeed[] = (
   [
-    ["주하봇", 188],
-    ["재영봇", 268],
-    ["지원봇", 22],
-    ["효정봇", 322],
-    ["유진봇", 148],
-    ["준서봇", 45],
+    // 닉네임 · 색 · `public/bots/` 안의 사진 파일 (없으면 위에서 만든 그림을 쓴다)
+    ["주하봇", 188, "juha-quokka.jpg"],
+    ["재영봇", 268, null],
+    ["지원봇", 22, null],
+    ["효정봇", 322, null],
+    ["유진봇", 148, null],
+    ["준서봇", 45, null],
   ] as const
-).map(([nickname, hue], i) => ({
+).map(([nickname, hue, photo], i) => ({
   email: `bot-${i + 1}${BOT_DOMAIN}`,
   nickname,
-  imageUrl: portrait(hue, i),
+  /**
+   * **사진 파일이 있으면 그것을 쓴다.** 없는 파일을 가리키면 목록에 깨진 이미지가 뜨므로,
+   * 파일을 넣은 봇만 위 표에 이름을 적는다 — 넣는 방법은 `public/bots/README.md` 에 있다.
+   */
+  imageUrl: photo ? `/bots/${photo}` : portrait(hue, i),
   // 이메일이 아니라 자리 번호로 시드를 만든다 — 명단 순서를 바꾸면 성격도 바뀌는 편이 자연스럽다
   seed: (i + 1) * 7919,
 }));

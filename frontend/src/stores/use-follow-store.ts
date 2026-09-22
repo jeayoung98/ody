@@ -48,16 +48,6 @@ interface FollowState {
    * 디버깅과 백엔드 확인용으로만 들고 있다.
    */
   snapshotSeq: number;
-  /**
-   * **지금 곡**에 대한 내 재생 기록 번호 (3차 계약 §3, S15P21A405-545).
-   *
-   * 예전에는 탑승~하차를 한 건으로 보는 값이었다. 이제 인솔자가 곡을 바꿀 때마다
-   * `RIDE_TRACK` 이 새 번호를 주므로 곡마다 갈아 끼운다 — 그래야 곡별 청취시간이 남는다.
-   * 서버가 번호를 못 받으면 `null` 로 오고, 그 곡은 시간을 못 남긴다.
-   */
-  playHistoryId: number | null;
-  /** 지금 곡을 틀기 시작한 시각. 종료 보고의 `playedMs` 를 여기서 잰다 */
-  songStartedAt: number;
 
   start: (input: {
     email: string;
@@ -65,10 +55,7 @@ interface FollowState {
     imageUrl: string | null;
     musicId: number;
     snapshotSeq: number;
-    playHistoryId: number;
   }) => void;
-  /** 곡이 바뀌어 기록 번호가 새것이 됐다. 시작 시각도 같이 갈아 끼운다 */
-  setSongRecord: (playHistoryId: number | null, songStartedAt: number) => void;
   /** 인솔자가 곡을 옮겼다 (`RIDE_TRACK`). 표식이 따라가도록 자리만 갱신한다 */
   setLeaderMusicId: (musicId: number) => void;
   /** 인솔자가 상세를 열거나 닫았다 (`RIDE_PANEL`). 재생은 건드리지 않는다 */
@@ -88,10 +75,8 @@ export const useFollowStore = create<FollowState>()(
       leaderViewingMusicId: null,
       followerCount: 0,
       snapshotSeq: 0,
-      playHistoryId: null,
-      songStartedAt: 0,
 
-      start: ({ email, nickname, imageUrl, musicId, snapshotSeq, playHistoryId }) =>
+      start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) =>
         set(
           {
             leaderEmail: email,
@@ -100,13 +85,10 @@ export const useFollowStore = create<FollowState>()(
             leaderMusicId: musicId,
             leaderViewingMusicId: null,
             snapshotSeq,
-            playHistoryId,
-            songStartedAt: Date.now(),
           },
           false,
           "start",
         ),
-      setSongRecord: (playHistoryId, songStartedAt) => set({ playHistoryId, songStartedAt }, false, "setSongRecord"),
       setLeaderMusicId: (leaderMusicId) => set({ leaderMusicId }, false, "setLeaderMusicId"),
       setLeaderViewingMusicId: (leaderViewingMusicId) => set({ leaderViewingMusicId }, false, "setLeaderViewingMusicId"),
       stop: () =>
@@ -118,8 +100,6 @@ export const useFollowStore = create<FollowState>()(
             leaderMusicId: null,
             leaderViewingMusicId: null,
             snapshotSeq: 0,
-            playHistoryId: null,
-            songStartedAt: 0,
             followerCount: 0,
           },
           false,

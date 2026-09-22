@@ -105,11 +105,10 @@ export const API_ENDPOINTS = {
     search: "/bff/music/search",
     /**
      * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.
-     * 이 호출이 곧 내 위치 이동이다. 응답의 `playHistoryId` 를 보관했다가 종료에 쓴다.
+     * 이 호출이 곧 내 위치 이동이다.
      */
     play: "/bff/music/play",
     /** 재생 종료. 위치는 바뀌지 않고 들은 시간만 남긴다 */
-    playEnd: "/bff/music/play/end",
     /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
     videoId: (id: number) => `/bff/music/${id}/video-id`,
     /**

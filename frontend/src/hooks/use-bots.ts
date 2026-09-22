@@ -5,7 +5,8 @@ import { BOTS, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { isKnownArtist } from "@/lib/bots/known-artists";
 import { BOT_ROSTER } from "@/lib/bots/roster";
-import { nextEpisode, rnd, type BotEpisode } from "@/lib/bots/sim";
+import { dropSong, nextEpisode, rnd, type BotEpisode } from "@/lib/bots/sim";
+import { subscribePlayback } from "@/lib/playback-events";
 import { endRide, playFrom } from "@/lib/realtime/ride";
 import { useBotStore, type BotLive } from "@/stores/use-bot-store";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -61,9 +62,33 @@ export function useBots(enabled: boolean): void {
       syncRide(before, next, showToast);
     };
 
+    /**
+     * **재생이 안 되는 곡은 그 자리에서 넘긴다** (S15P21A405-546).
+     *
+     * `pickSong` 이 `playable` 을 거르지만 그건 "유튜브 검색어를 만들 수 있다" 는 뜻일 뿐이라,
+     * 검색 결과가 재생 불가이거나 임베드가 막힌 경우는 **틀어 봐야 안다.** 플레이어에는 큐가
+     * 있을 때 다음 곡으로 넘기는 길이 이미 있지만(`youtube-embed`), 봇 탑승은 `playSingle`
+     * 이라 큐가 비어 있어 그 길을 못 탄다 — 그대로 두면 소리도 안 나고 넘어가지도 않는다.
+     *
+     * 곡만 떼어내고 `tick` 을 바로 불러 새 곡을 붙인다. 3초 주기를 기다리면 "바로 넘긴다" 가
+     * 아니다.
+     */
+    const stopWatch = subscribePlayback((e) => {
+      if (e.state !== "unavailable") return;
+      // 다시 고르지 않는다. 한 번 안 된 곡은 다음에도 안 된다
+      dead.add(e.musicId);
+      const bots = useBotStore.getState().bots;
+      if (!bots.some((b) => b.episode.musicId === e.musicId)) return;
+      useBotStore.getState().setBots(dropSong(bots, e.musicId));
+      tick();
+    });
+
     tick();
     const id = window.setInterval(tick, BOTS.tickMs);
-    return () => window.clearInterval(id);
+    return () => {
+      window.clearInterval(id);
+      stopWatch();
+    };
   }, [enabled, setBots, showToast]);
 
   /**
@@ -103,10 +128,16 @@ export function useBots(enabled: boolean): void {
  * 그 겹에 아는 곡이 거의 없으면 **평소대로 고른다** — 한두 곡에 여섯이 겹쳐 서느니 모르는
  * 곡이라도 흩어지는 편이 낫다.
  */
+/**
+ * 틀어 봤더니 안 되던 곡 (S15P21A405-546). 봇 전체가 같이 피한다 — 한 봇에게 안 되는 곡은
+ * 다른 봇에게도 안 된다. 새로고침하면 비는데, 그때는 다시 한 번 부딪혀 보고 다시 담는다.
+ */
+const dead = new Set<number>();
+
 function pickSong(layer: number, myLayer: number, myMusicId: number | null): number | null {
   const engine = getMapEngine();
   if (layer !== myLayer || !engine?.ready) return null;
-  const playable = engine.songs.filter((s) => s.playable);
+  const playable = engine.songs.filter((s) => s.playable && !dead.has(s.musicId));
   const known = playable.filter((s) => isKnownArtist(s.artist));
   const songs = known.length >= BOTS.knownMin ? known : playable;
   if (songs.length === 0) return null;

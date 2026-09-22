@@ -123,3 +123,42 @@ test("봇 주소는 한 줄로 가려낼 수 있다 — 서버로 나가면 안 
   assert.equal(new Set(BOT_ROSTER.map((b) => b.email)).size, BOT_ROSTER.length, "이메일이 겹치면 목록에서 한 명이 사라진다");
   assert.equal(new Set(BOT_ROSTER.map((b) => b.seed)).size, BOT_ROSTER.length, "시드가 겹치면 두 봇이 똑같이 움직인다");
 });
+
+// ── 재생 불가 곡 넘기기 (S15P21A405-546) ──────────────────────────────────
+
+test("안 틀리는 곡은 곡만 떼고 에피소드는 그대로 둔다", () => {
+  const { dropSong } = require("../src/lib/bots/sim.ts");
+  const bots = [
+    { email: "a", episode: { index: 3, online: true, layer: 2, musicId: 100, startedAt: T0, endsAt: T0 + 200_000 } },
+    { email: "b", episode: { index: 1, online: true, layer: 2, musicId: 200, startedAt: T0, endsAt: T0 + 300_000 } },
+  ];
+  const next = dropSong(bots, 100);
+
+  assert.equal(next[0].episode.musicId, null, "그 곡을 들고 있던 봇만 곡이 빈다");
+  assert.equal(next[1].episode.musicId, 200, "다른 봇은 건드리지 않는다");
+
+  /**
+   * **에피소드를 끝내면 안 된다.** 끝내면 `nextEpisode` 가 접속 여부를 다시 굴리고, 거기서
+   * 오프라인이 나오면 그 봇을 따라가던 사람에게 "인솔자가 사라졌습니다" 가 뜬다 —
+   * 곡 하나가 안 틀렸을 뿐인데 따라가기가 끊기는 셈이다.
+   */
+  assert.equal(next[0].episode.online, true, "접속 상태는 그대로");
+  assert.equal(next[0].episode.layer, 2, "겹도 그대로");
+  assert.equal(next[0].episode.endsAt, T0 + 200_000, "에피소드를 끝내지 않는다");
+});
+
+test("같은 곡을 여럿이 듣고 있으면 다 같이 넘긴다", () => {
+  const { dropSong } = require("../src/lib/bots/sim.ts");
+  const at = (email, musicId) => ({ email, episode: { index: 0, online: true, layer: 0, musicId, startedAt: T0, endsAt: T0 + 1 } });
+  const next = dropSong([at("a", 7), at("b", 7), at("c", 9)], 7);
+  assert.deepEqual(
+    next.map((b) => b.episode.musicId),
+    [null, null, 9],
+  );
+});
+
+test("아무도 안 듣는 곡이면 그대로 돌려준다", () => {
+  const { dropSong } = require("../src/lib/bots/sim.ts");
+  const bots = [{ email: "a", episode: { index: 0, online: true, layer: 0, musicId: 1, startedAt: T0, endsAt: T0 + 1 } }];
+  assert.deepEqual(dropSong(bots, 999), bots);
+});

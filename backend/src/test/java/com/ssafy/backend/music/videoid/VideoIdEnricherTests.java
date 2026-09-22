@@ -59,10 +59,28 @@ class VideoIdEnricherTests {
 	@Test
 	void resolve_marksUnplayable_andDoesNotWriteVideoId_whenLookupSaysUnplayable() {
 		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
+		when(writerPort.markUnplayable(1L)).thenReturn(true);
 
 		String result = enricher.resolve(1L, "a", "t", "al", null, 200);
 
 		assertEquals(VideoIds.UNPLAYABLE, result);
+		verify(writerPort).markUnplayable(1L);
+		verify(writerPort, never()).save(anyLong(), anyString());
+	}
+
+	/**
+	 * S15P21A405-568 — 동시에 들어온 다른 요청이 videoId 를 찾아 저장했으면 확정은 건너뛴다.
+	 *
+	 * <p>이 응답 한 번은 재생 불가로 나가지만 videoId 를 덮어쓰지는 않는다. 다음 조회가
+	 * 저장된 값을 읽어 스스로 바로잡는다 — 되돌릴 수 없는 삭제 대상으로 굳는 것보다 낫다.
+	 */
+	@Test
+	void resolve_doesNotWriteVideoId_whenMarkingUnplayableWasSkipped() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
+		when(writerPort.markUnplayable(1L)).thenReturn(false);
+
+		enricher.resolve(1L, "a", "t", "al", null, 200);
+
 		verify(writerPort).markUnplayable(1L);
 		verify(writerPort, never()).save(anyLong(), anyString());
 	}

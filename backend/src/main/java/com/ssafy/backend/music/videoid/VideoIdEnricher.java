@@ -40,8 +40,13 @@ public class VideoIdEnricher {
 		Optional<String> videoId = lookupPort.lookup(artist, title, album, durationSeconds);
 		videoId.ifPresent(id -> {
 			if (VideoIds.UNPLAYABLE.equals(id)) {
-				writerPort.markUnplayable(musicId);
-				log.info("[VideoId] 재생 불가 확정 musicId={}", musicId);
+				if (writerPort.markUnplayable(musicId)) {
+					log.info("[VideoId] 재생 불가 확정 musicId={}", musicId);
+				} else {
+					// 동시에 들어온 다른 요청이 videoId 를 찾아 저장했다(S15P21A405-568).
+					// 이 응답 한 번은 재생 불가로 나가지만 다음 조회는 저장된 값을 읽는다.
+					log.info("[VideoId] 재생 불가 확정 건너뜀 — videoId 가 이미 저장됨 musicId={}", musicId);
+				}
 			} else {
 				writerPort.save(musicId, id);
 				log.info("[VideoId] 실시간 매핑 완료 musicId={}, videoId={}", musicId, id);

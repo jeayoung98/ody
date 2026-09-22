@@ -11,6 +11,10 @@ public interface VideoIdMapper {
 
 	int updateVideoId(@Param("musicId") long musicId, @Param("videoId") String videoId);
 
-	/** 재생 불가 확정. {@code video_id} 는 건드리지 않는다 — 판정의 정본은 플래그다(S15P21A405-454). */
+	/**
+	 * 재생 불가 확정. {@code video_id} 는 쓰지 않는다 — 판정의 정본은 플래그다(S15P21A405-454).
+	 *
+	 * @return 1 이면 세웠고, <b>0 이면 이미 videoId 가 있어 세우지 않았다</b>(S15P21A405-568 경합)
+	 */
 	int markUnplayable(@Param("musicId") long musicId);
 }

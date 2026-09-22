@@ -2,6 +2,7 @@ import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLI
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
+import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -2804,17 +2805,40 @@ export class MapEngine {
     this.project();
   }
 
+  /**
+   * 지도에 찍을 사람 고르기 — **화면에 골고루** (S15P21A405-542).
+   *
+   * 예전에는 받은 배열 순서대로 훑으며 자리가 비면 찍고 `MAP_FRIENDS_MAX` 에서 멈췄다. 그
+   * 순서는 서버 응답 순서라 화면상의 자리와 아무 상관이 없었다 — **한쪽에 몰린 사람들이 먼저
+   * 칸을 차지하고 그 밖 영역은 통째로 비어 보였다.** 비슷한 곡을 듣는 사람끼리 지도에서 붙어
+   * 있는 것이 이 지도의 원리라, 몰림은 예외가 아니라 기본값이다.
+   *
+   * 같은 문제를 앨범 커버에서 먼저 겪었고 [`cover-spread`](../render/cover-spread.ts) 로 풀어
+   * 뒀다 (S15P21A405-518). 화면을 뽑을 개수만큼 칸으로 나누고 칸마다 하나씩 앞세운다.
+   * 규칙을 두 벌로 두지 않으려고 그 함수를 그대로 부른다.
+   *
+   * **58px 경합 검사는 남겨 둔다.** 칸 나누기는 "고루 퍼짐" 을 만들고 이건 "겹쳐 그리지 않음"
+   * 을 만든다 — 목적이 다르고, 칸이 커도 한 칸 안에서 둘이 겹칠 수 있다.
+   */
   private updateFriends() {
-    this.visFriends = [];
     const f = this.freeRect();
     const G = 58;
-    const occ = new Set<string>();
     const capN = MAP_FRIENDS_MAX;
-    const list = this.follow ? [this.follow.leader, ...this.friends.filter((x) => x.email !== this.follow!.leader.email)] : this.friends;
-    for (const u of list) {
-      if (this.visFriends.length >= capN) break;
+    const isLeaderOf = (u: NearbyUser) => this.follow?.leader.email === u.email;
+
+    /**
+     * 지난 프레임에 보이던 사람. **칸 경계는 카메라를 따라 움직인다** — 그냥 두면 지도를 밀
+     * 때마다 칸의 승자가 바뀌어 사람이 깜빡인다. 같은 칸을 다투면 이미 서 있던 쪽이 이긴다.
+     */
+    const wasVisible = new Set(this.visFriends.map((v) => v.user.email));
+    this.visFriends = [];
+
+    // 1) 그릴 수 있는 사람만 추려 화면 좌표를 구한다. 인솔자는 경합 밖이라 따로 둔다
+    const leader: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
+    const cands: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
+    for (const u of this.friends) {
       if (!u.isOnline || !u.isPublic) continue;
-      const isLeader = this.follow?.leader.email === u.email;
+      const isLeader = isLeaderOf(u);
       let w = this.friendPos.get(u.email);
       if (!w || !isLeader) {
         const base = this.anchorFor(u);
@@ -2824,15 +2848,34 @@ export class MapEngine {
       }
       const { px, py } = this.worldToScreen(w.x, w.y);
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
-      if (!isLeader && (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104)) continue;
-      const key = `${Math.floor(px / G)},${Math.floor(py / G)}`;
-      if (!isLeader) {
-        let clash = false;
-        for (let a = -1; a <= 1 && !clash; a++) for (let b = -1; b <= 1; b++) if (occ.has(`${Math.floor(px / G) + a},${Math.floor(py / G) + b}`)) clash = true;
-        if (clash) continue;
+      if (isLeader) {
+        leader.push({ u, px, py, heading: w.heading });
+        continue;
       }
-      occ.add(key);
-      this.visFriends.push({ user: u, px, py, heading: w.heading, isLeader });
+      if (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104) continue;
+      cands.push({ u, px, py, heading: w.heading });
+    }
+
+    // 2) 칸마다 하나씩 앞세운 순서로. 지난 프레임에 보이던 사람이 제 칸을 먼저 집는다
+    const order = keptFirst(cands, (c) => wasVisible.has(c.u.email));
+    const rect: Rect = { x0: 20, y0: 76, x1: Math.max(21, f.x1 - 20), y1: Math.max(77, this.H - 104) };
+    const spread = spreadOrder(order, (i) => ({ x: cands[i].px, y: cands[i].py }), rect, capN);
+
+    // 3) 그 순서대로 겹치지 않게 채운다. 인솔자는 늘 먼저이고 자리를 다투지 않는다
+    const occ = new Set<string>();
+    const place = (c: { u: NearbyUser; px: number; py: number; heading: number }, isLeader: boolean) => {
+      const cx = Math.floor(c.px / G);
+      const cy = Math.floor(c.py / G);
+      if (!isLeader) {
+        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (occ.has(`${cx + a},${cy + b}`)) return;
+      }
+      occ.add(`${cx},${cy}`);
+      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader });
+    };
+    for (const c of leader) place(c, true);
+    for (const i of spread) {
+      if (this.visFriends.length >= capN) break;
+      place(cands[i], false);
     }
   }
 

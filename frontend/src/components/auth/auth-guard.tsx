@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
 import { ROUTES, STORAGE_KEYS } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
+import { useForcePublic } from "@/hooks/use-force-public";
 import { readStorage, subscribeStorage } from "@/lib/storage";
 
 /**
@@ -44,6 +45,8 @@ export default function AuthGuard({ children, requireNickname = true }: { childr
   const hasToken = useHasToken();
   const { data: me } = useMeQuery();
   const needsNickname = requireNickname && !!me && !me.nickname;
+  // 폐지된 공개/비공개의 잔해를 치운다 — 내 정보가 온 뒤라야 토큰이 살아 있는 것이 확실하다
+  useForcePublic(!!me);
 
   useEffect(() => {
     if (!hasToken) router.replace(ROUTES.login);

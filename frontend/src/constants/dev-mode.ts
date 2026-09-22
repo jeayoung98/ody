@@ -14,7 +14,7 @@
  * 그래서 주소로 켠다.
  *
  * ```text
- * ?dev=1   설문을 끄고, 좁은 화면 게이트를 넘고, 이 브라우저의 분석 전송을 멈춘다
+ * ?dev=1   설문을 끄고, 이 브라우저의 분석 전송을 멈춘다
  * ?dev=0   셋 다 되돌린다
  * ```
  *
@@ -42,14 +42,8 @@
  * 상관없이 항상 필요하다. 감춰 둔 기능도 없다(전부 켜짐). 그러니 둘을 나눠 봐야 차이가
  * "설문 화면이 뜨느냐" 뿐이고, 이름이 둘이면 어느 쪽을 써야 하는지가 안 읽힌다.
  *
- * ## 저장소 키는 둘로 둔다
- *
- * 스위치는 하나지만 `ody:survey-mode` 와 `ody:gate-off` 는 따로 쓴다. 게이트 우회를 제 키에
- * 담아 두면 S15P21A405-419 에서 게이트를 걷어낼 때 **지울 것이 한 줄로 분명해진다.** 설문
- * 모드에 얹어 두면 그때 두 뜻이 엉킨 키를 풀어야 한다.
- *
- * 게이트를 굳이 스위치로 넘기는 이유는 `globals.css` 의 `.small-screen-gate` 가 순수 CSS 라
- * 폰에서 끌 방법이 달리 없어서다.
+ * 좁은 화면 게이트를 넘기는 일도 여기 있었는데, 게이트 자체가 없어져서 그 키(`ody:gate-off`)와
+ * `<html>` 클래스를 같이 걷었다 (S15P21A405-419). 남은 것은 설문과 분석 둘이다.
  *
  * ## 왜 인라인 스크립트인가
  *
@@ -69,14 +63,8 @@
 // 배럴(@/constants)이 아니라 정의 파일에서 직접 받는다 — 이 파일도 배럴이 모으는 대상이라 순환이 된다
 import { STORAGE_KEYS } from "./storage-keys";
 
-/** 개발 버전 스위치. `?dev=1` 켜기, `?dev=0` 끄기 — 설문과 게이트를 한꺼번에 뒤집는다 */
+/** 개발 버전 스위치. `?dev=1` 켜기, `?dev=0` 끄기 — 설문과 분석을 한꺼번에 뒤집는다 */
 export const DEV_MODE_PARAM = "dev";
-
-/**
- * 켜졌을 때 `<html>` 에 붙는 클래스. 게이트를 덮는 규칙이 `globals.css` 에 있고,
- * `html.ody-dev .small-screen-gate` 라 특이도가 높아 미디어 쿼리보다 항상 이긴다.
- */
-export const DEV_MODE_CLASS = "ody-dev";
 
 /**
  * `<head>` 에서 막고 도는 인라인 스크립트. **번들이 아니라 문자열로 나간다.**
@@ -88,14 +76,12 @@ export const DEV_MODE_CLASS = "ody-dev";
  * 죽는다.** 실패하면 그냥 아무 일도 안 한 것이 된다.
  */
 export const devModeScript = `(function(){try{
-var K="${STORAGE_KEYS.surveyMode}",G="${STORAGE_KEYS.gateOff}",A="${STORAGE_KEYS.analyticsMode}",u=new URL(location.href);
+var K="${STORAGE_KEYS.surveyMode}",A="${STORAGE_KEYS.analyticsMode}",u=new URL(location.href);
 var d=u.searchParams.get("${DEV_MODE_PARAM}");
 if(d!==null){
 var on=d!=="0";
-[K,G,A].forEach(function(k){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
+[K,A].forEach(function(k){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
 u.searchParams.delete("${DEV_MODE_PARAM}");
 history.replaceState(null,"",u.pathname+u.search+u.hash);
 }
-function off(k){return localStorage.getItem(k)==="false"||sessionStorage.getItem(k)==="false";}
-document.documentElement.classList.toggle("${DEV_MODE_CLASS}",off(K)||off(G));
 }catch(e){}})();`;

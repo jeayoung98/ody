@@ -7,7 +7,7 @@ import ChartPanel from "@/components/panels/chart/chart-panel";
  */
 export default function ChartPage() {
   return (
-    <PanelScreen>
+    <PanelScreen panel="chart">
       <ChartPanel />
     </PanelScreen>
   );

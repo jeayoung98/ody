@@ -101,7 +101,7 @@ export const FONTS = {
  * **JS 안에서 이미 폭을 재고 있는 곳**이 같은 경계를 쓰려고 참조한다.
  */
 export const BREAKPOINTS = {
-  tablet: 768,
+  tablet: 900,
   desk: 900,
 } as const;
 

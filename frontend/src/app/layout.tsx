@@ -1,6 +1,5 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
-import SmallScreenGate from "@/components/layout/small-screen-gate";
 import { devModeScript } from "@/constants/dev-mode";
 import { TEST_TOOLS } from "@/constants/test-tools";
 import AppShell from "@/components/layout/app-shell";
@@ -68,11 +67,6 @@ export default function RootLayout({ children }: { children: ReactNode }) {
         <QueryProvider>
           <AppShell>{children}</AppShell>
         </QueryProvider>
-        {/*
-          좁은 화면 차단 (S15P21A405-379). **루트 레이아웃에 둔다** — 지도·튜토리얼·로그인 등
-          모든 경로에 같이 걸려야 한다. 순수 CSS 라 JS 보다 먼저, JS 없이도 동작한다
-        */}
-        <SmallScreenGate />
       </body>
     </html>
   );

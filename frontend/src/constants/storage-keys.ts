@@ -24,12 +24,6 @@ export const STORAGE_KEYS = {
    * 읽는 쪽은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나다.
    */
   surveyMode: "ody:survey-mode",
-  /**
-   * 좁은 화면 게이트를 넘는다 (S15P21A405-421). `false` 면 넘고, 없으면 게이트가 산다 —
-   * 값 규칙을 `surveyMode` 와 맞춰 뒀다. 읽는 쪽은 CSS 라 [`dev-mode.ts`](./dev-mode.ts) 의
-   * 인라인 스크립트가 `<html>` 클래스로 옮긴다. 게이트를 걷어낼 때(S15P21A405-419) 같이 지운다.
-   */
-  gateOff: "ody:gate-off",
   /** 없거나 `true`면 분석 전송, `false`면 이 브라우저의 GA4·PostHog 수집을 모두 끈다. */
   analyticsMode: "ody:analytics-mode",
   /** `true`일 때 이 브라우저의 GA4 이벤트만 DebugView 대상으로 표시한다. */

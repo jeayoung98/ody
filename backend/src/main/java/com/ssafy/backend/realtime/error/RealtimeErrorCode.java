@@ -55,7 +55,20 @@ public enum RealtimeErrorCode implements ErrorCode {
 	 * 화면을 새로 고치면 풀린다 — 접속 문제와 구분하려고 따로 둔다.
 	 */
 	RIDE_STALE(HttpStatus.CONFLICT, "RIDE_STALE",
-			"따라가기 상태가 바뀌었습니다. 화면을 새로 고쳐 주세요.");
+			"따라가기 상태가 바뀌었습니다. 화면을 새로 고쳐 주세요."),
+
+	// 아래는 반응이 거부되는 사유들이다.
+
+	/** 자기 자신에게 보냈다. 언제 다시 해도 안 되므로 400 이다. */
+	REACTION_SELF(HttpStatus.BAD_REQUEST, "REACTION_SELF", "자기 자신에게는 반응을 보낼 수 없습니다."),
+
+	/** 상대가 내 층에 없다. 접속이 없거나 다른 층에 있다. 주변 사람 목록을 새로 받으면 된다. */
+	REACTION_NOT_NEARBY(HttpStatus.CONFLICT, "REACTION_NOT_NEARBY",
+			"같은 영역에 있는 사용자에게만 반응을 보낼 수 있습니다."),
+
+	/** 같은 사람에게 너무 빨리 다시 보냈다(SOCIAL-04). 잠시 뒤 다시 하면 된다. */
+	REACTION_COOLDOWN(HttpStatus.TOO_MANY_REQUESTS, "REACTION_COOLDOWN",
+			"같은 사용자에게는 잠시 뒤에 다시 보낼 수 있습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

@@ -14,5 +14,7 @@ public enum WebSocketErrorCode {
 	/** 재생 조작 종류나 재생 위치가 잘못됐다. */
 	RIDE_PLAYBACK_INVALID,
 	/** 곡 상세 열기·닫기 요청의 값이 잘못됐다. */
-	RIDE_PANEL_INVALID
+	RIDE_PANEL_INVALID,
+	/** 지도 화면 종류 요청의 값이 잘못됐다. 종류가 없거나 그 종류에 필요한 번호가 빠졌다. */
+	RIDE_VIEW_INVALID
 }

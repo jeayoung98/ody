@@ -261,53 +261,47 @@
 
 ---
 
-## 7. 반응하기 — 프론트 전달 (S15P21A405-590, 2026-09-22)
+## 8. 인솔자 지도 화면 종류 공유(RIDE_VIEW) — 프론트 전달 (S15P21A405-591, 2026-09-22)
 
-SOCIAL-02(반응하기)·SOCIAL-04(전송 제한)의 백엔드다. 대상 범위는 주변 사람과 같은 기준 — **나와 같은 층에 서 있는 사람**(582). 기록은 남기지 않고 받는 사람 개인 큐로 바로 넘긴다. 기존 코드는 수정하지 않았다(enum 두 곳에 값 추가만).
+따라가기가 옮겨 주던 것(곡·재생·화면 위 사람·곡 상세 패널)에 **인솔자가 지도를 어떤 모양으로 보고 있는지**를 더했다. `RIDE_PANEL` 과 같은 방식 — 내용은 안 보내고 "무엇을 보는지" 만 보낸다. 받는 쪽이 그 번호로 기존 조회 API 를 부른다. 기존 코드는 수정하지 않았다(enum 값 추가·탑승 직후 발송 한 줄·해체·마지막 하차 시 키 삭제 추가만).
 
-### 7-1. 전송 (REST)
+### 8-1. 인솔자 → 서버 (C→S)
 
-| 항목 | 값 |
-| --- | --- |
-| 경로 | `POST /api/realtime/reactions` |
-| 인증 | Bearer 필수. 보낸 사람은 토큰 주체(email) |
-| body | `{ "toEmail": "you@x.com", "reactionKey": "fire" }` |
-| `reactionKey` | `^[a-z_]{1,32}$`. 이모지 목록은 프론트 `constants/reactions.ts` 소유 — 서버는 형식만 검사 |
-| 성공 | `200 { success: true, data: null }` |
-| 프로파일 | `realtime` 에서만 뜬다 |
+`/app/ride/view` 로 보낸다. 라이더가 보내면 개인 오류 큐로 `RIDE_NOT_CAPTAIN`.
 
-거부 코드 — 어느 것인지로 화면 문구를 갈라야 한다.
-
-| HTTP | code | 뜻 | 프론트가 할 일 |
-| --- | --- | --- | --- |
-| 400 | `REACTION_SELF` | 자기 자신 | 버튼을 미리 막는다 |
-| 400 | `INVALID_INPUT` | body 형식 위반 | 개발 중에만 난다 |
-| 422 | `PRESENCE_ERROR` | **내가** 층 위에 없다(접속 끊김) | 따라가기와 같다 — 소켓 재연결 |
-| 409 | `REACTION_NOT_NEARBY` | 상대가 접속이 없거나 다른 층 | 주변 사람 목록을 새로 받는다. 토스트 "지금은 보낼 수 없어요" |
-| 429 | `REACTION_COOLDOWN` | 같은 사람에게 5초 안 재전송 | 프론트 `REACTION_COOLDOWN_MS`(5초) 가 먼저 막으므로 정상 흐름에서는 안 난다 |
-
-### 7-2. 수신 (소켓)
-
-받는 사람 개인 큐 `/user/queue/presence` 로, 봉투 `type` 은 `REACTION`.
+| `kind` | 필수 번호 | 프론트 상태 대응 |
+| --- | --- | --- |
+| `default` | 없음 | `viewMode = "default"` |
+| `journey` | `startMusicId`, `endMusicId` | `viewMode = "constellation"` + 여정 결과 |
+| `playlist` | `playlistId` | `viewMode = "constellation"` + 플레이리스트 |
+| `nearby` | `centerMusicId` | `viewMode = "nearby"` (`nearbyCenterMusicId`) |
 
 ```json
-{ "type": "REACTION", "seq": 17,
-  "payload": { "fromEmail": "me@x.com", "reactionKey": "fire", "sentAt": "2026-09-22T13:40:12.345Z" } }
+{ "kind": "journey", "startMusicId": 10877, "endMusicId": 4927 }
 ```
 
-- `types/profile.ts` 의 `ReactionEvent` 와 필드가 같다(`id` 는 스토어가 붙인다).
-- 보낸 사람 닉네임·사진은 **담지 않는다.** 주변 사람 목록(`NearbyPerson`)에서 `fromEmail` 로 찾는다. 같은 층이라 목록에 있다 — 없으면(상한 12명 밖) 이모지만 띄운다.
-- 소켓이 끊긴 사람에게 보낸 반응은 사라진다. 다시 보내지 않는다.
+번호가 빠지거나 `kind` 를 모르면 개인 오류 큐로 `RIDE_VIEW_INVALID`.
 
-### 7-3. 프론트 반영 필요
+### 8-2. 서버 → 라이더 (S→C)
 
-1. `hooks/mutations/use-send-reaction-mutation.ts` 가 부르는 `API_ENDPOINTS.user.reaction(email)` (`/api/users/{email}/reactions`, Next 목 라우트) → `POST /api/realtime/reactions` 로 전환. 목 라우트 `app/api/users/[email]/reactions/route.ts` 제거.
-2. 소켓 `REACTION` 수신 핸들러 → `useReactionStore.push({ reactionKey, mine: false, fromEmail, nickname })`. `hooks/use-mock-friend-reactions.ts` 와 `MOCK_FRIEND_REACTION_INTERVAL_MS` 제거.
-3. 대상 지정 UI — 지금 `ReactionPicker.onPick` 에 `toEmail` 이 안 넘어와 서버로 아무것도 안 간다. 주변 사람 패널 항목(또는 지도 아바타)에서 보내는 흐름이 필요하다.
-4. `types/api.ts` 에 에러 코드 3개 추가: `REACTION_SELF` `REACTION_NOT_NEARBY` `REACTION_COOLDOWN`.
+라이더 개인 큐 `/user/queue/presence`, 봉투 `type` = `RIDE_VIEW`. payload 는 요청과 같은 모양이고 종류에 맞지 않는 번호는 `null` 이다.
 
-### 7-4. 전제·주의
+```json
+{ "type": "RIDE_VIEW", "seq": 31,
+  "payload": { "kind": "journey", "startMusicId": 10877, "endMusicId": 4927, "playlistId": null, "centerMusicId": null } }
+```
 
-- 따라가는 동안에도 보낼 수 있다(B-5 의 차단 목록에 없다). 라이더는 인솔자 층에 있으므로 같은 층 검사는 그대로 통한다.
-- 쿨다운은 **방향이 있다.** 내가 그에게 5초에 한 번, 그가 나에게 5초에 한 번. `realtime.reaction.cooldown-sec`(기본 5) 로 조정.
-- 비공개(isPublic=false) 사용자에게도 층이 같으면 간다. 프론트 목록에 안 뜨면 대상으로 고를 수 없으니 실질적으로 막힌다. 서버 차단이 필요하면 그때 추가.
+- **중간에 탄 사람도 받는다.** 탑승 응답(`POST /api/realtime/ride`) 직후 `RIDE_VIEWPORT` 와 같은 타이밍에 `RIDE_VIEW` 가 한 번 온다. 인솔자가 기본 지도면 **안 온다** — 라이더도 기본이라 보낼 것이 없다.
+- 라이더는 이 값으로 자기가 조회한다: `journey` → `GET /api/music/journey?start=&end=`, `playlist` → 플레이리스트 조회, `nearby` → `GET /api/music/nearby?id=`. 한 명이 조회에 실패해도 그 사람만 빈 화면이다.
+- 선단이 흩어지거나(`RIDE_ENDED`) 마지막 라이더가 내리면 서버가 저장값을 지운다. 라이더는 `RIDE_ENDED` 를 받으면 자기 화면을 기본으로 돌린다(이미 그렇게 하고 있을 것).
+
+### 8-3. 프론트 반영 필요
+
+1. **인솔자 발송 4지점** — `viewMode`/여정/플레이리스트/주변 탐색 상태가 바뀌는 자리에서 `/app/ride/view` 발송. 따라오는 사람이 0명이어도 보낸다(저장만 되고 나중에 타는 사람이 받는다). 따라가는 중(`riding`)이면 보내지 않는다 — 569 의 `shouldDeclare` 와 같은 함정.
+2. **라이더 수신** — `RIDE_VIEW` 핸들러: `kind` 에 따라 기존 진입 함수(여정 열기·플레이리스트 별자리·`enterNearby`·`exitNearby`) 호출. 라이더 쪽 오버레이 조작 UI 는 막혀 있어야 한다(B-5).
+3. `RIDE_VIEW_INVALID` 오류 코드 타입 추가.
+
+### 8-4. 하지 않은 것
+
+- 오른쪽 패널(주변사람·랭킹) 공유. 별도 요청이 있을 때.
+- 여정·플레이리스트 내용 전송. 조회 API 가 이미 있어 받는 쪽이 부른다.

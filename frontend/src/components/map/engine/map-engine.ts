@@ -2629,19 +2629,53 @@ export class MapEngine {
   /** 인솔자가 레이어를 바꾼다 — 따라가는 사람도 같은 레이어로 전환 (모프) */
   private leaderChangesLayer(f: FollowState): boolean {
     const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
-    const target = this.layer + dir;
-    if (target < 0 || target >= LAYER_COUNT) return false;
-    const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
+    // 목은 **방향만** 고른다. 옮기는 일 자체는 서버가 모는 길과 같은 입구를 쓴다 (§560)
+    if (!this.rideToLayer(this.layer + dir)) return false;
+    f.phase = "view";
+    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+    return true;
+  }
+
+  /**
+   * **인솔자를 따라 겹을 옮긴다** (S15P21A405-560).
+   *
+   * 탑승 응답과 `RIDE_TRACK` 이 `layer` 를 같이 주는데 그 값을 버리고 있었다 — 인솔자가
+   * 파고들면 따라가는 사람만 제자리에 남고, 그 겹에 없는 곡을 가리키는 바람에 우주선까지
+   * 사라졌다. 옮기는 몸통은 원래 목 안에 갇혀 있던 것을 그대로 꺼낸 것이다.
+   *
+   * **누적 범위(`boxes`)를 같이 맞춘다.** 그 겹의 상주 집합을 받아 오는 키라서, 안 맞추면
+   * 화면만 바뀌고 별이 안 온다. 파고들 때는 지금 보이는 범위를 한 칸 쌓고, 떠오를 때는 자른다.
+   *
+   * 한 번에 여러 겹을 뛰면 쌓는 칸이 모자라지만, 인솔자는 한 겹씩 움직인다 — 그때는 같은
+   * 범위를 반복해 채운다. 정확한 조상 범위는 다음 조회가 바로잡는다.
+   */
+  rideToLayer(target: number, anchorMusicId?: number): boolean {
+    if (target < 0 || target >= LAYER_COUNT || target === this.layer) return false;
+    const f = this.follow;
+    /**
+     * 기준 곡을 **받을 수 있게 열어 둔다.** 탑승 직후에는 `follow` 가 아직 안 걸려 있다 —
+     * 그건 스토어가 바뀐 뒤 화면이 거는 것이라 한 박자 늦는다. 그때는 응답이 준 곡을 쓴다.
+     */
+    const anchor = anchorMusicId ?? f?.viewingMusicId;
+    const at = anchor == null ? null : this.index.get(anchor);
+    if (at == null) return false;
+
+    const view = { x: this.songs[at].pc[target * 2], y: this.songs[at].pc[target * 2 + 1] };
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
     const cam: MapCamera = { s, cx: view.x - (fr.cx - this.W / 2) / s, cy: view.y + (fr.cy - this.H / 2) / s };
-    // 인솔자를 따라 겹을 옮겨도 누적 범위는 맞춰 둔다 (그 겹 상주 집합을 받아야 하므로)
-    this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
-    // 우주선·내 위치는 새 레이어 좌표로 옮긴다
-    this.friendPos.delete(f.leader.email);
-    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
-    f.phase = "view";
-    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+
+    if (target > this.layer) {
+      const box = this.viewBox();
+      const grown = [...this.boxes];
+      while (grown.length < target) grown.push(box);
+      this.boxes = grown;
+    } else {
+      this.boxes = this.boxes.slice(0, target);
+    }
+    // 우주선·내 위치는 새 겹 좌표로 다시 잡힌다
+    if (f) this.friendPos.delete(f.leader.email);
+    this.morph(target, cam, this.subset, `${f?.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
     return true;
   }
 

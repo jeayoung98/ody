@@ -146,10 +146,11 @@ export function endRide(at: { musicId: number | null; layer: number }): void {
   // 자리를 모르는 길이 하나 있다 — 이미 끝나 있어 `RIDE_NOT_RIDING` 이 온 경우다. 그때는 안 옮긴다
   if (at.musicId != null) useMapStore.getState().setMyMusicId(at.musicId);
   /**
-   * 겹 맞추기. **떠오르는 쪽만 할 수 있다** — 파고들기는 엔진이 확대 게이트를 요구해서
-   * 밖에서 겹만 지정해 내려보낼 길이 없다.
-   * ponytail: 인솔자가 더 깊이 내려간 상태로 하차하면 겹이 어긋난 채 남는다.
-   * 엔진에 겹 직접 지정(`goToLayer`)이 생기면 그걸로 바꾼다 — BACKEND-NOTES 가 아니라 프론트 몫이다.
+   * 겹 맞추기. **내려가는 쪽도 된다** (S15P21A405-560) — 엔진에 겹을 직접 지정하는 입구가
+   * 생겼다. 예전에는 떠오르는 쪽만 할 수 있어서, 인솔자가 더 깊이 내려간 상태로 내리면
+   * 겹이 어긋난 채 남았다.
+   *
+   * **`stopFollow` 보다 먼저다.** `rideToLayer` 는 따라가는 상태를 보고 자리를 잡는다.
    */
   const map = useMapStore.getState();
   if (at.layer < map.layer) map.surfaceTo(at.layer);

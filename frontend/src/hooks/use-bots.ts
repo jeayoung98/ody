@@ -4,6 +4,7 @@ import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { BOTS, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
 import { BOT_ROSTER } from "@/lib/bots/roster";
 import { browsesAway, dropSong, nextEpisode, opensDetail, rnd, type BotEpisode } from "@/lib/bots/sim";
@@ -171,6 +172,13 @@ function syncRide(before: Map<string, BotEpisode>, next: BotLive[], showToast: (
     showToast(RIDE_ENDED_BY_CAPTAIN(leader.nickname));
     return null;
   }
+
+  /**
+   * **봇이 겹을 옮기면 같이 옮긴다** (S15P21A405-560). 봇은 내가 있는 겹에서만 곡을 고를 수
+   * 있어서, 안 따라가면 그 봇은 곡 없는 상태로 멈춘다 — 따라가기가 조용히 죽는다.
+   */
+  const toLayer = rideLayerTarget(useMapStore.getState().layer, leader.episode.layer);
+  if (toLayer != null) getMapEngine()?.rideToLayer(toLayer, leader.episode.musicId ?? undefined);
 
   const was = before.get(leader.email);
 

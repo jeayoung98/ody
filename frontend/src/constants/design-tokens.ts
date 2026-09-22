@@ -85,10 +85,19 @@ export const NEBULA_WASH: ReadonlyArray<{ u: number; v: number; r: number; c: re
   { u: 0.92, v: 0.55, r: 0.66, c: [150, 90, 235] },
 ];
 
+/**
+ * 캔버스가 쓰는 폰트. `styles/tokens.css` 의 `--font-*` 와 **같은 값이어야 한다** — 한쪽만
+ * 고치면 DOM 글자와 지도 글자가 서로 다른 서체로 갈린다.
+ *
+ * **셋 다 Pretendard 다** (S15P21A405-538). 이름을 셋으로 남긴 이유는 tokens.css 주석에 있다.
+ * 캔버스에는 `tabular-nums` 가 없으므로, 숫자를 세로로 줄 맞춰야 하는 자리는 지금처럼
+ * 그리는 쪽에서 자리를 잡아 준다.
+ */
+const PRETENDARD = '"Pretendard Variable",Pretendard,system-ui,sans-serif';
 export const FONTS = {
-  body: '"IBM Plex Sans KR",system-ui,sans-serif',
-  mono: '"IBM Plex Mono",ui-monospace,monospace',
-  display: '"Familjen Grotesk","IBM Plex Sans KR",sans-serif',
+  body: PRETENDARD,
+  mono: PRETENDARD,
+  display: PRETENDARD,
 } as const;
 
 /**

@@ -54,10 +54,21 @@
   --color-online: #4fe3ce;
   --color-offline: #3a4761;
 
-  /* ---------- 폰트 ---------- */
-  --font-display: "Familjen Grotesk", "IBM Plex Sans KR", system-ui, sans-serif;
-  --font-body: "IBM Plex Sans KR", system-ui, -apple-system, "Segoe UI", sans-serif;
-  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, monospace;
+  /* ----------
+     폰트 — **셋 다 Pretendard 다** (S15P21A405-538).
+
+     예전에는 Familjen Grotesk(display) · IBM Plex Sans KR(body) · IBM Plex Mono(mono) 를
+     섞어 썼다. 문제는 display 에 **한글 글리프가 없다**는 것이었다 — 한글만 조용히 body 로
+     떨어져서, `홍길동님의 우주선 탑승 중` 같은 한 줄 안에서 서체가 갈렸다.
+
+     이름을 셋으로 남겨 둔 이유는 **부르는 자리가 40곳이 넘기 때문**이다. 토큰을 지우면
+     `font-display` · `font-mono` 유틸리티를 쓰는 곳을 전부 고쳐야 하는데, 값만 같게 두면
+     한 줄도 안 건드린다. 나중에 제목용 서체를 따로 쓰고 싶어지면 여기 한 줄만 바꾼다.
+     ---------- */
+  --font-display: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --font-body: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
+  /* 자리 맞춤이 필요한 곳은 `.num`·`.lbl` 의 `tabular-nums` 가 맡는다 — Pretendard 가 지원한다 */
+  --font-mono: "Pretendard Variable", Pretendard, system-ui, -apple-system, "Segoe UI", sans-serif;
 
   /* ---------- 박스 ---------- */
   --radius-box: 18px;

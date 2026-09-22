@@ -72,7 +72,7 @@ class MusicLikeControllerTests {
         mockMvc.perform(get("/api/music/liked")
                         .principal(new UsernamePasswordAuthenticationToken("me@example.com", null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.items[0].musicId").value(7))
-                .andExpect(jsonPath("$.data.items[0].videoId").value("video7"));
+                .andExpect(jsonPath("$.data.content[0].musicId").value(7))
+                .andExpect(jsonPath("$.data.content[0].videoId").value("video7"));
     }
 }

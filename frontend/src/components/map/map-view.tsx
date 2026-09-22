@@ -9,6 +9,7 @@ import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutatio
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
+import { useBots } from "@/hooks/use-bots";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
@@ -86,6 +87,11 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
    */
   useViewportSubscription(features.social);
+  /**
+   * 데모 봇을 굴리는 유일한 시계 (S15P21A405-536). 지도 화면에만 둔다 — 두 군데서 돌면
+   * 같은 봇이 화면마다 다른 곡을 듣게 된다.
+   */
+  useBots(features.social);
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);

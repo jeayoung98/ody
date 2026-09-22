@@ -5,6 +5,8 @@ import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
+import { useNearbyWithBots } from "@/hooks/use-nearby-with-bots";
+import { isBot } from "@/lib/bots/roster";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -32,11 +34,16 @@ export default function FriendsPanel() {
    * `POST /api/realtime/nearby` 가 409 `RIDE_NOT_CAPTAIN` 으로 거부되는 경로다 — 부르면 패널에
    * 오류만 뜬다. 내 곡이 아니라 인솔자의 곡을 듣고 있으니 "내 주변" 이라는 기준 자체가 없다.
    */
-  const riding = useFollowStore((s) => s.leaderEmail != null);
+  const riding = useFollowStore((s) => s.leaderEmail != null && !isBot(s.leaderEmail));
   const live = connected && !riding;
   const { data, isLoading, error, refetch } = useNearbyPeopleQuery(live);
   // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
   useNearbyPeopleLive(live, refetch);
+  /**
+   * 서버 목록에 **데모 봇을 섞는다** (S15P21A405-536). 소켓이 안 붙어도 봇은 보인다 —
+   * 로컬에서 실시간이 죽어 있을 때 이 패널이 통째로 비는 것이 봇을 만든 이유 중 하나다.
+   */
+  const people = useNearbyWithBots(data?.people);
 
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */
@@ -58,7 +65,7 @@ export default function FriendsPanel() {
     ? "곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요."
     : temporary
       ? "지금은 목록을 만들지 못했어요."
-      : connected && data && data.people.length === 0
+      : people.length === 0
         ? "지금은 비슷한 곡을 듣는 사람이 없어요."
         : null;
 
@@ -78,7 +85,7 @@ export default function FriendsPanel() {
         눈금과 가운데의 나는 연결과 상관없이 참인 것들이라 먼저 보여 줘도 거짓말이 아니다.
       */}
       <div className="relative">
-        <NearbyRadar people={connected && data ? data.people : []} />
+        <NearbyRadar people={people} />
         {/*
           안내는 레이더 **아래쪽에 떠 있는 알약**이다 (S15P21A405-511). 판 한가운데가 아니라
           아래 끝에 두는 이유는 가운데에 내가 있고 그 둘레가 사람 자리이기 때문이다 — 거기를
@@ -112,7 +119,7 @@ export default function FriendsPanel() {
           (S15P21A405-508) — 사용자가 할 수 있는 게 없는 문구라, 레이더 밑에 한 줄 깔리면서
           가운데의 나를 위로 밀어낼 뿐이었다. 할 일이 있는 422·503 안내는 위에 그대로 남는다.
         */}
-        {data?.people.map((p) => <FriendRow key={p.email} person={p} />)}
+        {people.map((p) => <FriendRow key={p.email} person={p} />)}
       </div>
       {/* 반응은 패널 **오른쪽 아래**다 (S15P21A405-496). 목록 위에 있으면 목록을 읽기 전에
           먼저 걸리는데, 반응은 보고 나서 하는 일이다 */}

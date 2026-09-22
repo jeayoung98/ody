@@ -1,6 +1,9 @@
 import { useMutation } from "@tanstack/react-query";
 import { API_ENDPOINTS, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { isBot } from "@/lib/bots/roster";
+import { botLiveOf } from "@/stores/use-bot-store";
 import { sendJoinNow } from "@/hooks/use-presence-join";
 import { playFrom } from "@/lib/realtime/ride";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -30,6 +33,8 @@ export function useRideMutation() {
 
   return useMutation({
     mutationFn: async (target: RideTarget): Promise<RideResponse> => {
+      // 봇은 서버에 없는 사람이다. 보내 봐야 404 고, 보내면 안 되는 요청이다 (S15P21A405-536)
+      if (isBot(target.email)) return mountBot(target.email);
       // presence 가 살아 있어야 200 이 온다. 만료 상태에서 누르면 422 라 미리 깨워 둔다
       sendJoinNow();
       try {
@@ -68,6 +73,39 @@ export function useRideMutation() {
       showToast(RIDE_REJECTED[code as keyof typeof RIDE_REJECTED] ?? RIDE_REJECTED.UNKNOWN);
     },
   });
+}
+
+/**
+ * 봇에 타는 길 (S15P21A405-536).
+ *
+ * **서버 응답과 같은 모양을 만들어 돌려준다.** `onSuccess` 가 그 값 하나만 보고 화면을 세우게
+ * 두려는 것이다 — 여기서 스토어를 직접 건드리면 실사용자 경로와 봇 경로가 따로 놀게 되고,
+ * 둘 중 하나만 고쳐지는 사고가 난다. 이후 봇이 곡을 옮기는 것은 `use-bots` 가 옮겨 준다
+ * (실사용자의 `RIDE_TRACK` 자리).
+ */
+function mountBot(captainEmail: string): RideResponse {
+  const bot = botLiveOf(captainEmail);
+  const musicId = bot?.episode.musicId;
+  // 자리를 모르는 봇에는 탈 수 없다 — 다른 겹에 있거나 막 자리를 비운 경우다
+  if (!bot || !bot.episode.online || musicId == null) throw new ApiError(409, "RIDE_CAPTAIN_INACTIVE", "지금은 따라갈 수 없어요.");
+
+  const layer = bot.episode.layer;
+  const at = getMapEngine()?.pointOf(musicId);
+  return {
+    captainEmail,
+    // 봇 탑승은 서버에 기록이 없다. 종료 보고도 없으므로 이 값은 쓰이지 않는다
+    playHistoryId: -1,
+    musicId,
+    layer,
+    x: at?.pc[layer * 2] ?? 0,
+    y: at?.pc[layer * 2 + 1] ?? 0,
+    cellX: 0,
+    cellY: 0,
+    playback: "PLAYING",
+    positionMs: 0,
+    snapshotSeq: 0,
+    panel: { open: false, musicId: null, tab: "info" },
+  };
 }
 
 const mount = (captainEmail: string) =>

@@ -36,18 +36,32 @@ import { useEffect, type RefObject } from "react";
  * 이 훅이 그 사이에 사라져도 살아남는다. `click` 이 끝내 안 오는 경우(스크롤로 취소 등)를
  * 대비해 시한도 같이 건다 — 안 그러면 다음에 엉뚱한 누름 하나를 먹는다.
  *
+ * ## 어디를 눌렀을 때까지 "바깥" 인가
+ *
+ * 처음에는 **시트 밖 전부**를 바깥으로 쳤다. 그랬더니 탭바와 재생바 버튼까지 같이 삼켜서
+ * **하단 UI 가 통째로 안 눌렸다** — 곡 상세를 열어 둔 채로는 탭 이동도, 재생바의 플리 추가도
+ * 첫 누름이 늘 "시트 내리기" 로 먹혔다. 시트는 거의 항상 열려 있으므로 사실상 상시였다.
+ *
+ * 그래서 {@link only} 로 **셀 자리를 정한다.** 곡 상세는 지도만 센다 — 지도를 보려고 누른
+ * 것이 시트를 내리는 뜻이고, HUD 버튼을 누른 것은 그 버튼을 쓰겠다는 뜻이다.
+ *
  * @param ref      이 요소 **안쪽**을 누른 것은 바깥으로 치지 않는다
  * @param onDismiss 바깥을 눌렀을 때 부른다
  * @param enabled  꺼 두면 아무것도 듣지 않는다 (데스크톱·닫혀 있을 때)
+ * @param only     주면 **이 선택자 안쪽을 누른 것만** 센다. 없으면 바깥 전부
  */
-export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismiss: () => void, enabled: boolean): void {
+export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismiss: () => void, enabled: boolean, only?: string): void {
   useEffect(() => {
     if (!enabled) return;
 
     const isOutside = (target: EventTarget | null) => {
       const el = ref.current;
       if (!el) return false;
-      return !(target instanceof Node) || !el.contains(target);
+      if (!(target instanceof Node)) return true;
+      if (el.contains(target)) return false;
+      // 셀 자리를 정해 뒀으면 그 안쪽을 누른 것만 바깥으로 친다
+      if (only) return target instanceof Element ? !!target.closest(only) : false;
+      return true;
     };
 
     /**
@@ -83,5 +97,5 @@ export function useDismissOnOutside(ref: RefObject<HTMLElement | null>, onDismis
 
     document.addEventListener("pointerdown", onPointerDown, true);
     return () => document.removeEventListener("pointerdown", onPointerDown, true);
-  }, [ref, onDismiss, enabled]);
+  }, [ref, onDismiss, enabled, only]);
 }

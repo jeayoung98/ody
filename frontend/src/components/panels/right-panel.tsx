@@ -54,13 +54,17 @@ export default function RightPanel() {
   const swipe = usePanelSwipe();
   const panelRef = useRef<HTMLElement>(null);
   /**
-   * 폰에서 **바깥을 누르면 한 단 내려온다** (S15P21A405-532, S15P21A405-416).
+   * 폰에서 **지도를 누르면 한 단 내려온다** (S15P21A405-532, 416, 547).
    *
    * 처음에는 어느 단이든 바로 닫았는데, 그러면 **펼쳐 놓고 지도를 한 번 보려는 동작이 매번
-   * 닫기가 된다.** 그래서 2·3 단은 1 단으로 내려오고, 이미 1 단이면 그때 닫는다
-   * (`lowerSnap`). 어느 단에서든 걸어 둬야 하므로 조건에서 단을 빼 뒀다.
+   * 닫기가 된다.** 그래서 2·3 단은 1 단으로 내려오고, 이미 1 단이면 그때 닫는다 (`lowerSnap`).
+   *
+   * **세는 자리는 지도뿐이다** (`[data-map]`). 시트 밖 전부를 세던 때는 탭바와 재생바 버튼까지
+   * 같이 삼켜서 **하단 UI 가 통째로 안 눌렸다** — 시트는 거의 항상 열려 있으므로 사실상
+   * 상시였다. 지도를 누른 것은 지도를 보겠다는 뜻이고, HUD 버튼을 누른 것은 그 버튼을
+   * 쓰겠다는 뜻이라 서로 다른 말이다.
    */
-  useDismissOnOutside(panelRef, lowerSnap, useIsNarrow() && activePanel != null);
+  useDismissOnOutside(panelRef, lowerSnap, useIsNarrow() && activePanel != null, "[data-map]");
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다

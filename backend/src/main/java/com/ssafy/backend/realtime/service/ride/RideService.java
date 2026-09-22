@@ -12,6 +12,7 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
+import com.ssafy.backend.realtime.dto.ride.DisbandResponse;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
 import com.ssafy.backend.realtime.dto.ride.RideEndReason;
 import com.ssafy.backend.realtime.dto.ride.RideEndedPayload;
@@ -335,7 +336,9 @@ public class RideService {
 	 * @param email 사라진 사람
 	 */
 	public void onUserGone(String email) {
-		disband(email);
+		// 사라진 경우다. 여기서 거부를 던지면 뒤따르는 정리가 통째로 멈춘다 — 인솔자도
+		// 따라가던 사람도 아니었던 사람이 끊길 때마다 그렇게 된다. 그래서 조용히 끝나는 쪽을 쓴다.
+		disband(email, RideEndReason.CAPTAIN_LEFT);
 		leaveRide(email);
 	}
 
@@ -360,28 +363,62 @@ public class RideService {
 	}
 
 	/**
-	 * 인솔자가 사라졌을 때 그 선단을 해제한다.
+	 * 인솔자가 스스로 선단을 푼다.
 	 *
-	 * 따라가던 사람은 전원 강제로 내리고, 인솔자가 마지막으로 있던 곡에 그대로 남는다.
+	 * 따라오던 사람이 없으면 인솔자가 아니므로 거부한다. 이때 스크립트를 부르기 전에
+	 * 인원을 먼저 세는 것이 중요하다 — 스크립트는 인원이 0 이어도 재생 정보와 열어 둔 곡 상세를
+	 * 지운다. 사라진 사람에게는 맞지만, 살아 있는 인솔자에게는 나중에 타는 사람이 곡을
+	 * 처음부터 듣게 되는 손해다.
+	 *
+	 * @param captainEmail 선단을 푸는 인솔자
+	 * @return 내린 인원과 그 사람들이 남은 자리
+	 * @throws CustomException 따라오는 사람이 없으면 거부한다
+	 */
+	@Transactional
+	public DisbandResponse disbandByCaptain(String captainEmail) {
+		if (rideRedisRepository.riderCount(captainEmail) == 0) {
+			log.info("해체 거부 reason={}", RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+			throw new CustomException(RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+		}
+
+		DisbandResult result = disband(captainEmail, RideEndReason.CAPTAIN_ENDED);
+		if (!result.hadRiders()) {
+			// 세고 나서 부르는 사이에 전원이 내렸다. 푼 것이 없으니 인솔자가 아닌 것과 같다.
+			log.info("해체 거부 reason={} 사유=사이에 전원이 내렸다", RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+			throw new CustomException(RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+		}
+		return new DisbandResponse(result.riders().size(), result.musicId(), result.layer());
+	}
+
+	/**
+	 * 선단을 해제한다.
+	 *
+	 * 따라가던 사람은 전원 내리고, 인솔자가 마지막으로 있던 곡에 그대로 남는다.
 	 * 듣던 곡은 끊기지 않는다. 스스로 내렸을 때와 결과가 같다.
 	 *
-	 * 인솔자가 창을 닫든 접속이 만료되든 여기로 들어온다. 길을 둘로 두면 한쪽만 고쳐진다.
+	 * 들어오는 길이 셋이다 — 인솔자가 창을 닫든, 접속이 만료되든, 스스로 풀든 여기로 온다.
+	 * 길을 나누면 한쪽만 고쳐진다. 다른 것은 받는 쪽에 실어 보내는 사유뿐이다.
 	 *
-	 * @param captainEmail 사라진 인솔자
+	 * 여기서는 아무것도 던지지 않는다. 끊김 정리 중에 불리는 자리라, 거부를 던지면
+	 * 그 뒤의 정리가 멈춘다. 거부가 필요한 쪽은 {@link #disbandByCaptain(String)} 이 맡는다.
+	 *
+	 * @param captainEmail 선단의 인솔자
+	 * @param reason 받는 사람에게 알릴 끝난 이유
+	 * @return 해제 결과. 따라오던 사람이 없었으면 빈 결과
 	 */
-	public void disband(String captainEmail) {
+	public DisbandResult disband(String captainEmail, RideEndReason reason) {
 		// 1. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
 		//    누가 따라가고 있었는지도 스크립트가 같이 돌려준다. 자바에서 따로 읽으면
 		//    그 사이에 새로 탄 사람이 명단에서 빠져 같은 선단인데 만남으로 세어진다.
 		DisbandResult result = rideRedisRepository.disband(captainEmail);
 		if (!result.hadRiders()) {
-			return; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
+			return result; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
 		}
 		if (result.musicId() <= 0) {
 			// 아무도 서 있는 자리를 갖고 있지 않았다. 등록은 지웠지만 어디에 남았다고
 			// 알릴 자리가 없다. 여기까지 온 것 자체가 이상하므로 남겨 둔다.
 			log.warn("[Ride] 선단 해체 — 돌아갈 자리를 찾지 못했다 인원={}", result.riders().size());
-			return;
+			return result;
 		}
 
 		// 2. 만남에서 뺄 명단은 따라가던 전원에 인솔자를 더한 것이다.
@@ -393,7 +430,7 @@ public class RideService {
 		//    지도에 못 돌아간 사람에게도 보낸다. 끝난 것은 그 사람도 마찬가지다.
 		Spot spot = spotOf(result.musicId(), result.layer());
 		RideEndedPayload ended = new RideEndedPayload(
-				captainEmail, RideEndReason.CAPTAIN_LEFT,
+				captainEmail, reason,
 				result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
 		for (String rider : result.riders()) {
@@ -417,8 +454,9 @@ public class RideService {
 		notifyQuietly("해체 만남 기록", () ->
 				meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers));
 
-		log.info("[Ride] 선단 해체 musicId={} layer={} 내린인원={}",
-				result.musicId(), result.layer(), result.leftRiders().size());
+		log.info("[Ride] 선단 해체 사유={} musicId={} layer={} 내린인원={}",
+				reason, result.musicId(), result.layer(), result.leftRiders().size());
+		return result;
 	}
 
 	/**

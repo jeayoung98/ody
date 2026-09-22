@@ -27,6 +27,14 @@ export const MouseWheelIcon = ({ size = 40, ...p }: P) => (
     <path d="M12 6.5v3" />
   </svg>
 );
+/** 점점점 — 더 볼 것이 있다는 표시. 누르면 옵션 메뉴가 뜬다 (S15P21A405-524) */
+export const MoreIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2.6}>
+    <path d="M5 12h.01" />
+    <path d="M12 12h.01" />
+    <path d="M19 12h.01" />
+  </svg>
+);
 /** 내 위치로 가기 — 지도 앱의 "현재 위치" 조준선 */
 export const LocateIcon = ({ size = 16, ...p }: P) => (
   <svg {...base(size, p)}>

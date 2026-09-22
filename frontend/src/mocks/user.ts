@@ -16,7 +16,12 @@ const byLayer = new Map<number, NearbyUser[]>();
  * 레이어(영역)별 주변 사용자. 백엔드가 지금 있는 영역의 사람만 내려준다는 전제라 레이어마다 다른 사람이 보인다.
  * 각자 듣고 있는 곡이 지도상 위치가 된다.
  */
-export function mockNearbyUsers(layer: number): NearbyUser[] {
+/**
+ * 한 레이어의 목 사용자. **밖으로 내보내지 않는다** (S15P21A405-526) — 이걸 쓰던 목 라우트
+ * (`/bff/users/nearby`)는 실시간 viewport 구독으로 갈아타면서 지웠다. 지금은 아래 `everyone()`
+ * 을 거쳐 차트 목이 쓰는 것이 전부다.
+ */
+function mockNearbyUsers(layer: number): NearbyUser[] {
   const key = Math.max(0, Math.min(LAYER_COUNT - 1, layer));
   let list = byLayer.get(key);
   if (list) return list;

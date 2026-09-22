@@ -595,6 +595,20 @@ export class MapEngine {
     this.crowdLayer = layer;
   }
 
+  /**
+   * 이 곡의 상주 집합 원소 — 이 겹에 있으면 (S15P21A405-518·527).
+   *
+   * **지도 밖 화면이 이미 들고 있는 값을 빌려 쓰는 창구다.** 곡 상세를 열 때 제목·가수·앨범
+   * 커버는 이 점에 다 들어 있는데, 그걸 안 쓰면 `/bff/music/{id}` 를 기다리는 동안 화면이 빈다.
+   * 주변 곡 카드도 마찬가지다 — 그쪽 응답(`NeighborTrack`)에는 `albumMbid` 가 아예 없다.
+   *
+   * 이 겹에 없는 곡(고스트·검색 결과)이면 null 이고, 부르는 쪽이 평소대로 응답을 기다린다.
+   */
+  pointOf(musicId: number): MapPoint | null {
+    const i = this.index.get(musicId);
+    return i == null ? null : this.songs[i];
+  }
+
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
   setRepresentatives(layer: number, ids: number[]) {
     this.repIds = new Set(ids);

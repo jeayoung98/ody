@@ -9,11 +9,9 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import PanelCloseButton from "../panel-close-button";
 import FeedDashboard from "./feed-dashboard";
 import FeedHeader from "./feed-header";
-import FeedLikedPlaylists from "./feed-liked-playlists";
-import FeedMyPlaylists from "./feed-my-playlists";
+import FeedMenu from "./feed-menu";
+import FeedPlaylists from "./feed-playlists";
 import FeedSkeleton from "./feed-skeleton";
-import EditProfileButton from "@/components/auth/edit-profile-button";
-import LogoutButton from "@/components/auth/logout-button";
 
 /** 피드 = 마이페이지(내 것) / 상대 프로필(남의 것). 레이아웃 동일 (USER-02, USER-04) */
 export default function FeedPanel() {
@@ -24,7 +22,17 @@ export default function FeedPanel() {
   const { data, isPending, isError } = useUserProfileQuery(targetEmail);
 
   return (
-    <Box title={isMe ? "마이페이지" : "프로필"} actions={<PanelCloseButton />}>
+    <Box
+      title={isMe ? "마이페이지" : "프로필"}
+      /* 수정·로그아웃은 내 페이지에서만 (S15P21A405-524). 남의 프로필에 로그아웃이 보이면
+         그 사람을 로그아웃시키는 것처럼 읽힌다 */
+      actions={
+        <>
+          {isMe && <FeedMenu />}
+          <PanelCloseButton />
+        </>
+      }
+    >
       {isPending && <FeedSkeleton />}
       {isError && <ErrorMessage />}
       {data && (
@@ -35,13 +43,7 @@ export default function FeedPanel() {
           {isMe && (
             <>
               <Divider />
-              <FeedMyPlaylists />
-              <FeedLikedPlaylists />
-              <Divider />
-              <div className="flex flex-col gap-2">
-                <EditProfileButton />
-                <LogoutButton />
-              </div>
+              <FeedPlaylists />
             </>
           )}
         </>

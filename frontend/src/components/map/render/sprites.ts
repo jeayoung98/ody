@@ -2,6 +2,7 @@ import { NO_GENRE_ID } from "@/constants";
 import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
 import { starColorIdx } from "./star-look";
 import type { MapPoint, NearbyUser } from "@/types";
+import { albumCover } from "./cover-art";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
 export function mulberry32(a: number) {
@@ -192,13 +193,34 @@ export const ME_AVATAR: NearbyUser = {
   avatarSeed: [0.32, 0.58, 0.21, 0.77, 0.44, 0.68],
 };
 
-/* ---------- 절차적 앨범 커버 ---------- */
-const coverCache = new Map<number, HTMLCanvasElement>();
-export function coverFor(s: MapPoint): HTMLCanvasElement {
-  let c = coverCache.get(s.musicId);
+/* ---------- 앨범 커버 ---------- */
+/**
+ * 지도가 쓰는 크기(px). 별 위 커버는 19~33px 로 그려지니 이만큼이면 넉넉하다 —
+ * 수백 장을 들고 있는 자리라 크게 구울 이유가 없다.
+ */
+export const COVER_PX = 104;
+
+/** 키에 크기가 들어간다 — 같은 곡도 쓰는 자리마다 해상도가 다르다 (S15P21A405-518) */
+const coverCache = new Map<string, HTMLCanvasElement>();
+
+/**
+ * 이 곡의 커버.
+ *
+ * **진짜 앨범 커버가 있으면 그걸 준다** (S15P21A405-518) — `albumMbid` 로 Cover Art Archive
+ * 에서 받아 둔 그림이다. 아직 안 왔거나 없으면 아래 절차적 그림으로 떨어진다. 부르는 쪽은
+ * 둘을 구분하지 않는다: 지도는 rAF 로 계속 다시 그리므로 도착한 다음 프레임부터 저절로 바뀐다.
+ *
+ * `size` 를 받는 이유는 **화질** 이다. 예전에는 104px 고정이라 곡 상세 배경(376px)에 깔면
+ * 세 배 넘게 늘어나 뭉갰다. 그리는 좌표가 전부 `N` 비율이라 크게 구우면 그대로 선명해진다.
+ */
+export function coverFor(s: MapPoint, size: number = COVER_PX): HTMLCanvasElement {
+  const real = albumCover(s.musicId, s.albumMbid, size);
+  if (real) return real;
+  const key = `${s.musicId}:${size}`;
+  let c = coverCache.get(key);
   if (c) return c;
   if (coverCache.size > 500) coverCache.clear();
-  const N = 104;
+  const N = size;
   c = document.createElement("canvas");
   c.width = c.height = N;
   const g = c.getContext("2d")!;
@@ -239,7 +261,7 @@ export function coverFor(s: MapPoint): HTMLCanvasElement {
     }
   }
   g.globalAlpha = 1;
-  coverCache.set(s.musicId, c);
+  coverCache.set(key, c);
   return c;
 }
 

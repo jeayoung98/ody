@@ -66,7 +66,6 @@ export const API_ENDPOINTS = {
     image: "/bff/user/image",
     /** 실연동 → `PATCH /api/user/public`. 공개 계정 여부 */
     publicVisibility: "/bff/user/public",
-    nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
     /**
      * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
      * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**

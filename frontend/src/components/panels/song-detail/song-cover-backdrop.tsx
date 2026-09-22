@@ -1,11 +1,19 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { coverFor } from "@/components/map/render/sprites";
 import { NO_GENRE_ID } from "@/constants";
+import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 
 /** 커버가 마지막으로 사라지는 구간(px). 남은 커버가 이만큼일 때부터 패널색으로 덮기 시작한다 */
 const FADE = 72;
+
+/**
+ * 배경 커버를 굽는 크기(px). 패널 폭이 376 이고 고해상도 화면에서 두 배로 그려지므로 그 언저리다.
+ * Cover Art Archive 원본이 500px 이라 그보다 키워 봐야 소용없다.
+ */
+const BACKDROP_PX = 512;
 
 interface SongCoverBackdropProps {
   musicId: number;
@@ -36,16 +44,30 @@ interface SongCoverBackdropProps {
  * 3. 헤더 자리 어둠 — 위쪽만. 커버가 밝은 곡에서도 제목·버튼이 읽히게 한다
  * 4. 덮개 — 다 올렸을 때 커버를 지우는 패널색 (스크롤에 따라 투명도가 변한다)
  *
- * **실제 앨범 아트는 없다.** `MusicDetail.albumCoverUrl` 은 타입에만 있고 항상 null 이다
- * (ERD 에 없음 — BACKEND-NOTES E-5). 그래서 지도가 쓰는 **절차적 커버**를 그대로 가져온다.
- * 지도 것을 그대로 써야 한다 — 커버 색은 별 색에서 나오므로(`sprites.ts`) 여기서 따로 그리면
- * 같은 곡이 지도와 패널에서 다른 그림으로 보인다.
+ * **진짜 앨범 커버가 있으면 그걸 깐다** (S15P21A405-518). 백엔드가 주는 `albumMbid` 로 Cover
+ * Art Archive 에서 받는다. 없으면 지도가 쓰는 **절차적 커버**로 떨어진다 — 지도 것을 그대로
+ * 써야 한다. 커버 색이 별 색에서 나오므로(`sprites.ts`) 여기서 따로 그리면 같은 곡이 지도와
+ * 패널에서 다른 그림으로 보인다.
  *
- * 상세 응답을 기다리지 않는다. 커버는 `musicId` 하나로 나오므로 패널이 열리는 즉시 깔린다.
+ * **상세 응답을 기다리지 않는다.** 절차적 커버는 `musicId` 하나로 나오므로 패널이 열리는 즉시
+ * 깔리고, `albumMbid` 가 도착하면 그때 진짜 그림으로 바뀐다. 기다렸다 그리면 패널을 열 때마다
+ * 배경이 한 박자 비고 그 사이 헤더 글자가 맨 배경 위에 떠서 읽기 나빠진다.
+ *
+ * **크게 굽는다** (`BACKDROP_PX`). 예전에는 104px 을 세 배 넘게 늘려서 뭉갰고, 그걸 감추려고
+ * 블러를 걸어 뒀었다.
  */
 export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: SongCoverBackdropProps) {
   const coverRef = useRef<HTMLDivElement>(null);
   const plateRef = useRef<HTMLDivElement>(null);
+  /**
+   * **지도가 이미 들고 있으면 그 값을 쓴다** (S15P21A405-527). 별을 누른 순간 상주 집합에
+   * `albumMbid` 가 있으므로, 상세 응답을 기다리면 이미 받아 둔 그림을 두고 화면만 비운다.
+   * 상세 쿼리는 지도에 없는 곡(고스트·검색 결과)의 폴백이다 — 패널이 어차피 부르는 쿼리라
+   * 요청이 새로 나가지도 않는다.
+   */
+  const fromMap = getMapEngine()?.pointOf(musicId)?.albumMbid ?? null;
+  const fromDetail = useMusicDetailQuery(musicId).data?.albumMbid ?? null;
+  const albumMbid = fromMap ?? fromDetail;
 
   /**
    * 캔버스는 브라우저에만 있다. 상태로 들고 있으면 서버 렌더와 값이 달라 하이드레이션이 깨지고,
@@ -58,9 +80,29 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
   useEffect(() => {
     const el = coverRef.current;
     if (!el) return;
-    const canvas = coverFor({ musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, playable: true });
-    el.style.backgroundImage = `url(${canvas.toDataURL()})`;
-  }, [musicId]);
+    let raf = 0;
+    const paint = () => {
+      const canvas = coverFor(
+        { musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, albumMbid, playable: true },
+        BACKDROP_PX,
+      );
+      el.style.backgroundImage = `url(${canvas.toDataURL()})`;
+    };
+    paint();
+    /**
+     * 진짜 커버는 **받은 뒤에** 캔버스가 된다. 지도는 rAF 로 계속 다시 그려서 저절로 바뀌지만
+     * 여기는 한 번 칠하고 끝이라, 도착했는지 잠깐 되물어 본다. 이미 있으면 첫 칠에서 끝난다.
+     */
+    let tries = 0;
+    const poll = () => {
+      raf = 0;
+      if (!albumMbid || tries++ > 40) return;
+      paint();
+      raf = window.setTimeout(poll, 150) as unknown as number;
+    };
+    raf = window.setTimeout(poll, 150) as unknown as number;
+    return () => clearTimeout(raf);
+  }, [musicId, albumMbid]);
 
   /** 덮개 투명도도 같은 이유로 DOM 에 직접 쓴다 — 스크롤마다 리렌더할 일이 아니다 */
   useEffect(() => {
@@ -96,7 +138,7 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
       className="pointer-events-none absolute inset-x-0 top-0 aspect-square [-webkit-mask-image:linear-gradient(to_bottom,#000_62%,transparent)] [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]"
     >
       {/* 1. 커버 */}
-      <div ref={coverRef} className="absolute inset-0 scale-[1.02] bg-cover bg-center blur-[1px]" />
+      <div ref={coverRef} className="absolute inset-0 scale-[1.02] bg-cover bg-center" />
       {/* 2. 우리 색이 스민다 */}
       <div className="grad-bg absolute inset-0 opacity-40 mix-blend-soft-light" />
       {/* 3. 헤더 글자 자리 */}

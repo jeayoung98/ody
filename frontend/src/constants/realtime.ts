@@ -84,7 +84,23 @@ export const PLAY_END = { maxMs: 30 * 60 * 1000 } as const;
  * 격자 전체를 파이프라인 한 번으로 읽는 조회라 이 간격에서 부담이 되지 않는다고 적혀 있다.
  * 소켓 델타가 생기면(백엔드 후속) 이 폴링은 없어진다.
  */
-export const LAYER_USERS = { pollMs: 10_000 } as const;
+export const LAYER_USERS = {
+  pollMs: 10_000,
+  /**
+   * 주변 사람 패널에 넣을 **"가깝다" 의 경계** — 내 곡에서 `k` 번째로 가까운 곡까지의 거리
+   * (S15P21A405-541). 한 겹에 곡이 1,000개(`LAYER_SONG_COUNT`) 이므로 대략 가까운 쪽 8% 다.
+   *
+   * PC 값에 고정 숫자를 안 쓰는 이유는 `lib/nearby-from-layer.ts` 의 `radiusFromNeighbors` 에
+   * 적어 뒀다 — 겹마다 축의 퍼짐이 달라서 같은 숫자가 겹마다 다른 넓이를 뜻한다.
+   */
+  neighborK: 80,
+  /**
+   * 겹 조회에서 패널에 넣을 최대 인원. 서버 주변 사람 응답이 최대 10명
+   * (`realtime.nearby.neighbor-k`) 이라 그와 비슷한 규모로 맞춘다 — 인기 구역에서 수십 줄이
+   * 쌓이면 레이더도 목록도 못 읽는다.
+   */
+  maxInPanel: 12,
+} as const;
 
 /**
  * 주변 사람 레이더 (S15P21A405-496).

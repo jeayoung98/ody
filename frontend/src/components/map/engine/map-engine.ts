@@ -4,6 +4,7 @@ import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, Near
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
+import { wheelIntent } from "./ride-zoom";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -370,6 +371,11 @@ export class MapEngine {
    * (S15P21A405-559). `follow` 안에 두지 않은 이유는 그 타입이 명세가 정한 모양이기 때문이다.
    */
   private followLayer = -1;
+  /**
+   * 따라가는 중에 **사용자가 배율을 직접 잡았는가** (S15P21A405-562).
+   * 탈 때마다 풀린다 — 지난 탑승의 배율을 다음 탑승까지 끌고 가면 처음 타는 사람과 화면이 다르다.
+   */
+  private rideZoomHeld = false;
   onFollowEnd: ((reason: string) => void) | null = null;
   onArrive: ((musicId: number) => void) | null = null;
   /** 인솔자가 보고 있는 곡이 바뀌면 알린다 (우측 패널에 상세를 띄우기 위해) */
@@ -1969,16 +1975,31 @@ export class MapEngine {
   // ------------------------------------------------------------------ input
   /** 휠. 게이트가 열리면 배율은 멈추고 압력만 찬다 */
   wheel(deltaY: number, mx: number, my: number): "zoom" | "pressure" | "blocked" {
-    if (this.anim || this.pending || this.follow) return "blocked";
+    if (this.anim || this.pending) return "blocked";
     // 확대·축소도 "내가 화면을 움직인" 것이다 — 가운데 고정을 푼다
     this.centerLock = false;
     this.centerHoldId = null;
     const zoomIn = deltaY < 0;
-    const canDig = zoomIn && this.gateOpen();
+    /**
+     * **따라가는 중에는 배율만 열고 겹 이동은 막는다** (S15P21A405-562).
+     *
+     * 확대·축소는 내가 어디를 볼지의 문제라 선단이 어디로 가느냐와 상관이 없다. 반면 겹은
+     * 인솔자가 정하는 것이고(§560), 따라가는 사람이 혼자 파고들면 선단에서 떨어져 나간다.
+     * 압력 자체를 안 채운다 — `descend` 가 어차피 막지만, 차기만 하고 안 열리는 계기는
+     * 눌러도 아무 일이 없는 것처럼 보인다.
+     */
+    const riding = this.follow != null;
     // 파고든 겹에서는 진입 배율이 곧 축소 한계다 — 거기서 더 줄이려 하면 바로 떠오르기다
     const riseAt = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.riseScaleRatio;
-    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * riseAt;
-    if (canDig || canRise) {
+    const intent = wheelIntent({
+      riding,
+      zoomIn,
+      gateOpen: this.gateOpen(),
+      zoomedOutEnough: this.cam.s <= this.entryS * riseAt,
+      hasStack: this.stack.length > 0,
+    });
+    const canDig = intent === "dig";
+    if (intent !== "zoom") {
       this.pressureDir = canDig ? 1 : -1;
       // 압력이 차는 동안 카메라는 멈춰 있으므로 지금 상자가 곧 파고들 때의 상자다 — 미리 받게 알린다
       if (canDig && !this.prefetch) this.prefetch = [...this.boxes, this.drillBox()];
@@ -1992,6 +2013,8 @@ export class MapEngine {
     this.camTarget = null;
     this.touched = true;
     this.prefetch = null;
+    // 사용자가 배율을 잡았다 — 이 뒤로 `trackViewing` 은 배율을 되돌리지 않는다 (§562)
+    if (riding) this.rideZoomHeld = true;
     const w = this.screenToWorld(mx, my);
     const want = this.cam.s * Math.exp(-deltaY * WHEEL_ZOOM);
     // 한 겹 안에서 확대·축소 한계 (게이트가 닫혀 있어도 빈 곳으로 무한히 들어가지 않게).
@@ -2529,6 +2552,7 @@ export class MapEngine {
       visited: [],
     };
     this.followLayer = this.layer;
+    this.rideZoomHeld = false;
     // 서버가 몰 때는 우측 패널을 소켓의 `RIDE_PANEL` 이 정한다 — 여기서 열면 그걸 덮어쓴다
     if (!driven) this.onLeaderViewingChange?.(viewingMusicId);
   }
@@ -2555,6 +2579,7 @@ export class MapEngine {
   }
 
   stopFollow() {
+    this.rideZoomHeld = false;
     if (!this.follow) return;
     const f = this.follow;
     this.follow = null;
@@ -2918,8 +2943,14 @@ export class MapEngine {
     const view = this.worldOf(f.viewingMusicId);
     if (!view) return;
     const fr = this.freeRect();
-    const targetS = this.entryS * FOLLOW.zoomMul;
-    this.cam.s = this.cam.s * Math.pow(targetS / this.cam.s, 0.06);
+    /**
+     * **사용자가 배율을 만졌으면 그대로 둔다** (S15P21A405-562). 자리(중심)는 계속 인솔자를
+     * 따라가고 배율만 손을 뗀다 — 안 그러면 휠을 돌려도 다음 프레임에 도로 끌려간다.
+     */
+    if (!this.rideZoomHeld) {
+      const targetS = this.entryS * FOLLOW.zoomMul;
+      this.cam.s = this.cam.s * Math.pow(targetS / this.cam.s, 0.06);
+    }
     this.cam.cx = lerp(this.cam.cx, view.x - (fr.cx - this.W / 2) / this.cam.s, 0.06);
     this.cam.cy = lerp(this.cam.cy, view.y + (fr.cy - this.H / 2) / this.cam.s, 0.06);
     this.project();

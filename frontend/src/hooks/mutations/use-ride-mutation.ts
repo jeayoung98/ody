@@ -6,7 +6,7 @@ import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
 import { dropSong, setSong } from "@/lib/bots/sim";
 import { isBot } from "@/lib/bots/roster";
 import { botLiveOf, useBotStore } from "@/stores/use-bot-store";
-import { sendJoinNow } from "@/hooks/use-presence-join";
+import { joinAndWait } from "@/hooks/use-presence-join";
 import { playFrom } from "@/lib/realtime/ride";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -28,7 +28,7 @@ export interface RideTarget {
  * 막혔을 때 아무 응답이 없어 버튼만 안 먹는 것처럼 보인다.
  *
  * **422 는 presence 만료일 때가 많다** (1차 §12.1). 재생 선언과 같은 처리를 한다 — 부르기 전에
- * join 을 한 번 보내고, 그래도 422 면 join 재전송 뒤 **한 번만** 재시도한다.
+ * join 을 보내 **응답까지 기다리고**, 그래도 422 면 한 번 더 기다린 뒤 **한 번만** 재시도한다.
  */
 export function useRideMutation() {
   const showToast = useToastStore((s) => s.show);
@@ -38,14 +38,22 @@ export function useRideMutation() {
     mutationFn: async (target: RideTarget): Promise<RideResponse> => {
       // 봇은 서버에 없는 사람이다. 보내 봐야 404 고, 보내면 안 되는 요청이다 (S15P21A405-536)
       if (isBot(target.email)) return mountBot(target.email, qc);
-      // presence 가 살아 있어야 200 이 온다. 만료 상태에서 누르면 422 라 미리 깨워 둔다
-      sendJoinNow();
+      /**
+       * presence 가 살아 있어야 200 이 온다. **응답을 기다린다** (S15P21A405-555) — 예전에는
+       * 던지고 바로 REST 를 불러서, 서버가 join 을 처리하기 전에 요청이 닿으면 그대로 422 였다.
+       */
+      await joinAndWait();
       try {
         return await mount(target.email);
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "PRESENCE_ERROR") throw e;
-        // 자동 복구는 한 번뿐이다. 반복하면 사용자는 아무것도 모른 채 기다리기만 한다
-        sendJoinNow();
+        /**
+         * 자동 복구는 한 번뿐이다. 반복하면 사용자는 아무것도 모른 채 기다리기만 한다.
+         *
+         * presence 가 만료됐던 경우 첫 join 은 `PRESENCE_NOT_CONNECTED` 로 튕기고 오류 핸들러가
+         * 소켓을 다시 연다. 이 두 번째 기다림이 그 새 연결의 join 응답을 받아 낸다.
+         */
+        await joinAndWait();
         return await mount(target.email);
       }
     },

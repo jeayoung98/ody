@@ -9,10 +9,21 @@ import type { ProfileDashboard } from "@/types";
  * 플리 목록에 주기로 했다.
  */
 export default function FeedDashboard({ dashboard }: { dashboard: ProfileDashboard }) {
+  /**
+   * **모르는 값은 그리지 않는다** (S15P21A405-531). 0곡 이라고 적으면 "한 곡도 안 들었다" 는
+   * 없는 사실이 된다. 처음 재생한 곡 수는 아직 백엔드에 없어서 늘 비어 있다.
+   */
+  const rows = [
+    { label: "탐험한 곡 (재생)", value: dashboard.exploredCount },
+    { label: "발견한 곡 (처음 재생)", value: dashboard.discoveredCount },
+  ].filter((r) => r.value != null);
+  if (rows.length === 0) return null;
+
   return (
     <dl className="m-0">
-      <Stat label="탐험한 곡 (재생)" value={`${dashboard.exploredCount.toLocaleString()}곡`} numeric />
-      <Stat label="발견한 곡 (처음 재생)" value={`${dashboard.discoveredCount.toLocaleString()}곡`} numeric />
+      {rows.map((r) => (
+        <Stat key={r.label} label={r.label} value={`${r.value!.toLocaleString()}곡`} numeric />
+      ))}
     </dl>
   );
 }

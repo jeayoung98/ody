@@ -90,6 +90,16 @@ class GmsEvaluationClientTests {
 		assertThat(lastRequestBody.get()).contains("\"detail\":\"low\"");
 	}
 
+	/** 같은 그림은 같은 점수여야 한다 — temperature 0 이 빠지면 재평가한 사람이 유리해진다. */
+	@Test
+	void sendsZeroTemperature() {
+		body.set(chatResponse("{\\\"score\\\": 50, \\\"comment\\\": \\\"그럭저럭\\\"}"));
+
+		evaluate();
+
+		assertThat(lastRequestBody.get()).contains("\"temperature\":0");
+	}
+
 	/** 점수가 범위 밖이면 저장하지 않는다. 120점짜리 작품이 리더보드 1위가 되면 안 된다. */
 	@Test
 	void returnsEmpty_whenScoreOutOfRange() {

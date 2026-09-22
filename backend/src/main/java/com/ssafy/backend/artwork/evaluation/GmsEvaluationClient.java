@@ -113,6 +113,9 @@ public class GmsEvaluationClient implements ArtworkEvaluationPort {
 		String dataUri = "data:image/png;base64," + Base64.getEncoder().encodeToString(pngBytes);
 		return Map.of(
 				"model", model,
+				// 같은 그림은 같은 점수를 받아야 한다. 기본값(1.0)이면 호출마다 점수가 흔들려
+				// 재평가한 사람이 유리해진다 — 순위를 매기는 기능에서는 결함이다.
+				"temperature", 0,
 				"response_format", Map.of("type", "json_object"),
 				"messages", List.of(Map.of(
 						"role", "user",

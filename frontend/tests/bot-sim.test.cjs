@@ -162,3 +162,19 @@ test("아무도 안 듣는 곡이면 그대로 돌려준다", () => {
   const bots = [{ email: "a", episode: { index: 0, online: true, layer: 0, musicId: 1, startedAt: T0, endsAt: T0 + 1 } }];
   assert.deepEqual(dropSong(bots, 999), bots);
 });
+
+test("찾아서 넘긴 곡은 봇 상태에도 되쓴다 (S15P21A405-549)", () => {
+  const { setSong } = require("../src/lib/bots/sim.ts");
+  const ep = { index: 0, online: true, layer: 1, musicId: null, startedAt: T0, endsAt: T0 + 100 };
+  const bots = [
+    { email: "a", episode: ep },
+    { email: "b", episode: { ...ep, musicId: 5 } },
+  ];
+  const next = setSong(bots, "a", 77);
+
+  assert.equal(next[0].episode.musicId, 77, "되쓰지 않으면 다음 tick 이 또 다른 곡을 붙인다");
+  assert.equal(next[1].episode.musicId, 5, "남의 곡은 안 건드린다");
+  // 곡만 바꾼다 — 에피소드를 새로 굴리면 접속 여부까지 다시 정해진다
+  assert.equal(next[0].episode.endsAt, ep.endsAt);
+  assert.equal(next[0].episode.online, true);
+});

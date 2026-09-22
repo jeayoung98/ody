@@ -59,6 +59,7 @@ export function useRideMutation() {
         snapshotSeq: r.snapshotSeq,
         playHistoryId: r.playHistoryId,
       });
+      useFollowStore.getState().setLeaderViewingMusicId(r.panel.open ? r.panel.musicId : null);
       // 내 자리는 인솔자와 같다. 지도 표식이 그리로 간다
       useMapStore.getState().setMyMusicId(r.musicId);
       // 인솔자가 듣던 지점부터. `PAUSED` 면 그 지점에서 멈춰 선다
@@ -98,6 +99,8 @@ async function mountBot(captainEmail: string, qc: QueryClient): Promise<RideResp
 
   const layer = bot.episode.layer;
   const at = getMapEngine()?.pointOf(musicId);
+  // 넘겨서 다른 곡을 찾았으면 그 곡을 보고 있는 것으로 친다 — 안 그러면 엉뚱한 상세가 열린다
+  const viewing = bot.episode.viewingMusicId != null ? musicId : null;
   return {
     captainEmail,
     // 봇 탑승은 서버에 기록이 없다. 종료 보고도 없으므로 이 값은 쓰이지 않는다
@@ -111,7 +114,12 @@ async function mountBot(captainEmail: string, qc: QueryClient): Promise<RideResp
     playback: "PLAYING",
     positionMs: 0,
     snapshotSeq: 0,
-    panel: { open: false, musicId: null, tab: "info" },
+    /**
+     * **탑승하자마자 그 곡 상세를 연다** (S15P21A405-551). 실사용자 탑승은 인솔자가 열어 둔
+     * 상세를 응답에 실어 주는데(2차 명세 §3.1), 봇에는 그걸 채워 주는 서버가 없어 비어 있었다.
+     * 봇이 상세를 안 열어 둔 상태면 여기도 닫힌 채로 둔다 — 그 구분이 있어야 사람으로 보인다.
+     */
+    panel: { open: viewing != null, musicId: viewing, tab: "info" },
   };
 }
 

@@ -2189,9 +2189,24 @@ export class MapEngine {
   }
 
   // ------------------------------------------------------------------ me / play / follow
+  /**
+   * **나는 지금 이 곡에 서 있다** — 날아가지 않고 그 자리에 놓는다.
+   *
+   * 부르는 자리가 전부 그 뜻이다 (presence 의 `PRESENCE_JOINED`, 탑승, `RIDE_TRACK`, 하차).
+   * 예전에는 표식만 옮기고 `home`·`playingId` 는 그대로 뒀는데, 그 둘은 `travelTo` 안에서만
+   * 갱신되고 **탑승은 그 길을 안 탄다** — 그래서 남을 따라다니는 내내 "내 위치로 가기" 가
+   * 타기 전 곡을 가리켰다 (S15P21A405-551).
+   *
+   * `travelTo` 와 다른 점은 비행 애니메이션이 없다는 것뿐이다. 탑승은 우주선이 나를 데려가므로
+   * 따로 날아갈 이유가 없고, presence 는 서버가 정해 준 자리라 이동 자체가 없다.
+   */
   setMy(id: number | null) {
     if (id == null || !this.index.has(id)) return;
     this.myId = id;
+    this.playingId = id;
+    this.home = { musicId: id, boxes: [...this.boxes] };
+    // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다 (`travelTo` 와 같은 처리)
+    if (this.pinned && this.pinned.id !== id) this.pinned = null;
     const w = this.worldOf(id)!;
     this.me = { ...w };
   }

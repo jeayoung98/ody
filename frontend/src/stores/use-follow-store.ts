@@ -27,6 +27,13 @@ interface FollowState {
    */
   leaderMusicId: number | null;
   /**
+   * 인솔자가 **열어 둔 상세 곡** (2차 명세 §4.4 `RIDE_PANEL`). `null` 이면 닫혀 있다.
+   *
+   * 서 있는 곡(`leaderMusicId`)과 **다를 수 있다.** 옆 별을 눌러 보는 동안이 그렇다 —
+   * 그때 우주선은 그대로 있고 우측 패널만 바뀐다.
+   */
+  leaderViewingMusicId: number | null;
+  /**
    * 나를 따라오는 인원 수 (내가 인솔자일 때).
    *
    * **탈 때와 내릴 때 모두 서버가 알려 준다** (3차 계약 §2, S15P21A405-545) —
@@ -64,6 +71,8 @@ interface FollowState {
   setSongRecord: (playHistoryId: number | null, songStartedAt: number) => void;
   /** 인솔자가 곡을 옮겼다 (`RIDE_TRACK`). 표식이 따라가도록 자리만 갱신한다 */
   setLeaderMusicId: (musicId: number) => void;
+  /** 인솔자가 상세를 열거나 닫았다 (`RIDE_PANEL`). 재생은 건드리지 않는다 */
+  setLeaderViewingMusicId: (musicId: number | null) => void;
   /** 하차·강제 종료 공통. 자리는 그대로 두고(map-store 가 남는다) 탑승 상태만 지운다 */
   stop: () => void;
   setFollowerCount: (n: number) => void;
@@ -76,6 +85,7 @@ export const useFollowStore = create<FollowState>()(
       leaderNickname: null,
       leaderImageUrl: null,
       leaderMusicId: null,
+      leaderViewingMusicId: null,
       followerCount: 0,
       snapshotSeq: 0,
       playHistoryId: null,
@@ -88,6 +98,7 @@ export const useFollowStore = create<FollowState>()(
             leaderNickname: nickname,
             leaderImageUrl: imageUrl,
             leaderMusicId: musicId,
+            leaderViewingMusicId: null,
             snapshotSeq,
             playHistoryId,
             songStartedAt: Date.now(),
@@ -97,6 +108,7 @@ export const useFollowStore = create<FollowState>()(
         ),
       setSongRecord: (playHistoryId, songStartedAt) => set({ playHistoryId, songStartedAt }, false, "setSongRecord"),
       setLeaderMusicId: (leaderMusicId) => set({ leaderMusicId }, false, "setLeaderMusicId"),
+      setLeaderViewingMusicId: (leaderViewingMusicId) => set({ leaderViewingMusicId }, false, "setLeaderViewingMusicId"),
       stop: () =>
         set(
           {
@@ -104,6 +116,7 @@ export const useFollowStore = create<FollowState>()(
             leaderNickname: null,
             leaderImageUrl: null,
             leaderMusicId: null,
+            leaderViewingMusicId: null,
             snapshotSeq: 0,
             playHistoryId: null,
             songStartedAt: 0,

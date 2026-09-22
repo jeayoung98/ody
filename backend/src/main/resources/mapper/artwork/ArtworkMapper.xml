@@ -1,0 +1,196 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.artwork.mapper.ArtworkMapper">
+
+	<!--
+		테이블: artwork_round / artwork / artwork_point / artwork_like
+		DDL: backend/src/main/resources/db/artwork_001_tables.sql
+		id 는 DEFAULT 가 없어 애플리케이션이 시퀀스로 채운다(playlist 와 같은 방식).
+	-->
+
+	<!-- ============================ 회차 ============================ -->
+
+	<select id="findOpenRound" resultType="com.ssafy.backend.artwork.dto.ArtworkRoundRow">
+		SELECT id, theme, theme_prompt, starts_at, ends_at
+		FROM artwork_round
+		WHERE now() BETWEEN starts_at AND ends_at
+		ORDER BY starts_at DESC
+		LIMIT 1
+	</select>
+
+	<select id="findRoundById" resultType="com.ssafy.backend.artwork.dto.ArtworkRoundRow">
+		SELECT id, theme, theme_prompt, starts_at, ends_at
+		FROM artwork_round
+		WHERE id = #{roundId}
+	</select>
+
+	<!-- ============================ 작품 ============================ -->
+
+	<insert id="insertArtwork">
+		<selectKey keyProperty="id" order="BEFORE" resultType="long">
+			SELECT nextval('artwork_id_seq')
+		</selectKey>
+		INSERT INTO artwork (id, round_id, email, playlist_id, title, layout_version, status)
+		VALUES (#{id}, #{roundId}, #{email}, #{playlistId}, #{title}, #{layoutVersion}, #{status})
+	</insert>
+
+	<sql id="artworkColumns">
+		id, round_id, email, playlist_id, title, layout_version, status,
+		score, ai_comment, model, attempt_cnt, fail_reason, like_cnt, evaluated_at, created_at
+	</sql>
+
+	<select id="findById" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
+		SELECT <include refid="artworkColumns"/>
+		FROM artwork
+		WHERE id = #{artworkId}
+	</select>
+
+	<select id="findByRoundAndEmail" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
+		SELECT <include refid="artworkColumns"/>
+		FROM artwork
+		WHERE round_id = #{roundId} AND email = #{email}
+	</select>
+
+	<delete id="deleteById">
+		DELETE FROM artwork WHERE id = #{artworkId}
+	</delete>
+
+	<!--
+		SKIP LOCKED 가 핵심이다. 인스턴스가 둘이어도 서로 다른 행을 집어가므로 같은 작품을 두 번
+		평가하지 않는다. 락은 호출하는 쪽 트랜잭션이 끝날 때까지 유지된다.
+	-->
+	<select id="lockPendingForEvaluation" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
+		SELECT <include refid="artworkColumns"/>
+		FROM artwork
+		WHERE status = 'PENDING'
+		ORDER BY created_at ASC
+		LIMIT #{limit}
+		FOR UPDATE SKIP LOCKED
+	</select>
+
+	<!--
+		PENDING 인 행만 바꾼다. 평가 도중 소유자가 작품을 지웠거나 재제출로 다른 행이 됐으면
+		0행이 되고, 늦게 도착한 결과가 엉뚱한 작품에 붙지 않는다.
+	-->
+	<update id="markScored">
+		UPDATE artwork
+		SET status = 'SCORED',
+		    score = #{score},
+		    ai_comment = #{aiComment},
+		    model = #{model},
+		    fail_reason = NULL,
+		    attempt_cnt = attempt_cnt + 1,
+		    evaluated_at = now()
+		WHERE id = #{artworkId} AND status = 'PENDING'
+	</update>
+
+	<!-- score 를 건드리지 않는다 — 실패는 "점수 없음" 이지 0점이 아니다. -->
+	<update id="markFailed">
+		UPDATE artwork
+		SET status = 'FAILED',
+		    fail_reason = #{failReason},
+		    attempt_cnt = attempt_cnt + 1,
+		    evaluated_at = now()
+		WHERE id = #{artworkId} AND status = 'PENDING'
+	</update>
+
+	<update id="markPendingAgain">
+		UPDATE artwork
+		SET status = 'PENDING',
+		    fail_reason = NULL
+		WHERE id = #{artworkId} AND status = 'FAILED'
+	</update>
+
+	<!-- ============================ 좌표 ============================ -->
+
+	<insert id="insertPoints">
+		INSERT INTO artwork_point (artwork_id, position, music_id, x, y)
+		VALUES
+		<foreach collection="points" item="p" separator=",">
+			(#{artworkId}, #{p.position}, #{p.musicId}, #{p.x}, #{p.y})
+		</foreach>
+	</insert>
+
+	<select id="findPoints" resultType="com.ssafy.backend.artwork.dto.ArtworkPointRow">
+		SELECT position, music_id, x, y
+		FROM artwork_point
+		WHERE artwork_id = #{artworkId}
+		ORDER BY position ASC
+	</select>
+
+	<!-- ============================ 목록 ============================ -->
+
+	<!--
+		곡 수와 좋아요 여부를 스칼라 서브쿼리로 같이 읽는다. 목록을 받아 다시 N번 왕복하지 않으려는
+		것이고, 한 페이지가 최대 50행이라 서브쿼리 비용이 조인 재정렬보다 예측 가능하다.
+		requesterEmail 이 null 이면 likedByMe 는 계산하지 않고 false 다.
+	-->
+	<sql id="summaryColumns">
+		a.id            AS id,
+		a.title         AS title,
+		a.email         AS email,
+		a.status        AS status,
+		a.score         AS score,
+		a.ai_comment    AS ai_comment,
+		a.like_cnt      AS like_cnt,
+		a.created_at    AS created_at,
+		(SELECT count(*) FROM artwork_point p WHERE p.artwork_id = a.id) AS music_cnt
+	</sql>
+
+	<select id="findLeaderboard" resultType="com.ssafy.backend.artwork.dto.ArtworkSummaryRow">
+		SELECT
+			<include refid="summaryColumns"/>,
+			NULL AS fail_reason,
+			<choose>
+				<when test="requesterEmail != null">
+					EXISTS(SELECT 1 FROM artwork_like l WHERE l.artwork_id = a.id AND l.email = #{requesterEmail})
+				</when>
+				<otherwise>false</otherwise>
+			</choose> AS liked_by_me
+		FROM artwork a
+		WHERE a.round_id = #{roundId} AND a.status = 'SCORED'
+		ORDER BY a.score DESC, a.like_cnt DESC, a.created_at ASC
+		LIMIT #{limit} OFFSET #{offset}
+	</select>
+
+	<select id="countLeaderboard" resultType="int">
+		SELECT count(*) FROM artwork WHERE round_id = #{roundId} AND status = 'SCORED'
+	</select>
+
+	<!-- 내 작품은 상태를 가리지 않는다. 실패 사유도 본인에게는 보여준다. -->
+	<select id="findMine" resultType="com.ssafy.backend.artwork.dto.ArtworkSummaryRow">
+		SELECT
+			<include refid="summaryColumns"/>,
+			a.fail_reason AS fail_reason,
+			EXISTS(SELECT 1 FROM artwork_like l WHERE l.artwork_id = a.id AND l.email = #{email}) AS liked_by_me
+		FROM artwork a
+		WHERE a.email = #{email}
+		ORDER BY a.created_at DESC
+	</select>
+
+	<!-- ============================ 좋아요 ============================ -->
+
+	<insert id="insertLike">
+		INSERT INTO artwork_like (artwork_id, email)
+		VALUES (#{artworkId}, #{email})
+		ON CONFLICT DO NOTHING
+	</insert>
+
+	<delete id="deleteLike">
+		DELETE FROM artwork_like WHERE artwork_id = #{artworkId} AND email = #{email}
+	</delete>
+
+	<update id="addLikeCnt">
+		UPDATE artwork
+		SET like_cnt = GREATEST(like_cnt + #{delta}, 0)
+		WHERE id = #{artworkId}
+	</update>
+
+	<select id="findLikeCnt" resultType="int">
+		SELECT like_cnt FROM artwork WHERE id = #{artworkId}
+	</select>
+
+	<select id="existsLike" resultType="boolean">
+		SELECT EXISTS(SELECT 1 FROM artwork_like WHERE artwork_id = #{artworkId} AND email = #{email})
+	</select>
+</mapper>

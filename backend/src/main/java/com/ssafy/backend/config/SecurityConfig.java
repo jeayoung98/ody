@@ -54,6 +54,9 @@ public class SecurityConfig {
 								"/api/feedback",   // 탐색 설문은 비로그인도 보낸다 [S15P21A405-289]
 								"/api/feedback/answered",   // 답한 문항 조회는 인증 선택 (정본 §5.2, S15P21A405-346)
 								"/api/music/report",   // 음원 신고는 비로그인도 보낸다 [S15P21A405-388]
+								// 작품 감상은 인증 선택 — 제출·좋아요·삭제는 인증 필요다 [S15P21A405-563].
+								// 셋 다 GET 만 매핑돼 있어 쓰기 경로가 열리지 않는다.
+								"/api/artwork/round/current", "/api/artwork/leaderboard", "/api/artwork/detail",
 								"/oauth2/authorization/**", "/login/oauth2/code/**",
 								// 소켓 핸드셰이크. 이 단계에는 토큰이 실리지 않는다 —
 								// 인증은 소켓이 열린 뒤 STOMP CONNECT 에서 WebSocketAuthInterceptor 가 한다.

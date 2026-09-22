@@ -18,6 +18,7 @@ import { readStorage, writeStorage } from "@/lib/storage";
 import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { useMapStore } from "@/stores/use-map-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -639,6 +640,8 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   const playSong = useCallback(
     (s: MapPoint) => {
+      // 별이 이미 들고 있는 제목·아티스트다 — 재생바가 상세 조회를 기다리지 않게 넘긴다 (S15P21A405-585)
+      rememberMusicHints([{ id: s.musicId, title: s.title, artist: s.artist }]);
       selectMusic(s.musicId);
       // 폰에서는 재생해도 패널을 열지 않는다 — 지금 듣는 곡은 재생바가 이미 보여 준다
       if (!narrow) openSongFromMap(s.musicId);
@@ -796,6 +799,8 @@ export default function MapView({ occlusion }: MapViewProps) {
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {
         track("music_clicked", { music_id: id, source: "canvas", action: `set_${journey.pickTarget}` });
+        // 출발·도착 칸이 곧바로 제목을 띄우게 한다 (S15P21A405-585)
+        rememberMusicHints([{ id, title: song.title, artist: song.artist }]);
         journey.pickForNext(id);
         selectMusic(id);
         return;

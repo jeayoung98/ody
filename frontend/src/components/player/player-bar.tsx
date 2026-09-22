@@ -7,6 +7,7 @@ import AddToPlaylistMenu from "@/components/panels/playlist/add-to-playlist-menu
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useFeatures } from "@/hooks/use-features";
+import { useMusicLabel } from "@/hooks/use-music-label";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -48,6 +49,11 @@ export default function PlayerBar() {
   const features = useFeatures();
   const [menuOpen, setMenuOpen] = useState(false);
   const { data } = useMusicDetailQuery(currentMusicId);
+  /**
+   * 제목·아티스트는 **누를 때 받은 것부터** 쓴다 (S15P21A405-585). 상세를 기다리면 트는
+   * 순간 `Track 12345` 가 한 박자 떠 있다가 바뀐다 — 누른 쪽은 이미 제목을 알고 있었다.
+   */
+  const { title, artist } = useMusicLabel(currentMusicId);
 
   /**
    * 제목을 누르면 지금 듣고 있는 것의 패널을 연다 (PATH-02).
@@ -112,7 +118,7 @@ export default function PlayerBar() {
   const idle = currentMusicId == null;
   const subtitle = idle
     ? "지도에서 별을 눌러 골라보세요"
-    : [data?.artist ?? "-", contextLabel && `${contextLabel} 재생 중`, queue.length > 0 && `${queueIndex + 1}/${queue.length}`].filter(Boolean).join(" · ");
+    : [artist ?? "-", contextLabel && `${contextLabel} 재생 중`, queue.length > 0 && `${queueIndex + 1}/${queue.length}`].filter(Boolean).join(" · ");
 
   return (
     /*
@@ -129,7 +135,7 @@ export default function PlayerBar() {
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">
         <p className="truncate font-display text-[15px] leading-tight font-semibold text-ink">
-          {idle ? "재생할 곡을 고르세요" : data?.title ?? `Track ${currentMusicId}`}
+          {idle ? "재생할 곡을 고르세요" : title}
           {!idle && blocked && <span className="ml-2 text-[10px] font-normal text-warn">{blocked.badge}</span>}
         </p>
         {/* 고를 곡이 없을 때의 안내는 좁은 화면에서 뺀다 — 한 줄에 제목과 같이 들어가면 둘 다 잘린다 */}

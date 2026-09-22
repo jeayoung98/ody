@@ -5,6 +5,7 @@ import { CloseIcon } from "@/components/common/icons";
 import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
 import { useLoadMoreOnBottom } from "@/hooks/use-load-more-on-bottom";
 import { useJourneyStore } from "@/stores/use-journey-store";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import JourneyComposerResult from "./journey-composer-result";
@@ -12,6 +13,7 @@ import JourneyComposerSlot from "./journey-composer-slot";
 import { useSearchAnalytics } from "@/hooks/use-search-analytics";
 import { requestJourney } from "@/lib/analytics/flows";
 import { track } from "@/lib/analytics/client";
+import type { MusicSearchResult } from "@/types";
 
 /**
  * 여정 만들기 확장 검색창 (JOURNEY-01).
@@ -73,8 +75,11 @@ export default function JourneyComposer() {
     useTutorialStore.getState().complete("journey");
   };
 
-  const pick = (musicId: number, target: "start" | "end") => {
+  const pick = (result: MusicSearchResult, target: "start" | "end") => {
+    const musicId = result.id;
     analytics.select(musicId, results.findIndex((r) => r.id === musicId) + 1);
+    // 줄에 이미 그려져 있던 제목·아티스트를 그대로 넘긴다 — 칸이 상세 조회를 기다리지 않는다 (S15P21A405-585)
+    rememberMusicHints([result]);
     if (target === "start") setStart(musicId);
     else setEnd(musicId);
     setKeyword("");
@@ -134,7 +139,7 @@ export default function JourneyComposer() {
               result={r}
               isStart={r.id === startMusicId}
               isEnd={r.id === endMusicId}
-              onPick={() => pick(r.id, pickTarget === "end" ? "end" : "start")}
+              onPick={() => pick(r, pickTarget === "end" ? "end" : "start")}
             />
           ))}
           {/* 한 페이지에 20초 가까이 걸린다 — 멈춘 것처럼 보이지 않게 바닥에 상태를 남긴다 */}

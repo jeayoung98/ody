@@ -100,3 +100,14 @@ export function dropSong<T extends { episode: BotEpisode }>(bots: readonly T[], 
   if (!bots.some((b) => b.episode.musicId === musicId)) return [...bots];
   return bots.map((b) => (b.episode.musicId === musicId ? { ...b, episode: { ...b.episode, musicId: null } } : b));
 }
+
+/**
+ * 이 봇이 지금 이 곡을 듣는다고 못 박는다 (S15P21A405-549).
+ *
+ * 탑승 직전에 소리가 나는 곡을 찾아 넘겼을 때 쓴다. **되써 두지 않으면** 봇의 곡이 빈 채로
+ * 남아서, 다음 `tick` 이 또 다른 곡을 붙이고 탄 사람을 한 번 더 끌고 간다 — 누르자마자
+ * 두 번 튀는 것으로 보인다.
+ */
+export function setSong<T extends { email: string; episode: BotEpisode }>(bots: readonly T[], email: string, musicId: number): T[] {
+  return bots.map((b) => (b.email === email ? { ...b, episode: { ...b.episode, musicId } } : b));
+}

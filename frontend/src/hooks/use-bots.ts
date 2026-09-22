@@ -1,9 +1,10 @@
 "use client";
 
 import { useEffect } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { BOTS, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { isKnownArtist } from "@/lib/bots/known-artists";
+import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
 import { BOT_ROSTER } from "@/lib/bots/roster";
 import { dropSong, nextEpisode, rnd, type BotEpisode } from "@/lib/bots/sim";
 import { subscribePlayback } from "@/lib/playback-events";
@@ -26,6 +27,7 @@ import { useToastStore } from "@/stores/use-toast-store";
 export function useBots(enabled: boolean): void {
   const setBots = useBotStore((s) => s.setBots);
   const showToast = useToastStore((s) => s.show);
+  const qc = useQueryClient();
 
   useEffect(() => {
     if (!enabled) return;
@@ -59,7 +61,31 @@ export function useBots(enabled: boolean): void {
       });
 
       setBots(next);
-      syncRide(before, next, showToast);
+      const moved = syncRide(before, next, showToast);
+      if (moved != null) void ensureAudible(moved);
+    };
+
+    /**
+     * **소리가 나는 곡에만 세운다** (S15P21A405-549).
+     *
+     * `playable` 은 유튜브 검색어를 만들 수 있다는 뜻일 뿐이고, 실제로 틀리는지는 `videoId`
+     * 조회가 말한다. 봇이 고른 곡은 대부분 아직 안 찾아본 곡(`unsearched`)이라 그대로 두면
+     * **소리도 안 나고 넘어가지도 않는다** — 자동 스킵은 "찾아봤는데 없다" 일 때만 돈다.
+     *
+     * 안 되면 그 곡을 버리고 `tick` 이 새 곡을 붙인다. 그 곡도 안 되면 또 넘기는데,
+     * 조회가 외부 API 를 타므로 `BOTS.audibleTries` 에서 멎는다.
+     */
+    let tries = 0;
+    const ensureAudible = async (musicId: number) => {
+      if (await isAudible(qc, musicId)) {
+        tries = 0;
+        return;
+      }
+      if (++tries > BOTS.audibleTries) return;
+      const bots = useBotStore.getState().bots;
+      if (!bots.some((b) => b.episode.musicId === musicId)) return;
+      useBotStore.getState().setBots(dropSong(bots, musicId));
+      tick();
     };
 
     /**
@@ -76,7 +102,7 @@ export function useBots(enabled: boolean): void {
     const stopWatch = subscribePlayback((e) => {
       if (e.state !== "unavailable") return;
       // 다시 고르지 않는다. 한 번 안 된 곡은 다음에도 안 된다
-      dead.add(e.musicId);
+      markDead(e.musicId);
       const bots = useBotStore.getState().bots;
       if (!bots.some((b) => b.episode.musicId === e.musicId)) return;
       useBotStore.getState().setBots(dropSong(bots, e.musicId));
@@ -89,7 +115,7 @@ export function useBots(enabled: boolean): void {
       window.clearInterval(id);
       stopWatch();
     };
-  }, [enabled, setBots, showToast]);
+  }, [enabled, setBots, showToast, qc]);
 
   /**
    * 내가 겹을 옮겼다 — 딴 데 있는 봇들의 지금 에피소드를 **잘라 둔다**.
@@ -114,73 +140,34 @@ export function useBots(enabled: boolean): void {
 }
 
 /**
- * 이 봇이 들을 곡 하나.
- *
- * **절반 넘게 내 곡 근처에서 고른다.** 주변 사람 패널은 "내가 듣는 곡과 비슷한 곡을 듣는 사람"
- * 이라, 아무 데서나 고르면 봇은 지도에만 보이고 그 패널에는 영영 안 뜬다 — 정작 따라가기를
- * 누르는 자리가 거기다. 사람이 인기 있는 구역에 몰리는 것은 실제로도 그러하다.
- *
- * **소리가 없는 곡은 아예 안 고른다.** 봇을 따라갔는데 아무것도 안 들리면 따라가기가 고장 난
- * 것처럼 보인다 — 실사용자는 그런 곡에 설 수 있지만 봇은 시연이 목적이라 피해 간다.
- *
- * **아는 가수의 곡을 먼저 본다** (S15P21A405-543). 662만 곡에서 무작위로 돌리면 사람이 모르는
- * 곡만 나오는데, 시연에서 "누가 이 곡을 듣고 있다" 는 아는 곡일 때만 사람으로 읽힌다.
- * 그 겹에 아는 곡이 거의 없으면 **평소대로 고른다** — 한두 곡에 여섯이 겹쳐 서느니 모르는
- * 곡이라도 흩어지는 편이 낫다.
- */
-/**
- * 틀어 봤더니 안 되던 곡 (S15P21A405-546). 봇 전체가 같이 피한다 — 한 봇에게 안 되는 곡은
- * 다른 봇에게도 안 된다. 새로고침하면 비는데, 그때는 다시 한 번 부딪혀 보고 다시 담는다.
- */
-const dead = new Set<number>();
-
-function pickSong(layer: number, myLayer: number, myMusicId: number | null): number | null {
-  const engine = getMapEngine();
-  if (layer !== myLayer || !engine?.ready) return null;
-  const playable = engine.songs.filter((s) => s.playable && !dead.has(s.musicId));
-  const known = playable.filter((s) => isKnownArtist(s.artist));
-  const songs = known.length >= BOTS.knownMin ? known : playable;
-  if (songs.length === 0) return null;
-
-  const mine = myMusicId != null ? engine.pointOf(myMusicId) : null;
-  if (!mine || Math.random() < BOTS.wanderChance) return songs[Math.floor(Math.random() * songs.length)].musicId;
-
-  const dx = layer * 2;
-  const dy = dx + 1;
-  const near = songs
-    .map((s) => ({ id: s.musicId, d: (s.pc[dx] - mine.pc[dx]) ** 2 + (s.pc[dy] - mine.pc[dy]) ** 2 }))
-    .sort((a, b) => a.d - b.d)
-    .slice(0, BOTS.nearPool);
-  return near[Math.floor(Math.random() * near.length)].id;
-}
-
-/**
  * 내가 타고 있는 봇이 움직였으면 내 화면도 옮긴다.
  *
  * 실사용자를 따라갈 때 `RIDE_TRACK`·`RIDE_ENDED` 가 하는 일과 **같은 결과**를 만든다
  * (`use-ride-session`). 봇은 서버에 없어서 그 프레임이 올 데가 없다.
  */
-function syncRide(before: Map<string, BotEpisode>, next: BotLive[], showToast: (m: string) => void): void {
+function syncRide(before: Map<string, BotEpisode>, next: BotLive[], showToast: (m: string) => void): number | null {
   const ride = useFollowStore.getState();
-  if (!ride.leaderEmail) return;
+  if (!ride.leaderEmail) return null;
   const leader = next.find((b) => b.email === ride.leaderEmail);
-  if (!leader) return;
+  if (!leader) return null;
 
   // 선장이 자리를 비웠다 — 인솔자가 사라진 것과 같은 상태다
   if (!leader.episode.online) {
     const map = useMapStore.getState();
     endRide({ musicId: map.myMusicId, layer: map.layer });
     showToast(RIDE_ENDED_BY_CAPTAIN(leader.nickname));
-    return;
+    return null;
   }
 
   const was = before.get(leader.email);
   const musicId = leader.episode.musicId;
-  if (musicId == null || was?.musicId === musicId) return;
+  if (musicId == null || was?.musicId === musicId) return null;
 
   ride.setLeaderMusicId(musicId);
   useMapStore.getState().setMyMusicId(musicId);
   getMapEngine()?.rideTo(musicId);
   // 봇은 소리 있는 곡만 고르므로(`pickSong`) 여기서 재생 가부를 따지지 않는다
   playFrom(musicId, 0, true);
+  // 실제로 소리가 나는지는 부르는 쪽이 이어서 확인한다 (§549)
+  return musicId;
 }

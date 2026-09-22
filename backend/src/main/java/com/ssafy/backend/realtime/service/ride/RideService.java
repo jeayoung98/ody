@@ -75,6 +75,7 @@ public class RideService {
 	private final RidePlaybackService ridePlaybackService;
 	private final RideSubscriptionService rideSubscriptionService;
 	private final RideViewportService rideViewportService;
+	private final RideViewService rideViewService; // 탑승 직후 인솔자 지도 화면 종류 전달
 	private final RealtimeEventService realtimeEventService;
 	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
 	private final MeetingService meetingService; // 하차 시점 만남 기록
@@ -146,6 +147,8 @@ public class RideService {
 			//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
 			//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
 			rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
+			//    지도를 보는 모양(여정·플레이리스트·주변 탐색)도 같은 이유로 한 번 보낸다.
+			rideViewService.sendCurrent(riderEmail, captainEmail);
 
 			// 10. 인솔자에게 누가 탔는지 알린다. 인솔자가 인원수를 아는 유일한 길이다.
 			//     아래 11번은 인솔자 자리를 보는 사람들에게 가는 것이라 인솔자 본인은 빠진다.
@@ -313,6 +316,11 @@ public class RideService {
 
 		// 7. 인솔자를 보고 있는 사람들에게 인원수가 줄었다고 알린다.
 		notifyRiderCount(ride.captainEmail(), result.remainingRiders());
+		//    마지막 한 명이 내렸으면 선단이 없어진 것이다. 스크립트가 재생 정보·곡 상세를 지우는 것과
+		//    같은 이유로 지도 화면 모양도 지운다. 남겨 두면 다음에 타는 사람이 옛 화면을 받는다.
+		if (result.remainingRiders() == 0) {
+			notifyQuietly("하차 지도 화면 정리", () -> rideRedisRepository.deleteView(ride.captainEmail()));
+		}
 
 		// 8. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
 		//    명단은 지도에 다시 들어가기 전에 찍힌 것이라 자기 자신이 섞여 있지 않다.
@@ -411,6 +419,8 @@ public class RideService {
 		//    누가 따라가고 있었는지도 스크립트가 같이 돌려준다. 자바에서 따로 읽으면
 		//    그 사이에 새로 탄 사람이 명단에서 빠져 같은 선단인데 만남으로 세어진다.
 		DisbandResult result = rideRedisRepository.disband(captainEmail);
+		//    지도 화면 모양은 스크립트 밖의 키라 여기서 같이 지운다. 재생 정보·곡 상세와 같은 운명이다.
+		notifyQuietly("해체 지도 화면 정리", () -> rideRedisRepository.deleteView(captainEmail));
 		if (!result.hadRiders()) {
 			return result; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
 		}

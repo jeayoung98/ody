@@ -26,4 +26,10 @@ public final class WebSocketDestination {
 	 * 전체 경로는 /app/ride/panel 이다.
 	 */
 	public static final String APP_RIDE_PANEL = "/ride/panel";
+
+	/**
+	 * C→S 인솔자 지도 화면 종류 전환(기본·여정·플레이리스트·주변 탐색).
+	 * 전체 경로는 /app/ride/view 이다.
+	 */
+	public static final String APP_RIDE_VIEW = "/ride/view";
 }

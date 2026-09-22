@@ -15,6 +15,8 @@ import org.springframework.stereotype.Repository;
 
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.RidePanelTab;
+import com.ssafy.backend.realtime.dto.ride.RideViewKind;
+import com.ssafy.backend.realtime.dto.ride.RideViewPayload;
 
 import lombok.RequiredArgsConstructor;
 
@@ -46,6 +48,7 @@ public class RideRedisRepository {
 	private static final String RIDERS_PREFIX = "ride:riders:"; // 나를 따라오는 사람들
 	private static final String PLAYBACK_PREFIX = "ride:playback:"; // 그룹이 지금 트는 곡
 	private static final String PANEL_PREFIX = "ride:panel:"; // 인솔자가 열어 둔 곡 상세
+	private static final String VIEW_PREFIX = "ride:view:"; // 인솔자가 지도를 보는 모양
 
 	/**
 	 * 재생 스냅샷을 통째로 바꾸고 새 순번을 돌려준다.
@@ -474,6 +477,51 @@ public class RideRedisRepository {
 	/** 열어 둔 곡 상세를 지운다. 닫힌 상태는 키가 없는 것으로 나타낸다. */
 	public void deletePanel(String captainEmail) {
 		redis.delete(PANEL_PREFIX + captainEmail);
+	}
+
+	/**
+	 * 인솔자가 지도를 보는 모양을 저장한다. 중간에 타는 사람이 이 값으로 같은 화면을 본다.
+	 * 종류마다 담기는 번호가 달라, 옛 종류의 번호가 남지 않게 지우고 새로 넣는다.
+	 */
+	public void saveView(String captainEmail, RideViewPayload view) {
+		String key = VIEW_PREFIX + captainEmail;
+		Map<String, String> fields = new LinkedHashMap<>();
+		fields.put("kind", view.kind().value());
+		putIfPresent(fields, "startMusicId", view.startMusicId());
+		putIfPresent(fields, "endMusicId", view.endMusicId());
+		putIfPresent(fields, "playlistId", view.playlistId());
+		putIfPresent(fields, "centerMusicId", view.centerMusicId());
+		redis.delete(key);
+		redis.opsForHash().putAll(key, fields);
+	}
+
+	/** 인솔자가 지도를 보는 모양을 읽는다. 기본 지도(저장 없음)면 null. */
+	public RideViewPayload findView(String captainEmail) {
+		List<Object> v = redis.opsForHash().multiGet(VIEW_PREFIX + captainEmail,
+				List.of("kind", "startMusicId", "endMusicId", "playlistId", "centerMusicId"));
+		if (v == null || v.get(0) == null) {
+			return null;
+		}
+		RideViewKind kind = RideViewKind.from(v.get(0).toString());
+		if (kind == null) {
+			return null;
+		}
+		return new RideViewPayload(kind, toLong(v.get(1)), toLong(v.get(2)), toLong(v.get(3)), toLong(v.get(4)));
+	}
+
+	/** 지도 화면 모양을 지운다. 기본 지도는 키가 없는 것으로 나타낸다. */
+	public void deleteView(String captainEmail) {
+		redis.delete(VIEW_PREFIX + captainEmail);
+	}
+
+	private static void putIfPresent(Map<String, String> fields, String name, Long value) {
+		if (value != null) {
+			fields.put(name, Long.toString(value));
+		}
+	}
+
+	private static Long toLong(Object value) {
+		return value == null ? null : Long.valueOf(value.toString());
 	}
 
 	/**

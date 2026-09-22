@@ -41,7 +41,7 @@ export default function SongNearbyCard({ musicId, title, artist, rank, playing, 
   useEffect(() => {
     const el = coverRef.current;
     if (!el) return;
-    const albumMbid = getMapEngine()?.albumMbidOf(musicId) ?? null;
+    const albumMbid = getMapEngine()?.pointOf(musicId)?.albumMbid ?? null;
     const point = { musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, albumMbid, playable: true };
     let timer = 0;
     let tries = 0;

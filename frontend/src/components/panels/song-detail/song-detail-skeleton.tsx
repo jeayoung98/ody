@@ -7,23 +7,43 @@ import Skeleton from "@/components/common/skeleton";
  * **커버는 자리를 안 잡는다.** 절차적 커버는 `musicId` 하나로 나오므로 이미 뒤에 깔려 있다
  * (`song-cover-backdrop`) — 그 위에 회색 네모를 또 얹으면 있는 그림을 가리는 셈이다.
  *
- * 나머지는 **줄글처럼 두루뭉술하게** 깐다. 제목·가수 자리에 굵기가 다른 줄 둘, 칩 줄, 버튼 줄,
- * 그리고 아래로 섹션들. 실제 화면과 1:1로 맞추지 않는다 — 값이 채워질 때 미세하게 어긋나는
- * 것이 오히려 눈에 띄고, 여기서 할 일은 "이만큼 올 거예요" 뿐이다.
+ * **제목·가수는 아는 곡이면 진짜 글자를 적는다** (S15P21A405-527). 지도에서 별을 눌러 들어온
+ * 경우 상주 집합에 이미 그 값이 있다 — 아는 것을 회색 막대로 가려 둘 이유가 없다. 지도에 없는
+ * 곡(고스트·검색 결과)이면 예전처럼 막대로 자리만 잡는다.
+ *
+ * 나머지는 **줄글처럼 두루뭉술하게** 깐다. 칩 줄, 버튼 줄, 그리고 아래로 섹션들. 실제 화면과
+ * 1:1로 맞추지 않는다 — 값이 채워질 때 미세하게 어긋나는 것이 오히려 눈에 띄고, 여기서 할 일은
+ * "이만큼 올 거예요" 뿐이다.
  *
  * **다만 높이는 꽉 채운다** (`min-h`). 짧게 깔면 값이 올 때 패널이 훌쩍 늘어나 화면이 한 번
  * 튄다 — 자리를 잡아 두는 것이 이 화면의 일인데 자리 크기가 틀리면 도로아미타불이다.
  * 실제 곡 상세는 거의 늘 패널 최대 높이(`max-h-[calc(100dvh-264px)]`)에 닿으므로 그 값에 맞춘다.
  * 음원이 없어 아래를 접는 곡만 예외인데, 그건 소수라 다수 쪽에 맞췄다.
  */
-export default function SongDetailSkeleton() {
+interface SongDetailSkeletonProps {
+  /** 지도가 이미 아는 제목. 없으면 회색 막대로 자리만 잡는다 */
+  title?: string | null;
+  artist?: string | null;
+}
+
+export default function SongDetailSkeleton({ title, artist }: SongDetailSkeletonProps) {
   return (
     <div className="flex min-h-[calc(100dvh-212px)] flex-col gap-3.5">
       {/* 제목 · 가수 */}
       <div className="flex items-center gap-2.5">
         <div className="flex min-w-0 flex-1 flex-col gap-2">
-          <Skeleton w="62%" h={22} rounded="box" />
-          <Skeleton w="38%" h={11} />
+          {title ? (
+            <>
+              {/* 글자 크기·색은 `song-header` 와 맞춘다 — 값이 와도 제자리에 있어야 안 튄다 */}
+              <p className="truncate font-display text-xl leading-tight font-semibold text-ink drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]">{title}</p>
+              <p className="truncate text-xs text-ink-2 drop-shadow-[0_1px_5px_rgba(4,6,13,.9)]">{artist ?? "Unknown"}</p>
+            </>
+          ) : (
+            <>
+              <Skeleton w="62%" h={22} rounded="box" />
+              <Skeleton w="38%" h={11} />
+            </>
+          )}
         </div>
         <Skeleton w={36} h={36} />
       </div>

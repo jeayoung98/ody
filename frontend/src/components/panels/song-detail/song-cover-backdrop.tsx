@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { coverFor } from "@/components/map/render/sprites";
 import { NO_GENRE_ID } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -58,8 +59,15 @@ interface SongCoverBackdropProps {
 export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: SongCoverBackdropProps) {
   const coverRef = useRef<HTMLDivElement>(null);
   const plateRef = useRef<HTMLDivElement>(null);
-  // 패널이 이미 부르는 쿼리다 — 캐시를 나눠 쓰므로 요청이 새로 나가지 않는다
-  const albumMbid = useMusicDetailQuery(musicId).data?.albumMbid ?? null;
+  /**
+   * **지도가 이미 들고 있으면 그 값을 쓴다** (S15P21A405-527). 별을 누른 순간 상주 집합에
+   * `albumMbid` 가 있으므로, 상세 응답을 기다리면 이미 받아 둔 그림을 두고 화면만 비운다.
+   * 상세 쿼리는 지도에 없는 곡(고스트·검색 결과)의 폴백이다 — 패널이 어차피 부르는 쿼리라
+   * 요청이 새로 나가지도 않는다.
+   */
+  const fromMap = getMapEngine()?.pointOf(musicId)?.albumMbid ?? null;
+  const fromDetail = useMusicDetailQuery(musicId).data?.albumMbid ?? null;
+  const albumMbid = fromMap ?? fromDetail;
 
   /**
    * 캔버스는 브라우저에만 있다. 상태로 들고 있으면 서버 렌더와 값이 달라 하이드레이션이 깨지고,

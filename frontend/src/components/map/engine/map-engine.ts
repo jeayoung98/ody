@@ -596,15 +596,17 @@ export class MapEngine {
   }
 
   /**
-   * 이 곡의 앨범 ID — 상주 집합에 있으면 (S15P21A405-518).
+   * 이 곡의 상주 집합 원소 — 이 겹에 있으면 (S15P21A405-518·527).
    *
-   * 주변 곡 카드처럼 **지도 밖 화면**이 커버를 그릴 때 쓴다. 그쪽 응답(`NeighborTrack`)에는
-   * `albumMbid` 가 없어서, 이미 들고 있는 상주 집합에서 빌려 온다. 이 겹에 없는 곡이면 null 이고
-   * 부르는 쪽은 절차적 커버로 떨어진다.
+   * **지도 밖 화면이 이미 들고 있는 값을 빌려 쓰는 창구다.** 곡 상세를 열 때 제목·가수·앨범
+   * 커버는 이 점에 다 들어 있는데, 그걸 안 쓰면 `/bff/music/{id}` 를 기다리는 동안 화면이 빈다.
+   * 주변 곡 카드도 마찬가지다 — 그쪽 응답(`NeighborTrack`)에는 `albumMbid` 가 아예 없다.
+   *
+   * 이 겹에 없는 곡(고스트·검색 결과)이면 null 이고, 부르는 쪽이 평소대로 응답을 기다린다.
    */
-  albumMbidOf(musicId: number): string | null {
+  pointOf(musicId: number): MapPoint | null {
     const i = this.index.get(musicId);
-    return i == null ? null : (this.songs[i].albumMbid ?? null);
+    return i == null ? null : this.songs[i];
   }
 
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */

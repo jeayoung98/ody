@@ -1,0 +1,382 @@
+package com.ssafy.backend.artwork;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.mockito.Mockito;
+
+import com.ssafy.backend.artwork.dto.ArtworkDetailResponse;
+import com.ssafy.backend.artwork.dto.ArtworkLeaderboardResponse;
+import com.ssafy.backend.artwork.dto.ArtworkLikeRequest;
+import com.ssafy.backend.artwork.dto.ArtworkPointRow;
+import com.ssafy.backend.artwork.dto.ArtworkRoundRow;
+import com.ssafy.backend.artwork.dto.ArtworkRow;
+import com.ssafy.backend.artwork.dto.ArtworkSubmitResponse;
+import com.ssafy.backend.artwork.dto.ArtworkSummaryRow;
+import com.ssafy.backend.artwork.mapper.ArtworkMapper;
+import com.ssafy.backend.artwork.service.ArtworkService;
+import com.ssafy.backend.common.ArtworkErrorCode;
+import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.GlobalErrorCode;
+import com.ssafy.backend.music.dto.ConstellationLayoutResponse;
+import com.ssafy.backend.music.dto.ConstellationPoint;
+import com.ssafy.backend.music.dto.MusicDetail;
+import com.ssafy.backend.music.service.ConstellationService;
+import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
+import com.ssafy.backend.playlist.service.PlaylistService;
+
+/**
+ * 제출·조회·좋아요의 규칙 (S15P21A405-563).
+ *
+ * <p>여기서 지키는 핵심은 <b>작품이 제출 시점에 굳는다</b>는 것이다 — 원본 플레이리스트를 뒤에서
+ * 어떻게 고치든 작품의 곡·좌표·점수는 변하지 않아야 한다(spec FR-003).
+ */
+class ArtworkServiceTests {
+
+	private static final String OWNER = "owner@ody.com";
+	private static final String OTHER = "other@ody.com";
+
+	private ArtworkMapper artworkMapper;
+	private PlaylistService playlistService;
+	private ConstellationService constellationService;
+	private ArtworkService service;
+
+	@BeforeEach
+	void setUp() {
+		artworkMapper = Mockito.mock(ArtworkMapper.class);
+		playlistService = Mockito.mock(PlaylistService.class);
+		constellationService = Mockito.mock(ConstellationService.class);
+		// 곡 조회 어댑터 없이도 성립해야 한다 — 그림(좌표)이 우선이고 곡 정보는 곁들이다.
+		service = new ArtworkService(
+				artworkMapper, playlistService, constellationService, Optional.empty(), "v2.1-pca16");
+	}
+
+	// ---------------- 제출 ----------------
+
+	@Test
+	void submit_rejectsWhenNoOpenRound() {
+		when(artworkMapper.findOpenRound()).thenReturn(null);
+
+		assertThatThrownBy(() -> service.submit(1L, OWNER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_ROUND_CLOSED);
+
+		verify(artworkMapper, never()).insertArtwork(any());
+	}
+
+	/** 소유권 검사는 PlaylistService 가 한다. 같은 규칙을 두 군데 두지 않으려는 선택이다. */
+	@Test
+	void submit_propagatesForbiddenFromPlaylist() {
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(playlistService.getDetail(1L, OTHER)).thenThrow(new CustomException(GlobalErrorCode.FORBIDDEN));
+
+		assertThatThrownBy(() -> service.submit(1L, OTHER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(GlobalErrorCode.FORBIDDEN);
+
+		verify(artworkMapper, never()).insertArtwork(any());
+	}
+
+	/** 곡 수 검증(2~30)·좌표 누락 판정은 배치 API 가 그대로 한다. 여기서 다시 구현하지 않는다. */
+	@Test
+	void submit_propagatesInvalidInputFromLayout() {
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(playlistService.getDetail(1L, OWNER)).thenReturn(playlistWith(10L));
+		when(constellationService.layout(any())).thenThrow(new CustomException(GlobalErrorCode.INVALID_INPUT));
+
+		assertThatThrownBy(() -> service.submit(1L, OWNER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(GlobalErrorCode.INVALID_INPUT);
+
+		verify(artworkMapper, never()).insertArtwork(any());
+	}
+
+	@Test
+	void submit_storesSnapshotOfPointsAndTitle() {
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(playlistService.getDetail(1L, OWNER)).thenReturn(playlistWith(10L, 11L));
+		when(constellationService.layout(List.of(10L, 11L))).thenReturn(new ConstellationLayoutResponse(
+				List.of(new ConstellationPoint(10L, -0.5, 0.25), new ConstellationPoint(11L, 0.5, -0.25))));
+
+		ArtworkSubmitResponse response = service.submit(1L, OWNER);
+
+		assertThat(response.status()).isEqualTo(ArtworkStatus.PENDING.name());
+
+		ArgumentCaptor<ArtworkRow> artwork = ArgumentCaptor.forClass(ArtworkRow.class);
+		verify(artworkMapper).insertArtwork(artwork.capture());
+		assertThat(artwork.getValue().getStatus()).isEqualTo(ArtworkStatus.PENDING.name());
+		assertThat(artwork.getValue().getEmail()).isEqualTo(OWNER);
+		assertThat(artwork.getValue().getTitle()).isEqualTo("밤산책");
+		// 어떤 좌표 baseline 의 모양인지 남는다 (헌법 V).
+		assertThat(artwork.getValue().getLayoutVersion()).isEqualTo("v2.1-pca16");
+
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<ArtworkPointRow>> points = ArgumentCaptor.forClass(List.class);
+		verify(artworkMapper).insertPoints(anyLong(), points.capture());
+		assertThat(points.getValue()).hasSize(2);
+		assertThat(points.getValue().get(0).getPosition()).isZero();
+		assertThat(points.getValue().get(0).getMusicId()).isEqualTo(10L);
+		assertThat(points.getValue().get(0).getX()).isEqualTo(-0.5);
+		assertThat(points.getValue().get(1).getPosition()).isEqualTo(1);
+	}
+
+	/** 같은 회차 재제출은 기존 작품을 지우고 새로 만든다 — 점수·좋아요를 승계하지 않는다. */
+	@Test
+	void submit_replacesExistingArtworkInSameRound() {
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(playlistService.getDetail(1L, OWNER)).thenReturn(playlistWith(10L, 11L));
+		when(constellationService.layout(any())).thenReturn(new ConstellationLayoutResponse(
+				List.of(new ConstellationPoint(10L, 0.0, 0.0), new ConstellationPoint(11L, 1.0, 1.0))));
+		ArtworkRow existing = artwork(99L, ArtworkStatus.SCORED, OWNER);
+		when(artworkMapper.findByRoundAndEmail(1L, OWNER)).thenReturn(existing);
+
+		service.submit(1L, OWNER);
+
+		verify(artworkMapper).deleteById(99L);
+		verify(artworkMapper).insertArtwork(any());
+	}
+
+	// ---------------- 상세 ----------------
+
+	/** 아직 점수가 없는 남의 작품은 존재를 알 수 없어야 한다 — 403 이 아니라 404 다. */
+	@Test
+	void detail_hidesOthersPendingArtwork() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.PENDING, OWNER));
+
+		assertThatThrownBy(() -> service.getDetail(5L, OTHER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_NOT_FOUND);
+	}
+
+	@Test
+	void detail_showsOwnPendingArtwork() {
+		ArtworkRow row = artwork(5L, ArtworkStatus.PENDING, OWNER);
+		row.setFailReason(null);
+		when(artworkMapper.findById(5L)).thenReturn(row);
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		when(artworkMapper.findPoints(5L)).thenReturn(List.of(new ArtworkPointRow(0, 10L, 0.1, 0.2)));
+
+		ArtworkDetailResponse detail = service.getDetail(5L, OWNER);
+
+		assertThat(detail.mine()).isTrue();
+		assertThat(detail.status()).isEqualTo(ArtworkStatus.PENDING.name());
+		assertThat(detail.points()).singleElement()
+				.satisfies(p -> assertThat(p.musicId()).isEqualTo(10L));
+	}
+
+	/**
+	 * 상세의 좌표는 <b>artwork_point</b> 에서 나온다. 원본 플레이리스트를 다시 읽지 않는다 —
+	 * 이것이 "제출 뒤 원본을 고쳐도 작품이 변하지 않는다" 의 실제 근거다.
+	 */
+	@Test
+	void detail_readsSnapshotNotPlaylist() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		when(artworkMapper.findPoints(5L)).thenReturn(List.of(
+				new ArtworkPointRow(0, 10L, 0.1, 0.2), new ArtworkPointRow(1, 11L, -0.1, -0.2)));
+
+		ArtworkDetailResponse detail = service.getDetail(5L, OTHER);
+
+		assertThat(detail.points()).hasSize(2);
+		verify(playlistService, never()).getDetail(anyLong(), anyString());
+	}
+
+	/** 실패 사유는 소유자에게만 보인다. */
+	@Test
+	void detail_hidesFailReasonFromOthers() {
+		ArtworkRow row = artwork(5L, ArtworkStatus.SCORED, OWNER);
+		row.setFailReason("AI 채점 실패");
+		when(artworkMapper.findById(5L)).thenReturn(row);
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		when(artworkMapper.findPoints(5L)).thenReturn(List.of());
+
+		assertThat(service.getDetail(5L, OTHER).failReason()).isNull();
+		assertThat(service.getDetail(5L, OWNER).failReason()).isEqualTo("AI 채점 실패");
+	}
+
+	// ---------------- 리더보드 ----------------
+
+	@Test
+	void leaderboard_numbersRanksAcrossPages() {
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		when(artworkMapper.findLeaderboard(eq(1L), any(), eq(20), eq(20)))
+				.thenReturn(List.of(summaryRow(7L), summaryRow(8L)));
+		when(artworkMapper.countLeaderboard(1L)).thenReturn(42);
+
+		ArtworkLeaderboardResponse response = service.getLeaderboard(1L, OWNER, 1, 20);
+
+		assertThat(response.items()).extracting("rank").containsExactly(21, 22);
+		assertThat(response.totalCnt()).isEqualTo(42);
+	}
+
+	/** 한 번에 내려주는 개수는 상한에서 자른다. size=1000 으로 전체를 긁어가지 못한다. */
+	@Test
+	void leaderboard_capsPageSize() {
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		when(artworkMapper.findLeaderboard(anyLong(), any(), anyInt(), anyInt())).thenReturn(List.of());
+
+		ArtworkLeaderboardResponse response = service.getLeaderboard(1L, null, 0, 1000);
+
+		assertThat(response.size()).isEqualTo(ArtworkService.MAX_PAGE_SIZE);
+		verify(artworkMapper).findLeaderboard(1L, null, 0, ArtworkService.MAX_PAGE_SIZE);
+	}
+
+	// ---------------- 좋아요 ----------------
+
+	/** 기록이 실제로 바뀐 경우에만 집계를 움직인다 — 연타로 숫자가 부풀지 않는다. */
+	@Test
+	void like_doesNotChangeCountWhenAlreadyLiked() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+		when(artworkMapper.insertLike(5L, OTHER)).thenReturn(0);
+		when(artworkMapper.findLikeCnt(5L)).thenReturn(3);
+
+		assertThat(service.changeLike(new ArtworkLikeRequest(5L, true), OTHER).likeCnt()).isEqualTo(3);
+
+		verify(artworkMapper, never()).addLikeCnt(anyLong(), anyInt());
+	}
+
+	@Test
+	void like_incrementsOnceWhenNewlyLiked() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+		when(artworkMapper.insertLike(5L, OTHER)).thenReturn(1);
+		when(artworkMapper.findLikeCnt(5L)).thenReturn(4);
+
+		service.changeLike(new ArtworkLikeRequest(5L, true), OTHER);
+
+		verify(artworkMapper, times(1)).addLikeCnt(5L, 1);
+	}
+
+	@Test
+	void like_rejectsOthersPendingArtwork() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.PENDING, OWNER));
+
+		assertThatThrownBy(() -> service.changeLike(new ArtworkLikeRequest(5L, true), OTHER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_NOT_FOUND);
+	}
+
+	// ---------------- 재평가 · 삭제 ----------------
+
+	@Test
+	void retry_rejectsNonOwner() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.FAILED, OWNER));
+
+		assertThatThrownBy(() -> service.retry(5L, OTHER, 3))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(GlobalErrorCode.FORBIDDEN);
+	}
+
+	@Test
+	void retry_rejectsScoredArtwork() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+
+		assertThatThrownBy(() -> service.retry(5L, OWNER, 3))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_NOT_FAILED);
+	}
+
+	@Test
+	void retry_rejectsWhenAttemptsExhausted() {
+		ArtworkRow row = artwork(5L, ArtworkStatus.FAILED, OWNER);
+		row.setAttemptCnt(3);
+		when(artworkMapper.findById(5L)).thenReturn(row);
+
+		assertThatThrownBy(() -> service.retry(5L, OWNER, 3))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_RETRY_EXHAUSTED);
+
+		verify(artworkMapper, never()).markPendingAgain(anyLong());
+	}
+
+	@Test
+	void retry_movesFailedBackToPending() {
+		ArtworkRow row = artwork(5L, ArtworkStatus.FAILED, OWNER);
+		row.setAttemptCnt(1);
+		when(artworkMapper.findById(5L)).thenReturn(row);
+
+		service.retry(5L, OWNER, 3);
+
+		verify(artworkMapper).markPendingAgain(5L);
+	}
+
+	@Test
+	void delete_rejectsNonOwner() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+
+		assertThatThrownBy(() -> service.delete(5L, OTHER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(GlobalErrorCode.FORBIDDEN);
+
+		verify(artworkMapper, never()).deleteById(anyLong());
+	}
+
+	// ---------------- fixtures ----------------
+
+	private static int anyInt() {
+		return org.mockito.ArgumentMatchers.anyInt();
+	}
+
+	private static ArtworkRoundRow round() {
+		ArtworkRoundRow row = new ArtworkRoundRow();
+		row.setId(1L);
+		row.setTheme("고양이");
+		row.setThemePrompt("고양이를 얼마나 닮았는지 채점하라.");
+		row.setStartsAt(OffsetDateTime.now().minusDays(1));
+		row.setEndsAt(OffsetDateTime.now().plusDays(6));
+		return row;
+	}
+
+	private static ArtworkRow artwork(long id, ArtworkStatus status, String email) {
+		ArtworkRow row = new ArtworkRow();
+		row.setId(id);
+		row.setRoundId(1L);
+		row.setEmail(email);
+		row.setTitle("밤산책");
+		row.setStatus(status.name());
+		row.setCreatedAt(OffsetDateTime.now());
+		return row;
+	}
+
+	private static ArtworkSummaryRow summaryRow(long id) {
+		ArtworkSummaryRow row = new ArtworkSummaryRow();
+		row.setId(id);
+		row.setTitle("밤산책");
+		row.setEmail(OWNER);
+		row.setStatus(ArtworkStatus.SCORED.name());
+		row.setScore(80);
+		row.setCreatedAt(OffsetDateTime.now());
+		return row;
+	}
+
+	private static PlaylistDetailResponse playlistWith(Long... musicIds) {
+		List<MusicDetail> musics = java.util.Arrays.stream(musicIds)
+				.map(id -> new MusicDetail(
+						id, null, "곡" + id, "아티스트", null, 200, null, null, null, null, null, null, null, null))
+				.toList();
+		return new PlaylistDetailResponse(1L, "밤산책", musics.size(), 0, 0, false, musics);
+	}
+}

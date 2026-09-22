@@ -169,3 +169,92 @@
 - 목 라우트 `GET /bff/users/nearby?layer=` 를 이 API 로 갈아탈 때 **`layer` 그대로 넘기면 된다**(둘 다 0-based).
 - 격자 16×16 셀 전부를 파이프라인 1회로 읽는다. 현재 규모에서 충분. 사용자 수 제한(`individual-user-cap`)은 이 API 에 **적용하지 않는다** — 전부 준다.
 - `email` 이 응답에 있다. 계약서 §0 "payload 에 email 금지" 와 어긋나지만, `users` PK 가 email 이고 FE 가 email 을 아바타 키로 쓰며 backend/dev 의 `ViewportUser` 도 이미 email 을 실어 보내므로 그 관례를 따랐다.
+
+---
+
+## 6. 별자리 작품 AI 평가·회차 리더보드 — 프론트 전달 (S15P21A405-563, 2026-09-22)
+
+설계 문서는 `specs/009-constellation-artwork-ai/`(spec·plan·tasks). 여기는 프론트가 붙일 때 필요한 것만 적는다.
+
+**기능 요약**: 사용자가 만든 플레이리스트의 별자리 모양을 회차 주제(1회차 고양이)에 얼마나 닮았는지 AI가 채점하고, 채점된 작품을 점수 순 리더보드로 겨룬다.
+
+⚠️ **이 기능은 FEATURES.md 에 항목이 없다.** `SOCIAL-12`(랭킹, 미확정)는 주간 **좋아요** 기준이라 다른 줄이다. 기획 확인 대상.
+
+### 6-1. 엔드포인트
+
+| 메서드 | 경로 | 인증 | 설명 |
+| --- | --- | --- | --- |
+| `GET` | `/api/artwork/round/current` | 선택 | 지금 열린 회차. 없으면 `data: null` (오류 아님) |
+| `POST` | `/api/artwork/submit` | 필요 | 플레이리스트를 작품으로 제출 → `201` |
+| `GET` | `/api/artwork/leaderboard` | 선택 | 회차 리더보드 (`SCORED` 만) |
+| `GET` | `/api/artwork/detail` | 선택 | 작품 상세 |
+| `GET` | `/api/artwork/mine` | 필요 | 내 작품 (모든 상태) |
+| `POST` | `/api/artwork/like` | 필요 | 좋아요 목표 상태 변경 |
+| `POST` | `/api/artwork/retry/{artworkId}` | 필요 | 실패 작품 재평가 |
+| `DELETE` | `/api/artwork/{artworkId}` | 필요 | 작품 삭제 |
+
+인증 "선택" 은 비로그인도 볼 수 있다는 뜻이고, 로그인 상태면 `likedByMe` 가 채워진다.
+
+### 6-2. 제출은 즉시 끝나지 않는다 — **프론트가 다시 조회해야 한다**
+
+```jsonc
+// POST /api/artwork/submit  요청
+{ "playlistId": 12 }
+// 201
+{ "success": true, "data": { "artworkId": 501, "status": "PENDING" }, "error": null }
+```
+
+평가는 서버 스케줄러가 뒤에서 한다(기본 5초 주기). 제출 응답은 **언제나 `PENDING`** 이다. 점수를 보려면 `/api/artwork/detail` 이나 `/api/artwork/mine` 을 다시 부른다. **소켓 알림은 없다** — 폴링하거나 화면 재진입 때 갱신한다.
+
+`status` 는 `PENDING` · `SCORED` · `FAILED` 셋이다. `FAILED` 는 `score` 가 **`null`** 이다(0 이 아니다) — 0점으로 표시하면 "못생겼다"는 뜻이 된다.
+
+### 6-3. 같은 회차 재제출은 기존 작품을 **지우고** 새로 만든다
+
+점수·좋아요가 승계되지 않는다. 누르기 전에 "지금 점수와 좋아요가 사라진다"를 고지해야 한다. 서버는 확인 없이 바로 교체한다.
+
+### 6-4. 응답 모양
+
+```jsonc
+// GET /api/artwork/leaderboard?roundId=&page=0&size=20   (roundId 생략 = 열린 회차, size 최대 50)
+{ "round": { "roundId": 1, "theme": "고양이", "startsAt": "...", "endsAt": "..." },
+  "items": [ { "artworkId": 501, "rank": 1, "title": "밤산책", "ownerEmail": "a@b.c",
+               "status": "SCORED", "score": 87, "aiComment": "귀 두 개가 또렷하다",
+               "failReason": null, "likeCnt": 12, "likedByMe": false,
+               "musicCnt": 14, "createdAt": "..." } ],
+  "page": 0, "size": 20, "totalCnt": 137 }
+
+// GET /api/artwork/detail?artworkId=501
+{ "artworkId": 501, "roundId": 1, "theme": "고양이", "title": "밤산책",
+  "ownerEmail": "a@b.c", "mine": false, "status": "SCORED", "score": 87,
+  "aiComment": "...", "failReason": null, "likeCnt": 12, "likedByMe": false,
+  "points": [ { "musicId": 900, "x": -0.42, "y": 0.13 } ],
+  "musics": [ /* MusicDetail. points 와 같은 순서 */ ],
+  "createdAt": "...", "evaluatedAt": "..." }
+
+// POST /api/artwork/like   { "artworkId": 501, "liked": true }
+{ "artworkId": 501, "liked": true, "likeCnt": 13 }
+```
+
+- `points` 의 `musicId`·`x`·`y` 는 `POST /api/constellations/layout`(A-9) 응답과 **필드명·의미가 같다** — 별자리 뷰를 그대로 재사용할 수 있다.
+- `rank` 는 서버가 매긴다. 정렬은 `score` 내림차순 → `likeCnt` 내림차순 → 먼저 제출한 순이라 동점도 순서가 확정된다.
+- `musics` 는 곡이 지워졌으면 그 자리만 빠진다. `points` 는 그대로다 — 그림이 깨지지 않는 것이 우선이다.
+- `failReason` 은 **소유자에게만** 채워진다.
+
+### 6-5. 신규 에러 코드 — `frontend/src/types/api.ts` 에 추가 필요
+
+| code | HTTP | 언제 |
+| --- | --- | --- |
+| `ARTWORK_NOT_FOUND` | 404 | 없는 작품, 또는 **남의 미채점 작품** |
+| `ARTWORK_ROUND_CLOSED` | 409 | 열린 회차가 없는데 제출 |
+| `ARTWORK_NOT_FAILED` | 409 | 실패가 아닌 작품에 재평가 요청 |
+| `ARTWORK_RETRY_EXHAUSTED` | 409 | 재시도 3회 소진 |
+
+제출 시 기존 코드도 그대로 온다: 남의 플레이리스트 403 `FORBIDDEN`, 곡 수 2~30 위반 400 `INVALID_INPUT`, 없는 플레이리스트 404 `PLAYLIST_NOT_FOUND`, 좌표 없는 곡 404 `MUSIC_NOT_FOUND`.
+
+### 6-6. 전제·주의
+
+- **곡 수는 2~30.** 배치 API(A-9)와 같은 제약이다. 31곡 이상 플레이리스트는 제출이 400 이다 — 프론트가 미리 막거나 안내해야 한다.
+- 아직 점수가 없는 **남의** 작품은 상세가 `404` 다(403 이 아니다 — 존재 여부를 흘리지 않는다). 좋아요도 누를 수 없다.
+- 채점 이미지는 **서버가 저장된 좌표로 렌더한다.** 프론트가 캔버스 이미지를 보내는 API 는 없고 앞으로도 두지 않는다(점수 조작 방지).
+- ⚠️ **DB 담당**: `backend/src/main/resources/db/artwork_001_tables.sql` 적용 필요 — 테이블 4개·시퀀스 2개·인덱스 4개와 1회차 행이 들어 있다. 적용 전에는 작품 API 전부가 실패한다.
+- ⚠️ **인프라**: 배포 호스트 env 에 `GMS_BASE_URL`·`GMS_API_KEY`·`GMS_MODEL` 필요. 비어 있어도 서버는 뜨고 작품만 `FAILED` 로 남는다.

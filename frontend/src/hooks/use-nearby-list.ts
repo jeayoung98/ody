@@ -5,7 +5,7 @@ import { LAYER_USERS } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
 import { botAsNearbyPerson } from "@/lib/bots/adapt";
-import { distanceBetween, pickNearby, radiusFromNeighbors, type Placed } from "@/lib/nearby-from-layer";
+import { distanceBetween, pickNearby, radiusFromNeighbors, type Placed, type Point } from "@/lib/nearby-from-layer";
 import { useBotStore } from "@/stores/use-bot-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type { LayerUsersSnapshot, NearbyPerson } from "@/types";
@@ -48,49 +48,59 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
     const merged = [...(fromServer ?? [])];
     const seen = new Set(merged.map((p) => p.email));
 
-    // 지금 겹에 있는 봇만. 다른 겹에 가 있으면 지도에 없는데 목록에만 있는 사람이 된다
+    /**
+     * 경계를 **한 번 재서 봇과 실사용자가 같이 쓴다** (S15P21A405-543). 예전에는 겹 사용자
+     * 쪽에만 있어서, 사람은 가까운 이만 뜨는데 봇은 겹 반대편에 있어도 떴다 — 같은 목록 안에서
+     * 두 종류가 다른 규칙으로 뽑히면 "내 곡과 비슷한 곡을 듣는 사람" 이라는 설명이 깨진다.
+     */
+    const ctx = nearbyContext(layer, myMusicId);
+
+    // 지금 겹에 있고, 경계 안에 있는 봇만
     for (const bot of bots) {
       if (bot.episode.layer !== layer || seen.has(bot.email)) continue;
       const as = botAsNearbyPerson(bot, myMusicId);
-      if (as) {
-        merged.push(as);
-        seen.add(as.email);
-      }
+      if (!as || !ctx || as.distance > ctx.radius) continue;
+      merged.push(as);
+      seen.add(as.email);
     }
 
-    for (const p of fromLayer(layerUsers, layer, myMusicId, seen)) merged.push(p);
+    for (const p of fromLayer(layerUsers, ctx, seen)) merged.push(p);
     return merged.sort((a, b) => a.distance - b.distance);
   }, [enabled, fromServer, bots, layer, myMusicId, layerUsers]);
 }
 
 /**
- * 겹 사용자 중 내 근처 사람을 `NearbyPerson` 으로.
+ * 내 자리와 "가깝다" 의 경계.
  *
- * **내 자리를 모르면 아무도 안 넣는다.** 아직 아무 곡도 재생하지 않았다는 뜻이고, 그때는
- * "가깝다" 를 잴 기준 자체가 없다 — 아무 데나 잘라 넣는 것보다 비워 두는 편이 정직하다.
+ * **내 자리를 모르면 `null` 이다.** 아직 아무 곡도 재생하지 않았다는 뜻이고, 그때는 "가깝다"
+ * 를 잴 기준 자체가 없다 — 아무 데나 잘라 넣는 것보다 비워 두는 편이 정직하다. 봇도 같다.
+ *
+ * 경계는 이 겹의 곡 분포에서 뽑는다 (`radiusFromNeighbors`). 상주 집합을 한 번 훑는데
+ * 1,000곡짜리 배열이고 목록을 다시 만들 때만 도는 자리라 값이 싸다.
  */
-function fromLayer(
-  snapshot: LayerUsersSnapshot | undefined,
-  layer: number,
-  myMusicId: number | null,
-  seen: ReadonlySet<string>,
-): NearbyPerson[] {
+function nearbyContext(layer: number, myMusicId: number | null): { me: Point; radius: number } | null {
   const engine = getMapEngine();
   const mine = myMusicId != null ? engine?.pointOf(myMusicId) : null;
-  if (!snapshot || !engine || !mine) return [];
+  if (!engine || !mine) return null;
 
   const dx = layer * 2;
   const dy = dx + 1;
   const me = { x: mine.pc[dx], y: mine.pc[dy] };
-
-  /**
-   * 경계는 이 겹의 곡 분포에서 뽑는다 (`radiusFromNeighbors`). 상주 집합을 한 번 훑는데,
-   * 1,000곡짜리 배열이고 10초에 한 번 도는 자리라 값이 싸다.
-   */
   const radius = radiusFromNeighbors(
     engine.songs.map((s) => distanceBetween({ x: s.pc[dx], y: s.pc[dy] }, me)),
     LAYER_USERS.neighborK,
   );
+  return { me, radius };
+}
+
+/** 겹 사용자 중 경계 안의 사람을 `NearbyPerson` 으로 */
+function fromLayer(
+  snapshot: LayerUsersSnapshot | undefined,
+  ctx: { me: Point; radius: number } | null,
+  seen: ReadonlySet<string>,
+): NearbyPerson[] {
+  const engine = getMapEngine();
+  if (!snapshot || !engine || !ctx) return [];
 
   // 응답은 곡별 묶음이다. 좌표가 묶음에 붙어 있어 사람 쪽으로 옮겨 편다
   const flat: (Placed & { musicId: number; nickname: string | null; imageUrl: string | null; riderCount: number })[] = [];
@@ -98,7 +108,7 @@ function fromLayer(
     for (const u of g.users) flat.push({ ...u, musicId: g.musicId, x: g.x, y: g.y });
   }
 
-  return pickNearby(flat, me, radius, LAYER_USERS.maxInPanel, seen).map((u) => {
+  return pickNearby(flat, ctx.me, ctx.radius, LAYER_USERS.maxInPanel, seen).map((u) => {
     const song = engine.pointOf(u.musicId);
     return {
       email: u.email,

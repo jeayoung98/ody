@@ -32,6 +32,7 @@ import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePanelTab;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
+import com.ssafy.backend.realtime.dto.ride.RideEndReason;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
@@ -696,7 +697,7 @@ class RideServiceTests {
 	void disbandTellsEveryRider() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(realtimeMessageService).sendToUser(eq(RIDER), anyString(),
 				eq(RealtimeMessageType.RIDE_ENDED), any());
@@ -710,7 +711,7 @@ class RideServiceTests {
 	void disbandSendsOneBulkMessage() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(viewportDeltaService).sendBulkEnter(List.of(RIDER, MATE), LAYER, MUSIC, "7:5");
 	}
@@ -721,7 +722,7 @@ class RideServiceTests {
 	void disbandRecordsMeetingsWithoutFleet() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(meetingService).recordOnDismount(
 				List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER), Set.of(CAPTAIN, RIDER, MATE));
@@ -734,7 +735,7 @@ class RideServiceTests {
 	void disbandTellsNearbyPanels() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
 	}
@@ -747,7 +748,7 @@ class RideServiceTests {
 		doThrow(new IllegalStateException("화면 알림 실패"))
 				.when(viewportDeltaService).sendBulkEnter(any(), anyInt(), anyLong(), anyString());
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
 		verify(meetingService).recordOnDismount(any(), any(), any());
@@ -763,7 +764,7 @@ class RideServiceTests {
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(realtimeMessageService).sendToUser(eq(MATE), anyString(),
 				eq(RealtimeMessageType.RIDE_ENDED), any());
@@ -778,7 +779,7 @@ class RideServiceTests {
 		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
 				true, 0, 0, 0, 0, List.of(RIDER), List.of(), List.of()));
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verifyNoInteractions(realtimeMessageService, viewportDeltaService,
 				nearbyChangeService, meetingService);
@@ -790,7 +791,7 @@ class RideServiceTests {
 		when(rideRedisRepository.disband(CAPTAIN))
 				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verifyNoInteractions(realtimeMessageService, viewportDeltaService,
 				nearbyChangeService, meetingService);

@@ -3,6 +3,7 @@ package com.ssafy.backend.taste;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -65,7 +66,7 @@ class TasteAnalysisGenerationServiceTests {
     @Test
     void validOutput_isSavedAndConsumesDailyLimit() {
         when(mapper.claim(eq("me@example.com"), any(LocalDate.class), any(), any())).thenReturn(1);
-        when(gmsClient.generate(eq("INITIAL"), anyList())).thenReturn(new GmsTasteOutput(
+        when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt())).thenReturn(new GmsTasteOutput(
                 "resp_1", "강렬한 음악을 즐겨요.",
                 List.of(new GmsTasteOutput.Narrative("pc1-consistent_bias", "강렬한 쪽에 모여 있어요."))));
         when(mapper.markSuccess(
@@ -102,7 +103,7 @@ class TasteAnalysisGenerationServiceTests {
         when(mapper.claim(eq("me@example.com"), any(LocalDate.class), any(), any())).thenReturn(1);
         when(mapper.markFailed(
                 eq("me@example.com"), any(), any(), any(), eq("GMS_REQUEST_FAILED"))).thenReturn(1);
-        when(gmsClient.generate(eq("INITIAL"), anyList()))
+        when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt()))
                 .thenThrow(new GmsTasteClient.GmsTasteException("GMS_REQUEST_FAILED"));
 
         TasteAnalysisResponse response = service.generate("me@example.com");

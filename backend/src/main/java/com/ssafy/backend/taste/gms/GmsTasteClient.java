@@ -20,11 +20,18 @@ import com.ssafy.backend.taste.analysis.TasteFinding;
 public class GmsTasteClient {
 
     private static final String INSTRUCTIONS = """
-            제공된 finding만 근거로 한국어 음악 취향 문장을 작성하세요.
-            수치, 장르, 감정, 성격을 새로 추론하지 마세요.
-            summary에는 제공된 axisPhrase 중 하나 이상을 그대로 포함하세요.
-            각 narrative에는 해당 finding의 axisPhrase를 그대로 포함하세요.
-            summary는 한 문장이고 narratives는 findingId와 정확히 대응해야 합니다.
+            제공된 finding 과 수치만 근거로 한국어 음악 취향 문장을 작성하세요.
+            장르, 가수, 곡, 감정, 성격은 언급하지 말고 새 수치를 만들지 마세요.
+
+            summary 는 한 문장입니다. finding 을 축별로 나열하지 말고 하나의 취향으로 엮어 설명하세요.
+            제공된 axisPhrase 중 하나 이상을 그대로 포함하고 160자를 넘지 마세요.
+
+            각 narrative 는 finding 하나를 설명하며 그 finding 의 axisPhrase 를 그대로 포함해야 합니다.
+            type 이 CONSISTENT_BIAS 면 한쪽으로 꾸준히, BIAS 면 기울었지만 폭도 함께, DIVERSE 면 폭넓게 듣는다는 뜻입니다.
+            evidence 의 IQR 은 작을수록 모여 있고 클수록 퍼져 있다는 뜻입니다.
+
+            sampleSize 가 30 미만이거나 reportLevel 이 INITIAL 이면 단정하지 말고 잠정적인 표현을 쓰세요.
+            narratives 는 findingId 와 정확히 대응해야 합니다.
             """;
 
     private final ObjectMapper objectMapper;
@@ -72,12 +79,13 @@ public class GmsTasteClient {
         return trimmed + "/";
     }
 
-    public GmsTasteOutput generate(String level, List<TasteFinding> findings) {
+    public GmsTasteOutput generate(String level, List<TasteFinding> findings, int sampleSize) {
         if (key == null || key.isBlank()) {
             throw new GmsTasteException("GMS_NOT_CONFIGURED");
         }
         Map<String, Object> safeInput = Map.of(
                 "reportLevel", level,
+                "sampleSize", sampleSize,
                 "findings", findings.stream().map(finding -> Map.of(
                         "findingId", finding.id(),
                         "type", finding.type(),

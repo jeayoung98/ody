@@ -101,7 +101,8 @@ public class TasteAnalysisGenerationService {
         List<TasteFinding> findings = findingSelector.select(current.axes(), current.counts().valid());
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
-            GmsTasteOutput generated = gmsClient.generate(current.reportEligibility().level(), findings);
+            GmsTasteOutput generated = gmsClient.generate(
+                    current.reportEligibility().level(), findings, current.counts().valid());
             outputValidator.validate(generated, findings);
             sample.stop(meterRegistry.timer("ody.taste.gms.latency", "outcome", "success"));
             OffsetDateTime completedAt = OffsetDateTime.ofInstant(clock.instant(), zoneId);

@@ -28,7 +28,7 @@ class GmsTasteSecurityTests {
     void providerError_doesNotExposeKeyOrPayloadInApplicationException() throws Exception {
         start(exchange -> exchange.sendResponseHeaders(500, -1));
 
-        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding())))
+        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding()), 40))
                 .isInstanceOf(GmsTasteClient.GmsTasteException.class)
                 .satisfies(error -> assertThat(error.toString())
                         .doesNotContain(SECRET, "PC1 중앙 백분위", "강렬한"));
@@ -46,7 +46,7 @@ class GmsTasteSecurityTests {
         });
         long startedAt = System.nanoTime();
 
-        assertThatThrownBy(() -> client(20).generate("STANDARD", List.of(finding())))
+        assertThatThrownBy(() -> client(20).generate("STANDARD", List.of(finding()), 40))
                 .isInstanceOf(GmsTasteClient.GmsTasteException.class)
                 .satisfies(error -> assertThat(error.toString()).doesNotContain(SECRET));
 

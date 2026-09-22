@@ -56,12 +56,13 @@ class GmsTasteClientTests {
                 "http://localhost:" + server.getAddress().getPort() + "/v1",
                 "secret", "gpt-4.1", 1000, 1000);
 
-        GmsTasteOutput result = client.generate("STANDARD", List.of(finding()));
+        GmsTasteOutput result = client.generate("STANDARD", List.of(finding()), 40);
 
         assertThat(result.responseId()).isEqualTo("resp_1");
         assertThat(authorization.get()).isEqualTo("Bearer secret");
         assertThat(requestBody.get())
                 .contains("\"store\":false", "\"type\":\"json_schema\"", "pc1-high")
+                .contains("sampleSize")
                 .doesNotContain("email", "musicId", "title");
     }
 
@@ -73,7 +74,7 @@ class GmsTasteClientTests {
             exchange.getResponseBody().write(body);
         });
 
-        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding())))
+        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding()), 40))
                 .isInstanceOf(GmsTasteClient.GmsTasteException.class)
                 .satisfies(error -> assertThat(((GmsTasteClient.GmsTasteException) error).code())
                         .isEqualTo("GMS_INVALID_OUTPUT"));
@@ -87,7 +88,7 @@ class GmsTasteClientTests {
             exchange.sendResponseHeaders(500, -1);
         });
 
-        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding())))
+        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding()), 40))
                 .isInstanceOf(GmsTasteClient.GmsTasteException.class)
                 .satisfies(error -> assertThat(((GmsTasteClient.GmsTasteException) error).code())
                         .isEqualTo("GMS_REQUEST_FAILED"));
@@ -102,7 +103,7 @@ class GmsTasteClientTests {
             exchange.getResponseBody().write(body);
         });
 
-        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding())))
+        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding()), 40))
                 .isInstanceOf(GmsTasteClient.GmsTasteException.class)
                 .satisfies(error -> assertThat(((GmsTasteClient.GmsTasteException) error).code())
                         .isEqualTo("GMS_NO_OUTPUT"));
@@ -119,7 +120,7 @@ class GmsTasteClientTests {
             exchange.sendResponseHeaders(200, -1);
         });
 
-        assertThatThrownBy(() -> client(20).generate("STANDARD", List.of(finding())))
+        assertThatThrownBy(() -> client(20).generate("STANDARD", List.of(finding()), 40))
                 .isInstanceOf(GmsTasteClient.GmsTasteException.class)
                 .satisfies(error -> assertThat(((GmsTasteClient.GmsTasteException) error).code())
                         .isEqualTo("GMS_REQUEST_FAILED"));

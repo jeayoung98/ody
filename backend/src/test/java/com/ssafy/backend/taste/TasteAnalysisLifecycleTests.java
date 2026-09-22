@@ -59,7 +59,7 @@ class TasteAnalysisLifecycleTests {
         when(queryService.snapshot(EMAIL)).thenReturn(requested, changed);
         when(mapper.claim(eq(EMAIL), any(), any(), any())).thenReturn(1);
         when(gmsClient.model()).thenReturn("gpt-4.1");
-        when(gmsClient.generate(eq("INITIAL"), anyList())).thenReturn(output());
+        when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt())).thenReturn(output());
         stubSuccessfulTransition();
 
         TasteAnalysisResponse response = service(BEFORE_MIDNIGHT).generate(EMAIL);
@@ -94,7 +94,7 @@ class TasteAnalysisLifecycleTests {
         when(mapper.findLatestSuccess(EMAIL)).thenReturn(previous);
         when(mapper.claim(eq(EMAIL), any(), any(), any())).thenReturn(1);
         when(mapper.markFailed(eq(EMAIL), any(), any(), any(), eq("GMS_REQUEST_FAILED"))).thenReturn(1);
-        when(gmsClient.generate(eq("INITIAL"), anyList()))
+        when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt()))
                 .thenThrow(new GmsTasteClient.GmsTasteException("GMS_REQUEST_FAILED"));
 
         TasteAnalysisResponse first = service(BEFORE_MIDNIGHT).generate(EMAIL);
@@ -114,7 +114,7 @@ class TasteAnalysisLifecycleTests {
         when(mapper.markFailed(
                 eq(EMAIL), eq(LocalDate.of(2026, 9, 22)), any(), any(), eq("GMS_REQUEST_FAILED")))
                 .thenReturn(1);
-        when(gmsClient.generate(eq("INITIAL"), anyList()))
+        when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt()))
                 .thenThrow(new GmsTasteClient.GmsTasteException("GMS_REQUEST_FAILED"));
 
         TasteAnalysisResponse response = service(midnight).generate(EMAIL);

@@ -69,7 +69,7 @@ export const API_ENDPOINTS = {
     /**
      * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
      * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
-     * 탑승은 `POST /api/realtime/ride` 로 따로 있다 — 아직 배포에 없다.
+     * 탑승은 `POST /api/realtime/ride` 로 따로 있다 (S15P21A405-530, 실연동).
      *
      * 거는 쪽은 토큰 주체라 본문에 없다. 경로가 사용자별이 아니라 고정인 것도 그래서다.
      */
@@ -135,6 +135,11 @@ export const API_ENDPOINTS = {
     detail: (id: number) => `/bff/playlists/${id}`,
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,
+    /**
+     * 곡 순서 바꾸기 (S15P21A405-540) → 백엔드 `POST /api/playlist/music/reorder`.
+     * 본문은 **새 순서의 전체 목록**(`{musicIds}`)이다 — 바뀐 곡만 보내는 길이 없다.
+     */
+    order: (id: number) => `/bff/playlists/${id}/order`,
     like: (id: number) => `/bff/playlists/${id}/like`,
   },
 
@@ -165,6 +170,17 @@ export const API_ENDPOINTS = {
      * 사용자에게 보여야 하는 경로다.
      */
     ride: "/bff/realtime/ride",
+    /**
+     * 그 겹에서 **재생 중인 사람 전부** (S15P21A405-537, BACKEND-NOTES §5).
+     *
+     * **화면 범위와 무관하다.** 소켓 `VIEWPORT_SNAPSHOT` 은 보이는 범위만 주고 칸이 많아지면
+     * "N명" 뭉치로 바꿔 버리는데, 지도는 줌과 상관없이 사람을 **전부 한 명씩** 그리기로 했다
+     * (팀 결정). 그 결정을 만족시키는 유일한 출처다.
+     *
+     * `layer` 는 **0-based** 로 그대로 넘긴다 — 곡 조회(`map.songs`)의 `level` 처럼 +1 하지 않는다.
+     * 범위(0~7) 밖이면 400 이다. 밀어 주는 이벤트가 없어서 **레이어를 옮길 때와 주기적으로** 다시 부른다.
+     */
+    layerUsers: (layer: number) => `/bff/realtime/layers/${layer}/users`,
   },
 
   constellation: {

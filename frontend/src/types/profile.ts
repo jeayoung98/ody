@@ -114,7 +114,14 @@ export interface FollowUserSummary {
   imageUrl: string | null;
   isPublic: boolean;
   isFollowing: boolean;
+  /** **로그인 시각이다.** 접속 여부와 다른 값이므로 여기서 접속을 가늠하지 않는다 */
   lastActiveAt: string | null;
+  /**
+   * 지금 접속해 있는가 (3차 계약 §4, S15P21A405-545). **소켓이 살아 있다**는 뜻이고
+   * 창을 닫으면 늦어도 45초 뒤 `false` 가 된다. 실시간을 안 켠 사용자는 접속해 있어도
+   * `false` 인데, 그런 사용자는 지도에도 안 보이므로 화면 전체로 보면 앞뒤가 맞는다.
+   */
+  isOnline: boolean;
   /** ⚠️ 정본 명세에 없는 추가 필드 — 기획 확인 대기 (A-39) */
   meetingCnt: number;
 }

@@ -5,13 +5,22 @@ import { useQueryClient } from "@tanstack/react-query";
 import { QUERY_KEYS, RIDE_DROPPED, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
-import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
+import { endRide, playFrom, positionNow, reportSongEnd, syncPlayback } from "@/lib/realtime/ride";
+import { onTrackChange } from "@/lib/realtime/ride-record";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
-import type { PresenceErrorPayload, RideEndedPayload, RidePanelPayload, RidePlaybackPayload, RideRiderLeftPayload, RideTrackPayload } from "@/types";
+import type {
+  PresenceErrorPayload,
+  RideEndedPayload,
+  RidePanelPayload,
+  RidePlaybackPayload,
+  RideRiderJoinedPayload,
+  RideRiderLeftPayload,
+  RideTrackPayload,
+} from "@/types";
 
 /**
  * 따라가는 동안 오는 것들을 화면에 옮긴다 (2차 실시간 명세 §4, S15P21A405-530).
@@ -32,6 +41,16 @@ export function useRideSession(): void {
     const stopTrack = onType<RideTrackPayload>(["RIDE_TRACK"], (p) => {
       const ride = useFollowStore.getState();
       if (!ride.leaderEmail) return;
+
+      /**
+       * **앞 곡의 종료를 먼저 보내고 번호를 갈아 끼운다** (3차 계약 §3, S15P21A405-545).
+       * 안 하면 탑승부터 하차까지가 한 건으로 묻혀 곡별 청취시간이 안 남는다.
+       * `p.playHistoryId` 가 `null` 이면 이 곡은 기록이 없다 — 재생은 평소대로 한다.
+       */
+      const { end, next } = onTrackChange(ride, p.playHistoryId, Date.now());
+      if (end) reportSongEnd(ride);
+      ride.setSongRecord(next.playHistoryId, next.songStartedAt);
+
       ride.setLeaderMusicId(p.musicId);
       useMapStore.getState().setMyMusicId(p.musicId);
       // 우주선이 이전 곡에서 새 곡으로 날아온다. 재생은 아래에서 따로 건다
@@ -61,6 +80,8 @@ export function useRideSession(): void {
     const stopPanel = onType<RidePanelPayload>(["RIDE_PANEL"], (p) => {
       if (!useFollowStore.getState().leaderEmail) return;
       const panel = usePanelStore.getState();
+      // 스토어에도 남긴다 — 겹이 바뀌면 `map-view` 가 이 값으로 따라가기를 다시 건다 (§551)
+      useFollowStore.getState().setLeaderViewingMusicId(p.open ? p.musicId : null);
       if (!p.open || p.musicId == null) {
         panel.close();
         return;
@@ -82,8 +103,14 @@ export function useRideSession(): void {
       refetchNearbyIfOpen();
     });
 
-    /** 따라오던 사람이 내렸다. **인솔자에게만** 온다. 남은 인원이 같이 오므로 그대로 쓴다 */
-    const stopRiderLeft = onType<RideRiderLeftPayload>(["RIDE_RIDER_LEFT"], (p) => {
+    /**
+     * 선단 인원이 바뀌었다. **인솔자에게만** 온다 — 구경꾼용 인원수 알림은 설계상 요청자를
+     * 빼기 때문에 인솔자 본인에게 가지 않는다.
+     *
+     * 둘 다 **바뀐 뒤의** 인원을 싣는다. 탑승 쪽(`RIDE_RIDER_JOINED`)이 3차 계약에서 새로
+     * 생겼고(S15P21A405-545), 그 전에는 누가 내릴 때까지 숫자를 몰라 아예 숨겨 뒀다.
+     */
+    const stopRiders = onType<RideRiderJoinedPayload | RideRiderLeftPayload>(["RIDE_RIDER_JOINED", "RIDE_RIDER_LEFT"], (p) => {
       useFollowStore.getState().setFollowerCount(p.riderCount);
     });
 
@@ -101,7 +128,7 @@ export function useRideSession(): void {
       stopPlayback();
       stopPanel();
       stopEnded();
-      stopRiderLeft();
+      stopRiders();
       stopErr();
     };
 

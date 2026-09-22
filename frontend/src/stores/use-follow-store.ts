@@ -27,21 +27,37 @@ interface FollowState {
    */
   leaderMusicId: number | null;
   /**
+   * 인솔자가 **열어 둔 상세 곡** (2차 명세 §4.4 `RIDE_PANEL`). `null` 이면 닫혀 있다.
+   *
+   * 서 있는 곡(`leaderMusicId`)과 **다를 수 있다.** 옆 별을 눌러 보는 동안이 그렇다 —
+   * 그때 우주선은 그대로 있고 우측 패널만 바뀐다.
+   */
+  leaderViewingMusicId: number | null;
+  /**
    * 나를 따라오는 인원 수 (내가 인솔자일 때).
    *
-   * **`RIDE_RIDER_LEFT` 의 값만 믿는다** (명세 §14). 탑승 알림(`RIDE_RIDER_JOINED`)이 아직
-   * 없어서 누가 탄 순간에는 갱신되지 않는다. 그래서 초기값이 `null` 이고, 한 번도 소식을
-   * 못 받은 동안에는 **숫자를 아예 안 보여 준다** — 틀린 숫자보다 없는 편이 낫다.
+   * **탈 때와 내릴 때 모두 서버가 알려 준다** (3차 계약 §2, S15P21A405-545) —
+   * `RIDE_RIDER_JOINED` · `RIDE_RIDER_LEFT` 가 **바뀐 뒤의** 인원을 함께 싣는다. 예전에는
+   * 탑승 알림이 없어서 누가 내릴 때까지 숫자를 몰랐고, 그래서 `null` 로 두고 숨겼다.
+   * 이제 0 에서 출발해 그대로 믿으면 된다.
    */
-  followerCount: number | null;
+  followerCount: number;
   /**
    * 탑승 응답의 재생 스냅샷 번호. **프레임을 거르는 데 쓰지 않는다** —
    * 봉투 `seq` 와 다른 카운터라서다 (`types/realtime.ts` 의 `RideResponse.snapshotSeq` 참고).
    * 디버깅과 백엔드 확인용으로만 들고 있다.
    */
   snapshotSeq: number;
-  /** 내 재생 기록 번호. 탑승~하차를 한 건으로 종료 보고할 때 쓴다 (명세 §8.7) */
+  /**
+   * **지금 곡**에 대한 내 재생 기록 번호 (3차 계약 §3, S15P21A405-545).
+   *
+   * 예전에는 탑승~하차를 한 건으로 보는 값이었다. 이제 인솔자가 곡을 바꿀 때마다
+   * `RIDE_TRACK` 이 새 번호를 주므로 곡마다 갈아 끼운다 — 그래야 곡별 청취시간이 남는다.
+   * 서버가 번호를 못 받으면 `null` 로 오고, 그 곡은 시간을 못 남긴다.
+   */
   playHistoryId: number | null;
+  /** 지금 곡을 틀기 시작한 시각. 종료 보고의 `playedMs` 를 여기서 잰다 */
+  songStartedAt: number;
 
   start: (input: {
     email: string;
@@ -51,8 +67,12 @@ interface FollowState {
     snapshotSeq: number;
     playHistoryId: number;
   }) => void;
+  /** 곡이 바뀌어 기록 번호가 새것이 됐다. 시작 시각도 같이 갈아 끼운다 */
+  setSongRecord: (playHistoryId: number | null, songStartedAt: number) => void;
   /** 인솔자가 곡을 옮겼다 (`RIDE_TRACK`). 표식이 따라가도록 자리만 갱신한다 */
   setLeaderMusicId: (musicId: number) => void;
+  /** 인솔자가 상세를 열거나 닫았다 (`RIDE_PANEL`). 재생은 건드리지 않는다 */
+  setLeaderViewingMusicId: (musicId: number | null) => void;
   /** 하차·강제 종료 공통. 자리는 그대로 두고(map-store 가 남는다) 탑승 상태만 지운다 */
   stop: () => void;
   setFollowerCount: (n: number) => void;
@@ -65,20 +85,43 @@ export const useFollowStore = create<FollowState>()(
       leaderNickname: null,
       leaderImageUrl: null,
       leaderMusicId: null,
-      followerCount: null,
+      leaderViewingMusicId: null,
+      followerCount: 0,
       snapshotSeq: 0,
       playHistoryId: null,
+      songStartedAt: 0,
 
       start: ({ email, nickname, imageUrl, musicId, snapshotSeq, playHistoryId }) =>
         set(
-          { leaderEmail: email, leaderNickname: nickname, leaderImageUrl: imageUrl, leaderMusicId: musicId, snapshotSeq, playHistoryId },
+          {
+            leaderEmail: email,
+            leaderNickname: nickname,
+            leaderImageUrl: imageUrl,
+            leaderMusicId: musicId,
+            leaderViewingMusicId: null,
+            snapshotSeq,
+            playHistoryId,
+            songStartedAt: Date.now(),
+          },
           false,
           "start",
         ),
+      setSongRecord: (playHistoryId, songStartedAt) => set({ playHistoryId, songStartedAt }, false, "setSongRecord"),
       setLeaderMusicId: (leaderMusicId) => set({ leaderMusicId }, false, "setLeaderMusicId"),
+      setLeaderViewingMusicId: (leaderViewingMusicId) => set({ leaderViewingMusicId }, false, "setLeaderViewingMusicId"),
       stop: () =>
         set(
-          { leaderEmail: null, leaderNickname: null, leaderImageUrl: null, leaderMusicId: null, snapshotSeq: 0, playHistoryId: null },
+          {
+            leaderEmail: null,
+            leaderNickname: null,
+            leaderImageUrl: null,
+            leaderMusicId: null,
+            leaderViewingMusicId: null,
+            snapshotSeq: 0,
+            playHistoryId: null,
+            songStartedAt: 0,
+            followerCount: 0,
+          },
           false,
           "stop",
         ),

@@ -1,7 +1,9 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
+import { arcBetween, atArc, type Arc } from "./arc";
+import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -90,6 +92,14 @@ export interface VisibleFriend {
   /** 진행 방향(rad). 우주선 기수 */
   heading: number;
   isLeader: boolean;
+  /**
+   * 이 표식 **뒤에 겹쳐 선 사람들** (S15P21A405-550). 대표는 빼고 담는다.
+   *
+   * 예전에는 겹치면 그냥 버렸다. 이 지도는 비슷한 음악을 듣는 사람끼리 붙어 있는 것이
+   * 원리라 몰림이 기본값인데, 버리면 **같은 곡을 듣는 사람이 영영 안 보인다.**
+   * 명단을 들고 있으면 나중에 눌러서 펼치는 것도 여기서 나온다.
+   */
+  stacked: NearbyUser[];
 }
 
 export interface VisibleStar {
@@ -329,7 +339,14 @@ export class MapEngine {
   /** "N명" 뭉치 (CLUSTERED 모드). 원시 PC 좌표다 */
   crowd: CrowdCell[] = [];
   crowdLayer = -1;
-  private friendPos = new Map<string, { x: number; y: number; heading: number }>();
+  /**
+   * 사람마다의 **화면 자리와 진행 중인 비행** (S15P21A405-553).
+   *
+   * `mv` 가 있으면 지금 곡선을 타고 옮겨 가는 중이다. 예전에는 이 맵을 목록 갱신 때마다
+   * 통째로 비웠는데, 그러면 "직전에 어디 있었는지" 가 사라져 10초마다 매번 처음 보는 사람처럼
+   * 다시 놓게 된다 — 그게 뚝 사라졌다 뚝 나타나던 원인이다.
+   */
+  private friendPos = new Map<string, { x: number; y: number; heading: number; mv?: Arc }>();
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
   visFriends: VisibleFriend[] = [];
@@ -587,9 +604,22 @@ export class MapEngine {
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
   setFriends(layer: number, friends: NearbyUser[]) {
+    /**
+     * **겹이 바뀔 때만 자리를 비운다** (S15P21A405-553). 좌표계가 겹마다 다르므로 그때는
+     * 버려야 맞지만, 같은 겹에서 목록만 다시 받은 것이라면 자리를 이어가야 한다 — 비우면
+     * 이동이라는 개념 자체가 없어져 사람이 순간이동한다.
+     *
+     * 목록에서 빠진 사람은 정리한다. 안 하면 오래 켜 둘수록 떠난 사람의 자리가 쌓인다.
+     */
+    if (layer !== this.friendsLayer) this.friendPos.clear();
+    else {
+      const here = new Set(friends.map((f) => f.email));
+      // 인솔자는 목록에 없다 (요청자 제외 규칙) — 지우면 우주선이 자리를 잃는다
+      const leader = this.follow?.leader.email;
+      for (const email of this.friendPos.keys()) if (!here.has(email) && email !== leader) this.friendPos.delete(email);
+    }
     this.friends = friends;
     this.friendsLayer = layer;
-    this.friendPos.clear();
     this.anchorCache.clear();
   }
 
@@ -1531,6 +1561,29 @@ export class MapEngine {
     return i != null && this.subset[i] === 1;
   }
 
+  /**
+   * 곡 하나를 **이 자리에서 조용히 뺀다** (S15P21A405-544). 못 튼다고 판명된 곡에 쓴다.
+   *
+   * `setLayerSongs` 에 한 곡 짧은 목록을 다시 주는 길도 있지만 그러면 **겹 전환 연출이 통째로
+   * 다시 돈다** — 곡 하나 빠졌다고 지도가 모프하고 "상주 N곡" 안내까지 뜬다. 여기는 마스크
+   * 한 칸만 끄고 다시 그린다.
+   *
+   * 전환 중이면 **도착할 집합에서도** 뺀다. 안 그러면 전환이 끝나는 순간 그 별이 되살아난다.
+   *
+   * @returns 실제로 뺐으면 true. 이 겹에 없던 곡이면 false
+   */
+  hideSong(musicId: number): boolean {
+    const i = this.index.get(musicId);
+    if (i == null) return false;
+    const inAnim = this.anim != null && this.anim.subset[i] === 1;
+    if (this.subset[i] !== 1 && !inAnim) return false;
+    this.subset[i] = 0;
+    if (this.anim) this.anim.subset[i] = 0;
+    this.rebuildAliveIdx();
+    this.project();
+    return true;
+  }
+
   private centerMost() {
     let b = 0;
     let bd = 1e9;
@@ -2157,9 +2210,24 @@ export class MapEngine {
   }
 
   // ------------------------------------------------------------------ me / play / follow
+  /**
+   * **나는 지금 이 곡에 서 있다** — 날아가지 않고 그 자리에 놓는다.
+   *
+   * 부르는 자리가 전부 그 뜻이다 (presence 의 `PRESENCE_JOINED`, 탑승, `RIDE_TRACK`, 하차).
+   * 예전에는 표식만 옮기고 `home`·`playingId` 는 그대로 뒀는데, 그 둘은 `travelTo` 안에서만
+   * 갱신되고 **탑승은 그 길을 안 탄다** — 그래서 남을 따라다니는 내내 "내 위치로 가기" 가
+   * 타기 전 곡을 가리켰다 (S15P21A405-551).
+   *
+   * `travelTo` 와 다른 점은 비행 애니메이션이 없다는 것뿐이다. 탑승은 우주선이 나를 데려가므로
+   * 따로 날아갈 이유가 없고, presence 는 서버가 정해 준 자리라 이동 자체가 없다.
+   */
   setMy(id: number | null) {
     if (id == null || !this.index.has(id)) return;
     this.myId = id;
+    this.playingId = id;
+    this.home = { musicId: id, boxes: [...this.boxes] };
+    // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다 (`travelTo` 와 같은 처리)
+    if (this.pinned && this.pinned.id !== id) this.pinned = null;
     const w = this.worldOf(id)!;
     this.me = { ...w };
   }
@@ -2519,19 +2587,8 @@ export class MapEngine {
     const known = this.friendPos.get(f.leader.email);
     const from = known ?? this.worldOf(f.playingMusicId);
     if (!target || !from) return false;
-    const side = Math.random() < 0.5 ? 1 : -1;
-    const L = Math.hypot(target.x - from.x, target.y - from.y) || 1e-6;
-    f.mv = {
-      ax: from.x,
-      ay: from.y,
-      bx: target.x,
-      by: target.y,
-      cx: (from.x + target.x) / 2 - ((target.y - from.y) / L) * L * 0.35 * side,
-      cy: (from.y + target.y) / 2 + ((target.x - from.x) / L) * L * 0.35 * side,
-      t0: now,
-      dur: FOLLOW.moveMs,
-      toId,
-    };
+    // 사람 표식과 **같은 호를 쓴다** (S15P21A405-553) — 휘는 정도를 손볼 일이 생기면 한 군데만 고친다
+    f.mv = { ...arcBetween(from, target, now, FOLLOW.moveMs, FOLLOW.bow), toId };
     f.visited.push(toId);
     if (notify) this.onArrive?.(toId);
     return true;
@@ -2770,16 +2827,14 @@ export class MapEngine {
     if (!f.mv) this.trackViewing(f);
     if (!f.mv) return;
     const m = f.mv;
-    const t = Math.min(1, (now - m.t0) / m.dur);
-    const e = easeInOut(t);
-    const q = 1 - e;
-    const x = q * q * m.ax + 2 * q * e * m.cx + e * e * m.bx;
-    const y = q * q * m.ay + 2 * q * e * m.cy + e * e * m.by;
-    const hx = 2 * q * (m.cx - m.ax) + 2 * e * (m.bx - m.cx);
-    const hy = 2 * q * (m.cy - m.ay) + 2 * e * (m.by - m.cy);
-    this.friendPos.set(f.leader.email, { x, y, heading: Math.atan2(hy, hx) });
-    // 나는 선미 바로 뒤
-    const back = Math.max(0, e - 0.06);
+    const at = atArc(m, now);
+    const t = at.t;
+    this.friendPos.set(f.leader.email, { x: at.x, y: at.y, heading: at.heading });
+    /**
+     * 나는 선미 바로 뒤. 호 위에서 **조금 뒤처진 지점**을 그대로 쓴다 — `atArc` 는 시간으로
+     * 받으므로, 진행도를 직접 깎으려면 여기서 한 번 더 편다.
+     */
+    const back = Math.max(0, easeInOut(t) - 0.06);
     const qb = 1 - back;
     this.me.x = qb * qb * m.ax + 2 * qb * back * m.cx + back * back * m.bx;
     this.me.y = qb * qb * m.ay + 2 * qb * back * m.cy + back * back * m.by;
@@ -2804,36 +2859,136 @@ export class MapEngine {
     this.project();
   }
 
+  /**
+   * 지도에 찍을 사람 고르기 — **화면에 골고루** (S15P21A405-542).
+   *
+   * 예전에는 받은 배열 순서대로 훑으며 자리가 비면 찍고 `MAP_FRIENDS_MAX` 에서 멈췄다. 그
+   * 순서는 서버 응답 순서라 화면상의 자리와 아무 상관이 없었다 — **한쪽에 몰린 사람들이 먼저
+   * 칸을 차지하고 그 밖 영역은 통째로 비어 보였다.** 비슷한 곡을 듣는 사람끼리 지도에서 붙어
+   * 있는 것이 이 지도의 원리라, 몰림은 예외가 아니라 기본값이다.
+   *
+   * 같은 문제를 앨범 커버에서 먼저 겪었고 [`cover-spread`](../render/cover-spread.ts) 로 풀어
+   * 뒀다 (S15P21A405-518). 화면을 뽑을 개수만큼 칸으로 나누고 칸마다 하나씩 앞세운다.
+   * 규칙을 두 벌로 두지 않으려고 그 함수를 그대로 부른다.
+   *
+   * **58px 경합 검사는 남겨 둔다.** 칸 나누기는 "고루 퍼짐" 을 만들고 이건 "겹쳐 그리지 않음"
+   * 을 만든다 — 목적이 다르고, 칸이 커도 한 칸 안에서 둘이 겹칠 수 있다.
+   */
+  /**
+   * 사람 하나를 목적지 쪽으로 **곡선을 그리며** 옮긴다 (S15P21A405-553).
+   *
+   * 예전에는 목적지를 그 자리에 바로 넣어서, 누가 곡을 옮기면 뚝 사라졌다 뚝 나타났다.
+   * 내가 움직일 때와 같은 호를 쓴다 (`ME_FLIGHT`).
+   *
+   * **처음 보는 사람은 그냥 놓는다.** 없던 사람이 어디선가 날아오면 그것만큼 이상하다.
+   */
+  private glideFriend(u: NearbyUser, was: { x: number; y: number; heading: number; mv?: Arc } | undefined, base: { x: number; y: number }, now: number) {
+    if (!was) {
+      const fresh = { x: base.x, y: base.y, heading: (u.avatarSeed[0] ?? 0.5) * Math.PI * 2 };
+      this.friendPos.set(u.email, fresh);
+      return fresh;
+    }
+
+    /**
+     * 목적지가 바뀌었나. **지금 날아가는 중이면 그 도착지와** 견준다 — 지금 자리와 견주면
+     * 비행 도중 매 프레임이 "목적지가 다르다" 로 읽혀 호를 끝없이 새로 만든다.
+     */
+    const to = was.mv ? { x: was.mv.bx, y: was.mv.by } : was;
+    if (Math.hypot(base.x - to.x, base.y - to.y) > FRIEND_MOVE_EPS) {
+      was = { ...was, mv: arcBetween(was, base, now, ME_FLIGHT.ms, ME_FLIGHT.bow) };
+    }
+
+    if (!was.mv) return was;
+    const at = atArc(was.mv, now);
+    const next = { x: at.x, y: at.y, heading: at.heading, mv: at.t >= 1 ? undefined : was.mv };
+    this.friendPos.set(u.email, next);
+    return next;
+  }
+
   private updateFriends() {
-    this.visFriends = [];
+    const now = performance.now();
     const f = this.freeRect();
     const G = 58;
-    const occ = new Set<string>();
-    const capN = MAP_FRIENDS_MAX;
-    const list = this.follow ? [this.follow.leader, ...this.friends.filter((x) => x.email !== this.follow!.leader.email)] : this.friends;
-    for (const u of list) {
-      if (this.visFriends.length >= capN) break;
+    /**
+     * **개수 상한이 아니라 칸 나누기 단위다** (S15P21A405-550). 화면을 몇 칸으로 쪼개 고루
+     * 뽑을지에만 쓴다 — 예전에는 이 수에서 그리기를 멈췄고, 그래서 뒤쪽 사람들이 묶이지도
+     * 못하고 사라졌다. 지금은 아무도 안 버린다.
+     */
+    const spreadCells = MAP_FRIENDS_MAX;
+    const isLeaderOf = (u: NearbyUser) => this.follow?.leader.email === u.email;
+
+    /**
+     * 지난 프레임에 보이던 사람. **칸 경계는 카메라를 따라 움직인다** — 그냥 두면 지도를 밀
+     * 때마다 칸의 승자가 바뀌어 사람이 깜빡인다. 같은 칸을 다투면 이미 서 있던 쪽이 이긴다.
+     */
+    const wasVisible = new Set(this.visFriends.map((v) => v.user.email));
+    this.visFriends = [];
+
+    // 1) 그릴 수 있는 사람만 추려 화면 좌표를 구한다. 인솔자는 경합 밖이라 따로 둔다
+    const leader: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
+    const cands: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
+    for (const u of this.friends) {
       if (!u.isOnline || !u.isPublic) continue;
-      const isLeader = this.follow?.leader.email === u.email;
+      const isLeader = isLeaderOf(u);
       let w = this.friendPos.get(u.email);
-      if (!w || !isLeader) {
+      // 인솔자 자리는 `stepFollow` 의 우주선 비행이 정한다 — 여기서 건드리면 그 비행이 끊긴다
+      if (!isLeader) {
         const base = this.anchorFor(u);
         if (!base) continue;
-        w = w && isLeader ? w : { x: base.x, y: base.y, heading: w?.heading ?? ((u.avatarSeed[0] ?? 0.5) * Math.PI * 2) };
-        this.friendPos.set(u.email, w);
+        w = this.glideFriend(u, w, base, now);
       }
+      if (!w) continue;
       const { px, py } = this.worldToScreen(w.x, w.y);
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
-      if (!isLeader && (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104)) continue;
-      const key = `${Math.floor(px / G)},${Math.floor(py / G)}`;
-      if (!isLeader) {
-        let clash = false;
-        for (let a = -1; a <= 1 && !clash; a++) for (let b = -1; b <= 1; b++) if (occ.has(`${Math.floor(px / G) + a},${Math.floor(py / G) + b}`)) clash = true;
-        if (clash) continue;
+      if (isLeader) {
+        leader.push({ u, px, py, heading: w.heading });
+        continue;
       }
-      occ.add(key);
-      this.visFriends.push({ user: u, px, py, heading: w.heading, isLeader });
+      if (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104) continue;
+      cands.push({ u, px, py, heading: w.heading });
     }
+
+    // 2) 칸마다 하나씩 앞세운 순서로. 지난 프레임에 보이던 사람이 제 칸을 먼저 집는다
+    const order = keptFirst(cands, (c) => wasVisible.has(c.u.email));
+    const rect: Rect = { x0: 20, y0: 76, x1: Math.max(21, f.x1 - 20), y1: Math.max(77, this.H - 104) };
+    const spread = spreadOrder(order, (i) => ({ x: cands[i].px, y: cands[i].py }), rect, spreadCells);
+
+    /**
+     * 3) 그 순서대로 채운다. **겹치면 버리지 않고 먼저 선 사람에게 묶는다** (S15P21A405-550).
+     *
+     * 예전에는 주변 칸이 차 있으면 `return` 으로 그냥 건너뛰었다. 화면에서 58~170픽셀 안에
+     * 있으면 묻힌다는 뜻이고, **같은 곡이면 좌표가 완전히 같아서 무조건 한 명만 남았다.**
+     * 접속자가 여럿인데 화면에는 하나만 뜨던 것이 이것이다.
+     *
+     * 이제 그 자리의 주인을 찾아 명단에 얹는다. 그리는 쪽이 그 수를 배지로 적는다.
+     *
+     * **개수 상한도 없앴다.** 묶음이 생기면서 표식 수는 칸 크기가 이미 제한한다 — 한 표식이
+     * 주변 3×3 칸을 차지하므로 1024×768 화면이면 많아야 예순 몇 개다. 상한을 두면 그 뒤
+     * 사람들이 묶이지도 못하고 조용히 사라진다.
+     *
+     * 인솔자는 예외다. 자리를 다투지 않고 늘 제 모습으로 선다 — 따라가는 동안 인솔자가
+     * 남의 배지 속 숫자로 들어가면 누구를 따라가는지 알 수 없다.
+     */
+    const owner = new Map<string, number>();
+    const place = (c: { u: NearbyUser; px: number; py: number; heading: number }, isLeader: boolean) => {
+      const cx = Math.floor(c.px / G);
+      const cy = Math.floor(c.py / G);
+      if (!isLeader) {
+        for (let a = -1; a <= 1; a++) {
+          for (let b = -1; b <= 1; b++) {
+            const at = owner.get(`${cx + a},${cy + b}`);
+            if (at != null) {
+              this.visFriends[at].stacked.push(c.u);
+              return;
+            }
+          }
+        }
+      }
+      owner.set(`${cx},${cy}`, this.visFriends.length);
+      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader, stacked: [] });
+    };
+    for (const c of leader) place(c, true);
+    for (const i of spread) place(cands[i], false);
   }
 
   /**

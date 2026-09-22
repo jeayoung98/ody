@@ -1,6 +1,12 @@
-import type { ButtonHTMLAttributes } from "react";
+import type { ComponentPropsWithRef } from "react";
 
-interface IconButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
+/**
+ * `ComponentPropsWithRef` 라서 **`ref` 를 그대로 받는다** (S15P21A405-540). React 19 에서 `ref` 는
+ * 평범한 prop 이지만, 타입이 `ButtonHTMLAttributes` 면 목록에 없어서 넘길 수가 없다.
+ * 끌기 손잡이처럼 실제 DOM 을 잡아야 하는 쪽이 필요로 한다. 기존 쓰는 곳에는 영향이 없다 —
+ * 받을 수 있는 prop 이 하나 늘었을 뿐이다.
+ */
+interface IconButtonProps extends ComponentPropsWithRef<"button"> {
   /** 접근성용 라벨 (필수) */
   label: string;
   active?: boolean;

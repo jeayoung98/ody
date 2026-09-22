@@ -1,18 +1,30 @@
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
 import type { MapEngine } from "../engine/map-engine";
+import { drawCropped, photoFor } from "@/lib/avatar-photo";
 import { avatarFor, ME_AVATAR, trailOf } from "./sprites";
 
 const TEAL: readonly [number, number, number] = [79, 227, 206];
 
-/** 프로필을 바이저(유리창) 안에 넣은 우주 헬멧 */
-function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R: number, u: NearbyUser) {
+/**
+ * 프로필을 바이저(유리창) 안에 넣은 우주 헬멧.
+ *
+ * **패널에서도 쓴다** (S15P21A405-536) — `common/helmet-avatar`. 지도와 목록이 같은 사람을
+ * 다른 그림으로 보여 주면 목록에서 본 사람을 지도에서 못 찾는다. 베껴 두면 한쪽만 바뀐다.
+ */
+export function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R: number, u: NearbyUser) {
   const fade = g.globalAlpha;
   g.save();
   g.beginPath();
   g.arc(px, py, R, 0, 6.284);
   g.clip();
-  g.drawImage(avatarFor(u), px - R, py - R, R * 2, R * 2);
+  /**
+   * **프로필 사진이 있으면 그것이 바이저 안에 들어간다** (S15P21A405-536). 없거나 아직
+   * 안 받아졌으면 절차적 그림이다 — 기다리느라 빈 헬멧을 그리지 않는다.
+   */
+  const photo = photoFor(u.imageUrl);
+  if (photo) drawCropped(g, photo, px - R, py - R, R * 2);
+  else g.drawImage(avatarFor(u), px - R, py - R, R * 2, R * 2);
   g.globalCompositeOperation = "lighter";
   g.globalAlpha = 0.3 * fade;
   g.fillStyle = "#dfeaff";
@@ -27,7 +39,8 @@ function drawVisor(g: CanvasRenderingContext2D, px: number, py: number, R: numbe
   g.stroke();
 }
 
-function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], hot: boolean) {
+/** 헬멧 테두리와 좌우 통신 포드. `drawVisor` 와 짝이다 — 패널도 이 둘을 같이 부른다 */
+export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], hot: boolean) {
   g.beginPath();
   g.arc(px, py, R * 1.3, 0, 6.284);
   g.fillStyle = "rgba(186,206,240,.13)";
@@ -258,6 +271,35 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     g.strokeStyle = "#02040a";
     g.lineWidth = 1.3;
     g.stroke();
+    /**
+     * **겹쳐 선 사람 수** (S15P21A405-550). 이 표식 뒤에 몇 명이 더 있는지 적는다.
+     *
+     * 예전에는 겹친 사람을 아예 안 그렸다 — 같은 곡을 들으면 좌표가 같아서 한 명만 남았고,
+     * 나머지는 접속해 있는데도 화면에서 사라졌다. 이제 묶어서 수로 보여 준다.
+     *
+     * 표식 **왼쪽 위**에 붙인다. 오른쪽 아래는 접속 점이, 아래는 닉네임이 이미 쓰고 있다.
+     * 혼자면 그리지 않는다 — 모든 표식에 `1` 이 붙으면 숫자가 뜻을 잃는다.
+     */
+    const more = fr.stacked.length;
+    if (more > 0) {
+      const bx = px - R * (ship ? 0.95 : 0.82);
+      const by = py - R * (ship ? 0.95 : 0.82);
+      const label = `+${more}`;
+      g.font = `600 9px ${FONTS.body}`;
+      // 자릿수가 늘면 알약이 옆으로 늘어난다. 동그라미로 두면 세 자리에서 글자가 삐져나온다
+      const w = Math.max(15, g.measureText(label).width + 9);
+      const h = 13;
+      g.beginPath();
+      g.roundRect(bx - w / 2, by - h / 2, w, h, h / 2);
+      g.fillStyle = "rgba(2,4,10,.82)";
+      g.fill();
+      g.strokeStyle = rgba(rgb, 0.75);
+      g.lineWidth = 1.1;
+      g.stroke();
+      g.fillStyle = "#e9f1ff";
+      g.fillText(label, bx, by + 0.5);
+    }
+
     g.fillStyle = "rgba(233,241,255,.62)";
     g.font = `500 9.5px ${FONTS.body}`;
     g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 9);

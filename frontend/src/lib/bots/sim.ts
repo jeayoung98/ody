@@ -1,0 +1,147 @@
+/**
+ * 봇의 생활 시뮬레이션 — **순수 함수** (S15P21A405-536).
+ *
+ * 화면도 엔진도 시계도 모르고, 넣은 값만 보고 다음 상태를 돌려준다. 떼어 낸 이유는 이 규칙이
+ * "가짜 티가 나느냐" 를 통째로 결정하기 때문이다 — 청취 길이가 다양한지, 겹을 가끔만 옮기는지,
+ * 오프라인이 섞이는지. 눈으로 몇 분 보고 판단할 수 있는 것이 아니라 수치로 묶어야 한다
+ * (`tests/bot-sim.test.cjs`).
+ *
+ * 봇이 **어느 곡을 고르는지는 여기 없다.** 그건 지도 엔진이 들고 있는 상주 집합을 봐야 하는
+ * 일이고, 그걸 끌고 들어오면 이 파일을 테스트할 수 없어진다. 곡은 부르는 쪽이 붙인다.
+ */
+
+import { BOTS } from "@/constants/bots";
+import { LAYER_COUNT } from "@/constants/map";
+
+/** 봇 한 명의 지금 상태. 이 한 덩이가 끝나면 다음 것으로 넘어간다 */
+export interface BotEpisode {
+  /** 몇 번째인가. 난수 시드의 일부라 같은 봇이라도 매번 다른 값이 나온다 */
+  index: number;
+  /** 접속해 있는가. false 면 자리를 비운 구간이고 곡도 겹도 의미가 없다 */
+  online: boolean;
+  layer: number;
+  /**
+   * 듣고 있는 곡. **`null` 일 수 있다** — 내가 있는 겹이 아니면 고를 수 있는 곡 자체가
+   * 없기 때문이다(엔진은 지금 겹의 상주 집합만 들고 있다). 부르는 쪽이 겹이 맞는 순간에 채운다.
+   */
+  musicId: number | null;
+  /**
+   * **곡 상세를 열어 둔 곡** (S15P21A405-551). `null` 이면 아무것도 안 열어 둔 상태다.
+   *
+   * 틀고 있는 곡(`musicId`)과 **다를 수 있다.** 실제 사용자도 그렇다 — 한 곡을 틀어 놓고 옆
+   * 별을 눌러 보는 일이 흔하고, 데이터와 소켓이 애초에 그렇게 갈라져 있다
+   * (`NearbyUser.viewingMusicId` · `RIDE_PANEL`). 봇에 이 칸이 없으면 따라가는 사람은
+   * "상세만 바뀌는" 경우를 영영 못 본다.
+   */
+  viewingMusicId: number | null;
+  startedAt: number;
+  endsAt: number;
+}
+
+/**
+ * 시드에서 뽑는 [0,1) 난수.
+ *
+ * `Math.random()` 이 아닌 이유는 **같은 입력이면 같은 결과**여야 테스트가 되기 때문이다.
+ * `salt` 로 한 에피소드 안에서 여러 번 다른 값을 뽑는다.
+ */
+export function rnd(seed: number, index: number, salt: number): number {
+  let h = Math.imul(seed, 2654435761) ^ Math.imul(index, 40503) ^ Math.imul(salt, 2246822519);
+  h = Math.imul(h ^ (h >>> 15), 2246822519);
+  h = Math.imul(h ^ (h >>> 13), 3266489917);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
+
+const between = (r: number, range: readonly [number, number]) => range[0] + r * (range[1] - range[0]);
+
+/**
+ * 다음 겹. **사람 있는 쪽으로 끌리고, 가끔 떠난다.**
+ *
+ * 규칙이 두 줄인 이유가 있다. "가끔 옮긴다" 한 줄로 두면 여덟 겹에 고르게 흩어져 내 화면에는
+ * 평균 한 명도 안 남는다 — 만날 수가 없다는 원래 문제가 그대로 돌아온다. 반대로 늘 따라오게
+ * 하면 겹을 옮길 때마다 전원이 통째로 순간이동해 사람이 아니라 그림자로 보인다.
+ *
+ * 그래서 **내 겹에 있으면 가끔 떠나고, 딴 데 있으면 자주 돌아온다.** 이 두 확률의 비가 곧
+ * 정착 비율이다 — 지금 값이면 여섯 중 네다섯이 내 겹에 있고 한둘은 딴 데 가 있다.
+ */
+export function nextLayer(prev: BotEpisode | null, preferredLayer: number, r: (salt: number) => number): number {
+  const home = clampLayer(preferredLayer);
+  // 처음 등장하는 봇은 나와 같은 겹에서 시작한다 — 안 그러면 로그인 직후 화면이 여전히 비어 있다
+  if (prev == null) return home;
+  if (prev.layer === home) return r(2) < BOTS.layerHopChance ? Math.floor(r(4) * LAYER_COUNT) : prev.layer;
+  return r(3) < BOTS.homePull ? home : prev.layer;
+}
+
+const clampLayer = (n: number) => Math.min(LAYER_COUNT - 1, Math.max(0, Math.floor(n)));
+
+/**
+ * 이 봇의 다음 에피소드.
+ *
+ * **자리를 비운 다음에는 반드시 돌아온다.** 오프라인이 연달아 붙으면 한 번 사라진 봇이 십수 분
+ * 넘게 안 보이는데, 여섯 명뿐이라 그 사이 화면이 도로 비어 버린다.
+ */
+export function nextEpisode(seed: number, prev: BotEpisode | null, now: number, preferredLayer: number): BotEpisode {
+  const index = (prev?.index ?? -1) + 1;
+  const r = (salt: number) => rnd(seed, index, salt);
+  const online = prev == null || !prev.online || r(1) >= BOTS.offlineChance;
+  const layer = nextLayer(prev, preferredLayer, r);
+
+  return {
+    index,
+    online,
+    layer,
+    musicId: null,
+    viewingMusicId: null,
+    startedAt: now,
+    endsAt: now + Math.round(between(r(5), online ? BOTS.listenMs : BOTS.offlineMs)),
+  };
+}
+
+/**
+ * 이 곡을 들고 있던 봇에게서 **곡만 떼어낸다** (S15P21A405-546).
+ *
+ * 플레이어가 "재생 불가" 를 보고했을 때 부른다. 에피소드 자체를 끝내지 않는 것이 요점이다 —
+ * 끝내면 `nextEpisode` 가 접속 여부와 겹까지 다시 굴리는데, 거기서 오프라인이 나오면 그 봇을
+ * 따라가던 사람에게 **"인솔자가 사라졌습니다"** 가 뜬다. 곡 하나가 안 틀렸을 뿐인데
+ * 따라가기가 끊기는 셈이다.
+ *
+ * 곡이 빈 봇에게는 부르는 쪽이 곧바로 새 곡을 붙인다.
+ */
+export function dropSong<T extends { episode: BotEpisode }>(bots: readonly T[], musicId: number): T[] {
+  if (!bots.some((b) => b.episode.musicId === musicId)) return [...bots];
+  return bots.map((b) => (b.episode.musicId === musicId ? { ...b, episode: { ...b.episode, musicId: null } } : b));
+}
+
+/**
+ * 이 봇이 지금 이 곡을 듣는다고 못 박는다 (S15P21A405-549).
+ *
+ * 탑승 직전에 소리가 나는 곡을 찾아 넘겼을 때 쓴다. **되써 두지 않으면** 봇의 곡이 빈 채로
+ * 남아서, 다음 `tick` 이 또 다른 곡을 붙이고 탄 사람을 한 번 더 끌고 간다 — 누르자마자
+ * 두 번 튀는 것으로 보인다.
+ */
+export function setSong<T extends { email: string; episode: BotEpisode }>(bots: readonly T[], email: string, musicId: number): T[] {
+  return bots.map((b) => (b.email === email ? { ...b, episode: { ...b.episode, musicId } } : b));
+}
+
+/**
+ * 새 곡을 틀었을 때 **상세를 열어 둘 것인가** (S15P21A405-551).
+ *
+ * 사람은 틀자마자 상세를 닫아 두기도 하고 켜 둔 채 듣기도 한다. 늘 열어 두면 따라가는 사람의
+ * 우측 패널이 한 번도 안 닫혀 "닫힌다" 는 것 자체를 못 보고, 늘 닫아 두면 상세가 따라온다는
+ * 사실을 못 본다. 그래서 갈라 둔다.
+ *
+ * **여기서 만드는 것은 "본다" 뿐이다.** 다른 곡을 눌러 보는 경우는 그 곡을 고를 수 있는
+ * 쪽(지도 상주 집합을 아는 쪽)이 정한다.
+ */
+export function opensDetail(seed: number, index: number): boolean {
+  return rnd(seed, index, 11) < BOTS.opensDetailChance;
+}
+
+/**
+ * 이 봇이 지금 **다른 곡을 눌러 볼 것인가** — 틀고 있는 곡은 그대로 두고 상세만 옮기는 경우.
+ *
+ * 매 판단마다 굴리므로 확률을 낮게 둔다. `tick` 이 3초마다 도는데 여기서 크게 잡으면 우측
+ * 패널이 쉴 새 없이 갈아 끼워져 읽을 수가 없다.
+ */
+export function browsesAway(seed: number, index: number, salt: number): boolean {
+  return rnd(seed, index, 300 + (salt % 97)) < BOTS.browseChance;
+}

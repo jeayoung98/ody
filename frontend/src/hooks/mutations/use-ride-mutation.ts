@@ -1,6 +1,11 @@
-import { useMutation } from "@tanstack/react-query";
-import { API_ENDPOINTS, RIDE_REJECTED } from "@/constants";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
+import { API_ENDPOINTS, BOTS, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
+import { dropSong, setSong } from "@/lib/bots/sim";
+import { isBot } from "@/lib/bots/roster";
+import { botLiveOf, useBotStore } from "@/stores/use-bot-store";
 import { sendJoinNow } from "@/hooks/use-presence-join";
 import { playFrom } from "@/lib/realtime/ride";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -27,9 +32,12 @@ export interface RideTarget {
  */
 export function useRideMutation() {
   const showToast = useToastStore((s) => s.show);
+  const qc = useQueryClient();
 
   return useMutation({
     mutationFn: async (target: RideTarget): Promise<RideResponse> => {
+      // 봇은 서버에 없는 사람이다. 보내 봐야 404 고, 보내면 안 되는 요청이다 (S15P21A405-536)
+      if (isBot(target.email)) return mountBot(target.email, qc);
       // presence 가 살아 있어야 200 이 온다. 만료 상태에서 누르면 422 라 미리 깨워 둔다
       sendJoinNow();
       try {
@@ -51,6 +59,7 @@ export function useRideMutation() {
         snapshotSeq: r.snapshotSeq,
         playHistoryId: r.playHistoryId,
       });
+      useFollowStore.getState().setLeaderViewingMusicId(r.panel.open ? r.panel.musicId : null);
       // 내 자리는 인솔자와 같다. 지도 표식이 그리로 간다
       useMapStore.getState().setMyMusicId(r.musicId);
       // 인솔자가 듣던 지점부터. `PAUSED` 면 그 지점에서 멈춰 선다
@@ -68,6 +77,76 @@ export function useRideMutation() {
       showToast(RIDE_REJECTED[code as keyof typeof RIDE_REJECTED] ?? RIDE_REJECTED.UNKNOWN);
     },
   });
+}
+
+/**
+ * 봇에 타는 길 (S15P21A405-536).
+ *
+ * **서버 응답과 같은 모양을 만들어 돌려준다.** `onSuccess` 가 그 값 하나만 보고 화면을 세우게
+ * 두려는 것이다 — 여기서 스토어를 직접 건드리면 실사용자 경로와 봇 경로가 따로 놀게 되고,
+ * 둘 중 하나만 고쳐지는 사고가 난다. 이후 봇이 곡을 옮기는 것은 `use-bots` 가 옮겨 준다
+ * (실사용자의 `RIDE_TRACK` 자리).
+ *
+ * **소리가 나는 곡을 찾을 때까지 넘긴다** (S15P21A405-549). 누른 첫 곡이 조용하면 "따라가기를
+ * 눌렀더니 자동으로 플레이" 가 아니다. `use-bots` 가 곡이 바뀔 때마다 하는 확인과 같은 것을
+ * 여기서 한 번 미리 한다 — 거기에만 두면 첫 곡은 늘 확인 없이 지나간다.
+ */
+async function mountBot(captainEmail: string, qc: QueryClient): Promise<RideResponse> {
+  const bot = botLiveOf(captainEmail);
+  const musicId = bot?.episode.online ? await audibleSongOf(captainEmail, bot.episode.musicId, bot.episode.layer, qc) : null;
+  // 자리를 모르는 봇에는 탈 수 없다 — 다른 겹에 있거나 막 자리를 비운 경우다
+  if (!bot || !bot.episode.online || musicId == null) throw new ApiError(409, "RIDE_CAPTAIN_INACTIVE", "지금은 따라갈 수 없어요.");
+
+  const layer = bot.episode.layer;
+  const at = getMapEngine()?.pointOf(musicId);
+  // 넘겨서 다른 곡을 찾았으면 그 곡을 보고 있는 것으로 친다 — 안 그러면 엉뚱한 상세가 열린다
+  const viewing = bot.episode.viewingMusicId != null ? musicId : null;
+  return {
+    captainEmail,
+    // 봇 탑승은 서버에 기록이 없다. 종료 보고도 없으므로 이 값은 쓰이지 않는다
+    playHistoryId: -1,
+    musicId,
+    layer,
+    x: at?.pc[layer * 2] ?? 0,
+    y: at?.pc[layer * 2 + 1] ?? 0,
+    cellX: 0,
+    cellY: 0,
+    playback: "PLAYING",
+    positionMs: 0,
+    snapshotSeq: 0,
+    /**
+     * **탑승하자마자 그 곡 상세를 연다** (S15P21A405-551). 실사용자 탑승은 인솔자가 열어 둔
+     * 상세를 응답에 실어 주는데(2차 명세 §3.1), 봇에는 그걸 채워 주는 서버가 없어 비어 있었다.
+     * 봇이 상세를 안 열어 둔 상태면 여기도 닫힌 채로 둔다 — 그 구분이 있어야 사람으로 보인다.
+     */
+    panel: { open: viewing != null, musicId: viewing, tab: "info" },
+  };
+}
+
+/**
+ * 이 곡이 소리가 나면 그대로, 아니면 **봇을 다음 곡으로 넘겨** 가며 찾는다.
+ *
+ * 넘길 때마다 `videoId` 조회가 한 번 나가고 그 조회는 백엔드에서 외부 API 를 탄다.
+ * 그 겹 전체가 아직 안 찾아본 곡일 수 있으므로 `BOTS.audibleTries` 에서 멎고 `null` 을 준다 —
+ * 그때는 탑승이 "지금은 따라갈 수 없어요" 로 거절된다. 조용한 우주선에 태우는 것보다 낫다.
+ */
+async function audibleSongOf(email: string, first: number | null, layer: number, qc: QueryClient): Promise<number | null> {
+  let musicId = first;
+  const map = useMapStore.getState();
+  for (let i = 0; i < BOTS.audibleTries; i++) {
+    if (musicId != null && (await isAudible(qc, musicId))) {
+      // 넘겨서 찾은 곡이면 봇도 그 곡을 듣고 있어야 한다 — 안 그러면 다음 tick 이 또 옮긴다
+      if (musicId !== first) useBotStore.getState().setBots(setSong(useBotStore.getState().bots, email, musicId));
+      return musicId;
+    }
+    if (musicId != null) {
+      markDead(musicId);
+      useBotStore.getState().setBots(dropSong(useBotStore.getState().bots, musicId));
+    }
+    musicId = pickSong(layer, map.layer, map.myMusicId);
+    if (musicId == null) return null;
+  }
+  return null;
 }
 
 const mount = (captainEmail: string) =>

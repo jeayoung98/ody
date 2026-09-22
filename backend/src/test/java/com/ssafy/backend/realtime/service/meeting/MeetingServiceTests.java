@@ -133,4 +133,25 @@ class MeetingServiceTests {
 
 		verify(meetingMapper).upsertIncrement(RIDER, "e@test.dev");
 	}
+
+	/** 잠금만 남고 세지는 않으면 그 쌍은 3분 동안 다시 만나도 안 세진다. */
+	@Test
+	@DisplayName("세지 못하면 3분 잠금을 풀어 준다")
+	void failureReleasesCooldown() {
+		when(meetingMapper.upsertIncrement(RIDER, OUTSIDER)).thenThrow(new RuntimeException("FK"));
+
+		meetingService.recordOnDismount(List.of(RIDER), List.of(OUTSIDER), Set.of());
+
+		verify(redis).delete("meeting-cd:" + RIDER + ":" + OUTSIDER);
+	}
+
+	@Test
+	@DisplayName("3분 안에 이미 센 쌍은 잠금을 건드리지 않는다")
+	void cooldownHitDoesNotReleaseTheLock() {
+		when(valueOps.setIfAbsent(anyString(), eq("1"), any(Duration.class))).thenReturn(false);
+
+		meetingService.recordOnDismount(List.of(RIDER), List.of(OUTSIDER), Set.of());
+
+		verify(redis, never()).delete(anyString());
+	}
 }

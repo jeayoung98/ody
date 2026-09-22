@@ -54,7 +54,15 @@ public enum RealtimeErrorCode implements ErrorCode {
 	 * 소켓으로 같은 일이 막힐 때도 {@code WebSocketErrorCode.RIDE_NOT_CAPTAIN} 으로 같은 이름이 나간다.
 	 */
 	RIDE_NOT_CAPTAIN(HttpStatus.CONFLICT, "RIDE_NOT_CAPTAIN",
-			"따라가는 중에는 할 수 없습니다. 먼저 내려 주세요.");
+			"따라가는 중에는 할 수 없습니다. 먼저 내려 주세요."),
+
+	/**
+	 * 요청과 서버의 상태가 어긋났다. 그 사이에 다른 사람을 따라가기 시작했거나,
+	 * 이전 연결에서 만든 탑승이거나, 서 있는 자리가 없다.
+	 * 화면을 새로 고치면 풀린다 — 접속 문제와 구분하려고 따로 둔다.
+	 */
+	RIDE_STALE(HttpStatus.CONFLICT, "RIDE_STALE",
+			"따라가기 상태가 바뀌었습니다. 화면을 새로 고쳐 주세요.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

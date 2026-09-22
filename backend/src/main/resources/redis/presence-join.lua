@@ -40,6 +40,11 @@ if currentEpoch ~= expectedEpoch then
   return {'STALE'}
 end
 
+-- 1-1) 따라가는 중이면 지도에 없다. 옮기면 지도에 다시 나타나고 남의 셀 인원수가 깎인다.
+if redis.call('HGET', KEYS[1], 'riding') then
+  return {'STALE'}
+end
+
 -- 2) 읽은 뒤 곡이 바뀌었으면 늦은 요청이므로 막는다.
 local cur = redis.call('HGET', KEYS[1], 'musicId')
 local curStr = cur or ''

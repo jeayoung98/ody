@@ -264,7 +264,7 @@ public class PresenceRedisRepository {
 	 * @param epoch 종료할 접속 버전
 	 * @return 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록
 	 */
-	public List<String> applyLeave(String email, long epoch) {
+	public LeaveResult applyLeave(String email, long epoch) {
 		return doLeave(email, Long.toString(epoch), "");
 	}
 
@@ -276,7 +276,7 @@ public class PresenceRedisRepository {
 	 * @param sweepTimeMs 만료 확인 시각
 	 * @return 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록
 	 */
-	public List<String> applyLeaveExpired(String email, long sweepTimeMs) {
+	public LeaveResult applyLeaveExpired(String email, long sweepTimeMs) {
 		return doLeave(email, "", Long.toString(sweepTimeMs));
 	}
 
@@ -288,7 +288,23 @@ public class PresenceRedisRepository {
 	 * @return 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록
 	 */
 	@SuppressWarnings("unchecked")
-	private List<String> doLeave(String email, String epoch, String sweepTime) {
+	/**
+	 * 나가기 결과.
+	 *
+	 * 스크립트가 아무것도 건드리지 않고 돌아오는 경우가 있다 — 옛 접속의 종료 요청이거나
+	 * 아직 만료되지 않은 사용자다. 그 사람은 여전히 접속해 있으므로 따라가기도 그대로 둬야 한다.
+	 * 지울 자리가 없어서 빈 목록이 오는 것과는 다른 경우라 따로 구분한다.
+	 *
+	 * @param applied 실제로 정리했으면 true
+	 * @param removed 지도에서 뺀 자리. 서 있던 자리가 없었으면 빈 목록
+	 */
+	public record LeaveResult(boolean applied, List<String> removed) {
+
+		/** 아무것도 건드리지 않았다. */
+		private static final LeaveResult SKIPPED = new LeaveResult(false, List.of());
+	}
+
+	private LeaveResult doLeave(String email, String epoch, String sweepTime) {
 		List<String> keys = List.of(
 				PRESENCE_USER_PREFIX + email,
 				EXPIRY_KEY,
@@ -298,7 +314,11 @@ public class PresenceRedisRepository {
 				email, epoch, sweepTime,
 				LISTENERS_PREFIX, LAYER_LISTENERS_PREFIX, ACTIVE_CELL_PREFIX, ACTIVE_CELLS_PREFIX, USERCOUNT_PREFIX,
 				NEARBY_SUBSCRIBERS_PREFIX, VIEWPORT_CELL_PREFIX, VIEWPORT_CLUSTERED_PREFIX);
-		return result != null ? result : List.of();
+		// 응답이 없으면 스크립트가 못 돈 것이다. 아무것도 안 바뀌었다고 본다.
+		if (result == null || (result.size() == 1 && "SKIPPED".equals(result.get(0)))) {
+			return LeaveResult.SKIPPED;
+		}
+		return new LeaveResult(true, result);
 	}
 
 	/**

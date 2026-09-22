@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 import com.ssafy.backend.realtime.dto.viewport.ViewportCellCounts;
 import com.ssafy.backend.realtime.dto.viewport.ViewportBulkEnter;
 import com.ssafy.backend.realtime.dto.viewport.ViewportDelta;
+import com.ssafy.backend.realtime.dto.viewport.ViewportRiderCount;
 import com.ssafy.backend.realtime.dto.viewport.ViewportSnapshot;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
@@ -143,6 +144,19 @@ public class RideViewportService {
 			return;
 		}
 		send(riders, RealtimeMessageType.RIDE_VIEWPORT_BULK_ENTER, payload);
+	}
+
+	/**
+	 * 따라오는 인원수 변화도 따라가는 사람에게 그대로 넘긴다.
+	 *
+	 * @param riders 인솔자를 따라가는 사람들
+	 * @param payload 인솔자에게 보낸 것과 같은 내용
+	 */
+	public void mirrorRiderCount(Set<String> riders, ViewportRiderCount payload) {
+		if (payload == null) {
+			return;
+		}
+		send(riders, RealtimeMessageType.RIDE_VIEWPORT_RIDER_COUNT, payload);
 	}
 
 	/**

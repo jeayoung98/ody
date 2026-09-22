@@ -103,6 +103,24 @@ class RideDisbandRedisIntegrationTests {
 		assertThat(redis.opsForHash().get("cell:usercount:" + LAYER, CELL)).isEqualTo("2");
 	}
 
+	/** 알림은 전원에게, 남들에게 알리는 것과 만남은 지도로 돌아간 사람만 쓴다. */
+	@Test
+	@DisplayName("따라가던 전원과 지도로 돌아간 사람을 따로 돌려준다")
+	void answersWithBothRosters() {
+		String captain = user();
+		String alive = user();
+		String gone = user();
+		givenRiding(captain, alive);
+		keysToDelete.add("ride:captain:" + gone);
+		redis.opsForHash().put("ride:captain:" + gone, "captain", captain);
+		redis.opsForSet().add("ride:riders:" + captain, gone);
+
+		DisbandResult result = repository.disband(captain);
+
+		assertThat(result.riders()).containsExactlyInAnyOrder(alive, gone);
+		assertThat(result.leftRiders()).containsExactly(alive);
+	}
+
 	/** 고아 키가 남으면 다음 선단이 엉뚱한 상태를 물려받는다. */
 	@Test
 	@DisplayName("선단의 흔적이 하나도 남지 않는다")
@@ -186,6 +204,18 @@ class RideDisbandRedisIntegrationTests {
 		assertThat(redis.hasKey("ride:playback:" + captain)).isFalse();
 	}
 
+	@Test
+	@DisplayName("해체하면 따라가는 중 표시가 사라진다")
+	void ridingMarkIsClearedOnDisband() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider);
+
+		repository.disband(captain);
+
+		assertThat(redis.opsForHash().hasKey("presence:user:" + rider, "riding")).isFalse();
+	}
+
 	// ── 따라가던 사람 한 명만 사라짐 ───────────────────────
 
 	/** 선단은 그대로 둔다. 사라진 것은 인솔자가 아니라 따라가던 사람이다. */
@@ -221,6 +251,19 @@ class RideDisbandRedisIntegrationTests {
 				.isMember("layer-listeners:" + LAYER + ":" + MUSIC, gone)).isFalse();
 	}
 
+	/** 지도에는 안 넣지만 표시는 지운다. 남으면 그 뒤 재생·입장이 거부된다. */
+	@Test
+	@DisplayName("사라진 사람의 따라가는 중 표시도 지운다")
+	void ridingMarkIsClearedOnRiderLeave() {
+		String captain = user();
+		String gone = user();
+		givenRiding(captain, gone);
+
+		repository.riderLeave(gone);
+
+		assertThat(redis.opsForHash().hasKey("presence:user:" + gone, "riding")).isFalse();
+	}
+
 	@Test
 	@DisplayName("따라가는 중이 아니었으면 아무것도 돌려주지 않는다")
 	void notRidingReturnsNothing() {
@@ -235,6 +278,8 @@ class RideDisbandRedisIntegrationTests {
 		redis.opsForHash().put(key, "layer", Integer.toString(LAYER));
 		redis.opsForHash().put(key, "cellX", Integer.toString(CELL_X));
 		redis.opsForHash().put(key, "cellY", Integer.toString(CELL_Y));
+		// ride-place.lua 가 남기는 표시. 자리는 적혀 있어도 지도에는 없다는 뜻이다.
+		redis.opsForHash().put(key, "riding", "1");
 		redis.opsForHash().put("ride:captain:" + rider, "captain", captain);
 		redis.opsForHash().put("ride:captain:" + rider, "epoch", "1");
 		redis.opsForSet().add("ride:riders:" + captain, rider);

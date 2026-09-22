@@ -3,7 +3,6 @@ package com.ssafy.backend.realtime.repository.redis.integration;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.verifyNoInteractions;
 
 import java.time.Duration;
 import java.util.LinkedHashSet;
@@ -28,10 +27,12 @@ import com.ssafy.backend.realtime.event.RealtimeEventService;
 import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
 import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.LeaveResult;
 import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
 import com.ssafy.backend.realtime.service.music.MusicLocationService;
 import com.ssafy.backend.realtime.service.presence.PresenceService;
 import com.ssafy.backend.realtime.service.ride.RideService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
 
 /** 실제 Redis에서 사용자 배치와 상태 관리를 검증한다. */
 @EnabledIfEnvironmentVariable(named = "RUN_REDIS_INTEGRATION", matches = "true")
@@ -242,7 +243,7 @@ class PresenceRedisIntegrationTests {
 		assertThat(repository.join(remainingEmail, 1L, null, null, null, null,
 				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
 
-		assertThat(repository.applyLeave(data.email(), 1L)).containsExactly(
+		assertThat(repository.applyLeave(data.email(), 1L).removed()).containsExactly(
 				Long.toString(data.music1()), Integer.toString(data.layer1()), "3", "4", "1");
 
 		assertThat(redis.hasKey("presence:user:" + data.email())).isFalse();
@@ -271,11 +272,12 @@ class PresenceRedisIntegrationTests {
 				mock(MusicPositionCalculator.class),
 				eventService,
 				mock(PlayHistoryMapper.class),
-				mock(RideService.class));
+				mock(RideService.class),
+				mock(RiderMoveService.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
 		// 다른 탭이 남아 있지 않은 재연결이므로 이전 위치를 지운다.
-		service.connect(data.email(), 2L, false);
+		service.connect(data.email(), 2L);
 
 		assertThat(repository.snapshot(data.email()))
 				.isEqualTo(new PresenceSnapshot(null, null, null, null, 2L));
@@ -290,9 +292,10 @@ class PresenceRedisIntegrationTests {
 				null, null));
 	}
 
+	/** 탭을 여러 개 켜도 마지막 것만 산다. 앞의 탭 자리를 남겨 두면 지도에 유령이 생긴다. */
 	@Test
-	@DisplayName("다른 탭이 남아 있으면 이전 위치와 곡 인덱스를 그대로 둔다")
-	void connectKeepsPositionWhenOtherTabRemains() {
+	@DisplayName("앞의 탭이 남아 있어도 이전 위치와 곡 인덱스를 지운다")
+	void connectAlwaysClearsPreviousPosition() {
 		TestData data = testData();
 		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
 		connect(data.email(), 1L);
@@ -306,24 +309,25 @@ class PresenceRedisIntegrationTests {
 				mock(MusicPositionCalculator.class),
 				eventService,
 				mock(PlayHistoryMapper.class),
-				mock(RideService.class));
+				mock(RideService.class),
+				mock(RiderMoveService.class));
 		ReflectionTestUtils.setField(service, "ttlMs", 60_000L);
 
-		// 다른 탭이 살아 있으므로 접속 번호만 올리고 위치는 건드리지 않는다.
-		service.connect(data.email(), 2L, true);
+		// 앞의 탭이 남아 있든 아니든 새 접속은 새 출발이다.
+		service.connect(data.email(), 2L);
 
-		// 곡과 셀이 남아 있어야 새 탭이 듣던 곡을 그대로 물려받는다.
 		assertThat(repository.snapshot(data.email()))
-				.isEqualTo(new PresenceSnapshot(data.music1(), data.layer1(), 3, 4, 2L));
-		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isTrue();
+				.isEqualTo(new PresenceSnapshot(null, null, null, null, 2L));
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isFalse();
 		assertThat(redis.opsForSet().isMember(
-				"layer-listeners:" + data.layer1() + ":" + data.music1(), data.email())).isTrue();
-		assertThat(redis.opsForSet().isMember(
-				"active-song:cell:" + data.layer1() + ":3:4", Long.toString(data.music1()))).isTrue();
-		assertThat(redis.opsForSet().isMember("active-song:cells:" + data.layer1(), "3:4")).isTrue();
-		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
-		// 사라지지 않았으므로 퇴장 알림도 나가지 않는다.
-		verifyNoInteractions(eventService);
+				"layer-listeners:" + data.layer1() + ":" + data.music1(), data.email())).isFalse();
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isNull();
+		// 지도에서 사라졌으니 퇴장도 알린다.
+		verify(eventService).send(new PositionChanged(
+				data.email(), 1L, data.layer1(), null,
+				data.music1(), null,
+				"3:4", null,
+				null, null));
 	}
 
 	@Test
@@ -385,6 +389,57 @@ class PresenceRedisIntegrationTests {
 		assertThat(redis.hasKey(metaKey)).isTrue();
 	}
 
+	/** 앞의 탭이 닫힌 것뿐이다. 아무것도 안 건드렸다는 사실을 부르는 쪽이 알아야 한다. */
+	@Test
+	@DisplayName("이전 접속의 종료 요청은 건너뛴 것으로 알린다")
+	void staleLeaveReportsSkipped() {
+		TestData data = testData();
+		connect(data.email(), 2L);
+
+		assertThat(repository.applyLeave(data.email(), 1L).applied()).isFalse();
+	}
+
+	/** 만료 목록을 읽은 뒤 하트비트가 도착했다. 아직 살아 있다. */
+	@Test
+	@DisplayName("아직 만료되지 않았으면 건너뛴 것으로 알린다")
+	void notExpiredReportsSkipped() {
+		TestData data = testData();
+		long sweepTime = System.currentTimeMillis();
+		connect(data.email(), 1L);
+		redis.opsForZSet().add("presence:expiry", data.email(), sweepTime + 60_000);
+
+		assertThat(repository.applyLeaveExpired(data.email(), sweepTime).applied()).isFalse();
+	}
+
+	@Test
+	@DisplayName("자리에 없던 사용자를 지워도 정리한 것으로 알린다")
+	void leaveWithoutSpotIsStillApplied() {
+		TestData data = testData();
+		connect(data.email(), 1L);
+
+		assertThat(repository.applyLeave(data.email(), 1L).applied()).isTrue();
+		assertThat(repository.applyLeave(data.email(), 1L).removed()).isEmpty();
+	}
+
+	/** 화면을 연 접속 번호가 뒤처져 있어도 지워야 한다. 남기면 끊긴 사람에게 계속 보낸다. */
+	@Test
+	@DisplayName("화면을 연 접속 번호가 지금과 달라도 구독을 지운다")
+	void leaveRemovesViewportSubscriptionsOfOlderEpoch() {
+		TestData data = testData();
+		String metaKey = key("viewport:meta:" + data.email());
+		String cellKey = key("viewport:cell:" + data.layer1() + ":7:8");
+		connect(data.email(), 5L);
+		redis.opsForHash().putAll(metaKey, java.util.Map.of(
+				"epoch", "4", "requestSeq", "30", "layer", Integer.toString(data.layer1()),
+				"mode", "INDIVIDUAL", "cellKeys", "7:8"));
+		redis.opsForSet().add(cellKey, data.email());
+
+		repository.applyLeave(data.email(), 5L);
+
+		assertThat(redis.opsForSet().isMember(cellKey, data.email())).isFalse();
+		assertThat(redis.hasKey(metaKey)).isFalse();
+	}
+
 	@Test
 	@DisplayName("하트비트는 만료 시각을 갱신한다")
 	void heartbeatUpdatesExpiry() {
@@ -423,6 +478,124 @@ class PresenceRedisIntegrationTests {
 		assertThat(repository.recount(data.layer1())).isEqualTo(2L);
 		assertThat(redis.opsForHash().get(userCountKey, cell)).isEqualTo("3");
 		assertThat(redis.opsForHash().get(userCountKey, ghostCell)).isNull();
+	}
+
+	// ── 따라가는 사람은 지도에 없다 ─────────────────────────
+
+	@Test
+	@DisplayName("따라가기 첫 배치는 지도에서 빼고 표시를 남긴다")
+	void firstRidePlacementLeavesTheMap() {
+		TestData data = testData();
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(data.email(), data.music2(), data.layer1(), "5:6");
+		connect(data.email(), 1L);
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+
+		assertThat(repository.applyRidePlacement(data.email(), 1L,
+				data.music1(), data.layer1(), 3, 4,
+				data.music2(), data.layer1(), 0.5, 0.6, 5, 6)).isTrue();
+
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), data.email())).isFalse();
+		assertThat(redis.opsForSet().isMember(
+				"layer-listeners:" + data.layer1() + ":" + data.music2(), data.email())).isFalse();
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isNull();
+		assertThat(redis.opsForHash().get("presence:user:" + data.email(), "riding")).isEqualTo("1");
+	}
+
+	/** 인솔자가 곡을 바꿀 때마다 도는 자리다. 이미 지도에 없는데 또 빼면 남의 인원수가 깎인다. */
+	@Test
+	@DisplayName("따라가는 동안 곡을 옮겨도 남의 셀 인원수를 깎지 않는다")
+	void ridePlacementDoesNotTouchCountsAfterFirstMove() {
+		TestData data = testData();
+		String other = "presence-it-other-" + UUID.randomUUID() + "@test.local";
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(other, data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(data.email(), data.music2(), data.layer1(), "5:6");
+		connect(data.email(), 1L);
+		connect(other, 1L);
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+		assertThat(repository.join(other, 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+		// 첫 배치로 지도에서 빠진다. 남은 사람은 other 하나.
+		assertThat(repository.applyRidePlacement(data.email(), 1L,
+				data.music1(), data.layer1(), 3, 4,
+				data.music2(), data.layer1(), 0.5, 0.6, 5, 6)).isTrue();
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
+
+		// 인솔자가 다시 곡을 바꿔 따라가는 사람도 옮긴다.
+		assertThat(repository.applyRidePlacement(data.email(), 1L,
+				data.music2(), data.layer1(), 5, 6,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), other)).isTrue();
+	}
+
+	/** 지도에 없던 사람이다. 빼면 인솔자 셀이 깎이고 보인 적 없는 사람의 퇴장이 나간다. */
+	@Test
+	@DisplayName("따라가는 사람이 끊겨도 그 자리의 인원수는 그대로다")
+	void leavingWhileRidingKeepsCounts() {
+		TestData data = testData();
+		String captain = "presence-it-captain-" + UUID.randomUUID() + "@test.local";
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(captain, data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(data.email(), data.music2(), data.layer1(), "5:6");
+		connect(data.email(), 1L);
+		connect(captain, 1L);
+		assertThat(repository.join(captain, 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music2(), data.layer1(), 0.5, 0.6, 5, 6)).isTrue();
+		// 인솔자 자리로 옮겨 붙는다. 지도에는 안 들어간다.
+		assertThat(repository.applyRidePlacement(data.email(), 1L,
+				data.music2(), data.layer1(), 5, 6,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+
+		LeaveResult result = repository.applyLeave(data.email(), 1L);
+
+		assertThat(result.applied()).isTrue();
+		// 뺄 자리가 없으니 퇴장 알림도 나가지 않는다.
+		assertThat(result.removed()).isEmpty();
+		assertThat(redis.opsForHash().get("cell:usercount:" + data.layer1(), "3:4")).isEqualTo("1");
+		assertThat(redis.opsForSet().isMember("listeners:" + data.music1(), captain)).isTrue();
+	}
+
+	@Test
+	@DisplayName("따라가는 중에는 재생 요청을 거부한다")
+	void playWhileRidingIsRejected() {
+		TestData data = testData();
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(data.email(), data.music2(), data.layer1(), "5:6");
+		connect(data.email(), 1L);
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+		assertThat(repository.applyRidePlacement(data.email(), 1L,
+				data.music1(), data.layer1(), 3, 4,
+				data.music2(), data.layer1(), 0.5, 0.6, 5, 6)).isTrue();
+
+		assertThat(repository.applyPlay(data.email(),
+				data.music2(), data.layer1(), 5, 6,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isNull();
+	}
+
+	@Test
+	@DisplayName("따라가는 중에는 입장 요청을 거부한다")
+	void joinWhileRidingIsRejected() {
+		TestData data = testData();
+		trackJoinKeys(data.email(), data.music1(), data.layer1(), "3:4");
+		trackJoinKeys(data.email(), data.music2(), data.layer1(), "5:6");
+		connect(data.email(), 1L);
+		assertThat(repository.join(data.email(), 1L, null, null, null, null,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isTrue();
+		assertThat(repository.applyRidePlacement(data.email(), 1L,
+				data.music1(), data.layer1(), 3, 4,
+				data.music2(), data.layer1(), 0.5, 0.6, 5, 6)).isTrue();
+
+		assertThat(repository.join(data.email(), 1L,
+				data.music2(), data.layer1(), 5, 6,
+				data.music1(), data.layer1(), 0.3, 0.4, 3, 4)).isFalse();
 	}
 
 	private void connect(String email, long epoch) {

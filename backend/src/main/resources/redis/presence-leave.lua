@@ -17,7 +17,9 @@
 -- ARGV[10] 셀별 화면 구독 키
 -- ARGV[11] 셀별 인원수 화면 구독 키
 --
--- 반환: 지운 곡, 위치, 접속 버전. 지운 값이 없으면 빈 목록.
+-- 반환: 지운 곡, 위치, 접속 버전. 지울 자리가 없었으면 빈 목록.
+--       옛 접속의 종료 요청이거나 아직 만료 전이면 {'SKIPPED'} — 아무것도 건드리지 않았다는 뜻이다.
+--       부르는 쪽은 이때 따라가기도 그대로 둬야 한다. 그 사람은 아직 접속해 있다.
 
 local email     = ARGV[1]
 local epoch     = ARGV[2]
@@ -31,12 +33,9 @@ local function removeNearbySubscriptions()
   redis.call('DEL', KEYS[3])
 end
 
-local function removeViewportSubscriptions(expectedMetaEpoch)
-  local viewportEpoch = redis.call('HGET', KEYS[4], 'epoch')
-  if expectedMetaEpoch and viewportEpoch and viewportEpoch ~= expectedMetaEpoch then
-    return
-  end
-
+-- 화면 구독은 조건 없이 지운다. 저장된 접속 번호는 그 화면을 연 시점의 것이라
+-- 지금 접속 번호보다 앞서면 앞섰지 뒤설 수 없다. 다르다면 오래된 것이니 더더욱 지워야 한다.
+local function removeViewportSubscriptions()
   local viewportLayer = redis.call('HGET', KEYS[4], 'layer')
   local cellKeys = redis.call('HGET', KEYS[4], 'cellKeys') or ''
   if viewportLayer then
@@ -52,7 +51,7 @@ end
 if redis.call('EXISTS', KEYS[1]) == 0 then
   redis.call('ZREM', KEYS[2], email)
   removeNearbySubscriptions()
-  removeViewportSubscriptions(nil)
+  removeViewportSubscriptions()
   return {}
 end
 
@@ -60,13 +59,13 @@ if sweepTime ~= '' then
   -- 아직 만료되지 않았으면 중단한다.
   local sc = redis.call('ZSCORE', KEYS[2], email)
   if (not sc) or (tonumber(sc) > tonumber(sweepTime)) then
-    return {}
+    return {'SKIPPED'}
   end
 else
   -- 다른 접속의 종료 요청이면 중단한다.
   local storedEpoch = redis.call('HGET', KEYS[1], 'epoch')
   if storedEpoch ~= epoch then
-    return {}
+    return {'SKIPPED'}
   end
 end
 
@@ -77,9 +76,13 @@ local cellX   = redis.call('HGET', KEYS[1], 'cellX')
 local cellY   = redis.call('HGET', KEYS[1], 'cellY')
 local storedEpoch = redis.call('HGET', KEYS[1], 'epoch')
 
+-- 따라가는 중이면 자리는 적혀 있어도 지도에는 없다. 빼면 인솔자 셀 인원수가 깎이고,
+-- 아무에게도 보인 적 없는 사람의 퇴장 알림이 나간다.
+local riding = redis.call('HGET', KEYS[1], 'riding')
+
 -- 재생 중이었다면 곡과 위치를 지운다.
 local removed = {}
-if musicId then
+if musicId and not riding then
   local cellF = cellX .. ':' .. cellY
   redis.call('SREM', ARGV[4] .. musicId, email)
 
@@ -102,7 +105,7 @@ end
 
 -- 실시간 구독과 사용자 상태를 지운다.
 removeNearbySubscriptions()
-removeViewportSubscriptions(storedEpoch)
+removeViewportSubscriptions()
 redis.call('DEL', KEYS[1])
 redis.call('ZREM', KEYS[2], email)
 return removed

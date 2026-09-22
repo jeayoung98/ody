@@ -1,6 +1,9 @@
 package com.ssafy.backend.realtime.service.nearby;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
@@ -11,11 +14,13 @@ import static org.mockito.Mockito.when;
 
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.InOrder;
 import org.mockito.Mock;
@@ -27,7 +32,9 @@ import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.message.RealtimeMessageType;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.dto.nearby.NearbyBulkEnter;
 import com.ssafy.backend.realtime.dto.nearby.NearbyChange;
+import com.ssafy.backend.realtime.dto.nearby.NearbyRiderCount;
 import com.ssafy.backend.realtime.dto.nearby.NearbySnapshot;
 import com.ssafy.backend.realtime.service.nearby.NearbyMusicService;
 import com.ssafy.backend.realtime.service.nearby.RiderCountService;
@@ -186,5 +193,77 @@ class NearbyChangeServiceTests {
 				oldMusicId == null ? null : 1, newMusicId == null ? null : 1,
 				oldMusicId, newMusicId,
 				oldMusicId == null ? null : "1:1", newMusicId == null ? null : "2:2", 0.2, 0.3);
+	}
+
+	// ── 선단이 흩어져 여러 사람이 한꺼번에 나타남 ───────────
+
+	/** 해체는 위치 변경 알림을 거치지 않아, 이걸 안 보내면 목록이 끝내 안 바뀐다. */
+	@Test
+	@DisplayName("한 덩어리로 나타나면 받는 사람마다 한 번만 보낸다")
+	void bulkEnterSendsOneMessagePerReceiver() {
+		when(nearbyRepository.subscribers(100L)).thenReturn(Set.of("watcher@x.com"));
+		when(userDisplayService.find("a@x.com")).thenReturn(new UserDisplay("A", "a.png"));
+		when(userDisplayService.find("b@x.com")).thenReturn(new UserDisplay("B", null));
+		when(riderCountService.countAll(List.of("a@x.com", "b@x.com")))
+				.thenReturn(Map.of("a@x.com", 2));
+		when(meetingService.countWith("watcher@x.com", "a@x.com")).thenReturn(3);
+		when(meetingService.countWith("watcher@x.com", "b@x.com")).thenReturn(0);
+
+		service.sendEnteredTogether(List.of("a@x.com", "b@x.com"), 100L);
+
+		ArgumentCaptor<NearbyBulkEnter> captor = ArgumentCaptor.forClass(NearbyBulkEnter.class);
+		verify(realtimeMessageService).sendToUser(eq("watcher@x.com"), anyString(),
+				eq(RealtimeMessageType.NEARBY_BULK_ENTER), captor.capture());
+		assertThat(captor.getValue().musicId()).isEqualTo(100L);
+		assertThat(captor.getValue().people()).extracting(NearbyChange::email)
+				.containsExactly("a@x.com", "b@x.com");
+		assertThat(captor.getValue().people().get(0).riderCount()).isEqualTo(2);
+		assertThat(captor.getValue().people().get(0).meetingCount()).isEqualTo(3);
+		assertThat(captor.getValue().people().get(1).riderCount()).isZero();
+	}
+
+	/** 자기가 나타난 것을 자기가 받을 이유가 없다. */
+	@Test
+	@DisplayName("나타난 본인은 받지 않는다")
+	void bulkEnterSkipsTheArrivalsThemselves() {
+		when(nearbyRepository.subscribers(100L)).thenReturn(Set.of("a@x.com"));
+
+		service.sendEnteredTogether(List.of("a@x.com"), 100L);
+
+		verifyNoInteractions(realtimeMessageService, userDisplayService, meetingService);
+	}
+
+	@Test
+	@DisplayName("보는 사람이 없으면 아무것도 읽지 않는다")
+	void bulkEnterWithoutSubscribersDoesNothing() {
+		when(nearbyRepository.subscribers(100L)).thenReturn(Set.of());
+
+		service.sendEnteredTogether(List.of("a@x.com"), 100L);
+
+		verifyNoInteractions(realtimeMessageService, userDisplayService, riderCountService);
+	}
+
+	@Test
+	@DisplayName("나타난 사람이 없으면 보는 사람도 찾지 않는다")
+	void bulkEnterWithoutArrivalsDoesNothing() {
+		service.sendEnteredTogether(List.of(), 100L);
+
+		verifyNoInteractions(nearbyRepository, realtimeMessageService);
+	}
+
+	/** 곡도 자리도 그대로다. 목록에서 숫자만 바꾸면 된다. */
+	@Test
+	@DisplayName("인원수 변화를 그 곡을 보는 사람들에게 알린다")
+	void riderCountReachesSubscribers() {
+		when(nearbyRepository.subscribers(100L))
+				.thenReturn(Set.of("watcher@x.com", "captain@x.com"));
+
+		service.sendRiderCount("captain@x.com", 100L, 3);
+
+		verify(realtimeMessageService).sendToUser(eq("watcher@x.com"), anyString(),
+				eq(RealtimeMessageType.NEARBY_RIDER_COUNT),
+				eq(new NearbyRiderCount("captain@x.com", 3, 100L)));
+		verify(realtimeMessageService, never()).sendToUser(eq("captain@x.com"), anyString(),
+				eq(RealtimeMessageType.NEARBY_RIDER_COUNT), any());
 	}
 }

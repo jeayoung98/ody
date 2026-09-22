@@ -96,6 +96,66 @@ class RideDismountRedisIntegrationTests {
 		assertThat(repository.riders(captain)).doesNotContain(rider);
 	}
 
+	/** 남겨 두면 인솔자가 혼자 곡을 바꿔도 갱신되지 않아, 다음에 타는 사람이 옛 곡 정보를 받는다. */
+	@Test
+	@DisplayName("마지막 한 명이 내리면 재생 정보와 곡 상세도 지운다")
+	void lastRiderClearsFleetTraces() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForHash().put("ride:playback:" + captain, "musicId", Long.toString(MUSIC));
+		redis.opsForHash().put("ride:panel:" + captain, "musicId", Long.toString(MUSIC));
+
+		repository.dismount(rider, captain);
+
+		assertThat(redis.hasKey("ride:playback:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:panel:" + captain)).isFalse();
+	}
+
+	@Test
+	@DisplayName("아직 남은 사람이 있으면 재생 정보를 그대로 둔다")
+	void remainingRidersKeepFleetTraces() {
+		String captain = user();
+		String rider = user();
+		String other = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForSet().add("ride:riders:" + captain, other);
+		redis.opsForHash().put("ride:playback:" + captain, "musicId", Long.toString(MUSIC));
+
+		repository.dismount(rider, captain);
+
+		assertThat(redis.hasKey("ride:playback:" + captain)).isTrue();
+	}
+
+	/** 자바가 따로 읽으면 그 사이에 새로 탄 사람이 빠져 같은 선단인데 만남으로 세어진다. */
+	@Test
+	@DisplayName("남은 동료 명단을 같이 돌려준다")
+	void answersWithRemainingMates() {
+		String captain = user();
+		String rider = user();
+		String mate = user();
+		givenRiding(captain, rider, 1L);
+		redis.opsForSet().add("ride:riders:" + captain, mate);
+
+		DismountResult result = repository.dismount(rider, captain);
+
+		assertThat(result.remainingMates()).containsExactly(mate);
+		assertThat(result.remainingRiders()).isEqualTo(1);
+	}
+
+	/** 표시가 남으면 지도에 있으면서도 재생·입장이 거부된다. */
+	@Test
+	@DisplayName("내리면 따라가는 중 표시가 사라진다")
+	void ridingMarkIsCleared() {
+		String captain = user();
+		String rider = user();
+		givenRiding(captain, rider, 1L);
+
+		repository.dismount(rider, captain);
+
+		assertThat(redis.opsForHash().hasKey("presence:user:" + rider, "riding")).isFalse();
+	}
+
 	/** 다시 넣지 않으면 내린 뒤에도 남들 화면과 주변 사람 목록에 안 잡힌다. */
 	@Test
 	@DisplayName("내리면 지도 인덱스 다섯 곳에 다시 들어간다")
@@ -181,8 +241,9 @@ class RideDismountRedisIntegrationTests {
 		assertThat(redis.hasKey("ride:captain:" + rider)).isTrue();
 	}
 
+	/** 소켓이 끊긴 뒤 들어온 요청이다. 상태가 어긋난 것과는 받는 쪽이 할 일이 다르다. */
 	@Test
-	@DisplayName("접속 정보가 없으면 거부한다")
+	@DisplayName("접속 정보가 없으면 접속 없음으로 거부한다")
 	void noPresenceIsRejected() {
 		String captain = user();
 		String rider = user();
@@ -190,7 +251,8 @@ class RideDismountRedisIntegrationTests {
 		redis.opsForHash().put("ride:captain:" + rider, "captain", captain);
 		redis.opsForHash().put("ride:captain:" + rider, "epoch", "1");
 
-		assertThat(repository.dismount(rider, captain).status()).isEqualTo(DismountStatus.STALE);
+		assertThat(repository.dismount(rider, captain).status())
+				.isEqualTo(DismountStatus.NOT_CONNECTED);
 	}
 
 	/** 내린 사람이 다시 들어간 뒤에 읽으면 자기 자신이 섞이고 그 사이 들어온 남이 빠진다. */
@@ -246,6 +308,8 @@ class RideDismountRedisIntegrationTests {
 		redis.opsForHash().put(key, "layer", Integer.toString(LAYER));
 		redis.opsForHash().put(key, "cellX", Integer.toString(CELL_X));
 		redis.opsForHash().put(key, "cellY", Integer.toString(CELL_Y));
+		// ride-place.lua 가 남기는 표시. 자리는 적혀 있어도 지도에는 없다는 뜻이다.
+		redis.opsForHash().put(key, "riding", "1");
 	}
 
 	private String user() {
@@ -253,6 +317,8 @@ class RideDismountRedisIntegrationTests {
 		keysToDelete.add("presence:user:" + email);
 		keysToDelete.add("ride:captain:" + email);
 		keysToDelete.add("ride:riders:" + email);
+		keysToDelete.add("ride:playback:" + email);
+		keysToDelete.add("ride:panel:" + email);
 		keysToDelete.add("listeners:" + MUSIC);
 		keysToDelete.add("layer-listeners:" + LAYER + ":" + MUSIC);
 		keysToDelete.add("active-song:cell:" + LAYER + ":" + CELL);

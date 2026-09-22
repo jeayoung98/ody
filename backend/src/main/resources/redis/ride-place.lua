@@ -7,6 +7,10 @@
 -- presence 자체는 남긴다 — 하트비트·만료·접속 번호가 이 키를 쓰고,
 -- 내릴 때 어느 자리에 남길지도 여기 있어야 안다.
 --
+-- 그래서 presence 에 자리가 적혀 있어도 지도에는 없는 상태가 된다. 다른 스크립트가
+-- 그 자리를 지도에 있는 것으로 오해하면 남의 셀 인원수를 깎는다. 그래서 riding 표시를 남긴다.
+-- 표시가 없으면 아직 지도에 있는 것(탑승 첫 배치)이고, 있으면 이미 빠진 뒤(곡 따라 이동)다.
+--
 -- KEYS[1] presence:user:{따라가는 사람}
 --
 -- ARGV[1] 이메일           [2] 확인할 접속 번호
@@ -36,8 +40,11 @@ if cur ~= oldM then
   return {'STALE'}
 end
 
+-- 이미 따라가는 중이면 지도에 없다. 뺄 것이 없는데 빼면 남의 셀 인원수가 깎인다.
+local alreadyRiding = redis.call('HGET', KEYS[1], 'riding')
+
 -- 서 있던 자리가 있으면 지도에서 뺀다. 남들 화면에서 사라진다.
-if oldM ~= '' then
+if oldM ~= '' and not alreadyRiding then
   local P_lis, P_ll = ARGV[12], ARGV[13]
   local P_cell, P_cells, P_uc = ARGV[14], ARGV[15], ARGV[16]
 
@@ -60,12 +67,14 @@ if oldM ~= '' then
 end
 
 -- 새 자리는 값만 적어 둔다. 어떤 인덱스에도 넣지 않는다.
+-- riding 은 "자리는 적혀 있지만 지도에는 없다"는 표시다. 내릴 때 지운다.
 redis.call('HSET', KEYS[1],
   'musicId', ARGV[6],
   'layer',   ARGV[7],
   'x',       ARGV[8],
   'y',       ARGV[9],
   'cellX',   ARGV[10],
-  'cellY',   ARGV[11])
+  'cellY',   ARGV[11],
+  'riding',  '1')
 
 return {'OK'}

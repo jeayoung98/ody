@@ -11,6 +11,7 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.common.ApiResponse;
+import com.ssafy.backend.realtime.dto.ride.DisbandResponse;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
 import com.ssafy.backend.realtime.dto.ride.RideRequest;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
@@ -56,5 +57,22 @@ public class RideRestController {
 	@DeleteMapping("/ride")
 	public ApiResponse<DismountResponse> dismount(Principal principal) {
 		return ApiResponse.success(rideService.dismount(principal.getName()));
+	}
+
+	/**
+	 * 해체. 따라오던 사람을 한 번에 전부 내린다.
+	 *
+	 * 위의 하차와 경로가 닮았지만 내리는 사람이 다르다 — 하차는 부른 사람 자신이 내리고,
+	 * 이쪽은 부른 사람을 따라오던 사람들이 내린다. 인솔자 자신은 움직이지 않는다.
+	 *
+	 * 따라오는 사람이 없으면 인솔자가 아니므로 거부한다.
+	 */
+	@Operation(summary = "해체",
+			description = "따라오던 사람을 전부 내린다. 내린 사람들은 인솔자가 서 있는 곡에 그대로 "
+					+ "남고 듣던 곡도 끊기지 않는다. 인솔자 자신은 움직이지 않는다. "
+					+ "따라오는 사람이 없으면 거부한다.")
+	@DeleteMapping("/ride/fleet")
+	public ApiResponse<DisbandResponse> disband(Principal principal) {
+		return ApiResponse.success(rideService.disbandByCaptain(principal.getName()));
 	}
 }

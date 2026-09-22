@@ -359,7 +359,11 @@ export interface RideResponse {
    * 견주면 조용히 망가진다. 한참 틀고 있던 인솔자(`snapshotSeq` 가 이미 큼)에 방금 접속한
    * 사람(`seq` 가 1부터)이 타면 **초반 `RIDE_PLAYBACK` 이 전부 버려진다** — 오류도 안 뜬다.
    * 그래서 보관만 하고 거르는 데 쓰지 않는다. 순서 보장은 `stomp-client` 의 봉투 `seq` 비교가
-   * 이미 하고 있다. 백엔드에 확인 요청해 둔 항목이다 (BACKEND-NOTES A-41).
+   * 이미 하고 있다.
+   *
+   * 백엔드에 요청해 둔 항목이다 — **BACKEND-NOTES A-48, "재생 스냅샷 번호와 소켓 메시지 번호를
+   * 견주지 않도록 정리해 달라"**. `RIDE_PLAYBACK` payload 에 `snapshotSeq` 가 같이 오면 그때는
+   * 견줄 수 있다. 그 전까지 이 값은 디버깅용이다.
    */
   snapshotSeq: number;
   /** 중간에 타도 같은 화면을 보게 하려고 인솔자가 열어 둔 곡 상세를 함께 준다 */

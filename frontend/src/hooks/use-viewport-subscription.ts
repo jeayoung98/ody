@@ -4,7 +4,10 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { NO_GENRE_ID, REALTIME } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
+import { seedOf } from "@/lib/avatar-seed";
+import { botAsNearbyUser } from "@/lib/bots/adapt";
 import { expect, onConnectionChange, onType, send, settle } from "@/lib/realtime/stomp-client";
+import { useBotStore } from "@/stores/use-bot-store";
 import { isRiding } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type {
@@ -63,15 +66,12 @@ export function toViewportRequest(seq: number, boxes: readonly LayerBox[], view:
   };
 }
 
-/** 절차적 아바타 시드 — 목 시절과 같은 방식이라 같은 사람은 같은 얼굴이다 */
-export function seedOf(email: string): number[] {
-  let h = 2166136261;
-  for (const ch of email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
-  return Array.from({ length: 6 }, (_, i) => {
-    h = (h * 1664525 + 1013904223) >>> 0;
-    return ((h >>> (i % 8)) % 1000) / 1000;
-  });
-}
+/**
+ * 절차적 아바타 시드. 실제 구현은 [`lib/avatar-seed`](../lib/avatar-seed.ts) 로 옮겼다
+ * (S15P21A405-536) — 봇을 `NearbyUser` 로 바꾸는 쪽도 써야 하는데, 거기서 이 훅을 부르면
+ * 두 모듈이 서로를 가리킨다. 부르던 자리를 안 고치려고 이름만 여기서 다시 내보낸다.
+ */
+export { seedOf };
 
 /**
  * 서버가 주지 않는 `NearbyUser` 필드를 채운다 (§5.6).
@@ -171,6 +171,8 @@ export function useViewportSubscription(enabled: boolean): void {
   const [overlay, setOverlay] = useState<Map<string, NearbyUser | null>>(() => new Map());
   /** 좌표 없이 숫자만 온 인원수 변경 (2차 명세 §7.1). 합칠 때 마지막에 덮는다 */
   const [riderCounts, setRiderCounts] = useState<Map<string, number>>(() => new Map());
+  /** 데모 봇 (S15P21A405-536). 굴리는 쪽은 `use-bots` 하나고 여기는 읽기만 한다 */
+  const bots = useBotStore((s) => s.bots);
   /** 지금 모드. 반대 모드의 프레임을 버리는 기준이다 */
   const mode = useRef<ViewportSnapshot["mode"] | null>(null);
   /** 옮겨 받은 화면(`RIDE_VIEWPORT*`)의 마지막 번호. **인솔자의 번호라 내 것과 섞지 않는다** */
@@ -322,10 +324,26 @@ export function useViewportSubscription(enabled: boolean): void {
   /** 지도에 실제로 그릴 사람들 = 겹 조회(기준) + 소켓 델타(얹은 것) */
   const people = useMemo(() => mergePeople(layerUsers?.groups, overlay, riderCounts), [layerUsers, overlay, riderCounts]);
 
-  // 엔진에 넘긴다. 레이어를 함께 줘야 겹이 바뀌는 순간 이전 겹의 사람이 남지 않는다
+  /**
+   * 엔진에 넘긴다. 레이어를 함께 줘야 겹이 바뀌는 순간 이전 겹의 사람이 남지 않는다.
+   *
+   * **데모 봇을 여기서 섞는다** (S15P21A405-536). 엔진에 봇 전용 목록을 따로 두지 않는 이유는
+   * `friends` 를 읽는 자리가 그리기 경로 전반에 흩어져 있어서다 — 배열 하나를 합쳐 주는 편이
+   * 그 자리들을 하나도 안 건드린다. 지금 겹에 있는 봇만 들어간다.
+   *
+   * **봇은 겹 조회에 섞지 않는다** (S15P21A405-537). 그쪽은 서버가 준 기준 목록이고, 봇은
+   * 브라우저 안에서만 도는 가짜다 — 같은 자리에 담으면 다음 조회가 봇을 "떠난 사람" 으로 보고
+   * 지운다. 그릴 때만 한 배열로 합친다.
+   */
   useEffect(() => {
-    getMapEngine()?.setFriends(layer, [...people.values()]);
-  }, [layer, people]);
+    const withBots = [...people.values()];
+    for (const bot of bots) {
+      if (bot.episode.layer !== layer) continue;
+      const as = botAsNearbyUser(bot);
+      if (as) withBots.push(as);
+    }
+    getMapEngine()?.setFriends(layer, withBots);
+  }, [layer, people, bots]);
   /**
    * **"N명" 뭉치는 더 이상 지도에 그리지 않는다** (S15P21A405-537).
    *

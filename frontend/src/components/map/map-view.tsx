@@ -5,11 +5,11 @@ import type { Occlusion } from "@/components/map/engine/map-engine";
 import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM, RIDING_LOCKED } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useBots } from "@/hooks/use-bots";
+import { useDeclarePlay } from "@/hooks/use-declare-play";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
@@ -118,6 +118,11 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 같은 봇이 화면마다 다른 곡을 듣게 된다.
    */
   useBots(features.social);
+  /**
+   * 재생 선언을 보내는 유일한 자리 (S15P21A405-569). 지도 화면에만 둔다 —
+   * 두 군데서 걸면 곡마다 두 번 선언한다.
+   */
+  useDeclarePlay();
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
@@ -139,7 +144,6 @@ export default function MapView({ occlusion }: MapViewProps) {
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playWithConfirm = usePlaySong();
-  const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const leaderNickname = useFollowStore((s) => s.leaderNickname);
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
@@ -625,10 +629,11 @@ export default function MapView({ occlusion }: MapViewProps) {
       // 폰에서는 재생해도 패널을 열지 않는다 — 지금 듣는 곡은 재생바가 이미 보여 준다
       if (!narrow) openSongFromMap(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
+      // 선언은 `use-declare-play` 한 곳이 한다 (S15P21A405-569) — 여기서 또 부르면 두 번 나간다
+      playWithConfirm(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [narrow, openSongFromMap, playWithConfirm, recordPlay, selectMusic],
+    [narrow, openSongFromMap, playWithConfirm, selectMusic],
   );
 
   /**

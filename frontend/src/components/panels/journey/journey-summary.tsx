@@ -2,7 +2,6 @@
 
 import Button from "@/components/common/button";
 import { PlayIcon } from "@/components/common/icons";
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { formatDuration } from "@/lib/format";
 import { useJourneyStore } from "@/stores/use-journey-store";
@@ -19,7 +18,6 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
   const playQueue = usePlayerStore((s) => s.playQueue);
   const detachContext = usePlayerStore((s) => s.detachContext);
   const clearConstellation = useMapStore((s) => s.clearConstellation);
-  const recordPlay = useRecordPlayMutation();
   const startActivity = useStartActivity();
 
   if (!route) return null;
@@ -29,7 +27,6 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
     const ids = route.stops.map((s) => s.id);
     startActivity("journey", `${route.startMusicId}-${route.endMusicId}`, () => {
       playQueue({ kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId }, ids);
-      recordPlay.mutate({ musicId: ids[0], source: "JOURNEY", layer: useMapStore.getState().layer });
     });
   };
 

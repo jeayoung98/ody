@@ -7,7 +7,6 @@ import InfoHint from "@/components/common/info-hint";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import { NEARBY_COUNT } from "@/constants";
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useMapStore } from "@/stores/use-map-store";
@@ -58,7 +57,6 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const enterNearby = useMapStore((s) => s.enterNearby);
   const selectMusic = useMapStore((s) => s.selectMusic);
-  const { mutate: recordPlay } = useRecordPlayMutation();
   const openNeighborSong = usePanelStore((s) => s.openNeighborSong);
   const playQueue = usePlayerStore((s) => s.playQueue);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
@@ -104,7 +102,6 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     startActivity("nearby", String(centerMusicId), () => {
       if (!inNearby || nearbyCenterMusicId !== centerMusicId) enterNearby(centerMusicId);
       playQueue({ kind: "nearby", centerMusicId }, ids);
-      recordPlay({ musicId: ids[0], source: "MAP", layer: useMapStore.getState().layer });
     });
   };
 

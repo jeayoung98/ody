@@ -85,3 +85,18 @@ export function nextEpisode(seed: number, prev: BotEpisode | null, now: number, 
     endsAt: now + Math.round(between(r(5), online ? BOTS.listenMs : BOTS.offlineMs)),
   };
 }
+
+/**
+ * 이 곡을 들고 있던 봇에게서 **곡만 떼어낸다** (S15P21A405-546).
+ *
+ * 플레이어가 "재생 불가" 를 보고했을 때 부른다. 에피소드 자체를 끝내지 않는 것이 요점이다 —
+ * 끝내면 `nextEpisode` 가 접속 여부와 겹까지 다시 굴리는데, 거기서 오프라인이 나오면 그 봇을
+ * 따라가던 사람에게 **"인솔자가 사라졌습니다"** 가 뜬다. 곡 하나가 안 틀렸을 뿐인데
+ * 따라가기가 끊기는 셈이다.
+ *
+ * 곡이 빈 봇에게는 부르는 쪽이 곧바로 새 곡을 붙인다.
+ */
+export function dropSong<T extends { episode: BotEpisode }>(bots: readonly T[], musicId: number): T[] {
+  if (!bots.some((b) => b.episode.musicId === musicId)) return [...bots];
+  return bots.map((b) => (b.episode.musicId === musicId ? { ...b, episode: { ...b.episode, musicId: null } } : b));
+}

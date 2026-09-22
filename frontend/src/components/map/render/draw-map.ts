@@ -302,6 +302,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
  */
 let coverIdx: number[] = [];
 let coverLayer = -1;
+/** 지난 프레임의 카메라. 미는 중인지 확대하는 중인지를 여기서 가른다 (S15P21A405-529) */
+let coverCam = { cx: Number.NaN, cy: Number.NaN, s: Number.NaN };
 
 /**
  * 대표성이 가장 높은 몇 곡은 앨범 커버로 띄운다.
@@ -318,7 +320,10 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   e.coverHits = [];
   if (e.anim) return;
   const f = e.freeRect();
+  /** 새로 올릴 때 가장자리에서 띄워 둘 거리(px) */
   const M = 42;
+  /** 이미 그린 커버를 놓아 주는 선 — 그림이 통째로 화면 밖으로 나가면 (S15P21A405-529) */
+  const KEEP = COVER_COUNT.sizePx;
   const grow = clamp(0.86 + Math.log(Math.max(1, e.cam.s / 100)) * 0.13, 0.85, 1.35);
   if (e.coverAlpha < 0.01) return;
 
@@ -326,16 +331,39 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (coverLayer !== e.layer) {
     coverIdx = [];
     coverLayer = e.layer;
+    // 겹이 바뀐 것은 미는 것이 아니다 — 곧바로 채우게 카메라 기억도 비운다 (S15P21A405-529)
+    coverCam = { cx: Number.NaN, cy: Number.NaN, s: Number.NaN };
   }
 
   const n = e.cam.s < COVER_COUNT.nearScale ? COVER_COUNT.far : COVER_COUNT.near;
   const gap2 = COVER_COUNT.minGapPx * COVER_COUNT.minGapPx;
-  /** 아직 이 겹에 살아 있고 화면 안(여백 M)인가 */
-  const usable = (i: number) => {
+
+  /**
+   * **미는 동안에는 새 커버를 올리지 않는다** (S15P21A405-529).
+   *
+   * 예전에는 밀면서 가장자리 커버가 내려가고 그 자리를 다른 곡이 채우기를 반복했다 — 화면이
+   * 계속 깜빡였다. 미는 것은 "지금 있는 것을 계속 보겠다" 는 뜻이지 새 그림을 달라는 게 아니다.
+   *
+   * **배율이 바뀌면 예외다.** 줌은 보이는 범위 자체가 달라지는 일이라 새로 뽑는 것이 맞고,
+   * 사용자도 그때는 바뀌기를 기대한다. 줌은 커서 기준이라 cx·cy 도 같이 움직이므로 배율을 먼저 본다.
+   */
+  const zooming = e.cam.s !== coverCam.s;
+  const panning = !zooming && (e.cam.cx !== coverCam.cx || e.cam.cy !== coverCam.cy);
+  coverCam = { cx: e.cam.cx, cy: e.cam.cy, s: e.cam.s };
+  /**
+   * 아직 이 겹에 살아 있고 화면 안인가.
+   *
+   * **지킬 때와 올릴 때 기준이 다르다** (히스테리시스, S15P21A405-529). 예전에는 둘 다 여백
+   * 42px 이라, 화면 안에 멀쩡히 보이는 커버가 가장자리에 닿는 순간 내려갔다가 조금만 되밀면
+   * 다시 올라왔다. 올릴 때는 안쪽에 편히 들어와야 하고(`M`), **이미 그린 것은 화면 밖으로
+   * 완전히 나갈 때까지 남긴다**(`-KEEP`).
+   */
+  const usable = (i: number, forNew = false) => {
     if (!e.subset[i]) return false;
+    const m = forNew ? M : -KEEP;
     const px = e.pos[i * 2];
     const py = e.pos[i * 2 + 1];
-    return px > f.x0 + M && px < f.x1 - M && py > f.y0 + M && py < f.y1 - M;
+    return px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m;
   };
   /** 이미 고른 것들과 충분히 떨어져 있는가 (줌아웃하면 별이 모여 커버가 겹친다) */
   const spaced = (i: number, picked: number[]) =>
@@ -358,7 +386,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
    * 그래서 **화면을 커버 수만큼 칸으로 나누고 칸마다 하나씩** 집는다. 이미 커버가 있는 칸은
    * 건너뛰므로 새 커버는 늘 비어 있는 쪽으로 간다.
    */
-  if (picked.length < n) {
+  if (picked.length < n && !panning) {
     const candidates = new Set<number>();
     for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
     /**
@@ -378,7 +406,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
      */
     const fill = spreadOrder(
       [...candidates]
-        .filter((i) => !picked.includes(i) && usable(i))
+        .filter((i) => !picked.includes(i) && usable(i, true))
         .sort(byCoverPriority((i) => e.songs[i].albumMbid != null, (i) => e.songs[i].weight)),
       at,
       f,

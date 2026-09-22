@@ -1,11 +1,12 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { SEARCH_DEBOUNCE_MS } from "@/constants";
 import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
 import { useSearchAnalytics } from "@/hooks/use-search-analytics";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import type { MusicSearchResult, SearchCondition } from "@/types";
 
 /**
@@ -55,7 +56,18 @@ export function useMusicSearch({ visible, source }: { visible: boolean; source: 
 
   const condition = conditionOf(chip, debounced);
   const query = useMusicSearchQuery(condition);
-  const results = flattenSearch(query.data?.pages);
+  /**
+   * **못 트는 곡은 결과에서 뺀다** (S15P21A405-544). 지도에서 별을 지우는 것과 같은 이유다 —
+   * 눌러도 아무 일이 없는 줄을 다시 찾아내지 않게 한다.
+   *
+   * 여기서 거르는 것은 **곡을 열어 보고 알게 된 것**뿐이다. 서버가 아는 재생 불가 곡은 검색
+   * 응답에 아예 오지 않는다 (백엔드가 `video_id='none'` 을 제외한다).
+   *
+   * 거른 뒤의 수를 분석에 넘긴다 — 사용자가 본 것이 곧 결과 수다.
+   */
+  const unplayableIds = useUnplayableStore((s) => s.ids);
+  const rawResults = flattenSearch(query.data?.pages);
+  const results = useMemo(() => rawResults.filter((r) => !unplayableIds.has(r.id)), [rawResults, unplayableIds]);
   const analytics = useSearchAnalytics({
     keyword: chip ? `${chip.kind}:${chip.value} ${debounced}` : debounced,
     visible,

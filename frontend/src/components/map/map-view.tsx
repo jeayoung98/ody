@@ -16,6 +16,7 @@ import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { useFollowStore } from "@/stores/use-follow-store";
+import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -72,11 +73,35 @@ export default function MapView({ occlusion }: MapViewProps) {
 
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
-  const { data: songs, isError: songsFailed } = useMapSongsQuery(boxes);
+  const { data: rawSongs, isError: songsFailed } = useMapSongsQuery(boxes);
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);
-  const { data: prefetchedSongs } = useMapSongsQuery(prefetchBoxes ?? boxes);
+  const { data: rawPrefetchedSongs } = useMapSongsQuery(prefetchBoxes ?? boxes);
+
+  /**
+   * **못 트는 곡은 지도에 올리지 않는다** (S15P21A405-544).
+   *
+   * 예전에는 흐리게 그리고 호버 카드에 "재생 불가" 를 적었다 (SONG-04). 그런데 누를 수는 있어서,
+   * 눌러도 아무 일이 없는 별을 계속 다시 만나게 됐다. 안 보이면 다시 만날 일이 없다.
+   *
+   * **여기서는 서버가 준 `playable` 만 본다.** 곡을 열어 보고 알게 된 것은 아래 따로 뺀다 —
+   * 이 목록을 바꾸면 `setLayerSongs` 를 다시 타는데, 그건 "새 겹의 상주 집합이 도착했다" 는
+   * 뜻이라 **겹 전환 연출이 통째로 다시 돈다.** 곡 하나 빠졌다고 지도가 모프하면 안 된다.
+   */
+  const songs = useMemo(() => rawSongs?.filter((song) => song.playable !== false), [rawSongs]);
+  const prefetchedSongs = useMemo(() => rawPrefetchedSongs?.filter((song) => song.playable !== false), [rawPrefetchedSongs]);
+
+  /**
+   * 열어 보고 못 튼다고 판명된 곡을 **그 자리에서** 뺀다 (S15P21A405-544).
+   *
+   * 마스크 한 칸만 끄는 길이라 연출이 없다. `songs` 를 의존성에 둔 이유는 **겹을 옮기면
+   * 상주 집합이 새로 깔리기 때문**이다 — 그때 이미 빼 둔 곡이 되살아나므로 다시 빼야 한다.
+   */
+  const unplayableIds = useUnplayableStore((s) => s.ids);
+  useEffect(() => {
+    for (const musicId of unplayableIds) engine.hideSong(musicId);
+  }, [engine, unplayableIds, songs]);
   // 받은 집합을 엔진에 넘긴다 — 엔진은 이게 있어야 파고들기를 출발한다 (없으면 잠깐 기다린다)
   useEffect(() => {
     if (prefetchBoxes && prefetchedSongs) engine.setPrefetched(prefetchBoxes, prefetchedSongs);

@@ -472,6 +472,11 @@ export interface BackendUserDetail {
    * 옛 배포에는 없을 수 있어 optional 로 둔다.
    */
   playedMusicCnt?: number;
+  /**
+   * 지금 접속해 있는가 (3차 계약 §4, S15P21A405-545). **소켓 생존 기준**이다.
+   * optional 인 이유는 이 필드가 없던 배포를 만날 수 있어서다 — 그때는 `false` 로 떨어진다.
+   */
+  isOnline?: boolean;
 }
 
 export function toUser(u: BackendUserDetail): User {
@@ -489,13 +494,6 @@ export function toUser(u: BackendUserDetail): User {
   };
 }
 
-/**
- * 마지막 활동이 이 안쪽이면 접속 중으로 본다.
- *
- * ponytail: 백엔드에 온라인 플래그가 없어서 `lastActiveAt` 으로 **가늠한** 값이다 (BACKEND-NOTES A-35).
- * 실시간 소켓 접속자 목록이 생기면 그걸로 바꾼다 — 이 창은 그때까지의 근사치다.
- */
-const ONLINE_WINDOW_MS = 5 * 60 * 1000;
 const DAY_MS = 24 * 60 * 60 * 1000;
 
 /**
@@ -507,10 +505,19 @@ const DAY_MS = 24 * 60 * 60 * 1000;
  */
 export function toUserProfile(u: BackendUserDetail): UserProfile {
   const joined = Date.parse(u.createdAt);
-  const active = u.lastActiveAt ? Date.parse(u.lastActiveAt) : NaN;
   return {
     ...toUser(u),
-    isOnline: Number.isFinite(active) && Date.now() - active < ONLINE_WINDOW_MS,
+    /**
+     * **서버가 준 값을 그대로 쓴다** (3차 계약 §4, S15P21A405-545).
+     *
+     * 예전에는 `lastActiveAt` 이 5분 안이면 접속 중으로 봤다 — 백엔드에 플래그가 없어서
+     * 가늠한 값이었는데, `lastActiveAt` 은 **로그인 시각**이라 애초에 다른 것을 재고 있었다.
+     * 지금은 소켓 생존(45초 수명·15초 갱신)이 기준이다.
+     *
+     * 아직 안 내려주는 배포를 만나면 `false` 다. 접속 중인 사람을 오프라인으로 보이게 하는
+     * 쪽이, 아무도 없는데 불이 들어오는 쪽보다 낫다 — 따라가기 버튼이 그 값으로 열린다.
+     */
+    isOnline: u.isOnline ?? false,
     followerCount: u.followerCnt,
     followingCount: u.followingCnt,
     // "N일째 탐험중" — 가입 당일이 1일째다

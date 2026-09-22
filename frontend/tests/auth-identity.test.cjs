@@ -61,11 +61,28 @@ test("가입 N일째는 당일이 1일째다", () => {
   assert.equal(toUserProfile(detail({ createdAt: "어제" })).daysSinceJoined, 1);
 });
 
-test("접속 중 여부는 마지막 활동으로만 가늠한다", () => {
-  assert.equal(toUserProfile(detail({ lastActiveAt: new Date().toISOString() })).isOnline, true);
-  assert.equal(toUserProfile(detail({ lastActiveAt: new Date(Date.now() - 60 * 60 * 1000).toISOString() })).isOnline, false);
-  // 값이 없으면 "접속 중" 이 아니다 — 모르는 것을 켜진 것으로 보이면 따라가기가 열린다
-  assert.equal(toUserProfile(detail({ lastActiveAt: null })).isOnline, false);
+/**
+ * **서버가 준 값을 그대로 쓴다** (3차 계약 §4, S15P21A405-545).
+ *
+ * 예전에는 `lastActiveAt` 이 5분 안이면 접속 중으로 봤다. 백엔드에 플래그가 없어서 가늠한
+ * 값이었는데, `lastActiveAt` 은 **로그인 시각**이라 애초에 다른 것을 재고 있었다 — 방금
+ * 로그인하고 창을 닫은 사람이 계속 접속 중으로 보였다.
+ */
+test("접속 중 여부는 서버가 준 isOnline 을 그대로 쓴다", () => {
+  assert.equal(toUserProfile(detail({ isOnline: true })).isOnline, true);
+  assert.equal(toUserProfile(detail({ isOnline: false })).isOnline, false);
+});
+
+test("로그인 시각으로 접속 여부를 가늠하지 않는다", () => {
+  // 방금 로그인했어도 소켓이 없으면 접속 중이 아니다 — 예전 규칙이면 true 였다
+  assert.equal(toUserProfile(detail({ lastActiveAt: new Date().toISOString(), isOnline: false })).isOnline, false);
+  // 오래 전에 로그인했어도 소켓이 살아 있으면 접속 중이다
+  assert.equal(toUserProfile(detail({ lastActiveAt: new Date(Date.now() - 60 * 60 * 1000).toISOString(), isOnline: true })).isOnline, true);
+});
+
+test("필드가 없는 배포를 만나면 접속 중이 아니다", () => {
+  // 모르는 것을 켜진 것으로 보이면 따라가기 버튼이 열리고, 눌러도 아무 일이 없다
+  assert.equal(toUserProfile(detail({ lastActiveAt: new Date().toISOString() })).isOnline, false);
 });
 
 test("백엔드에 없는 것은 목으로 채우지 않는다 (A-35)", () => {

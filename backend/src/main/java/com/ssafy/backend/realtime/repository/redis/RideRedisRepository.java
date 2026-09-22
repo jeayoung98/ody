@@ -8,7 +8,9 @@ import java.util.Map;
 import java.util.Set;
 
 import org.springframework.context.annotation.Profile;
+import org.springframework.data.redis.core.Cursor;
 import org.springframework.data.redis.core.RedisCallback;
+import org.springframework.data.redis.core.ScanOptions;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.stereotype.Repository;
@@ -328,6 +330,19 @@ public class RideRedisRepository {
 			return null;
 		}
 		return new Ride(v.get(0).toString(), Long.parseLong(v.get(1).toString()));
+	}
+
+	/**
+	 * ride:captain 키가 남아 있는 사람 전원. 유령 따라가기 정리(sweep) 전용이다.
+	 * ponytail: 매번 SCAN 으로 전체를 훑는다. 따라가는 사람이 수천 명이 되면 별도 인덱스 Set 을 둔다.
+	 */
+	public Set<String> ridingEmails() {
+		Set<String> emails = new LinkedHashSet<>();
+		try (Cursor<String> cursor = redis.scan(
+				ScanOptions.scanOptions().match(CAPTAIN_PREFIX + "*").count(100).build())) {
+			cursor.forEachRemaining(key -> emails.add(key.substring(CAPTAIN_PREFIX.length())));
+		}
+		return emails;
 	}
 
 	/** 나를 따라오는 인원 수. */

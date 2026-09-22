@@ -21,7 +21,7 @@ function memStorage() {
 globalThis.window = { localStorage: memStorage(), sessionStorage: memStorage() };
 
 const { api } = require("../src/lib/api.ts");
-const { readStorage, writeStorage, removeStorage, subscribeStorage } = require("../src/lib/storage.ts");
+const { readStorage, writeStorage, removeStorage, resyncStorage, subscribeStorage } = require("../src/lib/storage.ts");
 const { STORAGE_KEYS, API_ENDPOINTS } = require("../src/constants/index.ts");
 
 const TOKEN = STORAGE_KEYS.accessToken;
@@ -107,4 +107,23 @@ test("로그아웃하지 않았으면 새 토큰을 그대로 받는다", async 
   await assert.rejects(() => api(API_ENDPOINTS.auth.me));
 
   assert.equal(readStorage(TOKEN), "revived");
+});
+
+/**
+ * 어긋난 구독 값을 깨우는 길 (S15P21A405-588).
+ *
+ * `useSyncExternalStore` 는 알림이 와야 스냅샷을 다시 읽는다. 하이드레이션 때 "토큰 없음" 으로
+ * 커밋되고 나면 그 뒤로 저장소를 건드리는 사람이 없어 영영 어긋난 채 남았다 — 로그인해도
+ * 스플래시만 돌고 새로고침해야 지도가 떴다.
+ */
+test("resyncStorage 는 값을 안 바꾸고 구독자만 깨운다", () => {
+  writeStorage(TOKEN, "alive");
+  let heard = 0;
+  const unsubscribe = subscribeStorage(() => (heard += 1));
+
+  resyncStorage();
+  assert.equal(heard, 1, "구독자가 다시 읽을 기회를 받아야 한다");
+  assert.equal(readStorage(TOKEN), "alive", "저장소는 그대로여야 한다");
+
+  unsubscribe();
 });

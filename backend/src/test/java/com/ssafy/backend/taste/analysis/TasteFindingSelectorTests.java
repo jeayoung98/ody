@@ -106,6 +106,19 @@ class TasteFindingSelectorTests {
                 .singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
     }
 
+    @Test
+    void strongerAxisComesFirstEvenWhenItsTypeUsedToRankLower() {
+        // 30곡 기준 치우침 임계 20.6 / 넓음 임계 65.3.
+        // pc1 은 겨우 걸친 CONSISTENT_BIAS(치우침 21.5), pc2 는 한참 넘긴 DIVERSE(IQR 90).
+        // 예전에는 타입이 정렬 첫 키여서 pc1 이 앞섰다.
+        List<TasteFinding> findings = selector.select(List.of(
+                axis(1, 71.5, 20, "VERIFIED", "STRONG"),
+                axis(2, 50, 90, "VERIFIED", "STRONG")), N);
+
+        assertThat(findings).extracting(TasteFinding::pc).containsExactly(2, 1);
+        assertThat(findings.get(0).type()).isEqualTo("DIVERSE");
+    }
+
     private static TasteAxisStatistics axis(
             int pc, double median, double iqr, String status, String strength) {
         return axis(pc, median, iqr, status, strength, List.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 1));

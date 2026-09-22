@@ -42,7 +42,10 @@ public class TasteFindingSelector {
         double diverseCut = interpolate(DIVERSE_CUT, sampleSize);
         double consistentCut = interpolate(CONSISTENT_CUT, sampleSize);
 
-        List<TasteFinding> candidates = new ArrayList<>();
+        record Scored(TasteFinding finding, double strength) {
+        }
+
+        List<Scored> candidates = new ArrayList<>();
         for (TasteAxisStatistics axis : statistics) {
             if (axis.label() == null || !axis.label().hasUsableWords()) {
                 continue;
@@ -51,24 +54,37 @@ public class TasteFindingSelector {
             double iqr = axis.percentile().iqr();
             double bias = Math.abs(median - 50);
             if (iqr >= diverseCut) {
-                candidates.add(finding(axis, "DIVERSE", "BOTH", iqr));
+                candidates.add(new Scored(
+                        finding(axis, "DIVERSE", "BOTH", iqr), strength(iqr, diverseCut, 100)));
             } else if (bias >= biasCut) {
                 String type = iqr <= consistentCut ? "CONSISTENT_BIAS" : "BIAS";
-                candidates.add(finding(axis, type, median < 50 ? "LOW" : "HIGH", bias));
+                candidates.add(new Scored(
+                        finding(axis, type, median < 50 ? "LOW" : "HIGH", bias),
+                        strength(bias, biasCut, 50)));
             }
         }
 
         candidates.sort(Comparator
-                .comparingInt((TasteFinding finding) -> priority(finding.type()))
-                .thenComparing(TasteFinding::effectSize, Comparator.reverseOrder())
-                .thenComparing(TasteFinding::pc));
+                .comparingDouble(Scored::strength).reversed()
+                .thenComparing(scored -> scored.finding().pc()));
         if (candidates.isEmpty()) {
             return List.of(new TasteFinding(
                     "balanced", "BALANCED", null, "CENTER", 0,
                     "어느 축에서도 뚜렷한 편향이나 넓은 분포가 발견되지 않음",
                     "뚜렷한 한 방향보다 여러 특성을 고르게 듣는 경향"));
         }
-        return List.copyOf(candidates.subList(0, Math.min(3, candidates.size())));
+        return candidates.stream().limit(3).map(Scored::finding).toList();
+    }
+
+    /**
+     * 타입이 달라도 견줄 수 있는 세기. 잡음 컷을 넘은 정도를 그 축에서 갈 수 있는 끝까지의 비율로 잰다.
+     * 컷에 겨우 걸치면 0, 이론상 최대면 1 이다. 치우침의 끝은 50(모든 곡이 한쪽 끝), 퍼짐의 끝은 100 이다.
+     *
+     * <p>이전에는 타입이 정렬 첫 키여서 겨우 걸친 CONSISTENT_BIAS 가 아주 넓은 DIVERSE 를 이겼다.
+     * 사용자 눈에는 더 뚜렷한 특징이 뒤로 밀렸다.
+     */
+    private static double strength(double measured, double cut, double ceiling) {
+        return cut >= ceiling ? 0 : (measured - cut) / (ceiling - cut);
     }
 
     /**
@@ -106,12 +122,4 @@ public class TasteFindingSelector {
         return new TasteFinding(id, type, axis.pc(), direction, effectSize, evidence, phrase);
     }
 
-    private static int priority(String type) {
-        return switch (type) {
-            case "CONSISTENT_BIAS" -> 0;
-            case "BIAS" -> 1;
-            case "DIVERSE" -> 2;
-            default -> 3;
-        };
-    }
 }

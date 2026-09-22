@@ -196,10 +196,23 @@ BUILD SUCCESSFUL in 2m 10s
 **등급은 버리지 않았다.** 응답 `axes[].label.strength` 로 그대로 내려가고, 약 등급을 "경향" 어투로 눌러
 표시하는 것은 화면 몫이다.
 
-⚠️ **순위 1순위는 여전히 finding 종류다.** `CONSISTENT_BIAS > BIAS > DIVERSE` 로 먼저 정렬하고 그 안에서
-effect size 로 줄 세운다. 그래서 약한 CONSISTENT_BIAS 가 강한 DIVERSE 를 이긴다. 최초 구현의 선택을
-그대로 뒀는데, "분포가 정하게 한다"는 이번 결정과는 어긋나는 면이 있다. **종류 우선을 유지할지 effect size
-우선으로 바꿀지는 정하지 않았다.**
+### 순위는 종류가 아니라 세기가 정한다 (2026-09-23)
+
+이전에는 `CONSISTENT_BIAS > BIAS > DIVERSE` 로 먼저 정렬해서 **겨우 컷에 걸친 CONSISTENT_BIAS 가
+한참 넘긴 DIVERSE 를 이겼다.** "분포가 정하게 한다"는 결정과 어긋나고, 사용자 눈에는 더 뚜렷한 특징이
+뒤로 밀렸다. 종류 우선을 버리고 **세기 하나로** 줄 세운다.
+
+세기는 타입이 달라도 견줄 수 있어야 하므로, 잰 값을 그대로 쓰지 않고 **잡음 컷을 넘은 정도를
+그 축에서 갈 수 있는 끝까지의 비율**로 바꾼다. 컷에 겨우 걸치면 0, 이론상 최대면 1 이다.
+
+| 종류 | 재는 값 | 컷 | 끝 |
+| --- | --- | --- | --- |
+| BIAS · CONSISTENT_BIAS | \|중앙 백분위 - 50\| | `BIAS_CUT` | 50 (모든 곡이 한쪽 끝) |
+| DIVERSE | IQR | `DIVERSE_CUT` | 100 |
+
+30곡 기준 예: 치우침 21.5 인 CONSISTENT_BIAS 는 0.03, IQR 90 인 DIVERSE 는 0.71 — 뒤집힌다.
+동점이면 PC 번호 순이라 결과는 여전히 결정적이다.
+회귀 테스트는 `TasteFindingSelectorTests.strongerAxisComesFirstEvenWhenItsTypeUsedToRankLower`.
 
 ## 4. 아직 검증하지 않은 것 (완료로 표시하지 않는다)
 

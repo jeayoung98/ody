@@ -5,7 +5,7 @@ import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
-import { useNearbyWithBots } from "@/hooks/use-nearby-with-bots";
+import { useNearbyList } from "@/hooks/use-nearby-list";
 import { isBot } from "@/lib/bots/roster";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
@@ -40,10 +40,11 @@ export default function FriendsPanel() {
   // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
   useNearbyPeopleLive(live, refetch);
   /**
-   * 서버 목록에 **데모 봇을 섞는다** (S15P21A405-536). 소켓이 안 붙어도 봇은 보인다 —
-   * 로컬에서 실시간이 죽어 있을 때 이 패널이 통째로 비는 것이 봇을 만든 이유 중 하나다.
+   * 서버 목록에 **겹 사용자 중 가까운 사람과 데모 봇을 섞는다** (S15P21A405-536 · 541).
+   * 소켓이 안 붙어도 목록이 찬다 — 지도에는 사람이 보이는데 이 패널만 비어 있는 것이
+   * 두 화면이 같은 사실을 다르게 말하는 상황이라 제일 나쁘다.
    */
-  const people = useNearbyWithBots(data?.people);
+  const people = useNearbyList(data?.people, !riding);
 
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */

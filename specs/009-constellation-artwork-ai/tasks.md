@@ -13,8 +13,8 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 > **설계는 S15P21A405-548, 구현은 S15P21A405-563** (브랜치 `backend/feat/S15P21A405-563-artwork-ai`).
 >
 > 2026-09-22 기준 코드는 다 들어갔고 `./gradlew test`(924건)·`./gradlew build` 가 통과한다.
-> 남은 것은 **사람이 해야 하는 넷**이다 — T000a(기획 승인), T000c(Credit 확인), T002·T003(운영 DB 실행).
-> **T002 전까지 작품 API 는 테이블이 없어 전부 실패한다.** 단위 테스트는 DB 를 타지 않아 영향받지 않는다.
+> 운영 DB 의 DDL 도 적용했다(2026-09-22, 사람이 DBeaver 로 실행).
+> 남은 것은 **T000a(기획 승인)** 과 **T000c(Credit 확인)** 이다. 둘 다 코드 작업이 아니다.
 >
 > 구현하며 합친 것: T007 은 T008 의 `ArtworkMapper` 하나로, T023·T024 는 `ArtworkService` 안으로 넣었다.
 > 네 테이블이 늘 함께 움직이는 하나의 집합체라 매퍼·서비스를 쪼갤 이유가 없었다.
@@ -45,8 +45,8 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 ## Phase 1: Setup (저장 계층)
 
 - [X] T001 DDL 작성 — `backend/src/main/resources/db/artwork_001_tables.sql`. plan.md "데이터 모델" 의 테이블 4개·시퀀스 3개·인덱스 4개. `CREATE INDEX CONCURRENTLY` 는 트랜잭션 밖에서 한 줄씩 실행하도록 주석으로 안내(`playlist_like_001` 과 같은 방식)
-- [ ] T002 DDL 실행 — **사람이 DBeaver 로 실행한다**(운영 쓰기). 실행 뒤 `SELECT count(*) FROM artwork_round, artwork, artwork_point, artwork_like` 가 모두 0으로 성립하는지 확인
-- [ ] T003 1회차 행 삽입 — `artwork_round(theme='고양이', theme_prompt=…, starts_at, ends_at)`. `theme_prompt` 는 "이 별자리 그림이 고양이를 얼마나 닮았는지 0~100 으로 채점하고 한국어 한 줄 평을 달아라" 취지. **사람이 실행**
+- [X] T002 DDL 실행 — **사람이 DBeaver 로 실행한다**(운영 쓰기). 실행 뒤 `SELECT count(*) FROM artwork_round, artwork, artwork_point, artwork_like` 가 모두 0으로 성립하는지 확인
+- [X] T003 1회차 행 삽입 — `artwork_round(theme='고양이', theme_prompt=…, starts_at, ends_at)`. `theme_prompt` 는 "이 별자리 그림이 고양이를 얼마나 닮았는지 0~100 으로 채점하고 한국어 한 줄 평을 달아라" 취지. **사람이 실행**
 
 ---
 

@@ -105,7 +105,7 @@ class ViewportCellCalculatorTests {
 				grid, Math.min(36, grid * grid), 20, 64, 250, 5000);
 		return new MusicPositionCalculator(new RealtimeProperties(
 				new RealtimeProperties.Presence(15_000, 45_000, 10_000, 60_000),
-				new RealtimeProperties.Nearby(10),
+				new RealtimeProperties.Nearby(10, 12),
 				viewport,
 				List.of(
 						new RealtimeProperties.AxisRange(1, 0, 16),

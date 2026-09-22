@@ -9,6 +9,7 @@ realtime:
     recount-interval-ms: 60000
   nearby:
     neighbor-k: 10
+    panel-cap: 12                  # 주변사람 패널에 올릴 최대 인원 (가까운 순)
   viewport:
     grid-size: 16                  # 한 줄의 기본 셀 수
     cluster-threshold-cells: 36    # 이 수를 넘으면 셀별 인원수로 표시

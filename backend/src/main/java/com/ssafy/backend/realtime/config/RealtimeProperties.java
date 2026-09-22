@@ -21,7 +21,19 @@ public record RealtimeProperties(
 	public record Presence(long heartbeatIntervalMs, long ttlMs, long sweepIntervalMs, long recountIntervalMs) {
 	}
 
-	public record Nearby(int neighborK) {
+	/**
+	 * 주변사람 설정.
+	 *
+	 * panelCap 은 패널에 올릴 최대 인원이다. 기준이 레이어 전체가 되면서 사람이 많은 층에서는
+	 * 수십 명이 될 수 있는데, 그러면 레이더도 목록도 못 읽는다. 가까운 순으로 이 수까지만 자른다.
+	 */
+	public record Nearby(int neighborK, int panelCap) {
+
+		public Nearby {
+			if (panelCap < 1) {
+				throw new IllegalArgumentException("panel-cap은 1 이상이어야 한다");
+			}
+		}
 	}
 
 	/** 화면 표시 방식과 갱신 주기 설정. */

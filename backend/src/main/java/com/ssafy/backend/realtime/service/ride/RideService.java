@@ -196,7 +196,7 @@ public class RideService {
 		notifyQuietly("인원수 화면 알림", () -> viewportDeltaService.sendRiderCount(
 				captainEmail, captain.layer(), captain.musicId(), cell, riderCount));
 		notifyQuietly("인원수 주변사람 알림", () -> nearbyChangeService.sendRiderCount(
-				captainEmail, captain.musicId(), riderCount));
+				captainEmail, captain.layer(), captain.musicId(), riderCount));
 	}
 
 	/**
@@ -447,7 +447,7 @@ public class RideService {
 		// 5. 주변사람 목록에도 알린다. 해체는 위치 변경 알림을 거치지 않아
 		//    이걸 안 보내면 패널을 열어 둔 사람의 목록에 이 사람들이 끝내 안 나타난다.
 		notifyQuietly("해체 주변사람 알림", () ->
-				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.musicId()));
+				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.layer(), result.musicId()));
 
 		// 6. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
 		//    한 명이 스스로 내릴 때와 같은 함수다. 두 벌로 두면 한쪽만 고쳐진다.

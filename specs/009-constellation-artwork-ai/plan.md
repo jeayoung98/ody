@@ -45,10 +45,25 @@
 
 | 설정 키 | 값 | 상태 |
 | --- | --- | --- |
-| `ody.artwork.gms.base-url` | `https://gms.ssafy.io/gmsapi/api.openai.com` | 확인 (GMS 문서) |
-| `ody.artwork.gms.model` | `gpt-4o-mini` | 확인 (GMS 모델 목록). **정확한 id 문자열은 첫 호출로 검증** |
-| `ody.artwork.gms.api-key` | 인증 키. `.env` 로만 주입, 저장소·로그 금지 (FR-016) | 발급 필요 |
-| `ody.artwork.gms.timeout-read-ms` | 읽기 타임아웃. 잠정 30000 | 실측 후 확정 |
+| `ody.artwork.gms.base-url` | `https://gms.ssafy.io/gmsapi/api.openai.com` | **확인 완료** (2026-09-22 실호출) |
+| `ody.artwork.gms.model` | `gpt-4o-mini` | **확인 완료**. 실제 응답 `model` 은 `gpt-4o-mini-2024-07-18` |
+| `ody.artwork.gms.api-key` | 인증 키. `Authorization: Bearer <key>`. env 로만 주입, 저장소·로그 금지 (FR-016) | **확인 완료**. 값은 배포 호스트 `/etc/ody/backend.env` 에 있다 |
+| `ody.artwork.gms.timeout-read-ms` | 읽기 타임아웃 10000 | 실측 0.85s 기준. 이미지가 커지면 재측정 |
+
+#### 실호출 확인 (2026-09-22, 배포 호스트)
+
+1×1 PNG 를 `image_url` data URI 로 실어 보낸 결과:
+
+```text
+HTTP 200  0.848465s
+model: "gpt-4o-mini-2024-07-18"
+usage.prompt_tokens: 8521   ← 1×1 이미지 한 장에
+```
+
+- **프록시가 `image_url` content 파트를 그대로 통과시킨다.** 설계의 "서버가 렌더한 PNG 를 보낸다"가 성립한다.
+- 인증은 `Authorization: Bearer` 로 맞다.
+- **이미지 토큰이 비싸다**: 1×1 짜리에 8,521 prompt token 이 붙었다. `gpt-4o-mini` 는 이미지 토큰에 큰 배수를 적용한다. GMS 가 Credit 을 **호출당 정액(2)** 으로 매기면 무시해도 되고, 토큰 비례면 이 값이 그대로 비용이다. **T000c 로 확인한다.**
+- 대응 수단: 요청에 `"detail": "low"` 를 붙이면 이미지 토큰이 줄어든다. 별자리는 흑백 점·선이라 해상도를 낮춰도 형태 판단에 손해가 적다. 설정값(`ody.artwork.gms.image-detail`)으로 빼 두고 실측으로 정한다.
 
 경로 `/v1/chat/completions` 는 어댑터가 갖는다 — base URL 에 넣지 않는다(`VideoIdApiClient` 가 base URL 과 `/videoid` 를 나눠 갖는 것과 같다).
 

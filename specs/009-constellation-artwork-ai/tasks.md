@@ -29,17 +29,8 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 **Purpose**: 지어낸 가정 위에 코드를 쌓지 않는다 (헌법 IX)
 
 - [ ] T000a 기획 확인 — (a) FEATURES.md 에 이 기능 항목 신설, (b) `SOCIAL-12` 와의 관계 정리(좋아요 순 vs AI 점수 순), (c) **회차당 1작품·교체 시 점수 소멸** 정책 승인. spec "기능 명세와의 관계" 참조
-- [ ] T000b GMS 실물 확인 — 키 발급 후 호출 1회. 확인할 것: 인증 헤더 형식(`Authorization: Bearer` 가정), 모델 id 문자열 `gpt-4o-mini` 가 그대로 먹는지, **프록시가 `image_url` content 파트를 통과시키는지**, 응답 지연. 결과를 plan.md "GMS 호출 계약" 에 반영한다. **키는 문서·커밋에 적지 않는다**
-
-  ```bash
-  curl -s -X POST https://gms.ssafy.io/gmsapi/api.openai.com/v1/chat/completions \
-    -H "Authorization: Bearer $GMS_API_KEY" -H "Content-Type: application/json" \
-    -d '{"model":"gpt-4o-mini","messages":[{"role":"user","content":[
-        {"type":"text","text":"이 이미지에 점이 몇 개 있나? 숫자만."},
-        {"type":"image_url","image_url":{"url":"data:image/png;base64,<1px PNG>"}}]}]}'
-  ```
-
-  이미지 파트가 거부되면 대안은 좌표를 텍스트로 넘기는 것이다 — 점수 변별력이 떨어지므로 그때 모델을 올릴지(`gpt-4o`·`gemini-3.5-flash`) 다시 정한다
+- [X] T000b GMS 실물 확인 — **완료 (2026-09-22)**. 배포 호스트에서 1×1 PNG 를 `image_url` data URI 로 실어 호출: `HTTP 200`, 0.85s, `model=gpt-4o-mini-2024-07-18`, 인증은 `Authorization: Bearer`. **프록시가 이미지 파트를 통과시킨다** — 설계 변경 없음. 값은 `/etc/ody/backend.env` 에 있다. 결과는 plan.md "실호출 확인" 에 기록
+- [ ] T000c 이미지 토큰 비용 확인 — 1×1 짜리에 `prompt_tokens` 가 **8,521** 붙었다. GMS Credit 이 **호출당 정액(2)** 인지 토큰 비례인지 확인한다. 토큰 비례면 (a) `"detail":"low"` 적용, (b) 렌더 해상도 축소, (c) 모델 재선택 중에서 고른다. 확인 방법: GMS 대시보드에서 위 호출 1건의 Credit 차감량을 본다
 
 **⚠️ T000a·T000b 없이 진행하면 명세에 없는 기능을 미확인 외부 계약 위에 구현하는 것이다**
 

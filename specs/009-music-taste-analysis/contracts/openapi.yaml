@@ -39,7 +39,7 @@ paths:
       operationId: getLikedMusic
       responses:
         '200':
-          description: 최근 좋아요순 전체 목록. items 순서를 기존 재생 큐에 사용한다.
+          description: 최근 좋아요순 전체 목록. content 순서를 기존 재생 큐에 사용한다.
           content:
             application/json:
               schema:
@@ -154,9 +154,9 @@ components:
           properties:
             data:
               type: object
-              required: [items]
+              required: [content]
               properties:
-                items:
+                content:
                   type: array
                   items: { $ref: '#/components/schemas/LikedMusicItem' }
     TasteAnalysisEnvelope:

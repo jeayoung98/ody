@@ -13,13 +13,28 @@ import type { UserProfile } from "@/types";
 interface FeedHeaderProps {
   profile: UserProfile;
   isMe: boolean;
+  /** 팔로워·팔로잉 숫자를 눌렀다 (S15P21A405-577). 목록을 어디에 그릴지는 패널이 정한다 */
+  onOpenFollows: (type: "follower" | "following") => void;
 }
 
-function StatInline({ label, value }: { label: string; value: number | string }) {
-  return (
-    <span className="lbl">
+/**
+ * 숫자 하나. **누를 수 있는 것과 아닌 것이 섞여 있다** (S15P21A405-577) — 팔로워·팔로잉은
+ * 목록으로 들어가고, 만남 횟수는 들어갈 곳이 없다. 눌리는 것만 손 모양이 된다.
+ *
+ * 글자 모양은 양쪽이 같다. 숫자 세 개가 한 줄에 나란히 서 있어서 하나만 링크처럼 꾸미면
+ * 줄이 들쭉날쭉해진다 — 다른 것은 커서와 hover 로 말한다.
+ */
+function StatInline({ label, value, onClick }: { label: string; value: number | string; onClick?: () => void }) {
+  const body = (
+    <>
       {label} <b className="num text-sm normal-case tracking-normal text-ink">{value}</b>
-    </span>
+    </>
+  );
+  if (!onClick) return <span className="lbl">{body}</span>;
+  return (
+    <button type="button" onClick={onClick} className="lbl cursor-pointer transition-colors duration-fast hover:text-ink">
+      {body}
+    </button>
   );
 }
 
@@ -27,7 +42,7 @@ function StatInline({ label, value }: { label: string; value: number | string })
  * [상단] 닉네임 · 프로필 사진 · 재생중인 곡 · 온라인 여부 · 팔로워/팔로잉 · 가입일(N일째 탐험중)
  * 남일 때: 만남 횟수 · 따라가기
  */
-export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
+export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderProps) {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const ride = useRideMutation();
   const follow = useFollowMutation();
@@ -78,8 +93,8 @@ export default function FeedHeader({ profile, isMe }: FeedHeaderProps) {
       </div>
 
       <div className="flex flex-wrap gap-3.5">
-        <StatInline label="팔로워" value={profile.followerCount.toLocaleString()} />
-        <StatInline label="팔로잉" value={profile.followingCount.toLocaleString()} />
+        <StatInline label="팔로워" value={profile.followerCount.toLocaleString()} onClick={() => onOpenFollows("follower")} />
+        <StatInline label="팔로잉" value={profile.followingCount.toLocaleString()} onClick={() => onOpenFollows("following")} />
         {!isMe && <StatInline label="만남" value={`${profile.meetingCount ?? 0}회`} />}
       </div>
 

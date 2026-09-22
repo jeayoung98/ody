@@ -111,15 +111,14 @@ interface PanelState {
 
   openSong: (musicId: number) => void;
   /**
-   * 지도에서 별을 눌러 곡 상세로 들어간다 (S15P21A405-515).
+   * 지도에서 별을 눌러 곡 상세로 들어간다.
    *
-   * **주변 사람을 펼쳐 놓고 있으면 패널을 갈아타지 않는다.** 주변 사람은 내가 듣는 곡 기준으로
-   * 도는 화면이라, 곡을 바꿔 가며 레이더가 어떻게 변하는지 보는 것이 그 화면을 쓰는 방식이다.
-   * 누를 때마다 상세로 튕기면 그 동작 자체가 불가능하다. 선택·재생은 그대로 일어나므로
-   * 누른 것이 씹히지도 않는다 — 두 번째 누름이 재생이고, 그러면 레이더가 그 곡으로 다시 그려진다.
+   * **어느 패널이 열려 있든 같다** (S15P21A405-547). 한때 주변 사람만 예외였다
+   * (S15P21A405-515) — 펼쳐 놓고 있으면 패널을 안 갈아탔다. 레이더를 보면서 곡만 바꾸라는
+   * 뜻이었는데, 예외가 하나만 있으니 같은 조작에 화면마다 다르게 반응해서 규칙이 안 읽혔다.
    *
-   * 지도 클릭에만 건다. 검색·플레이어바·내 위치로 가기처럼 **"이 곡으로 가자" 는 명시적 지시**는
-   * 막지 않는다 — 그건 사용자가 화면을 옮기겠다고 말한 것이다.
+   * 함수는 남겨 둔다 — 부르는 쪽이 "지도에서 눌렀다" 를 말하고 있고, 다시 갈라야 할 때
+   * 여기 한 군데만 고치면 된다.
    */
   openSongFromMap: (musicId: number) => void;
   /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
@@ -170,18 +169,7 @@ export const usePanelStore = create<PanelState>()(
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
 
-      openSongFromMap: (musicId) => {
-        const { activePanel, snap } = get();
-        if (activePanel === "friends") {
-          // 펼쳐 있으면 고정 — 레이더를 보면서 곡만 바꾼다
-          if (snap !== 1) return;
-          // 접어 뒀으면 보여 줄 것이 없으니 상세를 연다. 대신 돌아갈 자리를 남긴다 —
-          // 접기는 "잠깐 치우기" 라서, 상세를 열고 끝나면 레이더가 통째로 사라진 셈이 된다
-          set(open("song", { musicId, back: { panel: "friends" } }), false, "openSongFromMap/fromFriends");
-          return;
-        }
-        set(open("song", { musicId }), false, "openSongFromMap");
-      },
+      openSongFromMap: (musicId) => set(open("song", { musicId }), false, "openSongFromMap"),
 
       openSongFromList: (musicId) => {
         const { activePanel, playlistId } = get();
@@ -241,11 +229,11 @@ export const usePanelStore = create<PanelState>()(
        */
       collapse: () =>
         /**
-         * **주변 사람은 비켜 주지 않는다** (S15P21A405-515). 지도를 끄는 동안 자리를 비우는 것은
-         * 지도를 보려는 사람에게 맞는 동작인데, 주변 사람은 지도를 움직이며 **같이** 보는 화면이다.
-         * 조금만 끌어도 접히면 레이더가 계속 사라진다. 접기 버튼은 그대로 도므로 치우고 싶으면 치운다.
+         * **패널 종류를 가리지 않는다** (S15P21A405-547). S15P21A405-515 에서 주변 사람만
+         * 예외로 뒀었다 — 지도를 움직이며 같이 보는 화면이라는 이유였다. 예외가 하나만 있으니
+         * 같은 조작에 화면마다 다르게 반응해서 규칙이 안 읽혔고, 그래서 통일하기로 했다.
          */
-        set((s) => (s.activePanel && s.activePanel !== "friends" && s.snap !== 1 ? { snap: 1 as SheetSnap } : {}), false, "collapse"),
+        set((s) => (s.activePanel && s.snap !== 1 ? { snap: 1 as SheetSnap } : {}), false, "collapse"),
     }),
     { name: "panel-store" },
   ),

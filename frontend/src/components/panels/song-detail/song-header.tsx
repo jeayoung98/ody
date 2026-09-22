@@ -70,6 +70,17 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
           </Tag>
         ))}
         {/*
+          **조회수 · 길이 · 발매년도 순이다** (S15P21A405-547). 앞에 오는 것이 먼저 읽히는데,
+          그 자리를 값이 없을 때가 잦은 발매년도가 쓰고 있었다 — 백엔드가 안 주면 칩이 아예
+          빠져서 줄이 들쭉날쭉했다. 늘 있는 값부터 세운다.
+        */}
+        <Tag tone="violet" title="누적 재생">
+          ▶ {formatCount(music.playCnt)}
+        </Tag>
+        <Tag title="곡 길이">
+          <ClockIcon /> {formatDuration(music.duration)}
+        </Tag>
+        {/*
           발매년도. **백엔드가 아직 안 준다** — 상세 응답에 없어서 `toMusic` 이 null 로 못 박는다
           (BACKEND-NOTES). 값이 오기 시작하면 이 칩이 그대로 뜬다
         */}
@@ -78,12 +89,6 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
             <CalendarIcon /> {music.releaseYear}
           </Tag>
         )}
-        <Tag title="곡 길이">
-          <ClockIcon /> {formatDuration(music.duration)}
-        </Tag>
-        <Tag tone="violet" title="누적 재생">
-          ▶ {formatCount(music.playCnt)}
-        </Tag>
         {/* videoId 는 전용 엔드포인트가 출처다 (S15P21A405-340). 아직 모르는 동안에는 붙이지 않는다 */}
         {blocked && (
           <Tag tone="warn" title={blocked.notice}>

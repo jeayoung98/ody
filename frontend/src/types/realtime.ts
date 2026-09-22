@@ -37,10 +37,27 @@ export type RealtimeMessageType =
   | "VIEWPORT_MOVE"
   | "VIEWPORT_LEAVE"
   | "VIEWPORT_CELL_COUNTS"
+  | "VIEWPORT_BULK_ENTER"
+  | "VIEWPORT_RIDER_COUNT"
   | "NEARBY_SNAPSHOT"
   | "NEARBY_ENTER"
   | "NEARBY_MOVE"
   | "NEARBY_LEAVE"
+  | "NEARBY_BULK_ENTER"
+  | "NEARBY_RIDER_COUNT"
+  // 따라가기 (2차 명세 §2.3, S15P21A405-530)
+  | "RIDE_TRACK"
+  | "RIDE_PLAYBACK"
+  | "RIDE_PANEL"
+  | "RIDE_VIEWPORT"
+  | "RIDE_VIEWPORT_ENTER"
+  | "RIDE_VIEWPORT_MOVE"
+  | "RIDE_VIEWPORT_LEAVE"
+  | "RIDE_VIEWPORT_CELL_COUNTS"
+  | "RIDE_VIEWPORT_BULK_ENTER"
+  | "RIDE_VIEWPORT_RIDER_COUNT"
+  | "RIDE_RIDER_LEFT"
+  | "RIDE_ENDED"
   | "PRESENCE_ERROR";
 
 // ── 내 위치 ────────────────────────────────────────────────────────────────
@@ -117,7 +134,7 @@ export interface ViewportUser {
   email: string;
   nickname: string | null;
   imageUrl: string | null;
-  /** 현재 항상 0 — 따라가기가 아직 없다 */
+  /** 이 사람을 따라가는 인원. 선단은 지도에서 한 점이라 동승자 명단 대신 이 정수만 온다 */
   riderCount: number;
 }
 
@@ -175,6 +192,32 @@ export interface ViewportCloseRequest {
   requestSeq: number;
 }
 
+/**
+ * `VIEWPORT_BULK_ENTER` / `RIDE_VIEWPORT_BULK_ENTER` — 여러 사람이 **한 자리에** 한꺼번에 나타났다.
+ *
+ * 선단이 흩어질 때만 온다. 스무 명을 한 명씩 알리면 스무 번 다시 그리게 되고 중간 상태가 그대로
+ * 보인다. 전원이 인솔자의 마지막 곡에 남으므로 자리는 `musicId`·`x`·`y` 하나뿐이다.
+ */
+export interface ViewportBulkEnter {
+  requestSeq: number;
+  musicId: number;
+  x: number;
+  y: number;
+  users: ViewportUser[];
+}
+
+/**
+ * `VIEWPORT_RIDER_COUNT` — 화면 속 누군가의 **인원수만** 바뀌었다 (2차 명세 §7.1).
+ *
+ * **자리는 그대로다.** 좌표가 오지 않으니 그 사람의 `riderCount` 만 갈아 끼우고 위치는
+ * 건드리지 않는다. 이게 없으면 스무 명이 타고 내려도 구경하는 쪽에는 같은 수로 보인다.
+ */
+export interface ViewportRiderCount {
+  requestSeq: number;
+  email: string;
+  riderCount: number;
+}
+
 // ── 주변 사람 패널 ─────────────────────────────────────────────────────────
 
 /**
@@ -187,7 +230,7 @@ export interface NearbyPerson {
   nickname: string | null;
   imageUrl: string | null;
   meetingCount: number;
-  /** 현재 항상 0 */
+  /** 이 사람을 따라가는 인원 (S15P21A405-530) */
   riderCount: number;
   /** 그 사람이 지금 듣는 곡 */
   musicId: number;
@@ -219,6 +262,169 @@ export interface NearbyChange {
   musicId: number | null;
 }
 
+/**
+ * `NEARBY_BULK_ENTER` — 선단이 흩어져 여럿이 한꺼번에 목록에 들어왔다 (2차 명세 §7.2).
+ * `people` 은 `NEARBY_ENTER` 와 같은 모양이고 `requestSeq` 가 없다.
+ *
+ * **한 덩어리로 받았으니 한 번만 다시 그린다.** 반복문으로 하나씩 갱신하면 이 메시지를 만든
+ * 의미가 없어진다.
+ */
+export interface NearbyBulkEnter {
+  musicId: number;
+  people: NearbyChange[];
+}
+
+/** `NEARBY_RIDER_COUNT` — 목록 속 누군가의 인원수만 바뀌었다. `requestSeq` 가 없다 */
+export interface NearbyRiderCount {
+  email: string;
+  riderCount: number;
+  musicId: number;
+}
+
+// ── 따라가기 (탑승) ────────────────────────────────────────────────────────
+
+/**
+ * 따라가기 = **탑승(ride)** 이다 (S15P21A405-530). 구독(follow)과 다르다 — 구독은 오래 남는
+ * 관계이고, 탑승은 지금 이 순간 남의 탐색을 그대로 따라다니는 것이다.
+ *
+ * **탑승·하차만 REST 다.** 실패가 사용자에게 보여야 하는 경로라서다 — 소켓으로 보내면 거부당해도
+ * 아무 응답이 안 와서 버튼만 안 먹는 것처럼 보인다. 인솔자의 조작 전파는 전부 소켓이다.
+ */
+
+/** 인솔자가 지금 틀고 있는지 멈춰 있는지. 재생 위치를 읽는 방식이 갈린다 */
+export type RidePlaybackState = "PLAYING" | "PAUSED";
+
+/** 인솔자가 한 재생 조작의 종류. `DRIFT` 는 어긋남 보정이고 프론트는 아직 보내지 않는다 */
+export type RidePlaybackEvent = "PLAY" | "PAUSE" | "SEEK" | "DRIFT";
+
+/**
+ * 곡 상세에서 보고 있는 탭. **우리 화면에는 탭이 없다** — 곡 상세는 한 장짜리 스크롤이다.
+ * 계약이 값을 요구하므로 열 때 `info` 를 싣고, 받는 쪽은 탭을 보지 않고 그 곡 상세를 연다.
+ */
+export type RidePanelTab = "nearby" | "info" | "playlists";
+
+/** 인솔자가 열어 둔 곡 상세. `open` 이 false 면 나머지는 null 이다 */
+export interface RidePanelPayload {
+  open: boolean;
+  musicId: number | null;
+  tab: RidePanelTab | null;
+}
+
+/**
+ * `POST /api/realtime/ride` 응답 — 어디에 서게 됐고 무슨 곡을 어디서부터 틀면 되는지.
+ *
+ * **`positionMs` 는 서버가 계산해서 준다.** 저장값에서 직접 빼면 기기 시계가 틀린 만큼 어긋난다.
+ * `playHistoryId` 는 따라가는 사람 **자신의** 기록이라 재생 시간 저장에 그대로 쓴다.
+ */
+export interface RideRequest {
+  captainEmail: string;
+}
+
+export interface RideResponse {
+  captainEmail: string;
+  playHistoryId: number;
+  musicId: number;
+  layer: number;
+  x: number;
+  y: number;
+  cellX: number;
+  cellY: number;
+  playback: RidePlaybackState;
+  positionMs: number;
+  /**
+   * 재생 스냅샷의 번호.
+   *
+   * **2차 명세 §4.1 은 "봉투 `seq ≤ snapshotSeq` 면 버린다" 고 적었지만 그대로 하면 안 된다.**
+   * 배포 백엔드에서 둘은 **서로 다른 카운터**다 —
+   * `snapshotSeq` 는 인솔자별 Redis 해시의 `HINCRBY ride:playback:{captain} snapshotSeq`,
+   * 봉투 `seq` 는 **내 소켓 세션**의 메시지 번호(`nextMessageSeq(userId)`)다.
+   *
+   * 견주면 조용히 망가진다. 한참 틀고 있던 인솔자(`snapshotSeq` 가 이미 큼)에 방금 접속한
+   * 사람(`seq` 가 1부터)이 타면 **초반 `RIDE_PLAYBACK` 이 전부 버려진다** — 오류도 안 뜬다.
+   * 그래서 보관만 하고 거르는 데 쓰지 않는다. 순서 보장은 `stomp-client` 의 봉투 `seq` 비교가
+   * 이미 하고 있다. 백엔드에 확인 요청해 둔 항목이다 (BACKEND-NOTES A-41).
+   */
+  snapshotSeq: number;
+  /** 중간에 타도 같은 화면을 보게 하려고 인솔자가 열어 둔 곡 상세를 함께 준다 */
+  panel: RidePanelPayload;
+}
+
+/**
+ * `DELETE /api/realtime/ride` 응답 — 내려서 남게 된 자리.
+ * 인솔자가 마지막으로 있던 곡이다. **탑승 전 자리로 되돌리지 않는다** (D15).
+ */
+export interface DismountResponse {
+  musicId: number;
+  layer: number;
+  x: number;
+  y: number;
+  cellX: number;
+  cellY: number;
+}
+
+/**
+ * `RIDE_TRACK` — 인솔자가 곡을 바꿨다. **새 곡은 처음부터 튼다** (그래서 재생 위치가 없다).
+ * `playable` 이 false 면 위치만 옮기고 틀지 않는다.
+ */
+export interface RideTrackPayload {
+  musicId: number;
+  layer: number;
+  x: number;
+  y: number;
+  playable: boolean;
+  serverTs: number;
+}
+
+/**
+ * `RIDE_PLAYBACK` — 인솔자의 재생 조작.
+ *
+ * `event` 와 `state` 를 **둘 다** 본다. 재생바만 옮긴 경우(`SEEK`)는 멈춤·재생 상태가 그대로라,
+ * 받는 쪽이 "옮기기만 할지 틀기까지 할지" 를 `state` 로 가른다.
+ *
+ * `serverTs` 는 **보낸 시각이 아니라 이 위치의 기준 시각**이다. 봉투의 `ts` 로 대신할 수 없다.
+ */
+export interface RidePlaybackPayload {
+  event: RidePlaybackEvent;
+  state: RidePlaybackState;
+  positionMs: number;
+  serverTs: number;
+}
+
+/** `RIDE_RIDER_LEFT` — 따라오던 사람이 내렸다. **인솔자에게만** 온다 */
+export interface RideRiderLeftPayload {
+  email: string;
+  /** 내린 뒤 남은 인원. 다시 물어보지 않아도 되게 같이 온다 */
+  riderCount: number;
+}
+
+/**
+ * `RIDE_ENDED` — 인솔자가 사라져 따라가기가 끝났다. **따라가던 사람에게만** 온다.
+ * 스스로 내렸을 때와 같은 상태이므로 자리 정보도 하차 응답과 같다.
+ */
+export interface RideEndedPayload {
+  captainEmail: string;
+  reason: "CAPTAIN_LEFT";
+  musicId: number;
+  layer: number;
+  x: number;
+  y: number;
+  cellX: number;
+  cellY: number;
+}
+
+/** C→S `/app/ride/playback`. `positionMs` 는 0 이상이어야 한다 — 아니면 서버가 거부한다 */
+export interface RidePlaybackRequest {
+  event: RidePlaybackEvent;
+  positionMs: number;
+}
+
+/** C→S `/app/ride/panel`. 닫을 때는 `musicId`·`tab` 이 없어도 된다 */
+export interface RidePanelRequest {
+  open: boolean;
+  musicId?: number;
+  tab?: RidePanelTab;
+}
+
 // ── 오류 ──────────────────────────────────────────────────────────────────
 
 export type WebSocketErrorCode =
@@ -228,7 +434,12 @@ export type WebSocketErrorCode =
   | "PRESENCE_JOIN_INVALID"
   | "PRESENCE_VIEWPORT_INVALID"
   | "PRESENCE_STALE"
-  | "PRESENCE_NOT_CONNECTED";
+  | "PRESENCE_NOT_CONNECTED"
+  // 따라가기 (S15P21A405-530)
+  /** 인솔자만 보낼 수 있는 곳으로 동승자가 보냈다. 내리면 된다 */
+  | "RIDE_NOT_CAPTAIN"
+  | "RIDE_PLAYBACK_INVALID"
+  | "RIDE_PANEL_INVALID";
 
 export interface PresenceErrorPayload {
   code: WebSocketErrorCode;

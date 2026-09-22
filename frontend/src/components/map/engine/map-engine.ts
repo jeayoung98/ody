@@ -107,11 +107,20 @@ export interface VisibleStar {
  */
 export interface FollowState {
   leader: NearbyUser;
+  /**
+   * **서버가 몬다** (S15P21A405-530). `true` 면 아래 `phase`·`nextAt` 로 도는 목 시뮬레이션이
+   * 멎고, 인솔자의 동작은 소켓이 알려줄 때만 일어난다 (`rideTo` · `rideViewing`).
+   *
+   * 목을 지우지 않고 깃발로 가른 이유는 **잠금이 같은 자리에 걸려 있기 때문**이다.
+   * `this.follow` 하나가 팬·줌·레이어 이동·내 위치로 가기를 전부 막고 있어서(2차 명세 §6),
+   * 목만 들어내면 그 잠금까지 같이 사라진다.
+   */
+  driven: boolean;
   /** 인솔자가 지금 보고 있는 상세 곡 (뷰포트·우측 패널 기준) */
   viewingMusicId: number;
   /** 인솔자가 지금 재생 중인 곡 (우주선 위치 기준) */
   playingMusicId: number;
-  /** 다음에 일어날 인솔자 동작 */
+  /** 다음에 일어날 인솔자 동작. `driven` 이면 쓰이지 않는다 */
   phase: "view" | "play";
   /** 그 동작이 일어날 시각 */
   nextAt: number;
@@ -2396,7 +2405,11 @@ export class MapEngine {
     );
   }
 
-  startFollow(leader: NearbyUser) {
+  /**
+   * 따라가기를 켠다. `driven` 이면 **서버가 모는 것**이고, 인솔자의 다음 동작을 스스로 지어내지
+   * 않는다 (S15P21A405-530). `driven` 이 아닌 길은 목이고 디자인 확인용으로만 남아 있다.
+   */
+  startFollow(leader: NearbyUser, driven = false) {
     if (!this.index.has(leader.musicId)) return;
     this.travelToId = null;
     this.camTarget = null;
@@ -2406,6 +2419,7 @@ export class MapEngine {
     const viewingMusicId = this.index.has(leader.viewingMusicId) ? leader.viewingMusicId : leader.musicId;
     this.follow = {
       leader,
+      driven,
       viewingMusicId,
       playingMusicId: leader.musicId,
       // 탑승 직후엔 인솔자가 이미 보고 있는 곡이 있으므로, 다음 동작은 그 곡의 재생이다
@@ -2415,7 +2429,29 @@ export class MapEngine {
       mv: null,
       visited: [],
     };
-    this.onLeaderViewingChange?.(viewingMusicId);
+    // 서버가 몰 때는 우측 패널을 소켓의 `RIDE_PANEL` 이 정한다 — 여기서 열면 그걸 덮어쓴다
+    if (!driven) this.onLeaderViewingChange?.(viewingMusicId);
+  }
+
+  /**
+   * 인솔자가 곡을 바꿨다 — `RIDE_TRACK` 이 오면 부른다 (S15P21A405-530).
+   * 우주선이 이전 곡에서 새 곡으로 날아오고 나는 그 선미를 따라간다.
+   *
+   * **재생은 여기서 걸지 않는다.** 소켓 처리기가 이미 플레이어를 돌렸다 — `onArrive` 를 또
+   * 부르면 같은 곡을 두 번 건다.
+   */
+  rideTo(musicId: number) {
+    const f = this.follow;
+    if (!f || !this.index.has(musicId)) return;
+    f.viewingMusicId = musicId;
+    this.launchLeaderMove(performance.now(), f, musicId, { notify: false });
+  }
+
+  /** 인솔자가 보고 있는 곡만 바뀌었다 — `RIDE_PANEL` 이 오면 부른다. 뷰만 그리로 간다 */
+  rideViewing(musicId: number) {
+    const f = this.follow;
+    if (!f || !this.index.has(musicId)) return;
+    f.viewingMusicId = musicId;
   }
 
   stopFollow() {
@@ -2465,10 +2501,24 @@ export class MapEngine {
 
   /** ② 인솔자가 보고 있던 곡을 재생한다 — 우주선이 그 방향에서 날아온다. 뷰는 고정 */
   private leaderPlaysSong(now: number, f: FollowState) {
-    const target = this.worldOf(f.viewingMusicId);
+    if (!this.launchLeaderMove(now, f, f.viewingMusicId, { notify: true })) return;
+    f.phase = "view";
+    f.nextAt = now + FOLLOW.moveMs + FOLLOW.playToViewMs;
+  }
+
+  /**
+   * 우주선을 지금 자리에서 `toId` 로 띄운다. 목과 서버 양쪽이 같은 연출을 쓴다.
+   *
+   * `notify` 는 도착을 알릴지다 — 목은 이걸로 재생을 걸지만, 서버가 몰 때는 소켓 처리기가
+   * 이미 플레이어를 돌린 뒤라 다시 걸면 같은 곡이 두 번 시작된다.
+   *
+   * @returns 띄웠으면 true. 좌표를 모르면 false
+   */
+  private launchLeaderMove(now: number, f: FollowState, toId: number, { notify }: { notify: boolean }): boolean {
+    const target = this.worldOf(toId);
     const known = this.friendPos.get(f.leader.email);
     const from = known ?? this.worldOf(f.playingMusicId);
-    if (!target || !from) return;
+    if (!target || !from) return false;
     const side = Math.random() < 0.5 ? 1 : -1;
     const L = Math.hypot(target.x - from.x, target.y - from.y) || 1e-6;
     f.mv = {
@@ -2480,12 +2530,11 @@ export class MapEngine {
       cy: (from.y + target.y) / 2 + ((target.x - from.x) / L) * L * 0.35 * side,
       t0: now,
       dur: FOLLOW.moveMs,
-      toId: f.viewingMusicId,
+      toId,
     };
-    f.visited.push(f.viewingMusicId);
-    f.phase = "view";
-    f.nextAt = now + FOLLOW.moveMs + FOLLOW.playToViewMs;
-    this.onArrive?.(f.viewingMusicId);
+    f.visited.push(toId);
+    if (notify) this.onArrive?.(toId);
+    return true;
   }
 
   /** 인솔자가 레이어를 바꾼다 — 따라가는 사람도 같은 레이어로 전환 (모프) */
@@ -2715,7 +2764,8 @@ export class MapEngine {
   private stepFollow(now: number) {
     const f = this.follow;
     if (!f) return;
-    if (!f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
+    // 서버가 몰면 인솔자의 다음 동작을 지어내지 않는다 — 소켓이 알려줄 때만 움직인다
+    if (!f.driven && !f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
     // 뷰는 인솔자가 "보고 있는 곡"만 좇는다. 우주선이 날아오는 동안(mv)에는 고정 (SOCIAL-07)
     if (!f.mv) this.trackViewing(f);
     if (!f.mv) return;

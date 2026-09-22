@@ -1,11 +1,13 @@
 "use client";
 
 import { useState } from "react";
+import { RIDING_LOCKED } from "@/constants";
 import { NextIcon, PauseIcon, PlayIcon, PlaylistAddIcon, PrevIcon } from "@/components/common/icons";
 import AddToPlaylistMenu from "@/components/panels/playlist/add-to-playlist-menu";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useFeatures } from "@/hooks/use-features";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -35,6 +37,8 @@ export default function PlayerBar() {
   const queue = usePlayerStore((s) => s.queue);
   const queueIndex = usePlayerStore((s) => s.queueIndex);
   const toggle = usePlayerStore((s) => s.toggle);
+  /** 따라가는 동안에는 트랜스포트가 잠긴다 — 재생은 인솔자가 정한다 (2차 명세 §6) */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
   const next = usePlayerStore((s) => s.next);
   const prev = usePlayerStore((s) => s.prev);
   const showToast = useToastStore((s) => s.show);
@@ -86,6 +90,15 @@ export default function PlayerBar() {
    */
   const handleToggle = () => {
     if (currentMusicId == null) return;
+    /**
+     * **따라가는 동안에는 재생도 인솔자가 정한다** (2차 실시간 명세 §6, S15P21A405-530).
+     * 여기서 멈추면 서버의 선단 상태와 내 소리가 갈라지는데, 서버는 그 사실을 모른다 —
+     * 다음 `RIDE_PLAYBACK` 이 올 때까지 조용히 어긋난 채로 남는다.
+     */
+    if (riding) {
+      showToast(RIDING_LOCKED);
+      return;
+    }
     if (blocked) {
       track("action_blocked", { action: "play", reason: blocked.ref, music_id: currentMusicId });
       showToast(blocked.notice);
@@ -136,13 +149,13 @@ export default function PlayerBar() {
         {/* 내 위치로 가기 — 지도 스토어만 보는 별도 컴포넌트다. 여기 곡이 바뀌어도 다시 그려지지 않는다 */}
         <LocateButton />
         <div className="flex items-center gap-3">
-          <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={queue.length === 0}>
+          <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={riding || queue.length === 0}>
             <PrevIcon />
           </TransportButton>
           <TransportButton label={isPlaying ? "정지" : "재생"} primary size="lg" onClick={handleToggle} dimmed={!canPlay}>
             {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
           </TransportButton>
-          <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={queue.length === 0}>
+          <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={riding || queue.length === 0}>
             <NextIcon />
           </TransportButton>
         </div>

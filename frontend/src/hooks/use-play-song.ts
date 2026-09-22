@@ -1,9 +1,11 @@
 "use client";
 
 import { useCallback } from "react";
-import { ACTIVITY_CONFIRM, LEAVE_LIST_CONFIRM } from "@/constants";
+import { ACTIVITY_CONFIRM, LEAVE_LIST_CONFIRM, RIDING_LOCKED } from "@/constants";
 import { playbackActivity, samePlayContext, shouldConfirmListExit, visiblePlayContext } from "@/lib/play-context";
 import { useConfirmStore } from "@/stores/use-confirm-store";
+import { isRiding } from "@/stores/use-follow-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { runPlaybackTransition, useBlockingStore } from "@/stores/use-blocking-store";
@@ -30,6 +32,24 @@ export function usePlaySong() {
    */
   return useCallback(
     (musicId: number, after?: () => void) => {
+      /**
+       * **따라가는 동안에는 스스로 곡을 고를 수 없다** (2차 실시간 명세 §6, S15P21A405-530).
+       * 여기가 단일 곡 재생의 유일한 통로라 한 줄이면 들어오는 길 전부가 막힌다 — 곡 상세,
+       * 지도의 별, 검색 결과, 주변 탐색 카드가 모두 이리로 온다.
+       *
+       * 서버도 `POST /api/music/play` 를 409 `RIDE_NOT_CAPTAIN` 으로 막지만, **누르고 나서
+       * 실패를 보는 것보다 안 눌리는 편이 낫다.** 성공한 줄 알고 화면이 먼저 바뀌면 인솔자와
+       * 어긋난 자리에 서게 된다.
+       *
+       * **스스로 곡을 골랐다고 내려 주지는 않는다** (D12). 내리는 것은 하차 버튼으로만 한다.
+       *
+       * 선단을 따라 곡이 바뀌는 길은 이 통로를 쓰지 않는다 — `lib/realtime/ride.ts` 의
+       * `playFrom` 이 플레이어 스토어를 직접 부른다.
+       */
+      if (isRiding()) {
+        useToastStore.getState().show(RIDING_LOCKED);
+        return;
+      }
       const map = useMapStore.getState();
       // Snapshot the visible exploration. Inferring it later from the player
       // is wrong while the user has opened a new nearby/path view but the old

@@ -39,18 +39,33 @@
 
 **Scale/Scope**: 신규 패키지 `com.ssafy.backend.artwork`. 신규 파일 약 30개, 기존 파일 수정 0~1개(에러 코드 enum 은 신규 파일)
 
-### GMS 호출 계약 — **확인 필요, 지어내지 않았다**
+### GMS 호출 계약
 
-저장소에 GMS 사용처가 없다(`grep -ri gms` 무결과). 아래는 **설정으로 빼는 값**이며 구현 전에 실물로 확인한다.
+저장소에 GMS 사용처가 없다(`grep -ri gms` 무결과). 아래는 **설정으로 빼는 값**이다.
 
-| 설정 키 | 내용 | 상태 |
+| 설정 키 | 값 | 상태 |
 | --- | --- | --- |
-| `ody.artwork.gms.base-url` | GMS 게이트웨이 base URL | **미확인** |
-| `ody.artwork.gms.api-key` | 인증 키. `.env` 로만 주입, 저장소·로그 금지 (FR-016) | **미확인** |
-| `ody.artwork.gms.model` | 모델 id. 사용자 지정은 `gpt5.4 mini` — 게이트웨이가 받는 정확한 문자열 확인 필요 | **미확인** |
+| `ody.artwork.gms.base-url` | `https://gms.ssafy.io/gmsapi/api.openai.com` | 확인 (GMS 문서) |
+| `ody.artwork.gms.model` | `gpt-4o-mini` | 확인 (GMS 모델 목록). **정확한 id 문자열은 첫 호출로 검증** |
+| `ody.artwork.gms.api-key` | 인증 키. `.env` 로만 주입, 저장소·로그 금지 (FR-016) | 발급 필요 |
 | `ody.artwork.gms.timeout-read-ms` | 읽기 타임아웃. 잠정 30000 | 실측 후 확정 |
 
-**요청 형태 가정**: OpenAI 호환 `POST /v1/chat/completions`, 이미지 입력은 `data:image/png;base64,...` content part. **이 가정이 틀리면 어댑터 한 클래스(`GmsEvaluationClient`)만 바뀐다** — 포트 인터페이스(`ArtworkEvaluationPort`)가 그 경계다.
+경로 `/v1/chat/completions` 는 어댑터가 갖는다 — base URL 에 넣지 않는다(`VideoIdApiClient` 가 base URL 과 `/videoid` 를 나눠 갖는 것과 같다).
+
+**모델 선택 근거**: GMS 모델 목록에서 **이미지 입력이 명시된 것** 중 가장 싸다(2 Credit). "구조화된 출력 포함" 이라 `{score, comment}` JSON 강제가 되어 파싱 실패 경로가 줄어든다.
+
+| 후보 | Credit | 이미지 입력 |
+| --- | --- | --- |
+| **`gpt-4o-mini`** | **2** | 명시 — "텍스트 및 이미지 입력 지원, 구조화된 출력 포함" |
+| `gemini-3.5-flash` | 18 | 명시 — 멀티모달 |
+| `gpt-4o` | 20 | 명시 — 텍스트·이미지·오디오 |
+| `gpt-5.4-mini` | 14 | **없음** — 목록 설명에 멀티모달 언급 없음. 탈락 |
+
+점수에 변별력이 없으면(전부 비슷한 값) `gpt-4o` 나 `gemini-3.5-flash` 로 올린다. 모델 id 가 설정값이라 **환경변수 교체 + 컨테이너 재시작**으로 끝나고 재배포가 필요 없다.
+
+**비용 상한**: 회차당 1작품 + 재시도 3회 = 사용자당 최대 4회. 100명 기준 800 Credit.
+
+**요청 형태 가정**: OpenAI 호환 `POST /v1/chat/completions`, 이미지 입력은 `content` 배열의 `image_url` 파트에 `data:image/png;base64,...`. 인증 헤더는 `Authorization: Bearer <key>` 로 가정한다. **프록시가 이미지 파트를 통과시키는지, 헤더 형식이 맞는지는 첫 호출로 확인한다**(tasks T000b). 틀리면 어댑터 한 클래스(`GmsEvaluationClient`)만 바뀐다 — 포트 인터페이스(`ArtworkEvaluationPort`)가 그 경계다.
 
 **응답 파싱**: 모델에게 JSON 한 개만 답하라고 지시한다.
 

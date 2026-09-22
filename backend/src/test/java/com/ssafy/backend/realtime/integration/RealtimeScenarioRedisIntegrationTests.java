@@ -1,0 +1,197 @@
+package com.ssafy.backend.realtime.integration;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.any;
+import static org.mockito.Mockito.verify;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
+import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
+
+import com.ssafy.backend.realtime.dto.presence.JoinRequest;
+import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.message.RealtimeMessageType;
+
+/**
+ * 실시간 기능 전체를 실제 Redis 와 실제 Lua 로 돌려 본다.
+ *
+ * 단위 테스트는 기능 하나를 가짜 이웃과 함께 본다. 여기서는 반대로, 여러 기능이 같은 키를
+ * 나눠 쓰는 상황만 본다 — 한쪽이 바꾼 것을 다른 쪽이 못 따라가서 생겼던 문제들이다.
+ *
+ * 바깥 세계만 가짜로 둔다. DB(재생 기록·만남), 곡 좌표, 사용자 표시, 내보내는 메시지 넷이다.
+ * Redis·Lua·서비스는 전부 실물이라 키가 실제로 어떻게 남는지 그대로 확인할 수 있다.
+ */
+@Import(JdbcTransactionOnlyConfig.class)
+@EnabledIfEnvironmentVariable(named = "RUN_REDIS_INTEGRATION", matches = "true")
+@SpringBootTest(properties = {
+		"spring.profiles.active=test,realtime",
+		"spring.data.redis.host=${REDIS_TEST_HOST:127.0.0.1}",
+		"spring.data.redis.port=${REDIS_TEST_PORT:6380}",
+		// 스케줄러가 시험 중에 끼어들지 않게 한다. 만료 정리는 테스트가 직접 부른다.
+		"realtime.presence.sweep-interval-ms=3600000",
+		"realtime.presence.recount-interval-ms=3600000",
+		"realtime.viewport.cell-counts-interval-ms=3600000",
+})
+class RealtimeScenarioRedisIntegrationTests extends RealtimeScenarioSupport {
+
+	// ── 탭은 마지막 것만 산다 ───────────────────────────────
+
+	/**
+	 * 새 탭을 열면 앞의 탭은 죽는다. 그 뒤에 앞의 탭이 닫히면서 종료 신호가 뒤늦게 온다.
+	 *
+	 * 이때 지금 살아 있는 탭의 선단까지 같이 해제하면 안 된다.
+	 * 옛 접속 번호로 온 종료는 아무 일도 하지 않고 넘어가야 한다.
+	 */
+	@Test
+	@DisplayName("인솔자가 옛 탭을 닫아도 선단은 그대로다")
+	void closingAnOldTabKeepsTheFleet() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		// 인솔자가 탭을 하나 더 연다. 접속 번호가 올라가고 앞의 탭은 여기서 죽는다.
+		presenceService.connect(captain, 2L);
+		presenceService.join(captain, 2L, new JoinRequest(1L, LAYER, SONG_A));
+		rideService.mount(rider, captain);
+
+		// 뒤늦게 앞의 탭이 닫힌다. 접속 번호는 1 이다.
+		presenceService.leave(captain, 1L);
+
+		assertThat(rideRepository.riders(captain)).containsExactly(rider);
+		assertThat(redis.hasKey("ride:captain:" + rider)).isTrue();
+	}
+
+	/** 만료 목록을 읽은 뒤 하트비트가 도착한 경우다. 아직 살아 있다. */
+	@Test
+	@DisplayName("만료 전 정리가 돌아도 선단은 그대로다")
+	void sweepBeforeExpiryKeepsTheFleet() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+
+		presenceService.leaveExpired(captain, System.currentTimeMillis() - 60_000);
+
+		assertThat(rideRepository.riders(captain)).containsExactly(rider);
+	}
+
+	/** 따라가기 정보가 남으면 조작이 막힌 채 갇힌다. */
+	@Test
+	@DisplayName("따라가던 사람이 다시 연결하면 단독으로 돌아온다")
+	void reconnectingRiderComesBackAlone() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+
+		presenceService.connect(rider, 2L);
+
+		assertThat(redis.hasKey("ride:captain:" + rider)).isFalse();
+		assertThat(rideRepository.riders(captain)).isEmpty();
+		// 갇히지 않는다 — 다시 곡에 설 수 있다.
+		presenceService.join(rider, 2L, new JoinRequest(1L, LAYER, SONG_B));
+		assertThat(redis.opsForSet().isMember("listeners:" + SONG_B, rider)).isTrue();
+	}
+
+	// ── 따라가는 사람은 지도에 없다 ─────────────────────────
+
+	/** 지도에 없는 사람을 또 빼면 같은 자리에 있던 남이 화면에서 사라진다. */
+	@Test
+	@DisplayName("인솔자가 곡을 바꿔도 같은 자리의 남은 그대로 세어진다")
+	void captainChangingSongKeepsOthersCounted() {
+		String other = stand(SONG_A);
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		String cell = cellOf(other);
+		rideService.mount(rider, captain);
+		assertThat(cellCount(LAYER, cell)).isEqualTo(2); // 남 + 인솔자
+
+		musicPlayService.play(captain, SONG_C, "MAP", LAYER);
+
+		// 인솔자만 빠진다. 따라가는 사람은 애초에 이 자리에 없었다.
+		assertThat(cellCount(LAYER, cell)).isEqualTo(1);
+		assertThat(redis.opsForSet().isMember("listeners:" + SONG_A, other)).isTrue();
+	}
+
+	/** 지도에 없던 사람이다. 빼면 인솔자 자리가 깎이고 보인 적 없는 사람의 퇴장이 나간다. */
+	@Test
+	@DisplayName("따라가던 사람이 끊겨도 인솔자 자리의 인원수는 그대로다")
+	void riderLeavingKeepsCaptainCellCount() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+		String cell = cellOf(captain);
+		assertThat(cellCount(LAYER, cell)).isEqualTo(1);
+
+		presenceService.leave(rider, 1L);
+
+		assertThat(cellCount(LAYER, cell)).isEqualTo(1);
+		assertThat(redis.opsForSet().isMember("listeners:" + SONG_A, captain)).isTrue();
+	}
+
+	// ── 인솔자가 층을 옮기면 같이 간다 ──────────────────────
+
+	/** 안 따라가면 인솔자는 새 층, 따라가는 사람은 옛 층에 남아 선단이 갈라진다. */
+	@Test
+	@DisplayName("인솔자가 층을 옮기면 따라가는 사람도 그 층에 내린다")
+	void riderFollowsCaptainToAnotherLayer() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+
+		presenceService.join(captain, 1L, new JoinRequest(2L, OTHER_LAYER, SONG_A));
+
+		assertThat(presenceRepository.snapshot(rider).layer()).isEqualTo(OTHER_LAYER);
+		DismountResponse response = rideService.dismount(rider);
+		assertThat(response.layer()).isEqualTo(OTHER_LAYER);
+		assertThat(response.musicId()).isEqualTo(SONG_A);
+		assertThat(redis.opsForSet()
+				.isMember("layer-listeners:" + OTHER_LAYER + ":" + SONG_A, rider)).isTrue();
+	}
+
+	// ── 선단의 흔적 ────────────────────────────────────────
+
+	/** 남겨 두면 인솔자가 혼자 곡을 바꿔도 갱신되지 않아, 다음에 타는 사람이 옛 곡을 받는다. */
+	@Test
+	@DisplayName("마지막 한 명이 내리면 ride 키가 하나도 남지 않는다")
+	void lastDismountLeavesNoRideKeys() {
+		String captain = stand(SONG_A);
+		String rider = stand(SONG_B);
+		rideService.mount(rider, captain);
+		// 따라오는 사람이 있는 상태로 곡을 바꿔야 재생 정보가 생긴다.
+		musicPlayService.play(captain, SONG_C, "MAP", LAYER);
+		assertThat(redis.hasKey("ride:playback:" + captain)).isTrue();
+
+		rideService.dismount(rider);
+
+		assertThat(redis.hasKey("ride:riders:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:playback:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:panel:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:captain:" + rider)).isFalse();
+		assertThat(redis.opsForHash().hasKey("presence:user:" + rider, "riding")).isFalse();
+	}
+
+	@Test
+	@DisplayName("인솔자가 끊기면 전원이 지도로 돌아오고 ride 키가 남지 않는다")
+	void captainLeavingReturnsEveryoneToTheMap() {
+		String captain = stand(SONG_A);
+		String first = stand(SONG_B);
+		String second = stand(SONG_C);
+		rideService.mount(first, captain);
+		rideService.mount(second, captain);
+		String cell = cellOf(captain);
+
+		presenceService.leave(captain, 1L);
+
+		assertThat(redis.opsForSet().isMember("listeners:" + SONG_A, first, second))
+				.containsValues(true, true);
+		assertThat(cellCount(LAYER, cell)).isEqualTo(2); // 인솔자는 빠지고 둘이 남는다
+		assertThat(redis.hasKey("ride:riders:" + captain)).isFalse();
+		assertThat(redis.hasKey("ride:captain:" + first)).isFalse();
+		assertThat(redis.hasKey("ride:captain:" + second)).isFalse();
+		verify(realtimeMessageService).sendToUser(eq(first), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+		verify(realtimeMessageService).sendToUser(eq(second), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), any());
+	}
+}

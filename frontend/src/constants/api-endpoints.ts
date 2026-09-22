@@ -135,6 +135,11 @@ export const API_ENDPOINTS = {
     detail: (id: number) => `/bff/playlists/${id}`,
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,
+    /**
+     * 곡 순서 바꾸기 (S15P21A405-540) → 백엔드 `POST /api/playlist/music/reorder`.
+     * 본문은 **새 순서의 전체 목록**(`{musicIds}`)이다 — 바뀐 곡만 보내는 길이 없다.
+     */
+    order: (id: number) => `/bff/playlists/${id}/order`,
     like: (id: number) => `/bff/playlists/${id}/like`,
   },
 

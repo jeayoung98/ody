@@ -27,6 +27,8 @@ public class ArtworkRow {
 	private int attemptCnt;
 	private String failReason;
 	private int likeCnt;
+	/** 채점 기준 그림이면 true. 사람이 넣는 행이고 리더보드에 서지 않는다. */
+	private boolean anchor;
 	private OffsetDateTime evaluatedAt;
 	private OffsetDateTime createdAt;
 }

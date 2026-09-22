@@ -36,7 +36,7 @@
 
 	<sql id="artworkColumns">
 		id, round_id, email, playlist_id, title, layout_version, status,
-		score, ai_comment, model, attempt_cnt, fail_reason, like_cnt, evaluated_at, created_at
+		score, ai_comment, model, attempt_cnt, fail_reason, like_cnt, is_anchor AS anchor, evaluated_at, created_at
 	</sql>
 
 	<select id="findById" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
@@ -48,7 +48,15 @@
 	<select id="findByRoundAndEmail" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
 		SELECT <include refid="artworkColumns"/>
 		FROM artwork
-		WHERE round_id = #{roundId} AND email = #{email}
+		WHERE round_id = #{roundId} AND email = #{email} AND is_anchor = false
+	</select>
+
+	<!-- 채점 기준 그림. 사람이 SQL 로 넣고 점수가 고정돼 있다. 점수 내림차순으로 모델에게 보인다. -->
+	<select id="findAnchors" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
+		SELECT <include refid="artworkColumns"/>
+		FROM artwork
+		WHERE round_id = #{roundId} AND is_anchor = true AND score IS NOT NULL
+		ORDER BY score DESC, id ASC
 	</select>
 
 	<delete id="deleteById">
@@ -148,13 +156,13 @@
 				<otherwise>false</otherwise>
 			</choose> AS liked_by_me
 		FROM artwork a
-		WHERE a.round_id = #{roundId} AND a.status = 'SCORED'
+		WHERE a.round_id = #{roundId} AND a.status = 'SCORED' AND a.is_anchor = false
 		ORDER BY a.score DESC, a.like_cnt DESC, a.created_at ASC
 		LIMIT #{limit} OFFSET #{offset}
 	</select>
 
 	<select id="countLeaderboard" resultType="int">
-		SELECT count(*) FROM artwork WHERE round_id = #{roundId} AND status = 'SCORED'
+		SELECT count(*) FROM artwork WHERE round_id = #{roundId} AND status = 'SCORED' AND is_anchor = false
 	</select>
 
 	<!-- 내 작품은 상태를 가리지 않는다. 실패 사유도 본인에게는 보여준다. -->
@@ -164,7 +172,7 @@
 			a.fail_reason AS fail_reason,
 			EXISTS(SELECT 1 FROM artwork_like l WHERE l.artwork_id = a.id AND l.email = #{email}) AS liked_by_me
 		FROM artwork a
-		WHERE a.email = #{email}
+		WHERE a.email = #{email} AND a.is_anchor = false
 		ORDER BY a.created_at DESC
 	</select>
 

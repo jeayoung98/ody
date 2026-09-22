@@ -1,5 +1,6 @@
 package com.ssafy.backend.artwork.evaluation;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -21,7 +22,8 @@ public interface ArtworkEvaluationPort {
 	/**
 	 * @param pngBytes    서버가 렌더한 작품 이미지
 	 * @param themePrompt 회차의 채점 기준 문장({@code artwork_round.theme_prompt})
+	 * @param anchors     점수가 붙은 기준 그림. 비어 있으면 기준 없이 채점한다(진단에서 변별력이 크게 떨어졌다)
 	 * @return 채점 결과. 실패면 비어 있다
 	 */
-	Optional<ArtworkEvaluation> evaluate(byte[] pngBytes, String themePrompt);
+	Optional<ArtworkEvaluation> evaluate(byte[] pngBytes, String themePrompt, List<ArtworkAnchor> anchors);
 }

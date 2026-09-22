@@ -1,5 +1,6 @@
 package com.ssafy.backend.artwork.service;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -8,6 +9,7 @@ import org.springframework.stereotype.Service;
 import com.ssafy.backend.artwork.dto.ArtworkPointRow;
 import com.ssafy.backend.artwork.dto.ArtworkRoundRow;
 import com.ssafy.backend.artwork.dto.ArtworkRow;
+import com.ssafy.backend.artwork.evaluation.ArtworkAnchor;
 import com.ssafy.backend.artwork.evaluation.ArtworkEvaluation;
 import com.ssafy.backend.artwork.evaluation.ArtworkEvaluationPort;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
@@ -58,7 +60,8 @@ public class ArtworkEvaluationService {
 			}
 
 			byte[] png = renderer.render(points);
-			Optional<ArtworkEvaluation> evaluation = evaluationPort.evaluate(png, round.getThemePrompt());
+			Optional<ArtworkEvaluation> evaluation =
+					evaluationPort.evaluate(png, round.getThemePrompt(), loadAnchors(round.getId()));
 
 			if (evaluation.isEmpty()) {
 				markFailed(artworkId, "AI 채점 실패");
@@ -78,6 +81,29 @@ public class ArtworkEvaluationService {
 			log.warn("[Artwork] 평가 중 오류 artworkId={} error={}", artworkId, e.toString());
 			markFailed(artworkId, "평가 중 오류");
 		}
+	}
+
+	/**
+	 * 회차의 기준 그림을 점수 내림차순으로 렌더한다. 기준 그림은 {@code artwork} 행이라 좌표 저장과
+	 * 렌더러를 그대로 쓴다 — 채점 대상과 같은 화풍이어야 비교가 성립한다.
+	 *
+	 * <p>기준 그림이 없어도 채점은 진행한다. 다만 진단에서 기준 없는 채점은 엉망 배치와 난수를 못
+	 * 갈랐으므로(plan.md v3~v5) 회차마다 기준 행을 넣는 것이 운영 전제다. 없으면 WARN 한 번.
+	 */
+	private List<ArtworkAnchor> loadAnchors(long roundId) {
+		List<ArtworkRow> rows = artworkMapper.findAnchors(roundId);
+		if (rows.isEmpty()) {
+			log.warn("[Artwork] 회차에 기준 그림이 없다 — 변별력이 떨어진다 roundId={}", roundId);
+			return List.of();
+		}
+		List<ArtworkAnchor> anchors = new ArrayList<>(rows.size());
+		for (ArtworkRow row : rows) {
+			if (row.getScore() == null) {
+				continue;
+			}
+			anchors.add(new ArtworkAnchor(renderer.render(artworkMapper.findPoints(row.getId())), row.getScore()));
+		}
+		return anchors;
 	}
 
 	private void markFailed(long artworkId, String reason) {

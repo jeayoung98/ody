@@ -1,6 +1,7 @@
 package com.ssafy.backend.artwork.evaluation;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.Map;
@@ -39,13 +40,16 @@ public class GmsEvaluationClient implements ArtworkEvaluationPort {
 	/**
 	 * 응답을 JSON 으로 강제한다. OpenAI 의 {@code json_object} 모드는 메시지 어딘가에 "JSON" 이라는
 	 * 낱말이 있어야 동작하므로 아래 지시문에 그대로 넣었다 — 지우면 400 이 온다.
+	 *
+	 * <p>"구간 안에서 위치를 정하라" 나 "항목을 합산하라" 는 넣지 않는다. 숫자 결정을 모델에게 맡기면
+	 * {@code temperature 0} 이어도 같은 그림에 다른 점수가 나왔다(진단 v2·v4).
 	 */
 	private static final String INSTRUCTION = """
 			%s
 
 			답은 다른 말 없이 JSON 하나로만 하라.
 			{"score": 0부터 100 사이 정수, "comment": "한국어 한 줄 평"}
-			comment 는 40자 이내로 무엇이 닮았고 무엇이 아쉬운지 적어라.
+			comment 는 40자 이내로 어느 부위가 있고 없는지 적어라.
 			""";
 
 	private final RestClient restClient;
@@ -89,7 +93,7 @@ public class GmsEvaluationClient implements ArtworkEvaluationPort {
 	}
 
 	@Override
-	public Optional<ArtworkEvaluation> evaluate(byte[] pngBytes, String themePrompt) {
+	public Optional<ArtworkEvaluation> evaluate(byte[] pngBytes, String themePrompt, List<ArtworkAnchor> anchors) {
 		if (!apiKeyPresent) {
 			return Optional.empty();
 		}
@@ -97,7 +101,7 @@ public class GmsEvaluationClient implements ArtworkEvaluationPort {
 			GmsChatResponse response = restClient.post()
 					.uri("/v1/chat/completions")
 					.contentType(MediaType.APPLICATION_JSON)
-					.body(requestBody(pngBytes, themePrompt))
+					.body(requestBody(pngBytes, themePrompt, anchors))
 					.retrieve()
 					.body(GmsChatResponse.class);
 
@@ -109,20 +113,35 @@ public class GmsEvaluationClient implements ArtworkEvaluationPort {
 		}
 	}
 
-	private Map<String, Object> requestBody(byte[] pngBytes, String themePrompt) {
-		String dataUri = "data:image/png;base64," + Base64.getEncoder().encodeToString(pngBytes);
+	/**
+	 * 지시문 → (기준 그림 N — 점수 S, 그림)… → "채점할 그림:" → 작품. 기준 그림이 없으면 지시문과 작품만.
+	 * 모델은 마지막 그림 하나만 채점한다 — 지시문이 그렇게 말하고, 기준 그림에는 점수가 이미 붙어 있다.
+	 */
+	private Map<String, Object> requestBody(byte[] pngBytes, String themePrompt, List<ArtworkAnchor> anchors) {
+		List<Map<String, Object>> content = new ArrayList<>();
+		content.add(Map.of("type", "text", "text", INSTRUCTION.formatted(themePrompt)));
+		for (int i = 0; i < anchors.size(); i++) {
+			ArtworkAnchor anchor = anchors.get(i);
+			content.add(Map.of("type", "text", "text", "기준 그림 " + (i + 1) + " — 점수 " + anchor.score()));
+			content.add(imagePart(anchor.pngBytes()));
+		}
+		if (!anchors.isEmpty()) {
+			content.add(Map.of("type", "text", "text", "채점할 그림:"));
+		}
+		content.add(imagePart(pngBytes));
+
 		return Map.of(
 				"model", model,
 				// 같은 그림은 같은 점수를 받아야 한다. 기본값(1.0)이면 호출마다 점수가 흔들려
 				// 재평가한 사람이 유리해진다 — 순위를 매기는 기능에서는 결함이다.
 				"temperature", 0,
 				"response_format", Map.of("type", "json_object"),
-				"messages", List.of(Map.of(
-						"role", "user",
-						"content", List.of(
-								Map.of("type", "text", "text", INSTRUCTION.formatted(themePrompt)),
-								Map.of("type", "image_url",
-										"image_url", Map.of("url", dataUri, "detail", imageDetail))))));
+				"messages", List.of(Map.of("role", "user", "content", content)));
+	}
+
+	private Map<String, Object> imagePart(byte[] pngBytes) {
+		String dataUri = "data:image/png;base64," + Base64.getEncoder().encodeToString(pngBytes);
+		return Map.of("type", "image_url", "image_url", Map.of("url", dataUri, "detail", imageDetail));
 	}
 
 	/** 모델 답을 믿지 않는다. 형식·범위를 통과한 것만 점수로 인정한다. */
@@ -132,6 +151,11 @@ public class GmsEvaluationClient implements ArtworkEvaluationPort {
 			return Optional.empty();
 		}
 		GmsChatResponse.Message message = response.choices().get(0).message();
+		if (message != null && message.refusal() != null) {
+			// 모델의 안전 거부. 선 그림에도 드물게 붙는다(2026-09-22 진단). 재시도로 풀리는 실패다.
+			log.warn("[Artwork] GMS 가 답을 거부했다 model={} refusal={}", model, message.refusal());
+			return Optional.empty();
+		}
 		if (message == null || message.content() == null || message.content().isBlank()) {
 			log.warn("[Artwork] GMS 응답 content 가 비었다 model={}", model);
 			return Optional.empty();

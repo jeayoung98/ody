@@ -16,6 +16,7 @@ import org.junit.jupiter.api.Assumptions;
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.backend.artwork.dto.ArtworkPointRow;
+import com.ssafy.backend.artwork.evaluation.ArtworkAnchor;
 import com.ssafy.backend.artwork.evaluation.ArtworkEvaluation;
 import com.ssafy.backend.artwork.evaluation.GmsEvaluationClient;
 import com.ssafy.backend.artwork.render.ArtworkRenderer;
@@ -45,20 +46,24 @@ class GmsScoreProbe {
 	private static final Path ENV_FILE = Path.of(".env");
 	private static final Path OUT_DIR = Path.of("build", "artwork-probe");
 
-	/** {@code artwork_001_tables.sql} 의 1회차 {@code theme_prompt} 와 같은 문장. 한쪽만 바꾸면 진단이 실물과 달라진다. */
+	/** {@code artwork_002_anchors.sql} 의 1회차 {@code theme_prompt}(v6) 와 같은 문장. 한쪽만 바꾸면 진단이 실물과 달라진다. */
 	static final String THEME_PROMPT = """
-			이 그림은 음악 플레이리스트의 곡들을 점으로 찍고 순서대로 선으로 이은 별자리다.
-			이 배치가 고양이로 보이는지만 판단하라. 선의 굵기나 그림 솜씨는 평가 대상이 아니다.
+			이 그림들은 음악 플레이리스트의 곡들을 점으로 찍고 순서대로 선으로 이은 별자리다.
+			배치가 고양이로 보이는지만 판단하라. 선의 굵기나 그림 솜씨는 평가 대상이 아니다.
 
-			아래 기준에 맞춰 0~100 정수로 채점한다.
+			점수 구간:
 			- 90~100: 설명 없이 한눈에 고양이다. 귀·머리·몸통·꼬리가 제자리에 있고 비율도 맞다
-			- 70~89: 고양이로 보인다. 부위는 다 있으나 비율이나 배치가 어색하다
-			- 50~69: 고양이라고 말해주면 그렇게 보인다. 부위 하나가 빠졌거나 자리가 틀렸다
-			- 30~49: 동물 같긴 하나 고양이로 집어 말하기 어렵다
+			- 70~89: 고양이로 보인다. 네 부위가 다 있으나 비율이나 배치가 어색하다
+			- 50~69: 고양이라고 말해주면 그렇게 보인다. 부위 하나가 빠졌다
+			- 30~49: 부위 둘 이상이 빠졌거나, 부위는 있으나 서로 엉뚱한 자리라 고양이로 안 보인다
 			- 10~29: 부위 하나 정도만 고양이를 연상시킨다
-			- 0~9: 고양이와 무관한 배치다
+			- 0~9: 닫힌 형태가 하나도 없는 점 흩어짐이나 선 하나다
 
-			부위가 다 있어도 서로 엉뚱한 자리에 있어 한눈에 고양이로 안 보이면 50 아래다.
+			반드시 지킬 상한: 꼬리가 없으면 69 이하. 부위가 둘 이상 없으면 49 이하. 닫힌 형태가 없으면 9 이하.
+			부위가 다 있어도 서로 엉뚱한 자리면 49 이하.
+
+			먼저 기준 그림들과 그 점수를 본다. 그 다음 마지막 그림을 기준 그림과 비교해 채점한다.
+			기준 그림에서 꼬리가 어디 붙어 있는지, 머리가 몸통 어느 쪽에 있는지를 눈여겨보고, 마지막 그림에 같은 부위가 같은 자리에 있는지 하나씩 대조하라.
 			없는 것을 있다고 보지 마라. 애매하면 낮은 쪽을 준다.""";
 
 	/** 그림 이름 → 기대 점수대. 진단 출력에 같이 찍어 눈으로 대조한다. */
@@ -71,6 +76,9 @@ class GmsScoreProbe {
 		Map<String, String> m = new LinkedHashMap<>();
 		m.put("cat_best", "90~100 (23점, 앉은 옆모습)");
 		m.put("cat_best_again", "cat_best 와 같아야 (temp 0)");
+		m.put("cat_best_no_tail", "50~69 (best 에서 꼬리 제거)");
+		m.put("cat_best_scrambled", "<50 (best 부위 자리 이동)");
+		m.put("scatter2", "0~9 (난수 seed 7)");
 		m.put("cat_full", "70~89 (18점 성긴 스케치)");
 		m.put("cat_awkward", "50~79 (귀 과대·몸통 짧음)");
 		m.put("cat_no_tail", "50~69");
@@ -85,6 +93,10 @@ class GmsScoreProbe {
 		Map<String, List<ArtworkPointRow>> m = new LinkedHashMap<>();
 		m.put("cat_best", catBest());
 		m.put("cat_best_again", catBest());
+		// few-shot 진단용 시험 세트 — 기준 그림(cat_full 계열)과 다른 계열이어야 유출이 없다.
+		m.put("cat_best_no_tail", catBestNoTail());
+		m.put("cat_best_scrambled", catBestScrambled());
+		m.put("scatter2", scatter(7));
 		m.put("cat_full", catFull());
 		m.put("cat_awkward", catAwkward());
 		m.put("cat_no_tail", catNoTail());
@@ -109,6 +121,7 @@ class GmsScoreProbe {
 			Files.write(OUT_DIR.resolve(shape.getKey() + ".png"), renderer.render(shape.getValue()));
 		}
 		System.out.println("PNG: " + OUT_DIR.toAbsolutePath());
+		writeAnchorSql(shapes);
 
 		Assumptions.assumeTrue(!apiKey.isBlank(),
 				"backend/.env 에 GMS_API_KEY 가 없어 채점은 건너뛴다. PNG 는 위 경로에 남았다.");
@@ -118,13 +131,20 @@ class GmsScoreProbe {
 				env.getOrDefault("GMS_BASE_URL", "https://gms.ssafy.io/gmsapi/api.openai.com"),
 				apiKey, model, env.getOrDefault("GMS_IMAGE_DETAIL", "low"), 3000, 30000);
 
+		// 운영과 같은 기준 그림 4장 (v6). 기준과 시험이 같은 그림이면 그 행은 유출이라 점수를 믿지 않는다.
+		List<ArtworkAnchor> anchors = List.of(
+				new ArtworkAnchor(renderer.render(shapes.get("cat_full")), 75),
+				new ArtworkAnchor(renderer.render(shapes.get("cat_no_tail")), 55),
+				new ArtworkAnchor(renderer.render(shapes.get("cat_scrambled")), 35),
+				new ArtworkAnchor(renderer.render(shapes.get("scatter")), 5));
+
 		Map<String, String> expectations = expectations();
-		System.out.println("=== GMS 점수 진단 (model=" + model + ") ===");
+		System.out.println("=== GMS 점수 진단 (model=" + model + ", anchors=4) ===");
 		System.out.printf("%-16s %5s  %-28s %7s  %s%n", "shape", "score", "expected", "time", "comment");
 		for (Map.Entry<String, List<ArtworkPointRow>> shape : shapes.entrySet()) {
 			byte[] png = renderer.render(shape.getValue());
 			long startedAt = System.currentTimeMillis();
-			Optional<ArtworkEvaluation> result = client.evaluate(png, THEME_PROMPT);
+			Optional<ArtworkEvaluation> result = client.evaluate(png, THEME_PROMPT, anchors);
 			long elapsed = System.currentTimeMillis() - startedAt;
 
 			System.out.printf("%-16s %5s  %-28s %5dms  %s%n",
@@ -134,6 +154,35 @@ class GmsScoreProbe {
 					elapsed,
 					result.map(ArtworkEvaluation::comment).orElse("-"));
 		}
+	}
+
+	/**
+	 * 기준 그림 4장을 {@code artwork} 행으로 넣는 SQL 을 뽑는다 → {@code build/artwork-probe/anchors.sql}.
+	 * v6 진단에서 쓴 것과 같은 그림·점수다. 회차 DDL(`artwork_002_anchors.sql`)이 이 출력을 그대로 담는다.
+	 */
+	private static void writeAnchorSql(Map<String, List<ArtworkPointRow>> shapes) throws IOException {
+		String[][] anchors = {{"cat_full", "75"}, {"cat_no_tail", "55"}, {"cat_scrambled", "35"}, {"scatter", "5"}};
+		StringBuilder sql = new StringBuilder();
+		for (String[] anchor : anchors) {
+			String name = anchor[0];
+			sql.append("-- 기준 그림 ").append(name).append(" (").append(anchor[1]).append("점)\n");
+			sql.append("INSERT INTO public.artwork (id, round_id, email, title, layout_version, status, score, ai_comment, model, is_anchor, evaluated_at)\n");
+			sql.append("SELECT nextval('artwork_id_seq'), r.id, 'anchor@ody.system', '기준 ").append(name)
+					.append("', 'probe', 'SCORED', ").append(anchor[1]).append(", NULL, 'fixed', true, now()\n");
+			sql.append("FROM public.artwork_round r WHERE r.theme = '고양이'\n");
+			sql.append("  AND NOT EXISTS (SELECT 1 FROM public.artwork a WHERE a.round_id = r.id AND a.is_anchor AND a.title = '기준 ")
+					.append(name).append("');\n");
+			sql.append("INSERT INTO public.artwork_point (artwork_id, position, music_id, x, y)\nSELECT a.id, p.position, 0, p.x, p.y\nFROM public.artwork a, (VALUES\n");
+			List<ArtworkPointRow> points = shapes.get(name);
+			for (int i = 0; i < points.size(); i++) {
+				ArtworkPointRow p = points.get(i);
+				sql.append(String.format(java.util.Locale.ROOT, "  (%d, %.4f, %.4f)%s\n",
+						p.getPosition(), p.getX(), p.getY(), i < points.size() - 1 ? "," : ""));
+			}
+			sql.append(") AS p(position, x, y)\nWHERE a.is_anchor AND a.title = '기준 ").append(name)
+					.append("'\n  AND NOT EXISTS (SELECT 1 FROM public.artwork_point q WHERE q.artwork_id = a.id);\n\n");
+		}
+		Files.writeString(OUT_DIR.resolve("anchors.sql"), sql.toString(), StandardCharsets.UTF_8);
 	}
 
 	// ---------------------------------------------------------------------------------------
@@ -205,6 +254,38 @@ class GmsScoreProbe {
 		return toRows(xy);
 	}
 
+	/** catBest 에서 꼬리 3점(경로 앞머리)을 뗀 것. 뒷발에서 시작해 몸통 고리를 닫는다. */
+	private static List<ArtworkPointRow> catBestNoTail() {
+		List<ArtworkPointRow> full = catBest();
+		double[][] xy = new double[full.size() - 3][];
+		for (int i = 3; i < full.size(); i++) {
+			xy[i - 3] = new double[] {full.get(i).getX(), full.get(i).getY()};
+		}
+		return toRows(xy);
+	}
+
+	/**
+	 * catBest 의 부위를 그대로 두고 자리만 바꾼다 — 머리(경로 9~15번째)를 오른쪽 아래로, 꼬리(0~2)를 왼쪽 위로.
+	 * 몸통은 제자리. 부위는 넷 다 있고 배치만 엉망이다.
+	 */
+	private static List<ArtworkPointRow> catBestScrambled() {
+		List<ArtworkPointRow> full = catBest();
+		double[][] xy = new double[full.size()][];
+		for (int i = 0; i < full.size(); i++) {
+			double x = full.get(i).getX();
+			double y = full.get(i).getY();
+			if (i <= 2) {              // 꼬리 → 왼쪽 위
+				x -= 1.6;
+				y += 1.2;
+			} else if (i >= 9 && i <= 15) {   // 머리 → 오른쪽 아래
+				x += 1.2;
+				y -= 1.5;
+			}
+			xy[i] = new double[] {Math.max(-1, Math.min(1, x)), Math.max(-1, Math.min(1, y))};
+		}
+		return toRows(xy);
+	}
+
 	/** 네 부위 제자리이지만 18점 성긴 스케치라 꼬리가 왕복선이고 몸통이 각져 있다. 70~89 를 기대한다. */
 	private static List<ArtworkPointRow> catFull() {
 		return toRows(concat(HEAD, BODY_TOP, TAIL, BODY_BOTTOM));
@@ -256,9 +337,13 @@ class GmsScoreProbe {
 		return points;
 	}
 
-	/** 고정 시드 — 진단을 다시 돌려도 같은 그림이어야 점수를 비교할 수 있다. */
 	private static List<ArtworkPointRow> scatter() {
-		Random random = new Random(42);
+		return scatter(42);
+	}
+
+	/** 고정 시드 — 진단을 다시 돌려도 같은 그림이어야 점수를 비교할 수 있다. */
+	private static List<ArtworkPointRow> scatter(long seed) {
+		Random random = new Random(seed);
 		List<ArtworkPointRow> points = new ArrayList<>();
 		for (int i = 0; i < 12; i++) {
 			points.add(new ArtworkPointRow(i, 300 + i, random.nextDouble() * 2 - 1, random.nextDouble() * 2 - 1));

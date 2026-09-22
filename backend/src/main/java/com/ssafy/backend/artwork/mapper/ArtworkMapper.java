@@ -59,6 +59,12 @@ public interface ArtworkMapper {
 	/** 실패한 작품을 다시 대기로 되돌린다(재평가). */
 	int markPendingAgain(@Param("artworkId") long artworkId);
 
+	/**
+	 * 회차의 채점 기준 그림({@code is_anchor = true}). 점수 내림차순. 사람이 SQL 로 넣는 행이라
+	 * 리더보드·내 작품·회차당 1작품 검사 어디에도 나오지 않는다.
+	 */
+	List<ArtworkRow> findAnchors(@Param("roundId") long roundId);
+
 	// ---- 좌표 ----
 
 	void insertPoints(@Param("artworkId") long artworkId, @Param("points") List<ArtworkPointRow> points);

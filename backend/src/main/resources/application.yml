@@ -46,7 +46,9 @@ ody:
     gms:
       base-url: ${GMS_BASE_URL:https://gms.ssafy.io/gmsapi/api.openai.com}
       api-key: ${GMS_API_KEY:}
-      model: ${GMS_MODEL:gpt-4o-mini}
+      # gpt-4o-mini 는 어떤 프롬프트로도 그림 5종이 30점 동점이었다(specs/009 plan.md "변별력 진단").
+      # 이미지 토큰도 mini 가 7배(3,175 vs 427)라 토큰 기준이면 4o 가 더 싸다.
+      model: ${GMS_MODEL:gpt-4o}
       # low 면 이미지 토큰이 줄어든다. 별자리는 흑백 점·선이라 해상도를 낮춰도 형태 판단에 손해가 적다.
       image-detail: ${GMS_IMAGE_DETAIL:low}
       timeout-connect-ms: ${GMS_TIMEOUT_CONNECT_MS:3000}

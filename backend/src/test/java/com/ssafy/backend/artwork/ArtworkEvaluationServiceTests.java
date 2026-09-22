@@ -1,7 +1,9 @@
 package com.ssafy.backend.artwork;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -48,7 +50,7 @@ class ArtworkEvaluationServiceTests {
 	@Test
 	void writesScore_whenEvaluationSucceeds() {
 		givenArtworkWithPoints();
-		when(port.evaluate(any(), anyString()))
+		when(port.evaluate(any(), anyString(), anyList()))
 				.thenReturn(Optional.of(new ArtworkEvaluation(87, "귀가 또렷하다", "gpt-4o-mini-2024-07-18")));
 		when(artworkMapper.markScored(anyLong(), anyInt(), anyString(), anyString())).thenReturn(1);
 
@@ -62,7 +64,7 @@ class ArtworkEvaluationServiceTests {
 	@Test
 	void writesFailed_whenPortReturnsEmpty() {
 		givenArtworkWithPoints();
-		when(port.evaluate(any(), anyString())).thenReturn(Optional.empty());
+		when(port.evaluate(any(), anyString(), anyList())).thenReturn(Optional.empty());
 
 		service.evaluate(artwork());
 
@@ -74,7 +76,7 @@ class ArtworkEvaluationServiceTests {
 	@Test
 	void discardsResult_whenArtworkGone() {
 		givenArtworkWithPoints();
-		when(port.evaluate(any(), anyString()))
+		when(port.evaluate(any(), anyString(), anyList()))
 				.thenReturn(Optional.of(new ArtworkEvaluation(50, "그럭저럭", "gpt-4o-mini")));
 		when(artworkMapper.markScored(anyLong(), anyInt(), anyString(), anyString())).thenReturn(0);
 
@@ -90,7 +92,7 @@ class ArtworkEvaluationServiceTests {
 		service.evaluate(artwork());
 
 		verify(artworkMapper).markFailed(eq(5L), anyString());
-		verify(port, never()).evaluate(any(), anyString());
+		verify(port, never()).evaluate(any(), anyString(), anyList());
 	}
 
 	@Test
@@ -101,14 +103,46 @@ class ArtworkEvaluationServiceTests {
 		service.evaluate(artwork());
 
 		verify(artworkMapper).markFailed(eq(5L), anyString());
-		verify(port, never()).evaluate(any(), anyString());
+		verify(port, never()).evaluate(any(), anyString(), anyList());
+	}
+
+	/**
+	 * 회차의 기준 그림을 렌더해 점수와 함께 포트에 넘긴다 (few-shot). 기준이 없으면 빈 목록이고 채점은
+	 * 그대로 진행한다 — 진단에서 기준 없는 채점은 변별력이 크게 떨어졌지만(plan.md v3~v5) 막지는 않는다.
+	 */
+	@Test
+	void passesRenderedAnchorsToPort() {
+		givenArtworkWithPoints();
+		ArtworkRow anchorHigh = artwork();
+		anchorHigh.setId(901L);
+		anchorHigh.setScore(75);
+		ArtworkRow anchorLow = artwork();
+		anchorLow.setId(902L);
+		anchorLow.setScore(5);
+		when(artworkMapper.findAnchors(1L)).thenReturn(List.of(anchorHigh, anchorLow));
+		when(artworkMapper.findPoints(901L)).thenReturn(List.of(
+				new ArtworkPointRow(0, 1L, -0.2, 0.2), new ArtworkPointRow(1, 2L, 0.2, -0.2)));
+		when(artworkMapper.findPoints(902L)).thenReturn(List.of(
+				new ArtworkPointRow(0, 3L, 0.9, 0.9), new ArtworkPointRow(1, 4L, -0.9, 0.9)));
+		when(port.evaluate(any(), anyString(), anyList())).thenReturn(Optional.empty());
+
+		service.evaluate(artwork());
+
+		@SuppressWarnings("unchecked")
+		org.mockito.ArgumentCaptor<List<com.ssafy.backend.artwork.evaluation.ArtworkAnchor>> anchors =
+				org.mockito.ArgumentCaptor.forClass(List.class);
+		verify(port).evaluate(any(), eq("고양이를 얼마나 닮았는지 채점하라."), anchors.capture());
+		assertThat(anchors.getValue()).hasSize(2);
+		assertThat(anchors.getValue().get(0).score()).isEqualTo(75);
+		assertThat(anchors.getValue().get(1).score()).isEqualTo(5);
+		assertThat(anchors.getValue().get(0).pngBytes()).startsWith((byte) 0x89, (byte) 'P', (byte) 'N', (byte) 'G');
 	}
 
 	/** 포트가 예외를 던져도 밖으로 새지 않는다 — 한 작품의 실패가 배치를 멈추면 안 된다. */
 	@Test
 	void writesFailed_whenPortThrows() {
 		givenArtworkWithPoints();
-		when(port.evaluate(any(), anyString())).thenThrow(new IllegalStateException("boom"));
+		when(port.evaluate(any(), anyString(), anyList())).thenThrow(new IllegalStateException("boom"));
 
 		service.evaluate(artwork());
 

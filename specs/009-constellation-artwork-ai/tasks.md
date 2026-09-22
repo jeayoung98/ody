@@ -36,7 +36,9 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 
 - [ ] T000a 기획 확인 — (a) FEATURES.md 에 이 기능 항목 신설, (b) `SOCIAL-12` 와의 관계 정리(좋아요 순 vs AI 점수 순), (c) **회차당 1작품·교체 시 점수 소멸** 정책 승인. spec "기능 명세와의 관계" 참조
 - [X] T000b GMS 실물 확인 — **완료 (2026-09-22)**. 배포 호스트에서 1×1 PNG 를 `image_url` data URI 로 실어 호출: `HTTP 200`, 0.85s, `model=gpt-4o-mini-2024-07-18`, 인증은 `Authorization: Bearer`. **프록시가 이미지 파트를 통과시킨다** — 설계 변경 없음. 값은 `/etc/ody/backend.env` 에 있다. 결과는 plan.md "실호출 확인" 에 기록
-- [ ] T000c 이미지 토큰 비용 확인 — 1×1 짜리에 `prompt_tokens` 가 **8,521** 붙었다. GMS Credit 이 **호출당 정액(2)** 인지 토큰 비례인지 확인한다. 토큰 비례면 (a) `"detail":"low"` 적용, (b) 렌더 해상도 축소, (c) 모델 재선택 중에서 고른다. 확인 방법: GMS 대시보드에서 위 호출 1건의 Credit 차감량을 본다
+- [X] T000c 이미지 토큰 비용 확인 — **모델 결정으로 흡수.** `gpt-4o-mini` 는 `detail=low` 512px 에 3,175 토큰, `gpt-4o` 는 427. 정액이든 토큰 비례든 4o 쪽이 유리하다(정액이면 결과가 되는 유일한 선택, 토큰 비례면 1/7). plan.md "결정" 참조
+- [X] T000d **변별력 진단 6회** (2026-09-22, 약 500 Credit) — 결과·결정은 plan.md "변별력 진단 v1~v6". 결론: `gpt-4o` + 기준 그림 4장 few-shot + `temperature 0`. 알려진 한계: 꼬리 하나 빠진 것은 못 깎는다
+- [ ] T000e **비용 확인 (팀)** — 호출당 20 Credit, 사용자당 최대 80. 100명 = 8,000 Credit. mini(2)는 결과가 쓸 수 없어 대안이 아니다. 팀이 감당할 규모인지 확인
 
 **⚠️ T000a·T000b 없이 진행하면 명세에 없는 기능을 미확인 외부 계약 위에 구현하는 것이다**
 
@@ -47,6 +49,7 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 - [X] T001 DDL 작성 — `backend/src/main/resources/db/artwork_001_tables.sql`. plan.md "데이터 모델" 의 테이블 4개·시퀀스 3개·인덱스 4개. `CREATE INDEX CONCURRENTLY` 는 트랜잭션 밖에서 한 줄씩 실행하도록 주석으로 안내(`playlist_like_001` 과 같은 방식)
 - [X] T002 DDL 실행 — **사람이 DBeaver 로 실행한다**(운영 쓰기). 실행 뒤 `SELECT count(*) FROM artwork_round, artwork, artwork_point, artwork_like` 가 모두 0으로 성립하는지 확인
 - [X] T003 1회차 행 삽입 — `artwork_round(theme='고양이', theme_prompt=…, starts_at, ends_at)`. `theme_prompt` 는 "이 별자리 그림이 고양이를 얼마나 닮았는지 0~100 으로 채점하고 한국어 한 줄 평을 달아라" 취지. **사람이 실행**
+- [ ] T003b **`artwork_002_anchors.sql` 실행** — `is_anchor` 칼럼 추가 + 1회차 루브릭 v6 교체 + 기준 그림 4행(64 좌표). **사람이 DBeaver 로 실행.** 끝의 SELECT 가 `4 | 64 | true` 여야 한다. **이거 전까지 채점은 기준 없이 돌아 변별력이 떨어진다**(WARN 로그)
 
 ---
 

@@ -152,7 +152,7 @@ export default function PlayerBar() {
           <TransportButton label="이전" onClick={() => { track("play_prev_requested", { music_id: currentMusicId, at_boundary: queueIndex === 0 }); prev(); }} disabled={riding || queue.length === 0}>
             <PrevIcon />
           </TransportButton>
-          <TransportButton label={isPlaying ? "정지" : "재생"} primary size="lg" onClick={handleToggle} dimmed={!canPlay}>
+          <TransportButton label={isPlaying ? "정지" : "재생"} primary size="lg" onClick={handleToggle} dimmed={!canPlay || riding}>
             {isPlaying ? <PauseIcon size={20} /> : <PlayIcon size={20} />}
           </TransportButton>
           <TransportButton label="다음" onClick={() => { track("play_next_requested", { music_id: currentMusicId, at_boundary: queueIndex + 1 >= queue.length }); next(); }} disabled={riding || queue.length === 0}>

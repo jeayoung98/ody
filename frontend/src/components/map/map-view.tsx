@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM, RIDING_LOCKED } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
@@ -15,10 +15,11 @@ import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
-import { useFollowStore } from "@/stores/use-follow-store";
+import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -638,6 +639,19 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   const pressSong = useCallback(
     (s: MapPoint) => {
+      /**
+       * **따라가는 동안에는 별을 고를 수 없다** (S15P21A405-567).
+       *
+       * 재생은 `use-play-song` 이 이미 막지만 **선택과 상세 열기는 그대로 돌았다.** 따라가는
+       * 동안 우측은 인솔자가 열어 둔 곡이어야 하는데(S15P21A405-557) 그걸 덮어 버리고,
+       * 내가 다시 돌려놓을 방법도 없다 — 인솔자가 다음 곡을 누를 때까지 엉뚱한 상세를 본다.
+       *
+       * 조용히 씹지 않는다. 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다.
+       */
+      if (isRiding()) {
+        useToastStore.getState().show(RIDING_LOCKED);
+        return;
+      }
       const map = useMapStore.getState();
       track("music_clicked", { music_id: s.musicId, source: "canvas", action: map.selectedMusicId === s.musicId ? "play" : "inspect" });
       if (map.selectedMusicId === s.musicId) {

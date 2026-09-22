@@ -6,14 +6,38 @@ import java.util.List;
 
 import org.springframework.stereotype.Component;
 
+/**
+ * 축별 분포에서 리포트 근거가 될 finding 을 고른다.
+ *
+ * <p>임계값은 <b>표본 크기에 따라 달라진다</b>. 통계는 코퍼스 101분위로 변환한 백분위(0~100) 위에서
+ * 재므로, 좋아요가 코퍼스 무작위 표본이면 백분위는 정의상 균등분포가 된다. 그 균등분포에서 우연히
+ * 나오는 값이 곧 "취향이 없을 때의 잡음"이고, 아래 표는 그 잡음 분포의 분위수다
+ * (BIAS·DIVERSE 는 상위 5%, CONSISTENT 는 하위 5%). 즉 축당 오탐률이 표본 크기와 무관하게 5% 로 고정된다.
+ *
+ * <p>고정값(치우침 15 / 넓음 50 / 좁음 30)을 쓰면 표본이 작을수록 잡음이 커져서, 2026-09-22 실측 기준
+ * 10곡 사용자는 취향이 전혀 없어도 16축 중 7개가 걸렸고 넓음은 좋아요가 늘수록 오히려 더 걸렸다.
+ *
+ * <p>이 숫자는 <b>코퍼스와 무관한 상수</b>다. 백분위 변환이 어떤 코퍼스든 균등분포로 보내기 때문에,
+ * 기준 산출물(taste-reference)이 바뀌어도 다시 뽑을 필요가 없다. 2026-09-22 검증에서 운영 코퍼스
+ * 28,065곡으로 만든 잡음 분포와 순수 균등분포가 전 구간 0.3 이내로 일치했다.
+ */
 @Component
 public class TasteFindingSelector {
 
-    private static final double BIAS_THRESHOLD = 15;
-    private static final double CONSISTENT_IQR_MAX = 30;
-    private static final double DIVERSE_IQR_MIN = 50;
+    /** 잡음 분포 분위수 표. 사이 값은 log(n) 선형보간한다. */
+    private static final double[] SAMPLE_SIZES = {10, 15, 20, 30, 50, 100, 300};
+    /** |중앙 백분위 - 50| 상위 5% — 이보다 크면 치우침이 잡음으로 설명되지 않는다 */
+    private static final double[] BIAS_CUT = {26.5, 23.6, 20.1, 17.0, 13.3, 9.7, 5.6};
+    /** IQR 상위 5% — 이보다 넓으면 무작위 표본보다도 넓다 */
+    private static final double[] DIVERSE_CUT = {63.1, 62.5, 62.4, 61.1, 59.2, 57.1, 54.4};
+    /** IQR 하위 5% — 이보다 좁으면 무작위 표본보다 뚜렷하게 모여 있다 */
+    private static final double[] CONSISTENT_CUT = {19.8, 25.6, 28.6, 32.6, 36.8, 40.9, 44.9};
 
-    public List<TasteFinding> select(List<TasteAxisStatistics> statistics) {
+    public List<TasteFinding> select(List<TasteAxisStatistics> statistics, int sampleSize) {
+        double biasCut = interpolate(BIAS_CUT, sampleSize);
+        double diverseCut = interpolate(DIVERSE_CUT, sampleSize);
+        double consistentCut = interpolate(CONSISTENT_CUT, sampleSize);
+
         List<TasteFinding> candidates = new ArrayList<>();
         for (TasteAxisStatistics axis : statistics) {
             if (axis.label() == null || !axis.label().usableForNarrative()) {
@@ -22,10 +46,10 @@ public class TasteFindingSelector {
             double median = axis.percentile().median();
             double iqr = axis.percentile().iqr();
             double bias = Math.abs(median - 50);
-            if (iqr >= DIVERSE_IQR_MIN) {
+            if (iqr >= diverseCut) {
                 candidates.add(finding(axis, "DIVERSE", "BOTH", iqr));
-            } else if (bias >= BIAS_THRESHOLD) {
-                String type = iqr <= CONSISTENT_IQR_MAX ? "CONSISTENT_BIAS" : "BIAS";
+            } else if (bias >= biasCut) {
+                String type = iqr <= consistentCut ? "CONSISTENT_BIAS" : "BIAS";
                 candidates.add(finding(axis, type, median < 50 ? "LOW" : "HIGH", bias));
             }
         }
@@ -41,6 +65,30 @@ public class TasteFindingSelector {
                     "뚜렷한 한 방향보다 여러 특성을 고르게 듣는 경향"));
         }
         return List.copyOf(candidates.subList(0, Math.min(3, candidates.size())));
+    }
+
+    /**
+     * 표 바깥은 양 끝 값으로 고정한다.
+     * ponytail: 300곡 초과도 300곡 값을 쓴다 — 조금 보수적일 뿐 오탐이 늘지 않는다.
+     * 1,000곡대 사용자가 실제로 생기면 그때 표를 늘린다.
+     */
+    private static double interpolate(double[] cuts, int sampleSize) {
+        double n = Math.max(sampleSize, 1);
+        if (n <= SAMPLE_SIZES[0]) {
+            return cuts[0];
+        }
+        int last = SAMPLE_SIZES.length - 1;
+        if (n >= SAMPLE_SIZES[last]) {
+            return cuts[last];
+        }
+        int index = 0;
+        while (SAMPLE_SIZES[index + 1] < n) {
+            index++;
+        }
+        double from = Math.log(SAMPLE_SIZES[index]);
+        double to = Math.log(SAMPLE_SIZES[index + 1]);
+        double ratio = (Math.log(n) - from) / (to - from);
+        return cuts[index] + (cuts[index + 1] - cuts[index]) * ratio;
     }
 
     private static TasteFinding finding(

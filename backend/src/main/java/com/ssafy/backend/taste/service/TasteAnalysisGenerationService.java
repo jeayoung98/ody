@@ -98,7 +98,7 @@ public class TasteAnalysisGenerationService {
         }
         claim(email, analysisDate, requestedAt);
 
-        List<TasteFinding> findings = findingSelector.select(current.axes());
+        List<TasteFinding> findings = findingSelector.select(current.axes(), current.counts().valid());
         Timer.Sample sample = Timer.start(meterRegistry);
         try {
             GmsTasteOutput generated = gmsClient.generate(current.reportEligibility().level(), findings);

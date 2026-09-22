@@ -10,11 +10,14 @@ import com.ssafy.backend.taste.reference.TasteReference;
 
 class TasteFindingSelectorTests {
 
+    /** 잡음 기준 임계값은 표본 크기에 따라 달라진다. 이 테스트는 30곡 기준(치우침 17.0 / 넓음 61.1 / 좁음 32.6). */
+    private static final int N = 30;
+
     private final TasteFindingSelector selector = new TasteFindingSelector();
 
     @Test
     void narrowHighDistribution_isConsistentBias() {
-        List<TasteFinding> findings = selector.select(List.of(axis(1, 80, 20, "VERIFIED", "STRONG")));
+        List<TasteFinding> findings = selector.select(List.of(axis(1, 80, 20, "VERIFIED", "STRONG")), N);
 
         assertThat(findings.get(0).type()).isEqualTo("CONSISTENT_BIAS");
         assertThat(findings.get(0).direction()).isEqualTo("HIGH");
@@ -22,7 +25,7 @@ class TasteFindingSelectorTests {
 
     @Test
     void broadCenteredDistribution_isDiverseNotCenterPreference() {
-        List<TasteFinding> findings = selector.select(List.of(axis(1, 50, 70, "VERIFIED", "MEDIUM")));
+        List<TasteFinding> findings = selector.select(List.of(axis(1, 50, 70, "VERIFIED", "MEDIUM")), N);
 
         assertThat(findings.get(0).type()).isEqualTo("DIVERSE");
         assertThat(findings.get(0).direction()).isEqualTo("BOTH");
@@ -30,14 +33,14 @@ class TasteFindingSelectorTests {
 
     @Test
     void unverifiedAxis_isNotNarrated() {
-        List<TasteFinding> findings = selector.select(List.of(axis(1, 90, 10, "UNVERIFIED", "STRONG")));
+        List<TasteFinding> findings = selector.select(List.of(axis(1, 90, 10, "UNVERIFIED", "STRONG")), N);
 
         assertThat(findings).singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
     }
 
     @Test
     void moderatelySpreadHighDistribution_isBias() {
-        List<TasteFinding> findings = selector.select(List.of(axis(1, 75, 40, "VERIFIED", "MEDIUM")));
+        List<TasteFinding> findings = selector.select(List.of(axis(1, 75, 40, "VERIFIED", "MEDIUM")), N);
 
         assertThat(findings.get(0).type()).isEqualTo("BIAS");
         assertThat(findings.get(0).direction()).isEqualTo("HIGH");
@@ -46,15 +49,15 @@ class TasteFindingSelectorTests {
     @Test
     void separatedLowAndHighPeaks_areReportedAsDiverse() {
         TasteAxisStatistics bimodal = axis(
-                1, 50, 60, "VERIFIED", "STRONG",
+                1, 50, 70, "VERIFIED", "STRONG",
                 List.of(0, 5, 0, 0, 0, 0, 0, 0, 5, 0));
 
-        assertThat(selector.select(List.of(bimodal)).get(0).type()).isEqualTo("DIVERSE");
+        assertThat(selector.select(List.of(bimodal), N).get(0).type()).isEqualTo("DIVERSE");
     }
 
     @Test
     void noMaterialSignal_returnsBalanced() {
-        List<TasteFinding> findings = selector.select(List.of(axis(1, 50, 20, "VERIFIED", "STRONG")));
+        List<TasteFinding> findings = selector.select(List.of(axis(1, 50, 20, "VERIFIED", "STRONG")), N);
 
         assertThat(findings).singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
     }
@@ -65,9 +68,28 @@ class TasteFindingSelectorTests {
                 axis(4, 80, 20, "VERIFIED", "STRONG"),
                 axis(2, 80, 20, "VERIFIED", "STRONG"),
                 axis(3, 75, 20, "VERIFIED", "STRONG"),
-                axis(1, 50, 70, "VERIFIED", "STRONG")));
+                axis(1, 50, 70, "VERIFIED", "STRONG")), N);
 
         assertThat(findings).extracting(TasteFinding::pc).containsExactly(2, 4, 3);
+    }
+
+    @Test
+    void sameDistribution_isNotCalledBiasedWhenSampleIsTooSmallToTell() {
+        // 중앙 백분위 70(치우침 20)은 10곡에서는 잡음으로 설명되고(임계 26.5) 100곡에서는 아니다(임계 9.7).
+        TasteAxisStatistics axis = axis(1, 70, 45, "VERIFIED", "STRONG");
+
+        assertThat(selector.select(List.of(axis), 10))
+                .singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
+        assertThat(selector.select(List.of(axis), 100).get(0).type()).isEqualTo("BIAS");
+    }
+
+    @Test
+    void randomlySpreadDistribution_isNotCalledDiverse() {
+        // 무작위 표본의 IQR 중앙값은 50 근처다. 그 정도 폭은 "폭넓게 듣는다"가 아니다.
+        TasteAxisStatistics axis = axis(1, 50, 50, "VERIFIED", "STRONG");
+
+        assertThat(selector.select(List.of(axis), 30))
+                .singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
     }
 
     private static TasteAxisStatistics axis(

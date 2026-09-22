@@ -1,6 +1,9 @@
 "use client";
 
+import { useRef } from "react";
+import { useDismissOnOutside } from "@/hooks/use-dismiss-on-outside";
 import { usePanelEnabled } from "@/hooks/use-features";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePanelSwipe } from "@/hooks/use-panel-swipe";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
@@ -46,6 +49,15 @@ export default function RightPanel() {
   const panelEnabled = usePanelEnabled();
   // 폰에서 옆으로 밀어 접었다 편다 (S15P21A405-417). 마우스는 무시하므로 데스크톱은 그대로다
   const swipe = usePanelSwipe();
+  const close = usePanelStore((s) => s.close);
+  const panelRef = useRef<HTMLElement>(null);
+  /**
+   * 폰에서 **바깥을 누르면 닫는다** (S15P21A405-532). X 버튼 하나로만 닫히던 것을 앱 문법에 맞춘다.
+   *
+   * **펼쳐져 있을 때만이다.** 접힌 시트는 지도를 보라고 비켜 준 상태라, 거기서도 바깥 누름을
+   * 먹으면 별을 하나도 고를 수 없게 된다 — 누를 때마다 시트가 닫힐 뿐이다.
+   */
+  useDismissOnOutside(panelRef, close, useIsNarrow() && activePanel != null && !collapsed);
   if (!activePanel) return null;
   // 유저 테스트 동안 감춘 기능은 **프로그램으로 열려도** 그리지 않는다 (S15P21A405-333).
   // 레일에서만 막으면 플레이어바 컨텍스트·지도 클릭 같은 다른 길로 열려 버린다
@@ -53,6 +65,7 @@ export default function RightPanel() {
 
   return (
     <aside
+      ref={panelRef}
       data-hud
       data-tutorial={`panel-${activePanel}`}
       {...swipe}

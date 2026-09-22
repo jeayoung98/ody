@@ -183,34 +183,40 @@ export default function TutorialOverlay() {
   if (!step) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[60]">
-      {/*
-        덤 먼저 — 안내 카드와 손짓이 그 위에 와야 한다. 덤은 아무것도 막지 않는다.
-        확대 단계는 **휠을 유도하는 동안만** 덮는다 — 굴리기 시작하면 지도를 훑어보는
-        시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
-      */}
-      {step.veil && !(zooming && wheeled) && <TutorialSpotlight spotlight={step.spotlight} />}
+    <>
       {/*
         손짓(휠 안내·별 반짝임)은 **지도에 붙는 것**이라 패널 아래에 깔린다 (S15P21A405-417).
-        오버레이 전체가 z-60 이라 패널(z-20)·시트·탭바 위로 그대로 떠올랐는데, 폰에서는
-        시트가 화면을 덮으므로 그 위에 별 반짝임이 뚫고 나왔다. 안내 카드만 위에 남는다.
+        폰에서는 시트가 화면을 덮는데 그 위로 별 반짝임이 뚫고 나왔다.
+
+        **형제로 빼야 한다** (S15P21A405-532). 처음에는 z-60 짜리 오버레이 **안에** z-19 상자를
+        넣었는데 아무 효과가 없었다 — z 를 가진 부모가 이미 쌓임 맥락을 만들어서, 그 안의
+        숫자는 형제들끼리의 순서일 뿐 바깥의 패널·탭바와는 비교되지 않는다. 덩어리 전체가
+        여전히 60에 떠 있었다. 그래서 오버레이 밖으로 꺼내 **같은 맥락에서** 겨루게 한다.
       */}
       <div className="pointer-events-none absolute inset-0 z-[19]">
         {step.hint === "wheel" && !wheeled && <WheelHint />}
         {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       </div>
-      <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
-        <TutorialStepCard
-          index={stepIndex}
-          total={TUTORIAL_STEPS.length}
-          title={step.title}
-          description={step.description}
-          // 누를 곳이 따로 없는 단계는 카드의 버튼으로 넘긴다 (여정 결과 보기)
-          cta={step.cta || undefined}
-          onConfirm={step.cta ? () => complete(step.task) : undefined}
-          onSkip={skipTutorial}
-        />
+      <div className="pointer-events-none absolute inset-0 z-[60]">
+        {/*
+          덤 먼저 — 안내 카드가 그 위에 와야 한다. 덤은 아무것도 막지 않는다.
+          확대 단계는 **휠을 유도하는 동안만** 덮는다 — 굴리기 시작하면 지도를 훑어보는
+          시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
+        */}
+        {step.veil && !(zooming && wheeled) && <TutorialSpotlight spotlight={step.spotlight} />}
+        <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
+          <TutorialStepCard
+            index={stepIndex}
+            total={TUTORIAL_STEPS.length}
+            title={step.title}
+            description={step.description}
+            // 누를 곳이 따로 없는 단계는 카드의 버튼으로 넘긴다 (여정 결과 보기)
+            cta={step.cta || undefined}
+            onConfirm={step.cta ? () => complete(step.task) : undefined}
+            onSkip={skipTutorial}
+          />
+        </div>
       </div>
-    </div>
+    </>
   );
 }

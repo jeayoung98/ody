@@ -8,6 +8,7 @@ import { ChevronLeftIcon, CloseIcon } from "@/components/common/icons";
 import IconButton from "@/components/common/icon-button";
 import { NEARBY_COUNT, ROUTES, STORAGE_KEYS } from "@/constants";
 import { useSurveyMode } from "@/hooks/use-survey-mode";
+import { useSwipePager } from "@/hooks/use-swipe-pager";
 import { removeStorage } from "@/lib/storage";
 
 interface GuideCard {
@@ -109,6 +110,8 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
   const [at, setAt] = useState(0);
   const last = cards.length - 1;
   const go = useCallback((d: number) => setAt((v) => Math.min(last, Math.max(0, v + d))), [last]);
+  /** 폰에서 옆으로 밀어 넘긴다 (S15P21A405-532). 마우스는 무시하므로 데스크톱은 그대로다 */
+  const swipe = useSwipePager(go);
   /** 좌우 화살표로도 넘긴다 — 카드가 여러 장이라는 걸 키보드로 먼저 알아채는 사람이 있다 */
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -187,7 +190,11 @@ export default function HelpDialog({ onClose }: { onClose: () => void }) {
             </div>
           }
         >
-          <div key={card.key} className="animate-tfade flex flex-col gap-2.5">
+          {/*
+            **옆으로 밀어도 넘어간다** (S15P21A405-532). 화살표는 그대로 있고 손가락 길만 하나
+            더 낸다. `touch-pan-y` 라 세로 스크롤은 브라우저가 그대로 가져간다.
+          */}
+          <div key={card.key} {...swipe} className="animate-tfade flex touch-pan-y flex-col gap-2.5">
             {/*
               동작을 보여주는 짧은 영상. **GIF 가 아니라 mp4 다** — 같은 화면을 GIF 로 담으면
               10~50배 커진다 (실측: 2582x1556 GIF 가 69MB). 저장소에 들어가는 것이라 크기가

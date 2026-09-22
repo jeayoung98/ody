@@ -29,6 +29,7 @@ import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
+import { shouldFollowPlayback } from "./selection-follow";
 import StarfieldPlaceholder from "./starfield-placeholder";
 import { useViewport } from "./use-viewport";
 import { ANALYTICS } from "@/constants/analytics";
@@ -324,16 +325,30 @@ export default function MapView({ occlusion }: MapViewProps) {
     restoreLastPlayed(saved);
   }, [restoreLastPlayed]);
 
-  // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)
+  /**
+   * 재생 → 내 위치가 그 곡으로 이동 (MAP-08), 그리고 **선택도 함께 옮긴다** (S15P21A405-578).
+   *
+   * 선택을 같이 옮기는 이유는 [`shouldFollowPlayback`](./selection-follow.ts) 에 적었다 —
+   * 요약하면 재생이 저 혼자 넘어갈 때 선택이 낡은 별에 남아 주변 탐색이 엉뚱한 곡을 펼쳤다.
+   *
+   * **선택은 `getState()` 로 읽는다.** 의존성에 넣으면 여기서 선택을 바꾼 것이 다시 이 효과를
+   * 깨워 제 꼬리를 문다.
+   */
   useEffect(() => {
     if (currentMusicId == null) return;
     // 되살린 값은 "지금 막 재생한 것" 이 아니다 — 한 번만 흘려보낸다
-    if (currentMusicId === restoredPlaying.current) {
-      restoredPlaying.current = null;
-      return;
-    }
-    engine.travelTo(currentMusicId);
-  }, [engine, currentMusicId]);
+    const restored = currentMusicId === restoredPlaying.current;
+    if (restored) restoredPlaying.current = null;
+    else engine.travelTo(currentMusicId);
+
+    const follow = shouldFollowPlayback({
+      playingMusicId: currentMusicId,
+      selectedMusicId: useMapStore.getState().selectedMusicId,
+      restored,
+      riding: isRiding(),
+    });
+    if (follow) selectMusic(currentMusicId);
+  }, [engine, currentMusicId, selectMusic]);
 
   /**
    * 따라가기 (SOCIAL-06 ~ 09, S15P21A405-530).

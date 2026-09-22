@@ -5,6 +5,7 @@ import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
+import { nearestLayerWith } from "./reveal-layer";
 import { wheelIntent } from "./ride-zoom";
 import { acceptsAnchor } from "./stale-anchor";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
@@ -2412,6 +2413,19 @@ export class MapEngine {
    */
   private pinned: { id: number; layer: number } | null = null;
 
+  /**
+   * 마스크를 **지금 곡 수에 맞춘다** (S15P21A405-581).
+   *
+   * 스택 프레임의 마스크는 쌓일 당시의 곡 수로 만들어진 것이라, 그 뒤에 곡을 편입(`adopt`)하면
+   * 짧아진다. 짧은 채로 `subset` 에 앉히면 뒤쪽 색인이 `undefined` 라 상주 판정이 전부 어긋난다.
+   */
+  private fitMask(m: Uint8Array): Uint8Array {
+    if (m.length === this.N) return m.slice();
+    const out = new Uint8Array(this.N);
+    out.set(m.subarray(0, Math.min(m.length, this.N)));
+    return out;
+  }
+
   /** 못 박은 곡을 이 겹 상주 마스크에 되살린다 */
   private keepPinned(mask: Uint8Array, layer: number) {
     if (!this.pinned || this.pinned.layer !== layer) return;
@@ -2534,13 +2548,85 @@ export class MapEngine {
   }
 
   /**
+   * **검색한 곡을 지도에 실제로 띄운다** (S15P21A405-581).
+   *
+   * 지금 겹에 있으면 그대로 확대해 간다. 없으면 파고든 길을 거슬러 **그 곡이 상주하는 가장
+   * 가까운 겹**까지만 올라간다 — 필요한 만큼만 올라가야 그 아래 경로만 잃는다. 어느 겹에도
+   * 없으면 최상위까지 올라가 그 자리에 끼워 넣는다.
+   *
+   * **내 위치는 건드리지 않는다.** 내 자리는 재생 중인 곡이지 보러 간 곡이 아니다 (MAP-08).
+   * 그래서 이동한 뒤에도 `내 위치로 가기` 는 원래 자리를 가리킨다.
+   *
+   * SEARCH-01 은 "레이어를 자동으로 옮기지 않는다" 로 확정돼 있다. 이 메서드는 그 결정을
+   * 되돌리는 것이라 **기획 확인이 필요하고**, FEATURES.md 변경 제안에 올려 두었다.
+   */
+  revealSong(id: number): "focused" | "risen" | "surfaced" | "none" {
+    if (this.follow || this.anim || this.pending || !this.index.has(id)) return "none";
+    // 이미 이 겹에 있다 — 지금까지도 되던 길이다 (SEARCH-01 그대로)
+    if (this.isAlive(id)) {
+      this.ghost = null;
+      this.focusSong(id);
+      return "focused";
+    }
+    const i = this.index.get(id)!;
+    const target = nearestLayerWith(this.stack, i);
+    if (target != null) {
+      this.ghost = null;
+      this.selectedId = id;
+      // 모프가 끝나면 그 곡을 한복판에 놓는다 — `ascendTo` 는 내 곡을 기준으로 자리를 잡는다
+      this.centerAfterMorph = id;
+      this.ascendTo(target);
+      return "risen";
+    }
+    /**
+     * 어느 위 겹에도 없다. 최상위라면 옮길 데가 없으니 **그 자리에 끼워 넣고** 그리로 간다 —
+     * 요청받은 "최상위면 그냥 그 자리에서 바로 띄워 주고 그 자리로 가기" 가 이것이다.
+     */
+    if (this.layer === 0) {
+      this.ghost = null;
+      this.pinSong(i);
+      this.focusSong(id);
+      return "focused";
+    }
+    this.surfaceToSong(id);
+    return "surfaced";
+  }
+
+  /**
+   * 그 곡을 **이 겹에 끼워 넣고 못 박는다** (S15P21A405-581).
+   *
+   * 겹의 상주 집합은 서버가 고른 top-k 라 검색한 곡이 빠져 있을 수 있다. 못 박아 두지 않으면
+   * 다음 상주 집합 응답이 오는 순간 도로 사라진다 — `내 위치로 가기` 가 쓰는 것과 같은 장치다.
+   */
+  private pinSong(i: number) {
+    this.pinned = { id: this.songs[i].musicId, layer: this.layer };
+    if (this.subset[i]) return;
+    this.subset[i] = 1;
+    this.alpha[i] = 1;
+    this.rebuildAliveIdx();
+    this.project();
+  }
+
+  /**
    * 레이어 0(전 우주)까지 떠오른 뒤 그 곡을 확대한다 (MAP-12 "이 곡이 있는 곳으로 가기").
    * 파고든 경로를 버리는 큰 이동이라 사용자가 명시적으로 눌렀을 때만 부른다.
    */
   surfaceToSong(id: number) {
     if (this.follow || this.anim || !this.index.has(id)) return;
-    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 처음 받아 둔 그 집합이고, 그 겹에는 이 곡도 있다
-    const ns = this.stack[0]?.subset ?? this.subset.slice();
+    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 처음 받아 둔 그 집합이다
+    const ns = this.fitMask(this.stack[0]?.subset ?? this.subset);
+    /**
+     * **그 겹에 이 곡이 있다고 믿지 않는다** (S15P21A405-581).
+     *
+     * 예전에는 "레이어 0 집합에는 이 곡도 있다" 고 보고 그냥 썼다. 레이어 0 도 서버가 주는
+     * top-k 라 그 말이 늘 맞지는 않고, 검색으로 **방금 편입한 곡**은 아예 들어 있을 수가 없다 —
+     * 그러면 올라가긴 하는데 정작 찾던 별이 화면에 없다. 못 박아 두면 상주 집합 응답이 와도
+     * 빠지지 않는다 (`keepPinned`).
+     */
+    const i = this.index.get(id)!;
+    ns[i] = 1;
+    this.pinned = { id, layer: 0 };
+    this.ghost = null;
     this.stack = [];
     this.boxes = [];
     this.selectedId = id;
@@ -2957,8 +3043,19 @@ export class MapEngine {
     if (!f) return;
     // 서버가 몰면 인솔자의 다음 동작을 지어내지 않는다 — 소켓이 알려줄 때만 움직인다
     if (!f.driven && !f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
-    // 뷰는 인솔자가 "보고 있는 곡"만 좇는다. 우주선이 날아오는 동안(mv)에는 고정 (SOCIAL-07)
-    if (!f.mv) this.trackViewing(f);
+    /**
+     * 뷰는 인솔자가 **보고 있는 곡**을 좇는다 (SOCIAL-07).
+     *
+     * **비행 중에도 멈추지 않는다** (S15P21A405-576). 명세는 "우주선이 오는 동안 뷰는 움직이지
+     * 않는다" 고 적는데, 그건 **인솔자가 곡을 클릭해 내 뷰가 먼저 가 있다는 전제** 위의 말이다.
+     * 그 순서에서는 목적지가 이미 화면 한복판이라 여기서 좇아도 **어차피 제자리다** — 같은
+     * 점으로 보간하는 것이라 한 픽셀도 안 움직인다.
+     *
+     * 문제는 서버가 모는 길이다. 인솔자가 상세를 안 열고 바로 재생하면 `RIDE_TRACK` 하나로
+     * 뷰 목표와 비행이 동시에 잡히고, 여기서 멈추면 **비행 2.4초를 목적지가 화면 밖 1000px 에
+     * 있는 채로 보낸다.** 명세가 전제한 "먼저 이동" 이 없는 경우라 뷰가 배와 함께 간다.
+     */
+    this.trackViewing(f);
     if (!f.mv) return;
     const m = f.mv;
     const at = atArc(m, now);
@@ -2967,8 +3064,13 @@ export class MapEngine {
     /**
      * 나는 선미 바로 뒤. 호 위에서 **조금 뒤처진 지점**을 그대로 쓴다 — `atArc` 는 시간으로
      * 받으므로, 진행도를 직접 깎으려면 여기서 한 번 더 편다.
+     *
+     * **도착하면 뒤처짐을 거둔다** (S15P21A405-576). 안 거두면 비행이 끝난 자리가 호의 94%
+     * 지점이고, 그대로 굳는다 — 카메라는 목적지 별을 한복판에 잡는데 **내 표식만 72px 옆에
+     * 남아** 곡을 옮길 때마다 같은 만큼 어긋났다. 이 엔진의 다른 비행(`travelToId`)과
+     * 하차(`stopFollow`)는 둘 다 끝점으로 붙이고 있었고, 여기만 빠져 있었다.
      */
-    const back = Math.max(0, easeInOut(t) - 0.06);
+    const back = t >= 1 ? 1 : Math.max(0, easeInOut(t) - 0.06);
     const qb = 1 - back;
     this.me.x = qb * qb * m.ax + 2 * qb * back * m.cx + back * back * m.bx;
     this.me.y = qb * qb * m.ay + 2 * qb * back * m.cy + back * back * m.by;

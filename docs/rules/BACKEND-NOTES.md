@@ -534,3 +534,47 @@ BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리�
 
 **요청** A-57 하나입니다. 상세 응답에 소유자(이메일 또는 닉네임)를 넣어 주시면 목록을 한 번 더
 받는 우회가 없어지고, 남의 플리에서 만든 사람을 보여 줄 수 있습니다.
+
+---
+
+## 공개/비공개 계정 폐지 — 프론트는 걷어냈다 (S15P21A405-574, 2026-09-22)
+
+기획 확인: **공개/비공개 계정은 없는 기능이다. 전원 공개가 기본이고 설정 자체가 없다.**
+
+### 프론트가 한 것
+
+`isPublic` 을 통째로 끊었다. 타입(`User`·`NearbyUser`·`FollowUserSummary`)·설정 UI·
+`PATCH /api/user/public` 을 부르던 뮤테이션과 BFF 라우트를 지웠다. `UserDetailResponse.isPublic` 은
+**받고 버린다** — 응답 스키마는 안 건드렸다.
+
+지우면서 나온 것 하나: `map-engine` 이 `!u.isOnline || !u.isPublic` 으로 지도 표식을 거르고 있었다.
+그래서 합성 경로 여섯 군데가 전부 `isPublic: true` 를 집어넣고 있었다 — **문을 통과시키려고 넣던 값**이다.
+서버가 어느 사용자에게 `false` 를 줬으면 그 사람은 이유 없이 지도에서 사라졌다. 문과 값 둘 다 없앴다.
+
+### 백엔드에 남는 것 — 여기가 본론이다
+
+**프론트만 걷어내면 "버튼은 뜨는데 누르면 403" 이 된다.** `is_public = false` 인 행이 하나라도
+있으면 아래 넷이 그대로 막는다 (`origin/backend/dev` 에서 읽음).
+
+| # | 자리 | 지금 동작 |
+| --- | --- | --- |
+| V-1 | `UserService:49` | 비공개 + 본인 아님 → `403 USER_PRIVATE`. **남의 프로필이 아예 안 열린다** |
+| V-2 | `FollowService:105` | 같은 조건으로 팔로워·팔로잉 목록 차단 |
+| V-3 | `PlaylistService:65` · `:87` | 같은 조건으로 남의 플리 목록·상세 차단 |
+| V-4 | `UserVisibilityController` · `UserService:116` · `UserMapper.updateIsPublic` | 설정 변경 엔드포인트. 부르는 데가 없어졌다 |
+
+`AuthMapper.xml:18` 의 가입 INSERT 는 `is_public` 을 넣지 않는다 — **DB 컬럼 기본값을 탄다.**
+그 DDL 이 저장소에 없어 기본값이 `true` 인지 확인하지 못했다. 설정 UI 가 그동안 열려 있었으므로
+**이미 `false` 로 바꾼 계정이 있을 수 있다.**
+
+### 요청
+
+1. **V-1~V-3 의 `USER_PRIVATE` 분기를 걷어낸다.** 이것만 해도 증상은 사라진다
+2. `is_public = false` 인 행을 **`true` 로 backfill** 하고 컬럼 기본값을 `true` 로 확인한다
+3. V-4 와 `is_public` 컬럼·`UserDetailResponse.isPublic` 은 **1·2 가 끝난 뒤** 지운다.
+   순서를 바꾸면 프론트가 이미 안 읽으므로 상관없지만, 응답 필드를 먼저 빼도 프론트는 안 깨진다
+4. `UserErrorCode.USER_PRIVATE` 도 같이 없어진다. 프론트는 BFF 의 방어 분기를 **그때까지 유지**한다
+
+| # | 항목 | 상태 |
+| --- | --- | --- |
+| A-59 | 공개/비공개 폐지 — 백엔드 V-1~V-4 + backfill | 협의 전 |

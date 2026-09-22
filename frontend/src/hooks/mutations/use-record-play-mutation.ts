@@ -3,6 +3,7 @@ import { api } from "@/lib/api";
 import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
 import { sendJoinNow } from "@/hooks/use-presence-join";
 import { ApiError } from "@/lib/api";
+import { useMapStore } from "@/stores/use-map-store";
 import type { PlayRequest, PlayResponse } from "@/types";
 
 /**
@@ -48,8 +49,27 @@ export function useRecordPlayMutation() {
      * 남이 튼 것은 여전히 안 보인다 — 내가 안 누르면 무효화할 계기가 없다. 소켓이 필요한 일이고
      * 곡 상세의 재생수에 그만한 값어치가 있는지는 별개 판단이다.
      */
-    onSuccess: (_, input) => {
+    onSuccess: (res, input) => {
       void qc.invalidateQueries({ queryKey: QUERY_KEYS.music.detail(input.musicId) });
+      /**
+       * **이 응답이 내 자리의 최신 근거다** (S15P21A405-579).
+       *
+       * 그동안 `myMusicId` 를 채우는 통로는 소켓의 `PRESENCE_JOINED` 하나뿐이었다. 그런데 그
+       * 요청은 여기 `mutationFn` 이 재생 POST **직전에** 보낸다 — presence 를 깨우려는 것이라
+       * 순서가 그렇다. 서버는 아직 재생을 모르니 "이미 서 있는 자리", 곧 **직전 곡**을 돌려준다.
+       * 그래서 내 위치가 구조적으로 한 곡씩 뒤처졌다.
+       *
+       * S15P21A405-565 가 그 늦은 답을 걸러 내기는 한다. 다만 **옛 값을 버릴 뿐 새 값을 채우지
+       * 않아서**, 걸러진 뒤에도 내 위치는 여전히 직전 곡이었다. 서버가 자리를 잡은 뒤의 답인
+       * 이 값을 넣어야 비로소 맞는다.
+       *
+       * `input.musicId` 가 아니라 **응답의 `musicId`** 를 쓴다. 어디에 서게 됐는지는 서버가
+       * 정한다 (실시간 명세 §4.1).
+       *
+       * 비행 연출은 안 깨진다. `setMyMusicId` 가 표식을 그 곡에 놓지만, 날아가는 중이면 다음
+       * 프레임이 호 위 좌표로 다시 덮어쓰고 그림은 프레임 안에서만 그려진다.
+       */
+      useMapStore.getState().setMyMusicId(res.musicId);
     },
   });
 }

@@ -41,7 +41,6 @@ function mockNearbyUsers(layer: number): NearbyUser[] {
       nickname: nick,
       imageUrl: null,
       isOnline: rnd() > 0.12,
-      isPublic: rnd() > 0.14,
       musicId: song.musicId,
       // 보고 있는 곡은 재생 중인 곡의 유사곡 중 하나 (재생곡과 다를 수 있다)
       viewingMusicId: (nearestSongs(song, 5)[Math.floor(rnd() * 5)] ?? song).musicId,

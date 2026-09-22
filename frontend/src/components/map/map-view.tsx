@@ -194,7 +194,7 @@ export default function MapView({ occlusion }: MapViewProps) {
 
   /**
    * 목 반응은 걷어냈다 (S15P21A405-482). 실시간 명세가 **반응을 "아직 없는 것"** 으로 명시했고
-   * (따라가기·반응·비공개 계정), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
+   * (따라가기·반응), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
    * 도는 것처럼 보여서 테스트가 어긋난다. 훅 자체는 남겨 뒀다 — 데이터가 생기면 되살린다.
    */
 
@@ -359,9 +359,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         email: leaderEmail,
         nickname: leaderNickname,
         imageUrl: leaderImageUrl,
-        // 목록에 있다는 것이 곧 접속 중이라는 뜻이고(명세 §5.6), 비공개 계정은 아직 없다
+        // 목록에 있다는 것이 곧 접속 중이라는 뜻이다 (명세 §5.6)
         isOnline: true,
-        isPublic: true,
         musicId: leaderMusicId,
         // 인솔자가 옆 곡을 눌러 보는 동안은 서 있는 곡과 다르다 (§551)
         viewingMusicId: leaderViewingMusicId ?? leaderMusicId,

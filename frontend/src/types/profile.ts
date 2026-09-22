@@ -38,7 +38,6 @@ export interface NearbyUser {
   nickname: string | null;
   imageUrl: string | null;
   isOnline: boolean;
-  isPublic: boolean;
   /** 지금 듣고 있는 곡 = 지도상 위치 (따라가기 시 우주선·내 위치의 기준) */
   musicId: Id;
   /** 지금 보고 있는 상세 곡 (클릭한 곡). 따라가기 시 뷰포트 이동과 우측 패널의 기준 (SOCIAL-07) */
@@ -112,7 +111,6 @@ export interface FollowUserSummary {
   name: string | null;
   nickname: string | null;
   imageUrl: string | null;
-  isPublic: boolean;
   isFollowing: boolean;
   /** **로그인 시각이다.** 접속 여부와 다른 값이므로 여기서 접속을 가늠하지 않는다 */
   lastActiveAt: string | null;

@@ -22,7 +22,7 @@ function engine(people) {
 }
 
 /** x·y 는 곧 화면 좌표다 */
-const person = (email, x, y) => ({ email, nickname: email, isOnline: true, isPublic: true, musicId: 1, x, y, avatarSeed: [0.5], genreId: 1, riderCount: 0 });
+const person = (email, x, y) => ({ email, nickname: email, isOnline: true, musicId: 1, x, y, avatarSeed: [0.5], genreId: 1, riderCount: 0 });
 
 /** 표식 + 묶인 사람 = 화면에 셈어진 전원 */
 const counted = (e) => e.visFriends.reduce((n, v) => n + 1 + v.stacked.length, 0);

@@ -76,9 +76,8 @@ export { seedOf };
 /**
  * 서버가 주지 않는 `NearbyUser` 필드를 채운다 (§5.6).
  *
- * `isOnline` 은 **항상 true** 다 — 목록에 있다는 것이 곧 접속 중이라는 뜻이다. `isPublic` 도
- * 항상 true 이고(비공개 계정이 아직 없다), `meetingCount` 는 0 이다(뷰포트에는 오지 않고
- * 주변 사람 패널에만 있다). `viewingMusicId` 는 `musicId` 와 같게 둔다 — 따라가기가 없어
+ * `isOnline` 은 **항상 true** 다 — 목록에 있다는 것이 곧 접속 중이라는 뜻이다. `meetingCount`
+ * 는 0 이다(뷰포트에는 오지 않고 주변 사람 패널에만 있다). `viewingMusicId` 는 `musicId` 와 같게 둔다 — 따라가기가 없어
  * "보고 있는 곡" 이 따로 오지 않는다.
  */
 function toNearbyUser(p: {
@@ -95,7 +94,6 @@ function toNearbyUser(p: {
     nickname: p.nickname,
     imageUrl: p.imageUrl,
     isOnline: true,
-    isPublic: true,
     musicId: p.musicId,
     viewingMusicId: p.musicId,
     genreId: getMapEngine()?.genreOf(p.musicId) ?? NO_GENRE_ID,

@@ -8,8 +8,6 @@ export interface User {
   name: string | null;
   /** 온보딩에서 설정, 2~20자 */
   nickname: string | null;
-  /** 공개 계정 여부, 비공개면 따라가기 불가 */
-  isPublic: boolean;
   /** 튜토리얼 완료 여부 */
   tutorialCompleted: boolean;
   /** 최근 활동 시각 */

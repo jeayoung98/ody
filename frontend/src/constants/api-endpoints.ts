@@ -65,6 +65,12 @@ export const API_ENDPOINTS = {
     /** 실연동 → `PATCH /api/user/image`. **파일**을 올린다 — 주소 문자열은 받지 않는다 */
     image: "/bff/user/image",
     /**
+     * 실연동 → `PATCH /api/user/public`. **설정이 아니라 전원을 공개로 못박는 자리다**
+     * (S15P21A405-574). 공개/비공개 계정은 폐지됐는데 배포 백엔드가 아직 그 값으로 막는다.
+     * 백엔드가 `USER_PRIVATE` 를 걷어내면(BACKEND-NOTES A-59) 이 항목도 같이 지운다.
+     */
+    publicVisibility: "/bff/user/public",
+    /**
      * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
      * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
      * 탑승은 `POST /api/realtime/ride` 로 따로 있다 (S15P21A405-530, 실연동).

@@ -53,7 +53,7 @@ test("자리를 비우는 일이 있고, 비운 다음에는 반드시 돌아온
     const ms = e.endsAt - e.startedAt;
     assert.ok(ms >= BOTS.offlineMs[0] && ms <= BOTS.offlineMs[1], `자리 비움 길이가 범위 밖이다: ${ms}`);
   }
-  // 오프라인이 연달아 붙으면 한 번 사라진 봇이 십수 분 넘게 안 보인다 — 여덟 명뿐이라 화면이 빈다
+  // 오프라인이 연달아 붙으면 한 번 사라진 봇이 십수 분 넘게 안 보인다 — 여섯 명뿐이라 화면이 빈다
   for (let i = 1; i < eps.length; i++) {
     assert.ok(eps[i].online || eps[i - 1].online, `${i}번째에서 오프라인이 연달아 붙었다`);
   }

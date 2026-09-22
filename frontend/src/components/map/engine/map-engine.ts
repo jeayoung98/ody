@@ -5,6 +5,7 @@ import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
 import { wheelIntent } from "./ride-zoom";
+import { acceptsAnchor } from "./stale-anchor";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -2262,6 +2263,16 @@ export class MapEngine {
    * `travelTo` 와 다른 점은 비행 애니메이션이 없다는 것뿐이다. 탑승은 우주선이 나를 데려가므로
    * 따로 날아갈 이유가 없고, presence 는 서버가 정해 준 자리라 이동 자체가 없다.
    */
+  /**
+   * 이 자리를 받아도 되는가 — **날아가는 중이면 옛 자리를 거른다** (S15P21A405-565).
+   *
+   * 판단을 밖에 열어 두는 이유는 스토어도 같이 걸러야 하기 때문이다. 엔진만 무시하면
+   * `myMusicId` 는 옛 곡으로 바뀌어, 레이더 가운데와 지도 표식이 서로 다른 곡을 가리킨다.
+   */
+  acceptsAnchor(id: number): boolean {
+    return acceptsAnchor(this.travelToId, id);
+  }
+
   setMy(id: number | null) {
     if (id == null || !this.index.has(id)) return;
     this.myId = id;

@@ -3,6 +3,8 @@
 import { useState } from "react";
 import { createPortal } from "react-dom";
 import { HelpIcon } from "@/components/common/icons";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
+import { usePanelStore } from "@/stores/use-panel-store";
 import HelpDialog from "./help-dialog";
 import { setAnalyticsContext, track } from "@/lib/analytics/client";
 
@@ -24,11 +26,27 @@ import { setAnalyticsContext, track } from "@/lib/analytics/client";
  */
 export default function HelpButton() {
   const [open, setOpen] = useState(false);
+  /**
+   * **폰에서 시트가 펼쳐져 있으면 아예 없앤다** (S15P21A405-532).
+   *
+   * 다이얼로그는 `document.body` 에 z-50 으로 그려져서 시트(z-20) 위로 뜬다. 데스크톱에서는
+   * 도움말이 지도 옆에 뜨는 모달이라 그게 맞지만, 폰에서는 시트가 화면을 통째로 덮고 있는
+   * 위로 가이드가 또 얹혀 **두 화면이 겹쳐 보인다.**
+   *
+   * 다이얼로그의 z 를 내리는 대신 **버튼을 없앤다.** z 를 내리면 평소에 도움말을 열어도
+   * 시트 뒤에 숨어 아무것도 안 보이게 된다 — 열 길을 막는 편이 맞다. 시트를 접거나 닫으면
+   * 버튼이 돌아온다.
+   */
+  const narrow = useIsNarrow();
+  const activePanel = usePanelStore((s) => s.activePanel);
+  const collapsed = usePanelStore((s) => s.collapsed);
+  const sheetUp = activePanel != null && !collapsed;
   const close = () => {
     track("help_closed");
     setAnalyticsContext({ help_open: false });
     setOpen(false);
   };
+  if (narrow && sheetUp) return null;
   return (
     <>
       <button data-hud data-analytics-manual

@@ -9,7 +9,9 @@ import { ROUTES, STORAGE_KEYS } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import { track } from "@/lib/analytics/client";
 import { readStorage, writeStorage } from "@/lib/storage";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { useMapStore } from "@/stores/use-map-store";
+import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 
 /**
@@ -64,6 +66,20 @@ function contextOf(viewMode: string): HintContext | null {
 
 export default function PlayHint() {
   const pathname = usePathname();
+  /**
+   * **폰에서 시트가 펼쳐져 있으면 안 띄운다** (S15P21A405-532).
+   *
+   * 이 안내는 `fixed inset-0 z-[55]` 라 시트(z-20) 위로 그대로 떠오른다. 덤 한 겹에 맥박
+   * 고리까지 얹혀서, 곡 상세를 보는 중에 **튜토리얼이 뚫고 나온 것처럼** 보였다 —
+   * 실제로는 튜토리얼이 아니라 이것이다(모양을 일부러 같게 만들었다).
+   *
+   * z 를 내리는 것으로는 안 된다. 이 안내가 짚는 것은 **지도 위의 별**이라, 시트가 지도를
+   * 덮고 있으면 가리킬 대상 자체가 안 보인다. 그래서 아예 미룬다 — 시트를 접거나 닫으면
+   * 그때 뜬다. 데스크톱은 패널이 옆에 서고 지도가 그대로 보이므로 손대지 않는다.
+   */
+  const narrow = useIsNarrow();
+  const activePanel = usePanelStore((s) => s.activePanel);
+  const panelCollapsed = usePanelStore((s) => s.collapsed);
   // 서버와 첫 클라이언트 렌더는 비어 있다 — 저장소를 render 중에 읽으면 하이드레이션이 깨진다
   const hydrated = useSyncExternalStore(
     () => () => {},
@@ -194,6 +210,8 @@ export default function PlayHint() {
 
   // 홈에서만. 튜토리얼 화면도 MainScreen 을 쓰므로 여기서 갈라야 겹치지 않는다
   if (pathname !== ROUTES.home) return null;
+  // 폰에서 시트가 펼쳐져 있으면 미룬다 — 위 주석 참고
+  if (narrow && activePanel != null && !panelCollapsed) return null;
   if (!pending || !context || !at) return null;
 
   return (

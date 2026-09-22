@@ -197,13 +197,25 @@ export default function TutorialOverlay() {
         {step.hint === "wheel" && !wheeled && <WheelHint />}
         {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       </div>
+      {/*
+        덤과 맥박 고리. 아무것도 막지 않는다. 확대 단계는 **휠을 유도하는 동안만** 덮는다 —
+        굴리기 시작하면 지도를 훑어보는 시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
+
+        **폰에서는 이것도 지도 층으로 내린다** (S15P21A405-532). 손짓만 내리고 이건 z-60 에
+        뒀더니, 곡 상세 시트를 열면 **맥박 뛰는 teal 고리가 시트 위로 떠올랐다.** 덤·고리는
+        화면의 어느 자리를 가리키는 표시라 손짓과 같은 성질이다 — 시트가 화면을 덮으면 그
+        아래로 들어가는 것이 맞다.
+
+        데스크톱은 z-60 그대로다. 거기서는 고리가 **우측 패널(z-20)을 감싸기도** 하므로
+        내리면 패널 뒤로 숨어 버린다.
+      */}
+      {step.veil && !(zooming && wheeled) && (
+        <div className="pointer-events-none absolute inset-0 z-[60] max-tablet:z-[19]">
+          <TutorialSpotlight spotlight={step.spotlight} />
+        </div>
+      )}
+      {/* 안내 카드는 언제나 맨 위다 — 이게 가리면 무엇을 하라는 건지 읽을 수가 없다 */}
       <div className="pointer-events-none absolute inset-0 z-[60]">
-        {/*
-          덤 먼저 — 안내 카드가 그 위에 와야 한다. 덤은 아무것도 막지 않는다.
-          확대 단계는 **휠을 유도하는 동안만** 덮는다 — 굴리기 시작하면 지도를 훑어보는
-          시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
-        */}
-        {step.veil && !(zooming && wheeled) && <TutorialSpotlight spotlight={step.spotlight} />}
         <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
           <TutorialStepCard
             index={stepIndex}

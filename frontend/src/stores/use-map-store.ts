@@ -170,8 +170,15 @@ export const useMapStore = create<MapState>()(
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
       setMyMusicId: (myMusicId) => {
+        const engine = getMapEngine();
+        /**
+         * **날아가는 중이면 옛 자리는 버린다** (S15P21A405-565). 재생 직전에 보낸 presence
+         * join 의 답이 몇백 ms 뒤 직전 곡을 싣고 도착하는데, 그때 프론트는 이미 다음 곡으로
+         * 가고 있다. 그대로 받으면 표식이 되돌아가고 카메라가 따라가 화면이 직전 곡에 박힌다.
+         */
+        if (myMusicId != null && engine && !engine.acceptsAnchor(myMusicId)) return;
         set({ myMusicId }, false, "setMyMusicId");
-        getMapEngine()?.setMy(myMusicId);
+        engine?.setMy(myMusicId);
       },
 
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지

@@ -1,7 +1,8 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
+import { arcBetween, atArc, type Arc } from "./arc";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
@@ -338,7 +339,14 @@ export class MapEngine {
   /** "N명" 뭉치 (CLUSTERED 모드). 원시 PC 좌표다 */
   crowd: CrowdCell[] = [];
   crowdLayer = -1;
-  private friendPos = new Map<string, { x: number; y: number; heading: number }>();
+  /**
+   * 사람마다의 **화면 자리와 진행 중인 비행** (S15P21A405-553).
+   *
+   * `mv` 가 있으면 지금 곡선을 타고 옮겨 가는 중이다. 예전에는 이 맵을 목록 갱신 때마다
+   * 통째로 비웠는데, 그러면 "직전에 어디 있었는지" 가 사라져 10초마다 매번 처음 보는 사람처럼
+   * 다시 놓게 된다 — 그게 뚝 사라졌다 뚝 나타나던 원인이다.
+   */
+  private friendPos = new Map<string, { x: number; y: number; heading: number; mv?: Arc }>();
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
   visFriends: VisibleFriend[] = [];
@@ -596,9 +604,22 @@ export class MapEngine {
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
   setFriends(layer: number, friends: NearbyUser[]) {
+    /**
+     * **겹이 바뀔 때만 자리를 비운다** (S15P21A405-553). 좌표계가 겹마다 다르므로 그때는
+     * 버려야 맞지만, 같은 겹에서 목록만 다시 받은 것이라면 자리를 이어가야 한다 — 비우면
+     * 이동이라는 개념 자체가 없어져 사람이 순간이동한다.
+     *
+     * 목록에서 빠진 사람은 정리한다. 안 하면 오래 켜 둘수록 떠난 사람의 자리가 쌓인다.
+     */
+    if (layer !== this.friendsLayer) this.friendPos.clear();
+    else {
+      const here = new Set(friends.map((f) => f.email));
+      // 인솔자는 목록에 없다 (요청자 제외 규칙) — 지우면 우주선이 자리를 잃는다
+      const leader = this.follow?.leader.email;
+      for (const email of this.friendPos.keys()) if (!here.has(email) && email !== leader) this.friendPos.delete(email);
+    }
     this.friends = friends;
     this.friendsLayer = layer;
-    this.friendPos.clear();
     this.anchorCache.clear();
   }
 
@@ -2566,19 +2587,8 @@ export class MapEngine {
     const known = this.friendPos.get(f.leader.email);
     const from = known ?? this.worldOf(f.playingMusicId);
     if (!target || !from) return false;
-    const side = Math.random() < 0.5 ? 1 : -1;
-    const L = Math.hypot(target.x - from.x, target.y - from.y) || 1e-6;
-    f.mv = {
-      ax: from.x,
-      ay: from.y,
-      bx: target.x,
-      by: target.y,
-      cx: (from.x + target.x) / 2 - ((target.y - from.y) / L) * L * 0.35 * side,
-      cy: (from.y + target.y) / 2 + ((target.x - from.x) / L) * L * 0.35 * side,
-      t0: now,
-      dur: FOLLOW.moveMs,
-      toId,
-    };
+    // 사람 표식과 **같은 호를 쓴다** (S15P21A405-553) — 휘는 정도를 손볼 일이 생기면 한 군데만 고친다
+    f.mv = { ...arcBetween(from, target, now, FOLLOW.moveMs, FOLLOW.bow), toId };
     f.visited.push(toId);
     if (notify) this.onArrive?.(toId);
     return true;
@@ -2817,16 +2827,14 @@ export class MapEngine {
     if (!f.mv) this.trackViewing(f);
     if (!f.mv) return;
     const m = f.mv;
-    const t = Math.min(1, (now - m.t0) / m.dur);
-    const e = easeInOut(t);
-    const q = 1 - e;
-    const x = q * q * m.ax + 2 * q * e * m.cx + e * e * m.bx;
-    const y = q * q * m.ay + 2 * q * e * m.cy + e * e * m.by;
-    const hx = 2 * q * (m.cx - m.ax) + 2 * e * (m.bx - m.cx);
-    const hy = 2 * q * (m.cy - m.ay) + 2 * e * (m.by - m.cy);
-    this.friendPos.set(f.leader.email, { x, y, heading: Math.atan2(hy, hx) });
-    // 나는 선미 바로 뒤
-    const back = Math.max(0, e - 0.06);
+    const at = atArc(m, now);
+    const t = at.t;
+    this.friendPos.set(f.leader.email, { x: at.x, y: at.y, heading: at.heading });
+    /**
+     * 나는 선미 바로 뒤. 호 위에서 **조금 뒤처진 지점**을 그대로 쓴다 — `atArc` 는 시간으로
+     * 받으므로, 진행도를 직접 깎으려면 여기서 한 번 더 편다.
+     */
+    const back = Math.max(0, easeInOut(t) - 0.06);
     const qb = 1 - back;
     this.me.x = qb * qb * m.ax + 2 * qb * back * m.cx + back * back * m.bx;
     this.me.y = qb * qb * m.ay + 2 * qb * back * m.cy + back * back * m.by;
@@ -2866,7 +2874,39 @@ export class MapEngine {
    * **58px 경합 검사는 남겨 둔다.** 칸 나누기는 "고루 퍼짐" 을 만들고 이건 "겹쳐 그리지 않음"
    * 을 만든다 — 목적이 다르고, 칸이 커도 한 칸 안에서 둘이 겹칠 수 있다.
    */
+  /**
+   * 사람 하나를 목적지 쪽으로 **곡선을 그리며** 옮긴다 (S15P21A405-553).
+   *
+   * 예전에는 목적지를 그 자리에 바로 넣어서, 누가 곡을 옮기면 뚝 사라졌다 뚝 나타났다.
+   * 내가 움직일 때와 같은 호를 쓴다 (`ME_FLIGHT`).
+   *
+   * **처음 보는 사람은 그냥 놓는다.** 없던 사람이 어디선가 날아오면 그것만큼 이상하다.
+   */
+  private glideFriend(u: NearbyUser, was: { x: number; y: number; heading: number; mv?: Arc } | undefined, base: { x: number; y: number }, now: number) {
+    if (!was) {
+      const fresh = { x: base.x, y: base.y, heading: (u.avatarSeed[0] ?? 0.5) * Math.PI * 2 };
+      this.friendPos.set(u.email, fresh);
+      return fresh;
+    }
+
+    /**
+     * 목적지가 바뀌었나. **지금 날아가는 중이면 그 도착지와** 견준다 — 지금 자리와 견주면
+     * 비행 도중 매 프레임이 "목적지가 다르다" 로 읽혀 호를 끝없이 새로 만든다.
+     */
+    const to = was.mv ? { x: was.mv.bx, y: was.mv.by } : was;
+    if (Math.hypot(base.x - to.x, base.y - to.y) > FRIEND_MOVE_EPS) {
+      was = { ...was, mv: arcBetween(was, base, now, ME_FLIGHT.ms, ME_FLIGHT.bow) };
+    }
+
+    if (!was.mv) return was;
+    const at = atArc(was.mv, now);
+    const next = { x: at.x, y: at.y, heading: at.heading, mv: at.t >= 1 ? undefined : was.mv };
+    this.friendPos.set(u.email, next);
+    return next;
+  }
+
   private updateFriends() {
+    const now = performance.now();
     const f = this.freeRect();
     const G = 58;
     /**
@@ -2891,12 +2931,13 @@ export class MapEngine {
       if (!u.isOnline || !u.isPublic) continue;
       const isLeader = isLeaderOf(u);
       let w = this.friendPos.get(u.email);
-      if (!w || !isLeader) {
+      // 인솔자 자리는 `stepFollow` 의 우주선 비행이 정한다 — 여기서 건드리면 그 비행이 끊긴다
+      if (!isLeader) {
         const base = this.anchorFor(u);
         if (!base) continue;
-        w = w && isLeader ? w : { x: base.x, y: base.y, heading: w?.heading ?? ((u.avatarSeed[0] ?? 0.5) * Math.PI * 2) };
-        this.friendPos.set(u.email, w);
+        w = this.glideFriend(u, w, base, now);
       }
+      if (!w) continue;
       const { px, py } = this.worldToScreen(w.x, w.y);
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
       if (isLeader) {

@@ -62,11 +62,17 @@ class GmsScoreProbe {
 			없는 것을 있다고 보지 마라. 애매하면 낮은 쪽을 준다.""";
 
 	/** 그림 이름 → 기대 점수대. 진단 출력에 같이 찍어 눈으로 대조한다. */
+	/**
+	 * 기대 점수대는 <b>그림이 실제로 어떻게 보이는가</b>로 붙였다. 의도("고양이를 그리려 했다")로 붙이면
+	 * 모델이 맞는지 틀린지 가릴 수 없다. 절대값보다 <b>순서</b>가 진짜 검증이다 —
+	 * best > full > awkward ≥ no_tail > head_only > line/scatter.
+	 */
 	static Map<String, String> expectations() {
 		Map<String, String> m = new LinkedHashMap<>();
-		m.put("cat_full", "90~100");
-		m.put("cat_full_again", "cat_full 과 같아야");
-		m.put("cat_awkward", "70~89");
+		m.put("cat_best", "90~100 (23점, 앉은 옆모습)");
+		m.put("cat_best_again", "cat_best 와 같아야 (temp 0)");
+		m.put("cat_full", "70~89 (18점 성긴 스케치)");
+		m.put("cat_awkward", "50~79 (귀 과대·몸통 짧음)");
 		m.put("cat_no_tail", "50~69");
 		m.put("cat_scrambled", "<50 (부위 다 있음, 자리 엉망)");
 		m.put("cat_head_only", "10~29");
@@ -77,8 +83,9 @@ class GmsScoreProbe {
 
 	static Map<String, List<ArtworkPointRow>> shapes() {
 		Map<String, List<ArtworkPointRow>> m = new LinkedHashMap<>();
+		m.put("cat_best", catBest());
+		m.put("cat_best_again", catBest());
 		m.put("cat_full", catFull());
-		m.put("cat_full_again", catFull());
 		m.put("cat_awkward", catAwkward());
 		m.put("cat_no_tail", catNoTail());
 		m.put("cat_scrambled", catScrambled());
@@ -164,7 +171,41 @@ class GmsScoreProbe {
 		{-0.30, 0.05},   // 가슴 → 목 근처로 고리 닫기
 	};
 
-	/** 네 부위 제자리, 비율 정상. 90~100 을 기대한다. */
+	/**
+	 * 앉은 고양이 옆모습, 23점. 왼쪽을 보고 앉아 있고 꼬리가 바닥을 따라 뒤로 돌아 위로 휜다.
+	 * 경로는 꼬리 끝에서 시작해 엉덩이·등·귀·코·가슴·앞발·배·뒷발 순으로 몸통 고리를 닫는다.
+	 * 이 진단에서 90~100 후보는 이것 하나다 — catFull 은 성긴 스케치라 70~89 가 정직한 기대다.
+	 */
+	private static List<ArtworkPointRow> catBest() {
+		double[][] xy = {
+			{0.92, -0.40},   // 꼬리 끝 (위로 휨)
+			{0.88, -0.75},   // 꼬리 중간
+			{0.65, -0.92},   // 꼬리 밑동 (바닥)
+			{0.35, -0.85},   // 뒷발
+			{0.50, -0.70},   // 뒷다리 뒤
+			{0.55, -0.35},   // 엉덩이
+			{0.40, -0.05},   // 허리
+			{0.15, 0.20},    // 등
+			{-0.10, 0.40},   // 어깨·목
+			{-0.22, 0.60},   // 뒤통수
+			{-0.30, 0.90},   // 뒷귀 끝
+			{-0.42, 0.66},   // 귀 사이 골
+			{-0.50, 0.90},   // 앞귀 끝
+			{-0.62, 0.62},   // 이마
+			{-0.72, 0.45},   // 코
+			{-0.75, 0.25},   // 턱
+			{-0.62, 0.05},   // 가슴
+			{-0.58, -0.40},  // 앞다리
+			{-0.55, -0.85},  // 앞발 앞
+			{-0.25, -0.85},  // 앞발 뒤
+			{-0.05, -0.60},  // 배
+			{0.10, -0.85},   // 뒷다리 앞
+			{0.35, -0.85},   // 뒷발로 돌아와 몸통 고리 닫기
+		};
+		return toRows(xy);
+	}
+
+	/** 네 부위 제자리이지만 18점 성긴 스케치라 꼬리가 왕복선이고 몸통이 각져 있다. 70~89 를 기대한다. */
 	private static List<ArtworkPointRow> catFull() {
 		return toRows(concat(HEAD, BODY_TOP, TAIL, BODY_BOTTOM));
 	}

@@ -91,6 +91,14 @@ export interface VisibleFriend {
   /** 진행 방향(rad). 우주선 기수 */
   heading: number;
   isLeader: boolean;
+  /**
+   * 이 표식 **뒤에 겹쳐 선 사람들** (S15P21A405-550). 대표는 빼고 담는다.
+   *
+   * 예전에는 겹치면 그냥 버렸다. 이 지도는 비슷한 음악을 듣는 사람끼리 붙어 있는 것이
+   * 원리라 몰림이 기본값인데, 버리면 **같은 곡을 듣는 사람이 영영 안 보인다.**
+   * 명단을 들고 있으면 나중에 눌러서 펼치는 것도 여기서 나온다.
+   */
+  stacked: NearbyUser[];
 }
 
 export interface VisibleStar {
@@ -2846,7 +2854,12 @@ export class MapEngine {
   private updateFriends() {
     const f = this.freeRect();
     const G = 58;
-    const capN = MAP_FRIENDS_MAX;
+    /**
+     * **개수 상한이 아니라 칸 나누기 단위다** (S15P21A405-550). 화면을 몇 칸으로 쪼개 고루
+     * 뽑을지에만 쓴다 — 예전에는 이 수에서 그리기를 멈췄고, 그래서 뒤쪽 사람들이 묶이지도
+     * 못하고 사라졌다. 지금은 아무도 안 버린다.
+     */
+    const spreadCells = MAP_FRIENDS_MAX;
     const isLeaderOf = (u: NearbyUser) => this.follow?.leader.email === u.email;
 
     /**
@@ -2882,24 +2895,44 @@ export class MapEngine {
     // 2) 칸마다 하나씩 앞세운 순서로. 지난 프레임에 보이던 사람이 제 칸을 먼저 집는다
     const order = keptFirst(cands, (c) => wasVisible.has(c.u.email));
     const rect: Rect = { x0: 20, y0: 76, x1: Math.max(21, f.x1 - 20), y1: Math.max(77, this.H - 104) };
-    const spread = spreadOrder(order, (i) => ({ x: cands[i].px, y: cands[i].py }), rect, capN);
+    const spread = spreadOrder(order, (i) => ({ x: cands[i].px, y: cands[i].py }), rect, spreadCells);
 
-    // 3) 그 순서대로 겹치지 않게 채운다. 인솔자는 늘 먼저이고 자리를 다투지 않는다
-    const occ = new Set<string>();
+    /**
+     * 3) 그 순서대로 채운다. **겹치면 버리지 않고 먼저 선 사람에게 묶는다** (S15P21A405-550).
+     *
+     * 예전에는 주변 칸이 차 있으면 `return` 으로 그냥 건너뛰었다. 화면에서 58~170픽셀 안에
+     * 있으면 묻힌다는 뜻이고, **같은 곡이면 좌표가 완전히 같아서 무조건 한 명만 남았다.**
+     * 접속자가 여럿인데 화면에는 하나만 뜨던 것이 이것이다.
+     *
+     * 이제 그 자리의 주인을 찾아 명단에 얹는다. 그리는 쪽이 그 수를 배지로 적는다.
+     *
+     * **개수 상한도 없앴다.** 묶음이 생기면서 표식 수는 칸 크기가 이미 제한한다 — 한 표식이
+     * 주변 3×3 칸을 차지하므로 1024×768 화면이면 많아야 예순 몇 개다. 상한을 두면 그 뒤
+     * 사람들이 묶이지도 못하고 조용히 사라진다.
+     *
+     * 인솔자는 예외다. 자리를 다투지 않고 늘 제 모습으로 선다 — 따라가는 동안 인솔자가
+     * 남의 배지 속 숫자로 들어가면 누구를 따라가는지 알 수 없다.
+     */
+    const owner = new Map<string, number>();
     const place = (c: { u: NearbyUser; px: number; py: number; heading: number }, isLeader: boolean) => {
       const cx = Math.floor(c.px / G);
       const cy = Math.floor(c.py / G);
       if (!isLeader) {
-        for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) if (occ.has(`${cx + a},${cy + b}`)) return;
+        for (let a = -1; a <= 1; a++) {
+          for (let b = -1; b <= 1; b++) {
+            const at = owner.get(`${cx + a},${cy + b}`);
+            if (at != null) {
+              this.visFriends[at].stacked.push(c.u);
+              return;
+            }
+          }
+        }
       }
-      occ.add(`${cx},${cy}`);
-      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader });
+      owner.set(`${cx},${cy}`, this.visFriends.length);
+      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader, stacked: [] });
     };
     for (const c of leader) place(c, true);
-    for (const i of spread) {
-      if (this.visFriends.length >= capN) break;
-      place(cands[i], false);
-    }
+    for (const i of spread) place(cands[i], false);
   }
 
   /**

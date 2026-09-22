@@ -271,6 +271,35 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     g.strokeStyle = "#02040a";
     g.lineWidth = 1.3;
     g.stroke();
+    /**
+     * **겹쳐 선 사람 수** (S15P21A405-550). 이 표식 뒤에 몇 명이 더 있는지 적는다.
+     *
+     * 예전에는 겹친 사람을 아예 안 그렸다 — 같은 곡을 들으면 좌표가 같아서 한 명만 남았고,
+     * 나머지는 접속해 있는데도 화면에서 사라졌다. 이제 묶어서 수로 보여 준다.
+     *
+     * 표식 **왼쪽 위**에 붙인다. 오른쪽 아래는 접속 점이, 아래는 닉네임이 이미 쓰고 있다.
+     * 혼자면 그리지 않는다 — 모든 표식에 `1` 이 붙으면 숫자가 뜻을 잃는다.
+     */
+    const more = fr.stacked.length;
+    if (more > 0) {
+      const bx = px - R * (ship ? 0.95 : 0.82);
+      const by = py - R * (ship ? 0.95 : 0.82);
+      const label = `+${more}`;
+      g.font = `600 9px ${FONTS.body}`;
+      // 자릿수가 늘면 알약이 옆으로 늘어난다. 동그라미로 두면 세 자리에서 글자가 삐져나온다
+      const w = Math.max(15, g.measureText(label).width + 9);
+      const h = 13;
+      g.beginPath();
+      g.roundRect(bx - w / 2, by - h / 2, w, h, h / 2);
+      g.fillStyle = "rgba(2,4,10,.82)";
+      g.fill();
+      g.strokeStyle = rgba(rgb, 0.75);
+      g.lineWidth = 1.1;
+      g.stroke();
+      g.fillStyle = "#e9f1ff";
+      g.fillText(label, bx, by + 0.5);
+    }
+
     g.fillStyle = "rgba(233,241,255,.62)";
     g.font = `500 9.5px ${FONTS.body}`;
     g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 9);

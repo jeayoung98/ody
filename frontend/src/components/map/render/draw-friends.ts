@@ -68,69 +68,75 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
 /**
  * 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향).
  *
- * **곡선만으로 그린다** (S15P21A405-624). 예전에는 뾰족한 코와 직선 지느러미의 삼각 로켓이었는데 차갑고
- * 각져서 서비스 분위기와 안 맞았다. 달걀 몸통 · 둥근 지느러미 · 둥근 분사구 · 타원 불꽃으로
- * 바꿨다. 좌표계(코가 -y, `ang` 만큼 회전)와 크기 기준 `R`, 장르색 `rgb` 는 그대로다 — 부르는
- * 두 곳(인솔자·나)과 그 위에 얹는 바이저(`R * 0.66`) 자리가 안 바뀌어야 한다.
- * 파비콘(S15P21A405-623 후속)이 이 모양을 그대로 옮긴다.
+ * **평면 아이콘식 로켓** (S15P21A405-624). 둥근 코에서 꼬리로 좁아지는 물방울 몸통(두 톤),
+ * 큰 창, 뒤로 뻗은 둥근 지느러미 두 개, 꼬리 밴드. **불꽃은 없다** — 예전의 뾰족한 삼각 로켓과
+ * 불꽃은 차갑고 각져서 뺐다. 색은 서비스 팔레트: 몸통 ink, 창 테 ink4, 유리 violet, 지느러미는
+ * 장르색(`rgb`, 내 우주선은 teal).
+ *
+ * **창이 원점이다.** 부르는 쪽이 그 위에 `drawVisor(…, R * 0.72)` 로 사진을 얹으므로 창 중심이
+ * `(px, py)` 여야 한다. 그래서 몸통은 원점보다 아래로 더 길다(코 -1.25R, 꼬리 1.75R).
+ * 파비콘(`src/app/icon.svg`)이 이 좌표를 그대로 옮긴다 — 둘을 같이 고친다.
  */
-export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
 
-  // 불꽃 — 뾰족한 삼각형 대신 **타원**. 동승자·추진이 많을수록 길어지고 살짝 흔들린다
-  const boost = (1 + Math.min(riders, 6) * 0.2) * (1 + thrust * 1.8);
-  const fl = R * (1.35 + Math.sin(t * 9 + px) * 0.16) * boost;
-  const fy = R * 1.08;
-  const gr = g.createLinearGradient(0, fy, 0, fy + fl);
-  gr.addColorStop(0, rgba(rgb, 0.95));
-  gr.addColorStop(0.45, rgba(rgb, 0.4));
-  gr.addColorStop(1, rgba(rgb, 0));
-  g.fillStyle = gr;
-  g.beginPath();
-  g.ellipse(0, fy + fl / 2, R * 0.42, fl / 2, 0, 0, 6.284);
-  g.fill();
-  // 불꽃 속심 — 더 밝고 짧은 타원 하나가 안에 겹친다
-  g.fillStyle = "rgba(255,255,255,.55)";
-  g.beginPath();
-  g.ellipse(0, fy + fl * 0.28, R * 0.2, fl * 0.28, 0, 0, 6.284);
-  g.fill();
-
-  // 지느러미 — 양옆에 반쯤 묻힌 **둥근 알**. 몸통보다 먼저 그려 몸통이 안쪽을 덮는다
-  g.fillStyle = rgba(rgb, 0.85);
-  g.strokeStyle = "rgba(216,233,255,.7)";
-  g.lineWidth = 1.3;
+  // 지느러미 — 뒤로 뻗은 둥근 날. 몸통 뒤에 깔린다
+  g.fillStyle = rgba(rgb, 1);
   for (const sx of [-1, 1]) {
     g.beginPath();
-    g.ellipse(sx * R * 1.0, R * 0.78, R * 0.46, R * 0.52, 0, 0, 6.284);
+    g.moveTo(sx * R * 0.75, R * 0.55);
+    g.bezierCurveTo(sx * R * 1.25, R * 0.85, sx * R * 1.45, R * 1.25, sx * R * 1.4, R * 1.55);
+    g.bezierCurveTo(sx * R * 1.25, R * 1.6, sx * R * 0.9, R * 1.5, sx * R * 0.65, R * 1.4);
+    g.closePath();
     g.fill();
-    g.stroke();
   }
 
-  // 몸통 — 위가 살짝 좁은 달걀. 직선이 없다
-  g.fillStyle = "rgba(16,24,44,.92)";
-  g.strokeStyle = "rgba(216,233,255,.85)";
-  g.lineWidth = 1.5;
+  // 몸통 — 둥근 코, 꼬리로 갈수록 좁아지는 물방울
+  const body = () => {
+    g.beginPath();
+    g.moveTo(0, -R * 1.25);
+    g.bezierCurveTo(R * 0.65, -R * 1.25, R * 1.05, -R * 0.5, R * 1.05, R * 0.15);
+    g.bezierCurveTo(R * 1.05, R * 0.8, R * 0.75, R * 1.35, R * 0.45, R * 1.5);
+    g.lineTo(-R * 0.45, R * 1.5);
+    g.bezierCurveTo(-R * 0.75, R * 1.35, -R * 1.05, R * 0.8, -R * 1.05, R * 0.15);
+    g.bezierCurveTo(-R * 1.05, -R * 0.5, -R * 0.65, -R * 1.25, 0, -R * 1.25);
+    g.closePath();
+  };
+  body();
+  g.fillStyle = "#e9f1ff";
+  g.fill();
+  // 오른쪽 절반 음영 — 평면 아이콘의 두 톤
+  g.save();
+  body();
+  g.clip();
+  g.fillStyle = "#cfd9f7";
+  g.fillRect(0, -R * 1.3, R * 1.2, R * 3);
+  g.restore();
+
+  // 꼬리 밴드(분사구)
+  g.fillStyle = "#3a4761";
   g.beginPath();
-  g.moveTo(0, -R * 1.45);
-  g.bezierCurveTo(R * 1.1, -R * 1.45, R * 1.18, R * 0.3, R * 0.66, R * 1.02);
-  g.quadraticCurveTo(0, R * 1.28, -R * 0.66, R * 1.02);
-  g.bezierCurveTo(-R * 1.18, R * 0.3, -R * 1.1, -R * 1.45, 0, -R * 1.45);
+  g.moveTo(-R * 0.45, R * 1.5);
+  g.lineTo(R * 0.45, R * 1.5);
+  g.bezierCurveTo(R * 0.45, R * 1.65, R * 0.25, R * 1.75, 0, R * 1.75);
+  g.bezierCurveTo(-R * 0.25, R * 1.75, -R * 0.45, R * 1.65, -R * 0.45, R * 1.5);
   g.closePath();
   g.fill();
-  g.stroke();
 
-  // 분사구 — 꼬리에 붙은 둥근 알약
-  g.fillStyle = rgba(rgb, 0.7);
+  // 창 — 얇은 어두운 테와 보라 유리. 사진이 있으면 부르는 쪽이 유리 위에 덮는다 (R * 0.72)
+  g.fillStyle = "#3a4761";
   g.beginPath();
-  g.roundRect(-R * 0.36, R * 0.98, R * 0.72, R * 0.28, R * 0.14);
+  g.arc(0, 0, R * 0.8, 0, 6.284);
   g.fill();
-
-  // 코 반사광 — 둥근 표면임을 말해 주는 작은 점 하나
-  g.fillStyle = "rgba(255,255,255,.55)";
+  g.fillStyle = "#a67cff";
   g.beginPath();
-  g.ellipse(-R * 0.3, -R * 1.02, R * 0.13, R * 0.2, -0.5, 0, 6.284);
+  g.arc(0, 0, R * 0.72, 0, 6.284);
+  g.fill();
+  g.fillStyle = "rgba(255,255,255,.35)";
+  g.beginPath();
+  g.arc(-R * 0.22, -R * 0.22, R * 0.16, 0, 6.284);
   g.fill();
   g.restore();
 }
@@ -280,8 +286,9 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     if (ship) {
       const ang = fr.heading + Math.PI / 2;
       if (isLeader) drawQueue(g, px, py, R, ang, t, u.riderCount);
-      drawShip(g, px, py, R, rgb, ang, t, riders, isLeader && e.follow?.mv ? 0.6 : 0);
-      drawVisor(g, px, py, R * 0.66, u);
+      drawShip(g, px, py, R, rgb, ang);
+      // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
+      drawVisor(g, px, py, R * 0.72, u);
     } else {
       drawHelmet(g, px, py, R, rgb, isLeader);
       drawVisor(g, px, py, R, u);

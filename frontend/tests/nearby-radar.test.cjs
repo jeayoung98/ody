@@ -8,7 +8,7 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { angleOf, radiusOf, sizeOf } = require("../src/components/panels/friends/nearby-radar.tsx");
+const { angleOf, bearingOf, radiusOf, sizeOf } = require("../src/components/panels/friends/nearby-radar.tsx");
 const { RADAR } = require("../src/constants/realtime.ts");
 
 test("가까운 사람이 안쪽, 먼 사람이 바깥이다", () => {
@@ -56,4 +56,49 @@ test("가장 먼 고리에 최대 인원이 서도 헬멧이 서로 겹치지 �
   for (let i = 0; i < n; i++)
     for (let j = i + 1; j < n; j++) min = Math.min(min, Math.hypot(pts[i][0] - pts[j][0], pts[i][1] - pts[j][1]));
   assert.ok(min > RADAR.sizeMax, `가장 가까운 두 헬멧 간격 ${min.toFixed(1)}px 가 최대 지름 ${RADAR.sizeMax}px 보다 좁다`);
+});
+
+/**
+ * **좌표로 방향을 잡는다** (S15P21A405-582). 화면은 y 가 아래로 자라고 층 좌표는 위로 자라서
+ * 뒤집지 않으면 남북이 통째로 반대가 된다. 그 실수는 화면에서 "그럴듯한 다른 배치" 로 보여
+ * 눈으로는 절대 못 잡는다.
+ *
+ * 자리를 쓰는 쪽 규약은 `left = R + cos(a) * r`, `top = R + sin(a) * r` 이다.
+ * `sin` 이 양수면 아래로 간다.
+ */
+const at = (x, y) => ({ x, y });
+const ORIGIN = at(0, 0);
+/** 그 각으로 놓았을 때 화면에서 어느 쪽인가 */
+const screen = (a) => ({ dx: Math.cos(a), dy: Math.sin(a) });
+
+test("지도에서 위에 있는 사람은 레이더에서도 위에 온다", () => {
+  const { dx, dy } = screen(bearingOf(ORIGIN, at(0, 5)));
+  assert.ok(dy < -0.99, `위가 아니라 dy=${dy.toFixed(3)}`);
+  assert.ok(Math.abs(dx) < 1e-9);
+});
+
+test("지도에서 아래에 있는 사람은 레이더에서도 아래에 온다", () => {
+  const { dy } = screen(bearingOf(ORIGIN, at(0, -5)));
+  assert.ok(dy > 0.99, `아래가 아니라 dy=${dy.toFixed(3)}`);
+});
+
+test("좌우는 그대로다", () => {
+  assert.ok(screen(bearingOf(ORIGIN, at(5, 0))).dx > 0.99, "오른쪽");
+  assert.ok(screen(bearingOf(ORIGIN, at(-5, 0))).dx < -0.99, "왼쪽");
+});
+
+test("12시 기준이 angleOf 와 같다", () => {
+  // angleOf 의 첫 자리(i=0)가 12시다. 위쪽 사람의 방향각과 같아야 둘을 섞어 써도 안 어긋난다
+  assert.ok(Math.abs(bearingOf(ORIGIN, at(0, 5)) - angleOf(0, 8)) < 1e-9);
+});
+
+test("같은 곡을 듣는 사람은 각도가 같다 — 한 자리에 뭉친다", () => {
+  const a1 = bearingOf(at(1, 1), at(4, 5));
+  const a2 = bearingOf(at(1, 1), at(4, 5));
+  assert.equal(a1, a2);
+});
+
+test("자리를 모르면 방향도 없다", () => {
+  assert.equal(bearingOf(null, at(1, 1)), null);
+  assert.equal(bearingOf(ORIGIN, null), null);
 });

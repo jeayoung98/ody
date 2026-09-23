@@ -2,31 +2,31 @@
 
 import { useMemo } from "react";
 import { LAYER_USERS } from "@/constants";
-import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
 import { botAsNearbyPerson } from "@/lib/bots/adapt";
-import { distanceBetween, pickNearby, radiusFromNeighbors, type Placed, type Point } from "@/lib/nearby-from-layer";
+import { layerPointOf } from "@/lib/layer-point";
+import { distanceFrom, nearestFirst, type Point } from "@/lib/nearby-from-layer";
 import { useBotStore } from "@/stores/use-bot-store";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type { LayerUsersSnapshot, NearbyPerson } from "@/types";
 
 /**
- * 주변 사람 패널이 실제로 그리는 목록 — **출처가 셋이다** (S15P21A405-536 · 541).
+ * 주변 사람 패널이 실제로 그리는 목록 — **출처가 셋이다** (S15P21A405-536 · 541 · 582).
  *
- * 1. `POST /api/realtime/nearby` — 서버가 "비슷한 곡" 을 계산해 준 목록. 제일 좋다. 만남 횟수와
- *    곡 제목이 들어 있고 기준도 서버가 잡는다. 다만 **소켓·presence·재생 선언이 다 살아 있어야**
- *    답이 온다.
- * 2. `GET /api/realtime/layers/{layer}/users` 중 **가까운 사람** — 그냥 REST 폴링이라 소켓이
- *    죽어 있어도 온다. 지도에 이미 이 사람들이 찍히고 있는데 패널만 비어 있으면, 같은 사람을
- *    두 화면이 다르게 말하는 셈이 된다.
+ * 1. `POST /api/realtime/nearby` — 서버 목록. **기준이 내 층 전체다** (5차 명세). 만남 횟수가
+ *    들어 있고 가까운 순으로 상한까지 서버가 잘라 준다. 다만 **소켓·presence·재생 선언이 다
+ *    살아 있어야** 답이 온다.
+ * 2. `GET /api/realtime/layers/{layer}/users` — 그냥 REST 폴링이라 소켓이 죽어 있어도 온다.
+ *    지도에 이미 이 사람들이 찍히고 있는데 패널만 비어 있으면, 같은 사람을 두 화면이 다르게
+ *    말하는 셈이 된다.
  * 3. 데모 봇 — 아무도 없을 때 따라가기를 시연할 상대.
  *
  * **순서가 곧 우선순위다.** 같은 사람이 여러 출처에 있으면 앞엣것이 이긴다.
  *
- * 패널이 아니라 훅에 둔 이유는 정렬 때문이다. 뒤에 붙이기만 하면 거리 순서가 깨져 "가까운 순"
- * 이라는 패널의 설명이 거짓말이 되고, 레이더(`nearby-radar`)도 같은 목록을 거리로 찍으므로
- * 둘이 어긋난다. 합친 뒤 한 번 정렬한다.
+ * **거리는 여기서 한 번에 다시 잰다.** 출처마다 기준이 다르면 한 목록 안에서 정렬이 뒤섞인다.
+ * 게다가 서버 거리는 **층을 옮길 때만** 새로 오므로(5차 명세 §3), 내가 같은 층에서 곡을 바꾸면
+ * 그 값이 낡는다 — 좌표가 있으니 매번 다시 재는 편이 싸고 정확하다.
  */
 export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: boolean): NearbyPerson[] {
   const bots = useBotStore((s) => s.bots);
@@ -58,83 +58,69 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
     const merged = [...(fromServer ?? [])];
     const seen = new Set(merged.map((p) => p.email));
 
-    /**
-     * 경계를 **한 번 재서 봇과 실사용자가 같이 쓴다** (S15P21A405-543). 예전에는 겹 사용자
-     * 쪽에만 있어서, 사람은 가까운 이만 뜨는데 봇은 겹 반대편에 있어도 떴다 — 같은 목록 안에서
-     * 두 종류가 다른 규칙으로 뽑히면 "내 곡과 비슷한 곡을 듣는 사람" 이라는 설명이 깨진다.
-     */
-    const ctx = nearbyContext(layer, anchorMusicId);
-
-    // 지금 겹에 있고, 경계 안에 있는 봇만
     for (const bot of bots) {
       if (bot.episode.layer !== layer || seen.has(bot.email)) continue;
-      const as = botAsNearbyPerson(bot, anchorMusicId);
-      if (!as || !ctx || as.distance > ctx.radius) continue;
+      const as = botAsNearbyPerson(bot, layer);
+      if (!as) continue;
       merged.push(as);
       seen.add(as.email);
     }
 
-    for (const p of fromLayer(layerUsers, ctx, seen)) merged.push(p);
-    return merged.sort((a, b) => a.distance - b.distance);
+    for (const p of fromLayer(layerUsers, seen)) merged.push(p);
+
+    /**
+     * 거리를 전부 다시 재고 가까운 순으로 상한까지 자른다. **자르는 자리가 여기 하나뿐이라**
+     * 출처가 몇이든 패널에 뜨는 수는 늘 같다.
+     */
+    const me = layerPointOf(anchorMusicId, layer);
+    const placed = merged.map((p) => ({ ...p, distance: distanceFrom(me, pointOfPerson(p, layer)) }));
+    return nearestFirst(placed, LAYER_USERS.maxInPanel);
   }, [enabled, fromServer, bots, layer, anchorMusicId, layerUsers]);
 }
 
 /**
- * 내 자리와 "가깝다" 의 경계.
+ * 그 사람이 서 있는 자리.
  *
- * **내 자리를 모르면 `null` 이다.** 아직 아무 곡도 재생하지 않았다는 뜻이고, 그때는 "가깝다"
- * 를 잴 기준 자체가 없다 — 아무 데나 잘라 넣는 것보다 비워 두는 편이 정직하다. 봇도 같다.
+ * **서버가 준 좌표를 먼저 쓴다.** 그 사람의 곡이 이 겹 상주 집합 밖일 수 있고, 그러면 지도는
+ * 좌표를 모른다 — 서버만 아는 자리다.
  *
- * 경계는 이 겹의 곡 분포에서 뽑는다 (`radiusFromNeighbors`). 상주 집합을 한 번 훑는데
- * 1,000곡짜리 배열이고 목록을 다시 만들 때만 도는 자리라 값이 싸다.
+ * 좌표가 비어 있으면 듣는 곡으로 지도에서 찾아본다. 델타(`NEARBY_ENTER`·`MOVE`)가 자리를 못
+ * 구해 `null` 로 보내는 드문 경우와, 좌표를 사람마다 싣지 않는 `NEARBY_BULK_ENTER` 가 여기다.
  */
-function nearbyContext(layer: number, myMusicId: number | null): { me: Point; radius: number } | null {
-  const engine = getMapEngine();
-  const mine = myMusicId != null ? engine?.pointOf(myMusicId) : null;
-  if (!engine || !mine) return null;
-
-  const dx = layer * 2;
-  const dy = dx + 1;
-  const me = { x: mine.pc[dx], y: mine.pc[dy] };
-  const radius = radiusFromNeighbors(
-    engine.songs.map((s) => distanceBetween({ x: s.pc[dx], y: s.pc[dy] }, me)),
-    LAYER_USERS.neighborK,
-  );
-  return { me, radius };
+function pointOfPerson(p: NearbyPerson, layer: number): Point | null {
+  if (p.x != null && p.y != null) return { x: p.x, y: p.y };
+  return layerPointOf(p.musicId, layer);
 }
 
-/** 겹 사용자 중 경계 안의 사람을 `NearbyPerson` 으로 */
-function fromLayer(
-  snapshot: LayerUsersSnapshot | undefined,
-  ctx: { me: Point; radius: number } | null,
-  seen: ReadonlySet<string>,
-): NearbyPerson[] {
-  const engine = getMapEngine();
-  if (!snapshot || !engine || !ctx) return [];
+/**
+ * 겹 사용자 응답을 `NearbyPerson` 으로. **자르지 않는다** (S15P21A405-582) — 상한은 합친 뒤
+ * 한 번만 걸고, 거리도 부르는 쪽이 잰다.
+ */
+function fromLayer(snapshot: LayerUsersSnapshot | undefined, seen: ReadonlySet<string>): NearbyPerson[] {
+  if (!snapshot) return [];
 
   // 응답은 곡별 묶음이다. 좌표가 묶음에 붙어 있어 사람 쪽으로 옮겨 편다
-  const flat: (Placed & { musicId: number; nickname: string | null; imageUrl: string | null; riderCount: number })[] = [];
+  const out: NearbyPerson[] = [];
   for (const g of snapshot.groups) {
-    for (const u of g.users) flat.push({ ...u, musicId: g.musicId, x: g.x, y: g.y });
+    for (const u of g.users) {
+      if (seen.has(u.email)) continue;
+      out.push({
+        email: u.email,
+        nickname: u.nickname,
+        imageUrl: u.imageUrl,
+        /**
+         * 이 응답에는 **만남 횟수가 없다** (백엔드 명세: `viewingMusicId`·`genreId`·
+         * `meetCount` 는 안 온다). 0 이면 화면이 그 자리를 안 그린다 — 지어내지 않는다.
+         */
+        meetingCount: 0,
+        riderCount: u.riderCount,
+        musicId: g.musicId,
+        x: g.x,
+        y: g.y,
+        // 부르는 쪽이 다시 잰다. 여기서 채워 봐야 덮어쓰인다
+        distance: Number.POSITIVE_INFINITY,
+      });
+    }
   }
-
-  return pickNearby(flat, ctx.me, ctx.radius, LAYER_USERS.maxInPanel, seen).map((u) => {
-    const song = engine.pointOf(u.musicId);
-    return {
-      email: u.email,
-      nickname: u.nickname,
-      imageUrl: u.imageUrl,
-      /**
-       * 이 응답에는 **만남 횟수가 없다** (백엔드 명세: `viewingMusicId`·`genreId`·
-       * `meetCount` 는 안 온다). 0 이면 화면이 그 자리를 안 그린다 — 지어내지 않는다.
-       */
-      meetingCount: 0,
-      riderCount: u.riderCount,
-      musicId: u.musicId,
-      // 곡 제목은 상주 집합에서 빌려 온다. 이 겹에 있는 곡이라 거의 항상 잡힌다
-      title: song?.title ?? "",
-      artist: song?.artist ?? null,
-      distance: u.distance,
-    };
-  });
+  return out;
 }

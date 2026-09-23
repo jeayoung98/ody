@@ -1,7 +1,6 @@
 "use client";
 
 import Box from "@/components/common/box";
-import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
@@ -49,8 +48,6 @@ export default function FriendsPanel() {
   const code = (error as { code?: string } | null)?.code;
   /** 아직 아무 곡도 재생하지 않았다 (§7.2 422). 사용자가 할 일이 분명하다 */
   const noPlay = code === "PRESENCE_ERROR";
-  /** 비슷한 곡 계산이 잠깐 실패했다 (§12.7). **사용자 잘못이 아니다** */
-  const temporary = code === "SERVICE_UNAVAILABLE";
 
   /**
    * 지금 보여 줄 안내 **하나** (S15P21A405-511). 급한 것부터 고른다 —
@@ -69,21 +66,19 @@ export default function FriendsPanel() {
     ? "따라가는 중이라 인솔자 곡 주변을 보고 있어요."
     : noPlay
     ? "곡을 먼저 재생하면 비슷한 곡을 듣는 사람이 보여요."
-    : temporary
-      ? "지금은 목록을 만들지 못했어요."
-      : people.length === 0
-        ? "지금은 비슷한 곡을 듣는 사람이 없어요."
-        : null;
+    : people.length === 0
+      ? "지금은 이 층에 다른 사람이 없어요."
+      : null;
 
   return (
     <Box title="주변 사람" actions={<PanelCloseButton />}>
       <Note>
-        내가 듣는 곡과 <b>비슷한 곡</b>을 듣고 있는 사람입니다. 여기서의 거리는 실제 위치가 아니라 음악 지도상의 좌표 거리예요.
+        지금 나와 <b>같은 층</b>에 있는 사람입니다. 여기서의 거리는 실제 위치가 아니라 음악 지도상의 좌표 거리예요.
       </Note>
       {/*
-        레이더가 위, 줄 목록이 아래다 (S15P21A405-496). 레이더는 **거리와 크기**를 한눈에
-        보여주고, 목록은 레이더에 넣을 자리가 없는 것(듣는 곡 제목·만남 횟수)을 적는다.
-        하나만 두면 둘 중 하나를 잃는다.
+        레이더가 위, 줄 목록이 아래다 (S15P21A405-496). 레이더는 **어느 쪽에 얼마나 멀리**
+        있는지를 한눈에 보여주고(S15P21A405-582 로 각도도 진짜가 됐다), 목록은 레이더에 넣을
+        자리가 없는 것(이름·만남 횟수·따라가기 버튼)을 적는다. 하나만 두면 둘 중 하나를 잃는다.
       */}
       {/*
         **판은 늘 그리고, 사람만 연결됐을 때 얹는다** (S15P21A405-496). 연결까지 기다렸다가
@@ -101,12 +96,6 @@ export default function FriendsPanel() {
           <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
             <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[11.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
               {notice}
-              {/* 503 만 사용자가 할 수 있는 게 있다 — 그 버튼만 누를 수 있게 연다 */}
-              {temporary && (
-                <Button size="sm" className="pointer-events-auto shrink-0" onClick={() => void refetch()}>
-                  다시 시도
-                </Button>
-              )}
             </div>
           </div>
         )}

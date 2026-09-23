@@ -27,7 +27,6 @@ export type ImplementedErrorCode =
   /** 422 — 소켓 미연결 · 첫 배치인데 layer 없음 · 곡 좌표 없음 · 재생 없이 주변 사람 요청 */
   | "PRESENCE_ERROR"
   /** 503 — 주변 사람의 비슷한 곡 계산이 일시적으로 실패했다. **영구 오류가 아니다** */
-  | "SERVICE_UNAVAILABLE"
   // 따라가기 = 탑승 (S15P21A405-530, backend RealtimeErrorCode)
   /**
    * 사유마다 **사용자가 할 일이 다르다.** 잠시 뒤 다시 하면 되는 것(`RIDE_CAPTAIN_INACTIVE`·

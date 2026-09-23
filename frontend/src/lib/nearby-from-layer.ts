@@ -1,9 +1,12 @@
 /**
- * 겹 사용자 중 **가까운 사람만** 골라내기 — 순수 함수 (S15P21A405-541).
+ * 주변 사람 목록의 **거리와 순서** — 순수 함수 (S15P21A405-541 · 582).
  *
- * `GET /api/realtime/layers/{layer}/users` 는 그 겹에서 재생 중인 사람을 **전부** 준다
- * (S15P21A405-537). 지도에는 그게 맞다 — 줌과 상관없이 다 찍기로 했다. 그런데 주변 사람
- * 패널은 "내 근처" 라는 뜻이 붙은 목록이라, 겹 반대편 사람까지 넣으면 그 뜻이 없어진다.
+ * 예전에는 여기서 "가까운 사람만" 을 골라냈다. 겹 조회가 층 사람을 전부 주는데 패널은
+ * "내 근처" 라는 뜻이라 반경 안만 남겼다. **그 자르기를 걷어냈다** (S15P21A405-582, 5차 명세)
+ * — 이제 서버가 층 전체를 기준으로 삼고 가까운 순으로 상한까지 잘라 주므로, 화면이 한 번 더
+ * 자르면 서버가 일부러 넣은 사람을 도로 버린다.
+ *
+ * 남은 일은 둘뿐이다. **좌표로 거리를 재는 것**과 **합친 뒤 상한까지 자르는 것**.
  *
  * 화면도 엔진도 모른다. 좌표와 숫자만 받아 좌표와 숫자를 돌려준다 — 이 규칙이 맞는지는
  * 눈으로 판단할 수 없고 수치로 묶어야 한다 (`tests/nearby-from-layer.test.cjs`).
@@ -17,49 +20,27 @@ export interface Point {
 export const distanceBetween = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 /**
- * "가깝다" 의 경계를 **그 겹의 곡 분포에서** 뽑는다.
+ * 내 자리에서 그 사람까지. **잴 수 없으면 무한대**다 — 맨 뒤로 가고 상한에서 먼저 잘린다.
  *
- * PC 값에 고정 숫자를 박지 않는 이유는 **겹마다 축의 퍼짐이 다르기 때문**이다. 주성분은 앞
- * 축일수록 분산이 크다 — 0겹에서 "가깝다" 인 거리가 7겹에서는 겹 전체를 덮는 거리일 수 있다.
- * 그러면 한 겹에서는 아무도 안 뜨고 다른 겹에서는 전부 뜬다.
- *
- * 대신 **내 곡에서 `k` 번째로 가까운 곡까지의 거리**를 쓴다. "내 주변 곡 `k` 개가 놓인 만큼의
- * 범위" 라는 뜻이라 겹이 바뀌어도 같은 크기의 이웃을 가리킨다.
- *
- * 곡이 `k` 개보다 적으면 있는 것 중 제일 먼 곡까지다. 하나도 없으면 `0` — 아무도 안 들어온다.
+ * 잴 수 없는 경우가 둘이다. 내가 아직 아무 곡도 안 틀어 자리가 없을 때, 그리고 그 사람의
+ * 자리를 서버도 지도도 모를 때다. 둘 다 0 으로 채우면 **모르는 사람이 제일 가까운 사람으로**
+ * 올라온다 — 틀린 값을 앞에 끼우는 것보다 뒤로 보내는 편이 정직하다.
  */
-export function radiusFromNeighbors(distances: readonly number[], k: number): number {
-  const sorted = [...distances].filter(Number.isFinite).sort((a, b) => a - b);
-  if (sorted.length === 0) return 0;
-  return sorted[Math.min(k, sorted.length) - 1];
-}
-
-export interface Placed extends Point {
-  email: string;
+export function distanceFrom(me: Point | null, at: Point | null): number {
+  if (!me || !at) return Number.POSITIVE_INFINITY;
+  return distanceBetween(me, at);
 }
 
 /**
- * 반경 안에 있는 사람을 가까운 순으로, 최대 `max` 명까지.
+ * 가까운 순으로 `max` 명까지.
  *
- * `exclude` 는 **이미 목록에 있는 사람**이다 — 서버 주변 사람 응답과 데모 봇이 거기 든다.
- * 같은 사람이 두 줄로 뜨면 목록을 세는 것 자체가 안 되고, 서버 쪽 줄이 더 풍부하므로
- * (만남 횟수·곡 제목이 들어 있다) 이쪽을 버린다.
+ * **상한이 여기 하나뿐이다** (S15P21A405-582). 출처가 셋이라(서버 목록 · 겹 조회 · 봇) 각자
+ * 자르면 합친 결과가 상한을 넘는다. 서버도 가까운 순으로 자르므로 같은 기준을 한 번 더 건다.
  *
- * `max` 로 자르는 것은 **사람이 몰린 구역** 때문이다. 인기 구역에서는 반경 안에 수십 명이
- * 들어올 수 있는데, 우측 패널에 수십 줄이 쌓이면 레이더도 목록도 못 읽는다.
+ * **이 상한은 패널만의 것이다.** 지도는 겹 조회를 따로 받아 층 사람을 다 그리고 겹친 사람은
+ * 묶는다 (`use-viewport-subscription`). 여기서 자른다고 지도에서 사라지지 않는다.
  */
-export function pickNearby<T extends Placed>(
-  users: readonly T[],
-  me: Point,
-  radius: number,
-  max: number,
-  exclude: ReadonlySet<string> = new Set(),
-): (T & { distance: number })[] {
-  if (!(radius > 0) || max <= 0) return [];
-  return users
-    .filter((u) => !exclude.has(u.email))
-    .map((u) => ({ ...u, distance: distanceBetween(u, me) }))
-    .filter((u) => u.distance <= radius)
-    .sort((a, b) => a.distance - b.distance)
-    .slice(0, max);
+export function nearestFirst<T extends { distance: number }>(people: readonly T[], max: number): T[] {
+  if (max <= 0) return [];
+  return [...people].sort((a, b) => a.distance - b.distance).slice(0, max);
 }

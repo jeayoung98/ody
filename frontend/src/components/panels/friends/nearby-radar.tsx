@@ -3,6 +3,8 @@
 import HelmetAvatar from "@/components/common/helmet-avatar";
 import { RADAR } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
+import { layerPointOf } from "@/lib/layer-point";
+import type { Point } from "@/lib/nearby-from-layer";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { NearbyPerson } from "@/types";
@@ -12,16 +14,30 @@ import type { NearbyPerson } from "@/types";
  *
  * 가운데가 나고, 주변에 사람들이 헬멧으로 놓인다.
  *
- * **반지름만 진짜다.** `distance`(내 곡과의 거리)를 쓴다 — 멀수록 바깥이다. **각도는 의미가
- * 없다.** `NearbyPerson` 에 좌표가 오지 않아서(명세 §6.1) 방향을 만들 근거가 없다. 그래서
- * 해시 같은 것으로 흩뿌리지 않고 **고르게 나눠** 둔다 — 겹치지 않게 하는 것이 목적이고, 고른
- * 배치는 적어도 "이 방향에 뭔가 있다" 는 오해를 덜 만든다.
+ * **이제 각도도 진짜다** (S15P21A405-582). 예전에는 `NearbyPerson` 에 좌표가 없어서 방향을
+ * 만들 근거가 없었고, 그래서 사람들을 고르게 나눠 두기만 했다. 5차에서 서버가 층 좌표를 실어
+ * 주면서 **진짜 미니맵이 됐다** — 반지름은 내 자리에서의 거리, 각도는 그쪽 방향이다.
  *
- * 좌표가 생기면 `angleOf` 만 바꾸면 된다.
+ * 같은 곡을 듣는 사람은 좌표가 같으므로 **한 자리에 뭉친다.**
+ *
+ * 자리를 모르는 사람만 예전 방식(`angleOf`)으로 흩어 둔다.
  */
 
-/** 이 사람을 몇 시 방향에 둘지. 고르게 나누고 위(12시)부터 시계방향으로 */
+/** 자리를 모르는 사람을 둘 곳. 고르게 나누고 위(12시)부터 시계방향으로 */
 export const angleOf = (i: number, total: number) => (i / Math.max(1, total)) * Math.PI * 2 - Math.PI / 2;
+
+/**
+ * 내 자리에서 그 사람 쪽을 바라보는 각 (S15P21A405-582). 자리를 모르면 `null`.
+ *
+ * 화면은 y 가 아래로 자라고 층 좌표는 위로 자란다. 그래서 y 를 뒤집어야 지도에서 위쪽에 있는
+ * 사람이 레이더에서도 위에 온다 — `angleOf` 의 12시 기준과 같은 방향이다.
+ *
+ * **같은 곡을 듣는 사람은 각도도 반지름도 같아 한 자리에 뭉친다.** 그게 이 변경의 목적이다.
+ */
+export function bearingOf(me: Point | null, at: Point | null): number | null {
+  if (!me || !at) return null;
+  return Math.atan2(-(at.y - me.y), at.x - me.x);
+}
 
 /**
  * 가운데에서 얼마나 떨어뜨릴지 (0~1).
@@ -63,6 +79,9 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
   const { data: me } = useMeQuery();
   // 내 헬멧 색도 내가 듣는 곡의 장르를 따라간다 — 지도의 내 표식과 같은 규칙이다
   const myMusicId = useMapStore((s) => s.myMusicId);
+  const layer = useMapStore((s) => s.layer);
+  // 각도의 기준점. 아직 아무 곡도 안 틀었으면 없고, 그때는 예전처럼 고르게 흩어 둔다
+  const me0 = layerPointOf(myMusicId, layer);
 
   // 빈 배열이면 Math.max 가 -Infinity 라 0 을 함께 넣는다
   const maxDistance = Math.max(...people.map((p) => p.distance).filter(Number.isFinite), 0);
@@ -80,8 +99,9 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
 
       {/*
         탐색 빛 (S15P21A405-510). 눈금 위, 사람 아래다 — 사람을 덮으면 읽는 것을 방해한다.
-        **지나가는 자리의 사람을 밝히지 않는다** — 각도는 애초에 무의미해서(좌표가 오지 않는다)
-        빛이 그 사람을 "찾았다" 처럼 보이면 없는 정보를 지어내는 셈이 된다. 분위기만 맡는다.
+        **지나가는 자리의 사람을 밝히지 않는다.** 각도가 진짜가 된 지금도 마찬가지다
+        (S15P21A405-582) — 빛이 도는 속도와 사람이 있는 자리는 아무 관계가 없어서, 밝히면
+        "지금 저 사람을 찾았다" 는 없는 뜻이 생긴다. 분위기만 맡는다.
       */}
       <span aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
         <span
@@ -123,7 +143,8 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
       </span>
 
       {people.map((p, i) => {
-        const a = angleOf(i, people.length);
+        const at = p.x != null && p.y != null ? { x: p.x, y: p.y } : layerPointOf(p.musicId, layer);
+        const a = bearingOf(me0, at) ?? angleOf(i, people.length);
         const d = sizeOf(p.meetingCount, maxMeeting);
         const r = radiusOf(p.distance, maxDistance) * R;
         // 자주 마주친 사람만 숨쉰다. 전부 뛰면 화면이 출렁이고 "크다" 는 신호도 사라진다

@@ -6,7 +6,7 @@ import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { layerPointOf } from "@/lib/layer-point";
 import type { Point } from "@/lib/nearby-from-layer";
 import { useMapStore } from "@/stores/use-map-store";
-import { usePanelStore } from "@/stores/use-panel-store";
+import { useOpenProfile } from "@/hooks/use-open-profile";
 import type { NearbyPerson } from "@/types";
 
 /**
@@ -161,7 +161,7 @@ export function sizeOf(meetingCount: number, max: number): number {
  * 그 자체로 읽힌다 (S15P21A405-496).
  */
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
-  const openFeed = usePanelStore((s) => s.openFeed);
+  const openProfile = useOpenProfile();
   const { data: me } = useMeQuery();
   // 내 헬멧 색도 내가 듣는 곡의 장르를 따라간다 — 지도의 내 표식과 같은 규칙이다
   const myMusicId = useMapStore((s) => s.myMusicId);
@@ -252,7 +252,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           <button
             key={p.email}
             type="button"
-            onClick={() => openFeed(p.email)}
+            onClick={() => openProfile(p.email)}
             title={`${p.nickname ?? "이름 없음"}${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
             className={`absolute grid place-items-center rounded-pill transition-opacity hover:opacity-80 ${breathes ? "animate-breathe" : ""}`}
             style={{

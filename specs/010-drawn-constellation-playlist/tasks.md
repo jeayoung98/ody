@@ -49,10 +49,10 @@
 
 **Independent Test**: 2점·21점 → 400 `INVALID_INPUT`, 한 점에 몰린 그림 → 400 `ARTWORK_DRAWING_DEGENERATE`, 잡음 큰 결과 → 200 + `quality: LOW`.
 
-- [ ] T012 [P] [US4] `backend/src/main/java/com/ssafy/backend/common/ArtworkErrorCode.java` 에 `ARTWORK_DRAWING_DEGENERATE(HttpStatus.BAD_REQUEST, "ARTWORK_DRAWING_DEGENERATE", "점이 한 곳에 몰려 모양을 알 수 없습니다.")` 추가
-- [ ] T013 [US4] `A/service/CatPlaylistGenerator.java` 의 `draw()` 맨 앞에서 bbox 긴 변(0~1 좌표 기준) `< 0.02` 이면 `CustomException(ArtworkErrorCode.ARTWORK_DRAWING_DEGENERATE)` (research R5). 상수에 이유 주석
-- [ ] T014 [US4] `T/CatPlaylistGeneratorTests.java` 에 추가: 세 점이 0.01 안에 몰림 → `ARTWORK_DRAWING_DEGENERATE`, 일직선 세 점 → 정상 응답(Edge Case), 연속 두 점이 같은 자리 → 서로 다른 곡 2개(Edge Case)
-- [ ] T015 [P] [US4] `T/DrawRequestValidationTests.java` 신규: `Validation.buildDefaultValidatorFactory()` 로 2점·21점·x=1.5·y=null → 위반 있음, 3점·20점 정상 → 위반 없음 (`GlobalExceptionHandler` 가 `INVALID_INPUT` 400 으로 바꾸는 경로는 기존 테스트가 커버)
+- [x] T012 [P] [US4] `backend/src/main/java/com/ssafy/backend/common/ArtworkErrorCode.java` 에 `ARTWORK_DRAWING_DEGENERATE(HttpStatus.BAD_REQUEST, "ARTWORK_DRAWING_DEGENERATE", "점이 한 곳에 몰려 모양을 알 수 없습니다.")` 추가
+- [x] T013 [US4] `A/service/CatPlaylistGenerator.java` 의 `draw()` 맨 앞에서 bbox 긴 변(0~1 좌표 기준) `< 0.02` 이면 `CustomException(ArtworkErrorCode.ARTWORK_DRAWING_DEGENERATE)` (research R5). 상수에 이유 주석
+- [x] T014 [US4] `T/CatPlaylistGeneratorTests.java` 에 추가: 세 점이 0.01 안에 몰림 → `ARTWORK_DRAWING_DEGENERATE`, 일직선 세 점 → 정상 응답(Edge Case), 연속 두 점이 같은 자리 → 서로 다른 곡 2개(Edge Case)
+- [x] T015 [P] [US4] `T/DrawRequestValidationTests.java` 신규: `Validation.buildDefaultValidatorFactory()` 로 2점·21점·x=1.5·y=null → 위반 있음, 3점·20점 정상 → 위반 없음 (`GlobalExceptionHandler` 가 `INVALID_INPUT` 400 으로 바꾸는 경로는 기존 테스트가 커버)
 
 **Checkpoint**: FR-016 네 갈래 중 백엔드 몫 세 갈래 확인. 네 번째(10 s 타임아웃)는 FE
 
@@ -60,14 +60,14 @@
 
 **Goal**: 백엔드 변경 없음. 계약을 넘기고 FE 가 구현한다.
 
-- [ ] T016 [US3] `docs/rules/BACKEND-NOTES.md` 에 `### 6-8. 그린 별자리 매칭 (S15P21A405-598)` 절 추가: 엔드포인트·요청/응답·에러 표를 `specs/010-drawn-constellation-playlist/contracts/draw-match.md` 에서 요약, 저장은 기존 `/playlist/create` 에 `points` 순서 그대로, LOW = 경고+저장 허용, FE 요청 타임아웃 10 s, `types/api.ts` 에 `ARTWORK_DRAWING_DEGENERATE` 추가 필요
+- [x] T016 [US3] `docs/rules/BACKEND-NOTES.md` 에 `### 6-8. 그린 별자리 매칭 (S15P21A405-598)` 절 추가: 엔드포인트·요청/응답·에러 표를 `specs/010-drawn-constellation-playlist/contracts/draw-match.md` 에서 요약, 저장은 기존 `/playlist/create` 에 `points` 순서 그대로, LOW = 경고+저장 허용, FE 요청 타임아웃 10 s, `types/api.ts` 에 `ARTWORK_DRAWING_DEGENERATE` 추가 필요
 - [ ] T017 [US2] 노션 「결정 통보 · 물음」에 FE 요청 1건(🔴 물음, 담당 FE — 담당자는 사용자에게 확인): 캔버스 그리기 화면 US1~4(점 추가·자동 연결·`n / 20`·최소 3 전 비활성·최대 20 제한·마지막 점 취소·전체 초기화·결과 무효화 FR-022·비교 화면·미리 듣기·저장), 근거 BACKEND-NOTES 6-8. 올린 뒤 fetch 로 되읽어 한글·자동 링크 확인
 
 ## Phase 6: Polish & Cross-Cutting
 
-- [ ] T018 `A/service/CatPlaylistGenerator.java` 에 `@EventListener(ApplicationReadyEvent.class)` 예열 추가: 데몬 스레드(`Thread t = new Thread(...); t.setDaemon(true)`, 이름 `artwork-bounds-warmup`)에서 `bounds.updateAndGet(...)` 로 `findPc12Bounds` 를 미리 읽고 `log.info("[Artwork] 상자 예열 ms={}")`. 예외는 WARN 로그만(첫 요청 때 다시 읽는 기존 동작 유지). H2 테스트 프로필에서 `percentile_cont` 가 없어 실패해도 기동이 깨지지 않아야 한다 (research R4)
-- [ ] T019 T018 단위 테스트를 `T/CatPlaylistGeneratorTests.java` 에 추가: 예열 메서드를 직접 호출 → 이후 `draw`·`generate` 에서 `findPc12Bounds` 추가 호출 0회. 매퍼가 예외를 던지면 예열은 조용히 끝나고 다음 요청이 다시 읽는다
-- [ ] T020 `cd backend && ./gradlew test && ./gradlew build` — 실패 0 확인, 결과 XML 에서 실패·오류 수로 검증
+- [x] T018 `A/service/CatPlaylistGenerator.java` 에 `@EventListener(ApplicationReadyEvent.class)` 예열 추가: 데몬 스레드(`Thread t = new Thread(...); t.setDaemon(true)`, 이름 `artwork-bounds-warmup`)에서 `bounds.updateAndGet(...)` 로 `findPc12Bounds` 를 미리 읽고 `log.info("[Artwork] 상자 예열 ms={}")`. 예외는 WARN 로그만(첫 요청 때 다시 읽는 기존 동작 유지). H2 테스트 프로필에서 `percentile_cont` 가 없어 실패해도 기동이 깨지지 않아야 한다 (research R4)
+- [x] T019 T018 단위 테스트를 `T/CatPlaylistGeneratorTests.java` 에 추가: 예열 메서드를 직접 호출 → 이후 `draw`·`generate` 에서 `findPc12Bounds` 추가 호출 0회. 매퍼가 예외를 던지면 예열은 조용히 끝나고 다음 요청이 다시 읽는다
+- [x] T020 `cd backend && ./gradlew test && ./gradlew build` — 실패 0 확인, 결과 XML 에서 실패·오류 수로 검증
 - [ ] T021 (배포 후, 사람+Claude) [quickstart.md](./quickstart.md) 운영 절차: draw 3점 → 200·중복 없음·HIGH 예상, layout 대조, 같은 요청 반복 동일, 배포 직후 첫 요청 < 1 s, 컨테이너 로그 `상자 예열`·`그림 매칭`. 추가: (a) draw 결과로 `/api/playlist/create` → 상세 재조회 → 곡 순서 동일, 같은 곡으로 layout → draw 좌표와 동일 (SC-005·FR-021), (b) 20점 draw 30회 → p95 < 3 s 기록 (SC-001), (c) 삼각형·사각형·별·지그재그 draw 4회 → 3개 이상 MEDIUM 이상 (SC-007)
 
 ## Dependencies

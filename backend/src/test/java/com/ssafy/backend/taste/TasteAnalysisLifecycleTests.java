@@ -154,7 +154,7 @@ class TasteAnalysisLifecycleTests {
 
     private static AnalysisSnapshot snapshot(int count) {
         TasteReference.Label label =
-                new TasteReference.Label("VERIFIED", "STRONG", "잔잔한", "강렬한", "test");
+                new TasteReference.Label("VERIFIED", "STRONG", "세기", "잔잔한", "강렬한", "test");
         TasteAxisStatistics axis = new TasteAxisStatistics(
                 1,
                 new TasteAxisStatistics.Summary(0, 1, 2, 3, 4),

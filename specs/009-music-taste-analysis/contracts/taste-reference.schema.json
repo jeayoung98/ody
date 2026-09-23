@@ -1,0 +1,67 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ody.local/schemas/taste-reference-v1.json",
+  "title": "ODY Taste Analysis Reference",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "analysisVersion",
+    "populationCount",
+    "generatedAt",
+    "lineage",
+    "axes"
+  ],
+  "properties": {
+    "schemaVersion": { "const": "taste-reference-v1" },
+    "analysisVersion": { "type": "string", "minLength": 1 },
+    "populationCount": { "type": "integer", "minimum": 1 },
+    "generatedAt": { "type": "string", "format": "date-time" },
+    "lineage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["sourceManifest", "sourceChecksum", "generatorCommit", "generatorConfig"],
+      "properties": {
+        "sourceManifest": { "type": "string", "minLength": 1 },
+        "sourceChecksum": { "type": "string", "pattern": "^[A-Fa-f0-9]{64}$" },
+        "generatorCommit": { "type": "string", "minLength": 7 },
+        "generatorConfig": { "type": "string", "minLength": 1 }
+      }
+    },
+    "axes": {
+      "type": "array",
+      "minItems": 16,
+      "maxItems": 16,
+      "items": { "$ref": "#/$defs/axis" }
+    }
+  },
+  "$defs": {
+    "axis": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["pc", "explainedVariance", "quantiles", "label"],
+      "properties": {
+        "pc": { "type": "integer", "minimum": 1, "maximum": 16 },
+        "explainedVariance": { "type": "number", "minimum": 0, "maximum": 1 },
+        "quantiles": {
+          "type": "array",
+          "minItems": 101,
+          "maxItems": 101,
+          "items": { "type": "number" }
+        },
+        "label": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["status", "strength"],
+          "properties": {
+            "status": { "enum": ["VERIFIED", "UNVERIFIED", "UNLABELED"] },
+            "strength": { "enum": ["STRONG", "MEDIUM", "WEAK", "NONE"] },
+            "low": { "type": ["string", "null"], "maxLength": 120 },
+            "high": { "type": ["string", "null"], "maxLength": 120 },
+            "evidence": { "type": ["string", "null"], "maxLength": 500 }
+          }
+        }
+      }
+    }
+  }
+}

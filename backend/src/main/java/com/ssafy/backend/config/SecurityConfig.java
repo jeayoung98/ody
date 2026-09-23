@@ -61,7 +61,7 @@ public class SecurityConfig {
 								// 소켓 핸드셰이크. 이 단계에는 토큰이 실리지 않는다 —
 								// 인증은 소켓이 열린 뒤 STOMP CONNECT 에서 WebSocketAuthInterceptor 가 한다.
 								"/ws/**",
-								"/actuator/health", "/actuator/prometheus",
+								"/actuator/health", "/api/hello", "/actuator/prometheus",
 								// 수동 테스트 페이지. 머지 전에 이 줄과 파일을 함께 지운다 [S15P21A405-82]
 								"/__realtime-test.html",
 								"/api/swagger-ui.html", "/api/swagger-ui/**", "/api/v3/api-docs/**")

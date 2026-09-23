@@ -52,6 +52,7 @@ public class UserService {
 
 		// 비공개 판정 뒤에 센다 — 볼 수 없는 사용자의 기록은 읽지 않는다 (S15P21A405-430).
 		int playedMusicCnt = userMapper.countDistinctPlayedMusic(targetEmail);
+		int discoveredMusicCnt = userMapper.countDiscoveredMusic(targetEmail);
 
 		int followerCnt = followService.countFollowers(targetEmail);
 		int followingCnt = followService.countFollowings(targetEmail);
@@ -73,6 +74,7 @@ public class UserService {
 				isFollowing,
 				isMe,
 				playedMusicCnt,
+				discoveredMusicCnt,
 				isOnline);
 	}
 

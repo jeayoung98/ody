@@ -9,7 +9,6 @@ import { drawFriends, drawQueue, drawShip } from "./draw-friends";
  */
 const ME_SHIP_R = 13;
 /** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
-const TEAL_RGB: readonly [number, number, number] = [79, 227, 206];
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
 import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
@@ -953,7 +952,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
-    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang);
+    drawShip(g, px, py, ME_SHIP_R, ang);
     drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
     g.globalCompositeOperation = "source-over";
   } else {

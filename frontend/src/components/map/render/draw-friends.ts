@@ -71,20 +71,25 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
  *
  * **평면 아이콘식 로켓** (S15P21A405-624). 둥근 코에서 꼬리로 좁아지는 물방울 몸통(두 톤),
  * 큰 창, 뒤로 뻗은 둥근 지느러미 두 개, 꼬리 밴드. **불꽃은 없다** — 예전의 뾰족한 삼각 로켓과
- * 불꽃은 차갑고 각져서 뺐다. 색은 서비스 팔레트: 몸통 ink, 창 테 ink4, 유리 violet, 지느러미는
- * 장르색(`rgb`, 내 우주선은 teal).
+ * 불꽃은 차갑고 각져서 뺐다. 색은 서비스 팔레트: 몸통 ink, 창 테 ink4, 유리 violet,
+ * 지느러미 teal, 꼬리 밴드 violet.
+ *
+ * **지느러미는 누구 것이든 teal 이다** (S15P21A405-641). 예전에는 그 사람의 장르색을 따랐는데,
+ * 실데이터는 장르가 붙은 곡이 1% 뿐이라(`constants/map.ts` 의 `NO_GENRE_ID`) 거의 모든 배가
+ * 같은 무장르색이었다 — 구분이 되지도 않으면서 인자만 하나 더 받고 있었다. 장르색이 실제로
+ * 갈리는 자리는 헬멧(동승자 없는 사람)이고 그쪽은 그대로다.
  *
  * **창이 원점이다.** 부르는 쪽이 그 위에 `drawVisor(…, R * 0.72)` 로 사진을 얹으므로 창 중심이
  * `(px, py)` 여야 한다. 그래서 몸통은 원점보다 아래로 더 길다(코 -1.25R, 꼬리 1.75R).
  * 파비콘(`src/app/icon.svg`)이 이 좌표를 그대로 옮긴다 — 둘을 같이 고친다.
  */
-export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number) {
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
 
   // 지느러미 — 뒤로 뻗은 둥근 날. 몸통 뒤에 깔린다
-  g.fillStyle = rgba(rgb, 1);
+  g.fillStyle = rgba(TEAL, 1);
   for (const sx of [-1, 1]) {
     g.beginPath();
     g.moveTo(sx * R * 0.75, R * 0.55);
@@ -116,8 +121,8 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
   g.fillRect(0, -R * 1.3, R * 1.2, R * 3);
   g.restore();
 
-  // 꼬리 밴드(분사구)
-  g.fillStyle = "#3a4761";
+  // 꼬리 밴드(분사구). 창 테와 같은 ink4 였는데 몸통 밑에서 어둠에 묻혔다 — violet 으로 띄운다 (S15P21A405-641)
+  g.fillStyle = "#a67cff";
   g.beginPath();
   g.moveTo(-R * 0.45, R * 1.5);
   g.lineTo(R * 0.45, R * 1.5);
@@ -294,7 +299,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     if (ship) {
       const ang = fr.heading + Math.PI / 2;
       if (isLeader) drawQueue(g, px, py, R, ang, t, u.riderCount);
-      drawShip(g, px, py, R, rgb, ang);
+      drawShip(g, px, py, R, ang);
       // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
       drawVisor(g, px, py, R * 0.72, u);
     } else {

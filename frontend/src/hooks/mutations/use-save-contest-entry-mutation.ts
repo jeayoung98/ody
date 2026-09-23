@@ -3,19 +3,16 @@ import { api } from "@/lib/api";
 import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
 
 interface Input {
-  contestId: number;
-  entryId: number;
+  playlistName: string;
+  /** 작품 곡 순서 그대로 */
+  musicIds: number[];
 }
 
-/** 출품작을 내 플레이리스트로 복사한다 (곡 순서 유지). 내 플리 목록도 바뀐다 */
+/** 작품을 내 플레이리스트로 복사한다 (S15P21A405-640). 내 플리 목록이 바뀐다 */
 export function useSaveContestEntryMutation() {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: ({ contestId, entryId }: Input) =>
-      api<{ playlistId: number | null; saveCount: number }>(API_ENDPOINTS.contest.save(contestId, entryId), { method: "POST", body: JSON.stringify({}) }),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.contest.all });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mineAll });
-    },
+    mutationFn: (body: Input) => api<{ playlistId: number }>(API_ENDPOINTS.contest.save, { method: "POST", body: JSON.stringify(body) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mineAll }),
   });
 }

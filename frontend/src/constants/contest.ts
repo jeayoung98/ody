@@ -1,19 +1,23 @@
-import type { ContestSort } from "@/types";
+import type { ContestSort, MatchQuality } from "@/types";
 
 /**
- * 별자리 콘테스트 (S15P21A405-602).
+ * 별자리 콘테스트 (S15P21A405-602 · 640).
  *
- * 규칙 값(점 개수·표 수·재출품 횟수·AI 기준)은 **서버가 회차마다 내려준다** (`Contest.rules`).
- * 여기 있는 것은 목이 쓰는 기본값과, 화면 구성처럼 서버와 무관한 것만이다.
+ * 그리기 규칙은 백엔드 `DrawRequest`(점 3~20개)와 같다 — 화면이 먼저 막고, 넘기면 서버가 400 `INVALID_INPUT` 이다.
+ * 표 한도(`voteLimit`)는 회차마다 서버가 내려 주므로 여기 없다.
  */
-export const CONTEST_DEFAULT_RULES = {
+export const SKETCH_RULES = {
   minPoints: 3,
   maxPoints: 20,
-  resubmitLimit: 3,
-  voteLimit: 3,
-  aiGate: 30,
+  /** 별자리 이름 = 플레이리스트 이름. 백엔드 플리 이름 제한과 별개로 화면에서 자르는 길이 */
   titleMax: 30,
 } as const;
+
+/** 리더보드를 한 번에 받는 수. 서버 상한이 50 이다 (BACKEND-NOTES §6-4) */
+export const CONTEST_LEADERBOARD_SIZE = 50;
+
+/** 내 작품이 `PENDING` 이면 이 간격으로 다시 읽는다. 서버 채점 스케줄러가 5초 주기다 (§6-2) */
+export const CONTEST_SCORING_POLL_MS = 5000;
 
 export const CONTEST_TABS = [
   { key: "sketch", label: "별자리 그리기" },
@@ -23,15 +27,14 @@ export const CONTEST_TABS = [
 export type ContestTab = (typeof CONTEST_TABS)[number]["key"];
 
 export const CONTEST_SORTS = [
+  { key: "rank", label: "순위순" },
   { key: "latest", label: "최신순" },
-  { key: "votes", label: "표 많은 순" },
+  { key: "likes", label: "좋아요순" },
   { key: "ai", label: "AI 점수순" },
-  { key: "final", label: "최종 점수순" },
-  { key: "saves", label: "많이 가져간 순" },
 ] as const satisfies ReadonlyArray<{ key: ContestSort; label: string }>;
 
-/** 매칭 품질 라벨 — 서버 enum 을 사람 말로 */
-export const MATCH_QUALITY_LABEL = { HIGH: "높음", MID: "보통", LOW: "낮음" } as const;
+/** 모양 일치도 등급 — 서버 enum 을 사람 말로. `LOW` 는 실패가 아니라 경고다 */
+export const MATCH_QUALITY_LABEL: Record<MatchQuality, string> = { HIGH: "높음", MEDIUM: "보통", LOW: "낮음" };
 
 /** 스케치 캔버스 — 점을 다시 눌러 빼는 판정 반경(px) */
 export const SKETCH_HIT_PX = 12;

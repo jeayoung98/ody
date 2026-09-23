@@ -1,15 +1,18 @@
-import { ok } from "@/lib/api-response";
-import { contestCaller, contestFail } from "@/lib/contest-bff";
-import { currentContest } from "@/mocks/contest";
+import { okLive } from "@/lib/api-response";
+import { backendGet, callerAuth } from "@/lib/backend";
+import { artworkFail, toRound, type BackendArtworkRound } from "@/lib/contest-bff";
+
+const UPSTREAM = "/api/artwork/round/current";
 
 /**
- * ⚠ **목이다. 배포 API 에 이 기능이 없다** (S15P21A405-602, BACKEND-NOTES "별자리 콘테스트").
- * 지금 진행 중인 회차 + 내 출품·남은 표·남은 재출품. 진행 중인 회차가 없으면 `data: null`.
+ * 지금 열린 회차 (S15P21A405-640) — `GET /api/artwork/round/current`. **없으면 `null` 이다, 오류가 아니다.**
+ * 호출자 토큰을 넘겨야 `myVotesLeft` 가 채워진다(비로그인은 `null`).
  */
 export async function GET(req: Request) {
   try {
-    return ok(await currentContest(contestCaller(req).email));
+    const round = await backendGet<BackendArtworkRound | null>(UPSTREAM, { headers: callerAuth(req) }, { allowNullData: true });
+    return okLive(round ? toRound(round) : null, UPSTREAM);
   } catch (e) {
-    return contestFail(e);
+    return artworkFail(e, UPSTREAM);
   }
 }

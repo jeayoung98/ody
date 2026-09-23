@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import type { ContestTab } from "@/constants";
-import type { ContestJudge, ContestMatch, ContestSort, SketchPoint } from "@/types";
+import type { ContestMatch, ContestSort, SketchPoint } from "@/types";
 
 /** 빈 목록은 늘 같은 참조 — 셀렉터가 매번 새 배열을 만들지 않게 */
 const EMPTY_POINTS: SketchPoint[] = [];
@@ -12,8 +12,8 @@ const EMPTY_POINTS: SketchPoint[] = [];
  * 컴포넌트 state 로 두면 탭을 옮기거나 패널을 잠깐 닫는 순간 그리던 점이 날아간다.
  * 서버 상태(회차·출품작)는 TanStack Query 가 들고, 여기는 아직 서버에 안 보낸 것만 든다.
  *
- * **점을 건드리면 매칭·심사 결과를 버린다.** 결과는 그 점 배치에 대한 답이라, 점이 바뀐 뒤에도
- * 남아 있으면 다른 모양에 붙은 점수처럼 보인다.
+ * **점을 건드리면 매칭 결과를 버린다.** 결과는 그 점 배치에 대한 답이라, 점이 바뀐 뒤에도
+ * 남아 있으면 다른 모양에 붙은 것처럼 보인다. (즉시 심사는 640 에서 없어졌다 — AI 채점은 출품 뒤 서버가 한다)
  */
 interface ContestState {
   /** 이벤트 모달이 떠 있는가. 우측 패널과 무관한 **별개 화면**이다 */
@@ -24,7 +24,6 @@ interface ContestState {
   /** 마지막 점 → 첫 점을 잇는가 */
   closed: boolean;
   match: ContestMatch | null;
-  judge: ContestJudge | null;
   title: string;
 
   toggleOpen: () => void;
@@ -37,12 +36,11 @@ interface ContestState {
   clear: () => void;
   toggleClosed: () => void;
   setMatch: (match: ContestMatch | null) => void;
-  setJudge: (judge: ContestJudge | null) => void;
   setTitle: (title: string) => void;
 }
 
 /** 점이 바뀌었다 — 이전 답은 무효 */
-const invalidate = { match: null, judge: null } as const;
+const invalidate = { match: null } as const;
 
 export const useContestStore = create<ContestState>()(
   devtools(
@@ -53,7 +51,6 @@ export const useContestStore = create<ContestState>()(
       points: EMPTY_POINTS,
       closed: false,
       match: null,
-      judge: null,
       title: "",
 
       toggleOpen: () => set((s) => ({ open: !s.open }), false, "toggleOpen"),
@@ -65,8 +62,7 @@ export const useContestStore = create<ContestState>()(
       undo: () => set((s) => ({ points: s.points.slice(0, -1), ...invalidate }), false, "undo"),
       clear: () => set({ points: EMPTY_POINTS, closed: false, ...invalidate }, false, "clear"),
       toggleClosed: () => set((s) => ({ closed: !s.closed, ...invalidate }), false, "toggleClosed"),
-      setMatch: (match) => set({ match, judge: null }, false, "setMatch"),
-      setJudge: (judge) => set({ judge }, false, "setJudge"),
+      setMatch: (match) => set({ match }, false, "setMatch"),
       setTitle: (title) => set({ title }, false, "setTitle"),
     }),
     { name: "contest-store" },

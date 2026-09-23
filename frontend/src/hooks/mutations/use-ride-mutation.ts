@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { API_ENDPOINTS, BOTS, RIDE_REJECTED } from "@/constants";
+import { API_ENDPOINTS, BOTS, RIDE_CAPTAIN_UNREACHABLE, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
@@ -9,6 +9,7 @@ import { isBot } from "@/lib/bots/roster";
 import { botLiveOf, useBotStore } from "@/stores/use-bot-store";
 import { sendJoinNow } from "@/hooks/use-presence-join";
 import { playFrom } from "@/lib/realtime/ride";
+import { isConnected } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -79,6 +80,18 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
     onError: (e) => {
       if (silent) return;
       const code = e instanceof ApiError ? e.code : "UNKNOWN";
+      /**
+       * **422 는 두 가지를 한 코드로 말한다** (S15P21A405-628). 내 presence 가 없거나,
+       * 상대가 탈 수 있는 상태가 아니거나. 앞엣것은 여기서 직접 확인할 수 있다 —
+       * 소켓이 붙어 있으면 내 presence 는 있는 것이므로 남은 건 상대·서버 쪽이다.
+       *
+       * 구분 없이 "연결이 불안정해요" 만 띄우면 **서버가 거절한 것도 내 인터넷 탓으로
+       * 읽힌다.** 폰에서는 콘솔을 못 보므로 이 문구가 유일한 단서다.
+       */
+      if (code === "PRESENCE_ERROR" && isConnected()) {
+        showToast(RIDE_CAPTAIN_UNREACHABLE);
+        return;
+      }
       showToast(RIDE_REJECTED[code as keyof typeof RIDE_REJECTED] ?? RIDE_REJECTED.UNKNOWN);
     },
   });

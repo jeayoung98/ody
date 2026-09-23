@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -15,6 +15,15 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 /** 스프링 — 목표를 10% 쯤 지나쳤다 돌아온다. 겹친 표식이 갈라질 때의 "도잉" (S15P21A405-618) */
 const springOut = (t: number) => (t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(7 * t));
+/**
+ * 닉네임이 그려질 폭 어림(px). 엔진에는 캔버스 컨텍스트가 없어 `measureText` 를 못 쓴다 —
+ * 한글·한자처럼 넓은 글자와 그 밖을 둘로만 나눠 더한다. 갈라진 표식 사이 간격에 쓰므로 조금 넉넉해도 된다.
+ */
+const approxNameWidth = (s: string) => {
+  let w = 0;
+  for (const ch of s) w += (ch.codePointAt(0) ?? 0) >= 0x1100 ? FRIEND_SPREAD.nameCharPx.wide : FRIEND_SPREAD.nameCharPx.narrow;
+  return w;
+};
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
@@ -2312,7 +2321,7 @@ export class MapEngine {
   hitFriend(mx: number, my: number): VisibleFriend | null {
     [mx, my] = this.unview(mx, my);
     let best: VisibleFriend | null = null;
-    let bd = 22 * 22;
+    let bd = FRIEND_MARKER.hitPx * FRIEND_MARKER.hitPx;
     for (const fr of this.visFriends) {
       const d = (fr.px - mx) ** 2 + (fr.py - my) ** 2;
       if (d < bd) {
@@ -2354,13 +2363,25 @@ export class MapEngine {
     const v = this.visFriends[at];
     const people = [v.user, ...v.stacked];
     const n = people.length;
-    const R = 12.5 * v.scale;
-    // 이웃 사이 현이 헬멧 지름 + 틈 이상이 되는 반지름
-    const fit = (2 * R + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
-    const radius = Math.max(FRIEND_SPREAD.radiusPx * v.scale, fit) * springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    /**
+     * **펼치면 맨 앞 크기로 커진다.** 멀리(작게) 있는 묶음은 갈라 놓아도 작아서 누가 누군지
+     * 안 보인다 — 어차피 누른 것은 "이 사람들을 보겠다" 는 뜻이라 가장 가까운 별 위의 크기로
+     * 키운다. 퍼지는 것과 같은 스프링을 타서 크기도 같이 튄다.
+     */
+    const front = Math.max(v.scale, 1 + STAR_VIEW.depthSize);
+    const k = springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    const scale = v.scale + (front - v.scale) * k;
+    const R = FRIEND_MARKER.radiusPx * front;
+    /**
+     * 이웃 사이 현이 **헬멧 지름과 닉네임 폭 중 큰 것** + 틈 이상이 되는 반지름. 닉네임이 헬멧
+     * 아래 가운데 정렬로 붙어서, 헬멧만 안 겹치게 두면 이름끼리 포개져 읽을 수 없었다.
+     */
+    const nameW = Math.max(0, ...people.map((u) => approxNameWidth(u.nickname ?? "")));
+    const fit = (Math.max(2 * R, nameW) + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
+    const radius = Math.max(FRIEND_SPREAD.radiusPx * front, fit) * k;
     const parts: VisibleFriend[] = people.map((u, i) => {
       const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;
-      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale: v.scale, isLeader: false, stacked: [] };
+      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale, isLeader: false, stacked: [] };
     });
     this.visFriends.splice(at, 1, ...parts);
   }

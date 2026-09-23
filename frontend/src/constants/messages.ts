@@ -82,9 +82,26 @@ export const RIDE_REJECTED = {
   RIDE_FULL: "따라가는 인원이 가득 찼어요",
   RIDE_NOT_CAPTAIN: "따라가는 중에는 할 수 없어요. 먼저 내려 주세요",
   RIDE_STALE: "상태가 바뀌었어요. 화면을 새로 고친 뒤 다시 시도해 주세요",
+  /**
+   * **내 소켓이 끊긴 경우에만 쓴다** (S15P21A405-628). 붙어 있는데 422 면
+   * {@link RIDE_CAPTAIN_UNREACHABLE} 다 — `use-ride-mutation` 의 `onError` 가 고른다.
+   */
   PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
   UNKNOWN: "따라가기를 시작하지 못했어요",
 } as const;
+
+/**
+ * **소켓은 멀쩡한데 422 가 온 경우** (S15P21A405-628).
+ *
+ * 백엔드는 `PRESENCE_ERROR` 하나로 두 가지를 말한다 — 내 presence 가 없거나, 상대가 탈 수
+ * 있는 상태가 아니거나. 앞엣것은 프론트가 직접 확인할 수 있으므로(`isConnected`), 그게
+ * 아니라면 남은 것은 상대·서버 쪽이다.
+ *
+ * **"연결이 불안정해요" 를 그대로 쓰면 안 된다.** 내 인터넷을 의심하게 만들어서, 실제로
+ * 서버가 거절한 건을 찾는 데 시간을 쓰게 한다 — 이 문구 때문에 한 번 겪었다. 폰에서는
+ * 콘솔을 못 보므로 화면 문구가 유일한 단서다.
+ */
+export const RIDE_CAPTAIN_UNREACHABLE = "지금은 이 사람을 따라갈 수 없어요. 잠시 후 다시 시도해 주세요";
 
 /** 인솔자가 사라져 따라가기가 끝났다 (§4.3). 조용히 끊으면 왜 멈췄는지 알 수 없다 */
 export const RIDE_ENDED_BY_CAPTAIN = (who: string) => `${who} 님이 떠나 따라가기가 끝났어요`;

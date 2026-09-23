@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends, drawQueue, drawShip } from "./draw-friends";
@@ -437,7 +437,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalAlpha = e.coverAlpha;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `500 9.5px ${FONTS.body}`;
+  g.font = `500 ${MAP_TITLE_PX.cover}px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
@@ -462,7 +462,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     g.lineWidth = 1;
     g.stroke();
     g.fillStyle = "rgba(233,241,255,.58)";
-    g.fillText(fitText(g, it.s.title, 88), it.px, it.py + S / 2 + 9);
+    g.fillText(fitText(g, it.s.title, 104), it.px, it.py + S / 2 + 10);
   }
   g.globalAlpha = 1;
 }
@@ -718,14 +718,14 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
-    g.font = `500 10.5px ${FONTS.body}`;
-    const title = fitText(g, s.title, 110);
+    g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
+    const title = fitText(g, s.title, 126);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, x - tw / 2 - 6, y + 13, tw + 12, 17, 5);
+    roundRect(g, x - tw / 2 - 6, y + 13, tw + 12, 19, 5);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, x, y + 21.5);
+    g.fillText(title, x, y + 22.5);
     if (sub) {
       g.font = `500 8.5px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
@@ -946,7 +946,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
-    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang, e.time, e.myRiders, 0);
+    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang);
     drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
     g.globalCompositeOperation = "source-over";
   } else {
@@ -1039,8 +1039,8 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   const label = "이 영역에 없는 곡";
   g.font = `600 9px ${FONTS.mono}`;
   const labelW = g.measureText(label).width;
-  g.font = `500 10.5px ${FONTS.body}`;
-  const title = fitText(g, s.title, 130);
+  g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
+  const title = fitText(g, s.title, 150);
   const tw = Math.max(labelW, g.measureText(title).width);
   const ly = labelDir > 0 ? cy + rr + 5 : cy - rr - 41;
   const lx = clamp(cx, f.x0 + tw / 2 + 12, f.x1 - tw / 2 - 12);

@@ -109,6 +109,35 @@
 		WHERE id = #{artworkId} AND status = 'FAILED'
 	</update>
 
+	<!-- ============================ 고양이 플레이리스트 생성 (S15P21A405-595) ============================ -->
+
+	<!--
+		point((location::real[])[1], (location::real[])[2]) 는 music_l1_gist 의 인덱스 표현식과 글자 그대로
+		같아야 한다 — 첨자를 #{} 로 바꾸면 인덱스를 타지 못한다 (MajorTrackMapper 주석 참고).
+		<-> 는 KNN 정렬이라 GiST 가 가까운 순으로 걷는다.
+	-->
+	<select id="findNearestMusicByPc12" resultType="com.ssafy.backend.artwork.dto.MusicPc12Row">
+		SELECT m.id AS music_id,
+		       (m.location::real[])[1] AS pc1,
+		       (m.location::real[])[2] AS pc2
+		FROM music m
+		WHERE m.location IS NOT NULL
+		  AND NOT m.is_unplayable
+		ORDER BY point((m.location::real[])[1], (m.location::real[])[2]) <![CDATA[<->]]> point(#{x}, #{y})
+		LIMIT #{limit}
+	</select>
+
+	<!-- 2~98 백분위. 전체 곡을 한 번 훑는다 — 서비스가 결과를 들고 있어 요청마다 돌지 않는다. -->
+	<select id="findPc12Bounds" resultType="com.ssafy.backend.artwork.dto.Pc12BoundsRow">
+		SELECT percentile_cont(0.02) WITHIN GROUP (ORDER BY (m.location::real[])[1]) AS x_min,
+		       percentile_cont(0.98) WITHIN GROUP (ORDER BY (m.location::real[])[1]) AS x_max,
+		       percentile_cont(0.02) WITHIN GROUP (ORDER BY (m.location::real[])[2]) AS y_min,
+		       percentile_cont(0.98) WITHIN GROUP (ORDER BY (m.location::real[])[2]) AS y_max
+		FROM music m
+		WHERE m.location IS NOT NULL
+		  AND NOT m.is_unplayable
+	</select>
+
 	<!-- ============================ 좌표 ============================ -->
 
 	<insert id="insertPoints">

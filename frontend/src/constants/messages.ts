@@ -119,8 +119,6 @@ export const REACTION_REJECTED = {
   UNKNOWN: "반응을 보내지 못했어요",
 } as const;
 
-/** 재연결·새 탭으로 서버 쪽 탑승이 끊겼다 (§8.3). **자동으로 다시 태우지 않는다** */
-export const RIDE_DROPPED = "따라가기가 끊겼어요. 다시 눌러 주세요";
 
 /**
  * 따라가는 중에 여정을 누른 경우 (S15P21A405-557).

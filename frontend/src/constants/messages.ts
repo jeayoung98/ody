@@ -83,10 +83,13 @@ export const RIDE_REJECTED = {
   RIDE_NOT_CAPTAIN: "따라가는 중에는 할 수 없어요. 먼저 내려 주세요",
   RIDE_STALE: "상태가 바뀌었어요. 화면을 새로 고친 뒤 다시 시도해 주세요",
   /**
+   * 내 presence 가 없다는 뜻이다 — 인솔자 쪽 문제가 아니다 (S15P21A405-555). 자동 복구(소켓
+   * 재연결)를 거치고도 남은 경우라 "불안정" 보다 끊겼다고 말하는 편이 맞다.
+   *
    * **내 소켓이 끊긴 경우에만 쓴다** (S15P21A405-628). 붙어 있는데 422 면
    * {@link RIDE_CAPTAIN_UNREACHABLE} 다 — `use-ride-mutation` 의 `onError` 가 고른다.
    */
-  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  PRESENCE_ERROR: "실시간 연결이 끊겼어요. 잠시 후 다시 시도해 주세요",
   UNKNOWN: "따라가기를 시작하지 못했어요",
 } as const;
 

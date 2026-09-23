@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
-import { sendJoinNow } from "@/hooks/use-presence-join";
+import { joinAndWait } from "@/hooks/use-presence-join";
 import { ApiError } from "@/lib/api";
 import { useMapStore } from "@/stores/use-map-store";
 import type { PlayRequest, PlayResponse } from "@/types";
@@ -17,21 +17,24 @@ import type { PlayRequest, PlayResponse } from "@/types";
  *
  * **422 는 presence 가 만료됐다는 뜻일 때가 많다** (§12.1). 백그라운드 탭에서 heartbeat 가
  * 늘어져 만료된 상태로 재생을 누르면 실측에서 422 가 났다. 그래서 두 겹으로 막는다 —
- * 부르기 **전에** join 을 한 번 보내고, 그래도 422 면 join 재전송 후 **한 번만** 재시도한다.
- * 그 뒤에도 실패하면 그때 호출자에게 던진다.
+ * 부르기 **전에** join 을 보내 **응답까지 기다리고**, 그래도 422 면 한 번 더 기다린 뒤
+ * **한 번만** 재시도한다. 그 뒤에도 실패하면 그때 호출자에게 던진다.
+ *
+ * 기다리는 것이 핵심이다 (S15P21A405-555). 던지고 바로 REST 를 부르면 서버가 join 을 처리하기
+ * 전에 요청이 닿아, 깨우려던 그 만료 상태 그대로 422 가 난다.
  */
 export function useRecordPlayMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (input: PlayRequest): Promise<PlayResponse> => {
-      // presence 가 살아 있어야 200 이 온다. 만료 상태에서 누르면 422 라 미리 깨워 둔다
-      sendJoinNow(input.layer);
+      // presence 가 살아 있어야 200 이 온다. **응답을 기다린다** (S15P21A405-555)
+      await joinAndWait(input.layer);
       try {
         return await post(input);
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "PRESENCE_ERROR") throw e;
         // 자동 복구는 한 번뿐이다. 반복하면 사용자는 아무것도 모른 채 기다리기만 한다
-        sendJoinNow(input.layer);
+        await joinAndWait(input.layer);
         return await post(input);
       }
     },

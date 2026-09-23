@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -13,6 +13,8 @@ import { starMag } from "../render/star-look";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/** 스프링 — 목표를 10% 쯤 지나쳤다 돌아온다. 겹친 표식이 갈라질 때의 "도잉" (S15P21A405-618) */
+const springOut = (t: number) => (t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(7 * t));
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
@@ -367,6 +369,8 @@ export class MapEngine {
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
   visFriends: VisibleFriend[] = [];
+  /** 펼쳐 둔 묶음 — 대표 이메일과 펼치기 시작 시각 (S15P21A405-618). null 이면 전부 접혀 있다 */
+  private expandedStack: { email: string; since: number } | null = null;
   /** 이 레이어의 대표곡 (커버) */
   repIds = new Set<number>();
   private repLayer = -1;
@@ -2304,10 +2308,61 @@ export class MapEngine {
     return best;
   }
 
+  /** 가장 가까운 표식. 갈라진 표식은 서로 닿을 만큼 가까워서 첫 것을 집으면 옆 사람이 눌린다 (S15P21A405-618) */
   hitFriend(mx: number, my: number): VisibleFriend | null {
     [mx, my] = this.unview(mx, my);
-    for (const fr of this.visFriends) if ((fr.px - mx) ** 2 + (fr.py - my) ** 2 < 22 * 22) return fr;
-    return null;
+    let best: VisibleFriend | null = null;
+    let bd = 22 * 22;
+    for (const fr of this.visFriends) {
+      const d = (fr.px - mx) ** 2 + (fr.py - my) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = fr;
+      }
+    }
+    return best;
+  }
+
+  /** 배지(+N) 있는 표식을 펼친다 (S15P21A405-618). 다음 프레임부터 `spreadExpandedStack` 이 갈라 그린다 */
+  expandStack(email: string): void {
+    this.expandedStack = { email, since: performance.now() };
+  }
+
+  /** 펼친 묶음을 다시 하나로. 드래그·확대·다른 곳 클릭이 부른다 — 접힐 것이 없으면 아무 일도 없다 */
+  collapseStack(): void {
+    this.expandedStack = null;
+  }
+
+  /**
+   * 펼친 묶음을 **대표 + 뒤사람** 개별 표식으로 갈라 둘레에 놓는다 (S15P21A405-618).
+   *
+   * `updateFriends` 가 끝난 뒤의 후처리다 — 묶음 계산(칸·대표 유지)은 건드리지 않고 그 결과
+   * 한 칸만 여러 칸으로 바꾼다. 그래서 지도를 밀어도 대표가 바뀌지 않는 성질이 그대로 남는다.
+   *
+   * 둘이면 좌우로, 셋 이상이면 원 둘레에 고르게 선다. 반지름은 헬멧이 서로 닿지 않는 값이다.
+   * 퍼지는 동안은 스프링 곡선으로 반지름을 키운다. 대표가 화면에서 사라졌거나 뒤에 아무도
+   * 없게 됐으면 저절로 접는다.
+   */
+  private spreadExpandedStack(): void {
+    const ex = this.expandedStack;
+    if (!ex) return;
+    const at = this.visFriends.findIndex((v) => v.user.email === ex.email);
+    if (at < 0 || this.visFriends[at].stacked.length === 0) {
+      this.expandedStack = null;
+      return;
+    }
+    const v = this.visFriends[at];
+    const people = [v.user, ...v.stacked];
+    const n = people.length;
+    const R = 12.5 * v.scale;
+    // 이웃 사이 현이 헬멧 지름 + 틈 이상이 되는 반지름
+    const fit = (2 * R + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
+    const radius = Math.max(FRIEND_SPREAD.radiusPx * v.scale, fit) * springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    const parts: VisibleFriend[] = people.map((u, i) => {
+      const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale: v.scale, isLeader: false, stacked: [] };
+    });
+    this.visFriends.splice(at, 1, ...parts);
   }
 
   // ------------------------------------------------------------------ me / play / follow
@@ -3082,6 +3137,7 @@ export class MapEngine {
 
     this.updateReveal();
     this.updateFriends();
+    this.spreadExpandedStack();
     if (!this.anim) this.pickRepresentatives();
     this.publish();
   }

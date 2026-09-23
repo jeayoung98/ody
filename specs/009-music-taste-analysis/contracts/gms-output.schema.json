@@ -1,0 +1,38 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://ody.local/schemas/taste-gms-output-v1.json",
+  "title": "ODY Taste GMS Output",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["summary", "narratives"],
+  "properties": {
+    "summary": {
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 160
+    },
+    "narratives": {
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 3,
+      "uniqueItems": true,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["findingId", "text"],
+        "properties": {
+          "findingId": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 80
+          },
+          "text": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 500
+          }
+        }
+      }
+    }
+  }
+}

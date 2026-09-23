@@ -23,7 +23,7 @@ public class GlobalExceptionHandler {
 	@ExceptionHandler(CustomException.class)
 	public ResponseEntity<ApiResponse<Void>> handleCustomException(CustomException e) {
 		ErrorCode errorCode = e.getErrorCode();
-		return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.fail(errorCode));
+		return ResponseEntity.status(errorCode.getHttpStatus()).body(ApiResponse.fail(errorCode, e.getDetails()));
 	}
 
 	@ExceptionHandler({

@@ -24,14 +24,14 @@ export default function GhostBanner() {
       }`}
     >
       <span className="h-1.5 w-1.5 shrink-0 rounded-pill bg-violet shadow-[0_0_8px_#a67cff]" />
-      <span className="max-w-[220px] truncate text-[13px]">
+      <span className="max-w-[220px] truncate text-[14px]">
         <b className="font-semibold">{data?.title ?? "고스트별"}</b>
         <span className="ml-1.5 text-ink-3">이 영역에 없는 곡</span>
       </span>
       <button
         type="button"
         onClick={() => surfaceToMusic(ghostMusicId)}
-        className="rounded-pill bg-white/[.09] px-2.5 py-[5px] text-[12.5px] text-ink transition-colors hover:bg-white/[.16]"
+        className="rounded-pill bg-white/[.09] px-2.5 py-[5px] text-[13.5px] text-ink transition-colors hover:bg-white/[.16]"
       >
         이 별로 이동
       </button>
@@ -39,7 +39,7 @@ export default function GhostBanner() {
         type="button"
         aria-label="고스트별 끄기"
         onClick={dismissGhost}
-        className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-pill text-[12px] text-ink-3 transition-colors hover:bg-white/[.09] hover:text-ink"
+        className="grid h-[22px] w-[22px] shrink-0 place-items-center rounded-pill text-[13px] text-ink-3 transition-colors hover:bg-white/[.09] hover:text-ink"
       >
         ✕
       </button>

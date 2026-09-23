@@ -57,7 +57,7 @@ export default function FeedTasteReport() {
             표본이 적다는 말(잠정)은 문장이 아니라 **배지**다 (S15P21A405-639) — 문장 안에 박히면
             "나를 설명하는 한 문장" 이 아니라 면책 문구가 된다.
           */}
-          <p className={`font-display text-[16px] leading-snug font-medium ${view.stale ? "text-ink-2" : "text-ink"}`}>
+          <p className={`font-display text-[17px] leading-snug font-medium ${view.stale ? "text-ink-2" : "text-ink"}`}>
             {view.badge && (
               <span
                 title={view.badge.title}
@@ -96,7 +96,7 @@ export default function FeedTasteReport() {
       )}
 
       <div className="flex items-center justify-between gap-2">
-        {view.notice ? <span className="min-w-0 flex-1 text-[12px] text-ink-4">{view.notice}</span> : <span className="flex-1" />}
+        {view.notice ? <span className="min-w-0 flex-1 text-[13px] text-ink-4">{view.notice}</span> : <span className="flex-1" />}
         <Button
           size="sm"
           variant={report ? "secondary" : "primary"}

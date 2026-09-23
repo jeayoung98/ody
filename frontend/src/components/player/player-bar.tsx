@@ -134,12 +134,12 @@ export default function PlayerBar() {
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">
-        <p className="truncate font-display text-[16px] leading-tight font-semibold text-ink">
+        <p className="truncate font-display text-[17px] leading-tight font-semibold text-ink">
           {idle ? "재생할 곡을 고르세요" : title}
-          {!idle && blocked && <span className="ml-2 text-[11.5px] font-normal text-warn">{blocked.badge}</span>}
+          {!idle && blocked && <span className="ml-2 text-[12.5px] font-normal text-warn">{blocked.badge}</span>}
         </p>
         {/* 고를 곡이 없을 때의 안내는 좁은 화면에서 뺀다 — 한 줄에 제목과 같이 들어가면 둘 다 잘린다 */}
-        <p className={`mt-0.5 truncate text-[12px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
+        <p className={`mt-0.5 truncate text-[13px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
 
       {/*

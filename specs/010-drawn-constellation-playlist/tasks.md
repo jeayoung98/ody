@@ -70,6 +70,11 @@
 - [x] T020 `cd backend && ./gradlew test && ./gradlew build` — 실패 0 확인, 결과 XML 에서 실패·오류 수로 검증
 - [ ] T021 (배포 후, 사람+Claude) [quickstart.md](./quickstart.md) 운영 절차: draw 3점 → 200·중복 없음·HIGH 예상, layout 대조, 같은 요청 반복 동일, 배포 직후 첫 요청 < 1 s, 컨테이너 로그 `상자 예열`·`그림 매칭`. 추가: (a) draw 결과로 `/api/playlist/create` → 상세 재조회 → 곡 순서 동일, 같은 곡으로 layout → draw 좌표와 동일 (SC-005·FR-021), (b) 20점 draw 30회 → p95 < 3 s 기록 (SC-001), (c) 삼각형·사각형·별·지그재그 draw 4회 → 3개 이상 MEDIUM 이상 (SC-007)
 
+## Phase 7: FE(602) 대조 후속 (2026-09-23)
+
+- [x] T022 [US1] draw 응답 원소에 `title`·`artist` 추가 — `A/dto/DrawTrack.java` 신규, `A/service/CatPlaylistGenerator.java` 가 `MusicDetailReader.findSummariesByIds`(PK 일괄 1회)로 채운다. 어댑터 없으면 null. `T/CatPlaylistGeneratorTests.java` 에 이름·조회 1회 검증
+- [x] T023 [US2] spec FR-002·FR-006·FR-018, 계약, BACKEND-NOTES §6-8 에 닫힌 모양(표시용, 요청에 없음)·중간 점 빼기 허용 반영 (기획 결정)
+
 ## Dependencies
 
 ```text

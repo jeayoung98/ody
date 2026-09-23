@@ -4,8 +4,11 @@ import java.time.LocalTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
@@ -18,6 +21,7 @@ import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
 import com.ssafy.backend.artwork.dto.CatTemplateSummary;
 import com.ssafy.backend.artwork.dto.DrawRequest;
 import com.ssafy.backend.artwork.dto.DrawResponse;
+import com.ssafy.backend.artwork.dto.DrawTrack;
 import com.ssafy.backend.artwork.dto.MusicPc12Row;
 import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
@@ -25,6 +29,9 @@ import com.ssafy.backend.artwork.template.CatTemplate;
 import com.ssafy.backend.common.ArtworkErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
+import com.ssafy.backend.music.detail.MusicDetailReader;
+import com.ssafy.backend.music.dto.ConstellationPoint;
+import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.service.ConstellationService;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.service.PlaylistService;
@@ -65,15 +72,19 @@ public class CatPlaylistGenerator {
 	private final ArtworkMapper artworkMapper;
 	private final PlaylistService playlistService;
 	private final ConstellationService constellationService;
+	/** 그린 별자리 결과에 곡 이름을 싣는다. 어댑터가 없으면(테스트 프로필 등) 이름 없이 좌표만 준다. */
+	private final Optional<MusicDetailReader> musicDetailReader;
 
 	/** 곡 분포 상자. 곡 데이터가 바뀌지 않는 한 같으므로 한 번만 읽는다. */
 	private final AtomicReference<Pc12BoundsRow> bounds = new AtomicReference<>();
 
 	public CatPlaylistGenerator(
-			ArtworkMapper artworkMapper, PlaylistService playlistService, ConstellationService constellationService) {
+			ArtworkMapper artworkMapper, PlaylistService playlistService, ConstellationService constellationService,
+			Optional<MusicDetailReader> musicDetailReader) {
 		this.artworkMapper = artworkMapper;
 		this.playlistService = playlistService;
 		this.constellationService = constellationService;
+		this.musicDetailReader = musicDetailReader;
 	}
 
 	/**
@@ -157,15 +168,24 @@ public class CatPlaylistGenerator {
 		}
 
 		// 응답 좌표는 배치 API 와 같은 함수로 — 저장 후 다시 열어도 같은 별자리다(FR-011).
-		List<ArtworkPoint> layout = constellationService.layout(best.musicIds).points().stream()
-				.map(p -> new ArtworkPoint(p.musicId(), p.x(), p.y()))
-				.toList();
+		List<ConstellationPoint> layout = constellationService.layout(best.musicIds).points();
 		int score = ShapeScore.score(shape, layout.stream().map(p -> new double[] {p.x(), p.y()}).toList());
 		ShapeScore.Quality quality = ShapeScore.quality(score);
 
+		// 곡 이름은 PK 일괄 조회 한 번 (IN 은 순서를 보장하지 않아 id 로 되세운다).
+		Map<Long, MusicSummary> names = new HashMap<>();
+		musicDetailReader.ifPresent(r -> r.findSummariesByIds(best.musicIds).forEach(s -> names.put(s.id(), s)));
+		List<DrawTrack> tracks = layout.stream()
+				.map(p -> {
+					MusicSummary s = names.get(p.musicId());
+					return new DrawTrack(p.musicId(), s == null ? null : s.title(), s == null ? null : s.artist(),
+							p.x(), p.y());
+				})
+				.toList();
+
 		log.info("[Artwork] 그림 매칭 points={} score={} quality={} ms={}",
 				points.size(), score, quality, (System.nanoTime() - started) / 1_000_000);
-		return new DrawResponse(score, quality.name(), layout);
+		return new DrawResponse(score, quality.name(), tracks);
 	}
 
 	/** 점들의 bbox 긴 변 (캔버스 비율). */

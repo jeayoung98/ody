@@ -14,6 +14,7 @@ import static org.mockito.Mockito.when;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -32,7 +33,9 @@ import com.ssafy.backend.common.ArtworkErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.music.dto.ConstellationLayoutResponse;
+import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.ConstellationPoint;
+import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.service.ConstellationService;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.service.PlaylistService;
@@ -53,6 +56,7 @@ class CatPlaylistGeneratorTests {
 	private ArtworkMapper mapper;
 	private PlaylistService playlistService;
 	private ConstellationService constellationService;
+	private MusicDetailReader reader;
 	private CatPlaylistGenerator generator;
 
 	@BeforeEach
@@ -60,7 +64,12 @@ class CatPlaylistGeneratorTests {
 		mapper = Mockito.mock(ArtworkMapper.class);
 		playlistService = Mockito.mock(PlaylistService.class);
 		constellationService = Mockito.mock(ConstellationService.class);
-		generator = new CatPlaylistGenerator(mapper, playlistService, constellationService);
+		reader = Mockito.mock(MusicDetailReader.class);
+		generator = new CatPlaylistGenerator(mapper, playlistService, constellationService, Optional.of(reader));
+		when(reader.findSummariesByIds(any())).thenAnswer(inv -> {
+			List<Long> ids = inv.getArgument(0);
+			return ids.stream().map(id -> new MusicSummary(id, "곡" + id, "가수" + id, null, null, null, null)).toList();
+		});
 
 		Pc12BoundsRow box = new Pc12BoundsRow();
 		box.setXMin(-10);
@@ -187,6 +196,11 @@ class CatPlaylistGeneratorTests {
 		assertThat(response.points().get(0).x()).isEqualTo(gridX(ids.getValue().get(0)));
 		assertThat(response.score()).isBetween(0, 100);
 		assertThat(response.quality()).isIn("HIGH", "MEDIUM", "LOW");
+		// 곡 이름은 일괄 조회 한 번으로 싣는다
+		long first = ids.getValue().get(0);
+		assertThat(response.points().get(0).title()).isEqualTo("곡" + first);
+		assertThat(response.points().get(0).artist()).isEqualTo("가수" + first);
+		verify(reader, times(1)).findSummariesByIds(any());
 	}
 
 	@Test

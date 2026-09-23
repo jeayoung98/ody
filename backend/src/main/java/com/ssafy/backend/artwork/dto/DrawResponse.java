@@ -9,5 +9,5 @@ import java.util.List;
  * @param quality {@code HIGH}(≥90) · {@code MEDIUM}(≥70) · {@code LOW}. LOW 도 정상 응답이다 — 화면이 경고를 띄운다
  * @param points  요청 점 순서 그대로, 곡 중복 없음. 좌표는 배치 API 가 같은 곡 목록에 돌려주는 값과 같다
  */
-public record DrawResponse(int score, String quality, List<ArtworkPoint> points) {
+public record DrawResponse(int score, String quality, List<DrawTrack> points) {
 }

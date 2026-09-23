@@ -53,7 +53,7 @@
 | `artwork/dto/ArtworkRoundRow.java` · `ArtworkRound.java` | `voteLimit`, `aiWeight`(row) / `voteLimit`, `myVotesLeft`(응답) |
 | `artwork/dto/ArtworkRow.java` · `ArtworkSubmitRequest.java` | `closed` / `Boolean closed`(선택) |
 | `artwork/dto/ArtworkSummaryRow.java` · `ArtworkSummary.java` | `rankScore`, `closed` / + `points` |
-| `artwork/dto/ArtworkTrack.java` (신규) | `{musicId, title, artist, x, y}` — 598 `DrawTrack` 과 같은 모양, 머지 후 통합 |
+| `artwork/dto/ArtworkTrack.java` (신규) | `{musicId, title, artist, x, y}` — 598 `/draw` 결과도 같이 쓴다(`DrawTrack` 을 합침) |
 | `artwork/dto/ArtworkDetailResponse.java` | `closed`, `tracks`(`ArtworkTrack` — 좌표+곡 이름, 기존 `points`·`musics` 는 호환 유지) |
 | `resources/mapper/artwork/ArtworkMapper.xml` + `ArtworkMapper.java` | 회차 칸 조회, `insertArtwork` closed, `artworkColumns` closed, 리더보드 정렬·`rank_score`, `findPointsByArtworkIds`, `countVotesInRound`, `lockVotes` |
 | `common/ArtworkErrorCode.java` | `ARTWORK_VOTE_LIMIT`(409), `ARTWORK_VOTE_SELF`(400) |

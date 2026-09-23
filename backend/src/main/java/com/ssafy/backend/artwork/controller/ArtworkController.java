@@ -80,7 +80,8 @@ public class ArtworkController {
 	@PostMapping("/submit")
 	public ResponseEntity<ApiResponse<ArtworkSubmitResponse>> submit(
 			@RequestBody @Valid ArtworkSubmitRequest request, Authentication authentication) {
-		ArtworkSubmitResponse response = artworkService.submit(request.playlistId(), authentication.getName());
+		ArtworkSubmitResponse response = artworkService.submit(
+				request.playlistId(), Boolean.TRUE.equals(request.closed()), authentication.getName());
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
 	}
 

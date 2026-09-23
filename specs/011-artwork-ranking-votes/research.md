@@ -35,7 +35,7 @@
 
 - **Decision**: `ArtworkSummary` 에 `points: [{musicId, title, artist, x, y}]` 를 붙인다. 페이지 작품 id 로 `artwork_point` 한 번(`WHERE artwork_id IN (...)`), 곡 이름은 `MusicDetailReader.findSummariesByIds` 한 번(PK 일괄, 598 과 같은 경로).
 - **Rationale**: FE 갤러리·순위 카드가 썸네일(좌표)과 곡 이름을 그린다. 지금 리더보드는 `musicCnt` 뿐이라 FE 가 카드마다 상세를 부르게 된다(N+1). 상세 응답의 기존 `musics` 는 지워진 곡이 빠지는 별도 배열이라 `points` 와 순번이 어긋날 수 있다 — 상세에도 같은 원소(`tracks`)를 더한다. 곡 상세는 이미 읽으므로 조립만 추가된다(analyze U1).
-- 요소 모양은 598 `DrawTrack` 과 같다. 두 브랜치가 머지되면 하나로 합친다(`ponytail:` 주석).
+- 요소 모양이 598 `DrawTrack` 과 같아 616 에서 하나로 합쳤다 — `/draw` 응답도 `ArtworkTrack` 을 쓴다(JSON 모양 동일).
 
 ## R7. 닫힌 모양 렌더
 

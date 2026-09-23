@@ -33,6 +33,32 @@ class ArtworkRendererTests {
 				new ArtworkPointRow(2, 12L, 0.7, 0.9));
 	}
 
+	/** 닫힌 모양이면 마지막 점 → 첫 점 선이 생긴다. 그 선의 중간 픽셀로 본다 (S15P21A405-616). */
+	@Test
+	void closedDrawsLastToFirstSegment() throws IOException {
+		// points() 의 마지막 (0.7, 0.9) 과 첫 (-0.8, 0.5) 의 중간 = (-0.05, 0.7). 다른 두 선과는 멀다.
+		int px = pixel(-0.05);
+		int py = pixel(-0.7);
+
+		BufferedImage closed = ImageIO.read(new ByteArrayInputStream(renderer.render(points(), true)));
+		BufferedImage open = ImageIO.read(new ByteArrayInputStream(renderer.render(points(), false)));
+
+		assertThat(closed.getRGB(px, py)).isNotEqualTo(0xFF000000);
+		assertThat(open.getRGB(px, py)).isEqualTo(0xFF000000);
+	}
+
+	/** 기준 그림 경로(기존 render)는 열린 모양 그대로다 — 바이트가 같아야 이미 매긴 점수가 유효하다. */
+	@Test
+	void defaultRenderIsOpen() {
+		assertThat(renderer.render(points())).isEqualTo(renderer.render(points(), false));
+	}
+
+	/** 렌더러와 같은 식: 여백 8% 를 남기고 -1~1 을 픽셀로. y 는 호출하는 쪽에서 뒤집어 넘긴다. */
+	private static int pixel(double normalized) {
+		double margin = 0.08;
+		return (int) Math.round(SIZE * margin + (normalized + 1.0) / 2.0 * SIZE * (1.0 - 2 * margin));
+	}
+
 	@Test
 	void sameCoordinatesProduceSameBytes() {
 		assertThat(renderer.render(points())).isEqualTo(renderer.render(points()));

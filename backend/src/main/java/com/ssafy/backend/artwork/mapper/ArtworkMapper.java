@@ -85,6 +85,9 @@ public interface ArtworkMapper {
 	/** position 오름차순. */
 	List<ArtworkPointRow> findPoints(@Param("artworkId") long artworkId);
 
+	/** 여러 작품의 좌표를 한 번에 (S15P21A405-616 리더보드). 작품 id → position 순. {@code artworkId} 가 채워진다. */
+	List<ArtworkPointRow> findPointsByArtworkIds(@Param("artworkIds") List<Long> artworkIds);
+
 	// ---- 목록 ----
 
 	/**

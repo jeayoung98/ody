@@ -59,7 +59,8 @@ public class ArtworkEvaluationService {
 				return;
 			}
 
-			byte[] png = renderer.render(points);
+			// 닫힌 모양이면 마지막→첫 곡 선도 그려 채점한다 (S15P21A405-616). 기준 그림은 열린 모양 그대로.
+			byte[] png = renderer.render(points, artwork.isClosed());
 			Optional<ArtworkEvaluation> evaluation =
 					evaluationPort.evaluate(png, round.getThemePrompt(), loadAnchors(round.getId()));
 

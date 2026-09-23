@@ -17,11 +17,11 @@ import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.artwork.dto.ArtworkPoint;
+import com.ssafy.backend.artwork.dto.ArtworkTrack;
 import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
 import com.ssafy.backend.artwork.dto.CatTemplateSummary;
 import com.ssafy.backend.artwork.dto.DrawRequest;
 import com.ssafy.backend.artwork.dto.DrawResponse;
-import com.ssafy.backend.artwork.dto.DrawTrack;
 import com.ssafy.backend.artwork.dto.MusicPc12Row;
 import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
@@ -175,10 +175,10 @@ public class CatPlaylistGenerator {
 		// 곡 이름은 PK 일괄 조회 한 번 (IN 은 순서를 보장하지 않아 id 로 되세운다).
 		Map<Long, MusicSummary> names = new HashMap<>();
 		musicDetailReader.ifPresent(r -> r.findSummariesByIds(best.musicIds).forEach(s -> names.put(s.id(), s)));
-		List<DrawTrack> tracks = layout.stream()
+		List<ArtworkTrack> tracks = layout.stream()
 				.map(p -> {
 					MusicSummary s = names.get(p.musicId());
-					return new DrawTrack(p.musicId(), s == null ? null : s.title(), s == null ? null : s.artist(),
+					return new ArtworkTrack(p.musicId(), s == null ? null : s.title(), s == null ? null : s.artist(),
 							p.x(), p.y());
 				})
 				.toList();

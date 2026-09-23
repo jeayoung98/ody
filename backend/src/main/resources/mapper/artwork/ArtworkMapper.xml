@@ -30,8 +30,8 @@
 		<selectKey keyProperty="id" order="BEFORE" resultType="long">
 			SELECT nextval('artwork_id_seq')
 		</selectKey>
-		INSERT INTO artwork (id, round_id, email, playlist_id, title, layout_version, status)
-		VALUES (#{id}, #{roundId}, #{email}, #{playlistId}, #{title}, #{layoutVersion}, #{status})
+		INSERT INTO artwork (id, round_id, email, playlist_id, title, layout_version, status, closed)
+		VALUES (#{id}, #{roundId}, #{email}, #{playlistId}, #{title}, #{layoutVersion}, #{status}, #{closed})
 	</insert>
 
 	<sql id="artworkColumns">
@@ -155,6 +155,15 @@
 		ORDER BY position ASC
 	</select>
 
+	<!-- 리더보드 한 페이지의 좌표를 한 번에 (S15P21A405-616). 카드마다 왕복하지 않는다. PK(artwork_id, position) 를 탄다. -->
+	<select id="findPointsByArtworkIds" resultType="com.ssafy.backend.artwork.dto.ArtworkPointRow">
+		SELECT artwork_id, position, music_id, x, y
+		FROM artwork_point
+		WHERE artwork_id IN
+		<foreach collection="artworkIds" item="id" open="(" separator="," close=")">#{id}</foreach>
+		ORDER BY artwork_id ASC, position ASC
+	</select>
+
 	<!-- ============================ 목록 ============================ -->
 
 	<!--
@@ -171,6 +180,7 @@
 		a.ai_comment    AS ai_comment,
 		a.like_cnt      AS like_cnt,
 		a.created_at    AS created_at,
+		a.closed        AS closed,
 		(SELECT count(*) FROM artwork_point p WHERE p.artwork_id = a.id) AS music_cnt
 	</sql>
 

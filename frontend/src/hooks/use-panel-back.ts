@@ -51,7 +51,8 @@ export function usePanelBack(): PanelBack | null {
 
   return {
     target,
-    label: target.panel === "song" ? (backSong?.title ?? "직전 곡") : target.panel === "journey" ? "여정" : "플레이리스트",
+    label:
+      target.panel === "song" ? (backSong?.title ?? "직전 곡") : target.panel === "journey" ? "여정" : target.panel === "friends" ? "주변 사람" : "플레이리스트",
     go: () => {
       // 들어온 기록이 있으면 그 길로, 없으면 지금 듣고 있는 목록을 연다
       if (back) goBack();

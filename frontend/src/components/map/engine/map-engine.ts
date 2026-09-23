@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -13,6 +13,8 @@ import { starMag } from "../render/star-look";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/** 스프링 — 목표를 10% 쯤 지나쳤다 돌아온다. 겹친 표식이 갈라질 때의 "도잉" (S15P21A405-618) */
+const springOut = (t: number) => (t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(7 * t));
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
@@ -97,6 +99,8 @@ export interface VisibleFriend {
   py: number;
   /** 진행 방향(rad). 우주선 기수 */
   heading: number;
+  /** 서 있는 별의 깊이 크기 배율({@link MapEngine.depthScaleOf}). 반지름·잔상에 곱한다 (S15P21A405-614) */
+  scale: number;
   isLeader: boolean;
   /**
    * 이 표식 **뒤에 겹쳐 선 사람들** (S15P21A405-550). 대표는 빼고 담는다.
@@ -325,6 +329,8 @@ export class MapEngine {
     offTo: { x: number; y: number };
     offT0: number;
     pan: { x: number; y: number };
+    /** 고리를 얼마나 벌려 놓았나 (S15P21A405-593). 1 이 기본, 크면 넓게 퍼진다 */
+    zoom: number;
   } | null = null;
   /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
   route: number[] = [];
@@ -363,6 +369,8 @@ export class MapEngine {
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
   visFriends: VisibleFriend[] = [];
+  /** 펼쳐 둔 묶음 — 대표 이메일과 펼치기 시작 시각 (S15P21A405-618). null 이면 전부 접혀 있다 */
+  private expandedStack: { email: string; since: number } | null = null;
   /** 이 레이어의 대표곡 (커버) */
   repIds = new Set<number>();
   private repLayer = -1;
@@ -892,6 +900,7 @@ export class MapEngine {
       offTo: { x: 0, y: 0 },
       offT0: now,
       pan: { x: 0, y: 0 },
+      zoom: 1,
     };
     this.nearby = { centerId, ids };
     this.selectedId = centerId;
@@ -949,20 +958,70 @@ export class MapEngine {
     return null;
   }
 
+  /**
+   * 주변 탐색을 **확대한다** (S15P21A405-593).
+   *
+   * 처음에는 고리 반지름만 키웠다. 그랬더니 중심 별도 제목도 배경 별밭도 그대로인 채
+   * **살만 길어져서** "확대가 아니라 줄이 늘어난 것" 으로 보였다 — 이 뷰는 카메라가 아니라
+   * 화면 크기에서 반지름을 뽑아 세운 배치라(`freeRect`) 확대할 카메라가 없었기 때문이다.
+   *
+   * 그래서 **배치는 그대로 두고 화면을 통째로 키운다** ({@link probeView}). 캔버스 변환 한 번이라
+   * 배경·별·글씨·선이 같은 비율로 커진다. 배치 좌표(`probePos`)는 확대 전 자리 그대로이고,
+   * 클릭은 {@link unview} 가 눌린 자리를 확대 전으로 되돌려 맞춘다.
+   */
+  probeZoom(factor: number): number {
+    const p = this.probe;
+    if (!p || p.exitingAt) return 1;
+    p.zoom = Math.min(PROBE.maxZoom, Math.max(PROBE.minZoom, p.zoom * factor));
+    return p.zoom;
+  }
+
+  /**
+   * 주변 탐색을 들여다보는 **화면 확대**와 그 중심 (S15P21A405-593). 확대 중이 아니면 null.
+   *
+   * 중심은 지금 고리의 중심 별이다 — 키워도 보고 있던 별이 제자리에 남는다.
+   * **1 배 아래로는 안 내려간다.** 줄이면 배경 별밭 바깥의 빈 자리가 드러나는데, 어차피
+   * 바닥(`PROBE.minZoom`)에 닿는 입력은 뷰를 나가는 뜻이다 (`map-view` 의 휠 처리).
+   */
+  probeView(): { cx: number; cy: number; z: number } | null {
+    const p = this.probe;
+    if (!p || p.exitingAt || p.zoom <= 1) return null;
+    const cur = this.currentRing();
+    const c = cur ? this.probePos(cur.centerId) : null;
+    const f = this.freeRect();
+    return { cx: c?.x ?? f.cx, cy: c?.y ?? f.cy, z: p.zoom };
+  }
+
+  /**
+   * 눌린 화면 좌표 → **확대 전 좌표** (S15P21A405-593).
+   *
+   * 확대는 캔버스 변환으로만 걸리므로 `visible`·`hopLink` 같은 판정용 좌표는 확대 전 자리에
+   * 그대로 남는다. 들어오는 점만 되돌리면 그리기와 클릭이 어긋나지 않는다.
+   */
+  private unview(mx: number, my: number): [number, number] {
+    const v = this.probeView();
+    if (!v) return [mx, my];
+    return [v.cx + (mx - v.cx) / v.z, v.cy + (my - v.cy) / v.z];
+  }
+
   /** 주변 탐색 중 드래그 — 오버레이 전체를 민다. 고리 하나 반지름 안에서만 (다 밀어내면 빈 화면이 된다) */
   probePan(dx: number, dy: number) {
     const p = this.probe;
     if (!p || p.exitingAt) return;
     const f = this.freeRect();
     const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
-    p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx));
-    p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy));
+    // 손가락이 민 것은 **확대된 화면의 px** 이다 — 배치는 확대 전 공간이므로 배율로 나눠 단위를
+    // 맞춘다. 안 그러면 키워 놓을수록 같은 손짓이 몇 배로 밀린다
+    const z = Math.max(1, p.zoom);
+    p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx / z));
+    p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy / z));
   }
 
   /** 오버레이 공간 → 화면 중심 기준 이동량. 새 중심으로 미끄러지는 중이면 그 사이 값 */
   private probeOffset(now = performance.now()) {
     const p = this.probe!;
     const k = easeInOut(Math.min(1, (now - p.offT0) / PROBE.enterMs));
+    // `pan` 은 `probePan` 에서 이미 오버레이 공간으로 환산해 둔다 (S15P21A405-593)
     return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
   }
 
@@ -1054,6 +1113,7 @@ export class MapEngine {
     if (!sl) return real;
     const f = this.freeRect();
     const off = this.probeOffset();
+    // 배치는 **확대 전 자리**다 (S15P21A405-593). 확대는 캔버스 변환이 통째로 건다 (`probeView`)
     const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
     // 밀려나는 고리의 곡도 제자리로 돌아가지 않고 **그 자리에서 옅어진다** — 돌아가면 화면을 가로질러 튄다
     if (p.exitingAt) {
@@ -1319,6 +1379,7 @@ export class MapEngine {
 
   /** 고스트별 클릭 판정 — 맞으면 그 곡 ID */
   hitGhost(mx: number, my: number): number | null {
+    [mx, my] = this.unview(mx, my);
     const p = this.ghostPos();
     if (!p || !this.ghost) return null;
     return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
@@ -1550,6 +1611,17 @@ export class MapEngine {
   parOf(id: number | null): number {
     const i = id == null ? undefined : this.index.get(id);
     return i == null ? 1 : this.par(i);
+  }
+
+  /** 깊이 크기 배율 — 별 위에 서는 것(커버·사람)이 가까운 별 위에서 커진다 (S15P21A405-614) */
+  depthScale(i: number): number {
+    return 1 + this.z[i] * STAR_VIEW.depthSize;
+  }
+
+  /** {@link depthScale} 을 곡 id 로. 상주 집합에 없는 곡은 기준 평면(1) */
+  depthScaleOf(id: number | null): number {
+    const i = id == null ? undefined : this.index.get(id);
+    return i == null ? 1 : this.depthScale(i);
   }
 
   private proj(i: number, layer: number, cam: MapCamera, out: Float32Array, k: number) {
@@ -2117,6 +2189,7 @@ export class MapEngine {
 
   /** 라벨 링크 위인가 — 히트 영역은 그리는 쪽이 적어 둔 것이다 */
   hitHopLink(mx: number, my: number): { id: number } | null {
+    [mx, my] = this.unview(mx, my);
     const l = this.hopLink;
     if (!l) return null;
     return mx >= l.x && mx <= l.x + l.w && my >= l.y && my <= l.y + l.h ? { id: l.id } : null;
@@ -2214,6 +2287,7 @@ export class MapEngine {
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {
+    [mx, my] = this.unview(mx, my);
     let best: VisibleStar | null = null;
     let bd = 1e9;
     // 오버레이(별자리·주변 탐색)가 떠 있으면 그 안의 곡만 잡힌다 — 어둡게 덮인 뒷별이 호버·클릭에
@@ -2234,22 +2308,61 @@ export class MapEngine {
     return best;
   }
 
-  /** 내 위치(우주선·헬멧)의 화면 좌표. 반응 이모지가 여기서 떠오른다 (SOCIAL-02) */
-  mePos(): { x: number; y: number } | null {
-    if (this.myId == null) return null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
-    return { x: px, y: py };
-  }
-
-  /** 지도에 떠 있는 사용자의 화면 좌표. 내 뷰 안에 없으면 null (남의 반응은 그때만 보인다) */
-  friendScreenPos(email: string): { x: number; y: number } | null {
-    const f = this.visFriends.find((v) => v.user.email === email);
-    return f ? { x: f.px, y: f.py } : null;
-  }
-
+  /** 가장 가까운 표식. 갈라진 표식은 서로 닿을 만큼 가까워서 첫 것을 집으면 옆 사람이 눌린다 (S15P21A405-618) */
   hitFriend(mx: number, my: number): VisibleFriend | null {
-    for (const fr of this.visFriends) if ((fr.px - mx) ** 2 + (fr.py - my) ** 2 < 22 * 22) return fr;
-    return null;
+    [mx, my] = this.unview(mx, my);
+    let best: VisibleFriend | null = null;
+    let bd = 22 * 22;
+    for (const fr of this.visFriends) {
+      const d = (fr.px - mx) ** 2 + (fr.py - my) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = fr;
+      }
+    }
+    return best;
+  }
+
+  /** 배지(+N) 있는 표식을 펼친다 (S15P21A405-618). 다음 프레임부터 `spreadExpandedStack` 이 갈라 그린다 */
+  expandStack(email: string): void {
+    this.expandedStack = { email, since: performance.now() };
+  }
+
+  /** 펼친 묶음을 다시 하나로. 드래그·확대·다른 곳 클릭이 부른다 — 접힐 것이 없으면 아무 일도 없다 */
+  collapseStack(): void {
+    this.expandedStack = null;
+  }
+
+  /**
+   * 펼친 묶음을 **대표 + 뒤사람** 개별 표식으로 갈라 둘레에 놓는다 (S15P21A405-618).
+   *
+   * `updateFriends` 가 끝난 뒤의 후처리다 — 묶음 계산(칸·대표 유지)은 건드리지 않고 그 결과
+   * 한 칸만 여러 칸으로 바꾼다. 그래서 지도를 밀어도 대표가 바뀌지 않는 성질이 그대로 남는다.
+   *
+   * 둘이면 좌우로, 셋 이상이면 원 둘레에 고르게 선다. 반지름은 헬멧이 서로 닿지 않는 값이다.
+   * 퍼지는 동안은 스프링 곡선으로 반지름을 키운다. 대표가 화면에서 사라졌거나 뒤에 아무도
+   * 없게 됐으면 저절로 접는다.
+   */
+  private spreadExpandedStack(): void {
+    const ex = this.expandedStack;
+    if (!ex) return;
+    const at = this.visFriends.findIndex((v) => v.user.email === ex.email);
+    if (at < 0 || this.visFriends[at].stacked.length === 0) {
+      this.expandedStack = null;
+      return;
+    }
+    const v = this.visFriends[at];
+    const people = [v.user, ...v.stacked];
+    const n = people.length;
+    const R = 12.5 * v.scale;
+    // 이웃 사이 현이 헬멧 지름 + 틈 이상이 되는 반지름
+    const fit = (2 * R + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
+    const radius = Math.max(FRIEND_SPREAD.radiusPx * v.scale, fit) * springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    const parts: VisibleFriend[] = people.map((u, i) => {
+      const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale: v.scale, isLeader: false, stacked: [] };
+    });
+    this.visFriends.splice(at, 1, ...parts);
   }
 
   // ------------------------------------------------------------------ me / play / follow
@@ -2817,6 +2930,21 @@ export class MapEngine {
     } else {
       this.boxes = this.boxes.slice(0, target);
     }
+    /**
+     * **떠오를 길을 같이 남긴다** (S15P21A405-627). `ascendTo` 는 `stack` 을 거슬러 올라가는데
+     * 여기서 안 쌓으면 따라가기로 내려간 사람은 하차한 뒤 그 겹에 갇힌다 — 휠도 `hasStack` 이
+     * 없어 축소만 하고 떠오르지 않는다. 지금 겹은 떠날 때 모습 그대로, 건너뛴 중간 겹은
+     * `goHome` 처럼 맞춤 카메라로 합성한다. 떠오를 때는 `boxes` 와 같이 그 겹 위를 자른다.
+     */
+    const known = new Map(this.stack.map((fr) => [fr.layer, fr]));
+    known.set(this.layer, { layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
+    this.stack = Array.from({ length: target }, (_, l) => {
+      const have = known.get(l);
+      if (have) return have;
+      const sub = this.maskForBoxes(this.boxes, l);
+      const c = this.fitCam(l, sub, this.songs[at].musicId);
+      return { layer: l, cam: c, subset: sub, entryS: c.s };
+    });
     // 우주선·내 위치는 새 겹 좌표로 다시 잡힌다
     if (f) this.friendPos.delete(f.leader.email);
     this.morph(target, cam, this.subset, `${f?.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
@@ -3024,6 +3152,7 @@ export class MapEngine {
 
     this.updateReveal();
     this.updateFriends();
+    this.spreadExpandedStack();
     if (!this.anim) this.pickRepresentatives();
     this.publish();
   }
@@ -3152,8 +3281,9 @@ export class MapEngine {
     this.visFriends = [];
 
     // 1) 그릴 수 있는 사람만 추려 화면 좌표를 구한다. 인솔자는 경합 밖이라 따로 둔다
-    const leader: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
-    const cands: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
+    type Cand = { u: NearbyUser; px: number; py: number; heading: number; scale: number };
+    const leader: Cand[] = [];
+    const cands: Cand[] = [];
     for (const u of this.friends) {
       if (!u.isOnline) continue;
       const isLeader = isLeaderOf(u);
@@ -3168,12 +3298,13 @@ export class MapEngine {
       // 서 있는 곡과 같은 시차를 받아야 별 위에 그대로 선다 (S15P21A405-609)
       const { px, py } = this.worldToScreen(w.x, w.y, this.cam, this.parOf(u.musicId));
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+      const scale = this.depthScaleOf(u.musicId);
       if (isLeader) {
-        leader.push({ u, px, py, heading: w.heading });
+        leader.push({ u, px, py, heading: w.heading, scale });
         continue;
       }
       if (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104) continue;
-      cands.push({ u, px, py, heading: w.heading });
+      cands.push({ u, px, py, heading: w.heading, scale });
     }
 
     // 2) 칸마다 하나씩 앞세운 순서로. 지난 프레임에 보이던 사람이 제 칸을 먼저 집는다
@@ -3198,7 +3329,7 @@ export class MapEngine {
      * 남의 배지 속 숫자로 들어가면 누구를 따라가는지 알 수 없다.
      */
     const owner = new Map<string, number>();
-    const place = (c: { u: NearbyUser; px: number; py: number; heading: number }, isLeader: boolean) => {
+    const place = (c: Cand, isLeader: boolean) => {
       const cx = Math.floor(c.px / G);
       const cy = Math.floor(c.py / G);
       if (!isLeader) {
@@ -3213,7 +3344,7 @@ export class MapEngine {
         }
       }
       owner.set(`${cx},${cy}`, this.visFriends.length);
-      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader, stacked: [] });
+      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, scale: c.scale, isLeader, stacked: [] });
     };
     /**
      * **배율이 그대로면 지난 배치를 그대로 쓴다** (S15P21A405-566).
@@ -3225,7 +3356,8 @@ export class MapEngine {
      * 앨범 커버가 먼저 쓰던 규칙과 같다 (S15P21A405-529).
      */
     const byEmail = new Map([...leader, ...cands].map((c) => [c.u.email, c]));
-    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys())) : null;
+    // 인솔자가 남의 묶음 속이면 다시 정한다 — 안 그러면 따라가는 우주선이 배지 숫자로만 남는다 (S15P21A405-625)
+    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys()), this.follow?.leader.email ?? null) : null;
     this.friendPlanScale = this.cam.s;
 
     if (keep) {
@@ -3236,6 +3368,7 @@ export class MapEngine {
           px: c.px,
           py: c.py,
           heading: c.heading,
+          scale: c.scale,
           isLeader: isLeaderOf(c.u),
           stacked: entry.stacked.map((e) => byEmail.get(e)!.u),
         });
@@ -3323,6 +3456,7 @@ export class MapEngine {
         // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
         const k = this.visible.findIndex((v) => v.i === i);
         if (k >= 0) this.visible.splice(k, 1);
+        // 확대는 캔버스 변환이 건다 (S15P21A405-593) — 집는 범위는 확대 전 자리 기준이다 (`unview`)
         this.visible.push({ i, px: pp.x, py: pp.y, r: 16 });
         continue;
       }

@@ -121,7 +121,7 @@ interface PanelState {
    * 함수는 남겨 둔다 — 부르는 쪽이 "지도에서 눌렀다" 를 말하고 있고, 다시 갈라야 할 때
    * 여기 한 군데만 고치면 된다.
    */
-  openSongFromMap: (musicId: number) => void;
+  openSongFromMap: (musicId: number, snap?: SheetSnap) => void;
   /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
   openSongFromList: (musicId: number) => void;
   /** 주변 음악 카드로 이웃 곡에 들어간다 — 직전 곡을 돌아갈 자리로 기억한다 (S15P21A405-384) */
@@ -129,7 +129,8 @@ interface PanelState {
   /** 기억해 둔 자리로 돌아간다 */
   goBack: () => void;
   openPlaylist: (playlistId: number) => void;
-  openFeed: (email?: string | null) => void;
+  /** `back` 은 돌아갈 자리. 주변 사람 패널에서 열 때 `{ panel: "friends" }` 를 넘긴다 (S15P21A405-610) */
+  openFeed: (email?: string | null, back?: PanelReturn | null) => void;
   openJourney: () => void;
   openFriends: () => void;
   openChart: () => void;
@@ -170,13 +171,24 @@ export const usePanelStore = create<PanelState>()(
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
 
-      openSongFromMap: (musicId) => set(open("song", { musicId }), false, "openSongFromMap"),
+      /**
+       * `snap` 을 주면 그 자리에 선다 (S15P21A405-593). **폰은 1 단으로 연다** — 별을 눌렀을 때
+       * 알고 싶은 것은 "이게 무슨 곡이냐" 하나뿐이고, 지도는 그대로 보여야 다음 별을 고른다.
+       * 부르는 쪽이 정하는 이유는 화면 폭을 아는 쪽이 거기이기 때문이다.
+       */
+      openSongFromMap: (musicId, snap) => set(open("song", snap ? { musicId, snap } : { musicId }), false, "openSongFromMap"),
 
       openSongFromList: (musicId) => {
         const { activePanel, playlistId } = get();
         const back: PanelReturn | null =
           activePanel === "journey" ? { panel: "journey" } : activePanel === "playlist" && playlistId != null ? { panel: "playlist", playlistId } : null;
-        set(open("song", { musicId, back }), false, "openSongFromList");
+        /**
+         * **3 단으로 연다** (S15P21A405-593). 목록에서 곡을 골라 들어간 것은 그 곡을 지금
+         * 보겠다는 뜻인데, 여는 자리(2 단)로 열면 시트가 도리어 **내려가면서** 상세가 떠서
+         * 방금 누른 것이 작아지는 것처럼 보인다. 지도에서 별을 눌러 여는 길(2 단)과 다른 이유는
+         * 그쪽은 지도를 보며 곡을 갈아 끼우는 동작이라 지도가 남아야 하기 때문이다.
+         */
+        set(open("song", { musicId, back, snap: 3 }), false, "openSongFromList");
       },
 
       openNeighborSong: (musicId, fromMusicId) =>
@@ -193,15 +205,12 @@ export const usePanelStore = create<PanelState>()(
 
       openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
       /**
-       * 주변 사람 패널에서 열었으면 **돌아갈 자리를 기억한다** (S15P21A405-610). 피드 안(팔로워·팔로잉
-       * 목록)에서 다른 사람으로 갈아탈 때는 기억을 그대로 들고 간다. 지도·랭킹에서 열면 없다.
+       * **돌아갈 자리는 여는 쪽이 말한다** (S15P21A405-610). 처음엔 "지금 주변 사람 패널이 열려 있나"
+       * 로 추측했는데, 좁은 화면의 `/friends` 탭처럼 패널이 아닌 자리에서 열면 그 추측이 빗나간다.
+       * 피드 안(팔로워·팔로잉 목록)에서 다른 사람으로 갈아탈 때는 들고 있던 기억을 그대로 잇는다.
        */
-      openFeed: (email = null) =>
-        set(
-          (s) => open("feed", { profileEmail: email, back: s.activePanel === "friends" ? { panel: "friends" } : s.activePanel === "feed" ? s.back : null }),
-          false,
-          "openFeed",
-        ),
+      openFeed: (email = null, back = null) =>
+        set((s) => open("feed", { profileEmail: email, back: back ?? (s.activePanel === "feed" ? s.back : null) }), false, "openFeed"),
       openJourney: () => set(open("journey"), false, "openJourney"),
       openFriends: () => set(open("friends"), false, "openFriends"),
       openChart: () => set(open("chart"), false, "openChart"),

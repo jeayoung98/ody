@@ -480,6 +480,12 @@ export interface BackendUserDetail {
    */
   playedMusicCnt?: number;
   /**
+   * 이 사람이 **서비스에서 처음 재생한** 곡 수 (S15P21A405-619). 이미 남이 들은 곡은 세지 않고,
+   * 같은 곡을 여러 번 들어도 1곡이다 — 출처는 주간 발견왕과 같은 `music_discovery` 다.
+   * 백엔드가 S15P21A405-597 에서 넣어 줬다. 옛 배포에는 없을 수 있어 optional 로 둔다.
+   */
+  discoveredMusicCnt?: number;
+  /**
    * 지금 접속해 있는가 (3차 계약 §4, S15P21A405-545). **소켓 생존 기준**이다.
    * optional 인 이유는 이 필드가 없던 배포를 만날 수 있어서다 — 그때는 `false` 로 떨어진다.
    */
@@ -535,10 +541,13 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
     dashboard: {
       exploredCount: u.playedMusicCnt ?? null,
       /**
-       * **처음 재생한 곡 수는 배포 API 어디에도 없다** (S15P21A405-531). 0 을 넣으면 "한 곡도
-       * 발견 못 했다" 는 없는 사실이 되므로 모른다는 뜻의 null 로 둔다 — 화면이 그 줄을 안 그린다.
+       * **이제 서버가 준다** (S15P21A405-619). 예전에는 배포 API 어디에도 없어서 null 로 막아
+       * 뒀는데(S15P21A405-531), 백엔드가 S15P21A405-597 에서 `discoveredMusicCnt` 를 넣었다.
+       *
+       * 없으면 여전히 null 이다. **0 으로 떨어뜨리지 않는다** — 그러면 "한 곡도 발견 못 했다"
+       * 는 없는 사실이 되고, 화면은 그 줄을 지우는 대신 0 을 적는다.
        */
-      discoveredCount: null,
+      discoveredCount: u.discoveredMusicCnt ?? null,
       moodPreference: [],
     },
   };

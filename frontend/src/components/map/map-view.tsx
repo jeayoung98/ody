@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, PROBE, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM, RIDING_LOCKED } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, PROBE, REPRESENTATIVE_COUNT, RIDE_LOCK_TOAST_MS, RIDING_LOCKED, RIDING_MAP_LOCKED, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -425,6 +425,17 @@ export default function MapView({ occlusion }: MapViewProps) {
   useEffect(() => cancelHide, [cancelHide]);
 
   /**
+   * 따라가는 동안 막힌 지도 입력(휠·드래그)의 안내 (S15P21A405-605). 조용히 씹지 않는다 —
+   * 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다. 연속 입력이라 한 번 뜬 뒤 잠깐 쉰다.
+   */
+  const lockToastAt = useRef(0);
+  const notifyMapLocked = useCallback(() => {
+    const now = Date.now();
+    if (now - lockToastAt.current < RIDE_LOCK_TOAST_MS) return;
+    lockToastAt.current = now;
+    useToastStore.getState().show(RIDING_MAP_LOCKED);
+  }, []);
+  /**
    * 확대·축소 한 번. **휠과 두 손가락이 같은 길로 들어온다** (S15P21A405-415).
    *
    * 나누지 않는 이유는 이 함수가 하는 일이 확대만이 아니기 때문이다 — 뷰 모드별 분기(별자리는
@@ -433,6 +444,11 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   const zoomBy = useCallback(
     (deltaY: number, mx: number, my: number) => {
+      // 따라가는 중에는 확대·축소도 없다 (S15P21A405-605, SOCIAL-08) — 엔진도 막지만 이유는 여기서 말한다
+      if (isRiding()) {
+        notifyMapLocked();
+        return;
+      }
       const mode = useMapStore.getState().viewMode;
       const mapSnapshot = useMapStore.getState();
       wheelStart.current ??= { layer: mapSnapshot.layer, zoom: mapSnapshot.zoomK, mode };
@@ -474,7 +490,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       // 배율이 얼마나 올랐는지는 튜토리얼이 직접 본다 (`tutorial-overlay.tsx`)
       return engine.wheel(deltaY, mx, my);
     },
-    [engine],
+    [engine, notifyMapLocked],
   );
 
   const onWheel = useCallback(
@@ -610,7 +626,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         }
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
-        if (mode === "constellation") engine.overlayPan(dx, dy);
+        if (isRiding()) notifyMapLocked();
+        else if (mode === "constellation") engine.overlayPan(dx, dy);
         // 주변 탐색 중에는 지도 대신 탐색 별 뷰를 민다 (S15P21A405-285)
         else if (mode === "nearby") engine.probePan(dx, dy);
         else engine.dragBy(dx, dy);
@@ -640,7 +657,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my));
     },
-    [engine, cancelHide, scheduleHide, cancelHold, pinchNow, zoomBy],
+    [engine, cancelHide, scheduleHide, cancelHold, pinchNow, zoomBy, notifyMapLocked],
   );
   /**
    * 곡을 **재생**한다 — 상세를 열면서 동시에. 호버 카드의 재생 버튼과 선택된 별 재클릭이 여기로 온다.

@@ -1,12 +1,13 @@
 "use client";
 
 import HelmetAvatar from "@/components/common/helmet-avatar";
-import { RADAR } from "@/constants";
+import { RADAR, emojiOf } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { layerPointOf } from "@/lib/layer-point";
 import type { Point } from "@/lib/nearby-from-layer";
 import { useMapStore } from "@/stores/use-map-store";
 import { useOpenProfile } from "@/hooks/use-open-profile";
+import { useReactionStore } from "@/stores/use-reaction-store";
 import type { NearbyPerson } from "@/types";
 
 /**
@@ -163,6 +164,8 @@ export function sizeOf(meetingCount: number, max: number): number {
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
   const openProfile = useOpenProfile();
   const { data: me } = useMeQuery();
+  // 지도 위에 뜨는 반응을 여기서도 띄운다 (S15P21A405-608) — 패널을 보는 중에는 지도가 가려져 있다
+  const floating = useReactionStore((s) => s.floating);
   // 내 헬멧 색도 내가 듣는 곡의 장르를 따라간다 — 지도의 내 표식과 같은 규칙이다
   const myMusicId = useMapStore((s) => s.myMusicId);
   const layer = useMapStore((s) => s.layer);
@@ -273,6 +276,24 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
             */}
             <HelmetAvatar email={p.email} imageUrl={p.imageUrl} musicId={p.musicId} size={d} online />
           </button>
+        );
+      })}
+
+      {/*
+        반응 이모지 (SOCIAL-02, S15P21A405-608). 내 것은 가운데(나) 위로, 남의 것은 그 사람 헬멧 위로
+        떠오른다 — 지도의 `FloatingReactionItem` 과 같은 연출(`animate-fly`)이다. 목록에 없는 사람의
+        반응은 자리를 모르니 그리지 않는다.
+      */}
+      {floating.map((r) => {
+        const i = r.mine ? -1 : people.findIndex((p) => p.email === r.fromEmail);
+        if (!r.mine && i < 0) return null;
+        const at = r.mine ? { x: 0, y: -22 } : { x: spots[i].x, y: spots[i].y - sizes[i] / 2 };
+        return (
+          <span key={r.id} aria-hidden className="pointer-events-none absolute z-10" style={{ left: R + at.x, top: R + at.y }}>
+            <span className="animate-fly absolute bottom-0 left-0 text-[26px] leading-none drop-shadow-[0_2px_10px_rgba(0,0,0,.6)]">
+              {emojiOf(r.reactionKey)}
+            </span>
+          </span>
         );
       })}
     </div>

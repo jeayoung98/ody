@@ -82,7 +82,6 @@ export const API_ENDPOINTS = {
     /** `type` 은 `follower`(나를 구독한 사람) / `following`(내가 구독한 사람), `page` 는 0부터 */
     followList: (email: string, type: "follower" | "following", page = 0) =>
       `/bff/users/follow/list?email=${encodeURIComponent(email)}&type=${type}&page=${page}`,
-    reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,
   },
 
   map: {
@@ -106,6 +105,8 @@ export const API_ENDPOINTS = {
 
   music: {
     detail: (id: number) => `/bff/music/${id}`,
+    /** 곡 좋아요 (S15P21A405-611) — 백엔드 `POST /api/music/like`, 본문 `{musicId, liked}`. `liked` 는 목표 상태다 */
+    like: "/bff/music/like",
     search: "/bff/music/search",
     /**
      * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.
@@ -184,6 +185,11 @@ export const API_ENDPOINTS = {
      */
     ride: "/bff/realtime/ride",
     /**
+     * 선단 해체 = **강제 하차** (DELETE, 본문 없음) — 백엔드 `DELETE /api/realtime/ride/fleet`
+     * (S15P21A405-606). 인솔자가 따라오는 사람 전부를 내린다. 따라오는 사람이 없으면 `RIDE_NOT_CAPTAIN`.
+     */
+    rideFleet: "/bff/realtime/ride/fleet",
+    /**
      * 그 겹에서 **재생 중인 사람 전부** (S15P21A405-537, BACKEND-NOTES §5).
      *
      * **화면 범위와 무관하다.** 소켓 `VIEWPORT_SNAPSHOT` 은 보이는 범위만 주고 칸이 많아지면
@@ -194,6 +200,12 @@ export const API_ENDPOINTS = {
      * 범위(0~7) 밖이면 400 이다. 밀어 주는 이벤트가 없어서 **레이어를 옮길 때와 주기적으로** 다시 부른다.
      */
     layerUsers: (layer: number) => `/bff/realtime/layers/${layer}/users`,
+    /**
+     * 반응 보내기 (SOCIAL-02, S15P21A405-607) — 백엔드 `POST /api/realtime/reactions`, 본문 `{toEmail, reactionKey}`.
+     * 응답 `data` 는 null. 거부 사유 `REACTION_SELF`(400) · `REACTION_NOT_NEARBY`(409) · `REACTION_COOLDOWN`(429).
+     * 받는 쪽에는 개인 큐로 `REACTION` 이 온다.
+     */
+    reactions: "/bff/realtime/reactions",
   },
 
   constellation: {

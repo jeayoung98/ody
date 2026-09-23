@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { CalendarIcon, ClockIcon, PauseIcon, PlaylistAddIcon, PlayIcon } from "@/components/common/icons";
+import { CalendarIcon, ClockIcon, HeartIcon, PauseIcon, PlaylistAddIcon, PlayIcon } from "@/components/common/icons";
 import MarqueeText from "@/components/common/marquee-text";
 import Tag from "@/components/common/tag";
 import TransportButton from "@/components/common/transport-button";
 import { PLAYBACK_BLOCKED } from "@/constants";
+import { useLikeMusicMutation } from "@/hooks/mutations/use-like-music-mutation";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { useSongPlayToggle } from "@/hooks/use-song-play-toggle";
@@ -51,6 +52,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
     if (next && narrow) setSnap(3);
   };
   const { blocked, isThisPlaying, toggle } = useSongPlayToggle(music.id);
+  const like = useLikeMusicMutation();
   /**
    * **찾아봤는데 음원이 없는 곡** (S15P21A405-384). 다시 눌러도 답이 같으므로 재생도 플리 추가도
    * 아예 잠근다 — 흐리기만 하고 눌리게 두면 "될 것 같은데 안 되는" 버튼이 된다.
@@ -78,6 +80,10 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
             </span>
           )}
         </div>
+        {/* 좋아요 (S15P21A405-611). 못 트는 곡도 누를 수 있다 — 좋아하는 것과 들을 수 있는 것은 다른 일이다 */}
+        <TransportButton label={music.liked ? "좋아요 취소" : "좋아요"} size="md" bright onClick={() => like.mutate({ musicId: music.id, liked: !music.liked })}>
+          <HeartIcon size={17} filled={music.liked} className={music.liked ? "text-rose-400" : undefined} />
+        </TransportButton>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
         {features.playlist && (
           <TransportButton label={dead ? "재생할 수 없는 곡은 담을 수 없어요" : "플레이리스트에 추가"} size="md" bright disabled={dead} onClick={toggleMenu}>

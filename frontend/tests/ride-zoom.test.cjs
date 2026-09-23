@@ -1,17 +1,11 @@
 /* eslint-disable @typescript-eslint/no-require-imports */
-// 따라가는 중 휠이 무엇이 되는가 (S15P21A405-562).
+// 휠 한 칸이 무엇이 되는가. 따라가는 중의 분기는 여기 없다 — 엔진이 먼저 거른다 (S15P21A405-605).
 // 틀려도 화면에 티가 안 난다 — 압력만 차고 안 열리는 계기는 "눌렀는데 아무 일도 없는" 상태다.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 const { wheelIntent } = require("../src/components/map/engine/ride-zoom.ts");
 
-const base = { riding: false, zoomIn: true, gateOpen: false, zoomedOutEnough: false, hasStack: false };
-
-test("따라가는 중에는 늘 배율만 바뀐다", () => {
-  // 파고들 조건이 다 맞아도, 떠오를 조건이 다 맞아도 겹은 안 건드린다
-  assert.equal(wheelIntent({ ...base, riding: true, zoomIn: true, gateOpen: true }), "zoom");
-  assert.equal(wheelIntent({ ...base, riding: true, zoomIn: false, hasStack: true, zoomedOutEnough: true }), "zoom");
-});
+const base = { zoomIn: true, gateOpen: false, zoomedOutEnough: false, hasStack: false };
 
 test("평소에는 게이트가 열려 있으면 파고든다", () => {
   assert.equal(wheelIntent({ ...base, zoomIn: true, gateOpen: true }), "dig");

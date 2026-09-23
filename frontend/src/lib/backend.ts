@@ -155,13 +155,12 @@ export function backendGet<T>(path: string, init?: RequestInit): Promise<T> {
  * 로컬 `http://localhost:3000` 이 정확히 그 경우다 (S15P21A405-303).
  * 여기서 부르면 Next 서버가 새로 띄우는 요청이라 `Origin` 이 없어 통과한다.
  */
-export function backendPost<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
-  return backendFetch<T>(path, {
-    ...init,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    body: JSON.stringify(body),
-  });
+export function backendPost<T>(path: string, body: unknown, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
+  return backendFetch<T>(
+    path,
+    { ...init, method: "POST", headers: { "Content-Type": "application/json", ...init?.headers }, body: JSON.stringify(body) },
+    opts,
+  );
 }
 
 /**
@@ -315,6 +314,15 @@ export interface BackendMusicDetail extends BackendMusicSummary {
 /** `/api/music/detail` 응답 — 상세 필드가 평탄하게 펼쳐지고 neighbors 가 붙는다 */
 export interface BackendMusicDetailResponse extends BackendMusicDetail {
   neighbors: (BackendMusicSummary & { distance: number })[];
+  /** 요청한 사람이 좋아요를 눌렀는지 (S15P21A405-611). 옛 배포는 안 줄 수 있어 선택이다 */
+  liked?: boolean;
+}
+
+/** `POST /api/music/like` 응답 (S15P21A405-611). `liked` 는 **변경 후** 값이다 */
+export interface BackendMusicLikeResponse {
+  musicId: number;
+  liked: boolean;
+  likedAt: string | null;
 }
 
 /**

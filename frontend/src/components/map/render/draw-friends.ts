@@ -1,3 +1,4 @@
+import { FRIEND_MARKER } from "@/constants";
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
 import type { MapEngine } from "../engine/map-engine";
@@ -275,7 +276,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
     // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
-    const R = (isLeader ? 15 : 12.5) * fr.scale;
+    const R = (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;
@@ -332,9 +333,14 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       g.fillText(label, bx, by + 0.5);
     }
 
+    /**
+     * 닉네임은 **별 제목 줄보다 아래**에 둔다 (S15P21A405-618). 사람이 선 별에는 커버 제목
+     * (`py + 14~23 + 9`)이나 선택 링 제목(`py + rr + 15.5`)이 같은 자리에 오는데, 예전 `+9` 는
+     * 그 줄과 겹쳐 둘 다 읽히지 않았다. 헬멧 지름 하나만큼 더 내려 제목 줄 밑으로 보낸다.
+     */
     g.fillStyle = "rgba(233,241,255,.62)";
-    g.font = `500 9.5px ${FONTS.body}`;
-    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 9);
+    g.font = `500 ${FRIEND_MARKER.namePx}px ${FONTS.body}`;
+    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 22);
   }
   g.globalAlpha = 1;
 }

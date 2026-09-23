@@ -23,5 +23,7 @@ public record ArtworkSummary(
 		boolean likedByMe,
 		int musicCnt,
 		OffsetDateTime createdAt,
-		Double rankScore) {
+		Double rankScore,
+		/** 닫힌 모양 (S15P21A405-616). */
+		boolean closed) {
 }

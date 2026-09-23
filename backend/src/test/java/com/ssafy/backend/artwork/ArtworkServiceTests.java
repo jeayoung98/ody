@@ -74,7 +74,7 @@ class ArtworkServiceTests {
 	void submit_rejectsWhenNoOpenRound() {
 		when(artworkMapper.findOpenRound()).thenReturn(null);
 
-		assertThatThrownBy(() -> service.submit(1L, OWNER))
+		assertThatThrownBy(() -> service.submit(1L, false, OWNER))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
 				.isEqualTo(ArtworkErrorCode.ARTWORK_ROUND_CLOSED);
@@ -88,7 +88,7 @@ class ArtworkServiceTests {
 		when(artworkMapper.findOpenRound()).thenReturn(round());
 		when(playlistService.getDetail(1L, OTHER)).thenThrow(new CustomException(GlobalErrorCode.FORBIDDEN));
 
-		assertThatThrownBy(() -> service.submit(1L, OTHER))
+		assertThatThrownBy(() -> service.submit(1L, false, OTHER))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
 				.isEqualTo(GlobalErrorCode.FORBIDDEN);
@@ -103,7 +103,7 @@ class ArtworkServiceTests {
 		when(playlistService.getDetail(1L, OWNER)).thenReturn(playlistWith(10L));
 		when(constellationService.layout(any())).thenThrow(new CustomException(GlobalErrorCode.INVALID_INPUT));
 
-		assertThatThrownBy(() -> service.submit(1L, OWNER))
+		assertThatThrownBy(() -> service.submit(1L, false, OWNER))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
 				.isEqualTo(GlobalErrorCode.INVALID_INPUT);
@@ -118,7 +118,7 @@ class ArtworkServiceTests {
 		when(constellationService.layout(List.of(10L, 11L))).thenReturn(new ConstellationLayoutResponse(
 				List.of(new ConstellationPoint(10L, -0.5, 0.25), new ConstellationPoint(11L, 0.5, -0.25))));
 
-		ArtworkSubmitResponse response = service.submit(1L, OWNER);
+		ArtworkSubmitResponse response = service.submit(1L, false, OWNER);
 
 		assertThat(response.status()).isEqualTo(ArtworkStatus.PENDING.name());
 
@@ -140,6 +140,37 @@ class ArtworkServiceTests {
 		assertThat(points.getValue().get(1).getPosition()).isEqualTo(1);
 	}
 
+	/** 닫힌 모양은 출품 스냅샷에 남는다. 안 보내면(기존 클라이언트) 열린 모양 (S15P21A405-616). */
+	@Test
+	void submit_storesClosedFlag() {
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(playlistService.getDetail(1L, OWNER)).thenReturn(playlistWith(10L, 11L));
+		when(constellationService.layout(any())).thenReturn(new ConstellationLayoutResponse(
+				List.of(new ConstellationPoint(10L, 0.0, 0.0), new ConstellationPoint(11L, 1.0, 1.0))));
+
+		service.submit(1L, true, OWNER);
+		service.submit(1L, false, OWNER);
+
+		ArgumentCaptor<ArtworkRow> artwork = ArgumentCaptor.forClass(ArtworkRow.class);
+		verify(artworkMapper, times(2)).insertArtwork(artwork.capture());
+		assertThat(artwork.getAllValues()).extracting(ArtworkRow::isClosed).containsExactly(true, false);
+	}
+
+	@Test
+	void detailAndLeaderboard_carryClosedFlag() {
+		ArtworkRow closed = artwork(5L, ArtworkStatus.SCORED, OWNER);
+		closed.setClosed(true);
+		when(artworkMapper.findById(5L)).thenReturn(closed);
+		when(artworkMapper.findPoints(5L)).thenReturn(List.of());
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		ArtworkSummaryRow row = summaryRow(5L);
+		row.setClosed(true);
+		when(artworkMapper.findLeaderboard(anyLong(), anyDouble(), any(), anyInt(), anyInt())).thenReturn(List.of(row));
+
+		assertThat(service.getDetail(5L, OTHER).closed()).isTrue();
+		assertThat(service.getLeaderboard(1L, null, 0, 20).items().get(0).closed()).isTrue();
+	}
+
 	/** 같은 회차 재제출은 기존 작품을 지우고 새로 만든다 — 점수·좋아요를 승계하지 않는다. */
 	@Test
 	void submit_replacesExistingArtworkInSameRound() {
@@ -150,7 +181,7 @@ class ArtworkServiceTests {
 		ArtworkRow existing = artwork(99L, ArtworkStatus.SCORED, OWNER);
 		when(artworkMapper.findByRoundAndEmail(1L, OWNER)).thenReturn(existing);
 
-		service.submit(1L, OWNER);
+		service.submit(1L, false, OWNER);
 
 		verify(artworkMapper).deleteById(99L);
 		verify(artworkMapper).insertArtwork(any());

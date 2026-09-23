@@ -62,6 +62,16 @@ public class ArtworkRenderer {
 	 * @return PNG 바이트
 	 */
 	public byte[] render(List<ArtworkPointRow> points) {
+		return render(points, false);
+	}
+
+	/**
+	 * {@link #render(List)} 에 닫힌 모양을 더한다 (S15P21A405-616). {@code closed} 면 마지막 점과 첫 점을 잇는다.
+	 * 기준 그림은 열린 모양으로 채점된 값이라 {@link #render(List)} 를 그대로 쓴다.
+	 *
+	 * @param closed 점이 셋 이상일 때만 의미가 있다 — 둘이면 이미 이어져 있다
+	 */
+	public byte[] render(List<ArtworkPointRow> points, boolean closed) {
 		BufferedImage image = new BufferedImage(size, size, BufferedImage.TYPE_INT_RGB);
 		Graphics2D g = image.createGraphics();
 		try {
@@ -78,6 +88,11 @@ public class ArtworkRenderer {
 				ArtworkPointRow from = points.get(i - 1);
 				ArtworkPointRow to = points.get(i);
 				g.drawLine(toPixelX(from.getX()), toPixelY(from.getY()), toPixelX(to.getX()), toPixelY(to.getY()));
+			}
+			if (closed && points.size() > 2) {
+				ArtworkPointRow last = points.get(points.size() - 1);
+				ArtworkPointRow first = points.get(0);
+				g.drawLine(toPixelX(last.getX()), toPixelY(last.getY()), toPixelX(first.getX()), toPixelY(first.getY()));
 			}
 
 			double radius = size * dotRadiusRatio;

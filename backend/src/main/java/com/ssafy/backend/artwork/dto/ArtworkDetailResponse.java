@@ -30,5 +30,7 @@ public record ArtworkDetailResponse(
 		List<ArtworkPoint> points,
 		List<MusicDetail> musics,
 		OffsetDateTime createdAt,
-		OffsetDateTime evaluatedAt) {
+		OffsetDateTime evaluatedAt,
+		/** 닫힌 모양 — 마지막 곡과 첫 곡을 잇는다 (S15P21A405-616). */
+		boolean closed) {
 }

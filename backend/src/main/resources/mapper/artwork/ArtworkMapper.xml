@@ -30,8 +30,8 @@
 		<selectKey keyProperty="id" order="BEFORE" resultType="long">
 			SELECT nextval('artwork_id_seq')
 		</selectKey>
-		INSERT INTO artwork (id, round_id, email, playlist_id, title, layout_version, status)
-		VALUES (#{id}, #{roundId}, #{email}, #{playlistId}, #{title}, #{layoutVersion}, #{status})
+		INSERT INTO artwork (id, round_id, email, playlist_id, title, layout_version, status, closed)
+		VALUES (#{id}, #{roundId}, #{email}, #{playlistId}, #{title}, #{layoutVersion}, #{status}, #{closed})
 	</insert>
 
 	<sql id="artworkColumns">
@@ -171,6 +171,7 @@
 		a.ai_comment    AS ai_comment,
 		a.like_cnt      AS like_cnt,
 		a.created_at    AS created_at,
+		a.closed        AS closed,
 		(SELECT count(*) FROM artwork_point p WHERE p.artwork_id = a.id) AS music_cnt
 	</sql>
 

@@ -89,9 +89,11 @@ public class ArtworkService {
 	 *
 	 * <p>같은 회차에 이미 낸 작품이 있으면 <b>지우고 새로 만든다</b>. 점수·좋아요는 승계하지 않는다.
 	 * 승계하면 점수가 잘 나올 때까지 다시 내는 것이 최적 전략이 된다.
+	 *
+	 * @param closed 닫힌 모양(마지막 곡 → 첫 곡). 스냅샷으로 남고 채점 그림에 반영된다 (S15P21A405-616)
 	 */
 	@Transactional
-	public ArtworkSubmitResponse submit(long playlistId, String requesterEmail) {
+	public ArtworkSubmitResponse submit(long playlistId, boolean closed, String requesterEmail) {
 		ArtworkRoundRow round = artworkMapper.findOpenRound();
 		if (round == null) {
 			throw new CustomException(ArtworkErrorCode.ARTWORK_ROUND_CLOSED);
@@ -117,6 +119,7 @@ public class ArtworkService {
 		// 어떤 좌표계의 모양인지. "/pc12" 이전(집합 PCA) 스냅샷과 구분한다 (S15P21A405-595).
 		artwork.setLayoutVersion(layoutVersion + "/pc12");
 		artwork.setStatus(ArtworkStatus.PENDING.name());
+		artwork.setClosed(closed);
 		artworkMapper.insertArtwork(artwork);
 
 		List<ArtworkPointRow> pointRows = new ArrayList<>(points.size());
@@ -170,7 +173,8 @@ public class ArtworkService {
 				pointRows.stream().map(p -> new ArtworkPoint(p.getMusicId(), p.getX(), p.getY())).toList(),
 				loadMusicDetails(musicIds),
 				artwork.getCreatedAt(),
-				artwork.getEvaluatedAt());
+				artwork.getEvaluatedAt(),
+				artwork.isClosed());
 	}
 
 	/**
@@ -342,7 +346,8 @@ public class ArtworkService {
 				row.isLikedByMe(),
 				row.getMusicCnt(),
 				row.getCreatedAt(),
-				row.getRankScore());
+				row.getRankScore(),
+				row.isClosed());
 	}
 
 	/** 회차 응답. 로그인이면 남은 좋아요 수를 센다 — 배포 전 초과분이 있어도 음수로 내려가지 않는다. */

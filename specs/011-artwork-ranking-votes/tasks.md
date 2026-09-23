@@ -54,12 +54,12 @@
 
 **Independent Test**: 렌더러에 닫힘 true → 마지막→첫 점 선 픽셀이 칠해지고 false 는 기존 바이트와 동일. submit 이 closed 를 행에 넣음.
 
-- [ ] T015 [P] [US3] `A/render/ArtworkRenderer.java` 에 `render(List<ArtworkPointRow> points, boolean closed)` 추가 — 기존 선 루프 뒤 `closed && points.size() > 2` 면 마지막→첫 점 `drawLine`. 기존 `render(points)` 는 `render(points, false)` 위임
-- [ ] T016 [P] [US3] `T/ArtworkRendererTests.java` 에 추가: 닫힘 true 이미지에서 마지막·첫 점 중간 픽셀이 흰색, false 이미지에선 검은색. 기존 `render(points)` 바이트가 `render(points, false)` 와 같다
-- [ ] T017 [US3] `A/dto/ArtworkSubmitRequest.java` 에 `Boolean closed`(선택, 검증 없음). `A/service/ArtworkService.java` `submit(playlistId, closed, email)` 이 `Boolean.TRUE.equals(closed)` 를 `ArtworkRow` 에 담고, `M` `insertArtwork` 에 `closed` 칸. `A/controller/ArtworkController.java` submit 이 `request.closed()` 전달
-- [ ] T018 [US3] `A/service/ArtworkEvaluationService.java` 가 `renderer.render(points, artwork.isClosed())` 로 호출(기준 그림 경로 `loadAnchors` 는 기존 `render(points)` 그대로)
-- [ ] T019 [US3] `A/dto/ArtworkDetailResponse.java`·`A/dto/ArtworkSummary.java`(+`ArtworkSummaryRow`)에 `boolean closed` 추가, `M` 의 `findLeaderboard`·`findMine` SELECT 에 `a.closed`, `ArtworkService` 조립부 반영
-- [ ] T020 [US3] `T/ArtworkServiceTests.java`·`T/ArtworkEvaluationServiceTests.java` 에 추가: submit closed=true/null → 행 closed true/false, 채점이 `render(points, true)` 호출, 상세·리더보드 응답에 closed
+- [x] T015 [P] [US3] `A/render/ArtworkRenderer.java` 에 `render(List<ArtworkPointRow> points, boolean closed)` 추가 — 기존 선 루프 뒤 `closed && points.size() > 2` 면 마지막→첫 점 `drawLine`. 기존 `render(points)` 는 `render(points, false)` 위임
+- [x] T016 [P] [US3] `T/ArtworkRendererTests.java` 에 추가: 닫힘 true 이미지에서 마지막·첫 점 중간 픽셀이 흰색, false 이미지에선 검은색. 기존 `render(points)` 바이트가 `render(points, false)` 와 같다
+- [x] T017 [US3] `A/dto/ArtworkSubmitRequest.java` 에 `Boolean closed`(선택, 검증 없음). `A/service/ArtworkService.java` `submit(playlistId, closed, email)` 이 `Boolean.TRUE.equals(closed)` 를 `ArtworkRow` 에 담고, `M` `insertArtwork` 에 `closed` 칸. `A/controller/ArtworkController.java` submit 이 `request.closed()` 전달
+- [x] T018 [US3] `A/service/ArtworkEvaluationService.java` 가 `renderer.render(points, artwork.isClosed())` 로 호출(기준 그림 경로 `loadAnchors` 는 기존 `render(points)` 그대로)
+- [x] T019 [US3] `A/dto/ArtworkDetailResponse.java`·`A/dto/ArtworkSummary.java`(+`ArtworkSummaryRow`)에 `boolean closed` 추가, `M` 의 `findLeaderboard`·`findMine` SELECT 에 `a.closed`, `ArtworkService` 조립부 반영
+- [x] T020 [US3] `T/ArtworkServiceTests.java`·`T/ArtworkEvaluationServiceTests.java` 에 추가: submit closed=true/null → 행 closed true/false, 채점이 `render(points, true)` 호출, 상세·리더보드 응답에 closed
 
 **Checkpoint**: 닫힌 모양 출품 end-to-end
 

@@ -17,6 +17,7 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import com.ssafy.backend.artwork.dto.ArtworkPointRow;
@@ -147,6 +148,27 @@ class ArtworkEvaluationServiceTests {
 		service.evaluate(artwork());
 
 		verify(artworkMapper).markFailed(eq(5L), anyString());
+	}
+
+	/** 닫힌 작품은 마지막→첫 곡 선까지 그린 그림으로 채점한다 (S15P21A405-616). */
+	@Test
+	void rendersClosedShape_whenArtworkClosed() {
+		List<ArtworkPointRow> triangle = List.of(
+				new ArtworkPointRow(0, 10L, -0.5, 0.5), new ArtworkPointRow(1, 11L, 0.5, 0.5),
+				new ArtworkPointRow(2, 12L, 0.0, -0.5));
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		when(artworkMapper.findPoints(5L)).thenReturn(triangle);
+		when(port.evaluate(any(), anyString(), anyList())).thenReturn(Optional.empty());
+		ArtworkRow closed = artwork();
+		closed.setClosed(true);
+
+		service.evaluate(closed);
+
+		ArgumentCaptor<byte[]> png = ArgumentCaptor.forClass(byte[].class);
+		verify(port).evaluate(png.capture(), anyString(), anyList());
+		ArtworkRenderer same = new ArtworkRenderer(64, 0.02, 0.008f);
+		assertThat(png.getValue()).isEqualTo(same.render(triangle, true));
+		assertThat(png.getValue()).isNotEqualTo(same.render(triangle, false));
 	}
 
 	private void givenArtworkWithPoints() {

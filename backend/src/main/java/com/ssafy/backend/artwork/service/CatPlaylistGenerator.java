@@ -14,6 +14,8 @@ import org.springframework.stereotype.Service;
 import com.ssafy.backend.artwork.dto.ArtworkPoint;
 import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
 import com.ssafy.backend.artwork.dto.CatTemplateSummary;
+import com.ssafy.backend.artwork.dto.DrawRequest;
+import com.ssafy.backend.artwork.dto.DrawResponse;
 import com.ssafy.backend.artwork.dto.MusicPc12Row;
 import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
@@ -81,19 +83,7 @@ public class CatPlaylistGenerator {
 		CatTemplate template = CatTemplate.find(templateName)
 				.orElseThrow(() -> new CustomException(GlobalErrorCode.INVALID_INPUT));
 
-		Pc12BoundsRow box = bounds.updateAndGet(b -> b != null ? b : artworkMapper.findPc12Bounds());
-		double cx = (box.getXMin() + box.getXMax()) / 2;
-		double cy = (box.getYMin() + box.getYMax()) / 2;
-		// 두 축에 같은 배율 — 짧은 축 기준이어야 상자를 벗어나지 않는다.
-		double half = Math.min(box.getXMax() - box.getXMin(), box.getYMax() - box.getYMin()) / 2;
-
-		Placement best = null;
-		for (double scale : SCALES) {
-			Placement placement = place(template, cx, cy, half * scale);
-			if (placement != null && (best == null || placement.meanError < best.meanError)) {
-				best = placement;
-			}
-		}
+		Placement best = match(template.points());
 		if (best == null) {
 			// 후보 8곡이 전부 앞선 점에 잡히는 경우 — 곡이 수만 곡인 실 DB 에서는 나오지 않는다.
 			throw new IllegalStateException("템플릿 점마다 서로 다른 곡을 고르지 못했다: " + template.name());
@@ -114,16 +104,98 @@ public class CatPlaylistGenerator {
 	}
 
 	/**
-	 * 템플릿을 (cx, cy) 중심·반폭 {@code halfExtent} 로 놓고 점마다 가장 가까운 미사용 곡을 고른다.
+	 * 사용자가 그린 별자리에 곡을 대응시킨다 (S15P21A405-598). <b>플레이리스트를 만들지 않는다</b> — 사용자가 결과를
+	 * 보고 {@code /api/playlist/create} 로 저장한다.
+	 *
+	 * <p>그림을 템플릿과 같은 좌표계(-1~1, y 위)로 바꿔 {@link #match} 에 넣고, 고른 곡의 배치 좌표와 그림을
+	 * {@link ShapeScore} 로 비교한다. 점 i 는 곡 i 다.
+	 *
+	 * @param points 캔버스 기준 0~1, x 오른쪽·y 아래. 3~20개(컨트롤러 {@code @Valid})
+	 */
+	public DrawResponse draw(List<DrawRequest.DrawPoint> points) {
+		long started = System.nanoTime();
+		List<double[]> shape = normalize(points);
+
+		Placement best = match(shape);
+		if (best == null) {
+			throw new IllegalStateException("그림 점마다 서로 다른 곡을 고르지 못했다: points=" + points.size());
+		}
+
+		// 응답 좌표는 배치 API 와 같은 함수로 — 저장 후 다시 열어도 같은 별자리다(FR-011).
+		List<ArtworkPoint> layout = constellationService.layout(best.musicIds).points().stream()
+				.map(p -> new ArtworkPoint(p.musicId(), p.x(), p.y()))
+				.toList();
+		int score = ShapeScore.score(shape, layout.stream().map(p -> new double[] {p.x(), p.y()}).toList());
+		ShapeScore.Quality quality = ShapeScore.quality(score);
+
+		log.info("[Artwork] 그림 매칭 points={} score={} quality={} ms={}",
+				points.size(), score, quality, (System.nanoTime() - started) / 1_000_000);
+		return new DrawResponse(score, quality.name(), layout);
+	}
+
+	/** 캔버스 좌표(0~1, y 아래) → 템플릿 좌표계: y 반전, 무게중심 이동, 최대 절댓값 1. */
+	static List<double[]> normalize(List<DrawRequest.DrawPoint> points) {
+		double mx = 0;
+		double my = 0;
+		for (DrawRequest.DrawPoint p : points) {
+			mx += p.x();
+			my += 1 - p.y();
+		}
+		mx /= points.size();
+		my /= points.size();
+
+		List<double[]> shape = new ArrayList<>(points.size());
+		double span = 0;
+		for (DrawRequest.DrawPoint p : points) {
+			double x = p.x() - mx;
+			double y = (1 - p.y()) - my;
+			shape.add(new double[] {x, y});
+			span = Math.max(span, Math.max(Math.abs(x), Math.abs(y)));
+		}
+		for (double[] xy : shape) {
+			xy[0] /= span;
+			xy[1] /= span;
+		}
+		return shape;
+	}
+
+	/**
+	 * 점들(-1~1, y 위)을 곡 분포 상자 중심에 놓고, 크기를 {@link #SCALES} 로 바꿔 보며 평균 오차가 가장 작은
+	 * 배치를 고른다. 템플릿({@link #generate})과 그린 별자리({@link #draw})가 같은 경로를 쓴다.
+	 *
+	 * <p>회전은 탐색하지 않는다 — 곡이 pc1/pc2 평면을 빽빽이 덮어 어느 방향으로 놓아도 오차가 반폭의 0.1% 수준이다
+	 * (운영 실측 fitError 0.0005~0.0008, specs/010 research R1).
+	 *
+	 * @return 최선 배치. 어느 크기에서든 점마다 서로 다른 곡을 고르지 못하면 null
+	 */
+	private Placement match(List<double[]> points) {
+		Pc12BoundsRow box = bounds.updateAndGet(b -> b != null ? b : artworkMapper.findPc12Bounds());
+		double cx = (box.getXMin() + box.getXMax()) / 2;
+		double cy = (box.getYMin() + box.getYMax()) / 2;
+		// 두 축에 같은 배율 — 짧은 축 기준이어야 상자를 벗어나지 않는다.
+		double half = Math.min(box.getXMax() - box.getXMin(), box.getYMax() - box.getYMin()) / 2;
+
+		Placement best = null;
+		for (double scale : SCALES) {
+			Placement placement = place(points, cx, cy, half * scale);
+			if (placement != null && (best == null || placement.meanError < best.meanError)) {
+				best = placement;
+			}
+		}
+		return best;
+	}
+
+	/**
+	 * 점들을 (cx, cy) 중심·반폭 {@code halfExtent} 로 놓고 점마다 가장 가까운 미사용 곡을 고른다.
 	 *
 	 * @return 배치. 어느 점에서든 후보가 전부 사용 중이면 null
 	 */
-	private Placement place(CatTemplate template, double cx, double cy, double halfExtent) {
-		List<Long> musicIds = new ArrayList<>(template.points().size());
+	private Placement place(List<double[]> points, double cx, double cy, double halfExtent) {
+		List<Long> musicIds = new ArrayList<>(points.size());
 		Set<Long> used = new HashSet<>();
 		double totalError = 0;
 
-		for (double[] p : template.points()) {
+		for (double[] p : points) {
 			double tx = cx + p[0] * halfExtent;
 			double ty = cy + p[1] * halfExtent;
 			MusicPc12Row chosen = null;
@@ -139,7 +211,7 @@ public class CatPlaylistGenerator {
 			musicIds.add(chosen.getMusicId());
 			totalError += Math.hypot(chosen.getPc1() - tx, chosen.getPc2() - ty) / halfExtent;
 		}
-		return new Placement(musicIds, totalError / template.points().size(), halfExtent);
+		return new Placement(musicIds, totalError / points.size(), halfExtent);
 	}
 
 	private record Placement(List<Long> musicIds, double meanError, double scale) {

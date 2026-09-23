@@ -21,6 +21,8 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.Mockito;
 
 import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
+import com.ssafy.backend.artwork.dto.DrawRequest;
+import com.ssafy.backend.artwork.dto.DrawResponse;
 import com.ssafy.backend.artwork.dto.MusicPc12Row;
 import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
@@ -149,7 +151,78 @@ class CatPlaylistGeneratorTests {
 		assertThat(generator.templates().get(0).pointCount()).isEqualTo(CatTemplate.SITTING.points().size());
 	}
 
+	// ---------------- 그린 별자리 (S15P21A405-598) ----------------
+
+	/** 캔버스 좌표(0~1, y 아래) 오각형 5점. */
+	private static final List<DrawRequest.DrawPoint> PENTAGON = List.of(
+			new DrawRequest.DrawPoint(0.50, 0.10), new DrawRequest.DrawPoint(0.90, 0.40),
+			new DrawRequest.DrawPoint(0.75, 0.90), new DrawRequest.DrawPoint(0.25, 0.90),
+			new DrawRequest.DrawPoint(0.10, 0.40));
+
+	/** draw 는 모양을 점수로 비교하므로 layout 목이 실제 격자 좌표를 돌려줘야 한다(기본 목은 전부 원점). */
+	private void layoutReturnsGridCoordinates() {
+		// when(...) 로 다시 걸면 setUp 의 답변이 null 인자로 한 번 실행된다 — doAnswer 로 건다.
+		Mockito.doAnswer(inv -> {
+			List<Long> ids = inv.getArgument(0);
+			return new ConstellationLayoutResponse(ids.stream()
+					.map(id -> new ConstellationPoint(id, gridX(id), gridY(id)))
+					.toList());
+		}).when(constellationService).layout(any());
+	}
+
+	@Test
+	void draw_oneDistinctSongPerPoint_inInputOrder_matchingLayout() {
+		layoutReturnsGridCoordinates();
+
+		DrawResponse response = generator.draw(PENTAGON);
+
+		assertThat(response.points()).hasSize(PENTAGON.size());
+		assertThat(response.points()).extracting("musicId").doesNotHaveDuplicates();
+		@SuppressWarnings("unchecked")
+		ArgumentCaptor<List<Long>> ids = ArgumentCaptor.forClass(List.class);
+		verify(constellationService).layout(ids.capture());
+		// 응답 = 배치 API 결과 그대로, 입력 점 순서 그대로 (FR-011, SC-002)
+		assertThat(response.points()).extracting("musicId").containsExactlyElementsOf(ids.getValue());
+		assertThat(response.points().get(0).x()).isEqualTo(gridX(ids.getValue().get(0)));
+		assertThat(response.score()).isBetween(0, 100);
+		assertThat(response.quality()).isIn("HIGH", "MEDIUM", "LOW");
+	}
+
+	@Test
+	void draw_sameInput_sameResult() {
+		layoutReturnsGridCoordinates();
+
+		assertThat(generator.draw(PENTAGON)).isEqualTo(generator.draw(PENTAGON));
+	}
+
+	@Test
+	void draw_doesNotCreatePlaylist() {
+		layoutReturnsGridCoordinates();
+
+		generator.draw(PENTAGON);
+
+		verify(playlistService, never()).create(anyString(), anyString(), any());
+	}
+
+	@Test
+	void draw_keepsDrawnOrientation_soShapeScoresHigh() {
+		layoutReturnsGridCoordinates();
+
+		// 격자 0.5 · 반폭 6 이면 한 점 오차가 반폭의 수 % — 오각형이면 점수 90 이상(HIGH)이어야 한다.
+		DrawResponse response = generator.draw(PENTAGON);
+
+		assertThat(response.quality()).isEqualTo("HIGH");
+	}
+
 	// ---------------- 격자 가상 곡 ----------------
+
+	private static double gridX(long id) {
+		return ((id - 1_000_000L) / 1000 - 500) * GRID;
+	}
+
+	private static double gridY(long id) {
+		return ((id - 1_000_000L) % 1000 - 500) * GRID;
+	}
 
 	/** (x, y) 주변 격자점을 가까운 순으로 limit 개. 곡 id = 격자 좌표 해시(결정적, 칸마다 고유). */
 	private static List<MusicPc12Row> gridNeighbours(double x, double y, int limit) {

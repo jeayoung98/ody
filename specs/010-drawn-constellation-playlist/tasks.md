@@ -12,13 +12,13 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 브랜치가 최신 `origin/backend/dev` 를 포함하는지 확인하고 아니면 merge (`git merge --ff-only origin/backend/dev` 또는 일반 merge). 595 코드(`A/service/CatPlaylistGenerator.java`)가 있어야 한다
+- [x] T001 브랜치가 최신 `origin/backend/dev` 를 포함하는지 확인하고 아니면 merge (`git merge --ff-only origin/backend/dev` 또는 일반 merge). 595 코드(`A/service/CatPlaylistGenerator.java`)가 있어야 한다
 - [x] T002 `docs/rules/FEATURES.md` 변경 제안 #29 에 "자유 그리기(1-a, S15P21A405-598): `POST /api/artwork/draw`, 모양 일치도 점수, 생성·저장 분리" 를 덧붙인다 — 헌법 I. 기획(효정, 기획·구현 겸임) 결정으로 선행 구현, 2026-09-23 반영 완료
 
 ## Phase 2: Foundational (US1·US4 공통 선행)
 
-- [ ] T003 `A/service/CatPlaylistGenerator.java` 의 `generate()` 안 배치 탐색(상자 읽기 → `SCALES` 루프 → `place()` → 최소 오차 선택)을 `Placement match(List<double[]> points)` 로 추출한다. 입력은 -1~1·y 위 좌표. `generate()` 는 `match(template.points())` 를 부르고 외부 동작(응답·로그·예외)은 그대로다. 후보가 전부 사용 중이면 지금처럼 `IllegalStateException`
-- [ ] T004 기존 `T/CatPlaylistGeneratorTests.java` 7개가 T003 후에도 그대로 통과하는지 `./gradlew test --tests '*CatPlaylistGeneratorTests'` 로 확인 (리팩터 회귀 방지)
+- [x] T003 `A/service/CatPlaylistGenerator.java` 의 `generate()` 안 배치 탐색(상자 읽기 → `SCALES` 루프 → `place()` → 최소 오차 선택)을 `Placement match(List<double[]> points)` 로 추출한다. 입력은 -1~1·y 위 좌표. `generate()` 는 `match(template.points())` 를 부르고 외부 동작(응답·로그·예외)은 그대로다. 후보가 전부 사용 중이면 지금처럼 `IllegalStateException`
+- [x] T004 기존 `T/CatPlaylistGeneratorTests.java` 7개가 T003 후에도 그대로 통과하는지 `./gradlew test --tests '*CatPlaylistGeneratorTests'` 로 확인 (리팩터 회귀 방지)
 
 **Checkpoint**: 템플릿 생성 동작 불변, `match()` 재사용 가능
 
@@ -30,16 +30,16 @@
 
 ### Tests
 
-- [ ] T005 [P] [US1] `T/ShapeScoreTests.java` 신규: (a) 삼각형·사각형·별·지그재그 각각 자기 자신과 비교 → 100, (b) 이동·회전(17°·90°·200°)·확대(0.5·2배) 변형본 → 점수 차 ≤ 1 (SC-003), (c) 좌우 반전(비대칭 도형 기준) → 점수가 원본보다 20 이상 낮다, (d) 잡음 σ 0.05/0.2/0.5(도형 크기 대비, 시드 고정 `new Random(0)`) → HIGH/MEDIUM/LOW (research R3), (e) 점 순서를 바꾸면 점수 하락 (FR-009)
+- [x] T005 [P] [US1] `T/ShapeScoreTests.java` 신규: (a) 삼각형·사각형·별·지그재그 각각 자기 자신과 비교 → 100, (b) 이동·회전(17°·90°·200°)·확대(0.5·2배) 변형본 → 점수 차 ≤ 1 (SC-003), (c) 좌우 반전(비대칭 도형 기준) → 점수가 원본보다 20 이상 낮다, (d) 잡음 σ 0.03/0.15/0.5(도형 RMS 반지름 대비 — 0.2 는 예상 점수 ≈72 로 경계에 너무 가까워 조정, 시드 고정 `new Random(0)`) → HIGH/MEDIUM/LOW (research R3), (e) 점 순서를 바꾸면 점수 하락 (FR-009)
 
 ### Implementation
 
-- [ ] T006 [P] [US1] `A/service/ShapeScore.java` 신규 순수 계산 클래스(Spring 의존 없음, `PlanarProjection` 과 같은 성격): `static int score(List<double[]> drawn, List<double[]> result)` — 각 점열을 중심 이동·프로베니우스 노름 1 로 맞추고 복소수 `a = Σ conj(u_i)·v_i`, `d = sqrt(max(0, 2 − 2|a|))`, `round(100·max(0, 1 − d))`. `static Quality quality(int score)` — `HIGH ≥ 90`, `MEDIUM ≥ 70`, 나머지 `LOW`. 경계 상수에 `ponytail:` 주석(근거 research R3, 조정은 운영 `그림 매칭` 로그 분포로). 노름 0(한 점에 몰림)은 호출 전에 막히므로 `IllegalArgumentException`
-- [ ] T007 [P] [US1] `A/dto/DrawRequest.java` 신규 record: `@NotNull @Size(min = 3, max = 20) List<@NotNull @Valid DrawPoint> points`, 내부 record `DrawPoint(@NotNull @DecimalMin("0") @DecimalMax("1") Double x, 같은 규칙 y)`. javadoc 에 좌표 규약(캔버스 0~1, x 오른쪽·y 아래) 명시
-- [ ] T008 [P] [US1] `A/dto/DrawResponse.java` 신규 record: `int score, String quality, List<ArtworkPoint> points` (`A/dto/ArtworkPoint.java` 재사용)
-- [ ] T009 [US1] `A/service/CatPlaylistGenerator.java` 에 `DrawResponse draw(List<DrawRequest.DrawPoint> points)` 추가: y 반전(`1 − y`) → 중심 이동 → 최대 절댓값 1 정규화 → `match()` → `constellationService.layout(musicIds)` → `ShapeScore.score(정규화 그림, layout 좌표)` → `DrawResponse`. 로그 `log.info("[Artwork] 그림 매칭 points={} score={} quality={} ms={}", ...)`. 플리 생성·제출 없음 (T006·T007·T008 선행)
-- [ ] T010 [US1] `T/CatPlaylistGeneratorTests.java` 에 draw 케이스 추가 (T009 선행. 기존 격자 가상 곡·매퍼 목 재사용): 곡 수 = 점 수, `musicId` 중복 없음, 응답 순서 = 입력 순서 (SC-002), 응답 `points` = 목 `ConstellationService.layout` 반환값 (FR-011), 같은 입력 두 번 → 같은 응답 (FR-012), `PlaylistService.create` 가 **호출되지 않음** (FR-020)
-- [ ] T011 [US1] `A/controller/ArtworkController.java` 에 `@PostMapping("/draw")` 추가: `@RequestBody @Valid DrawRequest` → `ApiResponse.success(catPlaylistGenerator.draw(...))`, **200**(생성 없음). `@Operation` 설명에 "플레이리스트를 만들지 않는다, 저장은 /playlist/create" 명시. 인증 필요(SecurityConfig permitAll 에 넣지 않음)
+- [x] T006 [P] [US1] `A/service/ShapeScore.java` 신규 순수 계산 클래스(Spring 의존 없음, `PlanarProjection` 과 같은 성격): `static int score(List<double[]> drawn, List<double[]> result)` — 각 점열을 중심 이동·프로베니우스 노름 1 로 맞추고 복소수 `a = Σ conj(u_i)·v_i`, `d = sqrt(max(0, 2 − 2|a|))`, `round(100·max(0, 1 − d))`. `static Quality quality(int score)` — `HIGH ≥ 90`, `MEDIUM ≥ 70`, 나머지 `LOW`. 경계 상수에 `ponytail:` 주석(근거 research R3, 조정은 운영 `그림 매칭` 로그 분포로). 노름 0(한 점에 몰림)은 호출 전에 막히므로 `IllegalArgumentException`
+- [x] T007 [P] [US1] `A/dto/DrawRequest.java` 신규 record: `@NotNull @Size(min = 3, max = 20) List<@NotNull @Valid DrawPoint> points`, 내부 record `DrawPoint(@NotNull @DecimalMin("0") @DecimalMax("1") Double x, 같은 규칙 y)`. javadoc 에 좌표 규약(캔버스 0~1, x 오른쪽·y 아래) 명시
+- [x] T008 [P] [US1] `A/dto/DrawResponse.java` 신규 record: `int score, String quality, List<ArtworkPoint> points` (`A/dto/ArtworkPoint.java` 재사용)
+- [x] T009 [US1] `A/service/CatPlaylistGenerator.java` 에 `DrawResponse draw(List<DrawRequest.DrawPoint> points)` 추가: y 반전(`1 − y`) → 중심 이동 → 최대 절댓값 1 정규화 → `match()` → `constellationService.layout(musicIds)` → `ShapeScore.score(정규화 그림, layout 좌표)` → `DrawResponse`. 로그 `log.info("[Artwork] 그림 매칭 points={} score={} quality={} ms={}", ...)`. 플리 생성·제출 없음 (T006·T007·T008 선행)
+- [x] T010 [US1] `T/CatPlaylistGeneratorTests.java` 에 draw 케이스 추가 (T009 선행. 기존 격자 가상 곡·매퍼 목 재사용): 곡 수 = 점 수, `musicId` 중복 없음, 응답 순서 = 입력 순서 (SC-002), 응답 `points` = 목 `ConstellationService.layout` 반환값 (FR-011), 같은 입력 두 번 → 같은 응답 (FR-012), `PlaylistService.create` 가 **호출되지 않음** (FR-020)
+- [x] T011 [US1] `A/controller/ArtworkController.java` 에 `@PostMapping("/draw")` 추가: `@RequestBody @Valid DrawRequest` → `ApiResponse.success(catPlaylistGenerator.draw(...))`, **200**(생성 없음). `@Operation` 설명에 "플레이리스트를 만들지 않는다, 저장은 /playlist/create" 명시. 인증 필요(SecurityConfig permitAll 에 넣지 않음)
 
 **Checkpoint**: T005·T010 통과 — US1 단독 시연 가능 (curl 로 draw)
 

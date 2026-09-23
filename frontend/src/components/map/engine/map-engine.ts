@@ -97,6 +97,8 @@ export interface VisibleFriend {
   py: number;
   /** 진행 방향(rad). 우주선 기수 */
   heading: number;
+  /** 서 있는 별의 깊이 크기 배율({@link MapEngine.depthScaleOf}). 반지름·잔상에 곱한다 (S15P21A405-614) */
+  scale: number;
   isLeader: boolean;
   /**
    * 이 표식 **뒤에 겹쳐 선 사람들** (S15P21A405-550). 대표는 빼고 담는다.
@@ -1607,6 +1609,17 @@ export class MapEngine {
     return i == null ? 1 : this.par(i);
   }
 
+  /** 깊이 크기 배율 — 별 위에 서는 것(커버·사람)이 가까운 별 위에서 커진다 (S15P21A405-614) */
+  depthScale(i: number): number {
+    return 1 + this.z[i] * STAR_VIEW.depthSize;
+  }
+
+  /** {@link depthScale} 을 곡 id 로. 상주 집합에 없는 곡은 기준 평면(1) */
+  depthScaleOf(id: number | null): number {
+    const i = id == null ? undefined : this.index.get(id);
+    return i == null ? 1 : this.depthScale(i);
+  }
+
   private proj(i: number, layer: number, cam: MapCamera, out: Float32Array, k: number) {
     const s = this.songs[i];
     const p = this.par(i);
@@ -2289,19 +2302,6 @@ export class MapEngine {
       }
     }
     return best;
-  }
-
-  /** 내 위치(우주선·헬멧)의 화면 좌표. 반응 이모지가 여기서 떠오른다 (SOCIAL-02) */
-  mePos(): { x: number; y: number } | null {
-    if (this.myId == null) return null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
-    return { x: px, y: py };
-  }
-
-  /** 지도에 떠 있는 사용자의 화면 좌표. 내 뷰 안에 없으면 null (남의 반응은 그때만 보인다) */
-  friendScreenPos(email: string): { x: number; y: number } | null {
-    const f = this.visFriends.find((v) => v.user.email === email);
-    return f ? { x: f.px, y: f.py } : null;
   }
 
   hitFriend(mx: number, my: number): VisibleFriend | null {
@@ -3210,8 +3210,9 @@ export class MapEngine {
     this.visFriends = [];
 
     // 1) 그릴 수 있는 사람만 추려 화면 좌표를 구한다. 인솔자는 경합 밖이라 따로 둔다
-    const leader: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
-    const cands: { u: NearbyUser; px: number; py: number; heading: number }[] = [];
+    type Cand = { u: NearbyUser; px: number; py: number; heading: number; scale: number };
+    const leader: Cand[] = [];
+    const cands: Cand[] = [];
     for (const u of this.friends) {
       if (!u.isOnline) continue;
       const isLeader = isLeaderOf(u);
@@ -3226,12 +3227,13 @@ export class MapEngine {
       // 서 있는 곡과 같은 시차를 받아야 별 위에 그대로 선다 (S15P21A405-609)
       const { px, py } = this.worldToScreen(w.x, w.y, this.cam, this.parOf(u.musicId));
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
+      const scale = this.depthScaleOf(u.musicId);
       if (isLeader) {
-        leader.push({ u, px, py, heading: w.heading });
+        leader.push({ u, px, py, heading: w.heading, scale });
         continue;
       }
       if (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104) continue;
-      cands.push({ u, px, py, heading: w.heading });
+      cands.push({ u, px, py, heading: w.heading, scale });
     }
 
     // 2) 칸마다 하나씩 앞세운 순서로. 지난 프레임에 보이던 사람이 제 칸을 먼저 집는다
@@ -3256,7 +3258,7 @@ export class MapEngine {
      * 남의 배지 속 숫자로 들어가면 누구를 따라가는지 알 수 없다.
      */
     const owner = new Map<string, number>();
-    const place = (c: { u: NearbyUser; px: number; py: number; heading: number }, isLeader: boolean) => {
+    const place = (c: Cand, isLeader: boolean) => {
       const cx = Math.floor(c.px / G);
       const cy = Math.floor(c.py / G);
       if (!isLeader) {
@@ -3271,7 +3273,7 @@ export class MapEngine {
         }
       }
       owner.set(`${cx},${cy}`, this.visFriends.length);
-      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, isLeader, stacked: [] });
+      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, scale: c.scale, isLeader, stacked: [] });
     };
     /**
      * **배율이 그대로면 지난 배치를 그대로 쓴다** (S15P21A405-566).
@@ -3294,6 +3296,7 @@ export class MapEngine {
           px: c.px,
           py: c.py,
           heading: c.heading,
+          scale: c.scale,
           isLeader: isLeaderOf(c.u),
           stacked: entry.stacked.map((e) => byEmail.get(e)!.u),
         });

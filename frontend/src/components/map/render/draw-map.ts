@@ -440,9 +440,9 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.font = `500 9.5px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
-    // 크기도 글자 밝기도 곡마다 같다 (S15P21A405-518) — 둘 다 weight 에서 나오던 값인데
-    // 실데이터는 weight 가 전부 0 이라 musicId 해시로 굴러가고 있었다. 배율 확대만 남긴다
-    const S = COVER_COUNT.sizePx * grow;
+    // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
+    // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)
+    const S = COVER_COUNT.sizePx * grow * e.depthScale(i);
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다

@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { STORAGE_KEYS } from "@/constants";
+import { removeStorage, writeStorage } from "@/lib/storage";
 
 /**
  * 따라가기 = **탑승(ride)** 상태 (2차 실시간 명세 §12, S15P21A405-530).
@@ -10,8 +12,9 @@ import { devtools } from "zustand/middleware";
  * 상태를 읽는 자리가 두 군데가 된다 — 이 스토어를 읽는 곳이 이미 아홉 곳이라 옮기는 값보다
  * 어긋날 위험이 크다.
  *
- * **재연결로 되살리지 않는다** (명세 §8.3). 소켓이 새로 열리면 서버가 따라가기를 끊는다.
- * 프론트가 상태를 들고 있다가 자동으로 다시 태우면 서버에 없는 선단을 화면만 그리게 된다.
+ * **재연결·새로고침 뒤에는 다시 탄다** (S15P21A405-615). 소켓이 새로 열리면 서버가 따라가기를
+ * 끊으므로(명세 §8.3) 상태를 그대로 그리면 서버에 없는 선단이 된다 — 그래서 인솔자를 저장소에
+ * 남겨 두고 `use-ride-session` 이 **새 탑승 요청**을 보낸다. 여기는 그 저장을 시작·정지에 맞춰 쓴다.
  */
 interface FollowState {
   /** 내가 따라가는 인솔자. null 이면 따라가기 중 아님 */
@@ -76,7 +79,8 @@ export const useFollowStore = create<FollowState>()(
       followerCount: 0,
       snapshotSeq: 0,
 
-      start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) =>
+      start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) => {
+        writeStorage(STORAGE_KEYS.rideLeader, { email, nickname, imageUrl }, "session");
         set(
           {
             leaderEmail: email,
@@ -88,10 +92,12 @@ export const useFollowStore = create<FollowState>()(
           },
           false,
           "start",
-        ),
+        );
+      },
       setLeaderMusicId: (leaderMusicId) => set({ leaderMusicId }, false, "setLeaderMusicId"),
       setLeaderViewingMusicId: (leaderViewingMusicId) => set({ leaderViewingMusicId }, false, "setLeaderViewingMusicId"),
-      stop: () =>
+      stop: () => {
+        removeStorage(STORAGE_KEYS.rideLeader);
         set(
           {
             leaderEmail: null,
@@ -104,7 +110,8 @@ export const useFollowStore = create<FollowState>()(
           },
           false,
           "stop",
-        ),
+        );
+      },
       setFollowerCount: (followerCount) => set({ followerCount }, false, "setFollowerCount"),
     }),
     { name: "follow-store" },

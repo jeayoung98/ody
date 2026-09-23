@@ -3,7 +3,7 @@
 import { usePathname, useRouter } from "next/navigation";
 import { useCallback } from "react";
 import { ROUTES } from "@/constants";
-import { usePanelStore } from "@/stores/use-panel-store";
+import { usePanelStore, type PanelReturn } from "@/stores/use-panel-store";
 
 /**
  * 남의 프로필을 연다 (S15P21A405-593).
@@ -19,14 +19,15 @@ import { usePanelStore } from "@/stores/use-panel-store";
  *
  * 데스크톱에는 탭 화면이 없어 언제나 `/` 이므로 이 훅은 `openFeed` 와 같게 동작한다.
  */
-export function useOpenProfile(): (email: string) => void {
+export function useOpenProfile(): (email: string, back?: PanelReturn | null) => void {
   const openFeed = usePanelStore((s) => s.openFeed);
   const router = useRouter();
   const pathname = usePathname();
 
   return useCallback(
-    (email: string) => {
-      openFeed(email);
+    // 돌아갈 자리는 **여는 쪽이 넘긴다** (S15P21A405-610) — 여기서는 그대로 전달만 한다
+    (email: string, back: PanelReturn | null = null) => {
+      openFeed(email, back);
       if (pathname !== ROUTES.home) router.push(ROUTES.home);
     },
     [openFeed, pathname, router],

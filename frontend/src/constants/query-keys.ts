@@ -74,7 +74,8 @@ export const QUERY_KEYS = {
   },
 
   chart: {
-    ranking: (type: string) => ["chart", type] as const,
+    /** 세 랭킹이 한 응답이라 키도 하나다 (S15P21A405-604) */
+    weekly: ["chart", "weekly"] as const,
   },
 
   /** 별자리 콘테스트 (S15P21A405-602). 표·출품이 회차 정보와 목록 양쪽에 걸려 `all` 로 함께 무효화한다 */

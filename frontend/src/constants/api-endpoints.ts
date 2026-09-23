@@ -217,7 +217,12 @@ export const API_ENDPOINTS = {
   },
 
   chart: {
-    ranking: (type: string) => `/bff/charts/${type}`,
+    /**
+     * 이번 주 랭킹 — **실연동** (S15P21A405-604). 라우트 핸들러가 배포 백엔드
+     * `GET /api/stats/weekly` (발견왕·탐험왕·기여도 top 10) 를 대신 부른다.
+     * 종류별 경로(`/bff/charts/{type}`) 목은 걷어냈다 — 백엔드가 셋을 한 번에 주기 때문이다.
+     */
+    weekly: "/bff/charts/weekly",
   },
 
   /**

@@ -15,6 +15,15 @@ const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
 /** 스프링 — 목표를 10% 쯤 지나쳤다 돌아온다. 겹친 표식이 갈라질 때의 "도잉" (S15P21A405-618) */
 const springOut = (t: number) => (t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(7 * t));
+/**
+ * 닉네임이 그려질 폭 어림(px). 엔진에는 캔버스 컨텍스트가 없어 `measureText` 를 못 쓴다 —
+ * 한글·한자처럼 넓은 글자와 그 밖을 둘로만 나눠 더한다. 갈라진 표식 사이 간격에 쓰므로 조금 넉넉해도 된다.
+ */
+const approxNameWidth = (s: string) => {
+  let w = 0;
+  for (const ch of s) w += (ch.codePointAt(0) ?? 0) >= 0x1100 ? FRIEND_SPREAD.nameCharPx.wide : FRIEND_SPREAD.nameCharPx.narrow;
+  return w;
+};
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
@@ -2355,8 +2364,12 @@ export class MapEngine {
     const people = [v.user, ...v.stacked];
     const n = people.length;
     const R = 12.5 * v.scale;
-    // 이웃 사이 현이 헬멧 지름 + 틈 이상이 되는 반지름
-    const fit = (2 * R + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
+    /**
+     * 이웃 사이 현이 **헬멧 지름과 닉네임 폭 중 큰 것** + 틈 이상이 되는 반지름. 닉네임이 헬멧
+     * 아래 가운데 정렬로 붙어서, 헬멧만 안 겹치게 두면 이름끼리 포개져 읽을 수 없었다.
+     */
+    const nameW = Math.max(0, ...people.map((u) => approxNameWidth(u.nickname ?? "")));
+    const fit = (Math.max(2 * R, nameW) + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
     const radius = Math.max(FRIEND_SPREAD.radiusPx * v.scale, fit) * springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
     const parts: VisibleFriend[] = people.map((u, i) => {
       const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;

@@ -770,8 +770,10 @@ export const RIDE_LOCK_TOAST_MS = 3000;
 export const FRIEND_SPREAD = {
   /** 퍼지는 데 걸리는 시간(ms). 스프링 곡선이라 목표를 살짝 지나쳤다 돌아온다 */
   durationMs: 600,
-  /** 두 명일 때 가운데에서 각자 떨어지는 거리(px, 깊이 배율 전). 셋 이상은 서로 안 겹치는 반지름으로 늘어난다 */
-  radiusPx: 17,
-  /** 갈라진 헬멧 사이 틈(px) */
-  gapPx: 6,
+  /** 가운데에서 각자 떨어지는 최소 거리(px, 깊이 배율 전). 헬멧·닉네임이 안 겹치는 값이 더 크면 그쪽을 쓴다 */
+  radiusPx: 26,
+  /** 이웃한 헬멧(또는 닉네임) 사이 틈(px) */
+  gapPx: 10,
+  /** 닉네임 글자 폭 어림(px). 그리는 글꼴 9.5px 기준 — 한글은 정사각, 그 밖은 절반쯤 */
+  nameCharPx: { wide: 9.5, narrow: 5.4 },
 } as const;

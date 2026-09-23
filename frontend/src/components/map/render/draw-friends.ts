@@ -128,7 +128,7 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
   // 창 — 얇은 어두운 테와 보라 유리. 사진이 있으면 부르는 쪽이 유리 위에 덮는다 (R * 0.72)
   g.fillStyle = "#3a4761";
   g.beginPath();
-  g.arc(0, 0, R * 0.8, 0, 6.284);
+  g.arc(0, 0, R * 0.84, 0, 6.284);
   g.fill();
   g.fillStyle = "#a67cff";
   g.beginPath();

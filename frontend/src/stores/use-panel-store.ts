@@ -129,7 +129,8 @@ interface PanelState {
   /** 기억해 둔 자리로 돌아간다 */
   goBack: () => void;
   openPlaylist: (playlistId: number) => void;
-  openFeed: (email?: string | null) => void;
+  /** `back` 은 돌아갈 자리. 주변 사람 패널에서 열 때 `{ panel: "friends" }` 를 넘긴다 (S15P21A405-610) */
+  openFeed: (email?: string | null, back?: PanelReturn | null) => void;
   openJourney: () => void;
   openFriends: () => void;
   openChart: () => void;
@@ -193,15 +194,12 @@ export const usePanelStore = create<PanelState>()(
 
       openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
       /**
-       * 주변 사람 패널에서 열었으면 **돌아갈 자리를 기억한다** (S15P21A405-610). 피드 안(팔로워·팔로잉
-       * 목록)에서 다른 사람으로 갈아탈 때는 기억을 그대로 들고 간다. 지도·랭킹에서 열면 없다.
+       * **돌아갈 자리는 여는 쪽이 말한다** (S15P21A405-610). 처음엔 "지금 주변 사람 패널이 열려 있나"
+       * 로 추측했는데, 좁은 화면의 `/friends` 탭처럼 패널이 아닌 자리에서 열면 그 추측이 빗나간다.
+       * 피드 안(팔로워·팔로잉 목록)에서 다른 사람으로 갈아탈 때는 들고 있던 기억을 그대로 잇는다.
        */
-      openFeed: (email = null) =>
-        set(
-          (s) => open("feed", { profileEmail: email, back: s.activePanel === "friends" ? { panel: "friends" } : s.activePanel === "feed" ? s.back : null }),
-          false,
-          "openFeed",
-        ),
+      openFeed: (email = null, back = null) =>
+        set((s) => open("feed", { profileEmail: email, back: back ?? (s.activePanel === "feed" ? s.back : null) }), false, "openFeed"),
       openJourney: () => set(open("journey"), false, "openJourney"),
       openFriends: () => set(open("friends"), false, "openFriends"),
       openChart: () => set(open("chart"), false, "openChart"),

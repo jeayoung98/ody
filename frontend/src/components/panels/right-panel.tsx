@@ -78,9 +78,15 @@ export default function RightPanel() {
   const dismissOnMap = useCallback(
     (e: PointerEvent) => {
       if (!(e.target instanceof Element) || !e.target.closest("[data-map]")) return false;
-      if (snap === 3) return true;
+      // 3 단은 화면을 거의 덮은 상태라 뒤가 눌리면 안 된다 — 그 자리에서 삼키고 내린다
+      if (snap === 3) return "swallow";
       const engine = getMapEngine();
-      // 별도 사람도 아닌 빈 하늘을 눌렀을 때만 내려온다
+      /**
+       * 별도 사람도 아닌 빈 하늘을 눌렀을 때만 내려온다. **삼키지는 않는다**
+       * (S15P21A405-593) — 삼키면 지도가 누름을 못 받아 **밀기도 핀치도 죽는다.**
+       * 여정처럼 패널이 늘 떠 있는 화면에서 지도 조작이 통째로 안 먹던 원인이다.
+       * 끌지 않고 뗐을 때만 내려온다.
+       */
       return engine?.hitTest(e.clientX, e.clientY) == null && engine?.hitFriend?.(e.clientX, e.clientY) == null;
     },
     [snap],
@@ -137,7 +143,16 @@ export default function RightPanel() {
           시트가 오른쪽으로도 밀린다.
         */
         collapsed ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0" : ""
-      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none`}
+      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
+      /*
+        **폰에서는 시트가 바닥까지 찬다** (S15P21A405-593). `Box` 는 내용만큼만 높아지는
+        상자라, 짧은 화면(프로필·재생 불가 곡 상세·여정 목록이 비었을 때)에서는 **패널이
+        내용 끝에서 멈추고 그 아래로 지도가 비쳤다.** 3 단으로 펼쳐도 아래가 뚫려 있으니
+        시트가 떠 있는 조각처럼 보였다.
+
+        위아래가 못 박힌 상자(`top`·`bottom`)의 자식에 `flex-1` 을 줘서 남은 높이를 채운다.
+        데스크톱은 그대로 둔다 — 거기서는 패널이 내용만큼만 서는 것이 맞다.
+      */
       data-sheet
       /*
         폰에서 내려보내는 거리를 CSS 가 이 값으로 고른다 (S15P21A405-416). 데스크톱은 안 본다 —

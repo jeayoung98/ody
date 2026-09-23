@@ -6,7 +6,6 @@ import { REACTION_REJECTED, type ReactionKey } from "@/constants";
 import { useSendReactionMutation } from "@/hooks/mutations/use-send-reaction-mutation";
 import { ApiError } from "@/lib/api";
 import { isBot } from "@/lib/bots/roster";
-import { useMapStore } from "@/stores/use-map-store";
 import { useReactionStore } from "@/stores/use-reaction-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { NearbyPerson } from "@/types";
@@ -14,7 +13,7 @@ import ReactionPicker from "./reaction-picker";
 
 /**
  * 반응 보내기 — **주변 사람 패널 오른쪽 아래** (SOCIAL-02, S15P21A405-434·496). 기본 반응 세트를
- * 고르면 내 위로 떠서 사라진다. 우하단 FAB 였는데 플레이어바가 그 자리를 차지해 패널 안으로
+ * 고르면 레이더 가운데(나) 위로 떠서 사라진다. 우하단 FAB 였는데 플레이어바가 그 자리를 차지해 패널 안으로
  * 들어왔고, 목록 위에 있다가 아래로 내려왔다 — 반응은 주변 사람을 **보고 나서** 하는 일이라
  * 목록보다 먼저 걸리면 순서가 뒤집힌다.
  *
@@ -27,8 +26,6 @@ export default function ReactionButton({ people }: { people: NearbyPerson[] }) {
   const push = useReactionStore((s) => s.push);
   const showToast = useToastStore((s) => s.show);
   const send = useSendReactionMutation();
-  // 오버레이 뷰(별자리·주변 탐색)에서는 반응을 받지 않는다 — 띄울 지도가 가려져 있다
-  const overlay = useMapStore((s) => s.viewMode) !== "default";
 
   const handlePick = async (key: ReactionKey) => {
     setOpen(false);
@@ -42,8 +39,6 @@ export default function ReactionButton({ people }: { people: NearbyPerson[] }) {
     const code = first.reason instanceof ApiError ? first.reason.code : "UNKNOWN";
     showToast(REACTION_REJECTED[code as keyof typeof REACTION_REJECTED] ?? REACTION_REJECTED.UNKNOWN);
   };
-
-  if (overlay) return null;
 
   return (
     // 패널 **오른쪽 아래**에 선다 (S15P21A405-496). 버튼이 맨 오른쪽이고 고르는 칸은 왼쪽으로

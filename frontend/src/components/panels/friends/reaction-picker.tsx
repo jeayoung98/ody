@@ -18,7 +18,7 @@ export default function ReactionPicker({ onPick, horizontal = false }: ReactionP
           type="button"
           title={r.label}
           onClick={() => onPick(r.key)}
-          className="grid h-8 w-8 place-items-center rounded-pill text-[16px] leading-none transition-all duration-fast hover:scale-[1.12] hover:bg-white/[.12]"
+          className="grid h-8 w-8 place-items-center rounded-pill text-[17px] leading-none transition-all duration-fast hover:scale-[1.12] hover:bg-white/[.12]"
         >
           {r.emoji}
         </button>

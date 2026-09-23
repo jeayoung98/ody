@@ -20,7 +20,7 @@ export default function SignupPage() {
 
         <GoogleLoginButton />
 
-        <p className="mt-6 border-t border-line pt-5 text-center text-[13px] text-ink-2">
+        <p className="mt-6 border-t border-line pt-5 text-center text-[14px] text-ink-2">
           이미 계정이 있으신가요?{" "}
           <Link href={ROUTES.login} className="font-semibold text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink">
             로그인

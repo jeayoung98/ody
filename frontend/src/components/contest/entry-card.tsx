@@ -52,7 +52,7 @@ export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
         <p className="min-w-0 truncate text-sm font-medium">{entry.title}</p>
         {isMine ? <Tag tone="teal">내 출품</Tag> : entry.rank != null ? <Tag title="순위">{entry.rank}위</Tag> : null}
       </div>
-      <p className="truncate text-[12px] text-ink-3">
+      <p className="truncate text-[13px] text-ink-3">
         @{ownerLabel(entry.ownerEmail)} · {entry.musicCnt}곡 · {formatTimeAgo(entry.createdAt)}
       </p>
       {entry.aiComment && <p className="line-clamp-2 text-xs leading-relaxed text-ink-3">“{entry.aiComment}”</p>}

@@ -73,7 +73,7 @@ export default function FollowBanner() {
           **동승 인원은 여기 안 쓴다** (2차 명세 §14). 이 배너는 **따라가는 쪽**이 보는 것이라
           인솔자의 동승 인원과 관계가 없다.
         */}
-        <div className="num text-[11px] tracking-[0.05em] text-ink-3">지도 조작 잠김 · 하차하면 이 자리에서 이어갑니다</div>
+        <div className="num text-[12px] tracking-[0.05em] text-ink-3">지도 조작 잠김 · 하차하면 이 자리에서 이어갑니다</div>
       </div>
       <button
         type="button"

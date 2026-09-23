@@ -65,7 +65,7 @@ export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormP
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
       />
-      <p className="num -mt-1 text-right text-[11.5px] text-ink-4">
+      <p className="num -mt-1 text-right text-[12.5px] text-ink-4">
         {title.length} / {titleMax}
       </p>
       <Button variant="primary" className="w-full" disabled={disabled} onClick={handleSubmit}>

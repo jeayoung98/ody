@@ -6,7 +6,7 @@ import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { layerPointOf } from "@/lib/layer-point";
 import type { Point } from "@/lib/nearby-from-layer";
 import { useMapStore } from "@/stores/use-map-store";
-import { usePanelStore } from "@/stores/use-panel-store";
+import { useOpenProfile } from "@/hooks/use-open-profile";
 import { useReactionStore } from "@/stores/use-reaction-store";
 import type { NearbyPerson } from "@/types";
 
@@ -162,7 +162,7 @@ export function sizeOf(meetingCount: number, max: number): number {
  * 그 자체로 읽힌다 (S15P21A405-496).
  */
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
-  const openFeed = usePanelStore((s) => s.openFeed);
+  const openProfile = useOpenProfile();
   const { data: me } = useMeQuery();
   // 반응 이모지는 **여기에만** 뜬다 (S15P21A405-608). 지도 위 오버레이는 걷어냈다 — 지도가 어수선해진다
   const floating = useReactionStore((s) => s.floating);
@@ -255,7 +255,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           <button
             key={p.email}
             type="button"
-            onClick={() => openFeed(p.email, { panel: "friends" })}
+            onClick={() => openProfile(p.email, { panel: "friends" })}
             title={`${p.nickname ?? "이름 없음"}${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
             className={`absolute grid place-items-center rounded-pill transition-opacity hover:opacity-80 ${breathes ? "animate-breathe" : ""}`}
             style={{

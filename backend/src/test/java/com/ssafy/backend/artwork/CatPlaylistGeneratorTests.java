@@ -28,6 +28,7 @@ import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
 import com.ssafy.backend.artwork.service.CatPlaylistGenerator;
 import com.ssafy.backend.artwork.template.CatTemplate;
+import com.ssafy.backend.common.ArtworkErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.music.dto.ConstellationLayoutResponse;
@@ -212,6 +213,70 @@ class CatPlaylistGeneratorTests {
 		DrawResponse response = generator.draw(PENTAGON);
 
 		assertThat(response.quality()).isEqualTo("HIGH");
+	}
+
+	@Test
+	void draw_rejectsCollapsedDrawing() {
+		List<DrawRequest.DrawPoint> collapsed = List.of(
+				new DrawRequest.DrawPoint(0.500, 0.500), new DrawRequest.DrawPoint(0.505, 0.502),
+				new DrawRequest.DrawPoint(0.498, 0.509));
+
+		assertThatThrownBy(() -> generator.draw(collapsed))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_DRAWING_DEGENERATE);
+		verify(mapper, never()).findNearestMusicByPc12(anyDouble(), anyDouble(), anyInt());
+	}
+
+	@Test
+	void draw_straightLine_isValid() {
+		layoutReturnsGridCoordinates();
+
+		DrawResponse response = generator.draw(List.of(
+				new DrawRequest.DrawPoint(0.1, 0.5), new DrawRequest.DrawPoint(0.5, 0.5),
+				new DrawRequest.DrawPoint(0.9, 0.5)));
+
+		assertThat(response.points()).hasSize(3);
+	}
+
+	@Test
+	void draw_repeatedPoint_getsTwoDifferentSongs() {
+		layoutReturnsGridCoordinates();
+
+		DrawResponse response = generator.draw(List.of(
+				new DrawRequest.DrawPoint(0.2, 0.2), new DrawRequest.DrawPoint(0.2, 0.2),
+				new DrawRequest.DrawPoint(0.8, 0.8)));
+
+		assertThat(response.points()).extracting("musicId").doesNotHaveDuplicates().hasSize(3);
+	}
+
+	/** 기동 예열 뒤에는 요청이 상자를 다시 읽지 않는다 (research R4). */
+	@Test
+	void warmUp_fillsBoundsCache() {
+		layoutReturnsGridCoordinates();
+
+		generator.warmUpBounds();
+		generator.draw(PENTAGON);
+		generator.generate("loaf", EMAIL);
+
+		verify(mapper, times(1)).findPc12Bounds();
+	}
+
+	/** 예열이 실패해도(예: H2 에 percentile_cont 없음) 조용히 끝나고, 첫 요청이 다시 읽는다. */
+	@Test
+	void warmUp_failure_isSwallowed_andRequestRetries() {
+		layoutReturnsGridCoordinates();
+		Pc12BoundsRow box = new Pc12BoundsRow();
+		box.setXMin(-10);
+		box.setXMax(10);
+		box.setYMin(-6);
+		box.setYMax(6);
+		when(mapper.findPc12Bounds()).thenThrow(new IllegalStateException("no percentile_cont")).thenReturn(box);
+
+		generator.warmUpBounds();
+		generator.draw(PENTAGON);
+
+		verify(mapper, times(2)).findPc12Bounds();
 	}
 
 	// ---------------- 격자 가상 곡 ----------------

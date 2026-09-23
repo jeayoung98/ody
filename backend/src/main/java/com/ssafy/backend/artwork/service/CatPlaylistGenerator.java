@@ -9,6 +9,8 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicReference;
 
+import org.springframework.boot.context.event.ApplicationReadyEvent;
+import org.springframework.context.event.EventListener;
 import org.springframework.stereotype.Service;
 
 import com.ssafy.backend.artwork.dto.ArtworkPoint;
@@ -20,6 +22,7 @@ import com.ssafy.backend.artwork.dto.MusicPc12Row;
 import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
 import com.ssafy.backend.artwork.template.CatTemplate;
+import com.ssafy.backend.common.ArtworkErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.music.service.ConstellationService;
@@ -51,6 +54,12 @@ public class CatPlaylistGenerator {
 	/** 점 하나에 후보로 뽑는 곡 수. 앞선 점이 가져간 곡을 건너뛸 여유다. */
 	static final int CANDIDATES_PER_POINT = 8;
 
+	/**
+	 * 그림 bbox 긴 변이 캔버스의 이 비율보다 작으면 모양이 없다고 본다 (specs/010 research R5).
+	 * 한 점을 여러 번 누르거나 손이 떨린 정도다 — 정규화하면 잡음이 모양으로 부풀려진다.
+	 */
+	static final double MIN_DRAWING_EXTENT = 0.02;
+
 	private static final DateTimeFormatter NAME_SUFFIX = DateTimeFormatter.ofPattern("HHmmss");
 
 	private final ArtworkMapper artworkMapper;
@@ -65,6 +74,29 @@ public class CatPlaylistGenerator {
 		this.artworkMapper = artworkMapper;
 		this.playlistService = playlistService;
 		this.constellationService = constellationService;
+	}
+
+	/**
+	 * 기동 직후 상자를 미리 읽는다 (specs/010 research R4). 백분위 두 개가 전체 곡을 정렬해 운영에서 8.9 s 걸렸다 —
+	 * 첫 요청이 그 값을 치르면 제한 시간 10 s 에 거의 닿는다. 메인 스레드에서 돌리면 Blue-Green 헬스체크가 늦어지므로
+	 * 데몬 스레드 하나로 띄운다.
+	 */
+	@EventListener(ApplicationReadyEvent.class)
+	public void warmUpBoundsOnReady() {
+		Thread thread = new Thread(this::warmUpBounds, "artwork-bounds-warmup");
+		thread.setDaemon(true);
+		thread.start();
+	}
+
+	/** 상자를 읽어 캐시에 채운다. 실패하면 WARN 만 남긴다 — 캐시가 비어 있으니 첫 요청이 다시 읽는다. */
+	public void warmUpBounds() {
+		long started = System.nanoTime();
+		try {
+			bounds.updateAndGet(b -> b != null ? b : artworkMapper.findPc12Bounds());
+			log.info("[Artwork] 상자 예열 ms={}", (System.nanoTime() - started) / 1_000_000);
+		} catch (RuntimeException e) {
+			log.warn("[Artwork] 상자 예열 실패 — 첫 요청이 다시 읽는다: {}", e.toString());
+		}
 	}
 
 	public List<CatTemplateSummary> templates() {
@@ -114,6 +146,9 @@ public class CatPlaylistGenerator {
 	 */
 	public DrawResponse draw(List<DrawRequest.DrawPoint> points) {
 		long started = System.nanoTime();
+		if (extent(points) < MIN_DRAWING_EXTENT) {
+			throw new CustomException(ArtworkErrorCode.ARTWORK_DRAWING_DEGENERATE);
+		}
 		List<double[]> shape = normalize(points);
 
 		Placement best = match(shape);
@@ -131,6 +166,21 @@ public class CatPlaylistGenerator {
 		log.info("[Artwork] 그림 매칭 points={} score={} quality={} ms={}",
 				points.size(), score, quality, (System.nanoTime() - started) / 1_000_000);
 		return new DrawResponse(score, quality.name(), layout);
+	}
+
+	/** 점들의 bbox 긴 변 (캔버스 비율). */
+	private static double extent(List<DrawRequest.DrawPoint> points) {
+		double minX = 1;
+		double maxX = 0;
+		double minY = 1;
+		double maxY = 0;
+		for (DrawRequest.DrawPoint p : points) {
+			minX = Math.min(minX, p.x());
+			maxX = Math.max(maxX, p.x());
+			minY = Math.min(minY, p.y());
+			maxY = Math.max(maxY, p.y());
+		}
+		return Math.max(maxX - minX, maxY - minY);
 	}
 
 	/** 캔버스 좌표(0~1, y 아래) → 템플릿 좌표계: y 반전, 무게중심 이동, 최대 절댓값 1. */

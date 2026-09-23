@@ -63,6 +63,23 @@ test("흩어진 50명도 전원이 셈어진다", () => {
   assert.equal(counted(e), 50);
 });
 
+/**
+ * 묶여 있던 사람을 따라가기 시작하면 **다음 프레임에 제 표식(우주선)으로 나와야 한다** (S15P21A405-625).
+ * 배율이 같아 지난 배치를 재사용하는 길에서 이게 깨졌다 — 인솔자가 배지 숫자 속에 그대로 남았다.
+ */
+test("묶여 있던 사람이 인솔자가 되면 제 표식으로 올라온다", () => {
+  const e = engine([person("a", 300, 300), person("b", 300, 300), person("c", 300, 300)]);
+  assert.equal(e.visFriends[0].user.email, "a", "처음엔 a 가 대표고 b 는 묶여 있다");
+  // 따라가기 시작 — 인솔자 자리는 비행이 정하므로 테스트가 직접 놓는다
+  e.follow = { leader: e.friends[1] };
+  e.friendPos.set("b", { x: 300, y: 300, heading: 0 });
+  e.updateFriends();
+  const leader = e.visFriends.find((v) => v.user.email === "b");
+  assert.ok(leader, "b 가 제 표식으로 있어야 한다");
+  assert.equal(leader.isLeader, true);
+  assert.equal(counted(e), 3, "아무도 사라지면 안 된다");
+});
+
 test("화면 밖 사람은 여전히 후보가 아니다 — 겹침과 다른 문제라 이 티켓에서 안 건드렸다", () => {
   const e = engine([person("inside", 400, 400), person("outside", -500, 400)]);
   assert.equal(counted(e), 1);

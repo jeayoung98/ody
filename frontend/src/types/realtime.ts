@@ -400,6 +400,18 @@ export interface DismountResponse {
 }
 
 /**
+ * `DELETE /api/realtime/ride/fleet` 응답 — 인솔자가 선단을 해체했다 (S15P21A405-606).
+ * 값은 전부 **내려간 사람들** 이야기다. 인솔자 자신은 움직이지 않는다 — 화면은 인원수만 0 으로.
+ */
+export interface DisbandResponse {
+  /** 내린 사람 수 */
+  riderCount: number;
+  /** 내린 사람들이 남은 곡·레이어 (= 인솔자가 서 있는 곡) */
+  musicId: number;
+  layer: number;
+}
+
+/**
  * `RIDE_TRACK` — 인솔자가 곡을 바꿨다. **새 곡은 처음부터 튼다** (그래서 재생 위치가 없다).
  * `playable` 이 false 면 위치만 옮기고 틀지 않는다.
  */
@@ -457,12 +469,17 @@ export interface RideRiderLeftPayload {
 }
 
 /**
- * `RIDE_ENDED` — 인솔자가 사라져 따라가기가 끝났다. **따라가던 사람에게만** 온다.
+ * `RIDE_ENDED` — 따라가기가 끝났다. **따라가던 사람에게만** 온다.
  * 스스로 내렸을 때와 같은 상태이므로 자리 정보도 하차 응답과 같다.
+ *
+ * `reason` 이 둘이다 (백엔드 `RideEndReason`, S15P21A405-606):
+ * - `CAPTAIN_LEFT` — 인솔자가 사라졌다 (창을 닫았거나 접속 만료). 이제 없는 사람이다
+ * - `CAPTAIN_ENDED` — 인솔자가 **강제 하차(선단 해체)** 를 눌렀다. 인솔자는 같은 곡에 그대로 있다.
+ *   "나갔다" 고 알리면 화면과 어긋나므로 문구를 가른다
  */
 export interface RideEndedPayload {
   captainEmail: string;
-  reason: "CAPTAIN_LEFT";
+  reason: "CAPTAIN_LEFT" | "CAPTAIN_ENDED";
   musicId: number;
   layer: number;
   x: number;

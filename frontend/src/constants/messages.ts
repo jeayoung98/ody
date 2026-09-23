@@ -88,6 +88,21 @@ export const RIDE_REJECTED = {
 
 /** 인솔자가 사라져 따라가기가 끝났다 (§4.3). 조용히 끊으면 왜 멈췄는지 알 수 없다 */
 export const RIDE_ENDED_BY_CAPTAIN = (who: string) => `${who} 님이 떠나 따라가기가 끝났어요`;
+/** 인솔자가 강제 하차(선단 해체)를 눌렀다 (S15P21A405-606). 인솔자는 그 자리에 그대로 있다 — "떠났다" 고 말하면 틀린다 */
+export const RIDE_ENDED_BY_DISBAND = (who: string) => `${who} 님이 따라가기를 끝냈어요. 이 자리에서 이어가요`;
+
+/** 내가 인솔자로서 선단을 해체했다 (S15P21A405-606) */
+export const RIDE_DISBANDED = (count: number) => `${count}명을 내려 드렸어요`;
+
+/**
+ * 해체가 거부됐을 때. `RIDE_NOT_CAPTAIN` 이 여기서는 "따라가는 중" 이 아니라 **"따라오는 사람이 없다"** 는
+ * 뜻이다 (백엔드 `disbandByCaptain`) — 세고 나서 부르는 사이에 전원이 내린 경우라 실패가 아니다.
+ */
+export const RIDE_DISBAND_REJECTED = {
+  RIDE_NOT_CAPTAIN: "지금은 따라오는 사람이 없어요",
+  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  UNKNOWN: "강제 하차에 실패했어요. 잠시 후 다시 시도해 주세요",
+} as const;
 
 /** 재연결·새 탭으로 서버 쪽 탑승이 끊겼다 (§8.3). **자동으로 다시 태우지 않는다** */
 export const RIDE_DROPPED = "따라가기가 끊겼어요. 다시 눌러 주세요";

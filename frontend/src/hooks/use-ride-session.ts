@@ -2,7 +2,7 @@
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { QUERY_KEYS, RIDE_DROPPED, RIDE_ENDED_BY_CAPTAIN } from "@/constants";
+import { QUERY_KEYS, RIDE_DROPPED, RIDE_ENDED_BY_CAPTAIN, RIDE_ENDED_BY_DISBAND } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
@@ -96,7 +96,8 @@ export function useRideSession(): void {
     const stopEnded = onType<RideEndedPayload>(["RIDE_ENDED"], (p) => {
       const who = useFollowStore.getState().leaderNickname ?? p.captainEmail;
       endRide(p);
-      showToast(RIDE_ENDED_BY_CAPTAIN(who));
+      // 인솔자가 강제 하차를 눌렀으면(`CAPTAIN_ENDED`) 그 사람은 그대로 있다 — "떠났다" 고 말하면 틀린다 (S15P21A405-606)
+      showToast(p.reason === "CAPTAIN_ENDED" ? RIDE_ENDED_BY_DISBAND(who) : RIDE_ENDED_BY_CAPTAIN(who));
       // 주변 사람 패널이 떠 있으면 목록도 다시 받는다 — 탑승 동안 서버가 구독을 끊어 뒀다
       refetchNearbyIfOpen();
     });

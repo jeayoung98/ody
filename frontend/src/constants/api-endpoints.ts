@@ -184,6 +184,11 @@ export const API_ENDPOINTS = {
      */
     ride: "/bff/realtime/ride",
     /**
+     * 선단 해체 = **강제 하차** (DELETE, 본문 없음) — 백엔드 `DELETE /api/realtime/ride/fleet`
+     * (S15P21A405-606). 인솔자가 따라오는 사람 전부를 내린다. 따라오는 사람이 없으면 `RIDE_NOT_CAPTAIN`.
+     */
+    rideFleet: "/bff/realtime/ride/fleet",
+    /**
      * 그 겹에서 **재생 중인 사람 전부** (S15P21A405-537, BACKEND-NOTES §5).
      *
      * **화면 범위와 무관하다.** 소켓 `VIEWPORT_SNAPSHOT` 은 보이는 범위만 주고 칸이 많아지면

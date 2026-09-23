@@ -192,7 +192,16 @@ export const usePanelStore = create<PanelState>()(
       },
 
       openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
-      openFeed: (email = null) => set(open("feed", { profileEmail: email }), false, "openFeed"),
+      /**
+       * 주변 사람 패널에서 열었으면 **돌아갈 자리를 기억한다** (S15P21A405-610). 피드 안(팔로워·팔로잉
+       * 목록)에서 다른 사람으로 갈아탈 때는 기억을 그대로 들고 간다. 지도·랭킹에서 열면 없다.
+       */
+      openFeed: (email = null) =>
+        set(
+          (s) => open("feed", { profileEmail: email, back: s.activePanel === "friends" ? { panel: "friends" } : s.activePanel === "feed" ? s.back : null }),
+          false,
+          "openFeed",
+        ),
       openJourney: () => set(open("journey"), false, "openJourney"),
       openFriends: () => set(open("friends"), false, "openFriends"),
       openChart: () => set(open("chart"), false, "openChart"),

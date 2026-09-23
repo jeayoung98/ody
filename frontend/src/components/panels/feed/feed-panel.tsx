@@ -11,6 +11,7 @@ import { ROUTES } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useUserProfileQuery } from "@/hooks/queries/use-user-profile-query";
 import { usePanelStore } from "@/stores/use-panel-store";
+import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import FeedDashboard from "./feed-dashboard";
 import FeedFollowList from "./feed-follow-list";
@@ -42,6 +43,12 @@ interface FeedPanelProps {
 export default function FeedPanel({ self = false }: FeedPanelProps) {
   const storeEmail = usePanelStore((s) => s.profileEmail);
   const openFeed = usePanelStore((s) => s.openFeed);
+  /**
+   * 주변 사람에서 들어왔으면 돌아갈 화살표 (S15P21A405-610). `usePanelBack` 을 바로 쓰지 않고 `back` 을
+   * 먼저 보는 이유는, 그 훅이 여정·플리 진행 중이면 마지막 곡 상세 기준으로도 자리를 찾아내서
+   * 프로필에 엉뚱한 "여정으로" 화살표가 뜨기 때문이다.
+   */
+  const back = usePanelStore((s) => s.back);
   const router = useRouter();
   const profileEmail = self ? null : storeEmail;
   const { data: me } = useMeQuery();
@@ -78,10 +85,12 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
     <Box
       title={follows ? FOLLOW_TITLE[follows] : isMe ? "마이페이지" : "프로필"}
       lead={
-        follows && (
+        follows ? (
           <IconButton label="프로필로 돌아가기" onClick={() => setOpened(null)}>
             <BackIcon />
           </IconButton>
+        ) : (
+          back && !self && <PanelBackButton />
         )
       }
       /* 수정·로그아웃은 내 페이지에서만 (S15P21A405-524). 남의 프로필에 로그아웃이 보이면

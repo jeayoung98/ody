@@ -9,12 +9,14 @@ import org.springframework.stereotype.Controller;
 
 import com.ssafy.backend.realtime.dto.ride.RidePanelRequest;
 import com.ssafy.backend.realtime.dto.ride.RidePlaybackRequest;
+import com.ssafy.backend.realtime.dto.ride.RideViewRequest;
 import com.ssafy.backend.realtime.error.WebSocketErrorCode;
 import com.ssafy.backend.realtime.error.WebSocketErrorService;
 import com.ssafy.backend.realtime.error.WebSocketRequestException;
 import com.ssafy.backend.realtime.message.WebSocketDestination;
 import com.ssafy.backend.realtime.service.ride.RidePanelService;
 import com.ssafy.backend.realtime.service.ride.RidePlaybackService;
+import com.ssafy.backend.realtime.service.ride.RideViewService;
 import com.ssafy.backend.realtime.session.WebSocketSessionService;
 
 import lombok.RequiredArgsConstructor;
@@ -30,6 +32,7 @@ public class RideWebSocketController {
 
 	private final RidePlaybackService ridePlaybackService; // 재생 정보 저장과 발송
 	private final RidePanelService ridePanelService; // 곡 상세 저장과 발송
+	private final RideViewService rideViewService; // 지도 화면 종류 저장과 발송
 	private final WebSocketSessionService webSocketSessionService; // 현재 소켓의 접속 번호 조회
 	private final WebSocketErrorService webSocketErrorService; // 개인 오류 큐로 전송
 
@@ -88,6 +91,35 @@ public class RideWebSocketController {
 			webSocketErrorService.send(email, e.getCode(), e.getMessage());
 		} catch (IllegalArgumentException e) {
 			webSocketErrorService.send(email, WebSocketErrorCode.RIDE_PANEL_INVALID, e.getMessage());
+		}
+	}
+
+	/**
+	 * 인솔자가 지도를 보는 모양(기본·여정·플레이리스트·주변 탐색)을 바꿨을 때 받는다.
+	 *
+	 * @param request 보는 모양과 그에 필요한 번호
+	 * @param principal 로그인한 사용자
+	 * @param sessionId 현재 소켓 세션 ID
+	 */
+	@MessageMapping(WebSocketDestination.APP_RIDE_VIEW)
+	public void view(
+			RideViewRequest request,
+			Principal principal,
+			@Header("simpSessionId") String sessionId) {
+		String email = principal.getName();
+		if (notConnected(email, sessionId)) {
+			return;
+		}
+
+		try {
+			if (request == null) {
+				throw new IllegalArgumentException("지도 화면 요청이 비어 있다");
+			}
+			rideViewService.relay(email, request);
+		} catch (WebSocketRequestException e) {
+			webSocketErrorService.send(email, e.getCode(), e.getMessage());
+		} catch (IllegalArgumentException e) {
+			webSocketErrorService.send(email, WebSocketErrorCode.RIDE_VIEW_INVALID, e.getMessage());
 		}
 	}
 

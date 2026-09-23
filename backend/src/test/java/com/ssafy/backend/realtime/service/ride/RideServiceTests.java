@@ -83,6 +83,7 @@ class RideServiceTests {
 	@Mock RidePlaybackService ridePlaybackService;
 	@Mock RideSubscriptionService rideSubscriptionService;
 	@Mock RideViewportService rideViewportService;
+	@Mock RideViewService rideViewService;
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock MeetingService meetingService;

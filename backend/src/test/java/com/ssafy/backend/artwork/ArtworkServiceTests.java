@@ -3,6 +3,7 @@ package com.ssafy.backend.artwork;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
@@ -18,6 +19,7 @@ import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import com.ssafy.backend.artwork.dto.ArtworkDetailResponse;
@@ -218,7 +220,7 @@ class ArtworkServiceTests {
 	@Test
 	void leaderboard_numbersRanksAcrossPages() {
 		when(artworkMapper.findRoundById(1L)).thenReturn(round());
-		when(artworkMapper.findLeaderboard(eq(1L), any(), eq(20), eq(20)))
+		when(artworkMapper.findLeaderboard(eq(1L), eq(5.0), any(), eq(20), eq(20)))
 				.thenReturn(List.of(summaryRow(7L), summaryRow(8L)));
 		when(artworkMapper.countLeaderboard(1L)).thenReturn(42);
 
@@ -232,12 +234,38 @@ class ArtworkServiceTests {
 	@Test
 	void leaderboard_capsPageSize() {
 		when(artworkMapper.findRoundById(1L)).thenReturn(round());
-		when(artworkMapper.findLeaderboard(anyLong(), any(), anyInt(), anyInt())).thenReturn(List.of());
+		when(artworkMapper.findLeaderboard(anyLong(), anyDouble(), any(), anyInt(), anyInt())).thenReturn(List.of());
 
 		ArtworkLeaderboardResponse response = service.getLeaderboard(1L, null, 0, 1000);
 
 		assertThat(response.size()).isEqualTo(ArtworkService.MAX_PAGE_SIZE);
-		verify(artworkMapper).findLeaderboard(1L, null, 0, ArtworkService.MAX_PAGE_SIZE);
+		verify(artworkMapper).findLeaderboard(1L, 5.0, null, 0, ArtworkService.MAX_PAGE_SIZE);
+	}
+
+
+	/** 순위 점수는 회차 K 로 SQL 이 계산한다 — 서비스는 K 를 넘기고 값을 그대로 싣는다 (S15P21A405-616). */
+	@Test
+	void leaderboard_passesRoundAiWeight_andCarriesRankScore() {
+		ArtworkRoundRow r = round();
+		r.setAiWeight(10);
+		when(artworkMapper.findRoundById(1L)).thenReturn(r);
+		ArtworkSummaryRow first = summaryRow(7L);
+		first.setRankScore(14.0);
+		ArtworkSummaryRow second = summaryRow(8L);
+		second.setRankScore(9.0);
+		when(artworkMapper.findLeaderboard(eq(1L), eq(10.0), any(), eq(0), eq(20))).thenReturn(List.of(first, second));
+
+		ArtworkLeaderboardResponse response = service.getLeaderboard(1L, null, 0, 20);
+
+		assertThat(response.items()).extracting("rankScore").containsExactly(14.0, 9.0);
+		assertThat(response.items()).extracting("rank").containsExactly(1, 2);
+	}
+
+	@Test
+	void mine_hasNoRankScore() {
+		when(artworkMapper.findMine(OWNER)).thenReturn(List.of(summaryRow(7L)));
+
+		assertThat(service.findMine(OWNER)).extracting("rankScore").containsOnlyNulls();
 	}
 
 	// ---------------- 좋아요 ----------------
@@ -246,6 +274,8 @@ class ArtworkServiceTests {
 	@Test
 	void like_doesNotChangeCountWhenAlreadyLiked() {
 		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(artworkMapper.existsLike(5L, OTHER)).thenReturn(true);
 		when(artworkMapper.insertLike(5L, OTHER)).thenReturn(0);
 		when(artworkMapper.findLikeCnt(5L)).thenReturn(3);
 
@@ -257,6 +287,7 @@ class ArtworkServiceTests {
 	@Test
 	void like_incrementsOnceWhenNewlyLiked() {
 		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+		when(artworkMapper.findOpenRound()).thenReturn(round());
 		when(artworkMapper.insertLike(5L, OTHER)).thenReturn(1);
 		when(artworkMapper.findLikeCnt(5L)).thenReturn(4);
 
@@ -273,6 +304,103 @@ class ArtworkServiceTests {
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
 				.isEqualTo(ArtworkErrorCode.ARTWORK_NOT_FOUND);
+	}
+
+
+	// ---------------- 회차당 좋아요 한도 (S15P21A405-616) ----------------
+
+	private void openRoundWithVotesUsed(int used) {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(artworkMapper.countVotesInRound(OTHER, 1L)).thenReturn(used);
+	}
+
+	@Test
+	void like_rejectsFourthVoteInRound() {
+		openRoundWithVotesUsed(3);
+
+		assertThatThrownBy(() -> service.changeLike(new ArtworkLikeRequest(5L, true), OTHER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_VOTE_LIMIT);
+		verify(artworkMapper, never()).insertLike(anyLong(), anyString());
+	}
+
+	@Test
+	void like_allowedWhileUnderLimit_locksBeforeCounting() {
+		openRoundWithVotesUsed(2);
+		when(artworkMapper.insertLike(5L, OTHER)).thenReturn(1);
+
+		service.changeLike(new ArtworkLikeRequest(5L, true), OTHER);
+
+		InOrder order = Mockito.inOrder(artworkMapper);
+		order.verify(artworkMapper).lockVotes(OTHER, 1L);
+		order.verify(artworkMapper).countVotesInRound(OTHER, 1L);
+		order.verify(artworkMapper).insertLike(5L, OTHER);
+	}
+
+	/** 거두기는 한도와 무관하다 — 표를 돌려받는 동작이다. */
+	@Test
+	void unlike_skipsLimitAndLock() {
+		openRoundWithVotesUsed(3);
+		when(artworkMapper.deleteLike(5L, OTHER)).thenReturn(1);
+
+		service.changeLike(new ArtworkLikeRequest(5L, false), OTHER);
+
+		verify(artworkMapper).addLikeCnt(5L, -1);
+		verify(artworkMapper, never()).lockVotes(anyString(), anyLong());
+		verify(artworkMapper, never()).countVotesInRound(anyString(), anyLong());
+	}
+
+	/** 이미 누른 작품에 다시 true — 표를 더 쓰지 않으므로 한도에 걸리지 않는다(멱등). */
+	@Test
+	void like_repeatOnAlreadyLiked_skipsLimit() {
+		openRoundWithVotesUsed(3);
+		when(artworkMapper.existsLike(5L, OTHER)).thenReturn(true);
+
+		service.changeLike(new ArtworkLikeRequest(5L, true), OTHER);
+
+		verify(artworkMapper, never()).lockVotes(anyString(), anyLong());
+	}
+
+	@Test
+	void like_rejectsOwnArtwork() {
+		when(artworkMapper.findById(5L)).thenReturn(artwork(5L, ArtworkStatus.SCORED, OWNER));
+
+		assertThatThrownBy(() -> service.changeLike(new ArtworkLikeRequest(5L, true), OWNER))
+				.isInstanceOf(CustomException.class)
+				.extracting(e -> ((CustomException) e).getErrorCode())
+				.isEqualTo(ArtworkErrorCode.ARTWORK_VOTE_SELF);
+	}
+
+	/** 끝난 회차 순위가 흔들리지 않게 누르기·거두기 모두 막는다. */
+	@Test
+	void like_rejectsArtworkOfClosedRound_bothDirections() {
+		ArtworkRow old = artwork(5L, ArtworkStatus.SCORED, OWNER);
+		old.setRoundId(99L);
+		when(artworkMapper.findById(5L)).thenReturn(old);
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+
+		for (boolean liked : new boolean[] {true, false}) {
+			assertThatThrownBy(() -> service.changeLike(new ArtworkLikeRequest(5L, liked), OTHER))
+					.isInstanceOf(CustomException.class)
+					.extracting(e -> ((CustomException) e).getErrorCode())
+					.isEqualTo(ArtworkErrorCode.ARTWORK_ROUND_CLOSED);
+		}
+		verify(artworkMapper, never()).insertLike(anyLong(), anyString());
+		verify(artworkMapper, never()).deleteLike(anyLong(), anyString());
+	}
+
+	@Test
+	void currentRound_votesLeft_forLoggedInOnly_neverNegative() {
+		when(artworkMapper.findOpenRound()).thenReturn(round());
+		when(artworkMapper.countVotesInRound(OTHER, 1L)).thenReturn(1);
+		when(artworkMapper.countVotesInRound(OWNER, 1L)).thenReturn(4);   // 배포 전 초과분
+
+		assertThat(service.findOpenRound(OTHER).orElseThrow().myVotesLeft()).isEqualTo(2);
+		assertThat(service.findOpenRound(OWNER).orElseThrow().myVotesLeft()).isZero();
+		assertThat(service.findOpenRound(null).orElseThrow().myVotesLeft()).isNull();
+		assertThat(service.findOpenRound(null).orElseThrow().voteLimit()).isEqualTo(3);
 	}
 
 	// ---------------- 재평가 · 삭제 ----------------
@@ -347,6 +475,8 @@ class ArtworkServiceTests {
 		row.setThemePrompt("고양이를 얼마나 닮았는지 채점하라.");
 		row.setStartsAt(OffsetDateTime.now().minusDays(1));
 		row.setEndsAt(OffsetDateTime.now().plusDays(6));
+		row.setVoteLimit(3);
+		row.setAiWeight(5);
 		return row;
 	}
 

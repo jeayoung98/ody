@@ -61,7 +61,7 @@
 **Goal**: 백엔드 변경 없음. 계약을 넘기고 FE 가 구현한다.
 
 - [x] T016 [US3] `docs/rules/BACKEND-NOTES.md` 에 `### 6-8. 그린 별자리 매칭 (S15P21A405-598)` 절 추가: 엔드포인트·요청/응답·에러 표를 `specs/010-drawn-constellation-playlist/contracts/draw-match.md` 에서 요약, 저장은 기존 `/playlist/create` 에 `points` 순서 그대로, LOW = 경고+저장 허용, FE 요청 타임아웃 10 s, `types/api.ts` 에 `ARTWORK_DRAWING_DEGENERATE` 추가 필요
-- [ ] T017 [US2] 노션 「결정 통보 · 물음」에 FE 요청 1건(🔴 물음, 담당 FE — 담당자는 사용자에게 확인): 캔버스 그리기 화면 US1~4(점 추가·자동 연결·`n / 20`·최소 3 전 비활성·최대 20 제한·마지막 점 취소·전체 초기화·결과 무효화 FR-022·비교 화면·미리 듣기·저장), 근거 BACKEND-NOTES 6-8. 올린 뒤 fetch 로 되읽어 한글·자동 링크 확인
+- [x] T017 [US2] 노션 「결정 통보 · 물음」에 FE 요청 1건(🔴 물음, 담당 정유진 · FE Service — 2026-09-23 등록): 캔버스 그리기 화면 US1~4(점 추가·자동 연결·`n / 20`·최소 3 전 비활성·최대 20 제한·마지막 점 취소·전체 초기화·결과 무효화 FR-022·비교 화면·미리 듣기·저장), 근거 BACKEND-NOTES 6-8. 올린 뒤 fetch 로 되읽어 한글·자동 링크 확인
 
 ## Phase 6: Polish & Cross-Cutting
 

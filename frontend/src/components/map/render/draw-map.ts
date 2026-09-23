@@ -946,7 +946,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
-    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang, e.time, e.myRiders, 0);
+    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang);
     drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
     g.globalCompositeOperation = "source-over";
   } else {

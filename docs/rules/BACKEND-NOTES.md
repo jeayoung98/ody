@@ -243,7 +243,7 @@ A-23의 과거 “BE 머지 전” 기록은 현재 상태가 아니다. 2026-09
 | S-1 | 따라가기 동기화 — 인솔자의 동작을 **세 종류 이벤트로 따로** 보내야 한다 (SOCIAL-07): ① `leader:view` = 곡 클릭(`viewingMusicId`) ② `leader:play` = 재생 시작(`playingMusicId`) ③ `leader:layer` = 레이어 전환(`layer`) | 뷰는 ①에서 먼저 움직이고, 우주선은 ②가 와야 출발한다. 두 개를 한 이벤트로 합쳐 보내면 이 연출이 불가능하다 | 협의 전 |
 | S-2 | 따라가기 자동 종료: 인솔자 접속 종료·비공개 전환 시 (SOCIAL-10-1) | 서버가 알려줘야 한다 | 협의 전 |
 | S-3 | 접속 상태·현재 탐색 좌표 실시간 관리 (USER-03) | 주변 사람 목록의 실시간성 | 협의 전 |
-| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 협의 전 |
+| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | **연동됨 (2026-09-23, S15P21A405-607).** 전송 `POST /api/realtime/reactions` `{toEmail, reactionKey}` → 프론트 `/bff/realtime/reactions`. 수신 개인 큐 `REACTION` `{fromEmail, reactionKey, sentAt}`. 거부 `REACTION_SELF`(400)·`REACTION_NOT_NEARBY`(409)·`REACTION_COOLDOWN`(429)·`PRESENCE_ERROR`(422). **프론트는 주변 사람 패널 전원에게 펼쳐 보낸다** — 명세는 "내 위로 떠서 주변에 보이는" 방송이라 1:1 이 아니다. 백엔드에 "같은 층 전원" 방송 API(toEmail 없는 형태)를 요청할지 협의 필요. 이모지 키는 `rocket fire heart poop pray` 5개(프론트 소유, 서버는 형식만 검사) |
 | S-5 | 따라가는 인원 수 (SOCIAL-11), 만난 횟수 카운팅 (SOCIAL-05) | 서버 집계 필요 | 협의 전 |
 
 

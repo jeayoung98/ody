@@ -53,7 +53,14 @@ export type ImplementedErrorCode =
    * 없는 경우다. **화면을 새로 고치면 풀린다.** 접속 자체가 없는 경우는 여기 오지 않고
    * `PRESENCE_ERROR` 로 따로 나온다 — 둘은 사용자가 할 일이 다르다.
    */
-  | "RIDE_STALE";
+  | "RIDE_STALE"
+  // 반응하기 (S15P21A405-607, backend RealtimeErrorCode)
+  /** 400 — 자기 자신에게 보냈다 */
+  | "REACTION_SELF"
+  /** 409 — 상대가 내 층에 없다. 접속이 없거나 다른 층이다 */
+  | "REACTION_NOT_NEARBY"
+  /** 429 — 같은 사람에게 너무 빨리 다시 보냈다 (SOCIAL-04) */
+  | "REACTION_COOLDOWN";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =

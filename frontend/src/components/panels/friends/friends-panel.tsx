@@ -119,7 +119,7 @@ export default function FriendsPanel() {
       {/* 반응은 패널 **오른쪽 아래**다 (S15P21A405-496). 목록 위에 있으면 목록을 읽기 전에
           먼저 걸리는데, 반응은 보고 나서 하는 일이다 */}
       <div className="mt-1 flex justify-end">
-        <ReactionButton />
+        <ReactionButton people={people} />
       </div>
     </Box>
   );

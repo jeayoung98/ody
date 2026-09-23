@@ -155,13 +155,12 @@ export function backendGet<T>(path: string, init?: RequestInit): Promise<T> {
  * 로컬 `http://localhost:3000` 이 정확히 그 경우다 (S15P21A405-303).
  * 여기서 부르면 Next 서버가 새로 띄우는 요청이라 `Origin` 이 없어 통과한다.
  */
-export function backendPost<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
-  return backendFetch<T>(path, {
-    ...init,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    body: JSON.stringify(body),
-  });
+export function backendPost<T>(path: string, body: unknown, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
+  return backendFetch<T>(
+    path,
+    { ...init, method: "POST", headers: { "Content-Type": "application/json", ...init?.headers }, body: JSON.stringify(body) },
+    opts,
+  );
 }
 
 /**

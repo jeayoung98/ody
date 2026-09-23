@@ -268,7 +268,9 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
 
   g.textAlign = "center";
   g.textBaseline = "middle";
-  for (const fr of e.visFriends) {
+  // 인솔자는 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는 우주선이 가려지지 않는다 (S15P21A405-625)
+  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader));
+  for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;

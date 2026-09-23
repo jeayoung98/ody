@@ -13,5 +13,8 @@ export const REACTIONS = [
 ] as const;
 export type ReactionKey = (typeof REACTIONS)[number]["key"];
 
+/** 키 → 이모지. 서버를 거쳐 온 모르는 키는 ✨ 로 그린다 */
+export const emojiOf = (key: string) => REACTIONS.find((r) => r.key === key)?.emoji ?? "✨";
+
 /** 화면에 반응이 떠 있는 시간(ms) */
 export const REACTION_VISIBLE_MS = 2_000;

@@ -66,8 +66,13 @@ public class VideoIdEnricher {
 				String id = videoId.get();
 				if (VideoIds.UNPLAYABLE.equals(id)) {
 					outcome = "unplayable";
-					writerPort.markUnplayable(musicId);
-					log.info("[VideoId] 재생 불가 확정 musicId={}", musicId);
+					if (writerPort.markUnplayable(musicId)) {
+						log.info("[VideoId] 재생 불가 확정 musicId={}", musicId);
+					} else {
+						// 동시에 들어온 다른 요청이 videoId 를 찾아 저장했다(S15P21A405-568).
+						// 이 응답 한 번은 재생 불가로 나가지만 다음 조회는 저장된 값을 읽는다.
+						log.info("[VideoId] 재생 불가 확정 건너뜀 — videoId 가 이미 저장됨 musicId={}", musicId);
+					}
 				} else {
 					outcome = "found";
 					writerPort.save(musicId, id);

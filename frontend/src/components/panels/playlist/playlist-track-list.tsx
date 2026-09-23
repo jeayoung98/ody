@@ -11,7 +11,7 @@ import { moveItem, useReorderPlaylistItemsMutation } from "@/hooks/mutations/use
 import { rememberMusicHints } from "@/lib/music-hints";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
-import { useStartActivity } from "@/hooks/use-start-activity";
+import { usePlayPlaylist } from "@/hooks/use-play-playlist";
 import type { PlaylistDetail } from "@/types";
 import PlaylistSortableRow from "./playlist-sortable-row";
 
@@ -30,11 +30,10 @@ interface PlaylistTrackListProps {
  */
 export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackListProps) {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
-  const playQueue = usePlayerStore((s) => s.playQueue);
   const openSong = usePanelStore((s) => s.openSongFromList);
   const remove = useRemovePlaylistItemMutation();
   const reorder = useReorderPlaylistItemsMutation();
-  const startActivity = useStartActivity();
+  const playPlaylist = usePlayPlaylist(playlist);
 
   const ids = playlist.items.map((it) => it.musicId);
 
@@ -71,7 +70,8 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
   const playFrom = (index: number) => {
     // 목록이 이미 들고 있는 제목·아티스트다 — 큐 전체를 넘겨 재생바가 기다리지 않게 한다 (S15P21A405-585)
     rememberMusicHints(playlist.items.map((it) => it.music));
-    startActivity("playlist", String(playlist.id), () => playQueue({ kind: "playlist", playlistId: playlist.id }, ids, index));
+    // 별자리 뷰도 함께 켠다 (S15P21A405-613) — 머리글의 `순차 재생` 과 시작 위치만 다른 한 동작이다
+    playPlaylist(index);
   };
 
   return (

@@ -82,16 +82,16 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         </div>
         {/* 좋아요 (S15P21A405-611). 못 트는 곡도 누를 수 있다 — 좋아하는 것과 들을 수 있는 것은 다른 일이다 */}
         <TransportButton label={music.liked ? "좋아요 취소" : "좋아요"} size="md" bright onClick={() => like.mutate({ musicId: music.id, liked: !music.liked })}>
-          <HeartIcon size={17} filled={music.liked} className={music.liked ? "text-rose-400" : undefined} />
+          <HeartIcon size={18} filled={music.liked} className={music.liked ? "text-rose-400" : undefined} />
         </TransportButton>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
         {features.playlist && (
           <TransportButton label={dead ? "재생할 수 없는 곡은 담을 수 없어요" : "플레이리스트에 추가"} size="md" bright disabled={dead} onClick={toggleMenu}>
-            <PlaylistAddIcon size={17} />
+            <PlaylistAddIcon size={18} />
           </TransportButton>
         )}
         <TransportButton label={dead ? "재생할 수 없는 곡이에요" : isThisPlaying ? "정지" : "재생"} primary disabled={dead} dimmed={!dead && !!blocked} onClick={toggle}>
-          {isThisPlaying ? <PauseIcon size={17} /> : <PlayIcon size={17} />}
+          {isThisPlaying ? <PauseIcon size={18} /> : <PlayIcon size={18} />}
         </TransportButton>
       </div>
       {/*

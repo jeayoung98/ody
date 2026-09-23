@@ -73,7 +73,7 @@ export default function ViewModeCrumb() {
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-1">
       <span
-        className={`glass group inline-flex items-center gap-1.5 rounded-pill! px-2.5 py-[5px] text-[11.5px] transition-colors duration-fast ${tone} ${
+        className={`glass group inline-flex items-center gap-1.5 rounded-pill! px-2.5 py-[5px] text-[12.5px] transition-colors duration-fast ${tone} ${
           press ? "cursor-pointer hover:border-line-2 hover:text-ink" : ""
         }`}
         onClick={press ?? undefined}

@@ -23,11 +23,11 @@ export default function InfoHint({ label, children }: { label: string; children:
         onBlur={() => setPinned(false)}
         className={`grid h-[18px] w-[18px] place-items-center rounded-pill transition-colors duration-fast ${pinned ? "text-teal" : "text-ink-4 hover:text-ink-2"}`}
       >
-        <InfoIcon size={14} />
+        <InfoIcon size={16} />
       </button>
       <span
         role="tooltip"
-        className={`glass pointer-events-none absolute top-full left-1/2 z-30 mt-1.5 w-[230px] -translate-x-1/2 rounded-box-sm! px-3 py-2 text-[11.5px] leading-[1.55] font-normal text-ink-2 transition-opacity duration-fast ${
+        className={`glass pointer-events-none absolute top-full left-1/2 z-30 mt-1.5 w-[230px] -translate-x-1/2 rounded-box-sm! px-3 py-2 text-[12.5px] leading-[1.55] font-normal text-ink-2 transition-opacity duration-fast ${
           pinned ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
       >

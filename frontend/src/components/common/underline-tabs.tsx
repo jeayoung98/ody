@@ -38,7 +38,7 @@ export default function UnderlineTabs<T extends string>({ items, value, onChange
           data-key={item.key}
           aria-selected={value === item.key}
           onClick={() => onChange(item.key)}
-          className={`flex-1 px-3 py-2 text-center text-[13px] transition-colors duration-fast ${value === item.key ? "font-medium text-ink" : "text-ink-3 hover:text-ink-2"}`}
+          className={`flex-1 px-3 py-2 text-center text-[14px] transition-colors duration-fast ${value === item.key ? "font-medium text-ink" : "text-ink-3 hover:text-ink-2"}`}
         >
           {item.label}
         </button>

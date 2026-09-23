@@ -53,7 +53,7 @@ export default function MapActions() {
       <NearbyExploreButton />
       {panelEnabled.journey && (
         <RailButton label="여정" active={composerOpen} onClick={pressJourney} data-tutorial="journey">
-          <JourneyIcon size={16} />
+          <JourneyIcon size={17} />
         </RailButton>
       )}
       {/*

@@ -15,7 +15,7 @@ export default function AxisCompass() {
   const ax = LAYER_AXES[layer];
   const faintX = !ax.x[0];
   const faintY = !ax.y[0];
-  const cl = "absolute text-[9.5px] leading-[1.3] text-ink-2 [&_b]:font-medium [&_b]:text-ink";
+  const cl = "absolute text-[11px] leading-[1.3] text-ink-2 [&_b]:font-medium [&_b]:text-ink";
   return (
     <div className="relative mt-px h-[106px] rounded-[13px] border border-white/[.055] bg-gradient-to-b from-white/[.02] to-transparent">
       <span className="absolute top-1/2 right-[10%] left-[10%] h-px bg-white/[.11]" />
@@ -23,7 +23,7 @@ export default function AxisCompass() {
       <span className="absolute top-1/2 left-1/2 h-1.5 w-1.5 -translate-x-1/2 -translate-y-1/2 rounded-pill bg-teal shadow-[0_0_12px_#4fe3ce]" />
       {/* 라벨이 없는 축은 "이 방향은 설명이 안 된다"를 가운데에 적는다 */}
       {(faintX || faintY) && (
-        <span className="absolute bottom-[26px] left-1/2 -translate-x-1/2 text-[8.5px] text-ink-4">
+        <span className="absolute bottom-[26px] left-1/2 -translate-x-1/2 text-[10px] text-ink-4">
           {faintX && faintY ? "두 축 모두" : faintX ? "가로" : "세로"} 미세한 차이
         </span>
       )}

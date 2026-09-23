@@ -104,7 +104,7 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
                           playFrom(i);
                         }}
                       >
-                        <PlayIcon size={13} />
+                        <PlayIcon size={15} />
                       </IconButton>
                       {editable && (
                         <IconButton
@@ -116,7 +116,7 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
                             remove.mutate({ playlistId: playlist.id, musicId: it.musicId });
                           }}
                         >
-                          <CloseIcon size={13} />
+                          <CloseIcon size={15} />
                         </IconButton>
                       )}
                     </>

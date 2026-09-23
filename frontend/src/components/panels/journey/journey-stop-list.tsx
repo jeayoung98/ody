@@ -63,7 +63,7 @@ export default function JourneyStopList({ route }: { route: JourneyRoute | null 
                     playFrom(s.order);
                   }}
                 >
-                  <PlayIcon size={13} />
+                  <PlayIcon size={15} />
                 </IconButton>
               </span>
             }

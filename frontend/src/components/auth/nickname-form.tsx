@@ -29,12 +29,12 @@ export default function NicknameForm() {
     <form onSubmit={submit} noValidate>
       <NicknameCheckField value={value} onChange={setValue} onStatus={useCallback((v: boolean) => setOk(v), [])} />
 
-      {save.isError && <p className="mt-3 text-[11.5px] text-bad">{(save.error as ApiError).message}</p>}
+      {save.isError && <p className="mt-3 text-[12.5px] text-bad">{(save.error as ApiError).message}</p>}
 
       <button
         type="submit"
         disabled={save.isPending || !ok}
-        className="grad-bg mt-5 w-full rounded-pill py-3 text-[13.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
+        className="grad-bg mt-5 w-full rounded-pill py-3 text-[14.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
       >
         {save.isPending ? "저장 중…" : "이 닉네임으로 시작하기"}
       </button>

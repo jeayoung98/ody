@@ -57,7 +57,7 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
           경로 지우기
         </Button>
         <Button size="sm" variant="primary" onClick={handlePlay}>
-          <PlayIcon size={12} /> 순차 재생
+          <PlayIcon size={14} /> 순차 재생
         </Button>
       </div>
     </div>

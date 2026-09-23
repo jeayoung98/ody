@@ -207,7 +207,8 @@
 
 @utility lbl {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  /* 9.5px 이었다 (S15P21A405-631). `--text-2xs` 와 같은 값이다 — 대문자 자간 넓은 라벨이라 더 작게 읽혔다 */
+  font-size: 11px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-ink-3);

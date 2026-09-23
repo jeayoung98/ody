@@ -14,7 +14,7 @@ export default function LayerSummary() {
 
   return (
     <p // 들여쓰기는 자취 첫 칸의 좌우 여백(px-2)에 맞춘다 — 글머리가 어긋나면 딴 덩어리로 보인다
-      className="max-w-[min(34vw,420px)] pl-2 text-[11px] leading-[1.4] text-ink-3">
+      className="max-w-[min(34vw,420px)] pl-2 text-[12px] leading-[1.4] text-ink-3">
       {LAYER_SUMMARIES[layer]}
     </p>
   );

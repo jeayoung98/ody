@@ -49,7 +49,7 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
       nickname={person.nickname ?? "이름 없음"}
       imageUrl={person.imageUrl}
       onClick={() => {
-        openFeed(person.email);
+        openFeed(person.email, { panel: "friends" });
         backToMap();
       }}
       right={

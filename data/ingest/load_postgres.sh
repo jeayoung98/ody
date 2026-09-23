@@ -51,6 +51,42 @@ L2_INDEX="${MUSIC_TABLE}_l2_gist"
 run_sql() { docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB -q -c \"$1\""; }
 psql_value() { docker exec -i "$CONTAINER" bash -lc "psql -tA -U \$POSTGRES_USER -d \$POSTGRES_DB -c \"$1\"" | tr -d '\r'; }
 
+# 신곡 증분(S15P21A405-600) — ODY_APPEND=1. 기존 행·id·인덱스를 건드리지 않고 music.csv 의 새 곡만 더한다.
+#   - 이미 있는 mbid 는 건너뛴다. 같은 CSV 를 두 번 넣어도 행이 늘지 않는다.
+#   - 새로 들어갈 행의 id 가 전부 현재 MAX(id) 보다 커야 한다. 아니면 S7 을 --id-start MAX(id)+1 로 다시 돌린다.
+#     그 사이 BE 나 add_song.py 가 곡을 넣었으면 여기서 걸린다(잠금 안에서 검사한다).
+#   - HNSW·GiST 는 INSERT 가 갱신한다. 재빌드하지 않는다. genre·music_genre·map_sample 은 범위 밖이다.
+if [ "${ODY_APPEND:-0}" = "1" ]; then
+  echo "== A. 증분 적재 — $MUSIC_TABLE 에 새 곡만 INSERT"
+  docker cp "$CSV_DIR/music.csv" "$CONTAINER:/tmp/music.csv"
+  APPEND_SQL="/tmp/append_$(date +%s).sql"   # 이전 실행 파일과 소유자가 다르면 덮어쓰기가 막힌다. 매번 새 이름.
+  docker exec -i "$CONTAINER" bash -lc "cat > $APPEND_SQL" <<SQL
+\timing on
+BEGIN;
+LOCK TABLE $MUSIC_TABLE IN SHARE ROW EXCLUSIVE MODE;
+CREATE TEMP TABLE music_stage (LIKE $MUSIC_TABLE INCLUDING DEFAULTS) ON COMMIT DROP;
+COPY music_stage (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid)
+  FROM '/tmp/music.csv' WITH (FORMAT csv, HEADER true, FORCE_NOT_NULL (title));
+DELETE FROM music_stage s USING $MUSIC_TABLE m WHERE m.mbid = s.mbid;
+DO \$\$ DECLARE lo bigint; hi bigint; n bigint; BEGIN
+  SELECT min(id), count(*) INTO lo, n FROM music_stage;
+  SELECT coalesce(max(id), 0) INTO hi FROM $MUSIC_TABLE;
+  RAISE NOTICE 'new rows %, stage min id %, table max id %', n, lo, hi;
+  IF n > 0 AND lo <= hi THEN
+    RAISE EXCEPTION 'stage min id % <= $MUSIC_TABLE max id %. S7 을 --id-start % 로 다시 돌린다', lo, hi, hi + 1;
+  END IF;
+END \$\$;
+INSERT INTO $MUSIC_TABLE (id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid)
+  SELECT id, mbid, title, artist, release_year, bpm, duration, album, youtube_url, location, play_cnt, youtube_cnt, album_mbid
+  FROM music_stage;
+COMMIT;
+SQL
+  docker exec -i "$CONTAINER" bash -lc "psql -v ON_ERROR_STOP=1 -U \$POSTGRES_USER -d \$POSTGRES_DB -f $APPEND_SQL"
+  run_sql "SELECT count(*) AS rows, max(id) AS id_max FROM $MUSIC_TABLE;"
+  echo "완료. 지도 대표곡(map_sample)에는 build_map_layer.sql 을 다시 돌리기 전까지 나오지 않는다."
+  exit 0
+fi
+
 echo "== 0. 적재 전 상태 ($MUSIC_TABLE · $GENRE_TABLE · $LINK_TABLE)"
 run_sql "SELECT '$MUSIC_TABLE' AS t, count(*) FROM $MUSIC_TABLE UNION ALL SELECT '$GENRE_TABLE', count(*) FROM $GENRE_TABLE UNION ALL SELECT '$LINK_TABLE', count(*) FROM $LINK_TABLE;"
 

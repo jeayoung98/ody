@@ -529,13 +529,23 @@ def loudness_quantile(df, rules):
     return float(clean.selectExpr("percentile(loudness, {}) AS q".format(pct)).first()["q"])
 
 
-def run(spark, input_path, output_path, expect_excluded=None):
+def run(spark, input_path, output_path, expect_excluded=None, coords_path=None, quantile_base=None):
+    """coords_path·quantile_base 는 신곡 증분용이다(S15P21A405-600).
+
+    coords_path   : 입력에 좌표가 없을 때 S3 산출(mbid + pc1..pc16)과 조인한다.
+    quantile_base : R8·R15 분위를 이 표(전곡 catalog_input)에서 잰다. 신곡 몇 곡의 분포로 재면
+                    임계가 무의미해진다. R5·R6 묶음은 입력 안에서만 접힌다 — 기존 곡과의 중복은 보지 않는다.
+    """
     from pyspark.sql import functions as F
     rules, digest = load_rules()
     df = spark.read.parquet(input_path)
-    loud_q = loudness_quantile(df, rules)
-    hard_q = hard_loudness_quantile(df, rules)
-    quantiles = feature_quantiles(df, rules)
+    if coords_path:
+        coords = spark.read.parquet(coords_path).select(F.lower(F.col("mbid")).alias("mbid"), *PC)
+        df = df.join(coords, "mbid", "inner")
+    base = spark.read.parquet(quantile_base) if quantile_base else df
+    loud_q = loudness_quantile(base, rules)
+    hard_q = hard_loudness_quantile(base, rules)
+    quantiles = feature_quantiles(base, rules)
     catalog = apply_rules(df, rules, loud_q, quantiles, hard_q).withColumn("rules_hash", F.lit(digest))
     catalog.write.mode("overwrite").parquet(output_path)
     written = spark.read.parquet(output_path)
@@ -545,6 +555,7 @@ def run(spark, input_path, output_path, expect_excluded=None):
               "rows": total, "excluded": excluded, "kept": total - excluded,
               "rules_hash": digest, "r8_loudness_quantile": loud_q,
               "r8_hard_quantile": hard_q, "r15_quantiles": quantiles,
+              "coords_path": coords_path, "quantile_base": quantile_base,
               "dup_group_id": "xxhash64(묶음 키). 원본 factorize 코드와 값은 다르고 분할은 같다"}
     if expect_excluded:
         report["expected_excluded"] = int(expect_excluded)
@@ -557,12 +568,15 @@ def main():
     ap.add_argument("--in", dest="input_path", required=True, help="S1·S3·S4 조인 결과 (hdfs:///...)")
     ap.add_argument("--out", dest="output_path", required=True)
     ap.add_argument("--expect-excluded", type=int, default=0, help="기대 제외 수. 0 이면 검사하지 않는다")
+    ap.add_argument("--coords", help="신곡 증분: 입력에 좌표가 없으면 S3 산출과 조인한다")
+    ap.add_argument("--quantile-base", help="신곡 증분: R8·R15 분위를 잴 전곡 catalog_input")
     args = ap.parse_args()
 
     from pyspark.sql import SparkSession
     spark = SparkSession.builder.appName("ody-catalog-rules").getOrCreate()
     try:
-        report = run(spark, args.input_path, args.output_path, args.expect_excluded or None)
+        report = run(spark, args.input_path, args.output_path, args.expect_excluded or None,
+                     args.coords, args.quantile_base)
         print(json.dumps(report, ensure_ascii=False))
         if report.get("excluded_match") is False:
             raise SystemExit("제외 수 불일치: {} != {}".format(report["excluded"], report["expected_excluded"]))

@@ -22,6 +22,10 @@
 `row_number()` 는 전역 정렬을 한 파티션에 모은다. 469만 행이면 executor 하나가 다 짊어진다.
 대신 `sortBy(mbid)` 뒤 `zipWithIndex()` 를 쓴다 — 분산된 채로 같은 번호가 나온다.
 
+신곡 증분(S15P21A405-600)은 `--id-start` 로 번호를 이어 붙인다 — 기존 곡 id 는 그대로다. 번호는 새 곡
+안에서 mbid 오름차순으로 `id_start..id_start+n-1` 이다. 전곡을 다시 매기면 `playlist_item`·`play_history`
+등 music.id 참조가 전부 다른 곡을 가리키게 된다.
+
 ## 헤더는 붙이지 않는다
 파트 파일마다 헤더가 들어가면 `COPY` 가 그 줄을 데이터로 읽는다. 헤더는 `run_db_load.sh` 가
 `getmerge` 뒤에 한 번 붙이고, `COPY` 는 `HEADER true` 로 읽는다.
@@ -110,7 +114,7 @@ def build(spark, args):
     else:
         joined = joined.withColumn("gnr", F.lit(None).cast("string"))
 
-    # id = mbid 오름차순 1..N. zipWithIndex 는 파티션 순서를 지키므로 정렬 뒤에 부른다.
+    # id = mbid 오름차순 id_start..(전곡은 1..N). zipWithIndex 는 파티션 순서를 지키므로 정렬 뒤에 부른다.
     ordered = joined.orderBy("mbid").rdd.zipWithIndex()
     ordered.persist()
 
@@ -118,9 +122,11 @@ def build(spark, args):
     codes = sorted(set(ordered.flatMap(lambda pair: split_genres(pair[0]["gnr"])).distinct().collect()))
     genre_ids = {code: index + 1 for index, code in enumerate(codes)}
 
+    id_start = args.id_start
+
     def emit(pair):
         row, index = pair
-        song_id = index + 1
+        song_id = id_start + index
         music, neo4j, song_codes = music_csv_line(song_id, row, genre_ids)
         return song_id, music, neo4j, song_codes
 
@@ -142,7 +148,7 @@ def build(spark, args):
         [csv_line([genre_ids[code], code]) for code in codes], 1)
     genre_rdd.saveAsTextFile(os.path.join(args.out, "genre"))
 
-    report = {"stage": "S7", "out": args.out,
+    report = {"stage": "S7", "out": args.out, "id_start": id_start,
               "music_rows": emitted.count(), "genre_rows": len(codes),
               "music_genre_rows": links.count(),
               "headers": {"music": csv_line(MUSIC_COLUMNS), "genre": csv_line(GENRE_COLUMNS),
@@ -161,6 +167,8 @@ def main():
     parser.add_argument("--song-meta", dest="song_meta", help="v2_song_meta. 장르 코드(gnr)")
     parser.add_argument("--out", required=True, help="hdfs:///ody/data/ingest_csv")
     parser.add_argument("--expect-rows", type=int, help="music 행 수. 다르면 실패시킨다")
+    parser.add_argument("--id-start", type=int, default=1,
+                        help="첫 곡 id. 전곡은 1. 신곡 증분은 운영 music 의 MAX(id)+1")
     parser.add_argument("--report", help="실행 증거 json 경로(로컬)")
     args = parser.parse_args()
 

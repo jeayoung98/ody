@@ -148,6 +148,20 @@ S4 는 깊이 한 단계마다 같은 노드의 행을 모아 계산한다. S5 �
 
 `--prev` 해시 대조는 Spark 산출물에 적용할 수 없다(바이트가 같을 수 없다). 대신 `compare_bundle` 내용 대조를 쓴다. 근거는 스펙 20 의 S6 절.
 
+## 신곡 증분 — 기존 id 유지 (스펙 21, D20, Jira S15P21A405-600)
+AcousticBrainz 밖 곡의 lowlevel JSON 을 S1.5~S5·S7 에 태운다. S7 은 id 를 **다시 매기지 않고** `MAX(id)+1` 부터 이어 붙인다.
+
+```bash
+# 로컬 — songs.csv 는 json,title,artist (json 은 csv 기준 상대 경로)
+.venv/Scripts/python.exe spark/prepare_new_songs.py --songs new/songs.csv --out-dir work/new_songs/<batch>
+scp -i ~/.ssh/J15A405T.pem -r work/new_songs/<batch> ubuntu@j15a405a.p.ssafy.io:/home/ubuntu/stage/new_songs/
+# master-node
+bash ~/S15P21A405/data/spark/run_new_songs.sh <batch>                                           # S1.5 → S2 → S3 → S5
+ODY_HDFS_DATA=hdfs:///ody/new_songs/<batch> bash ~/S15P21A405/data/ingest/run_db_load.sh --append          # CSV 까지
+ODY_HDFS_DATA=hdfs:///ody/new_songs/<batch> bash ~/S15P21A405/data/ingest/run_db_load.sh --append --skip-spark --apply
+```
+S5 는 R8·R15 분위를 전곡 `hdfs:///ody/data/catalog_input` 에서 잰다(없으면 멈춘다). 기존 곡과의 중복 판정과 `map_sample` 재빌드는 하지 않는다.
+
 ## HDFS 적재 (T2, 컷 대상 아님) — 2026-09-10 완료
 ```bash
 # 로컬(Windows) → master-node. 로컬에 rsync 가 없어 파일 단위 scp 로 한다.

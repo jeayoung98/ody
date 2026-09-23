@@ -32,8 +32,6 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
    */
   const backToMap = useBackToMap();
 
-  // 제목은 델타로 들어온 사람에게는 비어 있다 — 서버가 ENTER 에 곡 정보를 주지 않는다 (§6.2)
-  const song = person.title ? [person.title, person.artist].filter(Boolean).join(" · ") : "듣는 곡을 불러오는 중";
 
   /**
    * 이미 그 사람을 따라가는 중이면 다시 누를 일이 없다. 다른 사람을 따라가는 중이면
@@ -50,7 +48,6 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
     <UserRow
       nickname={person.nickname ?? "이름 없음"}
       imageUrl={person.imageUrl}
-      caption={song}
       onClick={() => {
         openFeed(person.email);
         backToMap();

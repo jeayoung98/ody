@@ -41,13 +41,16 @@ export function useNearbyPeopleLive(open: boolean, refetch: () => void): void {
       put((people) => {
         const at = people.findIndex((x) => x.email === p.email);
         if (at >= 0) {
+          // 자리를 옮겼다. 좌표를 갈아 끼우면 거리와 순서는 `use-nearby-list` 가 다시 잰다
           const next = [...people];
-          next[at] = { ...next[at], musicId: p.musicId!, nickname: p.nickname, imageUrl: p.imageUrl, meetingCount: p.meetingCount ?? next[at].meetingCount };
+          next[at] = { ...next[at], musicId: p.musicId!, nickname: p.nickname, imageUrl: p.imageUrl, meetingCount: p.meetingCount ?? next[at].meetingCount, x: p.x, y: p.y };
           return next;
         }
         /**
-         * **`distance` 가 오지 않는다** (§6.2). 정렬 근거가 없으니 자리를 추측해야 한다 —
-         * 이미 목록에 있는 곡이면 그 곡 옆이 맞고(같은 곡이니 거리도 같다), 아니면 맨 뒤다.
+         * **`distance` 가 오지 않는다** (5차 명세 §2) — 받는 사람마다 다른 값이라 서버가
+         * 안 준다. 대신 **좌표가 온다.** 예전에는 거리를 몰라 "같은 곡을 듣는 사람 옆" 으로
+         * 자리를 추측하고 그런 이웃이 없으면 맨 뒤로 보냈는데, 이제 추측할 이유가 없다 —
+         * 거리는 `use-nearby-list` 가 좌표로 잰다. 여기서는 목록에 넣기만 한다.
          */
         const fresh: NearbyPerson = {
           email: p.email,
@@ -56,28 +59,26 @@ export function useNearbyPeopleLive(open: boolean, refetch: () => void): void {
           meetingCount: p.meetingCount ?? 0,
           riderCount: p.riderCount ?? 0,
           musicId: p.musicId!,
-          title: "",
-          artist: null,
+          x: p.x,
+          y: p.y,
           distance: Number.POSITIVE_INFINITY,
         };
-        const sameSong = people.findIndex((x) => x.musicId === p.musicId);
-        if (sameSong < 0) return [...people, fresh];
-        const next = [...people];
-        next.splice(sameSong + 1, 0, { ...fresh, title: next[sameSong].title, artist: next[sameSong].artist, distance: next[sameSong].distance });
-        return next;
+        return [...people, fresh];
       });
     });
 
     /**
      * 선단이 흩어져 여럿이 한꺼번에 들어왔다 (2차 명세 §7.2, S15P21A405-530).
      * **한 덩어리로 받았으니 한 번만 다시 그린다** — 한 명씩 넣으면 이 메시지의 의미가 없다.
-     * `requestSeq` 가 없고 좌표도 없다. 자리는 `musicId` 하나로 전원이 같다.
+     *
+     * 사람마다 좌표가 실리지 않는다. 자리는 `musicId` 하나로 전원이 같아서, 좌표를 비워 두면
+     * `use-nearby-list` 가 그 곡으로 지도에서 찾아본다.
      */
     const stopBulk = onType<NearbyBulkEnter>(["NEARBY_BULK_ENTER"], (p) => {
       put((people) => {
         const next = people.filter((x) => !p.people.some((n) => n.email === x.email));
-        const at = next.findIndex((x) => x.musicId === p.musicId);
-        const near = at >= 0 ? next[at] : null;
+        // 같은 곡에 이미 아는 사람이 있으면 그 자리를 빌린다. 없으면 곡으로 찾게 비워 둔다
+        const near = next.find((x) => x.musicId === p.musicId) ?? null;
         const fresh = p.people.map((n) => ({
           email: n.email,
           nickname: n.nickname,
@@ -85,14 +86,11 @@ export function useNearbyPeopleLive(open: boolean, refetch: () => void): void {
           meetingCount: n.meetingCount ?? 0,
           riderCount: n.riderCount ?? 0,
           musicId: p.musicId,
-          // 같은 곡에 이미 아는 사람이 있으면 그 곡의 제목·거리를 그대로 쓴다 (같은 곡이니 같다)
-          title: near?.title ?? "",
-          artist: near?.artist ?? null,
-          distance: near?.distance ?? Number.POSITIVE_INFINITY,
+          x: near?.x ?? null,
+          y: near?.y ?? null,
+          distance: Number.POSITIVE_INFINITY,
         }));
-        if (at < 0) return [...next, ...fresh];
-        next.splice(at + 1, 0, ...fresh);
-        return next;
+        return [...next, ...fresh];
       });
     });
 

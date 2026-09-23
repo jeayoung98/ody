@@ -61,17 +61,15 @@ export function botAsNearbyUser(bot: BotLive): NearbyUser | null {
 /**
  * 주변 사람 목록에 넣을 모습.
  *
- * `distance` 는 **직접 잰다.** 실사용자 것은 서버가 "비슷한 곡" 을 계산해 붙여 주지만 봇은
- * 서버가 모르는 존재라, 지금 겹의 두 축에서 내 곡과의 거리를 그대로 쓴다 — 목록이 가까운 순으로
- * 정렬되는 근거가 실사용자와 같은 종류의 값이어야 한 목록에 섞을 수 있다.
+ * **자리만 채우고 거리는 안 잰다** (S15P21A405-582). 예전에는 여기서 내 곡과의 거리를 직접
+ * 쟀다. 서버가 실사용자에게만 거리를 붙여 주니 봇도 같은 종류의 값을 가져야 한 목록에 섞을 수
+ * 있었기 때문이다. 이제는 **부르는 쪽이 세 출처의 거리를 한 번에 다시 잰다** — 내가 곡을 옮기면
+ * 서버 거리도 같이 낡기 때문이고, 그러면 여기서 미리 재 둘 이유가 없다.
  */
-export function botAsNearbyPerson(bot: BotLive, myMusicId: number | null): NearbyPerson | null {
-  const { online, layer, musicId } = bot.episode;
+export function botAsNearbyPerson(bot: BotLive, layer: number): NearbyPerson | null {
+  const { online, musicId } = bot.episode;
   if (!online || musicId == null) return null;
   const song = getMapEngine()?.pointOf(musicId);
-  const mine = myMusicId != null ? getMapEngine()?.pointOf(myMusicId) : null;
-  const dx = layer * 2;
-  const dy = dx + 1;
 
   return {
     email: bot.email,
@@ -80,10 +78,10 @@ export function botAsNearbyPerson(bot: BotLive, myMusicId: number | null): Nearb
     meetingCount: meetingsOf(bot),
     riderCount: useFollowStore.getState().leaderEmail === bot.email ? 1 : 0,
     musicId,
-    title: song?.title ?? "",
-    artist: song?.artist ?? null,
-    // 내 곡을 모르면 맨 뒤다 — 틀린 거리로 앞에 끼워 넣는 것보다 낫다
-    distance: song && mine ? Math.hypot(song.pc[dx] - mine.pc[dx], song.pc[dy] - mine.pc[dy]) : Number.POSITIVE_INFINITY,
+    x: song ? song.pc[layer * 2] : null,
+    y: song ? song.pc[layer * 2 + 1] : null,
+    // 부르는 쪽이 좌표로 다시 잰다. 여기서 채워 봐야 덮어쓰인다
+    distance: Number.POSITIVE_INFINITY,
   };
 }
 

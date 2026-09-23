@@ -76,6 +76,13 @@ export const QUERY_KEYS = {
   chart: {
     ranking: (type: string) => ["chart", type] as const,
   },
+
+  /** 별자리 콘테스트 (S15P21A405-602). 표·출품이 회차 정보와 목록 양쪽에 걸려 `all` 로 함께 무효화한다 */
+  contest: {
+    all: ["contest"] as const,
+    current: ["contest", "current"] as const,
+    entries: (contestId: number, sort: string) => ["contest", "entries", contestId, sort] as const,
+  },
   /**
    * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준
    * 폴링이었고, 이건 내가 듣는 곡 기준이라 레이어를 타지 않는다. 그래서 키에 인자가 없다.

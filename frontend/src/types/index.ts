@@ -11,3 +11,4 @@ export * from "./journey";
 export * from "./constellation";
 export * from "./api";
 export * from "./realtime";
+export * from "./contest";

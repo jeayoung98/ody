@@ -54,7 +54,13 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
   const isRiding = leaderEmail === profile.email;
   /** 이 사람을 **구독 중인가** (오래 남는 관계). 서버가 준 값이다 */
   const isFollowing = profile.isFollowing;
-  const canRide = !isMe && profile.isOnline && !isRiding;
+  /**
+   * **내 페이지는 늘 접속 중이다** (S15P21A405-620). 서버의 `isOnline` 은 소켓 presence 유무라,
+   * 소켓이 아직 안 붙었거나 끊긴 순간에 내 마이페이지가 "오프라인" 으로 뜬다 — 내가 지금 이
+   * 화면을 보고 있다는 사실이 곧 접속 중이라는 뜻이므로 서버 값을 기다리지 않는다. 남은 서버 값 그대로.
+   */
+  const online = isMe || profile.isOnline;
+  const canRide = !isMe && online && !isRiding;
 
   /**
    * 구독 — **실연동이다** (S15P21A405-489). 해제는 팔로우 중이 아니어도 200 이라 먼저 확인하지
@@ -78,11 +84,11 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
   return (
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-2.5">
-        <Avatar src={profile.imageUrl} name={profile.nickname} size={56} online={profile.isOnline} />
+        <Avatar src={profile.imageUrl} name={profile.nickname} size={56} online={online} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-xl font-semibold">{profile.nickname ?? profile.name ?? "익명"}</p>
           <p className="mt-[3px] text-[11.5px] text-ink-2">
-            {profile.isOnline ? "접속 중" : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
+            {online ? "접속 중" : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
           </p>
           {profile.nowPlaying && (
             <button type="button" onClick={() => openSong(profile.nowPlaying!.id)} className="mt-0.5 block max-w-full truncate text-xs text-teal hover:underline">
@@ -107,7 +113,7 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
           <Button variant="secondary" onClick={handleRide} disabled={!canRide || ride.isPending}>
             {isRiding ? "🚀 탑승 중" : "🚀 따라가기"}
           </Button>
-          {!profile.isOnline && <Note>오프라인이라 따라갈 수 없습니다.</Note>}
+          {!online && <Note>오프라인이라 따라갈 수 없습니다.</Note>}
         </div>
       )}
     </div>

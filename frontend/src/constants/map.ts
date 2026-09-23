@@ -722,3 +722,9 @@ export const HOVER_CARD = {
   /** 나타나고 사라지는 시간(ms) */
   fadeMs: 120,
 } as const;
+
+/**
+ * 따라가는 동안 막힌 지도 입력(휠·드래그)의 안내 토스트 간격(ms) (S15P21A405-605).
+ * 휠은 한 번에 수십 이벤트라 매번 띄우면 토스트가 깜빡이기만 한다 — 한 번 뜬 뒤 이만큼 쉰다.
+ */
+export const RIDE_LOCK_TOAST_MS = 3000;

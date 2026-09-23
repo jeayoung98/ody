@@ -103,11 +103,14 @@ public class PlaylistService {
 	}
 
 	/**
-	 * 플레이리스트 상세 조회 (정본 §4.2). 소유자만 접근 가능(§0.7).
+	 * 플레이리스트 상세 조회 (정본 §4.2). 로그인한 누구나 조회 가능 — 소유자 공개 여부와 무관 (S15P21A405-603).
 	 * 곡 정보 조회는 music 어댑터 필요 — 빈 플레이리스트는 어댑터 없어도 동작한다.
 	 */
 	public PlaylistDetailResponse getDetail(long playlistId, String requesterEmail) {
-		PlaylistRow playlist = requireOwnedPlaylist(playlistId, requesterEmail);
+		PlaylistRow playlist = playlistMapper.findById(playlistId);
+		if (playlist == null) {
+			throw new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND);
+		}
 		List<Long> musicIds = playlistMapper.findMusicIdsInOrder(playlistId);
 
 		List<MusicDetail> musics = musicIds.isEmpty() ? List.of() : loadMusicDetails(musicIds);

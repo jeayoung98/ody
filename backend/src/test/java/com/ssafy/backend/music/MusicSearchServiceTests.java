@@ -35,7 +35,7 @@ class MusicSearchServiceTests {
 	private final MusicSearchReader reader = mock(MusicSearchReader.class);
 	private final MusicDetailReader detail = mock(MusicDetailReader.class);
 	private final MusicService service = new MusicService(Optional.of(reader), Optional.of(detail), Optional.empty(),
-			org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class));
+			org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class), Optional.empty());
 
 	@Test
 	void search_passesConditionAndSize10_assemblesPage() {
@@ -104,7 +104,7 @@ class MusicSearchServiceTests {
 	@Test
 	void search_noAdapter_throws() {
 		MusicService noReader = new MusicService(Optional.empty(), Optional.empty(), Optional.empty(),
-				org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class));
+				org.mockito.Mockito.mock(com.ssafy.backend.music.service.NearbyService.class), mock(VideoIdEnricher.class), Optional.empty());
 
 		MusicSearchCondition condition = new MusicSearchCondition("q", null, null);
 		assertThrows(UnsupportedOperationException.class, () -> noReader.search(condition, 0));

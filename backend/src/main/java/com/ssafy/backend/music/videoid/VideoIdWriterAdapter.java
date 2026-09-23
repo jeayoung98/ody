@@ -20,7 +20,7 @@ public class VideoIdWriterAdapter implements VideoIdWriterPort {
 	}
 
 	@Override
-	public void markUnplayable(long musicId) {
-		mapper.markUnplayable(musicId);
+	public boolean markUnplayable(long musicId) {
+		return mapper.markUnplayable(musicId) == 1;
 	}
 }

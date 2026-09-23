@@ -124,6 +124,11 @@ export const RIDE_DISBAND_REJECTED = {
 /** 곡 좋아요 요청이 실패했다 (S15P21A405-611). 낙관적으로 켠 하트는 되돌린다 */
 export const LIKE_FAILED = "좋아요를 반영하지 못했어요. 잠시 후 다시 시도해 주세요";
 
+/** 연결이 흔들려 따라가기를 다시 잇는 중이다 (S15P21A405-615). 첫 재시도 때 한 번만 띄운다 */
+export const RIDE_RESUMING = "연결이 불안정해요. 따라가기를 다시 잇는 중이에요";
+/** 다시 잇기를 다 해 봤지만 안 됐다 — 이제야 내린다 */
+export const RIDE_RESUME_FAILED = (who: string) => `${who} 님과 다시 연결하지 못해 따라가기를 마쳤어요`;
+
 /**
  * 반응이 거부됐을 때 (SOCIAL-02·04, S15P21A405-607, 백엔드 `RealtimeErrorCode`).
  * 패널에 뜬 전원에게 보내므로 **전부 거부됐을 때만** 첫 사유를 말한다.

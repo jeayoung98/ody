@@ -141,3 +141,17 @@ export const RADAR = {
   /** 최대 만남 횟수의 이 비율을 넘는 사람만 숨쉰다 */
   breatheFrom: 0.6,
 } as const;
+
+/**
+ * 따라가기 다시 잇기 (S15P21A405-615). 연결이 흔들려도 **내리지 않고** 다시 탑승을 시도한다 —
+ * 내리는 것은 마지막 수단이다.
+ */
+export const RIDE_RESUME = {
+  /**
+   * 재시도 간격(ms). 합이 45초쯤이다 — presence TTL 과 같은 창이라, 인솔자가 새로고침 중이면
+   * 이 안에 돌아온다. 그 뒤에도 안 되면 정말 없는 것으로 본다.
+   */
+  backoffMs: [3_000, 5_000, 8_000, 12_000, 17_000],
+  /** 기다려도 달라지지 않는 거부 사유 — 이건 바로 내린다. 나머지(연결·인솔자 자리 비움·상태 어긋남·네트워크)는 다시 해 본다 */
+  finalCodes: ["RIDE_SELF", "RIDE_CHAIN_FORBIDDEN", "RIDE_NOT_CAPTAIN", "RIDE_FULL"],
+} as const;

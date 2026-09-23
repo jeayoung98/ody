@@ -143,6 +143,32 @@ class UserDetailServiceTests {
 				.isInstanceOf(CustomException.class);
 
 		Mockito.verify(mapper, Mockito.never()).countDistinctPlayedMusic("you@gmail.com");
+		Mockito.verify(mapper, Mockito.never()).countDiscoveredMusic("you@gmail.com");
+	}
+
+	@Test
+	void getDetail_countsDiscoveredMusic() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(42);
+		when(mapper.countDiscoveredMusic("you@gmail.com")).thenReturn(7);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+
+		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
+
+		assertThat(result.discoveredMusicCnt()).isEqualTo(7);
+		assertThat(result.playedMusicCnt()).isEqualTo(42);
+	}
+
+	/** 들은 곡이 전부 남이 먼저 들은 곡이면 발견 기록이 없다. 그때도 상세는 0 으로 뜬다. */
+	@Test
+	void getDetail_noDiscovery_returnsZero() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.countDiscoveredMusic("you@gmail.com")).thenReturn(0);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+
+		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").discoveredMusicCnt()).isZero();
 	}
 
 	@Test

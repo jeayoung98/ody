@@ -9,6 +9,9 @@ import java.time.OffsetDateTime;
  *
  * playedMusicCnt 는 그 사용자가 재생한 곡 수이고 같은 곡을 여러 번 들어도 1곡이다 (S15P21A405-430).
  *
+ * discoveredMusicCnt 는 그 사용자가 서비스에서 처음 재생한 곡 수다 (S15P21A405-597). 이미 남이 들은 곡은
+ * 그 사용자가 들어도 세지 않는다. 출처는 주간 발견왕과 같은 music_discovery 다.
+ *
  * isOnline 은 지금 접속해 있는지다. 소켓이 살아 있으면 true 이고, 창을 닫으면 늦어도
  * 45초 뒤에 false 가 된다. lastActiveAt 으로 짐작하지 않아도 된다 — 그 값은 로그인 시각이라
  * 접속과 상관이 없다. 실시간 기능을 켜지 않은 사람은 접속해 있어도 false 다.
@@ -27,5 +30,6 @@ public record UserDetailResponse(
 		boolean isFollowing,
 		boolean isMe,
 		int playedMusicCnt,
+		int discoveredMusicCnt,
 		boolean isOnline) {
 }

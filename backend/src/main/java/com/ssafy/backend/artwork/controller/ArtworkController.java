@@ -18,6 +18,10 @@ import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.artwork.dto.ArtworkDetailResponse;
 import com.ssafy.backend.artwork.dto.ArtworkLeaderboardResponse;
+import com.ssafy.backend.artwork.dto.CatPlaylistRequest;
+import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
+import com.ssafy.backend.artwork.dto.CatTemplateSummary;
+import com.ssafy.backend.artwork.service.CatPlaylistGenerator;
 import com.ssafy.backend.artwork.dto.ArtworkLikeRequest;
 import com.ssafy.backend.artwork.dto.ArtworkLikeResponse;
 import com.ssafy.backend.artwork.dto.ArtworkRound;
@@ -49,6 +53,7 @@ import lombok.RequiredArgsConstructor;
 public class ArtworkController {
 
 	private final ArtworkService artworkService;
+	private final CatPlaylistGenerator catPlaylistGenerator;
 
 	/** 재시도 상한. 사용자당 GMS 호출 수를 묶는 값이기도 하다. */
 	@Value("${ody.artwork.evaluation.max-attempts:3}")
@@ -72,6 +77,27 @@ public class ArtworkController {
 	public ResponseEntity<ApiResponse<ArtworkSubmitResponse>> submit(
 			@RequestBody @Valid ArtworkSubmitRequest request, Authentication authentication) {
 		ArtworkSubmitResponse response = artworkService.submit(request.playlistId(), authentication.getName());
+		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+	}
+
+	/** 고양이 템플릿 목록. {@code pointCount} 가 생성될 플레이리스트의 곡 수다. */
+	@Operation(summary = "고양이 템플릿 목록", description = "생성 가능한 고양이 모양 템플릿을 반환한다. name 을 /generate 에 넘긴다.")
+	@GetMapping("/templates")
+	public ApiResponse<List<CatTemplateSummary>> templates() {
+		return ApiResponse.success(catPlaylistGenerator.templates());
+	}
+
+	/**
+	 * 템플릿 모양대로 곡을 골라 내 플레이리스트를 만든다. 제출은 하지 않는다 — 사용자가 보고 {@code /submit}.
+	 * 응답 {@code points} 는 배치 API 가 그 플레이리스트에 돌려주는 값과 같다.
+	 */
+	@Operation(summary = "고양이 플레이리스트 생성",
+			description = "템플릿의 점마다 pc1/pc2 평면에서 가장 가까운 곡을 골라 내 플레이리스트를 만든다. "
+					+ "제출은 하지 않는다. fitError 는 템플릿과 실제 곡 위치의 평균 어긋남(0 이 완벽)이다.")
+	@PostMapping("/generate")
+	public ResponseEntity<ApiResponse<CatPlaylistResponse>> generate(
+			@RequestBody @Valid CatPlaylistRequest request, Authentication authentication) {
+		CatPlaylistResponse response = catPlaylistGenerator.generate(request.template(), authentication.getName());
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
 	}
 

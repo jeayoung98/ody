@@ -110,7 +110,8 @@ public class ArtworkService {
 		artwork.setEmail(requesterEmail);
 		artwork.setPlaylistId(playlistId);
 		artwork.setTitle(playlist.playlistName());
-		artwork.setLayoutVersion(layoutVersion);
+		// 어떤 좌표계의 모양인지. "/pc12" 이전(집합 PCA) 스냅샷과 구분한다 (S15P21A405-595).
+		artwork.setLayoutVersion(layoutVersion + "/pc12");
 		artwork.setStatus(ArtworkStatus.PENDING.name());
 		artworkMapper.insertArtwork(artwork);
 

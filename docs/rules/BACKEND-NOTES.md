@@ -91,6 +91,7 @@
 | A-50 | `GET /api/taste-analysis` | 없음 (인증 주체 기준) | `{ state, counts{ totalLiked, valid, excluded, exclusions }, reportEligibility{ eligible, level, additionalLikesNeeded }, analysisVersion, axes[], points[{ musicId, title, artist, coordinates[16] }], report{ level, aiGenerated, fresh, summary, narratives[{ findingId, text, evidence }], analyzedAt, generatedAt, lastRefreshedAt }, generation{ status, generatedThisRequest, dailyLimitUsedToday, canRetry, failureCode, nextAvailableAt } }` | 현재 좋아요 곡의 **기존 PC 좌표** 통계와 마지막 성공 리포트를 함께 준다. PCA 재학습·좌표 재산출은 이 기능 범위가 아니다. 유효 곡 10개 미만은 분포만, 10~29 `INITIAL`, 30 이상 `STANDARD`. `report.fresh=false` 면 좋아요나 분석 버전이 바뀌어 리포트가 STALE 이라는 뜻이다. 오류: 기준 산출물 없으면 503 `TASTE_REFERENCE_UNAVAILABLE` | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** · **기준 산출물 필요** |
 | A-51 | `POST /api/taste-analysis` | 없음 (인증 주체 기준) | A-50 과 같은 스키마 | 성공·재사용·fallback 모두 **200** 이다(201 아님) — 같은 요청이 결과에 따라 201/200 을 오가지 않게 통일했고, 신규 생성 여부는 `generation.status` 로 구분한다(2026-09-22 확정). 사용자가 **버튼을 눌렀을 때만** 리포트를 생성한다. 성공한 생성만 KST 기준 1일 1회 한도를 차감한다. 같은 snapshot 이면 저장 결과를 재사용한다(`generation.status=REUSED`, GMS 미호출). GMS 실패는 `FALLBACK` 으로 내려가고 **한도를 차감하지 않으며 같은 날 재시도할 수 있다**. 오류: 생성 진행 중 409 `TASTE_ANALYSIS_IN_PROGRESS`(`error.details.nextAvailableAt` = lease 만료 시각), 유효 곡 10개 미만 422 `TASTE_INSUFFICIENT_SAMPLE`, 당일 한도 소진 429 `TASTE_DAILY_LIMIT`(`error.details.nextAvailableAt` = 다음 KST 자정), 기준 산출물 없음 503 `TASTE_REFERENCE_UNAVAILABLE` | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** · **기준 산출물 필요** (GMS key 는 운영에 `GMS_API_KEY` 로 주입돼 있다) |
 | A-52 | `GET /api/user/detail` | 변경 없음 | **`discoveredMusicCnt`(int) 추가** — 그 사용자가 서비스에서 **처음** 재생한 곡 수 | 피드 대시보드의 "발견한 곡 수"(FEATURES.md 변경 제안 #16, **미확정**). 출처는 주간 발견왕과 같은 `music_discovery`(A-46) 라 이미 남이 들은 곡은 세지 않는다 — "들은 곡 수"는 `playedMusicCnt`(A-36) 다. 비공개 판정 뒤에 센다. 기록은 A-46 과 같이 realtime 재생 경로에서만 쌓인다. ⚠️ **DB 담당**: `db/music_discovery_002_email_index.sql` 의 `(email, discovered_at)` 인덱스를 운영 DB 에 적용해야 한다 — 없으면 상세 조회마다 테이블 전체를 읽는다 | ✅ 구현됨 (S15P21A405-597) · **프론트 반영 필요** · **인덱스 적용 필요** · **명세 확정 필요** |
+| A-53 | `GET /api/music/detail` | 변경 없음 (`id`). **인증은 선택** — 토큰을 보내면 좋아요 상태가 채워지고, 안 보내도 401 없이 지금과 똑같이 응답한다 | **`liked`(boolean) 추가** — 요청한 사용자가 이 곡을 좋아요 했는지. 비로그인이면 `false` | 곡 상세 화면의 좋아요 버튼이 하트를 채울지 비울지 판단할 근거. 플레이리스트가 같은 문제를 푸는 방식(A-41 계열, S15P21A405-447)과 맞췄다. `MusicDetail` 레코드가 아니라 **상세 응답 껍데기에만** 넣었다 — 그 레코드는 `JourneyStop` 도 `@JsonUnwrapped` 로 쓰기 때문에, 거기 넣으면 여정 경로가 정거장 수만큼 조회하거나 의미 없는 `false` 를 실어 나른다. `/api/music/major` 는 원소가 `MapPoint` 라 해당 없다. 조회는 `music_like` PK `(email, music_id)` 정타 1회라 상세 응답 시간에 영향이 없다(같은 요청이 이미 이웃 탐색과 videoId 외부 호출을 지난다) | ✅ 구현됨 (S15P21A405-599) · **프론트 반영 필요** |
 
 > **취향 분석 기준 산출물을 둘로 쪼개자는 제안 (2026-09-22, BE2) — 협의 필요, 미구현**
 >
@@ -340,3 +341,40 @@
 
 - 오른쪽 패널(주변사람·랭킹) 공유. 별도 요청이 있을 때.
 - 여정·플레이리스트 내용 전송. 조회 API 가 이미 있어 받는 쪽이 부른다.
+
+### 6-7. 별자리 좌표계 변경 + 고양이 플레이리스트 생성 (S15P21A405-595, 2026-09-23)
+
+⚠️ **`POST /api/constellations/layout`(A-9) 의 모양이 바뀐다.** 응답 형식은 그대로(`{points:[{musicId,x,y}]}`, -1~1), 값이 바뀐다.
+
+| | 이전 (S15P21A405-265) | 이후 (595) |
+| --- | --- | --- |
+| 축 | 그 곡 집합만의 PCA 상위 2축 | **pc1 → x, pc2 → y 고정** (지도 1레이어와 같은 축) |
+| 정규화 | 중심 이동 + 동일 배율, 최대 절댓값 1 | 같음 |
+| 같은 집합 → 같은 좌표 | ✓ | ✓ |
+| 레이어 무관 고정 배치 (PATH-01) | ✓ | ✓ |
+| 지도 1레이어 위치와 일치 | ✗ | **✓** — 별자리 = 1레이어에서 그 곡들의 상대 위치 |
+| 임의 집합이 화면을 채우는 정도 | 넓음 | 좁을 수 있음 (pc1/pc2 분산만큼) |
+
+**왜**: 사용자가 모양을 의도해 만들 수 있어야 "플리 모양이 상품" 이 성립한다. 지도 1레이어에서 고양이 자리의 곡을 골라도 집합 PCA 가 다른 축을 잡으면 고양이가 풀렸다. 만드는 좌표계·보는 좌표계·채점하는 좌표계를 하나로 맞췄다. 작품 스냅샷의 `layout_version` 은 `v2.1-pca16/pc12` 로 기록돼 이전 스냅샷(`v2.1-pca16`, 집합 PCA)과 구분된다. **FE 코드 변경 없음.** 기획 확인 대상(PATH-01 문구 "16차원 좌표를 2D로 압축" → "pc1/pc2 고정축").
+
+**신규 엔드포인트 2개**
+
+| 메서드 | 경로 | 인증 | 설명 |
+| --- | --- | --- | --- |
+| `GET` | `/api/artwork/templates` | 필요 | 고양이 템플릿 목록 `[{name, label, pointCount}]` |
+| `POST` | `/api/artwork/generate` | 필요 | 템플릿 모양대로 곡을 골라 **내 플레이리스트 생성** → `201`. 제출은 안 한다 |
+
+```jsonc
+// POST /api/artwork/generate
+{ "template": "sitting" }          // templates 의 name. 없는 이름 → 400 INVALID_INPUT
+// 201
+{ "playlistId": 12, "playlistName": "고양이 앉은 고양이 143012", "template": "sitting",
+  "musicCnt": 23, "fitError": 0.08,
+  "points": [ { "musicId": 900, "x": -0.42, "y": 0.13 } ] }   // layout API 와 같은 값·같은 순서
+```
+
+- 템플릿: `sitting`(앉은 옆모습 23곡) · `sketch`(18곡) · `loaf`(엎드린 17곡). 채점 진단에서 `sitting` 이 few-shot 기준 위에서 90점을 받은 그림 그대로다.
+- 곡 선택: 전체 곡(재생 불가 제외) 중 pc1/pc2 평면 최근접. 점마다 다른 곡. 템플릿 크기를 4단계로 놓아 보고 평균 오차가 가장 작은 배치를 택한다.
+- `fitError`: 템플릿 점과 실제 곡 위치의 평균 거리 ÷ 템플릿 반폭. 0 이 완벽. 화면에 "정확도" 로 보여줘도 되고 무시해도 된다.
+- 흐름: `templates` → `generate` → (사용자가 별자리 확인) → `POST /api/artwork/submit {playlistId}`. 자동 제출 없음 — 재제출 시 기존 점수가 사라지는 정책과 부딪히지 않게 사용자가 결정한다.
+- 플리 이름은 `고양이 <라벨> <HHmmss>` 라 같은 사람이 여러 번 만들어도 이름 중복(409)이 안 난다.

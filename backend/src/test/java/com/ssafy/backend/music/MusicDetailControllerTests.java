@@ -1,6 +1,7 @@
 package com.ssafy.backend.music;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -81,8 +82,8 @@ class MusicDetailControllerTests {
 	void detail_success_returnsFlatDetailWithNeighbors() throws Exception {
 		MusicDetailResponse body = new MusicDetailResponse(detail("https://youtu.be/x"),
 				List.of(neighbor(10877L, "https://youtu.be/y", 0.0412),
-						neighbor(10999L, "https://youtu.be/z", 0.0510)), false);
-		when(musicService.getDetail(eq(10234L))).thenReturn(body);
+						neighbor(10999L, "https://youtu.be/z", 0.0510)), false, false);
+		when(musicService.getDetail(eq(10234L), any())).thenReturn(body);
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -107,8 +108,8 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_targetNotPlayable_returns200WithNullUrl() throws Exception {
-		when(musicService.getDetail(anyLong()))
-				.thenReturn(new MusicDetailResponse(detail(null), List.of(), false));
+		when(musicService.getDetail(anyLong(), any()))
+				.thenReturn(new MusicDetailResponse(detail(null), List.of(), false, false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -119,9 +120,9 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_neighborNotPlayable_keptInList() throws Exception {
-		when(musicService.getDetail(anyLong()))
+		when(musicService.getDetail(anyLong(), any()))
 				.thenReturn(new MusicDetailResponse(detail("https://youtu.be/x"),
-						List.of(neighbor(10877L, null, 0.0412)), false));
+						List.of(neighbor(10877L, null, 0.0412)), false, false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -131,7 +132,7 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_notFound_returns404MusicNotFound() throws Exception {
-		when(musicService.getDetail(eq(999L)))
+		when(musicService.getDetail(eq(999L), any()))
 				.thenThrow(new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "999"))
@@ -165,7 +166,7 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_internalFailure_returns500() throws Exception {
-		when(musicService.getDetail(anyLong())).thenThrow(new RuntimeException("boom"));
+		when(musicService.getDetail(anyLong(), any())).thenThrow(new RuntimeException("boom"));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isInternalServerError())

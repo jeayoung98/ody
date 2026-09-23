@@ -8,6 +8,8 @@ import com.ssafy.backend.artwork.dto.ArtworkPointRow;
 import com.ssafy.backend.artwork.dto.ArtworkRoundRow;
 import com.ssafy.backend.artwork.dto.ArtworkRow;
 import com.ssafy.backend.artwork.dto.ArtworkSummaryRow;
+import com.ssafy.backend.artwork.dto.MusicPc12Row;
+import com.ssafy.backend.artwork.dto.Pc12BoundsRow;
 
 /**
  * 작품·회차·좌표·좋아요를 한 매퍼에서 다룬다 (S15P21A405-563).
@@ -64,6 +66,17 @@ public interface ArtworkMapper {
 	 * 리더보드·내 작품·회차당 1작품 검사 어디에도 나오지 않는다.
 	 */
 	List<ArtworkRow> findAnchors(@Param("roundId") long roundId);
+
+	// ---- 고양이 플레이리스트 생성 (S15P21A405-595) ----
+
+	/**
+	 * pc1/pc2 평면에서 점 {@code (x, y)} 에 가장 가까운 곡. 재생 불가 곡·좌표 없는 곡 제외.
+	 * {@code music_l1_gist}(표현식 GiST) 를 타는 KNN 이라 첨자는 리터럴 1·2 여야 한다.
+	 */
+	List<MusicPc12Row> findNearestMusicByPc12(@Param("x") double x, @Param("y") double y, @Param("limit") int limit);
+
+	/** 곡 pc1/pc2 의 2~98 백분위 상자. 템플릿을 이 안에 놓는다. */
+	Pc12BoundsRow findPc12Bounds();
 
 	// ---- 좌표 ----
 

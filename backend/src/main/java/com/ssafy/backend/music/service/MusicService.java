@@ -16,6 +16,7 @@ import com.ssafy.backend.music.search.MusicSearchCondition;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
+import com.ssafy.backend.music.like.MusicLikeMapper;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.VideoIdBatchResponse;
@@ -39,15 +40,18 @@ public class MusicService {
 	private final NearbyService nearbyService;
 	private final Optional<MajorTrackReader> majorReader;
 	private final VideoIdEnricher videoIdEnricher;
+	private final Optional<MusicLikeMapper> likeMapper;
 
 	// ponytail: 어댑터가 아직 없는 port 는 Optional 주입. 빈이 올라오면 자동 연결된다.
 	public MusicService(Optional<MusicSearchReader> searchReader, Optional<MusicDetailReader> detailReader,
-			Optional<MajorTrackReader> majorReader, NearbyService nearbyService, VideoIdEnricher videoIdEnricher) {
+			Optional<MajorTrackReader> majorReader, NearbyService nearbyService, VideoIdEnricher videoIdEnricher,
+			Optional<MusicLikeMapper> likeMapper) {
 		this.searchReader = searchReader;
 		this.detailReader = detailReader;
 		this.majorReader = majorReader;
 		this.nearbyService = nearbyService;
 		this.videoIdEnricher = videoIdEnricher;
+		this.likeMapper = likeMapper;
 	}
 
 	/**
@@ -94,7 +98,7 @@ public class MusicService {
 	 * 걷어냈다(S15P21A405-322). 검색·주변탐색·경로탐색도 같은 이유로 이미 걷어냈다
 	 * (S15P21A405-321, S15P21A405-322).
 	 */
-	public MusicDetailResponse getDetail(long id) {
+	public MusicDetailResponse getDetail(long id, String email) {
 		MusicDetailReader reader = detailReader.orElseThrow(
 				() -> new UnsupportedOperationException("music/detail: BE4 조회 어댑터 대기 중 (B-D)"));
 		MusicDetail detail = reader.findDetail(id)
@@ -108,7 +112,20 @@ public class MusicService {
 						detail.videoId(), detail.duration()));
 
 		log.info("[Music] 상세 조회 완료 title={}, artist={}, musicId={}, videoId={}, neighbors={}", enrichedDetail.title(), enrichedDetail.artist(), id, enrichedDetail.videoId(), result.neighbors().size());
-		return new MusicDetailResponse(enrichedDetail, result.neighbors(), result.lowSimilarity());
+		return new MusicDetailResponse(enrichedDetail, result.neighbors(), result.lowSimilarity(), liked(id, email));
+	}
+
+	/**
+	 * 요청한 사용자가 이 곡을 좋아요 했는지 (S15P21A405-599). 비로그인이면 조회하지 않는다.
+	 *
+	 * <p>{@code music_like} 의 PK 가 {@code (email, music_id)} 라 인덱스 정타 1회다. 이 메서드가 끼어드는
+	 * 상세 조회는 이미 이웃 탐색(pgvector)과 videoId 외부 호출(최악 5초)을 지나므로 영향이 없다.
+	 */
+	private boolean liked(long musicId, String email) {
+		if (email == null || likeMapper.isEmpty()) {
+			return false;
+		}
+		return likeMapper.get().findLikedAt(email, musicId) != null;
 	}
 
 	private static MusicDetail withVideoId(MusicDetail detail, String videoId) {

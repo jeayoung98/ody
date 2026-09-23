@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -122,10 +123,16 @@ public class MusicController {
 	/**
 	 * 노래 상세 조회 (정본 §3.2). id로 상세 + 최근접 10곡(neighbors). 없는 곡 → 404 MUSIC_NOT_FOUND.
 	 */
-	@Operation(summary = "노래 상세 조회", description = "id로 노래 상세와 최근접 10곡(neighbors)을 함께 조회한다. 없는 곡이면 404 MUSIC_NOT_FOUND.")
+	@Operation(summary = "노래 상세 조회", description = "id로 노래 상세와 최근접 10곡(neighbors)을 함께 조회한다. 로그인 시 liked 로 좋아요 여부를 함께 준다. 없는 곡이면 404 MUSIC_NOT_FOUND.")
 	@GetMapping("/detail")
-	public ApiResponse<MusicDetailResponse> detail(@RequestParam @Min(1) long id) {
-		return ApiResponse.success(musicService.getDetail(id));
+	public ApiResponse<MusicDetailResponse> detail(
+			@RequestParam @Min(1) long id, Authentication authentication) {
+		return ApiResponse.success(musicService.getDetail(id, emailOrNull(authentication)));
+	}
+
+	/** 인증은 선택이다. 비로그인도 그대로 상세를 본다 — 좋아요 상태만 false 가 된다. */
+	private static String emailOrNull(Authentication authentication) {
+		return authentication == null ? null : authentication.getName();
 	}
 
 	/**

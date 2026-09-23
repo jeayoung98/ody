@@ -14,9 +14,14 @@ import com.fasterxml.jackson.annotation.JsonUnwrapped;
  *
  * @param lowSimilarity 마지막 이웃 거리가 원거리 임계값을 넘었다는 표시. 오류가 아니다.
  *                      운영 실측 발동률 약 9% 라 드문 경우가 아니다
+ * @param liked 요청한 사용자가 이 곡을 좋아요 했는지. 비로그인이면 {@code false} (S15P21A405-599).
+ *              <b>{@link MusicDetail} 이 아니라 여기 둔다</b> — 그 레코드는 {@code JourneyStop} 도
+ *              {@code @JsonUnwrapped} 로 쓰기 때문에, 거기 넣으면 여정 경로가 정거장 수만큼 조회하거나
+ *              의미 없는 {@code false} 를 실어 나른다
  */
 public record MusicDetailResponse(
 		@JsonUnwrapped MusicDetail detail,
 		List<NeighborTrack> neighbors,
-		boolean lowSimilarity) {
+		boolean lowSimilarity,
+		boolean liked) {
 }

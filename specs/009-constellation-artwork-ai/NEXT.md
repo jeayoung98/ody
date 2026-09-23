@@ -78,7 +78,7 @@ BACKEND-NOTES **§6**(563) · **§6-7**(595) 에 계약이 있다. FE 쪽 할 �
 | 5-5 | 곡 밀도 낮은 자리의 점이 어긋난다 | 2-2 의 `fitError` 가 크면 | `SCALES` 세분화, 상자 백분위 5~95 로 좁히기, 후보 풀을 1레이어 상주로 제한하는 옵션 |
 | 5-6 | 스케줄러 배치가 한 트랜잭션 — HTTP 왕복 동안 커넥션 1개 점유 | 제출이 초당 수 건 이상 | `EVALUATING` 상태 추가해 락 없이 선점 (`ArtworkEvaluationScheduler` ponytail 주석) |
 | 5-7 | 관측 미터 없음 — 로그로만 본다 | `PENDING` 적체가 보일 때 | `artwork` 상태별 count 게이지 + GMS 호출 타이머 |
-| 5-8 | 자유 그리기(1-a) 없음 — 템플릿만 | 기획이 원할 때 | `generate` 에 `points[]` 입력 받는 변형. 생성기는 그대로 |
+| 5-8 | 자유 그리기(1-a) 없음 — 템플릿만 | 기획이 원할 때 | `generate` 에 `points[]` 입력 받는 변형. 생성기는 그대로. → **S15P21A405-598**, [specs/010](../010-drawn-constellation-playlist/spec.md) (spec 초안, 보류) |
 
 ---
 

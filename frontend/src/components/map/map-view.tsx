@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM, RIDING_LOCKED } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, PROBE, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM, RIDING_LOCKED } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
@@ -461,8 +461,12 @@ export default function MapView({ occlusion }: MapViewProps) {
        * 길이 사라진다. 휠 한 칸의 비율을 그대로 배율로 쓴다.
        */
       if (mode === "nearby") {
-        if (deltaY > 0) useMapStore.getState().exitNearby();
-        else engine.probeZoom(Math.exp(-deltaY * WHEEL_ZOOM));
+        /**
+         * **줄이는 입력은 먼저 배율을 깎는다.** 바닥(`PROBE.minZoom`)에 닿았을 때만 나간다 —
+         * 핀치는 벌리는 중에도 안쪽으로 몇 px 흔들리는데, 예전에는 그 한 번이 곧바로
+         * 나가기였다. 확대해 놓고도 화면이 원래대로 돌아가서 "확대가 안 된다" 로 보였다.
+         */
+        if (engine.probeZoom(Math.exp(-deltaY * WHEEL_ZOOM)) <= PROBE.minZoom) useMapStore.getState().exitNearby();
         return;
       }
       // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.

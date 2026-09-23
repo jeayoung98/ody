@@ -972,10 +972,11 @@ export class MapEngine {
    *
    * 별 크기는 그대로다. 커지는 것은 **간격**이고, 겹쳐 읽히던 제목이 갈리는 것이 목적이다.
    */
-  probeZoom(factor: number) {
+  probeZoom(factor: number): number {
     const p = this.probe;
-    if (!p || p.exitingAt) return;
-    p.zoom = Math.min(PROBE.maxZoom, Math.max(1, p.zoom * factor));
+    if (!p || p.exitingAt) return 1;
+    p.zoom = Math.min(PROBE.maxZoom, Math.max(PROBE.minZoom, p.zoom * factor));
+    return p.zoom;
   }
 
   /** 주변 탐색 중 드래그 — 오버레이 전체를 민다. 고리 하나 반지름 안에서만 (다 밀어내면 빈 화면이 된다) */

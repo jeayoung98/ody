@@ -18,7 +18,7 @@
 | 좋아요 | `ArtworkService.changeLike`, `artwork_like(artwork_id, email)` | 무제한. 내 작품에도 누를 수 있다. `liked` 는 목표 상태(멱등) |
 | 재출품 | `ArtworkService.submit` | 기존 작품 삭제 → 좋아요도 FK CASCADE 로 삭제 |
 | 채점 그림 | `ArtworkRenderer` | 순서대로 잇는 열린 경로만 그린다 |
-| 상세·리더보드의 곡 | `ArtworkDetailResponse`, `ArtworkSummary` | 곡 id·좌표만. 제목·가수 없음 |
+| 상세·리더보드의 곡 | `ArtworkDetailResponse`, `ArtworkSummary` | 상세는 `musics`(곡 상세, 제목·가수 포함)를 이미 싣는다. **리더보드는 `musicCnt` 뿐** — 좌표도 곡 이름도 없다 |
 | FE 콘테스트 | `origin/frontend/jenkins` S15P21A405-602 | 목 BFF(`/bff/contests/*`)로 동작. 계약 초안 BACKEND-NOTES A-62~A-70 |
 
 ### 기획 결정 (효정, 2026-09-23)

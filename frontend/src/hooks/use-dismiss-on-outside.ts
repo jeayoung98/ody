@@ -2,6 +2,18 @@
 
 import { useEffect, type RefObject } from "react";
 
+/** 이 안에서 손을 떼면 **탭**이다. 손가락은 가만히 있어도 몇 px 흔들린다 (`use-panel-swipe` 와 같은 값) */
+const TAP_SLOP = 10;
+
+/**
+ * 바깥 누름을 어떻게 볼 것인가 (S15P21A405-593).
+ *
+ * - `false` — 바깥이 아니다. 그냥 흘려보낸다
+ * - `true` — **탭이면** 닫는다. 끌면 아무 일도 안 한다 (지도를 움직이려던 손)
+ * - `"swallow"` — 그 자리에서 삼키고 닫는다. 뒤가 눌리면 안 되는 자리 (시트 3 단)
+ */
+export type DismissVerdict = false | true | "swallow";
+
 /**
  * **바깥을 누르면 닫는다. 그리고 그 누름은 아무 일도 일으키지 않는다** (S15P21A405-532).
  *
@@ -54,7 +66,7 @@ export function useDismissOnOutside(
   ref: RefObject<HTMLElement | null>,
   onDismiss: () => void,
   enabled: boolean,
-  counts?: (e: PointerEvent) => boolean,
+  counts?: (e: PointerEvent) => DismissVerdict,
 ): void {
   useEffect(() => {
     if (!enabled) return;
@@ -90,15 +102,59 @@ export function useDismissOnOutside(
       timer = window.setTimeout(off, 700);
     };
 
-    const onPointerDown = (e: PointerEvent) => {
-      if (!isOutside(e)) return;
-      e.stopPropagation();
-      e.preventDefault();
+    /**
+     * **끄는 손가락은 삼키지 않는다** (S15P21A405-593).
+     *
+     * 예전에는 바깥 `pointerdown` 을 무조건 그 자리에서 삼켰다. 그러면 시트가 열려 있는 동안
+     * **지도가 누름 자체를 못 받는다** — 여정(별자리)처럼 패널이 늘 떠 있는 화면에서는 밀기도
+     * 핀치도 통째로 죽는다. 두 손가락 중 첫 손가락이 삼켜지므로 확대는 시작도 못 한다.
+     *
+     * 그래서 `true` 는 **탭일 때만** 센다: 누름은 그대로 흘려보내고, 손을 뗄 때까지 움직이지
+     * 않았으면 그때 닫는다. 끌었으면 아무 일도 안 한다 — 지도를 움직이려던 손이다.
+     *
+     * `"swallow"` 는 예전 그대로다. 시트가 화면을 거의 덮은 3 단처럼 **뒤가 눌리면 안 되는**
+     * 자리를 위해 남긴다 — 거기서는 무엇을 눌렀든 내려오는 것이 먼저다.
+     */
+    let press: { x: number; y: number; id: number } | null = null;
+
+    const onPointerUp = (e: PointerEvent) => {
+      const p = press;
+      press = null;
+      document.removeEventListener("pointerup", onPointerUp, true);
+      document.removeEventListener("pointercancel", onCancel, true);
+      if (!p || p.id !== e.pointerId) return;
+      // 끌었으면 지도를 움직이려던 것이다. 손가락은 가만히 있어도 몇 px 흔들린다
+      if (Math.hypot(e.clientX - p.x, e.clientY - p.y) > TAP_SLOP) return;
       swallowNextClick();
       onDismiss();
     };
 
+    const onCancel = () => {
+      press = null;
+      document.removeEventListener("pointerup", onPointerUp, true);
+      document.removeEventListener("pointercancel", onCancel, true);
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      const verdict = isOutside(e);
+      if (!verdict) return;
+      if (verdict === "swallow") {
+        e.stopPropagation();
+        e.preventDefault();
+        swallowNextClick();
+        onDismiss();
+        return;
+      }
+      press = { x: e.clientX, y: e.clientY, id: e.pointerId };
+      document.addEventListener("pointerup", onPointerUp, true);
+      document.addEventListener("pointercancel", onCancel, true);
+    };
+
     document.addEventListener("pointerdown", onPointerDown, true);
-    return () => document.removeEventListener("pointerdown", onPointerDown, true);
+    return () => {
+      document.removeEventListener("pointerdown", onPointerDown, true);
+      document.removeEventListener("pointerup", onPointerUp, true);
+      document.removeEventListener("pointercancel", onCancel, true);
+    };
   }, [ref, onDismiss, enabled, counts]);
 }

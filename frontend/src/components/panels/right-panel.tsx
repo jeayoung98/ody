@@ -78,9 +78,15 @@ export default function RightPanel() {
   const dismissOnMap = useCallback(
     (e: PointerEvent) => {
       if (!(e.target instanceof Element) || !e.target.closest("[data-map]")) return false;
-      if (snap === 3) return true;
+      // 3 단은 화면을 거의 덮은 상태라 뒤가 눌리면 안 된다 — 그 자리에서 삼키고 내린다
+      if (snap === 3) return "swallow";
       const engine = getMapEngine();
-      // 별도 사람도 아닌 빈 하늘을 눌렀을 때만 내려온다
+      /**
+       * 별도 사람도 아닌 빈 하늘을 눌렀을 때만 내려온다. **삼키지는 않는다**
+       * (S15P21A405-593) — 삼키면 지도가 누름을 못 받아 **밀기도 핀치도 죽는다.**
+       * 여정처럼 패널이 늘 떠 있는 화면에서 지도 조작이 통째로 안 먹던 원인이다.
+       * 끌지 않고 뗐을 때만 내려온다.
+       */
       return engine?.hitTest(e.clientX, e.clientY) == null && engine?.hitFriend?.(e.clientX, e.clientY) == null;
     },
     [snap],

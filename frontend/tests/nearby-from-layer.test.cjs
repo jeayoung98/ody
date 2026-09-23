@@ -11,7 +11,7 @@
  */
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { distanceBetween, distanceFrom, nearestFirst } = require("../src/lib/nearby-from-layer.ts");
+const { distanceBetween, distanceFrom, nearestFirst, radiusFromNeighbors, withinRadius } = require("../src/lib/nearby-from-layer.ts");
 
 test("두 점 사이 거리", () => {
   assert.equal(distanceBetween({ x: 0, y: 0 }, { x: 3, y: 4 }), 5);
@@ -77,4 +77,51 @@ test("넘겨받은 배열을 제자리에서 정렬하지 않는다", () => {
   const input = [person("c", 3), person("a", 1)];
   nearestFirst(input, 10);
   assert.equal(input[0].email, "c");
+});
+
+/**
+ * **"가깝다" 의 경계를 그 겹의 곡 분포에서 뽑는다** (S15P21A405-541).
+ * 고정 숫자를 박으면 겹마다 축의 퍼짐이 달라 한 겹에서는 아무도 안 뜨고 다른 겹에서는 다 뜬다.
+ */
+test("내 곡에서 k 번째로 가까운 곡까지가 경계다", () => {
+  assert.equal(radiusFromNeighbors([5, 1, 3, 2, 4], 3), 3);
+  assert.equal(radiusFromNeighbors([5, 1, 3, 2, 4], 1), 1);
+});
+
+test("곡이 k 개보다 적으면 있는 것 중 제일 먼 곡까지다", () => {
+  assert.equal(radiusFromNeighbors([2, 1], 80), 2);
+});
+
+test("곡이 하나도 없으면 0 — 아무도 안 들어온다", () => {
+  assert.equal(radiusFromNeighbors([], 80), 0);
+  assert.deepEqual(withinRadius([person("a", 1)], 0), []);
+});
+
+/**
+ * **인원을 채우지 않는다** (S15P21A405-596). 서버 상한은 열두 명을 채우는 값이라 사람이 적은
+ * 층에서 층 반대편 사람까지 넣어 준다. 경계를 걸어야 "주변 사람" 이 제 뜻을 갖는다.
+ */
+test("경계 밖 사람은 뺀다 — 자리가 남아도 안 채운다", () => {
+  const out = withinRadius([person("near", 1), person("far", 100)], 10);
+  assert.deepEqual(
+    out.map((p) => p.email),
+    ["near"],
+  );
+});
+
+test("경계 위에 딱 걸치면 넣는다", () => {
+  assert.equal(withinRadius([person("edge", 10)], 10).length, 1);
+});
+
+test("가까이 아무도 없으면 빈 목록 — 그게 사실이다", () => {
+  assert.deepEqual(withinRadius([person("far", 999)], 10), []);
+});
+
+/** 내 자리를 모르면 거리를 잴 기준이 없다. 그때 넣어 두면 "가깝다" 가 아무 뜻이 없어진다 */
+test("경계를 모르면 아무도 안 넣는다", () => {
+  assert.deepEqual(withinRadius([person("a", 1)], null), []);
+});
+
+test("잴 수 없던 사람은 경계에서 걸러진다", () => {
+  assert.deepEqual(withinRadius([person("unknown", Number.POSITIVE_INFINITY)], 10), []);
 });

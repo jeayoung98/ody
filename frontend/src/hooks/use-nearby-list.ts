@@ -4,8 +4,9 @@ import { useMemo } from "react";
 import { LAYER_USERS } from "@/constants";
 import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
 import { botAsNearbyPerson } from "@/lib/bots/adapt";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { layerPointOf } from "@/lib/layer-point";
-import { distanceFrom, nearestFirst, type Point } from "@/lib/nearby-from-layer";
+import { distanceBetween, distanceFrom, nearestFirst, radiusFromNeighbors, withinRadius, type Point } from "@/lib/nearby-from-layer";
 import { useBotStore } from "@/stores/use-bot-store";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -69,13 +70,34 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
     for (const p of fromLayer(layerUsers, seen)) merged.push(p);
 
     /**
-     * 거리를 전부 다시 재고 가까운 순으로 상한까지 자른다. **자르는 자리가 여기 하나뿐이라**
-     * 출처가 몇이든 패널에 뜨는 수는 늘 같다.
+     * 거리를 전부 다시 재고, **경계 안만 남기고**, 가까운 순으로 상한까지 자른다.
+     * 세 규칙이 한 자리에 있어야 출처가 몇이든 패널이 같은 뜻을 갖는다.
+     *
+     * 경계가 먼저다 (S15P21A405-596). 서버 상한은 열두 명을 *채우는* 값이라 사람이 적은 층에서
+     * **층 반대편 사람까지 넣어 준다** — 그걸 그대로 그리면 "주변 사람" 이 아니라 "이 층 사람"
+     * 이 된다. 가까이 아무도 없으면 비는 것이 맞고, 화면은 그때 안내 한 줄을 띄운다.
      */
     const me = layerPointOf(anchorMusicId, layer);
     const placed = merged.map((p) => ({ ...p, distance: distanceFrom(me, pointOfPerson(p, layer)) }));
-    return nearestFirst(placed, LAYER_USERS.maxInPanel);
+    return nearestFirst(withinRadius(placed, nearRadius(layer, me)), LAYER_USERS.maxInPanel);
   }, [enabled, fromServer, bots, layer, anchorMusicId, layerUsers]);
+}
+
+/**
+ * "가깝다" 의 경계 (S15P21A405-596). 내 자리를 모르면 `null` — 잴 기준이 없다.
+ *
+ * 이 겹 상주 집합을 한 번 훑는다. 1,000곡짜리 배열이고 목록을 다시 만들 때만 도는 자리라
+ * 값이 싸다. 고정 숫자를 안 쓰는 이유는 `radiusFromNeighbors` 에 적어 뒀다.
+ */
+function nearRadius(layer: number, me: Point | null): number | null {
+  const engine = getMapEngine();
+  if (!engine || !me) return null;
+  const dx = layer * 2;
+  const dy = dx + 1;
+  return radiusFromNeighbors(
+    engine.songs.map((s) => distanceBetween({ x: s.pc[dx], y: s.pc[dy] }, me)),
+    LAYER_USERS.neighborK,
+  );
 }
 
 /**

@@ -13,8 +13,13 @@ import type { UserProfile } from "@/types";
 interface FeedHeaderProps {
   profile: UserProfile;
   isMe: boolean;
-  /** 팔로워·팔로잉 숫자를 눌렀다 (S15P21A405-577). 목록을 어디에 그릴지는 패널이 정한다 */
-  onOpenFollows: (type: "follower" | "following") => void;
+  /**
+   * 팔로워·팔로잉 숫자를 눌렀다 (S15P21A405-577). 목록을 어디에 그릴지는 패널이 정한다.
+   *
+   * **없으면 숫자가 그냥 글자다** (S15P21A405-593). 데모 봇처럼 목록을 가져올 곳이 없는
+   * 상대가 있다 — 누를 수 있게 두면 눌러 봐야 오류만 나온다.
+   */
+  onOpenFollows?: (type: "follower" | "following") => void;
 }
 
 /**
@@ -93,8 +98,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
       </div>
 
       <div className="flex flex-wrap gap-3.5">
-        <StatInline label="팔로워" value={profile.followerCount.toLocaleString()} onClick={() => onOpenFollows("follower")} />
-        <StatInline label="팔로잉" value={profile.followingCount.toLocaleString()} onClick={() => onOpenFollows("following")} />
+        <StatInline label="팔로워" value={profile.followerCount.toLocaleString()} onClick={onOpenFollows && (() => onOpenFollows("follower"))} />
+        <StatInline label="팔로잉" value={profile.followingCount.toLocaleString()} onClick={onOpenFollows && (() => onOpenFollows("following"))} />
         {!isMe && <StatInline label="만남" value={`${profile.meetingCount ?? 0}회`} />}
       </div>
 

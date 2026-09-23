@@ -62,6 +62,23 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
     },
 
     onSuccess: (r, target) => {
+      /**
+       * **타면 내 별자리는 무조건 사라진다** (ACT-01, S15P21A405-621).
+       *
+       * 지우는 일 자체는 원래도 일어났다 — 아래 `playFrom` 이 인솔자 곡을 `playSingle` 로 트는데,
+       * 거기 "별자리에 없는 곡을 틀면 별자리를 지운다" 가 들어 있다. 문제는 그 조건이
+       * **인솔자 곡이 내 목록에 없을 때**만 맞는다는 것이다. 인솔자가 마침 내 여정·플리 안의
+       * 곡을 듣고 있으면 조건에 안 걸려서 별자리가 그대로 남았다.
+       *
+       * 타는 동안 보는 것은 내 목록이 아니라 **인솔자가 가는 길**이다. 우연히 겹친 한 곡 때문에
+       * 남의 여정을 따라가면서 내 별자리를 보고 있게 두지 않는다.
+       *
+       * 여기 두는 이유는 **탑승이 시작되는 자리가 여기 하나**여서다 — 보통 탑승도, 봇 탑승도,
+       * 새로고침 뒤 재탑승(S15P21A405-615)도 전부 이 뮤테이션을 지난다.
+       *
+       * 여정 경로 자체(`useJourneyStore`)는 안 지운다. 하차하면 돌아갈 자리가 있어야 한다.
+       */
+      useMapStore.getState().clearConstellation();
       useFollowStore.getState().start({
         email: r.captainEmail,
         nickname: target.nickname,

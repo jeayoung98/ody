@@ -1,7 +1,6 @@
 "use client";
 
 import Box from "@/components/common/box";
-import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
 import { useNearbyList } from "@/hooks/use-nearby-list";
@@ -72,9 +71,6 @@ export default function FriendsPanel() {
 
   return (
     <Box title="주변 사람" actions={<PanelCloseButton />}>
-      <Note>
-        지금 나와 <b>가까운 곳</b>에 있는 사람입니다. 여기서의 거리는 실제 위치가 아니라 음악 지도상의 좌표 거리예요.
-      </Note>
       {/*
         레이더가 위, 줄 목록이 아래다 (S15P21A405-496). 레이더는 **어느 쪽에 얼마나 멀리**
         있는지를 한눈에 보여주고(S15P21A405-582 로 각도도 진짜가 됐다), 목록은 레이더에 넣을
@@ -87,16 +83,21 @@ export default function FriendsPanel() {
       */}
       <div className="relative">
         <NearbyRadar people={people} />
-        {/*
-          안내는 레이더 **아래쪽에 떠 있는 알약**이다 (S15P21A405-511). 판 한가운데가 아니라
-          아래 끝에 두는 이유는 가운데에 내가 있고 그 둘레가 사람 자리이기 때문이다 — 거기를
-          덮으면 정작 볼 것을 가린다. 모양은 하단 토스트(`common/toast`)와 같은 글래스 알약이다.
-        */}
+        {/* 반응은 레이더 **우측 하단**이다 (S15P21A405-608). 판 모서리는 원 밖이라 사람 헬멧이 오지 않는 자리다.
+            버튼이 맨 오른쪽이고 이모지 칸은 왼쪽으로 펼쳐진다 */}
+        <div className="absolute right-0 bottom-0 z-20">
+          <ReactionButton people={people} />
+        </div>
+      </div>
+      {/*
+        안내는 레이더 **아래의 고정 높이 칸**에 든다 (S15P21A405-608). 예전에는 레이더 위에 떠 있는
+        알약이었는데(S15P21A405-511) 둘레 사람이 아래쪽에 있으면 헬멧과 겹쳤다. 칸 높이를 고정해
+        안내가 생기고 사라져도 아래 목록이 출렁이지 않는다. 모양은 하단 토스트(`common/toast`)와 같다.
+      */}
+      <div className="flex h-9 items-center justify-center">
         {notice && (
-          <div className="pointer-events-none absolute inset-x-0 bottom-0 flex justify-center">
-            <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[11.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
-              {notice}
-            </div>
+          <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[11.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
+            {notice}
           </div>
         )}
       </div>
@@ -115,11 +116,6 @@ export default function FriendsPanel() {
           가운데의 나를 위로 밀어낼 뿐이었다. 할 일이 있는 422·503 안내는 위에 그대로 남는다.
         */}
         {people.map((p) => <FriendRow key={p.email} person={p} />)}
-      </div>
-      {/* 반응은 패널 **오른쪽 아래**다 (S15P21A405-496). 목록 위에 있으면 목록을 읽기 전에
-          먼저 걸리는데, 반응은 보고 나서 하는 일이다 */}
-      <div className="mt-1 flex justify-end">
-        <ReactionButton people={people} />
       </div>
     </Box>
   );

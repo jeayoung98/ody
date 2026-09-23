@@ -2,7 +2,7 @@
 
 import { useEffect, useRef } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { REACTIONS } from "@/constants";
+import { emojiOf } from "@/constants";
 import type { FloatingReaction } from "@/stores/use-reaction-store";
 
 /**
@@ -12,7 +12,7 @@ import type { FloatingReaction } from "@/stores/use-reaction-store";
  */
 export default function FloatingReactionItem({ reaction }: { reaction: FloatingReaction }) {
   const ref = useRef<HTMLDivElement>(null);
-  const emoji = REACTIONS.find((x) => x.key === reaction.reactionKey)?.emoji ?? "✨";
+  const emoji = emojiOf(reaction.reactionKey);
 
   useEffect(() => {
     let raf = 0;

@@ -3,6 +3,8 @@
 import HelmetAvatar from "@/components/common/helmet-avatar";
 import { RADAR } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
+import { layerPointOf } from "@/lib/layer-point";
+import type { Point } from "@/lib/nearby-from-layer";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { NearbyPerson } from "@/types";
@@ -12,16 +14,116 @@ import type { NearbyPerson } from "@/types";
  *
  * 가운데가 나고, 주변에 사람들이 헬멧으로 놓인다.
  *
- * **반지름만 진짜다.** `distance`(내 곡과의 거리)를 쓴다 — 멀수록 바깥이다. **각도는 의미가
- * 없다.** `NearbyPerson` 에 좌표가 오지 않아서(명세 §6.1) 방향을 만들 근거가 없다. 그래서
- * 해시 같은 것으로 흩뿌리지 않고 **고르게 나눠** 둔다 — 겹치지 않게 하는 것이 목적이고, 고른
- * 배치는 적어도 "이 방향에 뭔가 있다" 는 오해를 덜 만든다.
+ * **이제 각도도 진짜다** (S15P21A405-582). 예전에는 `NearbyPerson` 에 좌표가 없어서 방향을
+ * 만들 근거가 없었고, 그래서 사람들을 고르게 나눠 두기만 했다. 5차에서 서버가 층 좌표를 실어
+ * 주면서 방향이 생겼다 — 반지름은 내 자리에서의 거리, 각도는 그쪽 방향이다.
  *
- * 좌표가 생기면 `angleOf` 만 바꾸면 된다.
+ * **층의 미니맵은 아니다** (S15P21A405-596). 층에 있는 사람을 다 그리는 판이 아니라 **가까운
+ * 열두 명을 둘레에 벌려 놓는** 판이다. 그래서 같은 곡을 듣는 사람이 한 점에 포개지면 그대로
+ * 두지 않고 밀어낸다 (`spreadApart`) — 판의 목적이 "누를 수 있게 보여 주는 것" 이라서다.
+ *
+ * 자리를 모르는 사람만 예전 방식(`angleOf`)으로 흩어 둔다.
  */
 
-/** 이 사람을 몇 시 방향에 둘지. 고르게 나누고 위(12시)부터 시계방향으로 */
+/** 자리를 모르는 사람을 둘 곳. 고르게 나누고 위(12시)부터 시계방향으로 */
 export const angleOf = (i: number, total: number) => (i / Math.max(1, total)) * Math.PI * 2 - Math.PI / 2;
+
+/**
+ * 내 자리에서 그 사람 쪽을 바라보는 각 (S15P21A405-582). 자리를 모르면 `null`.
+ *
+ * 화면은 y 가 아래로 자라고 층 좌표는 위로 자란다. 그래서 y 를 뒤집어야 지도에서 위쪽에 있는
+ * 사람이 레이더에서도 위에 온다 — `angleOf` 의 12시 기준과 같은 방향이다.
+ *
+ * **같은 곡을 듣는 사람은 각도도 반지름도 같아진다.** 그대로 두면 완전히 포개지므로
+ * `spreadApart` 가 떼어 놓는다.
+ */
+export function bearingOf(me: Point | null, at: Point | null): number | null {
+  if (!me || !at) return null;
+  return Math.atan2(-(at.y - me.y), at.x - me.x);
+}
+
+/** 겹친 헬멧 사이에 남길 틈(px). 0 이면 테두리가 맞닿아 두 개인지 하나인지 안 보인다 */
+const SPREAD_GAP = 3;
+/** 밀어내기 반복 횟수. 12명에 이 정도면 남는 겹침이 없다 (`tests/nearby-radar.test.cjs`) */
+const SPREAD_PASSES = 8;
+
+/**
+ * **겹친 헬멧을 밀어낸다** (S15P21A405-596).
+ *
+ * 각도를 좌표로 잡으면 **같은 곡을 듣는 사람은 각도도 반지름도 같아 완전히 포개진다.** 맨 위
+ * 한 명만 눌리고 나머지는 있는지도 모른다 — 레이더에서 사람을 누르는 것이 프로필로 가는 길이라
+ * 그냥 안 보이는 것보다 나쁘다.
+ *
+ * 그래서 방향은 좌표대로 두되, 닿는 짝만 서로 반대로 조금씩 민다. 몇 번 반복하면 자리가 잡힌다.
+ *
+ * **무작위를 쓰지 않는다.** 완전히 같은 자리에 겹친 짝은 밀어낼 방향이 없는데, 거기서 난수를
+ * 쓰면 다시 그릴 때마다 헬멧이 튄다. 대신 **차례 번호로 방향을 정해** 같은 입력이면 같은
+ * 그림이 나오게 한다.
+ */
+export function spreadApart(items: readonly { x: number; y: number; d: number }[], bound: number): { x: number; y: number }[] {
+  const out = items.map((it) => ({ x: it.x, y: it.y }));
+
+  /**
+   * **똑같은 자리부터 부채꼴로 편다.** 같은 곡을 듣는 사람이 흔해서 한 점에 여럿이 겹치는데,
+   * 그 상태로 아래 밀어내기만 돌리면 서로 반대로 밀다가 다시 부딪히기를 되풀이한다 — 열두 명이
+   * 한 점이면 여덟 번을 돌려도 안 풀렸다.
+   *
+   * 먼저 원 위에 고르게 놓아 두면 남는 겹침은 이웃 무리와의 경계뿐이고, 그건 몇 번이면 풀린다.
+   */
+  const groups = new Map<string, number[]>();
+  out.forEach((p, i) => {
+    const key = `${Math.round(p.x)},${Math.round(p.y)}`;
+    const at = groups.get(key);
+    if (at) at.push(i);
+    else groups.set(key, [i]);
+  });
+  for (const idx of groups.values()) {
+    if (idx.length < 2) continue;
+    const need = Math.max(...idx.map((i) => items[i].d)) + SPREAD_GAP;
+    // 이웃끼리 `need` 만큼 벌어지는 원의 반지름
+    const r0 = need / (2 * Math.sin(Math.PI / idx.length));
+    idx.forEach((i, k) => {
+      const a = (k / idx.length) * Math.PI * 2 - Math.PI / 2;
+      out[i] = { x: out[i].x + Math.cos(a) * r0, y: out[i].y + Math.sin(a) * r0 };
+    });
+  }
+
+  for (let pass = 0; pass < SPREAD_PASSES; pass++) {
+    let moved = false;
+    for (let i = 0; i < out.length; i++) {
+      for (let j = i + 1; j < out.length; j++) {
+        const need = (items[i].d + items[j].d) / 2 + SPREAD_GAP;
+        let dx = out[j].x - out[i].x;
+        let dy = out[j].y - out[i].y;
+        let dist = Math.hypot(dx, dy);
+        if (dist >= need) continue;
+        if (dist < 1e-6) {
+          // 부채꼴을 펴고도 겹쳤다. 차례 번호로 방향을 갈라 매번 같은 그림이 나오게 한다
+          const a = ((i * 2 + j) * Math.PI * 2) / Math.max(1, out.length * 2);
+          dx = Math.cos(a);
+          dy = Math.sin(a);
+          dist = 1;
+        }
+        const push = (need - dist) / 2 / dist;
+        out[i].x -= dx * push;
+        out[i].y -= dy * push;
+        out[j].x += dx * push;
+        out[j].y += dy * push;
+        moved = true;
+      }
+    }
+    if (!moved) break;
+  }
+
+  // 밀다 보면 판 밖으로 나간다. 테두리 안에 붙여 둔다 — 잘려 나가면 누를 수가 없다
+  return out.map((p, i) => {
+    const max = Math.max(0, bound - items[i].d / 2);
+    const dist = Math.hypot(p.x, p.y);
+    if (dist <= max || dist < 1e-6) return p;
+    const k = max / dist;
+    return { x: p.x * k, y: p.y * k };
+  });
+}
 
 /**
  * 가운데에서 얼마나 떨어뜨릴지 (0~1).
@@ -63,11 +165,29 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
   const { data: me } = useMeQuery();
   // 내 헬멧 색도 내가 듣는 곡의 장르를 따라간다 — 지도의 내 표식과 같은 규칙이다
   const myMusicId = useMapStore((s) => s.myMusicId);
+  const layer = useMapStore((s) => s.layer);
+  // 각도의 기준점. 아직 아무 곡도 안 틀었으면 없고, 그때는 예전처럼 고르게 흩어 둔다
+  const me0 = layerPointOf(myMusicId, layer);
 
   // 빈 배열이면 Math.max 가 -Infinity 라 0 을 함께 넣는다
   const maxDistance = Math.max(...people.map((p) => p.distance).filter(Number.isFinite), 0);
   const maxMeeting = Math.max(...people.map((p) => p.meetingCount), 0);
   const R = RADAR.size / 2;
+
+  /**
+   * 자리를 먼저 다 잡고 그린다. **밀어내기가 짝을 봐야 해서** 한 명씩 그리며 정할 수 없다.
+   * 열두 명짜리 배열이라 매 렌더 돌려도 값이 싸다.
+   */
+  const sizes = people.map((p) => sizeOf(p.meetingCount, maxMeeting));
+  const spots = spreadApart(
+    people.map((p, i) => {
+      const at = p.x != null && p.y != null ? { x: p.x, y: p.y } : layerPointOf(p.musicId, layer);
+      const a = bearingOf(me0, at) ?? angleOf(i, people.length);
+      const r = radiusOf(p.distance, maxDistance) * R;
+      return { x: Math.cos(a) * r, y: Math.sin(a) * r, d: sizes[i] };
+    }),
+    R,
+  );
 
   return (
     <div className="relative mx-auto" style={{ width: RADAR.size, height: RADAR.size }} aria-label="주변 사람 레이더">
@@ -80,8 +200,9 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
 
       {/*
         탐색 빛 (S15P21A405-510). 눈금 위, 사람 아래다 — 사람을 덮으면 읽는 것을 방해한다.
-        **지나가는 자리의 사람을 밝히지 않는다** — 각도는 애초에 무의미해서(좌표가 오지 않는다)
-        빛이 그 사람을 "찾았다" 처럼 보이면 없는 정보를 지어내는 셈이 된다. 분위기만 맡는다.
+        **지나가는 자리의 사람을 밝히지 않는다.** 각도가 진짜가 된 지금도 마찬가지다
+        (S15P21A405-582) — 빛이 도는 속도와 사람이 있는 자리는 아무 관계가 없어서, 밝히면
+        "지금 저 사람을 찾았다" 는 없는 뜻이 생긴다. 분위기만 맡는다.
       */}
       <span aria-hidden className="pointer-events-none absolute inset-0 grid place-items-center">
         <span
@@ -123,9 +244,8 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
       </span>
 
       {people.map((p, i) => {
-        const a = angleOf(i, people.length);
-        const d = sizeOf(p.meetingCount, maxMeeting);
-        const r = radiusOf(p.distance, maxDistance) * R;
+        const d = sizes[i];
+        const spot = spots[i];
         // 자주 마주친 사람만 숨쉰다. 전부 뛰면 화면이 출렁이고 "크다" 는 신호도 사라진다
         const breathes = maxMeeting > 0 && p.meetingCount >= maxMeeting * RADAR.breatheFrom;
         return (
@@ -138,8 +258,8 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
             style={{
               width: d,
               height: d,
-              left: R + Math.cos(a) * r,
-              top: R + Math.sin(a) * r,
+              left: R + spot.x,
+              top: R + spot.y,
               marginLeft: -d / 2,
               marginTop: -d / 2,
               // 주기를 사람마다 달리 줘 심장박동처럼 맞아떨어지지 않게 한다

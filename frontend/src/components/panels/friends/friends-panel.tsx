@@ -101,7 +101,14 @@ export default function FriendsPanel() {
           </div>
         )}
       </div>
-      <div className="-mx-1.5 flex flex-col gap-0.5">
+      {/*
+        **레이더는 붙박이, 목록만 스크롤** (S15P21A405-635). Box 본문이 통째로 스크롤 상자라 사람이
+        많으면 목록을 내릴 때 레이더가 위로 사라졌다 — 레이더는 "어디에 누가" 를 보는 기준판이라
+        목록을 훑는 동안에도 보여야 한다. 이 칸이 남은 높이를 받아(`min-h-0 flex-1`) 제 안에서만
+        넘치게 하면 본문은 넘칠 일이 없어 바깥 스크롤이 서지 않는다. 데스크톱 패널(max-h)과 폰
+        화면(`PanelScreen` 의 flex-1 section) 둘 다 본문 높이가 잡혀 있어 같은 식으로 된다.
+      */}
+      <div className="scroll-quiet -mx-1.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
         {/*
           **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는
           TanStack Query v5 에서 `pending` 으로 멈춰 있어서, `isPending` 으로 스피너를 띄우면

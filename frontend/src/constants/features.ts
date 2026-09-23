@@ -17,7 +17,7 @@
  * `features.social` 로 갈라 둔 자리가 "항상 참" 으로 좁혀지고 비교문이 타입 오류가 난다
  * (`help-dialog.tsx` 의 `when !== false`). 지금 값이 전부 참인 것은 상태일 뿐 타입이 아니다.
  */
-type Features = { profile: boolean; playlist: boolean; social: boolean; chart: boolean };
+type Features = { profile: boolean; playlist: boolean; social: boolean; chart: boolean; contest: boolean };
 
 export const FEATURES: Features = {
   /** 마이페이지 — 내 프로필 패널, 지도에서 남의 프로필 열기 */
@@ -32,6 +32,8 @@ export const FEATURES: Features = {
   social: true,
   /** 차트 — 인기 플리·유저 랭킹 */
   chart: true,
+  /** 별자리 콘테스트 — 상단 원형 버튼, 그리기·갤러리·순위 패널 (S15P21A405-602). 아직 전부 목이다 */
+  contest: true,
 };
 
 /** 지금 열 수 있는 패널인가. 숨긴 기능의 패널은 프로그램으로 열려도 렌더하지 않는다 */
@@ -42,6 +44,7 @@ const panelsFor = (f: typeof FEATURES): Record<string, boolean> => ({
   playlist: f.playlist,
   friends: f.social,
   chart: f.chart,
+  contest: f.contest,
 });
 
 /**
@@ -57,7 +60,7 @@ export const PANEL_ENABLED = panelsFor(FEATURES);
  * 축이 생긴 셈인데, 예전(S15P21A405-333)처럼 네 기능을 통째로 감추던 것과는 범위가 다르다 —
  * 나머지는 설문 모드에서도 그대로 쓴다.
  */
-export const SURVEY_FEATURES: Features = { ...FEATURES, chart: false };
+export const SURVEY_FEATURES: Features = { ...FEATURES, chart: false, contest: false };
 
 /** {@link PANEL_ENABLED} 와 같은 이유로 미리 만든다 */
 export const SURVEY_PANEL_ENABLED = panelsFor(SURVEY_FEATURES);

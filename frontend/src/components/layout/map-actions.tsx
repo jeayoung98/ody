@@ -1,7 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { JourneyIcon } from "@/components/common/icons";
+import { ConstellationIcon, JourneyIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
 import { usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
@@ -55,6 +55,12 @@ export default function MapActions() {
       {panelEnabled.journey && (
         <RailButton label="여정" active={composerOpen} onClick={pressJourney} data-tutorial="journey">
           <JourneyIcon size={16} />
+        </RailButton>
+      )}
+      {/* 폰의 콘테스트 입구 — 데스크톱은 우상단 원형 버튼이 맡는다 (S15P21A405-602) */}
+      {panelEnabled.contest && (
+        <RailButton label="별자리 콘테스트" active={false} onClick={() => toggle("contest")} data-tutorial="contest">
+          <ConstellationIcon size={16} />
         </RailButton>
       )}
     </div>

@@ -271,3 +271,14 @@ export const GripIcon = ({ size = 14, ...p }: P) => (
     <path d="M4 16h16" />
   </svg>
 );
+
+/** 별자리 — 점 넷을 선으로 이은 모양. 콘테스트 진입 버튼 (S15P21A405-602) */
+export const ConstellationIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M5 17.5 9.5 7l5.5 6 4-9" />
+    <circle cx="5" cy="17.5" r="1.7" fill="currentColor" stroke="none" />
+    <circle cx="9.5" cy="7" r="1.7" fill="currentColor" stroke="none" />
+    <circle cx="15" cy="13" r="1.7" fill="currentColor" stroke="none" />
+    <circle cx="19" cy="4" r="1.7" fill="currentColor" stroke="none" />
+  </svg>
+);

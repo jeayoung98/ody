@@ -72,11 +72,11 @@ export default function SongNearbyCard({ musicId, title, artist, rank, playing, 
       <div ref={coverRef} aria-hidden className="absolute inset-0 bg-cover bg-center transition-transform duration-normal ease-spring group-hover:scale-[1.06]" />
       {/* 글자 자리만 어둡게 — 커버 위쪽은 그대로 보여 준다 */}
       <div aria-hidden className="absolute inset-0 bg-gradient-to-t from-void via-void/70 via-38% to-transparent to-72%" />
-      <span className="num absolute top-1 left-2 text-[11.5px] text-ink-2 drop-shadow-[0_1px_4px_rgba(4,6,13,.9)]">#{rank}</span>
-      {playing && <span className="absolute top-1 right-2 text-[11px] text-teal drop-shadow-[0_1px_4px_rgba(4,6,13,.9)]">▶</span>}
+      <span className="num absolute top-1 left-2 text-[12.5px] text-ink-2 drop-shadow-[0_1px_4px_rgba(4,6,13,.9)]">#{rank}</span>
+      {playing && <span className="absolute top-1 right-2 text-[12px] text-teal drop-shadow-[0_1px_4px_rgba(4,6,13,.9)]">▶</span>}
       <span className="absolute inset-x-0 bottom-0 flex flex-col gap-px px-2 pb-2">
-        <MarqueeText text={title} className="text-[13px] leading-tight font-medium text-ink drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
-        <MarqueeText text={artist ?? "Unknown"} className="text-[12px] leading-tight text-ink-3 drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
+        <MarqueeText text={title} className="text-[14px] leading-tight font-medium text-ink drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
+        <MarqueeText text={artist ?? "Unknown"} className="text-[13px] leading-tight text-ink-3 drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
       </span>
     </button>
   );

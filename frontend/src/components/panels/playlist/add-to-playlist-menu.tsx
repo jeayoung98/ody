@@ -46,7 +46,7 @@ export default function AddToPlaylistMenu({ musicId, onDone }: AddToPlaylistMenu
               className="flex w-full items-center justify-between rounded-box-sm border border-transparent px-[9px] py-2 text-left text-sm transition-colors hover:border-line hover:bg-white/[.055]"
             >
               <span className="truncate">{p.playlistName}</span>
-              <span className="num text-[11.5px] text-ink-3">{p.itemCount}곡 · ＋</span>
+              <span className="num text-[12.5px] text-ink-3">{p.itemCount}곡 · ＋</span>
             </button>
           ))}
         </div>

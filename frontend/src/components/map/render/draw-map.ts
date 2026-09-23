@@ -438,7 +438,14 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.font = `500 ${MAP_TITLE_PX.cover}px ${FONTS.body}`;
-  for (const i of picked) {
+  /**
+   * **먼 것부터, 가까운 것을 맨 위에** (S15P21A405-632). 크기는 깊이를 따르는데(614) 그리는
+   * 순서는 `picked`(우선순위) 순이라, 뒤쪽의 작은 커버가 앞쪽의 큰 커버를 덮어 원근이 뒤집혀
+   * 보였다. 화가 알고리즘대로 깊이 배율 오름차순으로 그린다 — `picked` 자체는 안 건드린다,
+   * 그 순서는 다음 프레임의 자리 유지에 쓰인다.
+   */
+  const paintOrder = [...picked].sort((a, b) => e.depthScale(a) - e.depthScale(b));
+  for (const i of paintOrder) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
     // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)

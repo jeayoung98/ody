@@ -269,8 +269,13 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
 
   g.textAlign = "center";
   g.textBaseline = "middle";
-  // 인솔자는 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는 우주선이 가려지지 않는다 (S15P21A405-625)
-  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader));
+  /**
+   * 그리는 순서 = 깊이 순서. **먼(작은) 표식부터, 가까운(큰) 표식이 위에** (S15P21A405-632) —
+   * 크기는 서 있는 별의 깊이를 따르는데(614) 순서가 이를 모르면 뒤쪽 작은 헬멧이 앞쪽 큰 헬멧을
+   * 덮어 원근이 뒤집힌다. 인솔자는 그 위 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는
+   * 우주선이 가려지지 않는다 (S15P21A405-625).
+   */
+  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader) || a.scale - b.scale);
   for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);

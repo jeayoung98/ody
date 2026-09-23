@@ -26,7 +26,6 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
 import { MapEngine } from "./engine/map-engine";
-import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
@@ -885,7 +884,6 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
-      {features.social && <FloatingReactions />}
       {/*
         상세로 들어가면 **카드를 같이 내린다** (S15P21A405-417). 카드는 z-25 라 패널(z-20) 위에
         뜬다 — 안 내리면 곡 상세를 열어 놓고도 카드가 그 위에 얹혀 "UI 가 뚫고 나온" 것처럼 보인다.

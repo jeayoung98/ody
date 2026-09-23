@@ -164,7 +164,7 @@ export function sizeOf(meetingCount: number, max: number): number {
 export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
   const openFeed = usePanelStore((s) => s.openFeed);
   const { data: me } = useMeQuery();
-  // 지도 위에 뜨는 반응을 여기서도 띄운다 (S15P21A405-608) — 패널을 보는 중에는 지도가 가려져 있다
+  // 반응 이모지는 **여기에만** 뜬다 (S15P21A405-608). 지도 위 오버레이는 걷어냈다 — 지도가 어수선해진다
   const floating = useReactionStore((s) => s.floating);
   // 내 헬멧 색도 내가 듣는 곡의 장르를 따라간다 — 지도의 내 표식과 같은 규칙이다
   const myMusicId = useMapStore((s) => s.myMusicId);

@@ -2234,19 +2234,6 @@ export class MapEngine {
     return best;
   }
 
-  /** 내 위치(우주선·헬멧)의 화면 좌표. 반응 이모지가 여기서 떠오른다 (SOCIAL-02) */
-  mePos(): { x: number; y: number } | null {
-    if (this.myId == null) return null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
-    return { x: px, y: py };
-  }
-
-  /** 지도에 떠 있는 사용자의 화면 좌표. 내 뷰 안에 없으면 null (남의 반응은 그때만 보인다) */
-  friendScreenPos(email: string): { x: number; y: number } | null {
-    const f = this.visFriends.find((v) => v.user.email === email);
-    return f ? { x: f.px, y: f.py } : null;
-  }
-
   hitFriend(mx: number, my: number): VisibleFriend | null {
     for (const fr of this.visFriends) if ((fr.px - mx) ** 2 + (fr.py - my) ** 2 < 22 * 22) return fr;
     return null;

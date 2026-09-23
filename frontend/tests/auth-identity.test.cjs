@@ -33,7 +33,6 @@ const detail = (over = {}) => ({
   email: "me@ody.app",
   name: "오디",
   nickname: "우주탐험가",
-  isPublic: true,
   tutorialCompleted: false,
   lastActiveAt: null,
   createdAt: new Date(Date.now() - 3 * 24 * 60 * 60 * 1000).toISOString(),

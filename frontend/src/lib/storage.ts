@@ -29,6 +29,20 @@ function notify(): void {
   for (const listener of listeners) listener();
 }
 
+/**
+ * **값은 그대로 두고 구독자만 다시 읽게 한다** (S15P21A405-588).
+ *
+ * `useSyncExternalStore` 는 알림이 와야 스냅샷을 다시 읽는다. 그래서 구독 값이 실제
+ * 저장소와 어긋난 채 커밋되면 — 하이드레이션 시점의 서버 스냅샷(토큰 없음)이 그렇다 —
+ * 그 뒤로 저장소를 건드리는 사람이 없으면 **영영 어긋난 채로 남는다.** 로그인해도 스플래시만
+ * 돌고 새로고침해야 지도가 뜨던 것이 이것이다.
+ *
+ * 어긋난 것을 발견한 쪽이 이걸 불러 한 번 깨운다. 저장소는 안 건드리므로 값이 바뀌지 않는다.
+ */
+export function resyncStorage(): void {
+  notify();
+}
+
 /** 두 저장소를 모두 본다 — 어디에 넣었는지 읽는 쪽이 신경 쓰지 않게 */
 export function readStorage<T>(key: string): T | null {
   if (typeof window === "undefined") return null;

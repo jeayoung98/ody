@@ -1,7 +1,15 @@
 import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
-import { drawFriends } from "./draw-friends";
+import { drawFriends, drawQueue, drawShip } from "./draw-friends";
+
+/**
+ * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
+ * 남의 우주선(12.5~15)과 같은 눈높이로 둔다 — 내 것만 크면 축척이 어긋나 보인다.
+ */
+const ME_SHIP_R = 13;
+/** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
+const TEAL_RGB: readonly [number, number, number] = [79, 227, 206];
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
 import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
@@ -432,9 +440,9 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.font = `500 9.5px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
-    // 크기도 글자 밝기도 곡마다 같다 (S15P21A405-518) — 둘 다 weight 에서 나오던 값인데
-    // 실데이터는 weight 가 전부 0 이라 musicId 해시로 굴러가고 있었다. 배율 확대만 남긴다
-    const S = COVER_COUNT.sizePx * grow;
+    // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
+    // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)
+    const S = COVER_COUNT.sizePx * grow * e.depthScale(i);
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다
@@ -626,6 +634,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   for (let ri = p.rings.length - 1; ri >= 0; ri--) {
     const r = p.rings[ri];
     const isCur = r === cur;
+    /**
+     * **벌려 본 배율이 크기에도 걸린다** (S15P21A405-593). 자리만 벌리면 별은 그대로인 채
+     * 이웃이 멀어질 뿐이라 "확대" 로 안 읽힌다 — 간격과 크기가 같이 커져야 다가간 것이 된다.
+     * 이 값은 별 지름과 가운데 점, 강조 링에 함께 쓰인다.
+     */
     const sc = e.ringScale(r);
     // 물러난 고리는 오므라드는 만큼 옅어진다 — 뭉치가 될 때 밝기가 그대로면 새 고리보다 눈에 띈다
     const a = k * e.ringK(r) * (isCur ? 1 : PROBE.prevAlpha);
@@ -923,8 +936,23 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
     g.stroke();
     g.globalCompositeOperation = "source-over";
   }
-  drawMeMarker(g, px, py, e.time);
-  g.globalCompositeOperation = "source-over";
+  /**
+   * **누가 나를 따라오면 나도 우주선이다** (S15P21A405-557).
+   *
+   * 예전에는 내가 따라갈 때만 우주선 뒤에 줄이 섰다 — 인솔자 쪽은 제 선단을 볼 길이 없어서
+   * 혼자 다니는 것과 구분이 안 됐다. 그리는 모양은 따라갈 때와 같고 '나' 자리만 다르다.
+   *
+   * 기수는 **날아온 방향**을 쓴다. 서 있을 때는 방향이랄 것이 없으므로 위를 본다.
+   */
+  if (e.myRiders > 0) {
+    const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang, e.time, e.myRiders, 0);
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
+    g.globalCompositeOperation = "source-over";
+  } else {
+    drawMeMarker(g, px, py, e.time);
+    g.globalCompositeOperation = "source-over";
+  }
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillStyle = "rgba(79,227,206,.95)";
@@ -1030,7 +1058,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
 function drawSelected(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.selectedId == null || e.probe || !e.isAlive(e.selectedId)) return;
   const w = e.worldOf(e.selectedId)!;
-  const { px, py } = e.worldToScreen(w.x, w.y);
+  const { px, py } = e.worldToScreen(w.x, w.y, e.cam, e.parOf(e.selectedId));
   const song = e.songs.find((s) => s.musicId === e.selectedId)!;
   const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
   g.globalCompositeOperation = "lighter";
@@ -1109,6 +1137,23 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   forgetStale(e.time);
   // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
   e.hopLink = null;
+  /**
+   * **주변 탐색의 확대는 여기 한 곳이다** (S15P21A405-593).
+   *
+   * 고리 반지름만 키우던 때는 중심 별도 제목도 배경도 그대로라 살만 길어졌다 — 확대가 아니라
+   * "줄이 늘어난 것" 으로 보였다. 화면을 통째로 키우면 배경 별밭·별 크기·글씨·선이 같은
+   * 비율로 커진다. 그리는 좌표는 아무 데도 안 고쳐도 된다.
+   *
+   * 되돌리는 쪽은 {@link MapEngine.unview} 하나다 — 클릭 판정이 보는 `visible`·`hopLink` 는
+   * 확대 전 자리에 그대로 남으므로, 눌린 점만 되돌리면 그리기와 클릭이 안 어긋난다.
+   */
+  const view = e.probeView();
+  if (view) {
+    g.save();
+    g.translate(view.cx, view.cy);
+    g.scale(view.z, view.z);
+    g.translate(-view.cx, -view.cy);
+  }
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
   drawBackground(g, e, depthOf(e));
   if (e.anim) {
@@ -1134,4 +1179,5 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawProbe(g, e);
   drawHold(g, e);
   drawPressure(g, e);
+  if (view) g.restore();
 }

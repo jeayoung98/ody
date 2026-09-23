@@ -2,32 +2,34 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
-import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, REPRESENTATIVE_COUNT, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, PROBE, REPRESENTATIVE_COUNT, RIDE_LOCK_TOAST_MS, RIDING_LOCKED, RIDING_MAP_LOCKED, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useBots } from "@/hooks/use-bots";
+import { useDeclarePlay } from "@/hooks/use-declare-play";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { readStorage, writeStorage } from "@/lib/storage";
-import { useFollowStore } from "@/stores/use-follow-store";
+import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { useMapStore } from "@/stores/use-map-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
 import { MapEngine } from "./engine/map-engine";
-import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
+import { shouldFollowPlayback } from "./selection-follow";
 import StarfieldPlaceholder from "./starfield-placeholder";
 import { useViewport } from "./use-viewport";
 import { ANALYTICS } from "@/constants/analytics";
@@ -117,6 +119,11 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 같은 봇이 화면마다 다른 곡을 듣게 된다.
    */
   useBots(features.social);
+  /**
+   * 재생 선언을 보내는 유일한 자리 (S15P21A405-569). 지도 화면에만 둔다 —
+   * 두 군데서 걸면 곡마다 두 번 선언한다.
+   */
+  useDeclarePlay();
   const viewMode = useMapStore((s) => s.viewMode);
   const nearbyCenterMusicId = useMapStore((s) => s.nearbyCenterMusicId);
   const constellationMusicIds = useMapStore((s) => s.constellationMusicIds);
@@ -129,21 +136,22 @@ export default function MapView({ occlusion }: MapViewProps) {
   const syncFromEngine = useMapStore((s) => s.syncFromEngine);
   // 지도에서 별을 누르는 길만 이걸 쓴다 — 주변 사람을 보는 중이면 패널을 갈아타지 않는다 (S15P21A405-515)
   const openSongFromMap = usePanelStore((s) => s.openSongFromMap);
-  /**
-   * 카드의 `상세` 버튼은 **명시적 지시**라 `openSongFromMap` 이 아니라 이쪽이다 (S15P21A405-515).
-   * 지도 클릭은 주변 사람을 보는 중이면 패널을 안 갈아타지만, 이건 "이 곡 상세를 보겠다" 를
-   * 손으로 누른 것이다 — 막으면 폰에서 곡 상세로 들어가는 길이 아예 없어진다.
-   */
-  const openSong = usePanelStore((s) => s.openSong);
   const openFeed = usePanelStore((s) => s.openFeed);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playWithConfirm = usePlaySong();
-  const { mutate: recordPlay } = useRecordPlayMutation();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const leaderNickname = useFollowStore((s) => s.leaderNickname);
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
   const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
   const leaderViewingMusicId = useFollowStore((s) => s.leaderViewingMusicId);
+  /**
+   * 나를 따라오는 인원 (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
+   * 엔진은 스토어를 모르므로 여기서 넣어 준다.
+   */
+  const followerCount = useFollowStore((s) => s.followerCount);
+  useEffect(() => {
+    engine.setMyRiders(followerCount);
+  }, [engine, followerCount]);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**
@@ -181,7 +189,7 @@ export default function MapView({ occlusion }: MapViewProps) {
 
   /**
    * 목 반응은 걷어냈다 (S15P21A405-482). 실시간 명세가 **반응을 "아직 없는 것"** 으로 명시했고
-   * (따라가기·반응·비공개 계정), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
+   * (따라가기·반응), 소켓에도 반응 메시지가 없다. 목이 계속 돌면 아직 없는 기능이
    * 도는 것처럼 보여서 테스트가 어긋난다. 훅 자체는 남겨 뒀다 — 데이터가 생기면 되살린다.
    */
 
@@ -311,16 +319,30 @@ export default function MapView({ occlusion }: MapViewProps) {
     restoreLastPlayed(saved);
   }, [restoreLastPlayed]);
 
-  // 재생 → 내 위치가 그 곡으로 이동 (MAP-08)
+  /**
+   * 재생 → 내 위치가 그 곡으로 이동 (MAP-08), 그리고 **선택도 함께 옮긴다** (S15P21A405-578).
+   *
+   * 선택을 같이 옮기는 이유는 [`shouldFollowPlayback`](./selection-follow.ts) 에 적었다 —
+   * 요약하면 재생이 저 혼자 넘어갈 때 선택이 낡은 별에 남아 주변 탐색이 엉뚱한 곡을 펼쳤다.
+   *
+   * **선택은 `getState()` 로 읽는다.** 의존성에 넣으면 여기서 선택을 바꾼 것이 다시 이 효과를
+   * 깨워 제 꼬리를 문다.
+   */
   useEffect(() => {
     if (currentMusicId == null) return;
     // 되살린 값은 "지금 막 재생한 것" 이 아니다 — 한 번만 흘려보낸다
-    if (currentMusicId === restoredPlaying.current) {
-      restoredPlaying.current = null;
-      return;
-    }
-    engine.travelTo(currentMusicId);
-  }, [engine, currentMusicId]);
+    const restored = currentMusicId === restoredPlaying.current;
+    if (restored) restoredPlaying.current = null;
+    else engine.travelTo(currentMusicId);
+
+    const follow = shouldFollowPlayback({
+      playingMusicId: currentMusicId,
+      selectedMusicId: useMapStore.getState().selectedMusicId,
+      restored,
+      riding: isRiding(),
+    });
+    if (follow) selectMusic(currentMusicId);
+  }, [engine, currentMusicId, selectMusic]);
 
   /**
    * 따라가기 (SOCIAL-06 ~ 09, S15P21A405-530).
@@ -346,9 +368,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         email: leaderEmail,
         nickname: leaderNickname,
         imageUrl: leaderImageUrl,
-        // 목록에 있다는 것이 곧 접속 중이라는 뜻이고(명세 §5.6), 비공개 계정은 아직 없다
+        // 목록에 있다는 것이 곧 접속 중이라는 뜻이다 (명세 §5.6)
         isOnline: true,
-        isPublic: true,
         musicId: leaderMusicId,
         // 인솔자가 옆 곡을 눌러 보는 동안은 서 있는 곡과 다르다 (§551)
         viewingMusicId: leaderViewingMusicId ?? leaderMusicId,
@@ -403,6 +424,17 @@ export default function MapView({ occlusion }: MapViewProps) {
   useEffect(() => cancelHide, [cancelHide]);
 
   /**
+   * 따라가는 동안 막힌 지도 입력(휠·드래그)의 안내 (S15P21A405-605). 조용히 씹지 않는다 —
+   * 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다. 연속 입력이라 한 번 뜬 뒤 잠깐 쉰다.
+   */
+  const lockToastAt = useRef(0);
+  const notifyMapLocked = useCallback(() => {
+    const now = Date.now();
+    if (now - lockToastAt.current < RIDE_LOCK_TOAST_MS) return;
+    lockToastAt.current = now;
+    useToastStore.getState().show(RIDING_MAP_LOCKED);
+  }, []);
+  /**
    * 확대·축소 한 번. **휠과 두 손가락이 같은 길로 들어온다** (S15P21A405-415).
    *
    * 나누지 않는 이유는 이 함수가 하는 일이 확대만이 아니기 때문이다 — 뷰 모드별 분기(별자리는
@@ -411,6 +443,11 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   const zoomBy = useCallback(
     (deltaY: number, mx: number, my: number) => {
+      // 따라가는 중에는 확대·축소도 없다 (S15P21A405-605, SOCIAL-08) — 엔진도 막지만 이유는 여기서 말한다
+      if (isRiding()) {
+        notifyMapLocked();
+        return;
+      }
       const mode = useMapStore.getState().viewMode;
       const mapSnapshot = useMapStore.getState();
       wheelStart.current ??= { layer: mapSnapshot.layer, zoom: mapSnapshot.zoomK, mode };
@@ -428,24 +465,41 @@ export default function MapView({ occlusion }: MapViewProps) {
         engine.overlayWheel(deltaY);
         return;
       }
-      // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
+      /**
+       * 주변 탐색 — **확대는 화면을 키우고, 끝까지 줄이면 뷰를 나간다** (S15P21A405-593).
+       *
+       * 예전에는 확대가 아무 일도 안 했다. 이 뷰는 카메라가 아니라 화면 크기에서 반지름을
+       * 뽑아 세운 배치라 확대할 카메라가 없었기 때문이다. 고리 반지름만 키워 봤더니 중심 별도
+       * 제목도 배경도 그대로인 채 **살만 길어져서** "확대가 아니라 줄이 늘어난 것" 이 됐다 —
+       * 지금은 캔버스를 통째로 키운다 (`probeView`, `draw-map`).
+       *
+       * 축소는 그대로 **나가기**다 — 키운 것을 되돌리는 뜻으로만 쓰면 이 뷰를 빠져나가는
+       * 길이 사라진다. 휠 한 칸의 비율을 그대로 배율로 쓴다.
+       */
       if (mode === "nearby") {
-        if (deltaY > 0) useMapStore.getState().exitNearby();
+        /**
+         * **줄이는 입력은 먼저 배율을 깎는다.** 바닥(`PROBE.minZoom`)에 닿았을 때만 나간다 —
+         * 핀치는 벌리는 중에도 안쪽으로 몇 px 흔들리는데, 예전에는 그 한 번이 곧바로
+         * 나가기였다. 확대해 놓고도 화면이 원래대로 돌아가서 "확대가 안 된다" 로 보였다.
+         */
+        if (engine.probeZoom(Math.exp(-deltaY * WHEEL_ZOOM)) <= PROBE.minZoom) useMapStore.getState().exitNearby();
         return;
       }
       // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.
       // 배율이 얼마나 올랐는지는 튜토리얼이 직접 본다 (`tutorial-overlay.tsx`)
       return engine.wheel(deltaY, mx, my);
     },
-    [engine],
+    [engine, notifyMapLocked],
   );
 
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
+      // 확대는 "다른 동작" 이다 — 펼쳐 둔 사람 묶음을 접는다 (S15P21A405-618)
+      engine.collapseStack();
       zoomBy(e.deltaY, e.clientX - r.left, e.clientY - r.top);
     },
-    [zoomBy],
+    [zoomBy, engine],
   );
   /**
    * 길게 누르기 = 그 별 주변으로 **파고들기** (S15P21A405-288). 휠 압력으로 다음 겹에 파고드는 것과 같은 은유다.
@@ -558,6 +612,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         const dx = e.clientX - drag.current.x;
         const dy = e.clientY - drag.current.y;
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
+        // 지도를 끌기 시작하면 펼쳐 둔 사람 묶음을 접는다 (S15P21A405-618)
+        if (drag.current.moved > 5) engine.collapseStack();
         drag.current.x = e.clientX;
         drag.current.y = e.clientY;
         // 움직였으면 누르기가 아니라 드래그다
@@ -573,7 +629,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         }
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
-        if (mode === "constellation") engine.overlayPan(dx, dy);
+        if (isRiding()) notifyMapLocked();
+        else if (mode === "constellation") engine.overlayPan(dx, dy);
         // 주변 탐색 중에는 지도 대신 탐색 별 뷰를 민다 (S15P21A405-285)
         else if (mode === "nearby") engine.probePan(dx, dy);
         else engine.dragBy(dx, dy);
@@ -603,7 +660,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my));
     },
-    [engine, cancelHide, scheduleHide, cancelHold, pinchNow, zoomBy],
+    [engine, cancelHide, scheduleHide, cancelHold, pinchNow, zoomBy, notifyMapLocked],
   );
   /**
    * 곡을 **재생**한다 — 상세를 열면서 동시에. 호버 카드의 재생 버튼과 선택된 별 재클릭이 여기로 온다.
@@ -612,14 +669,17 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   const playSong = useCallback(
     (s: MapPoint) => {
+      // 별이 이미 들고 있는 제목·아티스트다 — 재생바가 상세 조회를 기다리지 않게 넘긴다 (S15P21A405-585)
+      rememberMusicHints([{ id: s.musicId, title: s.title, artist: s.artist }]);
       selectMusic(s.musicId);
       // 폰에서는 재생해도 패널을 열지 않는다 — 지금 듣는 곡은 재생바가 이미 보여 준다
       if (!narrow) openSongFromMap(s.musicId);
       // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-      playWithConfirm(s.musicId, () => recordPlay({ musicId: s.musicId, source: "MAP", layer: useMapStore.getState().layer }));
+      // 선언은 `use-declare-play` 한 곳이 한다 (S15P21A405-569) — 여기서 또 부르면 두 번 나간다
+      playWithConfirm(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [narrow, openSongFromMap, playWithConfirm, recordPlay, selectMusic],
+    [narrow, openSongFromMap, playWithConfirm, selectMusic],
   );
 
   /**
@@ -630,6 +690,19 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   const pressSong = useCallback(
     (s: MapPoint) => {
+      /**
+       * **따라가는 동안에는 별을 고를 수 없다** (S15P21A405-567).
+       *
+       * 재생은 `use-play-song` 이 이미 막지만 **선택과 상세 열기는 그대로 돌았다.** 따라가는
+       * 동안 우측은 인솔자가 열어 둔 곡이어야 하는데(S15P21A405-557) 그걸 덮어 버리고,
+       * 내가 다시 돌려놓을 방법도 없다 — 인솔자가 다음 곡을 누를 때까지 엉뚱한 상세를 본다.
+       *
+       * 조용히 씹지 않는다. 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다.
+       */
+      if (isRiding()) {
+        useToastStore.getState().show(RIDING_LOCKED);
+        return;
+      }
       const map = useMapStore.getState();
       track("music_clicked", { music_id: s.musicId, source: "canvas", action: map.selectedMusicId === s.musicId ? "play" : "inspect" });
       if (map.selectedMusicId === s.musicId) {
@@ -640,31 +713,23 @@ export default function MapView({ occlusion }: MapViewProps) {
       // 내 위치는 제자리고, 선택 링만 붙는다. 우주선은 재생해야 날아간다
       selectMusic(s.musicId);
       /**
-       * **좁은 화면에서는 패널을 열지 않는다** (S15P21A405-417). 375px 에서 패널은 화면만큼
-       * 넓어 여는 순간 지도가 사라진다 — 그래서 두 번째 탭으로 재생하는 것도, 주변 탐색·경로
-       * 결과를 보는 것도 막혔다. 대신 호버 카드를 띄우고, 상세는 그 카드의 버튼으로 들어간다.
+       * **폰에서도 곡 상세를 바로 연다** (S15P21A405-593).
+       *
+       * 예전에는 호버 카드를 띄우고 그 안의 `상세` 를 눌러야 들어갔다 (S15P21A405-417).
+       * 이유는 "375px 에서 패널이 화면만큼 넓어 여는 순간 지도가 사라진다" 였는데, 시트가
+       * 3 단으로 서면서 **그 전제가 없어졌다** — 1 단으로 열면 제목 줄만 올라오고 지도는
+       * 그대로다. 카드 한 겹과 탭 한 번이 통째로 빠진다.
+       *
+       * **주변 탐색·여정에서도 같다.** 주변 탐색만 예외였는데 (S15P21A405-288, 카드가 고리
+       * 라벨을 덮는다는 이유) 덮을 카드가 없어졌으므로 그 예외도 같이 없앤다.
        */
-      // 주변 탐색 중에는 폰에서도 카드를 띄우지 않는다 (S15P21A405-288) — 고리 별에는 제목·순위
-      // 라벨과 "둘러보기 ›" 링크가 이미 붙어 있고, 375px 에서 300px 짜리 카드가 그걸 다 덮는다.
-      // 그 곡 상세는 다른 곡 상세의 "주변곡" 목록으로 들어간다
-      if (narrow && map.viewMode !== "nearby") {
-        // 엔진에도 알려야 한다 — 카드는 매 프레임 `hoverAnchor()` 로 자기 자리를 찾고,
-        // 그게 null 이면 **자리를 못 잡아 숨는다.** 이걸 빼먹어서 카드가 DOM 에는 있는데
-        // 화면에는 끝까지 안 나왔다 (그래서 "상세 버튼이 어디 있냐" 가 됐다)
-        engine.setHover(s.musicId);
-        cancelHide();
-        heldSong.current = s;
-        setHoverSong(s);
-        setCardOn(true);
-      } else if (!narrow) {
-        openSongFromMap(s.musicId);
-      }
+      openSongFromMap(s.musicId, narrow ? 1 : undefined);
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, cancelHide, narrow, openSongFromMap, playSong, selectMusic],
+    [engine, narrow, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(
@@ -707,9 +772,21 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       const fr = engine.hitFriend(mx, my);
       if (fr) {
+        /**
+         * 겹친 표식(+N)은 **먼저 갈라 보인다** (S15P21A405-618). 같은 노래를 듣는 사람은 좌표가 같아
+         * 확대해도 안 풀리므로, 누르는 것이 뒤사람을 보는 유일한 길이다. 갈라진 개별 표식은
+         * `stacked` 가 비어 있어 예전처럼 바로 프로필이다.
+         */
+        if (fr.stacked.length > 0) {
+          engine.expandStack(fr.user.email);
+          return;
+        }
+        engine.collapseStack();
         openFeed(fr.user.email);
         return;
       }
+      // 사람 아닌 곳을 눌렀다 — 펼쳐 둔 묶음은 접는다
+      engine.collapseStack();
       if (engine.follow) return;
       // 고스트별을 누르면 상세만 열고 화면은 그대로 둔다 — 이동은 상세 안 버튼으로 (MAP-12)
       const gid = engine.hitGhost(mx, my);
@@ -734,16 +811,26 @@ export default function MapView({ occlusion }: MapViewProps) {
         // 엔진 호버와 `heldSong` 은 페이드가 끝난 뒤 위쪽 이펙트가 푼다
         if (heldSong.current) setCardOn(false);
         /**
-         * **주변 탐색 중 빈 곳을 누르면 고리를 닫는다** (S15P21A405-384).
+         * **폰에서만 빈 곳을 눌러도 고리를 안 닫는다** (S15P21A405-593).
          *
-         * 곡 상세에서 켜는 버튼을 없애면서 패널 안에 끄는 길도 같이 사라졌다. 지도에서 바깥을
-         * 누르는 것은 "이건 그만 볼래" 와 같은 동작이라 여기에 붙인다 — 드래그(`moved > 5`)와
-         * 별·친구·고스트·오버레이는 위에서 이미 걸러졌으므로 여기는 정말 빈 곳이다.
-         * 패널은 건드리지 않는다. 곡을 보는 것과 고리를 보는 것은 다른 일이다.
+         * 이 규칙 자체는 S15P21A405-384(`55219af2`)에서 들어왔다 — 곡 상세에서 켜는 버튼이
+         * 없어지면서 끄는 길도 같이 사라졌다는 이유였고, 여기는 공용 코드라 **데스크톱에도
+         * 그대로 있다.** 마우스로 빈 곳을 누르는 건 한 번에 깔끔히 끝나고 확대도 휠로 하므로
+         * 거기서는 이 규칙이 걸리적거리지 않는다.
+         *
+         * 손가락은 다르다. 핀치는 두 손가락이 한 박자 어긋나게 닿는데, 둘째 손가락이 늦거나
+         * 누락되면 그 제스처가 통째로 "빈 곳 탭" 으로 읽혀 뷰가 닫혔다 — 벌리는 손이 곧
+         * 나가는 손이 되니 **확대가 되다 말고 원래대로 돌아갔다.** 폰에는 대신 뷰 칩의 ✕ 와
+         * 축소로 나가는 길이 있고, 별자리(경로 탐색)도 처음부터 빈 곳으로는 안 닫혔다 —
+         * 폰에서는 둘이 같아진다.
+         *
+         * **데스크톱은 그대로 둔다.**
          */
-        // 분석 이벤트(`nearby_closed`)는 스토어 구독자가 알아서 남긴다 (`analytics/observe`)
-        const map = useMapStore.getState();
-        if (map.viewMode === "nearby") map.exitNearby();
+        if (!narrow) {
+          // 분석 이벤트(`nearby_closed`)는 스토어 구독자가 알아서 남긴다 (`analytics/observe`)
+          const map = useMapStore.getState();
+          if (map.viewMode === "nearby") map.exitNearby();
+        }
         return;
       }
       const id = song.musicId;
@@ -755,13 +842,15 @@ export default function MapView({ occlusion }: MapViewProps) {
       const journey = useJourneyStore.getState();
       if (journey.pickTarget) {
         track("music_clicked", { music_id: id, source: "canvas", action: `set_${journey.pickTarget}` });
+        // 출발·도착 칸이 곧바로 제목을 띄우게 한다 (S15P21A405-585)
+        rememberMusicHints([{ id, title: song.title, artist: song.artist }]);
         journey.pickForNext(id);
         selectMusic(id);
         return;
       }
       pressSong(song);
     },
-    [engine, cancelHold, openFeed, openSongFromMap, pressSong, selectMusic],
+    [engine, cancelHold, narrow, openFeed, openSongFromMap, pressSong, selectMusic],
   );
   /**
    * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.
@@ -803,6 +892,7 @@ export default function MapView({ occlusion }: MapViewProps) {
   return (
     <div
       data-analytics-manual
+      data-map
       ref={ref}
       /*
        * `touch-none` 은 브라우저의 기본 제스처를 전부 끈다 (S15P21A405-415) — 스크롤·고무줄·
@@ -821,24 +911,13 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
-      {features.social && <FloatingReactions />}
       {/*
-        상세로 들어가면 **카드를 같이 내린다** (S15P21A405-417). 카드는 z-25 라 패널(z-20) 위에
-        뜬다 — 안 내리면 곡 상세를 열어 놓고도 카드가 그 위에 얹혀 "UI 가 뚫고 나온" 것처럼 보인다.
+        **마우스 전용이다** (S15P21A405-593). 손가락에는 호버가 없고, 폰에서는 별을 누르면
+        곡 상세가 바로 1 단으로 열린다 — 카드를 거칠 일이 없어졌다. 예전에는 폰에서도 이
+        카드를 띄우고 그 안의 `상세` 버튼으로 들어갔는데 (S15P21A405-417), 카드가 z-25 라
+        패널(z-20) 위에 얹혀 "UI 가 뚫고 나왔다" 는 말이 계속 나오던 자리이기도 하다.
       */}
-      <HoverCard
-        engine={engine}
-        song={hoverSong}
-        on={cardOn}
-        onDetail={
-          narrow && hoverSong
-            ? () => {
-                setCardOn(false);
-                openSong(hoverSong.musicId);
-              }
-            : undefined
-        }
-      />
+      <HoverCard engine={engine} song={hoverSong} on={cardOn} />
       {!songs && <StarfieldPlaceholder width={size.width} height={size.height} failed={songsFailed} />}
     </div>
   );

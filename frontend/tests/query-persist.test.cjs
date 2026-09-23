@@ -32,7 +32,7 @@ function login() {
 function fill(client) {
   client.setQueryData(QUERY_KEYS.auth.me, { email: "me@ody.kr", nickname: "루나" });
   client.setQueryData(QUERY_KEYS.user.profile("me@ody.kr"), { nickname: "루나", followerCount: 7, isOnline: true });
-  client.setQueryData(QUERY_KEYS.playlist.mine, [{ id: 1, playlistName: "밤" }]);
+  client.setQueryData(QUERY_KEYS.playlist.mine(null), [{ id: 1, playlistName: "밤" }]);
   client.setQueryData(QUERY_KEYS.map.songs([{ layer: 1, xMin: 0, yMin: 0, xMax: 1, yMax: 1 }]), [{ musicId: 1 }]);
   client.setQueryData(QUERY_KEYS.music.search({ mode: "all", query: "aespa" }), []);
 }
@@ -53,6 +53,25 @@ test("저장 대상만 담긴다 — 지도 상주 집합과 검색 결과는 �
   assert.ok(keys.some((k) => k.startsWith("playlist/mine")), "내 플리는 담긴다");
   assert.ok(!keys.some((k) => k.startsWith("map/songs")), "지도 상주 집합은 담지 않는다 — 용량이 크다");
   assert.ok(!keys.some((k) => k.startsWith("music/search")), "검색 결과는 담지 않는다");
+});
+
+/**
+ * 프로필에는 `isOnline`·`nowPlaying` 처럼 **지금 이 순간의 값**이 섞여 있다 (S15P21A405-586).
+ * 남의 것까지 저장하면 다시 열 때 어제 값이 먼저 보인다 — 접속 중이 아닌 사람이 접속 중으로,
+ * 안 듣는 곡이 듣는 중으로 한 박자 떠 있다가 바뀐다. 실시간이 고장 난 것으로 읽힌다.
+ */
+test("남의 프로필은 담지 않는다 — 내 것만 새로고침을 넘긴다", async () => {
+  login();
+  const client = new QueryClient();
+  const stop = startQueryPersist(client);
+  fill(client);
+  client.setQueryData(QUERY_KEYS.user.profile("someone@ody.kr"), { nickname: "남", isOnline: true });
+  await settle();
+  stop();
+
+  const keys = savedKeys();
+  assert.ok(keys.includes(`user/profile/me@ody.kr`), "내 프로필은 담긴다");
+  assert.ok(!keys.includes(`user/profile/someone@ody.kr`), "남의 프로필은 담지 않는다");
 });
 
 test("새로고침하면 지난 값이 먼저 들어와 있다 — 요청을 기다리지 않는다", async () => {

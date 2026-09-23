@@ -3,6 +3,7 @@
 import { CoronaIcon } from "@/components/common/icons";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -42,9 +43,15 @@ export default function NearbyExploreButton() {
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
 
+  /**
+   * **따라가는 중에는 잠긴다** (S15P21A405-605, SOCIAL-08). 557 에서는 인솔자 곡을 중심으로
+   * 열어 뒀는데, 기획이 따라가는 동안 지도 조작을 전부 막기로 했다 — 주변 탐색도 카메라를
+   * 옮기는 지도 조작이다. 왜 안 눌리는지는 툴팁이 말한다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
   const target = selectedMusicId ?? currentMusicId;
   const active = viewMode === "nearby";
-  const disabled = !active && target == null;
+  const disabled = riding || (!active && target == null);
 
   const handleClick = () => {
     if (active) exitNearby();
@@ -62,7 +69,7 @@ export default function NearbyExploreButton() {
       active={active}
       disabled={disabled}
       // 상단에 올라온 뒤로 "왜 안 눌리지" 가 더 눈에 띈다 — 이유를 바로 말한다
-      title={disabled ? "곡을 먼저 고르세요" : active ? "주변 탐색 닫기" : "주변 탐색"}
+      title={riding ? "따라가는 중에는 지도를 움직일 수 없어요" : disabled ? "곡을 먼저 고르세요" : active ? "주변 탐색 닫기" : "주변 탐색"}
       onClick={handleClick}
       data-tutorial="nearby"
     >

@@ -26,6 +26,7 @@ import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
 import { RIGHT_PANEL_W } from "@/constants/design-tokens";
 import PlayHint from "@/components/discovery/play-hint";
+import ContestModal from "@/components/contest/contest-modal";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
 /**
@@ -58,7 +59,7 @@ interface MainScreenProps {
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
-  const panelCollapsed = usePanelStore((s) => s.collapsed);
+  const panelCollapsed = usePanelStore((s) => s.snap) === 1;
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   /**
    * 감춘 기능의 패널은 열려 있어도 화면에 없다 (S15P21A405-333). 여기서도 같은 판정을 써야
@@ -139,6 +140,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       {overlay}
       {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다 */}
       <PlayHint />
+      {/* 이벤트(별자리 콘테스트) — 우측 패널이 아니라 화면 대부분을 덮는 모달 (S15P21A405-602). body 에 포털로 그린다 */}
+      {features.contest && <ContestModal />}
       <Toast />
       <ConfirmDialog />
       {/* 설문 — NEXT_PUBLIC_TEST_TOOLS(빌드) + ody:survey-mode(브라우저) 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}

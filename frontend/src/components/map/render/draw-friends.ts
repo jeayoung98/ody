@@ -65,56 +65,78 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
   g.stroke();
 }
 
-/** 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향) */
-function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
+/**
+ * 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향).
+ *
+ * **곡선만으로 그린다** (S15P21A405-624). 예전에는 뾰족한 코와 직선 지느러미의 삼각 로켓이었는데 차갑고
+ * 각져서 서비스 분위기와 안 맞았다. 달걀 몸통 · 둥근 지느러미 · 둥근 분사구 · 타원 불꽃으로
+ * 바꿨다. 좌표계(코가 -y, `ang` 만큼 회전)와 크기 기준 `R`, 장르색 `rgb` 는 그대로다 — 부르는
+ * 두 곳(인솔자·나)과 그 위에 얹는 바이저(`R * 0.66`) 자리가 안 바뀌어야 한다.
+ * 파비콘(S15P21A405-623 후속)이 이 모양을 그대로 옮긴다.
+ */
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
+
+  // 불꽃 — 뾰족한 삼각형 대신 **타원**. 동승자·추진이 많을수록 길어지고 살짝 흔들린다
   const boost = (1 + Math.min(riders, 6) * 0.2) * (1 + thrust * 1.8);
-  const fl = R * (1.5 + Math.sin(t * 9 + px) * 0.18) * boost;
-  const gr = g.createLinearGradient(0, R * 1.15, 0, R * 1.15 + fl);
+  const fl = R * (1.35 + Math.sin(t * 9 + px) * 0.16) * boost;
+  const fy = R * 1.08;
+  const gr = g.createLinearGradient(0, fy, 0, fy + fl);
   gr.addColorStop(0, rgba(rgb, 0.95));
-  gr.addColorStop(0.38, rgba(rgb, 0.36));
+  gr.addColorStop(0.45, rgba(rgb, 0.4));
   gr.addColorStop(1, rgba(rgb, 0));
   g.fillStyle = gr;
   g.beginPath();
-  g.moveTo(-R * 0.5, R * 1.15);
-  g.lineTo(R * 0.5, R * 1.15);
-  g.lineTo(0, R * 1.15 + fl);
-  g.closePath();
+  g.ellipse(0, fy + fl / 2, R * 0.42, fl / 2, 0, 0, 6.284);
   g.fill();
-  g.fillStyle = "rgba(16,24,44,.9)";
-  g.strokeStyle = "rgba(216,233,255,.82)";
+  // 불꽃 속심 — 더 밝고 짧은 타원 하나가 안에 겹친다
+  g.fillStyle = "rgba(255,255,255,.55)";
+  g.beginPath();
+  g.ellipse(0, fy + fl * 0.28, R * 0.2, fl * 0.28, 0, 0, 6.284);
+  g.fill();
+
+  // 지느러미 — 양옆에 반쯤 묻힌 **둥근 알**. 몸통보다 먼저 그려 몸통이 안쪽을 덮는다
+  g.fillStyle = rgba(rgb, 0.85);
+  g.strokeStyle = "rgba(216,233,255,.7)";
+  g.lineWidth = 1.3;
+  for (const sx of [-1, 1]) {
+    g.beginPath();
+    g.ellipse(sx * R * 1.0, R * 0.78, R * 0.46, R * 0.52, 0, 0, 6.284);
+    g.fill();
+    g.stroke();
+  }
+
+  // 몸통 — 위가 살짝 좁은 달걀. 직선이 없다
+  g.fillStyle = "rgba(16,24,44,.92)";
+  g.strokeStyle = "rgba(216,233,255,.85)";
   g.lineWidth = 1.5;
-  g.lineJoin = "round";
   g.beginPath();
-  g.moveTo(0, -R * 1.6);
-  g.lineTo(R * 0.62, -R * 0.2);
-  g.lineTo(R * 1.5, R * 1.0);
-  g.lineTo(R * 0.5, R * 0.85);
-  g.lineTo(R * 0.5, R * 1.2);
-  g.lineTo(-R * 0.5, R * 1.2);
-  g.lineTo(-R * 0.5, R * 0.85);
-  g.lineTo(-R * 1.5, R * 1.0);
-  g.lineTo(-R * 0.62, -R * 0.2);
+  g.moveTo(0, -R * 1.45);
+  g.bezierCurveTo(R * 1.1, -R * 1.45, R * 1.18, R * 0.3, R * 0.66, R * 1.02);
+  g.quadraticCurveTo(0, R * 1.28, -R * 0.66, R * 1.02);
+  g.bezierCurveTo(-R * 1.18, R * 0.3, -R * 1.1, -R * 1.45, 0, -R * 1.45);
   g.closePath();
   g.fill();
   g.stroke();
-  g.strokeStyle = rgba(rgb, 0.75);
-  g.lineWidth = 1.2;
+
+  // 분사구 — 꼬리에 붙은 둥근 알약
+  g.fillStyle = rgba(rgb, 0.7);
   g.beginPath();
-  g.moveTo(-R * 0.2, -R * 0.95);
-  g.lineTo(R * 0.2, -R * 0.95);
-  g.stroke();
-  g.fillStyle = rgba(rgb, 0.55);
+  g.roundRect(-R * 0.36, R * 0.98, R * 0.72, R * 0.28, R * 0.14);
+  g.fill();
+
+  // 코 반사광 — 둥근 표면임을 말해 주는 작은 점 하나
+  g.fillStyle = "rgba(255,255,255,.55)";
   g.beginPath();
-  g.roundRect(-R * 0.5, R * 0.98, R * 1.0, R * 0.24, R * 0.1);
+  g.ellipse(-R * 0.3, -R * 1.02, R * 0.13, R * 0.2, -0.5, 0, 6.284);
   g.fill();
   g.restore();
 }
 
 /** 탑승 후 선미 뒤로 줄줄이 달리는 동승자 (나 + 다른 사람들) */
-function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
+export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
   const rr = R * 0.5;
@@ -224,7 +246,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
   for (const fr of e.visFriends) {
     const tr = trailOf(fr.user.email);
     const rgb = genreRgb(fr.user.genreId);
-    const sc = 24;
+    const sc = 24 * fr.scale;
     for (let k = 0; k < tr.length - 1; k++) {
       const a0 = 1 - k / (tr.length - 1);
       const pulse = 0.55 + 0.45 * Math.sin(t * 0.8 - k * 0.55 + fr.px * 0.01);
@@ -240,11 +262,14 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
 
   g.textAlign = "center";
   g.textBaseline = "middle";
-  for (const fr of e.visFriends) {
+  // 인솔자는 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는 우주선이 가려지지 않는다 (S15P21A405-625)
+  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader));
+  for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
-    const R = isLeader ? 15 : 12.5;
+    // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
+    const R = (isLeader ? 15 : 12.5) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;

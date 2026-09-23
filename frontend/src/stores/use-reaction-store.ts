@@ -1,13 +1,14 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import { REACTION_VISIBLE_MS, type ReactionKey } from "@/constants";
+import { REACTION_VISIBLE_MS } from "@/constants";
 
 export interface FloatingReaction {
   id: string;
-  reactionKey: ReactionKey;
-  /** 내가 보낸 것(내 위로 뜸)인지, 다른 사람의 것인지 */
+  /** 서버가 넘겨 준 키 그대로. 우리 세트에 없으면 ✨ 로 그린다 */
+  reactionKey: string;
+  /** 내가 보낸 것(레이더 가운데 위로 뜸)인지, 다른 사람의 것인지 */
   mine: boolean;
-  /** 남의 반응은 해당 유저 이메일 (내 뷰 안에 있을 때만 표시) */
+  /** 남의 반응은 해당 유저 이메일 (레이더 목록에 있을 때만 표시) */
   fromEmail: string | null;
   /** 남의 반응일 때 이모지 아래 붙는 이름 */
   nickname?: string | null;
@@ -15,18 +16,17 @@ export interface FloatingReaction {
 
 interface ReactionState {
   floating: FloatingReaction[];
-  /** 마지막 전송 시각 (대상 이메일별) — 반복 전송 제한용 */
-  lastSentAt: Record<string, number>;
-
   push: (reaction: Omit<FloatingReaction, "id">) => void;
-  markSent: (toEmail: string) => void;
 }
 
+/**
+ * 주변 사람 레이더에 떠 있는 반응들 (SOCIAL-02). **지도에는 그리지 않는다** (S15P21A405-608). 재전송 제한(SOCIAL-04)은 서버가 429 로 막는다 —
+ * 여기서 따로 세지 않는다.
+ */
 export const useReactionStore = create<ReactionState>()(
   devtools(
     (set) => ({
       floating: [],
-      lastSentAt: {},
 
       push: (reaction) => {
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
@@ -35,9 +35,6 @@ export const useReactionStore = create<ReactionState>()(
           set((s) => ({ floating: s.floating.filter((r) => r.id !== id) }), false, "expire");
         }, REACTION_VISIBLE_MS);
       },
-
-      markSent: (toEmail) =>
-        set((s) => ({ lastSentAt: { ...s.lastSentAt, [toEmail]: Date.now() } }), false, "markSent"),
     }),
     { name: "reaction-store" },
   ),

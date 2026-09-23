@@ -1,5 +1,7 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { STORAGE_KEYS } from "@/constants";
+import { removeStorage, writeStorage } from "@/lib/storage";
 
 /**
  * 따라가기 = **탑승(ride)** 상태 (2차 실시간 명세 §12, S15P21A405-530).
@@ -10,8 +12,9 @@ import { devtools } from "zustand/middleware";
  * 상태를 읽는 자리가 두 군데가 된다 — 이 스토어를 읽는 곳이 이미 아홉 곳이라 옮기는 값보다
  * 어긋날 위험이 크다.
  *
- * **재연결로 되살리지 않는다** (명세 §8.3). 소켓이 새로 열리면 서버가 따라가기를 끊는다.
- * 프론트가 상태를 들고 있다가 자동으로 다시 태우면 서버에 없는 선단을 화면만 그리게 된다.
+ * **재연결·새로고침 뒤에는 다시 탄다** (S15P21A405-615). 소켓이 새로 열리면 서버가 따라가기를
+ * 끊으므로(명세 §8.3) 상태를 그대로 그리면 서버에 없는 선단이 된다 — 그래서 인솔자를 저장소에
+ * 남겨 두고 `use-ride-session` 이 **새 탑승 요청**을 보낸다. 여기는 그 저장을 시작·정지에 맞춰 쓴다.
  */
 interface FollowState {
   /** 내가 따라가는 인솔자. null 이면 따라가기 중 아님 */
@@ -48,16 +51,6 @@ interface FollowState {
    * 디버깅과 백엔드 확인용으로만 들고 있다.
    */
   snapshotSeq: number;
-  /**
-   * **지금 곡**에 대한 내 재생 기록 번호 (3차 계약 §3, S15P21A405-545).
-   *
-   * 예전에는 탑승~하차를 한 건으로 보는 값이었다. 이제 인솔자가 곡을 바꿀 때마다
-   * `RIDE_TRACK` 이 새 번호를 주므로 곡마다 갈아 끼운다 — 그래야 곡별 청취시간이 남는다.
-   * 서버가 번호를 못 받으면 `null` 로 오고, 그 곡은 시간을 못 남긴다.
-   */
-  playHistoryId: number | null;
-  /** 지금 곡을 틀기 시작한 시각. 종료 보고의 `playedMs` 를 여기서 잰다 */
-  songStartedAt: number;
 
   start: (input: {
     email: string;
@@ -65,10 +58,7 @@ interface FollowState {
     imageUrl: string | null;
     musicId: number;
     snapshotSeq: number;
-    playHistoryId: number;
   }) => void;
-  /** 곡이 바뀌어 기록 번호가 새것이 됐다. 시작 시각도 같이 갈아 끼운다 */
-  setSongRecord: (playHistoryId: number | null, songStartedAt: number) => void;
   /** 인솔자가 곡을 옮겼다 (`RIDE_TRACK`). 표식이 따라가도록 자리만 갱신한다 */
   setLeaderMusicId: (musicId: number) => void;
   /** 인솔자가 상세를 열거나 닫았다 (`RIDE_PANEL`). 재생은 건드리지 않는다 */
@@ -88,10 +78,9 @@ export const useFollowStore = create<FollowState>()(
       leaderViewingMusicId: null,
       followerCount: 0,
       snapshotSeq: 0,
-      playHistoryId: null,
-      songStartedAt: 0,
 
-      start: ({ email, nickname, imageUrl, musicId, snapshotSeq, playHistoryId }) =>
+      start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) => {
+        writeStorage(STORAGE_KEYS.rideLeader, { email, nickname, imageUrl }, "session");
         set(
           {
             leaderEmail: email,
@@ -100,16 +89,15 @@ export const useFollowStore = create<FollowState>()(
             leaderMusicId: musicId,
             leaderViewingMusicId: null,
             snapshotSeq,
-            playHistoryId,
-            songStartedAt: Date.now(),
           },
           false,
           "start",
-        ),
-      setSongRecord: (playHistoryId, songStartedAt) => set({ playHistoryId, songStartedAt }, false, "setSongRecord"),
+        );
+      },
       setLeaderMusicId: (leaderMusicId) => set({ leaderMusicId }, false, "setLeaderMusicId"),
       setLeaderViewingMusicId: (leaderViewingMusicId) => set({ leaderViewingMusicId }, false, "setLeaderViewingMusicId"),
-      stop: () =>
+      stop: () => {
+        removeStorage(STORAGE_KEYS.rideLeader);
         set(
           {
             leaderEmail: null,
@@ -118,13 +106,12 @@ export const useFollowStore = create<FollowState>()(
             leaderMusicId: null,
             leaderViewingMusicId: null,
             snapshotSeq: 0,
-            playHistoryId: null,
-            songStartedAt: 0,
             followerCount: 0,
           },
           false,
           "stop",
-        ),
+        );
+      },
       setFollowerCount: (followerCount) => set({ followerCount }, false, "setFollowerCount"),
     }),
     { name: "follow-store" },

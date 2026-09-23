@@ -4,7 +4,8 @@
  * **전부 켜져 있다** (S15P21A405-480). 예전에는 유저 테스트 동안 마이페이지·플레이리스트·
  * 주변 사람·차트를 감췄고(S15P21A405-333), 설문 모드가 그 스위치였다 — 테스터는 탐색만 보고
  * 팀원은 모드를 꺼서 전부 봤다. 이제 테스트 모드에서도 나머지 기능을 그대로 쓰기로 해서
- * 감추는 축 자체가 없어졌다. **설문 모드가 가르는 것은 설문뿐이다.**
+ * 감추는 축 자체가 없어졌다. **설문 모드가 가르는 것은 설문뿐이다.** 한때 랭킹만 다시 감췄다가
+ * (S15P21A405-570) 콘테스트까지 딸려 꺼지는 바람에 그 축도 걷어냈다 (S15P21A405-612).
  *
  * 값을 지우지 않고 남겨 둔 이유: 호출부 열 곳이 `features.social` 처럼 이름으로 묻고 있고,
  * 다음에 무언가를 다시 감출 일이 생기면 여기만 false 로 돌리면 된다. 그때도 호출부는 안 고친다.
@@ -17,7 +18,7 @@
  * `features.social` 로 갈라 둔 자리가 "항상 참" 으로 좁혀지고 비교문이 타입 오류가 난다
  * (`help-dialog.tsx` 의 `when !== false`). 지금 값이 전부 참인 것은 상태일 뿐 타입이 아니다.
  */
-type Features = { profile: boolean; playlist: boolean; social: boolean; chart: boolean };
+type Features = { profile: boolean; playlist: boolean; social: boolean; chart: boolean; contest: boolean };
 
 export const FEATURES: Features = {
   /** 마이페이지 — 내 프로필 패널, 지도에서 남의 프로필 열기 */
@@ -32,6 +33,8 @@ export const FEATURES: Features = {
   social: true,
   /** 차트 — 인기 플리·유저 랭킹 */
   chart: true,
+  /** 이벤트(별자리 콘테스트) — 상단 원형 버튼이 여는 전체 화면 모달 (S15P21A405-602). 우측 패널이 아니라 `PANEL_ENABLED` 에는 없다. 아직 전부 목이다 */
+  contest: true,
 };
 
 /** 지금 열 수 있는 패널인가. 숨긴 기능의 패널은 프로그램으로 열려도 렌더하지 않는다 */
@@ -44,8 +47,6 @@ const panelsFor = (f: typeof FEATURES): Record<string, boolean> => ({
   chart: f.chart,
 });
 
-/**
- * 미리 만들어 둔다 — 훅이 매 렌더 새 객체를 돌려주면 `useSyncExternalStore` 가 스냅샷이
- * 계속 바뀐 것으로 보고 무한 렌더에 빠진다.
- */
+/** 미리 만들어 둔다 — 훅이 매 렌더 새 객체를 돌려주면 그걸 의존성으로 쓰는 쪽이 매번 다시 돈다 */
 export const PANEL_ENABLED = panelsFor(FEATURES);
+

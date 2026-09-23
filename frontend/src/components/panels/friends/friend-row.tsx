@@ -5,7 +5,7 @@ import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useRideMutation } from "@/hooks/mutations/use-ride-mutation";
 import { useFollowStore } from "@/stores/use-follow-store";
-import { usePanelStore } from "@/stores/use-panel-store";
+import { useOpenProfile } from "@/hooks/use-open-profile";
 import type { NearbyPerson } from "@/types";
 
 /**
@@ -22,7 +22,7 @@ import type { NearbyPerson } from "@/types";
  * 늘 참인 표시는 아무것도 말해 주지 않는다. 대신 그 자리에 듣는 곡을 적는다.
  */
 export default function FriendRow({ person }: { person: NearbyPerson }) {
-  const openFeed = usePanelStore((s) => s.openFeed);
+  const openProfile = useOpenProfile();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const ride = useRideMutation();
   const startActivity = useStartActivity();
@@ -32,8 +32,6 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
    */
   const backToMap = useBackToMap();
 
-  // 제목은 델타로 들어온 사람에게는 비어 있다 — 서버가 ENTER 에 곡 정보를 주지 않는다 (§6.2)
-  const song = person.title ? [person.title, person.artist].filter(Boolean).join(" · ") : "듣는 곡을 불러오는 중";
 
   /**
    * 이미 그 사람을 따라가는 중이면 다시 누를 일이 없다. 다른 사람을 따라가는 중이면
@@ -50,9 +48,8 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
     <UserRow
       nickname={person.nickname ?? "이름 없음"}
       imageUrl={person.imageUrl}
-      caption={song}
       onClick={() => {
-        openFeed(person.email);
+        openProfile(person.email, { panel: "friends" });
         backToMap();
       }}
       right={

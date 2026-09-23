@@ -1,5 +1,7 @@
 "use client";
 
+import { RIDING_MAP_LOCKED } from "@/constants";
+
 import { LocateIcon } from "@/components/common/icons";
 import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useMapStore } from "@/stores/use-map-store";
@@ -35,7 +37,7 @@ export default function LocateButton() {
     const r = useMapStore.getState().goHome();
     track("map_locate_used", { outcome: r });
     backToMap();
-    if (r === "follow") showToast("따라가는 동안에는 화면을 옮길 수 없어요");
+    if (r === "follow") showToast(RIDING_MAP_LOCKED);
     else if (r !== "none") {
       const musicId = usePlayerStore.getState().currentMusicId;
       if (musicId != null) usePanelStore.getState().openSong(musicId);

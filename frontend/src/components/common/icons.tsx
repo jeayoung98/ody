@@ -271,3 +271,34 @@ export const GripIcon = ({ size = 14, ...p }: P) => (
     <path d="M4 16h16" />
   </svg>
 );
+
+/**
+ * 고양이 별자리 — 귀 둘·둥근 얼굴을 점으로 잇고 눈 둘은 떨어진 별로 둔 모양.
+ * 이벤트(별자리 콘테스트) 진입 버튼 (S15P21A405-602). 획은 살짝 얇게(1.6) — 점이 많아 굵으면 뭉친다.
+ */
+export const CatConstellationIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={1.6}>
+    <path d="M4.5 5.5 8 9.5h8l3.5-4-1 8.5-3.5 5h-6l-3.5-5z" />
+    {[
+      [4.5, 5.5],
+      [8, 9.5],
+      [16, 9.5],
+      [19.5, 5.5],
+      [18.5, 14],
+      [15, 19],
+      [9, 19],
+      [5.5, 14],
+    ].map(([cx, cy]) => (
+      <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.45" fill="currentColor" stroke="none" />
+    ))}
+    <circle cx="9.8" cy="13.6" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="14.2" cy="13.6" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/** 하트 — 곡 좋아요 (S15P21A405-611). `filled` 면 속을 채운다 */
+export const HeartIcon = ({ size = 16, filled = false, ...p }: P & { filled?: boolean }) => (
+  <svg {...base(size, p)} fill={filled ? "currentColor" : "none"}>
+    <path d="M12 20.3S4.5 15.6 4.5 10.2A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.4-7.5 10.1-7.5 10.1z" />
+  </svg>
+);

@@ -155,13 +155,12 @@ export function backendGet<T>(path: string, init?: RequestInit): Promise<T> {
  * 로컬 `http://localhost:3000` 이 정확히 그 경우다 (S15P21A405-303).
  * 여기서 부르면 Next 서버가 새로 띄우는 요청이라 `Origin` 이 없어 통과한다.
  */
-export function backendPost<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
-  return backendFetch<T>(path, {
-    ...init,
-    method: "POST",
-    headers: { "Content-Type": "application/json", ...init?.headers },
-    body: JSON.stringify(body),
-  });
+export function backendPost<T>(path: string, body: unknown, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
+  return backendFetch<T>(
+    path,
+    { ...init, method: "POST", headers: { "Content-Type": "application/json", ...init?.headers }, body: JSON.stringify(body) },
+    opts,
+  );
 }
 
 /**
@@ -315,6 +314,15 @@ export interface BackendMusicDetail extends BackendMusicSummary {
 /** `/api/music/detail` 응답 — 상세 필드가 평탄하게 펼쳐지고 neighbors 가 붙는다 */
 export interface BackendMusicDetailResponse extends BackendMusicDetail {
   neighbors: (BackendMusicSummary & { distance: number })[];
+  /** 요청한 사람이 좋아요를 눌렀는지 (S15P21A405-611). 옛 배포는 안 줄 수 있어 선택이다 */
+  liked?: boolean;
+}
+
+/** `POST /api/music/like` 응답 (S15P21A405-611). `liked` 는 **변경 후** 값이다 */
+export interface BackendMusicLikeResponse {
+  musicId: number;
+  liked: boolean;
+  likedAt: string | null;
 }
 
 /**
@@ -457,7 +465,6 @@ export interface BackendUserDetail {
   email: string;
   name: string | null;
   nickname: string | null;
-  isPublic: boolean;
   tutorialCompleted: boolean;
   lastActiveAt: string | null;
   createdAt: string;
@@ -473,6 +480,12 @@ export interface BackendUserDetail {
    */
   playedMusicCnt?: number;
   /**
+   * 이 사람이 **서비스에서 처음 재생한** 곡 수 (S15P21A405-619). 이미 남이 들은 곡은 세지 않고,
+   * 같은 곡을 여러 번 들어도 1곡이다 — 출처는 주간 발견왕과 같은 `music_discovery` 다.
+   * 백엔드가 S15P21A405-597 에서 넣어 줬다. 옛 배포에는 없을 수 있어 optional 로 둔다.
+   */
+  discoveredMusicCnt?: number;
+  /**
    * 지금 접속해 있는가 (3차 계약 §4, S15P21A405-545). **소켓 생존 기준**이다.
    * optional 인 이유는 이 필드가 없던 배포를 만날 수 있어서다 — 그때는 `false` 로 떨어진다.
    */
@@ -484,7 +497,6 @@ export function toUser(u: BackendUserDetail): User {
     email: u.email,
     name: u.name,
     nickname: u.nickname,
-    isPublic: u.isPublic,
     tutorialCompleted: u.tutorialCompleted,
     lastActiveAt: u.lastActiveAt,
     createdAt: u.createdAt,
@@ -529,10 +541,13 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
     dashboard: {
       exploredCount: u.playedMusicCnt ?? null,
       /**
-       * **처음 재생한 곡 수는 배포 API 어디에도 없다** (S15P21A405-531). 0 을 넣으면 "한 곡도
-       * 발견 못 했다" 는 없는 사실이 되므로 모른다는 뜻의 null 로 둔다 — 화면이 그 줄을 안 그린다.
+       * **이제 서버가 준다** (S15P21A405-619). 예전에는 배포 API 어디에도 없어서 null 로 막아
+       * 뒀는데(S15P21A405-531), 백엔드가 S15P21A405-597 에서 `discoveredMusicCnt` 를 넣었다.
+       *
+       * 없으면 여전히 null 이다. **0 으로 떨어뜨리지 않는다** — 그러면 "한 곡도 발견 못 했다"
+       * 는 없는 사실이 되고, 화면은 그 줄을 지우는 대신 0 을 적는다.
        */
-      discoveredCount: null,
+      discoveredCount: u.discoveredMusicCnt ?? null,
       moodPreference: [],
     },
   };

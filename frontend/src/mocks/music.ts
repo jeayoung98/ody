@@ -40,6 +40,7 @@ export function mockMusicDetail(id: number): MusicDetail {
   return {
     ...base,
     albumCoverUrl: null,
+    liked: false,
     country: "KR",
     language: "ko",
     composer: `Composer ${(id % 15) + 1}`,

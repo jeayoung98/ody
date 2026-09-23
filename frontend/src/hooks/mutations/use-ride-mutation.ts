@@ -2,6 +2,7 @@ import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-q
 import { API_ENDPOINTS, BOTS, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
+import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
 import { dropSong, setSong } from "@/lib/bots/sim";
 import { isBot } from "@/lib/bots/roster";
@@ -65,9 +66,11 @@ export function useRideMutation() {
         imageUrl: target.imageUrl,
         musicId: r.musicId,
         snapshotSeq: r.snapshotSeq,
-        playHistoryId: r.playHistoryId,
       });
       useFollowStore.getState().setLeaderViewingMusicId(r.panel.open ? r.panel.musicId : null);
+      // 인솔자가 다른 겹에 있으면 거기부터 간다 (S15P21A405-560)
+      const toLayer = rideLayerTarget(useMapStore.getState().layer, r.layer);
+      if (toLayer != null) getMapEngine()?.rideToLayer(toLayer, r.musicId);
       // 내 자리는 인솔자와 같다. 지도 표식이 그리로 간다
       useMapStore.getState().setMyMusicId(r.musicId);
       // 인솔자가 듣던 지점부터. `PAUSED` 면 그 지점에서 멈춰 선다

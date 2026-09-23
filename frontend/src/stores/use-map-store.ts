@@ -116,6 +116,15 @@ interface MapState extends EngineSnapshot {
    * 이 겹에 있으면 그 곡으로 확대하고, 없으면 고스트별로 띄운다 (MAP-12) — 레이어를 자동으로 옮기지 않는다.
    */
   focusMusic: (musicId: number) => void;
+  /**
+   * 검색한 곡을 **지도에 실제로 띄운다** (S15P21A405-581).
+   *
+   * 지도가 모르는 곡이면 좌표를 먼저 넣어 줘야 한다 — 부르는 쪽이 곡 상세에서 만들어 넘긴다
+   * (`lib/map-point`). 없으면 지금까지처럼 고스트별로 떨어진다.
+   *
+   * 옮기지 못하는 상황(따라가는 중·전환 중)에서도 고스트별로 떨어진다.
+   */
+  revealMusic: (musicId: number, point?: MapPoint | null) => void;
   /** 고스트별을 끈다 (배너의 닫기) */
   dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
@@ -170,8 +179,15 @@ export const useMapStore = create<MapState>()(
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
       setMyMusicId: (myMusicId) => {
+        const engine = getMapEngine();
+        /**
+         * **날아가는 중이면 옛 자리는 버린다** (S15P21A405-565). 재생 직전에 보낸 presence
+         * join 의 답이 몇백 ms 뒤 직전 곡을 싣고 도착하는데, 그때 프론트는 이미 다음 곡으로
+         * 가고 있다. 그대로 받으면 표식이 되돌아가고 카메라가 따라가 화면이 직전 곡에 박힌다.
+         */
+        if (myMusicId != null && engine && !engine.acceptsAnchor(myMusicId)) return;
         set({ myMusicId }, false, "setMyMusicId");
-        getMapEngine()?.setMy(myMusicId);
+        engine?.setMy(myMusicId);
       },
 
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
@@ -228,6 +244,20 @@ export const useMapStore = create<MapState>()(
         // 이 겹에 있으면 확대, 없으면 "범위 밖에 있다"고 치고 고스트별로 (MAP-12)
         if (engine?.isAlive(musicId)) engine.focusSong(musicId);
         else engine?.setGhost(musicId);
+      },
+
+      revealMusic: (musicId, point) => {
+        const engine = getMapEngine();
+        set({ selectedMusicId: musicId }, false, "revealMusic");
+        if (!engine) return;
+        // 지도가 모르는 곡이면 좌표를 먼저 넣는다. 레이어 0 에서는 `adopt` 가 상주까지 켜 준다
+        if (point && !engine.isAlive(musicId)) engine.adopt([point]);
+        /**
+         * **띄우지 못하면 예전 길로 떨어진다** (S15P21A405-581). 따라가는 중이거나 겹을 건너는
+         * 중이면 화면을 옮기지 않기로 돼 있고, 좌표를 못 구한 곡은 놓을 자리가 없다.
+         * 그때는 고스트별이라도 띄워 "저쪽 바깥에 있다" 를 남긴다 (MAP-12).
+         */
+        if (engine.revealSong(musicId) === "none") engine.setGhost(musicId);
       },
       dismissGhost: () => {
         getMapEngine()?.clearGhost();

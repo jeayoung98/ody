@@ -9,6 +9,15 @@ export function formatDuration(totalSeconds: number | null | undefined): string 
   return h > 0 ? `${h}:${mm}:${String(sec).padStart(2, "0")}` : `${mm}:${String(sec).padStart(2, "0")}`;
 }
 
+/** ISO 시각 → "방금" · "12분 전" · "3시간 전" · "2일 전" */
+export function formatTimeAgo(iso: string, now = Date.now()): string {
+  const min = Math.max(0, Math.round((now - new Date(iso).getTime()) / 60_000));
+  if (min < 1) return "방금";
+  if (min < 60) return `${min}분 전`;
+  if (min < 1440) return `${Math.round(min / 60)}시간 전`;
+  return `${Math.round(min / 1440)}일 전`;
+}
+
 /** 1234567 → "1.2M" 형태 */
 export function formatCount(n: number | null | undefined): string {
   if (n == null) return "-";

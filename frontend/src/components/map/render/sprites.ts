@@ -2,6 +2,7 @@ import { NO_GENRE_ID } from "@/constants";
 import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
 import { starColorIdx } from "./star-look";
 import type { MapPoint, NearbyUser } from "@/types";
+import { BudgetCache, canvasBytes } from "@/lib/budget-cache";
 import { albumCover } from "./cover-art";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
@@ -183,7 +184,6 @@ export const ME_AVATAR: NearbyUser = {
   nickname: "나",
   imageUrl: null,
   isOnline: true,
-  isPublic: true,
   musicId: 0,
   viewingMusicId: 0,
   genreId: 0,
@@ -200,8 +200,14 @@ export const ME_AVATAR: NearbyUser = {
  */
 export const COVER_PX = 104;
 
-/** 키에 크기가 들어간다 — 같은 곡도 쓰는 자리마다 해상도가 다르다 (S15P21A405-518) */
-const coverCache = new Map<string, HTMLCanvasElement>();
+/**
+ * 키에 크기가 들어간다 — 같은 곡도 쓰는 자리마다 해상도가 다르다 (S15P21A405-518).
+ *
+ * **예산으로 잰다** (S15P21A405-586). 500장으로 세던 것을 12MB 로 바꿨다 — 104px 과 512px 이
+ * 24배 차이라 장수로는 무엇을 막는지 알 수 없었고, 넘치면 `clear()` 로 통째로 비워서 지금
+ * 화면에 서 있는 커버까지 다시 그려야 했다. 이제 가장 오래 안 쓴 것부터 하나씩 나간다.
+ */
+const coverCache = new BudgetCache<string, HTMLCanvasElement>(12 * 1024 * 1024, canvasBytes);
 
 /**
  * 이 곡의 커버.
@@ -219,7 +225,6 @@ export function coverFor(s: MapPoint, size: number = COVER_PX): HTMLCanvasElemen
   const key = `${s.musicId}:${size}`;
   let c = coverCache.get(key);
   if (c) return c;
-  if (coverCache.size > 500) coverCache.clear();
   const N = size;
   c = document.createElement("canvas");
   c.width = c.height = N;

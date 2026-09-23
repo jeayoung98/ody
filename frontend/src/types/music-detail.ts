@@ -29,6 +29,8 @@ export interface MusicDetail extends Music {
   nearby: Pick<Music, "id" | "title" | "artist">[];
   /** 관련 플레이리스트 */
   relatedPlaylists: Pick<Playlist, "id" | "playlistName" | "email">[];
+  /** 내가 좋아요를 눌렀는지 — **요청한 사람** 기준 (S15P21A405-611). 좋아요 수는 상세 응답에 없다 */
+  liked: boolean;
 }
 
 /** 검색 결과 항목. 지도 위치는 id로 지도 데이터에서 찾는다 */

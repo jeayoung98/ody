@@ -9,11 +9,17 @@ pipeline {
 
     environment {
         NODE_IMAGE = 'node:24.20.0-bookworm-slim'
+
         SSH_KEY = '/var/lib/jenkins/.ssh/app_deploy'
         DEPLOY_USER = 'ubuntu'
         DEPLOY_HOST = 'app-node'
+
         PUBLIC_BASE_URL = 'https://j15a405.p.ssafy.io'
+        BACKEND_ORIGIN = 'https://j15a405.p.ssafy.io'
+
         ARTIFACT_NAME = "ody-frontend-${BUILD_NUMBER}.tar.gz"
+        RELEASE_ID = "next-${BUILD_NUMBER}"
+
         FRONTEND_CHANGED = 'true'
         FRONTEND_DEPLOYED = 'false'
     }
@@ -28,8 +34,14 @@ pipeline {
         stage('Detect Frontend Changes') {
             steps {
                 script {
-                    def effectiveBranch = env.BRANCH_NAME ?: env.GIT_BRANCH?.replaceFirst(/^origin\//, '')
-                    if (effectiveBranch && effectiveBranch != 'master') {
+                    def effectiveBranch =
+                        env.BRANCH_NAME ?:
+                        env.GIT_BRANCH?.replaceFirst(/^origin\//, '')
+
+                    echo "Effective branch: ${effectiveBranch}"
+
+                    // frontend/jenkins 브랜치만 배포 허용
+                    if (effectiveBranch && effectiveBranch != 'frontend/jenkins') {
                         env.FRONTEND_CHANGED = 'false'
                         echo "Frontend deployment is disabled for branch: ${effectiveBranch}"
                     } else {
@@ -39,19 +51,27 @@ pipeline {
 set -euo pipefail
 
 base="${GIT_PREVIOUS_SUCCESSFUL_COMMIT:-}"
+
+# 이전 성공 빌드가 없으면 전체 빌드
 if [[ -z "${base}" ]] || ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
     exit 0
 fi
 
+# Frontend 관련 파일이 바뀌었는지 확인
 if git diff --quiet "${base}" "${GIT_COMMIT}" -- \
-    frontend infra/k6/frontend-zero-downtime.js \
+    frontend \
+    infra/k6/frontend-zero-downtime.js \
     docs/infra/examples/frontend-nginx.locations.conf; then
     exit 1
 fi
+
 exit 0
 '''
                         )
-                        env.FRONTEND_CHANGED = changed == 0 ? 'true' : 'false'
+
+                        env.FRONTEND_CHANGED =
+                            changed == 0 ? 'true' : 'false'
+
                         echo "Frontend-relevant change: ${env.FRONTEND_CHANGED}"
                     }
                 }
@@ -60,50 +80,97 @@ exit 0
 
         stage('Install, Lint, Test, Build') {
             when {
-                expression { env.FRONTEND_CHANGED == 'true' }
+                expression {
+                    env.FRONTEND_CHANGED == 'true'
+                }
             }
+
             steps {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
+
+# 이전 빌드 산출물이 남지 않도록 정리
+rm -rf frontend/.next
+rm -f -- "${ARTIFACT_NAME}"
 
 docker run --rm \
     --user "$(id -u):$(id -g)" \
     -e HOME=/tmp \
     -e npm_config_cache=/tmp/.npm \
-    -e VITE_API_BASE_URL=/api \
+    -e BACKEND_ORIGIN="${BACKEND_ORIGIN}" \
     -v "${WORKSPACE}/frontend:/workspace" \
     -w /workspace \
     "${NODE_IMAGE}" \
     sh -euc '
         node --version | grep -Fx "v24.20.0"
         npm --version | grep -Fx "11.19.0"
+
         npm ci
         npm run lint
         npm test
         npm run build
     '
 
-test -s frontend/dist/index.html
-grep -Fx 'ok' frontend/dist/healthz.txt
-printf '%s\n' "${BUILD_NUMBER}" > frontend/dist/build-id.txt
-tar -C frontend/dist -czf "${ARTIFACT_NAME}" .
+# Next.js standalone 빌드 확인
+test -s frontend/.next/standalone/server.js
+
+# Next standalone은 static/public을 자동 포함하지 않으므로 직접 복사
+mkdir -p frontend/.next/standalone/.next
+
+rm -rf frontend/.next/standalone/.next/static
+cp -r \
+    frontend/.next/static \
+    frontend/.next/standalone/.next/static
+
+rm -rf frontend/.next/standalone/public
+
+if [[ -d frontend/public ]]; then
+    cp -r \
+        frontend/public \
+        frontend/.next/standalone/public
+else
+    mkdir -p frontend/.next/standalone/public
+fi
+
+# 배포 버전 확인용 파일
+printf '%s\\n' "${RELEASE_ID}" \
+    > frontend/.next/standalone/public/build-id.txt
+
+# 프론트 자체 health check용 파일
+printf 'ok\\n' \
+    > frontend/.next/standalone/public/healthz.txt
+
+# standalone 전체를 배포 Artifact로 압축
+tar \
+    -C frontend/.next/standalone \
+    -czf "${ARTIFACT_NAME}" \
+    .
 '''
             }
         }
 
         stage('Archive Artifact') {
             when {
-                expression { env.FRONTEND_CHANGED == 'true' }
+                expression {
+                    env.FRONTEND_CHANGED == 'true'
+                }
             }
+
             steps {
-                archiveArtifacts artifacts: "${ARTIFACT_NAME}", fingerprint: true
+                archiveArtifacts(
+                    artifacts: "${ARTIFACT_NAME}",
+                    fingerprint: true
+                )
             }
         }
 
         stage('Transfer Artifact') {
             when {
-                expression { env.FRONTEND_CHANGED == 'true' }
+                expression {
+                    env.FRONTEND_CHANGED == 'true'
+                }
             }
+
             steps {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
@@ -117,6 +184,7 @@ ssh_options=(
 scp "${ssh_options[@]}" \
     "${ARTIFACT_NAME}" \
     "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/${ARTIFACT_NAME}"
+
 scp "${ssh_options[@]}" \
     frontend/deploy.sh \
     "${DEPLOY_USER}@${DEPLOY_HOST}:/tmp/deploy-frontend-${BUILD_NUMBER}.sh"
@@ -126,8 +194,11 @@ scp "${ssh_options[@]}" \
 
         stage('Deploy Frontend') {
             when {
-                expression { env.FRONTEND_CHANGED == 'true' }
+                expression {
+                    env.FRONTEND_CHANGED == 'true'
+                }
             }
+
             steps {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
@@ -138,8 +209,12 @@ ssh \
     -o StrictHostKeyChecking=yes \
     "${DEPLOY_USER}@${DEPLOY_HOST}" \
     "chmod 0755 '/tmp/deploy-frontend-${BUILD_NUMBER}.sh' && \
-     '/tmp/deploy-frontend-${BUILD_NUMBER}.sh' deploy '/tmp/${ARTIFACT_NAME}' '${BUILD_NUMBER}'"
+     '/tmp/deploy-frontend-${BUILD_NUMBER}.sh' \
+        deploy \
+        '/tmp/${ARTIFACT_NAME}' \
+        '${RELEASE_ID}'"
 '''
+
                 script {
                     env.FRONTEND_DEPLOYED = 'true'
                 }
@@ -148,20 +223,51 @@ ssh \
 
         stage('Verify Public Routes') {
             when {
-                expression { env.FRONTEND_CHANGED == 'true' }
+                expression {
+                    env.FRONTEND_CHANGED == 'true'
+                }
             }
+
             steps {
                 sh '''#!/usr/bin/env bash
 set -euo pipefail
 
-curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/" >/dev/null
-marker="$(curl -fsS --retry 5 --retry-delay 1 --max-time 10 \
-    "${PUBLIC_BASE_URL}/build-id.txt?release=${BUILD_NUMBER}")"
-[[ "${marker}" == "${BUILD_NUMBER}" ]]
-curl -fsS --retry 5 --retry-delay 1 --max-time 10 "${PUBLIC_BASE_URL}/api/hello" >/dev/null
+# Frontend 접근 확인
+curl -fsS \
+    --retry 5 \
+    --retry-delay 1 \
+    --max-time 10 \
+    "${PUBLIC_BASE_URL}/" \
+    >/dev/null
 
-actuator_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
-    "${PUBLIC_BASE_URL}/actuator/health")"
+# 실제 배포된 Jenkins Build Number 확인
+marker="$(
+    curl -fsS \
+        --retry 5 \
+        --retry-delay 1 \
+        --max-time 10 \
+        "${PUBLIC_BASE_URL}/build-id.txt?release=${RELEASE_ID}"
+)"
+
+[[ "${marker}" == "${RELEASE_ID}" ]]
+
+# Backend API 연결 확인
+curl -fsS \
+    --retry 5 \
+    --retry-delay 1 \
+    --max-time 10 \
+    "${PUBLIC_BASE_URL}/api/hello" \
+    >/dev/null
+
+# actuator가 외부에는 노출되지 않는지 확인
+actuator_status="$(
+    curl -sS \
+        -o /dev/null \
+        -w '%{http_code}' \
+        --max-time 10 \
+        "${PUBLIC_BASE_URL}/actuator/health"
+)"
+
 [[ "${actuator_status}" == "403" || "${actuator_status}" == "404" ]]
 '''
             }
@@ -172,21 +278,27 @@ actuator_status="$(curl -sS -o /dev/null -w '%{http_code}' --max-time 10 \
         always {
             sh '''#!/usr/bin/env bash
 rm -f -- "${ARTIFACT_NAME}"
+
 if [[ "${FRONTEND_CHANGED:-false}" == "true" ]]; then
     ssh \
         -i "${SSH_KEY}" \
         -o BatchMode=yes \
         -o StrictHostKeyChecking=yes \
         "${DEPLOY_USER}@${DEPLOY_HOST}" \
-        "rm -f -- '/tmp/${ARTIFACT_NAME}' '/tmp/deploy-frontend-${BUILD_NUMBER}.sh'" || true
+        "rm -f -- \
+            '/tmp/${ARTIFACT_NAME}' \
+            '/tmp/deploy-frontend-${BUILD_NUMBER}.sh'" \
+        || true
 fi
 '''
         }
+
         success {
             echo "Frontend pipeline completed. deployed=${env.FRONTEND_DEPLOYED} build=${env.BUILD_NUMBER}"
         }
+
         failure {
-            echo 'Frontend pipeline failed. The deploy script preserves or restores the previous current symlink.'
+            echo 'Frontend pipeline failed. The deploy script preserves or restores the previous release.'
         }
     }
 }

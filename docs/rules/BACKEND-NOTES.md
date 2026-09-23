@@ -243,7 +243,7 @@ A-23의 과거 “BE 머지 전” 기록은 현재 상태가 아니다. 2026-09
 | S-1 | 따라가기 동기화 — 인솔자의 동작을 **세 종류 이벤트로 따로** 보내야 한다 (SOCIAL-07): ① `leader:view` = 곡 클릭(`viewingMusicId`) ② `leader:play` = 재생 시작(`playingMusicId`) ③ `leader:layer` = 레이어 전환(`layer`) | 뷰는 ①에서 먼저 움직이고, 우주선은 ②가 와야 출발한다. 두 개를 한 이벤트로 합쳐 보내면 이 연출이 불가능하다 | 협의 전 |
 | S-2 | 따라가기 자동 종료: 인솔자 접속 종료·비공개 전환 시 (SOCIAL-10-1) | 서버가 알려줘야 한다 | 협의 전 |
 | S-3 | 접속 상태·현재 탐색 좌표 실시간 관리 (USER-03) | 주변 사람 목록의 실시간성 | 협의 전 |
-| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 협의 전 |
+| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | **연동됨 (2026-09-23, S15P21A405-607).** 전송 `POST /api/realtime/reactions` `{toEmail, reactionKey}` → 프론트 `/bff/realtime/reactions`. 수신 개인 큐 `REACTION` `{fromEmail, reactionKey, sentAt}`. 거부 `REACTION_SELF`(400)·`REACTION_NOT_NEARBY`(409)·`REACTION_COOLDOWN`(429)·`PRESENCE_ERROR`(422). **프론트는 주변 사람 패널 전원에게 펼쳐 보낸다** — 명세는 "내 위로 떠서 주변에 보이는" 방송이라 1:1 이 아니다. 백엔드에 "같은 층 전원" 방송 API(toEmail 없는 형태)를 요청할지 협의 필요. 이모지 키는 `rocket fire heart poop pray` 5개(프론트 소유, 서버는 형식만 검사) |
 | S-5 | 따라가는 인원 수 (SOCIAL-11), 만난 횟수 카운팅 (SOCIAL-05) | 서버 집계 필요 | 협의 전 |
 
 
@@ -448,7 +448,7 @@ S15P21A405-489 에서 실연동했다. 따라가기는 `RideRestController` 로 
 | A-50 | 인원수 델타 네 종이 배포에 없다 | ~~명세 §2.3·§7.1 의 네 종이 배포 enum 에 없다~~ **들어왔다** (2026-09-22, `58a415eb` "따라오는 인원수를 밀어 주고 거부 사유를 코드로 나눈다"). `VIEWPORT_RIDER_COUNT` · `NEARBY_RIDER_COUNT` · `RIDE_VIEWPORT_RIDER_COUNT` 가 enum 에 생겼고 탑승·하차·이탈 세 곳에서 인솔자를 보는 사람들에게 나간다. `NEARBY_BULK_ENTER` 도 있다 | — | ✅ 해소 (2026-09-22) · 프론트는 이미 받는 코드가 있어 추가 작업 없음 |
 | A-51 | `RIDE_STALE` 오류 코드가 없다 | ~~`RealtimeErrorCode` 에 없다~~ **생겼다** (2026-09-22, `58a415eb`). 409 `RIDE_STALE` = "그 사이 상태가 어긋났다, 새로 고치면 풀린다", 접속이 없는 경우는 `PRESENCE_ERROR` 로 떼어 냈다 | — | ✅ 해소 (2026-09-22) · 프론트 `ApiErrorCode` 와 안내 문구 반영 완료 |
 | A-52 | 곡 상세 `tab` 값에 대응하는 UI 가 없다 | `RidePanelTab` 은 `nearby`·`info`·`playlists` 를 요구하는데 **우리 곡 상세에는 탭이 없다** (한 장짜리 스크롤) | 기능상 문제는 없다. 프론트는 열 때 `info` 로 고정해 싣고, 받는 쪽은 탭을 보지 않고 그 곡 상세를 연다 (명세 FR-035 의 `nearby` 폴백과 결과가 같다) | 프론트 결정 — 백엔드 조치 불필요 |
-| A-53 | 따라가는 동안의 **곡별** 재생시간을 보낼 수 없다 | `RIDE_TRACK` 으로 곡이 바뀌면 서버가 새 `play_history` 를 만들지만 **그 번호가 프론트에 오지 않는다** (명세 §8.7 이 같은 말을 한다) | 탑승 중 곡별 청취시간이 남지 않는다 | **해소 (2026-09-22, 3차 계약 §3)** — `RIDE_TRACK.playHistoryId: Long` 추가. `origin/backend/jenkins` 의 `RideTrackPayload` 에서 확인. 기록 번호를 못 받으면 `null` 로 오고 곡 알림 자체는 그대로 나간다 — 안 보내면 이미 서버에서 옮겨진 사람이 옛 곡에 남기 때문이다. 프론트는 앞 곡 종료를 보내고 번호를 갈아 끼운다 (S15P21A405-545) |
+| A-53 | 따라가는 동안의 **곡별** 재생시간을 보낼 수 없다 | `RIDE_TRACK` 으로 곡이 바뀌면 서버가 새 `play_history` 를 만들지만 **그 번호가 프론트에 오지 않는다** (명세 §8.7 이 같은 말을 한다) | 탑승 중 곡별 청취시간이 남지 않는다 | **없어진 기능 (2026-09-22)** — `RIDE_TRACK.playHistoryId` 는 계약대로 추가됐고(3차 계약 §3) 프론트도 붙였었다(S15P21A405-545). 그런데 그 뒤 **`PATCH /api/music/play/end` 가 배포에서 빠졌다** — 몇 초 들었는지를 안 남기기로 했다(2026-09-22 배포 스웨거에 없다). 곡별 청취시간이라는 목적 자체가 사라져 프론트 배선을 걷어냈다 (S15P21A405-571). `playHistoryId` 는 서버가 계속 보내므로 타입에만 남겨 뒀다 — 받긴 받되 쓰지 않는다 |
 
 ### 백엔드에 드리는 요청 (2026-09-22 재배포 후 남은 것만)
 
@@ -534,3 +534,91 @@ BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리�
 
 **요청** A-57 하나입니다. 상세 응답에 소유자(이메일 또는 닉네임)를 넣어 주시면 목록을 한 번 더
 받는 우회가 없어지고, 남의 플리에서 만든 사람을 보여 줄 수 있습니다.
+
+---
+
+## 공개/비공개 계정 폐지 — 프론트는 걷어냈다 (S15P21A405-574, 2026-09-22)
+
+기획 확인: **공개/비공개 계정은 없는 기능이다. 전원 공개가 기본이고 설정 자체가 없다.**
+
+### 프론트가 한 것
+
+`isPublic` 을 통째로 끊었다. 타입(`User`·`NearbyUser`·`FollowUserSummary`)·설정 UI·
+`PATCH /api/user/public` 을 부르던 뮤테이션과 BFF 라우트를 지웠다. `UserDetailResponse.isPublic` 은
+**받고 버린다** — 응답 스키마는 안 건드렸다.
+
+지우면서 나온 것 하나: `map-engine` 이 `!u.isOnline || !u.isPublic` 으로 지도 표식을 거르고 있었다.
+그래서 합성 경로 여섯 군데가 전부 `isPublic: true` 를 집어넣고 있었다 — **문을 통과시키려고 넣던 값**이다.
+서버가 어느 사용자에게 `false` 를 줬으면 그 사람은 이유 없이 지도에서 사라졌다. 문과 값 둘 다 없앴다.
+
+### 백엔드에 남는 것 — 여기가 본론이다
+
+**프론트만 걷어내면 "버튼은 뜨는데 누르면 403" 이 된다.** `is_public = false` 인 행이 하나라도
+있으면 아래 넷이 그대로 막는다 (`origin/backend/dev` 에서 읽음).
+
+| # | 자리 | 지금 동작 |
+| --- | --- | --- |
+| V-1 | `UserService:49` | 비공개 + 본인 아님 → `403 USER_PRIVATE`. **남의 프로필이 아예 안 열린다** |
+| V-2 | `FollowService:105` | 같은 조건으로 팔로워·팔로잉 목록 차단 |
+| V-3 | `PlaylistService:65` · `:87` | 같은 조건으로 남의 플리 목록·상세 차단 |
+| V-4 | `UserVisibilityController` · `UserService:116` · `UserMapper.updateIsPublic` | 설정 변경 엔드포인트. 부르는 데가 없어졌다 |
+
+`AuthMapper.xml:18` 의 가입 INSERT 는 `is_public` 을 넣지 않는다 — **DB 컬럼 기본값을 탄다.**
+그 DDL 이 저장소에 없어 기본값이 `true` 인지 확인하지 못했다. 설정 UI 가 그동안 열려 있었으므로
+**이미 `false` 로 바꾼 계정이 있을 수 있다.**
+
+### 요청
+
+1. **V-1~V-3 의 `USER_PRIVATE` 분기를 걷어낸다.** 이것만 해도 증상은 사라진다
+2. `is_public = false` 인 행을 **`true` 로 backfill** 하고 컬럼 기본값을 `true` 로 확인한다
+3. V-4 와 `is_public` 컬럼·`UserDetailResponse.isPublic` 은 **1·2 가 끝난 뒤** 지운다.
+   순서를 바꾸면 프론트가 이미 안 읽으므로 상관없지만, 응답 필드를 먼저 빼도 프론트는 안 깨진다
+4. `UserErrorCode.USER_PRIVATE` 도 같이 없어진다. 프론트는 BFF 의 방어 분기를 **그때까지 유지**한다
+
+| # | 항목 | 상태 |
+| --- | --- | --- |
+| A-59 | 공개/비공개 폐지 — 백엔드 V-1~V-4 + backfill | 협의 전 |
+
+## 주변 사람이 층 기준이 된 뒤 (S15P21A405-582 · 596)
+
+| # | 항목 | 무엇이 걸리나 | 상태 |
+| --- | --- | --- | --- |
+| A-60 | 패널에 누구를 띄우나 — **물을 것 없음** | 5차 명세가 패널을 "그 층의 미니맵" 으로 적어서 층 전체가 보여야 하는지 물으려 했으나, 2026-09-23 프론트 확인 결과 **미니맵이 아니다.** 규칙은 둘이다. ① 내 곡 주변 `neighborK`(80)번째 곡까지의 거리를 경계로 삼아 그 안의 사람만 띄운다. 가까이 아무도 없으면 **비우고 안내만 띄운다.** ② 경계 안에 몰려 있으면 가까운 순 12명까지. 서버 `realtime.nearby.panel-cap` 12 는 **채우는 값**이라 사람이 적은 층에서 층 반대편 사람까지 넣어 주는데, 프론트가 경계로 다시 거른다 — 서버는 바꿀 것이 없다 | 확인함 · 조치 불필요 |
+| A-61 | `NEARBY_BULK_ENTER` 에 **사람별 좌표가 없다** | 5차 명세 §2 는 `ENTER`·`MOVE`·`BULK_ENTER` 가 `x`·`y` 를 담는다고 적었는데, `BULK_ENTER` 는 `musicId` 가 봉투에 하나뿐이라 사람마다 실리지 않는 것으로 읽힌다. 프론트는 그 곡으로 지도에서 자리를 찾아 메운다 — 그 곡이 이 층 상주 집합 밖이면 자리를 못 구해 목록 맨 뒤로 간다. 봉투에 `x`·`y` 를 하나만 넣어 주면 그 틈이 없어진다 | 협의 전 |
+
+## 별자리 콘테스트 — 프론트 목 계약 (S15P21A405-602, 2026-09-23)
+
+FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15P21A405-548**(AI 평가·리더보드) · **S15P21A405-598**(그린 점 → 곡 매칭) 에서 진행 중이다.
+프론트는 아래 모양으로 목(`src/app/bff/contests/*`, `src/mocks/contest.ts`)을 만들어 화면을 먼저 붙였다. **경로·필드는 전부 제안**이며 백엔드 설계에 맞춰 바꿀 수 있다 — 바뀌면 프론트에 알려 주면 라우트만 갈아 끼운다. 타입은 `frontend/src/types/contest.ts`.
+
+| # | API | 요청 | 응답 `data` | 이유 | 상태 |
+| --- | --- | --- | --- | --- | --- |
+| A-62 | `GET /api/contests/current` | — | `Contest` = `{ id, roundNo, theme, startsAt, endsAt, announceAt, status(OPEN/CLOSED/ANNOUNCED), rules{minPoints, maxPoints, resubmitLimit, voteLimit, aiGate, titleMax}, myEntryId, myVotesLeft, myResubmitsLeft }`. 진행 중인 회차가 없으면 `null` | 진입 버튼(진행 중 점·D-day)과 패널 머리가 이걸로 그려진다. 규칙 값은 **회차마다 바뀔 수 있어** 프론트에 박지 않는다 | 협의 전 |
+| A-63 | `POST /api/contests/{id}/match` | `{ points: [{x,y}] }` — 0~1 정규화 캔버스 좌표(y 아래 양수), 3~20개 | `ContestMatch` = `{ tracks: [{musicId, title, artist, x, y}], similarity(0~1), quality(HIGH/MID/LOW) }`. `tracks` 는 **점 입력 순서**, 중복 없음. `x,y` 는 배치 API 규약(-1~1, y 위 양수) | S15P21A405-598 그대로. 프론트는 결과 좌표로 미리보기·썸네일을 그리므로 **결과 좌표가 배치 API(`/constellations/layout`)와 일치**해야 한다(598 AC). 점 수 범위 밖이면 정의된 오류 | 협의 전 |
+| A-64 | `POST /api/contests/{id}/judge` | `{ tracks: ContestTrack[], closed }` | `ContestJudge` = `{ score(0~100), comment(≤80자) }` | **즉시 심사** — 매칭 결과가 오는 순간 부른다(기획 확정: 즉시 + 그 점수로 출품). 입력은 **모양만**(곡명·사용자 제외, 공정성). 같은 배치면 같은 답이어야 미리보기 점수 = 출품 점수가 된다 → 배치 해시 캐시 제안. 비용: 점을 바꿀 때마다 부르는 구조라 사용자당 rate limit(분당 20회 제안) 필요. 부담되면 "심사 받기" 버튼 방식으로 바꿀 수 있다 | 협의 전 |
+| A-65 | `POST /api/contests/{id}/entries` | `{ title(1~30자), tracks: ContestTrack[], closed }` | `ContestEntry` (아래) · 201 | 출품. 내 출품작이 있으면 **대체**(resubmit_count+1, 표 유지). 점수는 judge 캐시 재사용. `tracks` 는 **스냅샷** — 원본 플리를 고쳐도 출품작은 안 바뀐다(치팅 방지). 오류: `CONTEST_NOT_OPEN`, `CONTEST_RESUBMIT_EXHAUSTED`, 제목·곡 수 검증 | 협의 전 |
+| A-66 | `GET /api/contests/{id}/entries?sort=latest\|votes\|ai\|final\|saves` | 정렬 키 (cursor 페이지네이션은 백엔드가 정함) | `ContestEntry[]` = `{ id, contestId, title, ownerEmail, ownerNickname, tracks, closed, aiScore, aiComment, voteCount, saveCount, finalScore, eligible, rank, votedByMe, savedByMe, isMine, createdAt }` | 갤러리·순위가 **같은 목록**을 쓴다 — `sort=final` 이 곧 순위. `eligible = aiScore ≥ rules.aiGate`, `finalScore = ai×0.5 + (votes ÷ 회차 최대 votes × 100)×0.5`(소수 1자리), `rank` 는 eligible 안에서만(동점 AI 우선, 그다음 먼저 낸 순). 썸네일은 `tracks` 의 `x,y` 로 클라이언트가 그린다(이미지 저장 없음) | 협의 전 |
+| A-67 | `POST` · `DELETE /api/contests/{id}/entries/{entryId}/vote` | — | `{ voteCount, myVotesLeft }` | 표 주기·거두기. 회차당 `rules.voteLimit`(3), 내 출품작 금지. **플리 좋아요(PATH-07)와 별개 카운터** — 같이 쓰면 콘테스트 플리가 주간 탑 플리 차트를 점령한다. 오류: `CONTEST_VOTE_LIMIT`(409), `CONTEST_VOTE_SELF`(400), `CONTEST_NOT_OPEN` | 협의 전 |
+| A-68 | `POST /api/contests/{id}/entries/{entryId}/save` | `{ title? }` | `{ playlistId, saveCount }` · 201 | 출품작 스냅샷을 **내 새 플레이리스트**로 복사(순서 유지). 남의 출품작도 가능, 회차 종료 후도 가능. `save_count+1`. 프론트 목은 지금 `POST /api/playlist/create` 에 `musicIdList` 를 실어 **실제 플리를 만든다** — 백엔드가 이 API 를 만들면 그 안에서 같은 일을 하면 된다 | 협의 전 |
+| A-69 | 오류 코드 | — | `CONTEST_NOT_FOUND` `CONTEST_NOT_OPEN` `CONTEST_ENTRY_NOT_FOUND` `CONTEST_VOTE_LIMIT` `CONTEST_VOTE_SELF` `CONTEST_RESUBMIT_EXHAUSTED` | 프론트 `types/api.ts` `BffErrorCode` 에 이 이름으로 넣어 두었다. 사유마다 사용자에게 보여 줄 말이 달라 하나로 뭉치면 안 된다 | 협의 전 |
+| A-70 | 데이터 (ERD 에 없음) | — | `contest`(회차·테마·기간·상태·규칙), `contest_entry`(unique(contest_id,user_id), title, track_ids 순서 스냅샷, closed, ai_score, ai_comment, resubmit_count, vote_count, save_count, final_rank), `contest_vote`(unique(contest_id,user_id,entry_id)), `contest_judge_cache`(배치 해시 → 점수·평) | 프론트가 요구하는 필드의 출처. `final_rank` 는 `announceAt` 에 확정 저장, 이후 출품·투표 쓰기는 `CONTEST_NOT_OPEN` | 협의 전 |
+| A-71 | `GET /api/stats/weekly` ↔ SOCIAL-12 **종류가 다르다** | — | `{ weekStart, weekEnd, discovery[], explore[], contribution[] }`, 각 칸 `RankedUser { rank, email, nickname, imageUrl, count }` | 2026-09-23 프론트 실연동 (S15P21A405-604). 명세 SOCIAL-12 는 **실시간 탑 버스기사 / 이번주 탐험왕 / 누적 팔로워 / 탑 플레이리스트** 4종인데, 배포된 백엔드(S15P21A405-448)는 **발견왕 / 탐험왕 / 기여도** 3종이다. 겹치는 것은 탐험왕만. 프론트는 백엔드 기준으로 탭을 바꿨다(발견왕·탐험왕·기여도 + 버스기사 "준비 중"), 누적 팔로워·탑 플리 **목 탭은 걷어냈다**. `count` 는 프론트 `score` 로 받는다. 기획이 4종을 유지하려면 백엔드에 팔로워·탑 플리·버스기사 랭킹이 더 필요하고, 3종으로 갈 거면 FEATURES SOCIAL-12 문구를 바꿔야 한다 (변경 제안 #37) | 협의 전 |
+
+**정해야 할 것**
+- 즉시 심사 비용 상한 (A-64) — 예상 참가자 수로 한 번 계산해 보고 결정.
+- 회차 생성은 어드민 API 로 할지 초기엔 DB insert 로 갈지.
+- 지난 회차 아카이브(`GET /api/contests?status=ANNOUNCED`)를 1차 범위에 넣을지. 프론트는 아직 안 붙였다.
+- 별밭: 프론트 목의 매칭은 **레이어 0 상주 집합**(`/api/music/major?level=1`) 안에서만 찾는다. 실서비스가 662만 곡 전체에서 찾을지, 대표곡 안에서 찾을지는 598 에서 정한다.
+
+## 따라가기 복원 — 새로고침·재연결 (S15P21A405-615, 2026-09-23)
+
+프론트가 **새로고침·재연결 뒤 같은 인솔자에게 자동으로 다시 탑승**하도록 바꿨다 (`use-ride-session`).
+인솔자를 sessionStorage 에 남기고 소켓이 열리면 `POST /api/realtime/ride` 를 다시 보낸다. 백엔드 변경
+없이 되는 범위는 여기까지고, 아래는 백엔드가 있어야 되는 것들이다.
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-72 | **재연결 유예 기간 — 소켓이 끊겨도 탑승·선단을 잠시 유지** | 2차 명세 §8.3: 소켓이 새로 열리면 서버가 이전 위치와 탑승을 지운다. 인솔자가 새로고침하면 선단이 해체되고 따라오던 전원에게 `RIDE_ENDED` 가 간다 | **인솔자 새로고침은 프론트가 못 살린다.** 동승자는 재탑승으로 우회하지만 인솔자는 돌아올 선단이 없다. 재접속 후 30~60초 안에 같은 사용자가 CONNECT 하면 탑승·선단·위치를 그대로 잇고, 넘기면 지금처럼 지우는 방식을 요청 | 협의 전 |
+| A-73 | **내 탑승 조회** `GET /api/realtime/ride/me` → `{captainEmail, musicId, layer, playback, positionMs, panel}` (탑승 응답과 같은 모양) 또는 없음 | 없다. 프론트는 저장소의 인솔자로 **다시 탑승**해야만 상태를 얻는다 | A-72 가 되면 재연결 뒤 "지금 내가 타고 있나" 를 물을 길이 필요하다. 새 탭·저장 유실도 이걸로 복원된다 | 협의 전 |
+| A-74 | 재탑승이 **새 좌석**으로 계산된다 | 재접속 시 이전 탑승이 지워진 뒤 새로 타므로 `RIDE_FULL` 경합에 걸릴 수 있고, 인솔자에게 `RIDE_RIDER_LEFT` → `RIDE_RIDER_JOINED` 가 연달아 가 인원수가 깜빡인다 | 유예 기간(A-72)이 있으면 둘 다 사라진다. 없다면 재탑승을 좌석 유지로 처리해 달라 | 협의 전 |
+| A-75 | 재탑승 시 재생 위치 | 탑승 응답의 `positionMs` 로 이어 튼다 — 이건 지금도 된다 | — | 확인만 (백엔드 할 일 없음) |

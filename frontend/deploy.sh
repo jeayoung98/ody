@@ -139,7 +139,6 @@ nginx_check() {
     nginx -t
 }
 
-
 frontend_service_exists() {
     systemctl cat "${FRONTEND_SERVICE}" >/dev/null 2>&1
 }

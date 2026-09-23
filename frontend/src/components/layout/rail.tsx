@@ -1,10 +1,11 @@
 "use client";
 
 import { FriendsIcon, JourneyIcon, RankIcon } from "@/components/common/icons";
-import { usePanelEnabled } from "@/hooks/use-features";
+import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import ContestButton from "./contest-button";
 import NearbyExploreButton from "./nearby-explore-button";
 import ProfileButton from "./profile-button";
 import RailButton from "./rail-button";
@@ -39,9 +40,10 @@ export default function Rail() {
   const pressJourney = () => {
     if (composerOpen) closeComposer();
     else if (hasJourney) toggle("journey");
-    else openComposer("start");
+    else openComposer();
   };
   const panelEnabled = usePanelEnabled();
+  const features = useFeatures();
 
   return (
     /*
@@ -51,6 +53,8 @@ export default function Rail() {
      * 비틀어 쓰다가 "랭킹을 보는 중인데 주변 탐색이 켜진" 상태가 생겼다.
      */
     <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:hidden">
+      {/* 이벤트(콘테스트)는 기간이 있어 알약 밖 왼쪽에 따로 선다 (S15P21A405-602). 진행 중인 회차가 없으면 없다 */}
+      {features.contest && <ContestButton />}
       <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">

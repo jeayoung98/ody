@@ -1,11 +1,9 @@
 "use client";
 
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { usePlaySong } from "@/hooks/use-play-song";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
-import { useMapStore } from "@/stores/use-map-store";
 
 /**
  * 곡 상세의 재생 버튼이 쓰는 한 벌 — 지금 이 곡이 울리는지, 누르면 무엇을 할지.
@@ -18,7 +16,6 @@ export function useSongPlayToggle(musicId: number) {
   const pause = usePlayerStore((s) => s.pause);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const recordPlay = useRecordPlayMutation();
   const showToast = useToastStore((s) => s.show);
 
   /**
@@ -54,7 +51,8 @@ export function useSongPlayToggle(musicId: number) {
       return;
     }
     // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-    playWithConfirm(musicId, () => recordPlay.mutate({ musicId, source: "MAP", layer: useMapStore.getState().layer }));
+    // 선언은 `use-declare-play` 한 곳이 한다 (S15P21A405-569) — 여기서 또 부르면 두 번 나간다
+    playWithConfirm(musicId);
   };
 
   return { canPlay, blocked, isThisPlaying, toggle };

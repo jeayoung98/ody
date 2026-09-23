@@ -77,7 +77,9 @@ class TasteAnalysisGenerationServiceTests {
 
         assertThat(response.generation().status()).isEqualTo("GENERATED");
         assertThat(response.generation().dailyLimitUsedToday()).isTrue();
-        assertThat(response.report().summary()).contains("잠정 경향");
+        // 접두사를 붙이지 않고 GMS 요약을 그대로 싣는다 [S15P21A405-634].
+        assertThat(response.report().summary()).isEqualTo("강렬한 음악을 즐겨요.");
+        assertThat(response.report().level()).isEqualTo("INITIAL");
     }
 
     @Test

@@ -106,7 +106,7 @@ public class TasteAnalysisGenerationService {
             outputValidator.validate(generated, findings);
             sample.stop(meterRegistry.timer("ody.taste.gms.latency", "outcome", "success"));
             OffsetDateTime completedAt = OffsetDateTime.ofInstant(clock.instant(), zoneId);
-            String summary = ensureInitialLanguage(current.reportEligibility().level(), generated.summary());
+            String summary = generated.summary();
             List<TasteAnalysisResponse.Narrative> narratives = toNarratives(generated, findings);
             int updated = mapper.markSuccess(
                     email, analysisDate, requestedAt, completedAt, hash,
@@ -120,7 +120,7 @@ public class TasteAnalysisGenerationService {
             meterRegistry.counter("ody.taste.generation.outcomes", "outcome", "generated").increment();
             boolean fresh = isCurrentSnapshot(email, hash);
             TasteAnalysisResponse.Report report = new TasteAnalysisResponse.Report(
-                    current.reportEligibility().level(), true, fresh, summary, narratives,
+                    current.reportEligibility().level(), true, fresh, summary, narratives, findings,
                     requestedAt, completedAt, completedAt);
             return withReport(current, fresh ? "FRESH" : "STALE", report,
                     new TasteAnalysisResponse.Generation("GENERATED", true, true, false, null,
@@ -139,7 +139,7 @@ public class TasteAnalysisGenerationService {
                     fallbackRenderer.render(current.reportEligibility().level(), findings);
             TasteAnalysisResponse.Report report = new TasteAnalysisResponse.Report(
                     current.reportEligibility().level(), false, true,
-                    fallback.summary(), fallback.narratives(), requestedAt, completedAt,
+                    fallback.summary(), fallback.narratives(), findings, requestedAt, completedAt,
                     latest == null ? null : latest.getCompletedAt());
             return withReport(current, "FALLBACK", report,
                     new TasteAnalysisResponse.Generation(
@@ -200,6 +200,7 @@ public class TasteAnalysisGenerationService {
             boolean generatedThisRequest) {
         TasteAnalysisResponse.Report report = new TasteAnalysisResponse.Report(
                 row.getReportLevel(), true, true, row.getSummary(), readNarratives(row.getNarratives()),
+                readFindings(row.getFindings()),
                 row.getRequestedAt(), row.getCompletedAt(), row.getCompletedAt());
         boolean usedToday = row.getAnalysisDate().equals(OffsetDateTime.ofInstant(clock.instant(), zoneId).toLocalDate());
         return withReport(current, state, report,
@@ -228,18 +229,27 @@ public class TasteAnalysisGenerationService {
                 .toList();
     }
 
-    private static String ensureInitialLanguage(String level, String summary) {
-        if ("INITIAL".equals(level) && !summary.contains("잠정")) {
-            return "현재 좋아요에서 보이는 잠정 경향으로, " + summary;
-        }
-        return summary;
-    }
-
     private String json(Object value) {
         try {
             return objectMapper.writeValueAsString(value);
         } catch (JsonProcessingException error) {
             throw new IllegalStateException("taste snapshot serialization failed", error);
+        }
+    }
+
+    /**
+     * 저장된 findings 를 그대로 되돌린다. 생성 직후 응답과 이후 조회 응답이 같아야 한다.
+     * 값이 없는 행이 있어도 리포트 전체를 죽이지 않고 빈 목록으로 둔다.
+     */
+    private List<TasteFinding> readFindings(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {
+            });
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("stored taste findings are invalid", error);
         }
     }
 

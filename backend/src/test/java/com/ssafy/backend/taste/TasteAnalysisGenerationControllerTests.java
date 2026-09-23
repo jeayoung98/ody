@@ -96,7 +96,7 @@ class TasteAnalysisGenerationControllerTests {
                 "taste-v1",
                 List.of(), List.of(),
                 new TasteAnalysisResponse.Report(
-                        level, aiGenerated, true, "요약", List.of(), completedAt, completedAt, completedAt),
+                        level, aiGenerated, true, "요약", List.of(), List.of(), completedAt, completedAt, completedAt),
                 new TasteAnalysisResponse.Generation(
                         generationStatus, aiGenerated, aiGenerated, !aiGenerated,
                         aiGenerated ? null : "GMS_REQUEST_FAILED", null));

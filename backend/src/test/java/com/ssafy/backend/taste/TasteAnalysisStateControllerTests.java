@@ -120,7 +120,7 @@ class TasteAnalysisStateControllerTests {
                 "taste-v1",
                 List.of(), List.of(),
                 new TasteAnalysisResponse.Report(
-                        "INITIAL", true, "FRESH".equals(state), "요약", List.of(),
+                        "INITIAL", true, "FRESH".equals(state), "요약", List.of(), List.of(),
                         completedAt, completedAt, completedAt),
                 new TasteAnalysisResponse.Generation(
                         generationStatus, false, false, false, null, nextAvailableAt));

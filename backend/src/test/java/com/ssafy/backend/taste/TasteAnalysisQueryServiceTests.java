@@ -155,6 +155,60 @@ class TasteAnalysisQueryServiceTests {
         assertThat(response.counts().excluded()).isEqualTo(1);
     }
 
+    /** 화면이 태그를 그리려면 저장된 findings 가 조회 응답에도 그대로 나와야 한다 [S15P21A405-634]. */
+    @Test
+    void storedFindings_areReturnedOnQuery() {
+        List<TasteMusicRow> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            rows.add(row(i));
+        }
+        when(references.current()).thenReturn(Optional.of(reference()));
+        when(mapper.findLikedMusic("me@example.com")).thenReturn(rows);
+        TasteAnalysisRow latest = new TasteAnalysisRow();
+        latest.setAnalysisDate(java.time.LocalDate.of(2026, 9, 21));
+        latest.setLikedSetHash("다른-해시");
+        latest.setReportLevel("INITIAL");
+        latest.setSummary("저장된 요약");
+        latest.setNarratives("[]");
+        latest.setFindings("[{\"id\":\"pc3-consistent_bias\",\"type\":\"CONSISTENT_BIAS\",\"pc\":3,"
+                + "\"direction\":\"HIGH\",\"effectSize\":22.4,\"evidence\":\"근거\",\"axisPhrase\":\"여백 있는\"}]");
+        latest.setRequestedAt(OffsetDateTime.parse("2026-09-21T08:00:00+09:00"));
+        latest.setCompletedAt(OffsetDateTime.parse("2026-09-21T08:00:05+09:00"));
+        when(analysisMapper.findLatestSuccess("me@example.com")).thenReturn(latest);
+
+        TasteAnalysisResponse response = service.get("me@example.com");
+
+        assertThat(response.report().findings()).singleElement().satisfies(finding -> {
+            assertThat(finding.id()).isEqualTo("pc3-consistent_bias");
+            assertThat(finding.type()).isEqualTo("CONSISTENT_BIAS");
+            assertThat(finding.pc()).isEqualTo(3);
+            assertThat(finding.direction()).isEqualTo("HIGH");
+            assertThat(finding.axisPhrase()).isEqualTo("여백 있는");
+        });
+    }
+
+    /** findings 가 비어 있는 행이 있어도 리포트 전체가 죽지 않는다. */
+    @Test
+    void missingStoredFindings_doNotBreakTheReport() {
+        List<TasteMusicRow> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            rows.add(row(i));
+        }
+        when(references.current()).thenReturn(Optional.of(reference()));
+        when(mapper.findLikedMusic("me@example.com")).thenReturn(rows);
+        TasteAnalysisRow latest = new TasteAnalysisRow();
+        latest.setAnalysisDate(java.time.LocalDate.of(2026, 9, 21));
+        latest.setLikedSetHash("다른-해시");
+        latest.setReportLevel("INITIAL");
+        latest.setSummary("저장된 요약");
+        latest.setNarratives("[]");
+        latest.setRequestedAt(OffsetDateTime.parse("2026-09-21T08:00:00+09:00"));
+        latest.setCompletedAt(OffsetDateTime.parse("2026-09-21T08:00:05+09:00"));
+        when(analysisMapper.findLatestSuccess("me@example.com")).thenReturn(latest);
+
+        assertThat(service.get("me@example.com").report().findings()).isEmpty();
+    }
+
     private TasteMusicRow row(int id) {
         TasteMusicRow row = new TasteMusicRow();
         row.setMusicId(id + 1L);

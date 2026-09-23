@@ -1,7 +1,7 @@
 "use client";
 
 import { CloseIcon } from "@/components/common/icons";
-import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useMusicLabel } from "@/hooks/use-music-label";
 
 interface JourneyComposerSlotProps {
   role: "start" | "end";
@@ -20,9 +20,9 @@ interface JourneyComposerSlotProps {
  * 테두리 없이 점 하나와 입력만 두고, 편집 중인 줄만 색이 살아난다.
  */
 export default function JourneyComposerSlot({ role, musicId, active, keyword, onFocusSlot, onKeywordChange, onClear }: JourneyComposerSlotProps) {
-  const { data } = useMusicDetailQuery(musicId);
+  // 누를 때 넘겨받은 제목이 있으면 조회를 기다리지 않는다 (S15P21A405-585)
+  const { title, artist } = useMusicLabel(musicId);
   const isStart = role === "start";
-  const title = data?.title ?? (musicId != null ? `Track ${musicId}` : "");
   const editing = active && keyword.length > 0;
   const dot = isStart
     ? active
@@ -46,7 +46,7 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
           autoComplete="off"
         />
       </span>
-      {musicId != null && !editing && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{data?.artist}</span>}
+      {musicId != null && !editing && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{artist}</span>}
       {musicId != null && !editing && (
         <button
           type="button"

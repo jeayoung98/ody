@@ -62,31 +62,31 @@ export interface NearbyUser {
   y?: number;
 }
 
-/** 랭킹 항목 (사람) */
+/**
+ * 랭킹 한 칸 (사람) — 백엔드 `RankedUser` (S15P21A405-448). rank 는 1부터, 동점도 다른 순위.
+ * `score` 는 백엔드의 `count` 다 — 종류마다 뜻이 다르다 (발견한 곡 수 / 재생 횟수 / 신고 건수).
+ */
 export interface UserRankingItem {
   rank: number;
   email: Email;
   nickname: string | null;
   imageUrl: string | null;
-  /** 지표값 (팔로워 수, 탐험 곡 수 등) */
   score: number;
 }
 
-/** 랭킹 항목 (플레이리스트) */
-export interface PlaylistRankingItem {
-  rank: number;
-  playlistId: Id;
-  playlistName: string;
-  ownerNickname: string | null;
-  likeCnt: number;
-}
-
-/** 반응 이벤트 (수신) */
-export interface ReactionEvent {
-  id: string;
-  fromEmail: Email;
-  reactionKey: string;
-  sentAt: ISODateString;
+/**
+ * 이번 주 랭킹 — 백엔드 `GET /api/stats/weekly` (S15P21A405-448, S15P21A405-604).
+ * 구간은 한국 시간 월요일 00:00 시작, `weekStart` 이상 `weekEnd` 미만. 세 목록을 한 번에 받는다.
+ */
+export interface WeeklyRanking {
+  weekStart: ISODateString;
+  weekEnd: ISODateString;
+  /** 그 주에 처음 재생된 곡을 많이 찾아낸 사람 */
+  discovery: UserRankingItem[];
+  /** 그 주에 재생을 많이 한 사람 (같은 곡 반복 포함) */
+  explore: UserRankingItem[];
+  /** 그 주에 신고를 많이 한 사람 */
+  contribution: UserRankingItem[];
 }
 
 /**

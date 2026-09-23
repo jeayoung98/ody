@@ -27,7 +27,6 @@ export type ImplementedErrorCode =
   /** 422 — 소켓 미연결 · 첫 배치인데 layer 없음 · 곡 좌표 없음 · 재생 없이 주변 사람 요청 */
   | "PRESENCE_ERROR"
   /** 503 — 주변 사람의 비슷한 곡 계산이 일시적으로 실패했다. **영구 오류가 아니다** */
-  | "SERVICE_UNAVAILABLE"
   // 따라가기 = 탑승 (S15P21A405-530, backend RealtimeErrorCode)
   /**
    * 사유마다 **사용자가 할 일이 다르다.** 잠시 뒤 다시 하면 되는 것(`RIDE_CAPTAIN_INACTIVE`·
@@ -54,7 +53,14 @@ export type ImplementedErrorCode =
    * 없는 경우다. **화면을 새로 고치면 풀린다.** 접속 자체가 없는 경우는 여기 오지 않고
    * `PRESENCE_ERROR` 로 따로 나온다 — 둘은 사용자가 할 일이 다르다.
    */
-  | "RIDE_STALE";
+  | "RIDE_STALE"
+  // 반응하기 (S15P21A405-607, backend RealtimeErrorCode)
+  /** 400 — 자기 자신에게 보냈다 */
+  | "REACTION_SELF"
+  /** 409 — 상대가 내 층에 없다. 접속이 없거나 다른 층이다 */
+  | "REACTION_NOT_NEARBY"
+  /** 429 — 같은 사람에게 너무 빨리 다시 보냈다 (SOCIAL-04) */
+  | "REACTION_COOLDOWN";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =
@@ -83,7 +89,21 @@ export type SpecErrorCode =
  * `NOT_IMPLEMENTED` 는 **배포 API 에 그 기능이 아예 없다**는 뜻이다 (S15P21A405-468). 목으로
  * 성공한 척하면 새로고침 때 사라져서 "저장이 가끔 안 된다" 로 보이므로, 실패를 드러낸다.
  */
-export type BffErrorCode = "NOT_IMPLEMENTED";
+export type BffErrorCode =
+  | "NOT_IMPLEMENTED"
+  /**
+   * 별자리 콘테스트 (S15P21A405-602). 지금은 목 라우트만 낸다 — 백엔드가 같은 이름을 쓰기를
+   * 제안해 두었다 (BACKEND-NOTES "별자리 콘테스트"). 사유마다 사용자가 할 일이 다르다.
+   */
+  | "CONTEST_NOT_FOUND"
+  | "CONTEST_NOT_OPEN"
+  | "CONTEST_ENTRY_NOT_FOUND"
+  /** 409 — 회차당 표를 다 썼다. 다른 표를 거두면 다시 줄 수 있다 */
+  | "CONTEST_VOTE_LIMIT"
+  /** 400 — 내 출품작에 표를 주려 했다 */
+  | "CONTEST_VOTE_SELF"
+  /** 409 — 재출품 횟수를 다 썼다 */
+  | "CONTEST_RESUBMIT_EXHAUSTED";
 
 export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | BffErrorCode;
 

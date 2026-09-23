@@ -82,7 +82,6 @@ export const API_ENDPOINTS = {
     /** `type` 은 `follower`(나를 구독한 사람) / `following`(내가 구독한 사람), `page` 는 0부터 */
     followList: (email: string, type: "follower" | "following", page = 0) =>
       `/bff/users/follow/list?email=${encodeURIComponent(email)}&type=${type}&page=${page}`,
-    reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,
   },
 
   map: {
@@ -133,8 +132,18 @@ export const API_ENDPOINTS = {
    */
   playlist: {
     list: "/bff/playlists",
-    mine: "/bff/playlists/mine",
-    liked: "/bff/playlists/liked",
+    /**
+     * 만든 플리 · 좋아요한 플리. **이메일을 주면 그 사람 것**이다 (S15P21A405-587).
+     *
+     * 백엔드 `GET /api/playlist/search` · `/liked` 는 처음부터 `email` 로 **아무나** 조회하는
+     * API 다 ("본인 목록도 이 API(email에 본인 email)" — 컨트롤러 주석). 공개 범위 판정도
+     * 서비스 안에 있다. 우리 쪽만 토큰 주체로 박아 두고 있어서 남의 피드에 못 붙였다.
+     *
+     * 경로 이름은 `mine` 그대로 둔다 — 부르는 쪽 대부분이 실제로 내 것을 원하고(플리 추가 메뉴 ·
+     * 플리 패널), 이름을 바꾸면 그 자리들까지 건드리게 된다. 안 주면 예전과 똑같이 토큰 주체다.
+     */
+    mine: (email?: string | null) => (email ? `/bff/playlists/mine?email=${encodeURIComponent(email)}` : "/bff/playlists/mine"),
+    liked: (email?: string | null) => (email ? `/bff/playlists/liked?email=${encodeURIComponent(email)}` : "/bff/playlists/liked"),
     detail: (id: number) => `/bff/playlists/${id}`,
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,
@@ -174,6 +183,11 @@ export const API_ENDPOINTS = {
      */
     ride: "/bff/realtime/ride",
     /**
+     * 선단 해체 = **강제 하차** (DELETE, 본문 없음) — 백엔드 `DELETE /api/realtime/ride/fleet`
+     * (S15P21A405-606). 인솔자가 따라오는 사람 전부를 내린다. 따라오는 사람이 없으면 `RIDE_NOT_CAPTAIN`.
+     */
+    rideFleet: "/bff/realtime/ride/fleet",
+    /**
      * 그 겹에서 **재생 중인 사람 전부** (S15P21A405-537, BACKEND-NOTES §5).
      *
      * **화면 범위와 무관하다.** 소켓 `VIEWPORT_SNAPSHOT` 은 보이는 범위만 주고 칸이 많아지면
@@ -184,6 +198,12 @@ export const API_ENDPOINTS = {
      * 범위(0~7) 밖이면 400 이다. 밀어 주는 이벤트가 없어서 **레이어를 옮길 때와 주기적으로** 다시 부른다.
      */
     layerUsers: (layer: number) => `/bff/realtime/layers/${layer}/users`,
+    /**
+     * 반응 보내기 (SOCIAL-02, S15P21A405-607) — 백엔드 `POST /api/realtime/reactions`, 본문 `{toEmail, reactionKey}`.
+     * 응답 `data` 는 null. 거부 사유 `REACTION_SELF`(400) · `REACTION_NOT_NEARBY`(409) · `REACTION_COOLDOWN`(429).
+     * 받는 쪽에는 개인 큐로 `REACTION` 이 온다.
+     */
+    reactions: "/bff/realtime/reactions",
   },
 
   constellation: {
@@ -207,6 +227,26 @@ export const API_ENDPOINTS = {
   },
 
   chart: {
-    ranking: (type: string) => `/bff/charts/${type}`,
+    /**
+     * 이번 주 랭킹 — **실연동** (S15P21A405-604). 라우트 핸들러가 배포 백엔드
+     * `GET /api/stats/weekly` (발견왕·탐험왕·기여도 top 10) 를 대신 부른다.
+     * 종류별 경로(`/bff/charts/{type}`) 목은 걷어냈다 — 백엔드가 셋을 한 번에 주기 때문이다.
+     */
+    weekly: "/bff/charts/weekly",
+  },
+
+  /**
+   * 별자리 콘테스트 (S15P21A405-602). **전부 목이다** — 배포 API 에 없다. 백엔드 설계는
+   * S15P21A405-548(AI 평가·리더보드) · 598(그린 점 → 곡 매칭) 에서 진행 중이고, 프론트가 기대하는
+   * 요청·응답 모양은 BACKEND-NOTES "별자리 콘테스트" 절에 적어 두었다.
+   */
+  contest: {
+    current: "/bff/contests/current",
+    match: (id: number) => `/bff/contests/${id}/match`,
+    judge: (id: number) => `/bff/contests/${id}/judge`,
+    /** 목록(GET, `sort` 필수) 과 출품(POST, 정렬 없음) 이 같은 경로다 */
+    entries: (id: number, sort?: string) => `/bff/contests/${id}/entries${sort ? `?sort=${sort}` : ""}`,
+    vote: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/vote`,
+    save: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/save`,
   },
 } as const;

@@ -28,7 +28,7 @@ export function useLikePlaylistMutation() {
       qc.setQueryData<PlaylistDetail>(QUERY_KEYS.playlist.detail(playlistId), (prev) =>
         prev ? { ...prev, isLiked: data.isLiked, likeCnt: data.likeCnt } : prev,
       );
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.liked });
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.likedAll });
     },
   });
 }

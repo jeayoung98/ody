@@ -14,7 +14,12 @@ import type { FollowResponse } from "@/types";
  * 오래 남는 관계이고 탑승은 지금 이 순간 남의 탐색을 따라다니는 것이다.
  *
  * 응답의 `followeeFollowerCnt` 는 **바뀐 뒤** 값이라 화면이 다시 조회하지 않고 바로 쓸 수 있다.
- * 그래도 프로필 쿼리를 무효화하는 것은 같은 화면의 다른 값(`isFollowing` 등)을 맞추기 위해서다.
+ * 그래도 조회를 무효화하는 것은 같은 화면의 다른 값(`isFollowing` 등)을 맞추기 위해서다.
+ *
+ * **사용자 조회를 통째로 무효화한다** (S15P21A405-577). 예전에는 상대 프로필 하나만 지웠는데,
+ * 구독 하나가 바뀌면 최소 네 군데가 같이 틀어진다 — 상대의 팔로워 수, **내 팔로잉 수**,
+ * 그리고 양쪽의 팔로워·팔로잉 목록(`isFollowing` 이 보는 사람 기준이라 남의 목록도 바뀐다).
+ * 어느 것이 화면에 떠 있는지 여기서는 알 수 없고, 사용자 조회는 작아서 다시 읽어도 싸다.
  */
 export function useFollowMutation() {
   const qc = useQueryClient();
@@ -22,7 +27,7 @@ export function useFollowMutation() {
     mutationFn: (followeeEmail: string) =>
       // 봇은 서버에 없는 계정이라 구독 관계를 보낼 곳이 없다. 이 브라우저에만 남는다 (S15P21A405-536)
       isBot(followeeEmail) ? followBotLocally(followeeEmail, true) : api<FollowResponse>(API_ENDPOINTS.user.followInsert, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
-    onSuccess: (_d, email) => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.profile(email) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all }),
   });
 }
 
@@ -44,6 +49,6 @@ export function useUnfollowMutation() {
   return useMutation({
     mutationFn: (followeeEmail: string) =>
       isBot(followeeEmail) ? followBotLocally(followeeEmail, false) : api<FollowResponse>(API_ENDPOINTS.user.followDelete, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
-    onSuccess: (_d, email) => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.profile(email) }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all }),
   });
 }

@@ -23,7 +23,6 @@ export function useNearbyPeopleQuery(enabled: boolean) {
     enabled,
     staleTime: Infinity,
     refetchOnWindowFocus: false,
-    retry: (count, error) => count < 1 && (error as { code?: string }).code === "SERVICE_UNAVAILABLE",
     retryDelay: 2_500,
   });
 }

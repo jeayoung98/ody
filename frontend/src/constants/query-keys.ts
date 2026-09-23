@@ -58,8 +58,15 @@ export const QUERY_KEYS = {
   playlist: {
     all: ["playlist"] as const,
     detail: (id: number) => ["playlist", "detail", id] as const,
-    mine: ["playlist", "mine"] as const,
-    liked: ["playlist", "liked"] as const,
+    /**
+     * 만든 플리. **이메일이 키에 들어간다** (S15P21A405-587) — 남의 피드도 같은 목록을 쓰므로
+     * 키가 하나뿐이면 내 플리와 남의 플리가 한 자리를 서로 덮어쓴다. `null` 은 "토큰 주체".
+     */
+    mine: (email: string | null) => ["playlist", "mine", email] as const,
+    /** 누구 것이든 만든 플리 전부 — 무효화할 때 쓴다 (이메일을 모르는 자리에서 부른다) */
+    mineAll: ["playlist", "mine"] as const,
+    liked: (email: string | null) => ["playlist", "liked", email] as const,
+    likedAll: ["playlist", "liked"] as const,
   },
 
   journey: {
@@ -67,7 +74,15 @@ export const QUERY_KEYS = {
   },
 
   chart: {
-    ranking: (type: string) => ["chart", type] as const,
+    /** 세 랭킹이 한 응답이라 키도 하나다 (S15P21A405-604) */
+    weekly: ["chart", "weekly"] as const,
+  },
+
+  /** 별자리 콘테스트 (S15P21A405-602). 표·출품이 회차 정보와 목록 양쪽에 걸려 `all` 로 함께 무효화한다 */
+  contest: {
+    all: ["contest"] as const,
+    current: ["contest", "current"] as const,
+    entries: (contestId: number, sort: string) => ["contest", "entries", contestId, sort] as const,
   },
   /**
    * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준

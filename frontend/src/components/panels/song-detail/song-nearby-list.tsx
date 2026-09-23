@@ -10,6 +10,7 @@ import { NEARBY_COUNT } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useMapStore } from "@/stores/use-map-store";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
@@ -99,6 +100,8 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
   const handlePlayAll = () => {
     const ids = [centerMusicId, ...items.map((m) => m.id)];
     if (ids.length < 2) return;
+    // 카드에 이미 그려져 있는 제목·아티스트를 큐 전체 몫으로 넘긴다 (S15P21A405-585)
+    rememberMusicHints(items);
     startActivity("nearby", String(centerMusicId), () => {
       if (!inNearby || nearbyCenterMusicId !== centerMusicId) enterNearby(centerMusicId);
       playQueue({ kind: "nearby", centerMusicId }, ids);

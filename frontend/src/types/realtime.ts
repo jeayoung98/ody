@@ -59,6 +59,8 @@ export type RealtimeMessageType =
   | "RIDE_RIDER_JOINED"
   | "RIDE_RIDER_LEFT"
   | "RIDE_ENDED"
+  // 반응하기 (S15P21A405-607). 받는 사람 개인 큐로만 온다
+  | "REACTION"
   | "PRESENCE_ERROR";
 
 // ── 내 위치 ────────────────────────────────────────────────────────────────
@@ -233,8 +235,14 @@ export interface LayerUsersSnapshot {
 // ── 주변 사람 패널 ─────────────────────────────────────────────────────────
 
 /**
- * 뷰포트의 `NearbyUser` 와 **다른 타입이다.** 좌표가 없고(지도에 찍지 않는다) 대신 듣는 곡과
- * 거리·만남수가 있다. 기준도 화면 범위가 아니라 내가 듣는 곡과 비슷한 곡이다.
+ * 뷰포트의 `NearbyUser` 와 **다른 타입이다.** 만남수가 있고 화면 범위가 아니라 층이 기준이다.
+ *
+ * **기준이 내 층 전체가 됐다** (S15P21A405-582, 5차 명세). 예전에는 내 곡과 비슷한 곡 열 개를
+ * 듣는 사람만 담았는데 사람이 적을 때 목록이 거의 비어서, 그 층에 있는 사람을 전부 담고 가까운
+ * 순으로 자르는 것으로 바뀌었다. 패널을 그 층의 **미니맵**으로 본다.
+ *
+ * 그래서 **곡 제목과 가수가 빠지고 좌표가 들어왔다.** 화면이 사람만 보여 주기로 했고, 좌표가
+ * 있어야 레이더가 같은 곡을 듣는 사람을 같은 자리에 모을 수 있다.
  */
 export interface NearbyPerson {
   email: string;
@@ -246,9 +254,21 @@ export interface NearbyPerson {
   riderCount: number;
   /** 그 사람이 지금 듣는 곡 */
   musicId: number;
-  title: string;
-  artist: string | null;
-  /** 내 곡과의 거리(정렬 근거). `0` 이면 나와 같은 곡 */
+  /**
+   * 그 층 표시축의 **원시 좌표** — 지도에 찍는 값과 같은 눈금이다 (S15P21A405-582).
+   *
+   * **`null` 일 수 있다.** 델타로 들어온 사람은 서버가 자리를 못 구했을 때 비워 보내고, 그때는
+   * 듣는 곡으로 지도에서 찾아본다 (`use-nearby-list` 의 `pointOfPerson`).
+   */
+  x: number | null;
+  y: number | null;
+  /**
+   * 내 자리에서 그 사람까지의 거리 (정렬 근거). `0` 이면 나와 같은 곡.
+   *
+   * **서버 값을 그대로 믿지 않는다.** 서버는 스냅샷에만 담아 주는데 그 스냅샷은 **층을 옮길
+   * 때만** 온다 (5차 명세 §3). 내가 같은 층에서 곡을 바꾸면 거리가 달라지는데 새 목록이 안
+   * 오므로, 화면이 좌표로 매번 다시 잰다.
+   */
   distance: number;
 }
 
@@ -272,6 +292,14 @@ export interface NearbyChange {
   meetingCount: number | null;
   riderCount: number | null;
   musicId: number | null;
+  /**
+   * 옮겨 간 자리 (S15P21A405-582). `NEARBY_LEAVE` 는 전부 `null` 이다.
+   *
+   * **거리는 안 온다.** 받는 사람마다 다른 값이라 서버가 구하려면 사람 수만큼 조회가 도는데,
+   * 곡이 바뀔 때마다 도는 자리라 감당이 안 된다 — 좌표만 받아 화면이 직접 잰다 (5차 명세 §2).
+   */
+  x: number | null;
+  y: number | null;
 }
 
 /**
@@ -374,6 +402,18 @@ export interface DismountResponse {
 }
 
 /**
+ * `DELETE /api/realtime/ride/fleet` 응답 — 인솔자가 선단을 해체했다 (S15P21A405-606).
+ * 값은 전부 **내려간 사람들** 이야기다. 인솔자 자신은 움직이지 않는다 — 화면은 인원수만 0 으로.
+ */
+export interface DisbandResponse {
+  /** 내린 사람 수 */
+  riderCount: number;
+  /** 내린 사람들이 남은 곡·레이어 (= 인솔자가 서 있는 곡) */
+  musicId: number;
+  layer: number;
+}
+
+/**
  * `RIDE_TRACK` — 인솔자가 곡을 바꿨다. **새 곡은 처음부터 튼다** (그래서 재생 위치가 없다).
  * `playable` 이 false 면 위치만 옮기고 틀지 않는다.
  */
@@ -431,12 +471,17 @@ export interface RideRiderLeftPayload {
 }
 
 /**
- * `RIDE_ENDED` — 인솔자가 사라져 따라가기가 끝났다. **따라가던 사람에게만** 온다.
+ * `RIDE_ENDED` — 따라가기가 끝났다. **따라가던 사람에게만** 온다.
  * 스스로 내렸을 때와 같은 상태이므로 자리 정보도 하차 응답과 같다.
+ *
+ * `reason` 이 둘이다 (백엔드 `RideEndReason`, S15P21A405-606):
+ * - `CAPTAIN_LEFT` — 인솔자가 사라졌다 (창을 닫았거나 접속 만료). 이제 없는 사람이다
+ * - `CAPTAIN_ENDED` — 인솔자가 **강제 하차(선단 해체)** 를 눌렀다. 인솔자는 같은 곡에 그대로 있다.
+ *   "나갔다" 고 알리면 화면과 어긋나므로 문구를 가른다
  */
 export interface RideEndedPayload {
   captainEmail: string;
-  reason: "CAPTAIN_LEFT";
+  reason: "CAPTAIN_LEFT" | "CAPTAIN_ENDED";
   musicId: number;
   layer: number;
   x: number;
@@ -491,4 +536,18 @@ export interface CrowdCell {
   x: number;
   y: number;
   count: number;
+}
+
+// ── 반응하기 ───────────────────────────────────────────────────────────────
+
+/**
+ * `REACTION` — 누가 나에게 어떤 반응을 보냈다 (SOCIAL-02, S15P21A405-607).
+ * 보낸 사람의 닉네임·사진은 없다 — 받는 쪽이 이미 들고 있는 주변 사람 목록에서 찾는다.
+ */
+export interface ReactionPayload {
+  fromEmail: string;
+  /** 프론트 이모지 세트의 키 (`REACTIONS`). 모르는 키는 ✨ 로 그린다 */
+  reactionKey: string;
+  /** 서버가 보낸 시각(ISO-8601) */
+  sentAt: string;
 }

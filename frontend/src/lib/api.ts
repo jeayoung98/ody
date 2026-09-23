@@ -59,6 +59,20 @@ async function reissueAccessToken(): Promise<boolean> {
         return false;
       }
 
+      /**
+       * **재발급이 도는 사이에 로그아웃했으면 그 결과를 버린다** (S15P21A405-588).
+       *
+       * 토큰이 사라졌다는 것은 그 사이에 누군가 지웠다는 뜻이고, 지우는 자리는 로그아웃과
+       * 바로 위(되살아나지 않는 세션)뿐이다. 둘 다 "이 세션은 끝났다" 는 결론이라 여기서
+       * 새 토큰을 써 넣으면 **방금 로그아웃한 사람이 다시 로그인된다.**
+       *
+       * 실제로 그랬다. 지도는 10초마다 겹 사용자를 폴링하고 액세스 토큰 수명은 30분이라,
+       * 로그아웃을 누르는 순간 401 재발급이 떠 있을 확률이 낮지 않다. 그러면 로그인 화면에서
+       * `GuestGate` 가 되살아난 토큰을 보고 스플래시(점 하나)를 띄운 채 홈으로 되돌린다 —
+       * 사용자에게는 "로그아웃했는데 로그인 창이 안 뜬다" 로 보인다.
+       */
+      if (readStorage<string>(STORAGE_KEYS.accessToken) == null) return false;
+
       writeStorage(STORAGE_KEYS.accessToken, body.data.accessToken, readStorageScope(STORAGE_KEYS.accessToken) ?? "local");
       return true;
     } catch {

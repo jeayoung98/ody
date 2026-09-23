@@ -54,12 +54,12 @@
 
 **Independent Test**: 렌더러에 닫힘 true → 마지막→첫 점 선 픽셀이 칠해지고 false 는 기존 바이트와 동일. submit 이 closed 를 행에 넣음.
 
-- [ ] T015 [P] [US3] `A/render/ArtworkRenderer.java` 에 `render(List<ArtworkPointRow> points, boolean closed)` 추가 — 기존 선 루프 뒤 `closed && points.size() > 2` 면 마지막→첫 점 `drawLine`. 기존 `render(points)` 는 `render(points, false)` 위임
-- [ ] T016 [P] [US3] `T/ArtworkRendererTests.java` 에 추가: 닫힘 true 이미지에서 마지막·첫 점 중간 픽셀이 흰색, false 이미지에선 검은색. 기존 `render(points)` 바이트가 `render(points, false)` 와 같다
-- [ ] T017 [US3] `A/dto/ArtworkSubmitRequest.java` 에 `Boolean closed`(선택, 검증 없음). `A/service/ArtworkService.java` `submit(playlistId, closed, email)` 이 `Boolean.TRUE.equals(closed)` 를 `ArtworkRow` 에 담고, `M` `insertArtwork` 에 `closed` 칸. `A/controller/ArtworkController.java` submit 이 `request.closed()` 전달
-- [ ] T018 [US3] `A/service/ArtworkEvaluationService.java` 가 `renderer.render(points, artwork.isClosed())` 로 호출(기준 그림 경로 `loadAnchors` 는 기존 `render(points)` 그대로)
-- [ ] T019 [US3] `A/dto/ArtworkDetailResponse.java`·`A/dto/ArtworkSummary.java`(+`ArtworkSummaryRow`)에 `boolean closed` 추가, `M` 의 `findLeaderboard`·`findMine` SELECT 에 `a.closed`, `ArtworkService` 조립부 반영
-- [ ] T020 [US3] `T/ArtworkServiceTests.java`·`T/ArtworkEvaluationServiceTests.java` 에 추가: submit closed=true/null → 행 closed true/false, 채점이 `render(points, true)` 호출, 상세·리더보드 응답에 closed
+- [x] T015 [P] [US3] `A/render/ArtworkRenderer.java` 에 `render(List<ArtworkPointRow> points, boolean closed)` 추가 — 기존 선 루프 뒤 `closed && points.size() > 2` 면 마지막→첫 점 `drawLine`. 기존 `render(points)` 는 `render(points, false)` 위임
+- [x] T016 [P] [US3] `T/ArtworkRendererTests.java` 에 추가: 닫힘 true 이미지에서 마지막·첫 점 중간 픽셀이 흰색, false 이미지에선 검은색. 기존 `render(points)` 바이트가 `render(points, false)` 와 같다
+- [x] T017 [US3] `A/dto/ArtworkSubmitRequest.java` 에 `Boolean closed`(선택, 검증 없음). `A/service/ArtworkService.java` `submit(playlistId, closed, email)` 이 `Boolean.TRUE.equals(closed)` 를 `ArtworkRow` 에 담고, `M` `insertArtwork` 에 `closed` 칸. `A/controller/ArtworkController.java` submit 이 `request.closed()` 전달
+- [x] T018 [US3] `A/service/ArtworkEvaluationService.java` 가 `renderer.render(points, artwork.isClosed())` 로 호출(기준 그림 경로 `loadAnchors` 는 기존 `render(points)` 그대로)
+- [x] T019 [US3] `A/dto/ArtworkDetailResponse.java`·`A/dto/ArtworkSummary.java`(+`ArtworkSummaryRow`)에 `boolean closed` 추가, `M` 의 `findLeaderboard`·`findMine` SELECT 에 `a.closed`, `ArtworkService` 조립부 반영
+- [x] T020 [US3] `T/ArtworkServiceTests.java`·`T/ArtworkEvaluationServiceTests.java` 에 추가: submit closed=true/null → 행 closed true/false, 채점이 `render(points, true)` 호출, 상세·리더보드 응답에 closed
 
 **Checkpoint**: 닫힌 모양 출품 end-to-end
 
@@ -69,20 +69,20 @@
 
 **Independent Test**: 항목 2개 페이지 → `findPointsByArtworkIds` 1회, `findSummariesByIds` 1회, 항목별 points 순서가 position 순, 곡 이름이 채워짐.
 
-- [ ] T021 [P] [US4] `A/dto/ArtworkTrack.java` 신규 record `(long musicId, String title, String artist, double x, double y)` — javadoc 에 "598 `DrawTrack` 과 같은 모양, 두 브랜치 머지 후 하나로" `ponytail:` 주석
-- [ ] T022 [P] [US4] `M` + `A/mapper/ArtworkMapper.java` 에 `findPointsByArtworkIds(List<Long> artworkIds)` — `SELECT artwork_id, position, music_id, x, y FROM artwork_point WHERE artwork_id IN (...) ORDER BY artwork_id, position` (`<foreach>`). `ArtworkPointRow` 에 `artworkId` 가 없으면 추가
-- [ ] T023 [US4] `A/dto/ArtworkSummary.java` 에 `List<ArtworkTrack> points`(리더보드만, `findMine` 은 빈 목록). `A/service/ArtworkService.java` `getLeaderboard` 에서 페이지 작품 id 로 T022 1회, 곡 id 모아 `musicDetailReader.findSummariesByIds` 1회(어댑터 없으면 이름 null), 항목별 조립. 빈 페이지면 두 조회 모두 생략
-- [ ] T024 [US4] `A/dto/ArtworkDetailResponse.java` 에 `List<ArtworkTrack> tracks` 추가 — `ArtworkService.getDetail` 이 이미 읽은 곡 상세(`loadMusicDetails`)를 musicId 로 짝지어 좌표 순서대로 조립(지워진 곡은 이름 null, 원소는 유지). 기존 `points`·`musics` 는 그대로(analyze U1)
-- [ ] T025 [US4] `T/ArtworkServiceTests.java` 에 추가: 리더보드 항목 2개 → 두 조회 각 1회, points 순서·이름, 빈 페이지 → 조회 0회. 상세 `tracks` 가 좌표 순서·이름을 갖고, 곡이 지워진 자리도 원소가 남는다
+- [x] T021 [P] [US4] `A/dto/ArtworkTrack.java` 신규 record `(long musicId, String title, String artist, double x, double y)` — 598 `DrawTrack` 과 같은 모양이라 616 Polish 에서 합쳤다(DrawTrack 삭제)
+- [x] T022 [P] [US4] `M` + `A/mapper/ArtworkMapper.java` 에 `findPointsByArtworkIds(List<Long> artworkIds)` — `SELECT artwork_id, position, music_id, x, y FROM artwork_point WHERE artwork_id IN (...) ORDER BY artwork_id, position` (`<foreach>`). `ArtworkPointRow` 에 `artworkId` 가 없으면 추가
+- [x] T023 [US4] `A/dto/ArtworkSummary.java` 에 `List<ArtworkTrack> points`(리더보드만, `findMine` 은 빈 목록). `A/service/ArtworkService.java` `getLeaderboard` 에서 페이지 작품 id 로 T022 1회, 곡 id 모아 `musicDetailReader.findSummariesByIds` 1회(어댑터 없으면 이름 null), 항목별 조립. 빈 페이지면 두 조회 모두 생략
+- [x] T024 [US4] `A/dto/ArtworkDetailResponse.java` 에 `List<ArtworkTrack> tracks` 추가 — `ArtworkService.getDetail` 이 이미 읽은 곡 상세(`loadMusicDetails`)를 musicId 로 짝지어 좌표 순서대로 조립(지워진 곡은 이름 null, 원소는 유지). 기존 `points`·`musics` 는 그대로(analyze U1)
+- [x] T025 [US4] `T/ArtworkServiceTests.java` 에 추가: 리더보드 항목 2개 → 두 조회 각 1회, points 순서·이름, 빈 페이지 → 조회 0회. 상세 `tracks` 가 좌표 순서·이름을 갖고, 곡이 지워진 자리도 원소가 남는다
 
 **Checkpoint**: FE 갤러리·순위 카드가 추가 호출 없이 그려짐
 
 ## Phase 7: Polish & Cross-Cutting
 
-- [ ] T026 `docs/rules/BACKEND-NOTES.md` 에 `### 6-9. 작품 순위·좋아요 3표·닫힌 모양 (S15P21A405-616)` — `contracts/artwork-api-delta.md` 요약(바뀐 정렬, 새 필드, 새 에러 2개, FE 목→실제 매핑표), "K·한도는 회차 행 UPDATE 로 조정" 명시. §6 본문 리더보드 정렬 문구를 새 규칙으로 고친다
-- [ ] T027 `docs/rules/FEATURES.md` 변경 제안 #36(콘테스트)에 "순위 = 좋아요 + AI×K/100(K=5, 회차별), 좋아요 회차당 3표·내 작품 금지, 채점은 비동기(즉시 심사 미채택) — 기획(효정) 결정 2026-09-23, S15P21A405-616" 덧붙임
-- [ ] T028 `cd backend && ./gradlew test && ./gradlew build` — 결과 XML 로 실패 0 확인
-- [ ] T029 노션 「결정 통보 · 물음」에 FE(윤주하 · FE Exploration) 통보 1건: 콘테스트 목 → `/api/artwork/*` 매핑표·즉시 심사 미채택·새 에러 코드. 기존 598 FE 요청(정유진)과의 중복 정리 메모 포함. 올린 뒤 fetch 로 되읽기 — **담당·유형은 올리기 전에 사용자에게 확인**
+- [x] T026 `docs/rules/BACKEND-NOTES.md` 에 `### 6-9. 작품 순위·좋아요 3표·닫힌 모양 (S15P21A405-616)` — `contracts/artwork-api-delta.md` 요약(바뀐 정렬, 새 필드, 새 에러 2개, FE 목→실제 매핑표), "K·한도는 회차 행 UPDATE 로 조정" 명시. §6 본문 리더보드 정렬 문구를 새 규칙으로 고친다
+- [x] T027 `docs/rules/FEATURES.md` 변경 제안 **#39**(#36 은 FE 브랜치에만 있어 backend/dev 에서는 새 행 — 번호 충돌 피해 39)에 "순위 = 좋아요 + AI×K/100(K=5, 회차별), 좋아요 회차당 3표·내 작품 금지, 채점은 비동기(즉시 심사 미채택) — 기획(효정) 결정 2026-09-23, S15P21A405-616" 덧붙임
+- [x] T028 `cd backend && ./gradlew test && ./gradlew build` — 결과 XML 로 실패 0 확인
+- [x] T029 노션 「결정 통보 · 물음」에 FE(윤주하 · FE Exploration) 통보 1건: 콘테스트 목 → `/api/artwork/*` 매핑표·즉시 심사 미채택·새 에러 코드. 기존 598 FE 요청(정유진)과의 중복 정리 메모 포함. 올린 뒤 fetch 로 되읽기 — (2026-09-23 등록: 🔴 물음, 담당 윤주하 · FE Exploration. 598 정유진 요청에는 중복 정리 댓글)
 - [ ] T030 (배포 전, 사람) 운영 DB 에 `artwork_003_ranking_votes.sql` 적용 → (배포) → [quickstart.md](./quickstart.md) 운영 확인 추가 확인(analyze C1·C2): 한 작품에 좋아요 1개 전후로 그 작품 `rankScore` 만 +1, 좋아요 0 인 작품끼리는 AI 점수 순, 좋아요 준 작품이 재출품되면 내 `myVotesLeft` +1
 
 ## Dependencies

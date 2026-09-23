@@ -273,7 +273,7 @@
 ```
 
 - `points` 의 `musicId`·`x`·`y` 는 `POST /api/constellations/layout`(A-9) 응답과 **필드명·의미가 같다** — 별자리 뷰를 그대로 재사용할 수 있다.
-- `rank` 는 서버가 매긴다. 정렬은 `score` 내림차순 → `likeCnt` 내림차순 → 먼저 제출한 순이라 동점도 순서가 확정된다.
+- `rank` 는 서버가 매긴다. 정렬은 **순위 점수(`rankScore` = 좋아요 + AI 점수 / 100 × K) 내림차순** → `score` 내림차순 → 먼저 제출한 순이라 동점도 순서가 확정된다 (2026-09-23 S15P21A405-616 에서 변경 — §6-9).
 - `musics` 는 곡이 지워졌으면 그 자리만 빠진다. `points` 는 그대로다 — 그림이 깨지지 않는 것이 우선이다.
 - `failReason` 은 **소유자에게만** 채워진다.
 
@@ -416,3 +416,43 @@
 | 10초 무응답 (FE 요청 타임아웃) | — | — | 매칭 처리 실패 |
 
 화면(점 찍기·자동 연결·`n / 20`·최소 3개 전 생성 비활성·20개 제한·마지막 점 취소·전체 초기화·결과 뒤 그림 수정 시 결과 무효·비교 화면·순서대로 미리 듣기·저장)은 spec US1~4 가 기준이다.
+
+### 6-9. 작품 순위(AI + 좋아요)·좋아요 3표·닫힌 모양·곡 목록 (S15P21A405-616, 2026-09-23)
+
+기획(효정) 결정: §6 모델(비동기 채점·회차당 1작품·재출품 초기화)을 유지하면서 좋아요를 순위에 넣는다. FE 콘테스트 목(A-62~A-70)은 이 절의 API 로 교체한다 — **즉시 심사(A-64)는 채택하지 않는다**. 계약 원문 `specs/011-artwork-ranking-votes/contracts/artwork-api-delta.md`.
+
+**순위** — `rankScore = likeCnt + score × K / 100`, K 는 회차별(기본 5, "AI 만점 = 좋아요 5개"). 정렬 `rankScore ↓ → score ↓ → 먼저 낸 순`. 좋아요 하나는 언제나 정확히 +1, 남의 좋아요는 내 점수에 영향이 없다. K·표 한도는 `artwork_round` 행의 `ai_weight`·`vote_limit` — DB `UPDATE` 로 바뀌고 배포·재시작이 필요 없다.
+
+**좋아요 3표** — 회차당 **남의** 작품에 최대 3개. 거두면 표가 돌아온다(작품이 재출품·삭제돼도). 닫힌 회차 작품은 누르기·거두기 모두 막힌다.
+
+| 바뀌는 응답 | 추가 필드 |
+| --- | --- |
+| `GET /api/artwork/round/current` (+ 리더보드의 `round`) | `voteLimit`(3), `myVotesLeft`(로그인만, 비로그인 `null`) |
+| `GET /api/artwork/leaderboard` 항목 | `rankScore`, `closed`, `points: [{musicId, title, artist, x, y}]` (썸네일·곡 목록 — 카드마다 상세를 부르지 않아도 된다) |
+| `GET /api/artwork/detail` | `closed`, `tracks: [{musicId, title, artist, x, y}]` (좌표와 곡 이름이 한 원소. 지워진 곡도 원소는 남고 이름만 `null`. 기존 `points`·`musics` 는 그대로) |
+| `GET /api/artwork/mine` 항목 | `closed` (`rankScore` 는 `null`, `points` 는 빈 목록) |
+| `POST /api/artwork/submit` 요청 | `closed`(선택, 기본 `false`) — 닫힌 모양이면 채점 그림에도 마지막→첫 곡 선이 그려진다 |
+
+**새 거절 사유** (`POST /api/artwork/like`) — `frontend/src/types/api.ts` 추가 필요
+
+| code | HTTP | 언제 | FE 목 이름 |
+| --- | --- | --- | --- |
+| `ARTWORK_VOTE_LIMIT` | 409 | 이번 회차 표를 다 씀 (누를 때만) | `CONTEST_VOTE_LIMIT` |
+| `ARTWORK_VOTE_SELF` | 400 | 내 작품 (**기존에는 허용됐다**) | `CONTEST_VOTE_SELF` |
+| `ARTWORK_ROUND_CLOSED` | 409 | 작품 회차가 닫힘 (기존 코드, 좋아요에도 쓰임) | `CONTEST_NOT_OPEN` |
+
+**FE 콘테스트 목 → 실제 API**
+
+| FE 목 | 실제 |
+| --- | --- |
+| `GET /bff/contests/current` | `GET /api/artwork/round/current` |
+| `POST /bff/contests/{id}/match` | `POST /api/artwork/draw` (§6-8) — 미리보기 점수는 `score`(모양 일치도) |
+| `POST /bff/contests/{id}/judge` | **없음** — AI 채점은 출품 뒤 비동기(§6-2). 출품 후 `detail` 을 다시 조회해 `SCORED` 를 기다린다 |
+| `POST /bff/contests/{id}/entries` | `POST /api/playlist/create` → `POST /api/artwork/submit {playlistId, closed}` |
+| `GET /bff/contests/{id}/entries?sort=final` | `GET /api/artwork/leaderboard` |
+| `POST`·`DELETE .../vote` | `POST /api/artwork/like {artworkId, liked}` |
+| `POST .../save` | `POST /api/playlist/create` (출품작 `points` 의 `musicId` 순서) — 저장 수는 없다 |
+
+**없는 것 (이번 범위 밖)**: 즉시 심사, AI 게이트, 최종점수 식(AI×0.5+투표×0.5), 저장 수, 발표 시각·최종 순위 고정, 재출품 횟수 제한(재출품은 §6-3 대로 점수·좋아요 초기화).
+
+- ⚠️ **DB**: `backend/src/main/resources/db/artwork_003_ranking_votes.sql` — 2026-09-23 운영 적용 완료.

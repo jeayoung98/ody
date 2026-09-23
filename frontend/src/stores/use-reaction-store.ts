@@ -6,9 +6,9 @@ export interface FloatingReaction {
   id: string;
   /** 서버가 넘겨 준 키 그대로. 우리 세트에 없으면 ✨ 로 그린다 */
   reactionKey: string;
-  /** 내가 보낸 것(내 위로 뜸)인지, 다른 사람의 것인지 */
+  /** 내가 보낸 것(레이더 가운데 위로 뜸)인지, 다른 사람의 것인지 */
   mine: boolean;
-  /** 남의 반응은 해당 유저 이메일 (내 뷰 안에 있을 때만 표시) */
+  /** 남의 반응은 해당 유저 이메일 (레이더 목록에 있을 때만 표시) */
   fromEmail: string | null;
   /** 남의 반응일 때 이모지 아래 붙는 이름 */
   nickname?: string | null;
@@ -20,7 +20,7 @@ interface ReactionState {
 }
 
 /**
- * 지도 위에 떠 있는 반응들 (SOCIAL-02). 재전송 제한(SOCIAL-04)은 서버가 429 로 막는다 —
+ * 주변 사람 레이더에 떠 있는 반응들 (SOCIAL-02). **지도에는 그리지 않는다** (S15P21A405-608). 재전송 제한(SOCIAL-04)은 서버가 429 로 막는다 —
  * 여기서 따로 세지 않는다.
  */
 export const useReactionStore = create<ReactionState>()(

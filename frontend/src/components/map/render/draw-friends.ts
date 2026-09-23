@@ -224,7 +224,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
   for (const fr of e.visFriends) {
     const tr = trailOf(fr.user.email);
     const rgb = genreRgb(fr.user.genreId);
-    const sc = 24;
+    const sc = 24 * fr.scale;
     for (let k = 0; k < tr.length - 1; k++) {
       const a0 = 1 - k / (tr.length - 1);
       const pulse = 0.55 + 0.45 * Math.sin(t * 0.8 - k * 0.55 + fr.px * 0.01);
@@ -244,7 +244,8 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
-    const R = isLeader ? 15 : 12.5;
+    // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
+    const R = (isLeader ? 15 : 12.5) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;

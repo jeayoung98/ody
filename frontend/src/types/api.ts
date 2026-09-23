@@ -82,7 +82,21 @@ export type SpecErrorCode =
  * `NOT_IMPLEMENTED` 는 **배포 API 에 그 기능이 아예 없다**는 뜻이다 (S15P21A405-468). 목으로
  * 성공한 척하면 새로고침 때 사라져서 "저장이 가끔 안 된다" 로 보이므로, 실패를 드러낸다.
  */
-export type BffErrorCode = "NOT_IMPLEMENTED";
+export type BffErrorCode =
+  | "NOT_IMPLEMENTED"
+  /**
+   * 별자리 콘테스트 (S15P21A405-602). 지금은 목 라우트만 낸다 — 백엔드가 같은 이름을 쓰기를
+   * 제안해 두었다 (BACKEND-NOTES "별자리 콘테스트"). 사유마다 사용자가 할 일이 다르다.
+   */
+  | "CONTEST_NOT_FOUND"
+  | "CONTEST_NOT_OPEN"
+  | "CONTEST_ENTRY_NOT_FOUND"
+  /** 409 — 회차당 표를 다 썼다. 다른 표를 거두면 다시 줄 수 있다 */
+  | "CONTEST_VOTE_LIMIT"
+  /** 400 — 내 출품작에 표를 주려 했다 */
+  | "CONTEST_VOTE_SELF"
+  /** 409 — 재출품 횟수를 다 썼다 */
+  | "CONTEST_RESUBMIT_EXHAUSTED";
 
 export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | BffErrorCode;
 

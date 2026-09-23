@@ -219,4 +219,19 @@ export const API_ENDPOINTS = {
   chart: {
     ranking: (type: string) => `/bff/charts/${type}`,
   },
+
+  /**
+   * 별자리 콘테스트 (S15P21A405-602). **전부 목이다** — 배포 API 에 없다. 백엔드 설계는
+   * S15P21A405-548(AI 평가·리더보드) · 598(그린 점 → 곡 매칭) 에서 진행 중이고, 프론트가 기대하는
+   * 요청·응답 모양은 BACKEND-NOTES "별자리 콘테스트" 절에 적어 두었다.
+   */
+  contest: {
+    current: "/bff/contests/current",
+    match: (id: number) => `/bff/contests/${id}/match`,
+    judge: (id: number) => `/bff/contests/${id}/judge`,
+    /** 목록(GET, `sort` 필수) 과 출품(POST, 정렬 없음) 이 같은 경로다 */
+    entries: (id: number, sort?: string) => `/bff/contests/${id}/entries${sort ? `?sort=${sort}` : ""}`,
+    vote: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/vote`,
+    save: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/save`,
+  },
 } as const;

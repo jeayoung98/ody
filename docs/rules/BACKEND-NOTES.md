@@ -585,3 +585,26 @@ BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리�
 | --- | --- | --- | --- |
 | A-60 | 패널에 누구를 띄우나 — **물을 것 없음** | 5차 명세가 패널을 "그 층의 미니맵" 으로 적어서 층 전체가 보여야 하는지 물으려 했으나, 2026-09-23 프론트 확인 결과 **미니맵이 아니다.** 규칙은 둘이다. ① 내 곡 주변 `neighborK`(80)번째 곡까지의 거리를 경계로 삼아 그 안의 사람만 띄운다. 가까이 아무도 없으면 **비우고 안내만 띄운다.** ② 경계 안에 몰려 있으면 가까운 순 12명까지. 서버 `realtime.nearby.panel-cap` 12 는 **채우는 값**이라 사람이 적은 층에서 층 반대편 사람까지 넣어 주는데, 프론트가 경계로 다시 거른다 — 서버는 바꿀 것이 없다 | 확인함 · 조치 불필요 |
 | A-61 | `NEARBY_BULK_ENTER` 에 **사람별 좌표가 없다** | 5차 명세 §2 는 `ENTER`·`MOVE`·`BULK_ENTER` 가 `x`·`y` 를 담는다고 적었는데, `BULK_ENTER` 는 `musicId` 가 봉투에 하나뿐이라 사람마다 실리지 않는 것으로 읽힌다. 프론트는 그 곡으로 지도에서 자리를 찾아 메운다 — 그 곡이 이 층 상주 집합 밖이면 자리를 못 구해 목록 맨 뒤로 간다. 봉투에 `x`·`y` 를 하나만 넣어 주면 그 틈이 없어진다 | 협의 전 |
+
+## 별자리 콘테스트 — 프론트 목 계약 (S15P21A405-602, 2026-09-23)
+
+FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15P21A405-548**(AI 평가·리더보드) · **S15P21A405-598**(그린 점 → 곡 매칭) 에서 진행 중이다.
+프론트는 아래 모양으로 목(`src/app/bff/contests/*`, `src/mocks/contest.ts`)을 만들어 화면을 먼저 붙였다. **경로·필드는 전부 제안**이며 백엔드 설계에 맞춰 바꿀 수 있다 — 바뀌면 프론트에 알려 주면 라우트만 갈아 끼운다. 타입은 `frontend/src/types/contest.ts`.
+
+| # | API | 요청 | 응답 `data` | 이유 | 상태 |
+| --- | --- | --- | --- | --- | --- |
+| A-62 | `GET /api/contests/current` | — | `Contest` = `{ id, roundNo, theme, startsAt, endsAt, announceAt, status(OPEN/CLOSED/ANNOUNCED), rules{minPoints, maxPoints, resubmitLimit, voteLimit, aiGate, titleMax}, myEntryId, myVotesLeft, myResubmitsLeft }`. 진행 중인 회차가 없으면 `null` | 진입 버튼(진행 중 점·D-day)과 패널 머리가 이걸로 그려진다. 규칙 값은 **회차마다 바뀔 수 있어** 프론트에 박지 않는다 | 협의 전 |
+| A-63 | `POST /api/contests/{id}/match` | `{ points: [{x,y}] }` — 0~1 정규화 캔버스 좌표(y 아래 양수), 3~20개 | `ContestMatch` = `{ tracks: [{musicId, title, artist, x, y}], similarity(0~1), quality(HIGH/MID/LOW) }`. `tracks` 는 **점 입력 순서**, 중복 없음. `x,y` 는 배치 API 규약(-1~1, y 위 양수) | S15P21A405-598 그대로. 프론트는 결과 좌표로 미리보기·썸네일을 그리므로 **결과 좌표가 배치 API(`/constellations/layout`)와 일치**해야 한다(598 AC). 점 수 범위 밖이면 정의된 오류 | 협의 전 |
+| A-64 | `POST /api/contests/{id}/judge` | `{ tracks: ContestTrack[], closed }` | `ContestJudge` = `{ score(0~100), comment(≤80자) }` | **즉시 심사** — 매칭 결과가 오는 순간 부른다(기획 확정: 즉시 + 그 점수로 출품). 입력은 **모양만**(곡명·사용자 제외, 공정성). 같은 배치면 같은 답이어야 미리보기 점수 = 출품 점수가 된다 → 배치 해시 캐시 제안. 비용: 점을 바꿀 때마다 부르는 구조라 사용자당 rate limit(분당 20회 제안) 필요. 부담되면 "심사 받기" 버튼 방식으로 바꿀 수 있다 | 협의 전 |
+| A-65 | `POST /api/contests/{id}/entries` | `{ title(1~30자), tracks: ContestTrack[], closed }` | `ContestEntry` (아래) · 201 | 출품. 내 출품작이 있으면 **대체**(resubmit_count+1, 표 유지). 점수는 judge 캐시 재사용. `tracks` 는 **스냅샷** — 원본 플리를 고쳐도 출품작은 안 바뀐다(치팅 방지). 오류: `CONTEST_NOT_OPEN`, `CONTEST_RESUBMIT_EXHAUSTED`, 제목·곡 수 검증 | 협의 전 |
+| A-66 | `GET /api/contests/{id}/entries?sort=latest\|votes\|ai\|final\|saves` | 정렬 키 (cursor 페이지네이션은 백엔드가 정함) | `ContestEntry[]` = `{ id, contestId, title, ownerEmail, ownerNickname, tracks, closed, aiScore, aiComment, voteCount, saveCount, finalScore, eligible, rank, votedByMe, savedByMe, isMine, createdAt }` | 갤러리·순위가 **같은 목록**을 쓴다 — `sort=final` 이 곧 순위. `eligible = aiScore ≥ rules.aiGate`, `finalScore = ai×0.5 + (votes ÷ 회차 최대 votes × 100)×0.5`(소수 1자리), `rank` 는 eligible 안에서만(동점 AI 우선, 그다음 먼저 낸 순). 썸네일은 `tracks` 의 `x,y` 로 클라이언트가 그린다(이미지 저장 없음) | 협의 전 |
+| A-67 | `POST` · `DELETE /api/contests/{id}/entries/{entryId}/vote` | — | `{ voteCount, myVotesLeft }` | 표 주기·거두기. 회차당 `rules.voteLimit`(3), 내 출품작 금지. **플리 좋아요(PATH-07)와 별개 카운터** — 같이 쓰면 콘테스트 플리가 주간 탑 플리 차트를 점령한다. 오류: `CONTEST_VOTE_LIMIT`(409), `CONTEST_VOTE_SELF`(400), `CONTEST_NOT_OPEN` | 협의 전 |
+| A-68 | `POST /api/contests/{id}/entries/{entryId}/save` | `{ title? }` | `{ playlistId, saveCount }` · 201 | 출품작 스냅샷을 **내 새 플레이리스트**로 복사(순서 유지). 남의 출품작도 가능, 회차 종료 후도 가능. `save_count+1`. 프론트 목은 지금 `POST /api/playlist/create` 에 `musicIdList` 를 실어 **실제 플리를 만든다** — 백엔드가 이 API 를 만들면 그 안에서 같은 일을 하면 된다 | 협의 전 |
+| A-69 | 오류 코드 | — | `CONTEST_NOT_FOUND` `CONTEST_NOT_OPEN` `CONTEST_ENTRY_NOT_FOUND` `CONTEST_VOTE_LIMIT` `CONTEST_VOTE_SELF` `CONTEST_RESUBMIT_EXHAUSTED` | 프론트 `types/api.ts` `BffErrorCode` 에 이 이름으로 넣어 두었다. 사유마다 사용자에게 보여 줄 말이 달라 하나로 뭉치면 안 된다 | 협의 전 |
+| A-70 | 데이터 (ERD 에 없음) | — | `contest`(회차·테마·기간·상태·규칙), `contest_entry`(unique(contest_id,user_id), title, track_ids 순서 스냅샷, closed, ai_score, ai_comment, resubmit_count, vote_count, save_count, final_rank), `contest_vote`(unique(contest_id,user_id,entry_id)), `contest_judge_cache`(배치 해시 → 점수·평) | 프론트가 요구하는 필드의 출처. `final_rank` 는 `announceAt` 에 확정 저장, 이후 출품·투표 쓰기는 `CONTEST_NOT_OPEN` | 협의 전 |
+
+**정해야 할 것**
+- 즉시 심사 비용 상한 (A-64) — 예상 참가자 수로 한 번 계산해 보고 결정.
+- 회차 생성은 어드민 API 로 할지 초기엔 DB insert 로 갈지.
+- 지난 회차 아카이브(`GET /api/contests?status=ANNOUNCED`)를 1차 범위에 넣을지. 프론트는 아직 안 붙였다.
+- 별밭: 프론트 목의 매칭은 **레이어 0 상주 집합**(`/api/music/major?level=1`) 안에서만 찾는다. 실서비스가 662만 곡 전체에서 찾을지, 대표곡 안에서 찾을지는 598 에서 정한다.

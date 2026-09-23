@@ -46,7 +46,7 @@ class TasteFindingSelectorTests {
                 new TasteAxisStatistics.PercentileSummary(0, 84, 90, 96, 100, 12),
                 List.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 1),
                 0.1,
-                new TasteReference.Label("UNLABELED", "NONE", null, null, "test"));
+                new TasteReference.Label("UNLABELED", "NONE", null, null, null, "test"));
 
         assertThat(selector.select(List.of(unlabeled), N))
                 .singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
@@ -119,6 +119,22 @@ class TasteFindingSelectorTests {
         assertThat(findings.get(0).type()).isEqualTo("DIVERSE");
     }
 
+    /** PC10~14 는 라벨이 전문 용어라 요약에서 뺐다. 분포가 아무리 뚜렷해도 문장이 되지 않는다. */
+    @Test
+    void excludedAxis_isNotNarratedEvenWhenStronglyBiased() {
+        TasteAxisStatistics excluded = axis(12, 95, 8, "VERIFIED", "STRONG");
+
+        assertThat(selector.select(List.of(excluded), N))
+                .singleElement().extracting(TasteFinding::type).isEqualTo("BALANCED");
+    }
+
+    @Test
+    void candidateAxis_isStillNarrated() {
+        TasteAxisStatistics candidate = axis(9, 95, 8, "VERIFIED", "STRONG");
+
+        assertThat(selector.select(List.of(candidate), N).get(0).pc()).isEqualTo(9);
+    }
+
     private static TasteAxisStatistics axis(
             int pc, double median, double iqr, String status, String strength) {
         return axis(pc, median, iqr, status, strength, List.of(0, 0, 0, 0, 0, 0, 0, 0, 0, 1));
@@ -135,6 +151,6 @@ class TasteFindingSelectorTests {
                 new TasteAxisStatistics.PercentileSummary(0, q1, median, q3, 100, iqr),
                 histogram,
                 0.1,
-                new TasteReference.Label(status, strength, "잔잔한", "강렬한", "test"));
+                new TasteReference.Label(status, strength, "세기", "잔잔한", "강렬한", "test"));
     }
 }

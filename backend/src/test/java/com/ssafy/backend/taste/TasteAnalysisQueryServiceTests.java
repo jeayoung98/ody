@@ -226,7 +226,7 @@ class TasteAnalysisQueryServiceTests {
         List<TasteReference.Axis> axes = IntStream.rangeClosed(1, 16)
                 .mapToObj(pc -> new TasteReference.Axis(pc, 0.01,
                         IntStream.rangeClosed(0, 100).mapToObj(i -> (double) i).toList(),
-                        new TasteReference.Label("VERIFIED", "MEDIUM", "low", "high", "test")))
+                        new TasteReference.Label("VERIFIED", "MEDIUM", "axis", "low", "high", "test")))
                 .toList();
         return new TasteReference("taste-reference-v1", "taste-v1", 101,
                 OffsetDateTime.parse("2026-09-21T00:00:00Z"),

@@ -3,6 +3,7 @@ package com.ssafy.backend.taste.analysis;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Set;
 
 import org.springframework.stereotype.Component;
 
@@ -12,11 +13,11 @@ import org.springframework.stereotype.Component;
  * <p>임계값은 <b>표본 크기에 따라 달라진다</b>. 통계는 코퍼스 101분위로 변환한 백분위(0~100) 위에서
  * 재므로, 좋아요가 코퍼스 무작위 표본이면 백분위는 정의상 균등분포가 된다. 그 균등분포에서 우연히
  * 나오는 값이 곧 "취향이 없을 때의 잡음"이고, 아래 표는 그 잡음 분포의 분위수다
- * (BIAS·DIVERSE 는 상위 1.5%, CONSISTENT 는 하위 1.5%). 즉 축당 오탐률이 표본 크기와 무관하게 1.5% 로 고정된다.
+ * (BIAS·DIVERSE 는 상위 2.18%, CONSISTENT 는 하위 2.18%). 즉 축당 오탐률이 표본 크기와 무관하게 2.18% 로 고정된다.
  *
- * <p><b>1.5% 인 이유는 다중검정 보정이다.</b> 후보 축이 16개이므로 축당 1.5% 면 취향이 없는 사용자에게
- * 우연히 걸리는 축이 평균 0.24개다. 등급으로 5축만 쓰던 때의 5% x 5축 = 0.25 와 같은 수준을 유지한다.
- * 후보 축 수를 바꾸면 이 값도 같이 바꿔야 한다.
+ * <p><b>2.18% 인 이유는 다중검정 보정이다.</b> 후보 축이 {@link #CANDIDATE_PCS} 11개이므로 축당 2.18% 면
+ * 취향이 없는 사용자에게 우연히 걸리는 축이 평균 0.24개다. 등급으로 5축만 쓰던 때의 5% x 5축 = 0.25 와
+ * 같은 수준이다. <b>후보 축 수를 바꾸면 이 값도 같이 바꿔야 한다</b>(2026-09-23 16축 1.5% 에서 옮겨 왔다).
  *
  * <p>고정값(치우침 15 / 넓음 50 / 좁음 30)을 쓰면 표본이 작을수록 잡음이 커져서, 2026-09-22 실측 기준
  * 10곡 사용자는 취향이 전혀 없어도 16축 중 7개가 걸렸고 넓음은 좋아요가 늘수록 오히려 더 걸렸다.
@@ -28,14 +29,21 @@ import org.springframework.stereotype.Component;
 @Component
 public class TasteFindingSelector {
 
+    /**
+     * 요약에 쓸 후보 축. PC10·11·12·13·14 는 뺐다 — 라벨이 서브베이스·조성(C/F#)처럼 전문 용어이거나
+     * 사람 말로 옮길 축 이름을 짓지 못했고, 다섯 축 모두 {@code UNVERIFIED} 다. 분포 자체는 응답
+     * {@code axes[]} 에 16축 그대로 나가므로 차트에서는 계속 보인다 [S15P21A405-634].
+     */
+    private static final Set<Integer> CANDIDATE_PCS = Set.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 15, 16);
+
     /** 잡음 분포 분위수 표. 사이 값은 log(n) 선형보간한다. */
     private static final double[] SAMPLE_SIZES = {10, 15, 20, 30, 50, 100, 300};
-    /** |중앙 백분위 - 50| 상위 1.5% — 이보다 크면 치우침이 잡음으로 설명되지 않는다 */
-    private static final double[] BIAS_CUT = {31.4, 28.1, 24.4, 20.6, 16.5, 11.9, 7.0};
-    /** IQR 상위 1.5% — 이보다 넓으면 무작위 표본보다도 넓다 */
-    private static final double[] DIVERSE_CUT = {69.8, 68.3, 67.7, 65.3, 62.8, 59.7, 55.9};
-    /** IQR 하위 1.5% — 이보다 좁으면 무작위 표본보다 뚜렷하게 모여 있다 */
-    private static final double[] CONSISTENT_CUT = {14.8, 20.8, 24.0, 28.5, 33.5, 38.4, 43.4};
+    /** |중앙 백분위 - 50| 상위 2.18% — 이보다 크면 치우침이 잡음으로 설명되지 않는다 */
+    private static final double[] BIAS_CUT = {30.1, 26.8, 23.2, 19.6, 15.6, 11.3, 6.5};
+    /** IQR 상위 2.18% — 이보다 넓으면 무작위 표본보다도 넓다 */
+    private static final double[] DIVERSE_CUT = {67.9, 66.8, 66.1, 64.1, 61.8, 58.9, 55.5};
+    /** IQR 하위 2.18% — 이보다 좁으면 무작위 표본보다 뚜렷하게 모여 있다 */
+    private static final double[] CONSISTENT_CUT = {16.2, 22.1, 25.4, 29.7, 34.4, 39.2, 43.9};
 
     public List<TasteFinding> select(List<TasteAxisStatistics> statistics, int sampleSize) {
         double biasCut = interpolate(BIAS_CUT, sampleSize);
@@ -47,7 +55,8 @@ public class TasteFindingSelector {
 
         List<Scored> candidates = new ArrayList<>();
         for (TasteAxisStatistics axis : statistics) {
-            if (axis.label() == null || !axis.label().hasUsableWords()) {
+            if (!CANDIDATE_PCS.contains(axis.pc())
+                    || axis.label() == null || !axis.label().hasUsableWords()) {
                 continue;
             }
             double median = axis.percentile().median();

@@ -170,7 +170,9 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const A = out ? e.alphaOut : e.alpha;
   const W = e.W;
   const H = e.H;
-  const R = clamp(0.55 * e.cam.s, 60, Math.max(W, H) * 0.8);
+  // 기준 반지름. 0.55·60 이던 것을 0.75·80 으로 — 화면에서 구름이 자잘하게 흩어져 보였다 (S15P21A405-643).
+  // 퍼프 수·알파는 그대로다: lighter 합성이라 그것까지 올리면 겹치는 자리가 하얗게 뜬다
+  const R = clamp(0.75 * e.cam.s, 80, Math.max(W, H) * 0.8);
   g.globalCompositeOperation = "lighter";
   // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
   const step = Math.max(1, Math.floor(e.N / 22));

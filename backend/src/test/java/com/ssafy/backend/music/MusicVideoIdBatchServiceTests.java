@@ -32,7 +32,7 @@ class MusicVideoIdBatchServiceTests {
 
     private static MusicService serviceWith(MusicDetailReader reader, VideoIdEnricher enricher) {
         return new MusicService(Optional.empty(), Optional.ofNullable(reader), Optional.empty(),
-                mock(NearbyService.class), enricher);
+                mock(NearbyService.class), enricher, Optional.empty());
     }
 
     @Test

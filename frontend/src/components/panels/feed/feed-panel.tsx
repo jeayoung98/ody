@@ -108,12 +108,11 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
               <FeedHeader profile={data} isMe={isMe} onOpenFollows={openFollows} />
               <Divider />
               <FeedDashboard dashboard={data.dashboard} />
-              {isMe && (
-                <>
-                  <Divider />
-                  <FeedPlaylists />
-                </>
-              )}
+              <Divider />
+              {/* **남의 피드에도 뜬다** (S15P21A405-587). USER-04 가 상대 프로필을 "마이페이지와
+                  레이아웃 동일" 로 정해 두었는데 이 목록만 내 페이지에 갇혀 있었다. 남의 것은
+                  읽기 전용이라 만들기·삭제가 빠진다 (`feed-playlists`) */}
+              <FeedPlaylists email={targetEmail} isMe={isMe} />
             </>
           )}
         </>

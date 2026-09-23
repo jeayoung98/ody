@@ -21,7 +21,7 @@ function memStorage() {
 globalThis.window = { localStorage: memStorage(), sessionStorage: memStorage() };
 
 const { api } = require("../src/lib/api.ts");
-const { readStorage, writeStorage, subscribeStorage } = require("../src/lib/storage.ts");
+const { readStorage, writeStorage, removeStorage, resyncStorage, subscribeStorage } = require("../src/lib/storage.ts");
 const { STORAGE_KEYS, API_ENDPOINTS } = require("../src/constants/index.ts");
 
 const TOKEN = STORAGE_KEYS.accessToken;
@@ -74,4 +74,56 @@ test("토큰이 지워지면 구독자가 그 자리에서 듣는다", () => {
   unsubscribe();
   writeStorage(TOKEN, "again");
   assert.equal(heard, 1, "구독을 끊었으면 더 듣지 않는다");
+});
+
+/**
+ * 재발급이 도는 **사이에** 로그아웃한 경우 (S15P21A405-588).
+ *
+ * 지도는 10초마다 겹 사용자를 폴링하고 액세스 토큰 수명은 30분이라, 로그아웃을 누르는 순간
+ * 401 재발급이 떠 있을 확률이 낮지 않다. 그때 새 토큰을 써 넣으면 방금 로그아웃한 사람이
+ * 다시 로그인되고, 로그인 화면은 스플래시만 띄운 채 홈으로 되돌린다.
+ */
+test("재발급 도중에 로그아웃했으면 새 토큰을 쓰지 않는다", async () => {
+  // 앞 테스트의 재발급 메모(`reissuing`)가 비워지도록 한 박자 넘긴다 — 그 정리가 매크로태스크다
+  await new Promise((r) => setTimeout(r, 0));
+  writeStorage(TOKEN, "expired-token");
+  stubFetch(async () => {
+    // 재발급 응답이 오기 직전에 로그아웃이 끼어든다
+    removeStorage(TOKEN);
+    return json(200, { success: true, data: { accessToken: "revived" }, error: null });
+  });
+
+  await assert.rejects(() => api(API_ENDPOINTS.auth.me));
+
+  assert.equal(readStorage(TOKEN), null, "로그아웃한 세션이 재발급으로 되살아나면 안 된다");
+});
+
+test("로그아웃하지 않았으면 새 토큰을 그대로 받는다", async () => {
+  // 앞 테스트의 재발급 메모(`reissuing`)가 비워지도록 한 박자 넘긴다 — 그 정리가 매크로태스크다
+  await new Promise((r) => setTimeout(r, 0));
+  writeStorage(TOKEN, "expired-token");
+  stubFetch(async () => json(200, { success: true, data: { accessToken: "revived" }, error: null }));
+
+  await assert.rejects(() => api(API_ENDPOINTS.auth.me));
+
+  assert.equal(readStorage(TOKEN), "revived");
+});
+
+/**
+ * 어긋난 구독 값을 깨우는 길 (S15P21A405-588).
+ *
+ * `useSyncExternalStore` 는 알림이 와야 스냅샷을 다시 읽는다. 하이드레이션 때 "토큰 없음" 으로
+ * 커밋되고 나면 그 뒤로 저장소를 건드리는 사람이 없어 영영 어긋난 채 남았다 — 로그인해도
+ * 스플래시만 돌고 새로고침해야 지도가 떴다.
+ */
+test("resyncStorage 는 값을 안 바꾸고 구독자만 깨운다", () => {
+  writeStorage(TOKEN, "alive");
+  let heard = 0;
+  const unsubscribe = subscribeStorage(() => (heard += 1));
+
+  resyncStorage();
+  assert.equal(heard, 1, "구독자가 다시 읽을 기회를 받아야 한다");
+  assert.equal(readStorage(TOKEN), "alive", "저장소는 그대로여야 한다");
+
+  unsubscribe();
 });

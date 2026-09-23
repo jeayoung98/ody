@@ -1,5 +1,7 @@
 "use client";
 
+import { BudgetCache, canvasBytes } from "@/lib/budget-cache";
+
 /**
  * 진짜 앨범 커버 — Cover Art Archive (S15P21A405-518).
  *
@@ -23,13 +25,26 @@ const RELEASE = (mbid: string) => `https://coverartarchive.org/release/${mbid}/f
 /** 캐시 키 — 같은 곡도 쓰는 자리마다 크기가 다르다 (지도는 작게, 상세 배경은 크게) */
 const keyOf = (musicId: number, size: number) => `${musicId}:${size}`;
 
-const ready = new Map<string, HTMLCanvasElement>();
+/**
+ * 구워 둔 커버 (S15P21A405-586). **개수가 아니라 예산으로 잰다** — 104px 한 장이 43KB 인데
+ * 곡 상세 배경의 512px 은 1MB 라, 개수로 세면 같은 300장이 13MB 이기도 하고 300MB 이기도 하다.
+ *
+ * 12MB 는 화면이 쓰는 양의 몇 배다: 지도에 동시에 뜨는 커버가 스무 장(104px, 합쳐 0.9MB)이고
+ * 곡 상세 배경이 한 장(512px, 1MB)이다. 넉넉히 두고도 상한이 있다는 것이 요점이다.
+ */
+const ready = new BudgetCache<string, HTMLCanvasElement>(12 * 1024 * 1024, canvasBytes);
 /**
  * 받아 둔 원본 이미지 (곡 단위). **크기가 달라도 다시 받지 않는다** (S15P21A405-527) —
  * 호버 카드가 104px 로 본 곡을 눌러 상세를 열면 512px 이 필요한데, 이미 디코딩해 둔 이 이미지로
  * 그 자리에서 구우면 된다. 브라우저 캐시를 다시 태우는 것보다 한 박자 빠르다.
+ *
+ * **여덟 장만 들고 있는다** (S15P21A405-586). 디코딩된 500px 한 장이 약 1MB 인데, 예전에는
+ * 받은 곡마다 쌓아 두고 `ready` 가 300장을 넘을 때에야 통째로 비웠다 — 그 사이 수백 MB 다.
+ * 이 목록이 하는 일은 "방금 본 곡을 다른 크기로 다시 굽기" 하나뿐이라 그만큼이면 된다.
+ * 밀려난 곡도 그림을 잃지 않는다: 구워 둔 캔버스는 `ready` 에 그대로 있고, 다른 크기가
+ * 필요해지면 브라우저 캐시에서 다시 받는다.
  */
-const source = new Map<number, HTMLImageElement>();
+const source = new BudgetCache<number, HTMLImageElement>(8, () => 1);
 const failed = new Set<number>();
 const loading = new Set<string>();
 
@@ -70,10 +85,6 @@ export function albumCover(musicId: number, albumMbid: string | null | undefined
     img.crossOrigin = "anonymous";
     img.onload = () => {
       loading.delete(key);
-      if (ready.size > 300) {
-        ready.clear();
-        source.clear();
-      }
       source.set(musicId, img);
       ready.set(key, bake(img, size));
     };
@@ -88,7 +99,10 @@ export function albumCover(musicId: number, albumMbid: string | null | undefined
   return null;
 }
 
-/** 커버 그림이 실제로 와 있는가 (지도가 커버 자리를 줄 곡을 고를 때 쓴다) */
+/**
+ * 커버 그림이 실제로 와 있는가 (지도가 커버 자리를 줄 곡을 고를 때 쓴다).
+ * **쓴 것으로 치지 않는다** — 후보를 훑는 것뿐이라 이걸로 LRU 순서가 흔들리면 안 된다.
+ */
 export function hasAlbumCover(musicId: number, size: number): boolean {
   return ready.has(keyOf(musicId, size));
 }

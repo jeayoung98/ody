@@ -8,6 +8,7 @@ import { CloseIcon, PlayIcon } from "@/components/common/icons";
 import SectionTitle from "@/components/common/section-title";
 import { useRemovePlaylistItemMutation } from "@/hooks/mutations/use-remove-playlist-item-mutation";
 import { moveItem, useReorderPlaylistItemsMutation } from "@/hooks/mutations/use-reorder-playlist-items-mutation";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useStartActivity } from "@/hooks/use-start-activity";
@@ -67,8 +68,11 @@ export default function PlaylistTrackList({ playlist, editable }: PlaylistTrackL
    *
    * 단일 재생이 아니라 플리 재생이다. 다른 활동이 돌고 있으면 먼저 확인을 받는다 (ACT-01).
    */
-  const playFrom = (index: number) =>
+  const playFrom = (index: number) => {
+    // 목록이 이미 들고 있는 제목·아티스트다 — 큐 전체를 넘겨 재생바가 기다리지 않게 한다 (S15P21A405-585)
+    rememberMusicHints(playlist.items.map((it) => it.music));
     startActivity("playlist", String(playlist.id), () => playQueue({ kind: "playlist", playlistId: playlist.id }, ids, index));
+  };
 
   return (
     <div className="flex flex-col gap-2">

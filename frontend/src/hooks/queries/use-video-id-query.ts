@@ -13,6 +13,9 @@ interface VideoIdResult {
   lookup: VideoIdLookup;
 }
 
+/** 한 곡의 영상은 세션 중에 바뀌지 않는다. `staleTime` 과 `gcTime` 을 같은 값으로 묶는다 */
+const VIDEO_ID_CACHE_MS = 30 * 60 * 1000;
+
 /**
  * 곡 하나의 `videoId` (SONG-03, S15P21A405-340).
  *
@@ -27,7 +30,17 @@ export function useVideoIdQuery(musicId: number | null) {
     queryKey: QUERY_KEYS.music.videoId(musicId ?? -1),
     queryFn: () => api<VideoIdResult>(API_ENDPOINTS.music.videoId(musicId!)),
     enabled: musicId != null,
-    staleTime: 30 * 60 * 1000,
+    staleTime: VIDEO_ID_CACHE_MS,
+    /**
+     * **`gcTime` 을 같이 올려야 30분 캐시가 산다** (S15P21A405-586). 기본값은 5분이라, 그 곡을
+     * 보는 컴포넌트가 사라지면 5분 뒤 버려졌다 — `staleTime` 30분은 곡 상세를 열어 둔 동안만
+     * 뜻이 있었고, 닫았다 다시 열면 다시 물었다. 이 조회는 DB 에 없으면 백엔드가 **외부 API 를
+     * 부르는** 비싼 길이라 그만큼이 그대로 낭비였다.
+     *
+     * 메모리는 문제가 아니다 — 항목이 `{musicId, videoId, lookup}` 세 칸이라 곡 천 개를 들고
+     * 있어도 수십 KB 다.
+     */
+    gcTime: VIDEO_ID_CACHE_MS,
   });
 }
 

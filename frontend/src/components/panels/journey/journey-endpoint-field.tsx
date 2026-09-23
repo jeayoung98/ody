@@ -1,6 +1,6 @@
 "use client";
 
-import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useMusicLabel } from "@/hooks/use-music-label";
 
 interface JourneyEndpointFieldProps {
   label: string;
@@ -12,7 +12,7 @@ interface JourneyEndpointFieldProps {
 
 /** 여정 패널의 출발·도착 표시 줄. 패널은 결과를 보여줄 뿐이고, 고치는 건 확장 검색창에서 한다 (JOURNEY-01) */
 export default function JourneyEndpointField({ label, tone, musicId, onOpenComposer }: JourneyEndpointFieldProps) {
-  const { data } = useMusicDetailQuery(musicId);
+  const { title, artist } = useMusicLabel(musicId);
   const dot = tone === "teal" ? "bg-teal shadow-[0_0_7px_#4fe3ce]" : "bg-violet shadow-[0_0_7px_#a67cff]";
 
   return (
@@ -25,9 +25,9 @@ export default function JourneyEndpointField({ label, tone, musicId, onOpenCompo
       <span className={`h-1.5 w-1.5 shrink-0 rounded-pill ${dot}`} />
       <span className="lbl w-6 shrink-0">{label}</span>
       <span className="min-w-0 flex-1 truncate text-[13px] transition-colors group-hover:text-teal">
-        {musicId == null ? <span className="text-ink-4">지정 안 됨</span> : (data?.title ?? `Track ${musicId}`)}
+        {musicId == null ? <span className="text-ink-4">지정 안 됨</span> : title}
       </span>
-      <span className="shrink-0 truncate text-[11px] text-ink-3">{data?.artist ?? ""}</span>
+      <span className="shrink-0 truncate text-[11px] text-ink-3">{artist ?? ""}</span>
     </button>
   );
 }

@@ -251,4 +251,15 @@ export const API_ENDPOINTS = {
     vote: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/vote`,
     save: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/save`,
   },
+
+  /**
+   * 음악 취향 분석 (S15P21A405-630) — **실연동**. 라우트 핸들러가 배포 백엔드
+   * `GET·POST /api/taste-analysis` 를 호출자 토큰으로 대신 부른다 (S15P21A405-512).
+   *
+   * **경로 하나에 메서드 둘이다.** GET 은 지금 상태를 읽고, POST 는 리포트를 새로 만든다
+   * (하루 한 번). 백엔드가 그렇게 두었고 여기서 갈라 둘 이유가 없다.
+   */
+  taste: {
+    analysis: "/bff/taste-analysis",
+  },
 } as const;

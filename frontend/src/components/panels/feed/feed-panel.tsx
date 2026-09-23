@@ -19,6 +19,7 @@ import FeedHeader from "./feed-header";
 import FeedMenu from "./feed-menu";
 import FeedPlaylists from "./feed-playlists";
 import FeedSkeleton from "./feed-skeleton";
+import FeedTasteReport from "./feed-taste-report";
 
 type FollowType = "follower" | "following";
 
@@ -118,6 +119,15 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
               <Divider />
               <FeedDashboard dashboard={data.dashboard} />
               <Divider />
+              {/* **내 페이지에만 선다** (S15P21A405-630). 백엔드가 토큰으로 사람을 정해서
+                  남의 취향은 물어볼 수가 없다 — USER-04 의 "레이아웃 동일" 을 어기는 게
+                  아니라 API 가 낼 수 없는 화면이다 */}
+              {isMe && me && (
+                <>
+                  <FeedTasteReport />
+                  <Divider />
+                </>
+              )}
               {/* **남의 피드에도 뜬다** (S15P21A405-587). USER-04 가 상대 프로필을 "마이페이지와
                   레이아웃 동일" 로 정해 두었는데 이 목록만 내 페이지에 갇혀 있었다. 남의 것은
                   읽기 전용이라 만들기·삭제가 빠진다 (`feed-playlists`) */}

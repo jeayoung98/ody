@@ -2363,17 +2363,25 @@ export class MapEngine {
     const v = this.visFriends[at];
     const people = [v.user, ...v.stacked];
     const n = people.length;
-    const R = 12.5 * v.scale;
+    /**
+     * **펼치면 맨 앞 크기로 커진다.** 멀리(작게) 있는 묶음은 갈라 놓아도 작아서 누가 누군지
+     * 안 보인다 — 어차피 누른 것은 "이 사람들을 보겠다" 는 뜻이라 가장 가까운 별 위의 크기로
+     * 키운다. 퍼지는 것과 같은 스프링을 타서 크기도 같이 튄다.
+     */
+    const front = Math.max(v.scale, 1 + STAR_VIEW.depthSize);
+    const k = springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    const scale = v.scale + (front - v.scale) * k;
+    const R = 12.5 * front;
     /**
      * 이웃 사이 현이 **헬멧 지름과 닉네임 폭 중 큰 것** + 틈 이상이 되는 반지름. 닉네임이 헬멧
      * 아래 가운데 정렬로 붙어서, 헬멧만 안 겹치게 두면 이름끼리 포개져 읽을 수 없었다.
      */
     const nameW = Math.max(0, ...people.map((u) => approxNameWidth(u.nickname ?? "")));
     const fit = (Math.max(2 * R, nameW) + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
-    const radius = Math.max(FRIEND_SPREAD.radiusPx * v.scale, fit) * springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    const radius = Math.max(FRIEND_SPREAD.radiusPx * front, fit) * k;
     const parts: VisibleFriend[] = people.map((u, i) => {
       const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;
-      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale: v.scale, isLeader: false, stacked: [] };
+      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale, isLeader: false, stacked: [] };
     });
     this.visFriends.splice(at, 1, ...parts);
   }

@@ -125,8 +125,8 @@ class ArtworkServiceTests {
 		assertThat(artwork.getValue().getStatus()).isEqualTo(ArtworkStatus.PENDING.name());
 		assertThat(artwork.getValue().getEmail()).isEqualTo(OWNER);
 		assertThat(artwork.getValue().getTitle()).isEqualTo("밤산책");
-		// 어떤 좌표 baseline 의 모양인지 남는다 (헌법 V).
-		assertThat(artwork.getValue().getLayoutVersion()).isEqualTo("v2.1-pca16");
+		// 어떤 좌표 baseline·좌표계의 모양인지 남는다 (헌법 V). "/pc12" 가 붙지 않은 것은 집합 PCA 시절 스냅샷이다.
+		assertThat(artwork.getValue().getLayoutVersion()).isEqualTo("v2.1-pca16/pc12");
 
 		@SuppressWarnings("unchecked")
 		ArgumentCaptor<List<ArtworkPointRow>> points = ArgumentCaptor.forClass(List.class);

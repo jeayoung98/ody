@@ -132,8 +132,8 @@ description: "Task list for 별자리 작품 AI 평가와 회차 리더보드"
 ## Phase 6: 마무리
 
 - [X] T034 프론트 전달 — `docs/rules/BACKEND-NOTES.md` 에 엔드포인트 8개·신규 에러 코드 4개·**제출이 `PENDING` 이라 재조회가 필요하다**는 점을 적고 프론트에 알린다 (CLAUDE.md §3)
-- [ ] T035 인프라 전달 — GMS base URL·API 키 환경변수, `-Djava.awt.headless=true` 명시를 인프라에 요청
-- [ ] T036 관측 — `PENDING` 행 수와 GMS 실패 로그를 확인하는 방법을 plan.md "확인할 지표" 대로 점검. 새 미터는 실측 뒤에 정한다
+- [X] T035 인프라 — `/etc/ody/backend.env` 에 `GMS_BASE_URL`·`GMS_API_KEY`·`GMS_MODEL=gpt-4o` 적용, 배포 #21 컨테이너에서 확인. `java.awt.headless` 는 Spring Boot 기본값(true)으로 렌더가 실제로 돌았다 — 명시는 인프라 재량으로 남긴다
+- [X] T036 관측 — **배포 후 e2e (2026-09-22 09:05 UTC, backend:21)**: 곡 10개 플리 제출 → `201 PENDING` → 3초 뒤 스케줄러 `평가 대상 1건` → 2.3초 뒤 `평가 완료 artworkId=6 score=9 model=gpt-4o-2024-08-06`. 코멘트 "귀와 머리만 보이고 닫힌 형태 없음". 로그 한 줄로 흐름이 다 보인다. WARN(키 없음·기준 없음) 없음. 새 미터는 필요 없다고 판단 — 제출 수가 적어 로그로 충분
 - [X] T037 `./gradlew test` · `./gradlew build` 통과 확인
 
 ---
@@ -155,3 +155,23 @@ T000a·T000b (사람)
 ## 범위 밖 (이 목록에 없는 것)
 
 1-a(점 찍어 플레이리스트), 회차 자동 생성 스케줄러, 작품 비공개·신고·댓글, 실시간 순위 알림.
+
+---
+
+## Phase 7: 고양이 플레이리스트 생성 + 좌표계 전환 (S15P21A405-595, 2026-09-23)
+
+브랜치 `backend/feat/S15P21A405-595-cat-playlist-generator`. 스키마 변경 없음.
+
+- [X] T038 `PlanarProjection` 을 pc1/pc2 고정축으로 교체 (이름 유지, 고유분해 삭제). `PlanarProjectionTests` 재작성 — 결정성·순서 무관·pc1/pc2 상대 위치 보존·동일 배율·방향 = 지도
+- [X] T039 작품 `layout_version` 에 `/pc12` 접미 — 이전 스냅샷(집합 PCA)과 구분
+- [X] T040 `CatTemplate` — `sitting`(23) · `sketch`(18) · `loaf`(17). 진단 v6 에서 90점 받은 그림이 `sitting`
+- [X] T041 `ArtworkMapper.findNearestMusicByPc12`(GiST KNN, 첨자 리터럴) · `findPc12Bounds`(2~98 백분위)
+- [X] T042 `CatPlaylistGenerator` — 상자 안 4단계 크기 배치, 점마다 미사용 최근접 곡, 평균 오차 최소 선택, `PlaylistService.create` 로 생성, 응답 좌표는 `ConstellationService.layout`
+- [X] T043 `GET /api/artwork/templates` · `POST /api/artwork/generate` (201)
+- [X] T044 `CatPlaylistGeneratorTests` — 격자 가상 곡으로 중복 없음·점 수·순서·오차 상한·상자 1회·없는 템플릿 400·이름
+- [X] T045 문서 — BACKEND-NOTES §6-7, FEATURES 변경 제안 #28·#29, plan.md 후속 절, spec.md US4·FR-017~021
+- [X] T046 `./gradlew test` · `./gradlew build` 통과
+- [ ] T047 MR → `backend/dev` → `backend/jenkins` 배포 (**사람**)
+- [ ] T048 배포 후 실측 — `generate` 3종의 `fitError`, 별자리 렌더 눈 확인, 최선을 `submit` 해 점수. `EXPLAIN` 으로 KNN 이 `music_l1_gist` 를 타는지
+- [ ] T049 기획 확인 — 변경 제안 #28(좌표계) · #29(고양이 생성)
+- [ ] T050 실측 뒤 SC-008 기준 확정, 필요하면 `SCALES`·`CANDIDATES_PER_POINT` 조정

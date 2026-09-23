@@ -21,6 +21,8 @@ import com.ssafy.backend.artwork.dto.ArtworkLeaderboardResponse;
 import com.ssafy.backend.artwork.dto.CatPlaylistRequest;
 import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
 import com.ssafy.backend.artwork.dto.CatTemplateSummary;
+import com.ssafy.backend.artwork.dto.DrawRequest;
+import com.ssafy.backend.artwork.dto.DrawResponse;
 import com.ssafy.backend.artwork.service.CatPlaylistGenerator;
 import com.ssafy.backend.artwork.dto.ArtworkLikeRequest;
 import com.ssafy.backend.artwork.dto.ArtworkLikeResponse;
@@ -101,6 +103,18 @@ public class ArtworkController {
 			@RequestBody @Valid CatPlaylistRequest request, Authentication authentication) {
 		CatPlaylistResponse response = catPlaylistGenerator.generate(request.template(), authentication.getName());
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
+	}
+
+	/**
+	 * 사용자가 그린 별자리에 곡을 대응시킨다 (S15P21A405-598). <b>플레이리스트를 만들지 않는다</b> — 결과를 보고
+	 * {@code /api/playlist/create} 로 저장한다. 품질이 LOW 여도 200 이다.
+	 */
+	@Operation(summary = "그린 별자리 매칭",
+			description = "캔버스 좌표(0~1, y 아래) 점 3~20개마다 서로 다른 곡을 pc1/pc2 에서 골라 좌표·모양 일치도(0~100)·"
+					+ "품질(HIGH/MEDIUM/LOW)을 반환한다. 플레이리스트는 만들지 않는다 — 저장은 /api/playlist/create.")
+	@PostMapping("/draw")
+	public ApiResponse<DrawResponse> draw(@RequestBody @Valid DrawRequest request) {
+		return ApiResponse.success(catPlaylistGenerator.draw(request.points()));
 	}
 
 	/** 회차 리더보드. 순위 점수(좋아요 + AI / 100 × K) → AI 점수 → 먼저 제출한 순. 채점된 작품만 보인다. */

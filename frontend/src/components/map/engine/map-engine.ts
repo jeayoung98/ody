@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -2321,7 +2321,7 @@ export class MapEngine {
   hitFriend(mx: number, my: number): VisibleFriend | null {
     [mx, my] = this.unview(mx, my);
     let best: VisibleFriend | null = null;
-    let bd = 22 * 22;
+    let bd = FRIEND_MARKER.hitPx * FRIEND_MARKER.hitPx;
     for (const fr of this.visFriends) {
       const d = (fr.px - mx) ** 2 + (fr.py - my) ** 2;
       if (d < bd) {
@@ -2371,7 +2371,7 @@ export class MapEngine {
     const front = Math.max(v.scale, 1 + STAR_VIEW.depthSize);
     const k = springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
     const scale = v.scale + (front - v.scale) * k;
-    const R = 12.5 * front;
+    const R = FRIEND_MARKER.radiusPx * front;
     /**
      * 이웃 사이 현이 **헬멧 지름과 닉네임 폭 중 큰 것** + 틈 이상이 되는 반지름. 닉네임이 헬멧
      * 아래 가운데 정렬로 붙어서, 헬멧만 안 겹치게 두면 이름끼리 포개져 읽을 수 없었다.

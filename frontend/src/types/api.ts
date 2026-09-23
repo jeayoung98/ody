@@ -60,7 +60,20 @@ export type ImplementedErrorCode =
   /** 409 — 상대가 내 층에 없다. 접속이 없거나 다른 층이다 */
   | "REACTION_NOT_NEARBY"
   /** 429 — 같은 사람에게 너무 빨리 다시 보냈다 (SOCIAL-04) */
-  | "REACTION_COOLDOWN";
+  | "REACTION_COOLDOWN"
+  // 취향 분석 (S15P21A405-630, backend TasteErrorCode)
+  /**
+   * 422 — 유효한 좋아요 곡이 10개 미만이라 리포트를 만들 수 없다.
+   * **오류로 보여 주지 않는다** — 조회 응답의 `reportEligibility` 가 같은 사실을 미리 말해 주므로,
+   * 화면은 버튼을 잠그고 몇 곡이 더 필요한지 적는다. 이 코드는 그 잠금을 뚫고 눌렀을 때의 답이다.
+   */
+  | "TASTE_INSUFFICIENT_SAMPLE"
+  /** 429 — 오늘 몫을 이미 썼다. 생성은 하루 한 번이다 */
+  | "TASTE_DAILY_LIMIT"
+  /** 409 — 이미 만들고 있다. 기다리면 된다 */
+  | "TASTE_ANALYSIS_IN_PROGRESS"
+  /** 503 — 분석 기준(전체 카탈로그 통계)이 아직 준비되지 않았다. 우리가 할 수 있는 일이 없다 */
+  | "TASTE_REFERENCE_UNAVAILABLE";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import Box from "@/components/common/box";
+import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
-import UnderlineTabs from "@/components/common/underline-tabs";
 import { useFeatures } from "@/hooks/use-features";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
@@ -22,6 +22,7 @@ import SongNearbyList from "./song-nearby-list";
 import SongPcList from "./song-pc-list";
 import SongRelatedPlaylists from "./song-related-playlists";
 import SongReportButton from "./song-report-button";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /**
  * 시트 앞의 빈 칸 = 커버를 드러내는 창(px). 정사각 커버의 위쪽 절반쯤으로, 여기에 헤더 높이가
@@ -39,9 +40,6 @@ const COVER_WINDOW = 188;
  */
 const SHEET_FADE = 200;
 
-/** 시트 아래쪽 탭. 관련 플리 탭은 플리 기능이 열려 있으면 늘 있다 — 비어 있으면 만들기가 뜬다 (S15P21A405-435) */
-type DetailTab = "nearby" | "info" | "playlists";
-
 /**
  * 곡 상세 (SONG-02).
  *
@@ -52,8 +50,8 @@ type DetailTab = "nearby" | "info" | "playlists";
  * 시트 윗머리는 투명 → 배경색 그라데이션이라 커버가 시트로 녹아든다. 끝까지 올리면
  * 헤더 뒤의 커버까지 덮개가 지워서 패널이 한 색이 된다(`song-cover-backdrop`).
  *
- * 제목·행동 줄 아래는 **탭**이다 (S15P21A405-435): 주변곡 · 정보 · 관련 플리. 세로로 죽 이어
- * 붙이니 길었다. 탭은 곡을 옮겨 다녀도 유지된다 — 주변 곡을 타고 다니는 사람은 계속 주변곡을 본다.
+ * 제목·행동 줄 아래는 **한 장으로 이어 붙인다** (S15P21A405-477): 주변곡 → 관련 플리 → 소리.
+ * 탭이었다가 걷어낸 이유는 아래 렌더 부분에 적어 뒀다.
  */
 export default function SongDetailPanel() {
   const musicId = usePanelStore((s) => s.musicId);
@@ -76,18 +74,16 @@ export default function SongDetailPanel() {
    * **왜 안 되는지, 무엇을 해 주면 되는지**(신고) 한 줄이다.
    */
   const { blocked } = usePlayability(musicId);
+  /**
+   * 지도가 이미 아는 것 (S15P21A405-527). 별을 눌러 들어왔으면 제목·가수가 상주 집합에 있다 —
+   * 상세 응답을 기다리는 동안 그걸 그대로 보여 준다. 없으면(고스트·검색 결과) null 이고
+   * 스켈레톤이 예전처럼 막대로 자리만 잡는다.
+   */
+  const known = musicId != null ? getMapEngine()?.pointOf(musicId) : null;
   const dead = blocked === PLAYBACK_BLOCKED.noVideo;
 
-  const [tab, setTab] = useState<DetailTab>("nearby");
   // 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다
   const hasPlaylists = features.playlist;
-  const tabs: { key: DetailTab; label: string }[] = [
-    { key: "nearby", label: "주변곡" },
-    { key: "info", label: "소리" },
-    ...(hasPlaylists ? [{ key: "playlists" as const, label: "관련 플리" }] : []),
-  ];
-  // 플리 기능이 꺼진 빌드에서 저장된 탭이 남아 있으면 주변곡으로
-  const activeTab: DetailTab = tab === "playlists" && !hasPlaylists ? "nearby" : tab;
 
   /**
    * 곡이 바뀌면 **맨 위로 되돌린다** (S15P21A405-384). 패널은 곡이 바뀌어도 같은 상자를 쓰므로
@@ -117,14 +113,20 @@ export default function SongDetailPanel() {
       // 커버는 상세 응답을 기다리지 않는다 — musicId 만으로 그려지므로 여는 즉시 깔린다
       bg={musicId != null ? <SongCoverBackdrop musicId={musicId} scrollerRef={bodyRef} reveal={COVER_WINDOW} /> : undefined}
     >
-      {/* 커버를 드러내는 창 */}
-      <div aria-hidden style={{ height: COVER_WINDOW }} />
+      {/*
+        커버를 드러내는 창.
+
+        **시트를 내리면 이 창이 줄어든다** (S15P21A405-417, `globals.css`). 폰에서 접으면
+        화면에 걸리는 건 머리글과 이 창뿐이라 **무슨 곡인지가 안 보였다** — 창을 줄이면
+        제목·가수가 그 자리로 따라 올라온다. 인라인 `height` 라 CSS 쪽은 `!important` 로 덮는다.
+      */}
+      <div aria-hidden data-cover-window style={{ height: COVER_WINDOW }} />
       <div className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]">
         {/* 시트 바닥 — 윗머리는 커버가 비치도록 투명에서 시작한다 */}
         <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
         <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />
 
-        {isPending && <SongDetailSkeleton />}
+        {isPending && <SongDetailSkeleton title={known?.title} artist={known?.artist} />}
         {isError && <ErrorMessage />}
         {data && (
           <>
@@ -136,13 +138,37 @@ export default function SongDetailPanel() {
               올 값은 넷뿐이었고 그중 셋은 제목 아래 칩이 이미 말한다. BPM 은 칩에도 없어
               이 화면에서 사라진 유일한 값이다.
             */}
+            {/*
+              **탭을 걷고 한 장으로 폈다** (S15P21A405-477). 유저 테스트 동안 플리가 꺼져 있어
+              탭이 둘뿐이었는데, 두 개짜리 탭바는 한 줄을 상시로 쓰면서 절반을 클릭 뒤에 숨긴다.
+              특히 `소리`(축 차트)는 **주변곡이 왜 주변곡인지 설명하는 근거**라 탭 뒤에 있으면
+              대부분 한 번도 안 열어 보고 "닮았나요" 에 답하게 된다.
+
+              순서가 곧 우선순위다: 주변곡 → 플리 → 소리. 차트는 위 다섯만 펴 두고 접혀 있어서
+              (`song-pc-list`) 한 장으로 합쳐도 늘어나는 높이가 크지 않다.
+
+              섹션이 셋을 넘거나 한 곡에서 주변곡 ↔ 소리를 오가는 사용이 실제로 보이면 그때
+              탭으로 돌린다 — 이 구조에서 되돌리기는 쉽다.
+
+              **담긴 플리가 없으면 그 칸은 통째로 빠진다** — 탭이던 시절에는 빈 탭을 눌러 본
+              사람에게 "여기서 만들라" 고 권할 자리가 있었지만, 한 장이 된 지금은 그 권유가
+              주변곡과 소리 사이를 늘 갈라놓는다. 새 플리 만들기는 제목 줄의 플리 버튼
+              (`add-to-playlist-menu`) 에 그대로 있다.
+            */}
             {!dead && (
-              <>
-                <UnderlineTabs items={tabs} value={activeTab} onChange={setTab} />
-                {activeTab === "nearby" && <SongNearbyList items={data.nearby} centerMusicId={data.id} />}
-                {activeTab === "info" && <SongPcList items={data.principalComponents} />}
-                {activeTab === "playlists" && <SongRelatedPlaylists items={data.relatedPlaylists} musicId={data.id} />}
-              </>
+              // 여정 버튼 줄과는 한 칸 더 띄운다 — 위는 "이 곡으로 할 일", 아래는 "이 곡에 관한 것"이다.
+              // 섹션 사이는 구분선 앞뒤로 20px 씩 — 탭을 걷은 뒤로는 이 빈칸이 탭바 노릇을 한다
+              <div className="flex flex-col gap-5 pt-2">
+                <SongNearbyList items={data.nearby} centerMusicId={data.id} />
+                {hasPlaylists && data.relatedPlaylists.length > 0 && (
+                  <>
+                    <Divider />
+                    <SongRelatedPlaylists items={data.relatedPlaylists} />
+                  </>
+                )}
+                <Divider />
+                <SongPcList items={data.principalComponents} />
+              </div>
             )}
           </>
         )}

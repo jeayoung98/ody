@@ -26,9 +26,9 @@ export function observeAnalytics(): void {
   });
   usePanelStore.subscribe((s, p) => {
     if (s.activePanel !== p.activePanel) track("panel_changed", { panel: s.activePanel ?? "none", previous_panel: p.activePanel ?? "none" });
-    if (s.collapsed !== p.collapsed) track("panel_collapsed_changed", { panel: s.activePanel, collapsed: s.collapsed });
+    if (s.snap !== p.snap) track("panel_collapsed_changed", { panel: s.activePanel, collapsed: s.snap === 1, snap: s.snap });
     // 상세 패널이 펼쳐진 사실. 실제 데이터 성공/실패는 QueryCache에서 따로 확인한다.
-    if (s.activePanel === "song" && !s.collapsed && (p.activePanel !== "song" || p.musicId !== s.musicId || p.collapsed)) {
+    if (s.activePanel === "song" && s.snap > 1 && (p.activePanel !== "song" || p.musicId !== s.musicId || p.snap === 1)) {
       track("music_detail_viewed", { music_id: s.musicId });
     }
   });

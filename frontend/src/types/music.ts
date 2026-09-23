@@ -30,6 +30,13 @@ export interface Music {
   id: Id;
   /** MusicBrainz recording MBID(36자 UUID) 또는 SHA-1 경로 해시 폴백(40자) */
   mbid: string;
+  /**
+   * 이 곡이 실린 **앨범**의 MusicBrainz 릴리스 ID (S15P21A405-518). `mbid` 는 곡(recording) 쪽이라
+   * 앨범 커버를 못 찾는다 — 커버를 여는 열쇠는 이 값이다 (`render/cover-art`).
+   *
+   * 2026-09-21 배포 확인 — 지도 응답 100건 전부 값이 있었다. 그래도 없는 곡은 절차적 커버로 떨어진다.
+   */
+  albumMbid?: string | null;
   /** 곡명 */
   title: string;
   /** 아티스트명 */
@@ -62,27 +69,13 @@ export interface Music {
   youtubeCnt: number;
 }
 
-/** genre 테이블 */
-export interface Genre {
-  /** 장르 ID */
-  id: Id;
-  /** 장르명 */
-  name: string;
-}
-
-/** music_genre 테이블 (music ↔ genre 다대다 매핑) */
-export interface MusicGenre {
-  id: Id;
-  /** 곡 ID */
-  musicId: Id;
-  /** 장르 ID */
-  genreId: Id;
-}
-
-/** 장르가 조인된 곡 (조회용) */
-export interface MusicWithGenres extends Music {
-  genres: Genre[];
-}
+/*
+ * `Genre` · `MusicGenre` · `MusicWithGenres` 를 걷어냈다 (장르 원천이 사라졌다 (S15P21A405-490, BACKEND-NOTES A-47)).
+ * 백엔드가 `genre`·`music_genre` 테이블을 지우면서 응답에서 장르 이름이 사라졌다 —
+ * 읽을 원천이 없는 타입을 남겨 두면 다음 사람이 "채우면 되겠네" 로 읽는다.
+ *
+ * **`Music.genreId` 는 남는다.** 지도 별 색이 쓰는 값이고 지금은 무장르(10) 고정이다.
+ */
 
 /** 재생 가능한 곡 (youtubeUrl이 반드시 존재) */
 export type PlayableMusic = Music & { youtubeUrl: string };

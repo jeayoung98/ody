@@ -21,6 +21,16 @@ interface PlayerState {
   queueIndex: number;
   /** Transport generation; also changes when restarting the same song. */
   playSeq: number;
+  /**
+   * **서버에 알려야 하는 재생**이 몇 번째인가 (S15P21A405-569).
+   *
+   * `playSeq` 와 따로 두는 이유는 그 값이 세는 것이 다르기 때문이다. `playSeq` 는 "플레이어가
+   * 새 곡을 세웠다" 라서 `preview`(설문 창 다시 듣기)와 `stop` 도 올린다 — 둘 다 서버에
+   * 알릴 일이 아니다. 다시 듣기로 내 지도 위치가 움직이면 안 되고, 정지는 곡이 없다.
+   *
+   * 올리는 것은 넷뿐이다: `playSingle` · `playQueue` · `next` · `prev`.
+   */
+  declareSeq: number;
   restoreLast: (musicId: number) => void;
   playSingle: (musicId: number, origin?: PlayContext) => void;
   playQueue: (context: Exclude<PlayContext, { kind: "single" }>, musicIds: number[], startIndex?: number) => void;
@@ -37,7 +47,7 @@ interface PlayerState {
 export const usePlayerStore = create<PlayerState>()(
   devtools((set, get) => ({
     currentMusicId: null, isPlaying: false, context: { kind: "single" },
-    queue: [], queueIndex: 0, playSeq: 0,
+    queue: [], queueIndex: 0, playSeq: 0, declareSeq: 0,
     restoreLast: (musicId) => {
       if (get().currentMusicId == null) set({ currentMusicId: musicId, isPlaying: false }, false, "restoreLast");
     },
@@ -60,7 +70,7 @@ export const usePlayerStore = create<PlayerState>()(
       const queueIndex = atQueue >= 0 ? atQueue : fromList ? atList : 0;
       runPlaybackTransition(() => {
         if (map.constellationMusicIds.length && !map.constellationMusicIds.includes(musicId)) useMapStore.getState().clearConstellation();
-        set({ currentMusicId: musicId, isPlaying: true, context, queue, queueIndex, playSeq: get().playSeq + 1 }, false, "playSingle");
+        set({ currentMusicId: musicId, isPlaying: true, context, queue, queueIndex, playSeq: get().playSeq + 1, declareSeq: get().declareSeq + 1 }, false, "playSingle");
       });
     },
     playQueue: (context, musicIds, startIndex = 0) => {
@@ -68,7 +78,7 @@ export const usePlayerStore = create<PlayerState>()(
       const queue = [...musicIds];
       runPlaybackTransition(() => set({
         context, queue, queueIndex: startIndex, currentMusicId: queue[startIndex],
-        isPlaying: true, playSeq: get().playSeq + 1,
+        isPlaying: true, playSeq: get().playSeq + 1, declareSeq: get().declareSeq + 1,
       }, false, "playQueue"));
     },
     /**
@@ -91,14 +101,14 @@ export const usePlayerStore = create<PlayerState>()(
       const { queue, queueIndex } = get();
       runPlaybackTransition(() => {
         if (queueIndex + 1 >= queue.length) { get().pause(); return; }
-        set({ queueIndex: queueIndex + 1, currentMusicId: queue[queueIndex + 1], isPlaying: true, playSeq: get().playSeq + 1 }, false, "next");
+        set({ queueIndex: queueIndex + 1, currentMusicId: queue[queueIndex + 1], isPlaying: true, playSeq: get().playSeq + 1, declareSeq: get().declareSeq + 1 }, false, "next");
       });
     },
     prev: () => {
       const { queue, queueIndex } = get();
       if (queueIndex <= 0 || !queue.length) return;
       runPlaybackTransition(() => set({
-        queueIndex: queueIndex - 1, currentMusicId: queue[queueIndex - 1], isPlaying: true, playSeq: get().playSeq + 1,
+        queueIndex: queueIndex - 1, currentMusicId: queue[queueIndex - 1], isPlaying: true, playSeq: get().playSeq + 1, declareSeq: get().declareSeq + 1,
       }, false, "prev"));
     },
     stop: () => runPlaybackTransition(() => set({

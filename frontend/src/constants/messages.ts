@@ -64,3 +64,76 @@ export type PlaybackBlocked = (typeof PLAYBACK_BLOCKED)[keyof typeof PLAYBACK_BL
 
 /** 못 트는 곡을 자동으로 넘겼을 때 (S15P21A405-364). 조용히 넘기면 곡이 사라진 것으로 보인다 */
 export const SKIPPED_UNPLAYABLE = "재생할 수 없는 곡을 건너뛰었어요";
+
+/**
+ * 따라가기(탑승)가 거부됐을 때의 안내 (2차 실시간 명세 §3.3, S15P21A405-530).
+ *
+ * **사유마다 사용자가 할 일이 다르다.** 잠시 뒤 다시 하면 되는 것과 아무리 해도 안 되는 것을
+ * 한 문구로 뭉치면 "다시 해 보라" 는 말이 빈말이 된다.
+ *
+ * `RIDE_NOT_RIDING` 은 여기 없다 — **조용히 넘기는** 사유다. 이미 `RIDE_ENDED` 로 끝나 있어서
+ * 내릴 것이 없었던 경우이고, 사용자 입장에서는 눌러서 내려진 것이 맞다.
+ */
+export const RIDE_REJECTED = {
+  RIDE_SELF: "자기 자신은 따라갈 수 없어요",
+  RIDE_CAPTAIN_INACTIVE: "지금은 따라갈 수 없는 사용자예요",
+  RIDE_ALREADY_RIDING: "이미 따라가는 중이에요. 먼저 내려 주세요",
+  RIDE_CHAIN_FORBIDDEN: "따라가기는 한 단계까지만 가능해요",
+  RIDE_FULL: "따라가는 인원이 가득 찼어요",
+  RIDE_NOT_CAPTAIN: "따라가는 중에는 할 수 없어요. 먼저 내려 주세요",
+  RIDE_STALE: "상태가 바뀌었어요. 화면을 새로 고친 뒤 다시 시도해 주세요",
+  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  UNKNOWN: "따라가기를 시작하지 못했어요",
+} as const;
+
+/** 인솔자가 사라져 따라가기가 끝났다 (§4.3). 조용히 끊으면 왜 멈췄는지 알 수 없다 */
+export const RIDE_ENDED_BY_CAPTAIN = (who: string) => `${who} 님이 떠나 따라가기가 끝났어요`;
+/** 인솔자가 강제 하차(선단 해체)를 눌렀다 (S15P21A405-606). 인솔자는 그 자리에 그대로 있다 — "떠났다" 고 말하면 틀린다 */
+export const RIDE_ENDED_BY_DISBAND = (who: string) => `${who} 님이 따라가기를 끝냈어요. 이 자리에서 이어가요`;
+
+/** 내가 인솔자로서 선단을 해체했다 (S15P21A405-606) */
+export const RIDE_DISBANDED = (count: number) => `${count}명을 내려 드렸어요`;
+
+/**
+ * 해체가 거부됐을 때. `RIDE_NOT_CAPTAIN` 이 여기서는 "따라가는 중" 이 아니라 **"따라오는 사람이 없다"** 는
+ * 뜻이다 (백엔드 `disbandByCaptain`) — 세고 나서 부르는 사이에 전원이 내린 경우라 실패가 아니다.
+ */
+export const RIDE_DISBAND_REJECTED = {
+  RIDE_NOT_CAPTAIN: "지금은 따라오는 사람이 없어요",
+  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  UNKNOWN: "강제 하차에 실패했어요. 잠시 후 다시 시도해 주세요",
+} as const;
+
+/** 곡 좋아요 요청이 실패했다 (S15P21A405-611). 낙관적으로 켠 하트는 되돌린다 */
+export const LIKE_FAILED = "좋아요를 반영하지 못했어요. 잠시 후 다시 시도해 주세요";
+
+/**
+ * 반응이 거부됐을 때 (SOCIAL-02·04, S15P21A405-607, 백엔드 `RealtimeErrorCode`).
+ * 패널에 뜬 전원에게 보내므로 **전부 거부됐을 때만** 첫 사유를 말한다.
+ */
+export const REACTION_REJECTED = {
+  REACTION_SELF: "자기 자신에게는 반응을 보낼 수 없어요",
+  REACTION_NOT_NEARBY: "같은 영역에 있는 사람에게만 보낼 수 있어요",
+  REACTION_COOLDOWN: "같은 사람에게는 잠시 뒤에 다시 보낼 수 있어요",
+  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  UNKNOWN: "반응을 보내지 못했어요",
+} as const;
+
+
+/**
+ * 따라가는 중에 여정을 누른 경우 (S15P21A405-557).
+ *
+ * **묻지 않고 막는다.** 다른 활동은 "멈추고 시작할까요" 를 물어도 되지만(ACT-01), 여정은
+ * 출발·도착을 직접 골라야 하는데 따라가는 동안에는 지도를 못 만진다 — 물어서 승낙을 받아도
+ * 그 다음에 할 수 있는 것이 없다.
+ */
+export const RIDING_JOURNEY_BLOCKED = "따라가는 중에는 여정을 만들 수 없어요. 하차한 뒤에 해 주세요";
+
+/** 따라가는 동안 막힌 조작을 눌렀다 (§6). 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다 */
+export const RIDING_LOCKED = "따라가는 중에는 직접 고를 수 없어요. 하차하면 다시 돼요";
+
+/**
+ * 따라가는 동안 지도를 움직이려 했다 — 휠·드래그·주변 탐색·내 위치로 가기 (S15P21A405-605, SOCIAL-08).
+ * 곡 고르기(`RIDING_LOCKED`)와 갈라 둔다: 이쪽은 "화면" 이고 저쪽은 "곡" 이다.
+ */
+export const RIDING_MAP_LOCKED = "따라가는 중에는 지도를 움직일 수 없어요. 하차하면 다시 돼요";

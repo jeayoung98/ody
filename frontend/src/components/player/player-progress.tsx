@@ -2,6 +2,8 @@
 
 import { useEffect, useRef, useState } from "react";
 import { formatDuration } from "@/lib/format";
+import { publishSeek } from "@/lib/realtime/ride";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { getPlayer } from "./player-registry";
 import WaveformBars from "./waveform-bars";
@@ -92,8 +94,17 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   const duration = clock.duration;
   const value = Math.min(scrub ?? clock.t, duration || Infinity);
   const ratio = duration > 0 ? value / duration : 0;
-  /** 옮길 수 있으려면 들을 수 있는 곡이어야 하고, 플레이어가 길이를 알려줬어야 한다 */
-  const seekable = canPlay && duration > 0;
+  /**
+   * 옮길 수 있으려면 들을 수 있는 곡이어야 하고, 플레이어가 길이를 알려줬어야 한다.
+   *
+   * **따라가는 중에도 못 옮긴다** (S15P21A405-567). 옮기면 서버의 선단 상태와 내 소리가
+   * 갈라지는데 **서버는 그 사실을 모른다** — 다음 `RIDE_PLAYBACK` 이 올 때까지 조용히 어긋난
+   * 채로 남는다. 정지 버튼을 막은 이유와 같다.
+   *
+   * 지금 위치와 길이는 그대로 보여 준다. 못 트는 곡에서 바만 잠그는 방식과 같다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
+  const seekable = canPlay && duration > 0 && !riding;
   /** 읽어 주는 길이는 곡 정보로 미리 채워도 된다 — 눈금과 달리 틀려도 옮겨지는 자리가 바뀌지 않는다 */
   const shownDuration = duration || (durationSec != null && durationSec > 0 ? durationSec : 0);
 
@@ -101,6 +112,12 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
     if (!seekable || scrub == null) return;
     track("play_seeked", { music_id: musicId, from_sec: Math.round(clock.t), to_sec: Math.round(next) });
     getPlayer()?.seekTo(next, true);
+    /**
+     * 따라오는 사람들에게 같은 자리로 옮기라고 알린다 (2차 실시간 명세 §5.1, S15P21A405-530).
+     * **놓았을 때 한 번만 나간다** — 끄는 내내 보내면 그대로 다 전달된다. 여기가 커밋 지점이라
+     * 이미 한 번이지만, 키보드 화살표 연타처럼 잦은 커밋도 있어 발행 간격을 한 겹 더 둔다.
+     */
+    publishSeek(Math.round(next * 1000));
     pendingSeek.current = { t: next, until: Date.now() + SEEK_SETTLE_MS };
     setClock((c) => ({ ...c, t: next }));
     setScrub(null);
@@ -110,7 +127,8 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
     <div className="flex items-center gap-2.5">
       {/* 못 트는 곡이어도 길이는 알려 준다 — 바만 잠근다 */}
       <span className="num w-8 shrink-0 text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
-      <div className="relative h-8 min-w-0 flex-1">
+      {/* 좁은 화면에서는 파형을 8px 로 눕힌다 — 자리는 거의 안 먹으면서 어디까지 왔는지는 보인다 */}
+      <div className="relative h-8 min-w-0 flex-1 max-tablet:h-2">
         <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
         <input
           data-analytics-manual

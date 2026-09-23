@@ -2,9 +2,9 @@
 
 import { useCallback } from "react";
 import { ACTIVITY_CONFIRM, type ActivityKind } from "@/constants";
-import { useStopFollowMutation } from "@/hooks/mutations/use-follow-mutation";
 import { useConfirmStore } from "@/stores/use-confirm-store";
 import { ownedMapRepresentation, playbackActivity, type PlaybackActivity } from "@/lib/play-context";
+import { dismountRide } from "@/hooks/mutations/use-dismount-mutation";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
@@ -34,13 +34,19 @@ function currentActivity(): CurrentActivity | null {
  */
 export function useStartActivity() {
   const ask = useConfirmStore((s) => s.ask);
-  const stopFollow = useStopFollowMutation();
 
   const stopCurrent = useCallback(
     (cur: CurrentActivity) => {
       if (cur.kind === "follow") {
-        stopFollow.mutate(cur.targetKey);
-        useFollowStore.getState().stop();
+        /**
+         * 탑승 중단은 **서버에도 알린다** (S15P21A405-530). 예전에는 로컬 상태만 지웠다 —
+         * 하차 API 가 배포에 없었기 때문이다. 화면만 내리면 서버에서는 계속 타고 있어서
+         * 인솔자를 따라 곡이 바뀌고, 내가 시작한 새 활동을 그게 덮어쓴다.
+         *
+         * 기다리지 않는다. 다음 활동은 지금 시작되어야 하고, 실패해도 `dismountRide` 가
+         * 화면 쪽 탑승 상태는 걷어낸다.
+         */
+        void dismountRide().catch(() => {});
         return;
       }
       usePlayerStore.getState().stop();
@@ -52,7 +58,7 @@ export function useStartActivity() {
       if (owned === "nearby") map.exitNearby();
       else if (owned === "constellation") map.clearConstellation();
     },
-    [stopFollow],
+    [],
   );
 
   return useCallback(

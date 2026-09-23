@@ -8,16 +8,14 @@ export interface User {
   name: string | null;
   /** 온보딩에서 설정, 2~20자 */
   nickname: string | null;
-  /** 공개 계정 여부, 비공개면 따라가기 불가 */
-  isPublic: boolean;
   /** 튜토리얼 완료 여부 */
   tutorialCompleted: boolean;
   /** 최근 활동 시각 */
   lastActiveAt: ISODateString | null;
   /** 가입 시각 */
   createdAt: ISODateString;
-  /** 수정 시각 */
-  updatedAt: ISODateString;
+  /** 수정 시각. **배포 백엔드는 내려주지 않는다** (`UserDetailResponse` 에 없다) */
+  updatedAt: ISODateString | null;
   /** 프로필 이미지 URL */
   imageUrl: string | null;
 }

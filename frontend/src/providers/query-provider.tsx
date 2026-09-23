@@ -2,9 +2,10 @@
 
 import { QueryCache, QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import AnalyticsProvider from "./analytics-provider";
 import { track } from "@/lib/analytics/client";
+import { startQueryPersist } from "@/lib/query-persist";
 
 function makeQueryClient() {
   return new QueryClient({
@@ -27,6 +28,10 @@ function makeQueryClient() {
 export default function QueryProvider({ children }: { children: ReactNode }) {
   // useState로 클라이언트 인스턴스를 고정해 리렌더 시 재생성되지 않도록 함
   const [queryClient] = useState(makeQueryClient);
+
+  // 저장해 둔 값을 붓고 이후 변화를 계속 저장한다 (S15P21A405-504). 마운트 뒤에 하는 이유는
+  // `query-persist` 주석에 있다 — 서버가 그린 화면과 첫 렌더가 어긋나면 안 된다
+  useEffect(() => startQueryPersist(queryClient), [queryClient]);
 
   return (
     <QueryClientProvider client={queryClient}>

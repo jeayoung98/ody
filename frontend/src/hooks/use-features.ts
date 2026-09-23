@@ -1,34 +1,22 @@
 "use client";
 
-import { ALL_FEATURES, ALL_PANELS, FEATURES, PANEL_ENABLED } from "@/constants";
-import { useSurveyMode } from "./use-survey-mode";
+import { FEATURES, PANEL_ENABLED } from "@/constants";
 
 /**
- * 지금 보여 줄 기능 (S15P21A405-387).
+ * 지금 보여 줄 기능.
  *
- * 유저 테스트 동안 감춰 둔 것들([`FEATURES`](../constants/features.ts), S15P21A405-333)은
- * 빌드타임 환경변수라 배포본에서 못 켰다. 그래서 설문 모드를 꺼도 레일의 마이페이지·주변
- * 사람·차트 탭이 계속 안 보였다 — **배포본에서 팀원이 개발 버전을 보라고 만든 모드인데
- * 정작 개발 중인 화면으로 들어갈 입구가 닫혀 있었다.**
+ * **설문 모드를 보지 않는다** (S15P21A405-612). 그 모드는 설문(과 테스트 안내 화면)만 가른다 —
+ * 한동안 랭킹을 감추는 데도 썼는데(S15P21A405-570) 콘테스트가 딸려 꺼지면서 축을 걷어냈다.
  *
- * 이제 [`useSurveyMode`](./use-survey-mode.ts) 를 따른다. 설문 모드면 감춘 값, 끄면 전부 켠 값.
- *
- * ```js
- * localStorage.setItem("ody:survey-mode", "false"); location.reload();  // 전부 보인다
- * localStorage.removeItem("ody:survey-mode");       location.reload();  // 감춘다 (기본)
- * ```
- *
- * 환경변수(`NEXT_PUBLIC_FEATURE_*`)는 그대로 살아 있다 — 설문 모드인 채로 **하나만** 켜 보고
- * 싶을 때 쓴다. 모드를 끄면 어차피 전부 켜지므로 그때는 무의미하다.
- *
- * **상수를 직접 import 하지 않는다.** `FEATURES.social` 을 그대로 읽으면 모드를 안 따라서,
- * 같은 화면인데 어떤 자리는 열리고 어떤 자리는 닫히는 상태가 된다.
+ * 그래도 훅으로 남겨 둔 이유: 호출부 열 곳이 전부 여기를 거치므로 무언가를 다시 감출 일이 생기면
+ * 여기와 [`FEATURES`](../constants/features.ts) 만 고치면 된다. 상수를 컴포넌트에서 직접 읽기
+ * 시작하면 그 길이 막힌다.
  */
 export function useFeatures(): typeof FEATURES {
-  return useSurveyMode() ? FEATURES : ALL_FEATURES;
+  return FEATURES;
 }
 
 /** 지금 열 수 있는 패널인가. {@link useFeatures} 와 같은 기준이다 */
 export function usePanelEnabled(): Record<string, boolean> {
-  return useSurveyMode() ? PANEL_ENABLED : ALL_PANELS;
+  return PANEL_ENABLED;
 }

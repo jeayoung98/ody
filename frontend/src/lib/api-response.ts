@@ -27,8 +27,8 @@ function markLive(res: NextResponse, upstream: string) {
 }
 
 /** 배포 백엔드에서 받아온 성공 응답. `upstream` 은 실제로 부른 백엔드 경로다 */
-export function okLive<T>(data: T, upstream: string) {
-  return markLive(ok(data), upstream);
+export function okLive<T>(data: T, upstream: string, status = 200) {
+  return markLive(ok(data, status), upstream);
 }
 
 /**

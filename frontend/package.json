@@ -10,6 +10,9 @@
     "test": "tsc --noEmit && node --require ./tests/register.cjs --test tests/*.test.cjs"
   },
   "dependencies": {
+    "@dnd-kit/core": "6.3.1",
+    "@dnd-kit/sortable": "10.0.0",
+    "@stomp/stompjs": "7.3.0",
     "@tanstack/react-query": "^5.102.8",
     "@tanstack/react-query-devtools": "^5.102.8",
     "chart.js": "4.5.1",

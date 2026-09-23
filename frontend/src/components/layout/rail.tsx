@@ -1,10 +1,11 @@
 "use client";
 
 import { FriendsIcon, JourneyIcon, RankIcon } from "@/components/common/icons";
-import { usePanelEnabled } from "@/hooks/use-features";
+import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import ContestButton from "./contest-button";
 import NearbyExploreButton from "./nearby-explore-button";
 import ProfileButton from "./profile-button";
 import RailButton from "./rail-button";
@@ -39,13 +40,22 @@ export default function Rail() {
   const pressJourney = () => {
     if (composerOpen) closeComposer();
     else if (hasJourney) toggle("journey");
-    else openComposer("start");
+    else openComposer();
   };
   const panelEnabled = usePanelEnabled();
+  const features = useFeatures();
 
   return (
-    <div data-hud className="absolute top-4 right-[18px] z-[22] flex items-center gap-2">
-      <nav aria-label="네비" className="glass flex gap-0.5 rounded-pill! p-px">
+    /*
+     * **폰에서는 통째로 숨는다** (S15P21A405-417). 좁은 화면의 네비는 하단 고정 탭바가
+     * 맡고(`bottom-tabs.tsx`), 목록도 아예 다르다 — 거기는 목적지 넷(주변 사람·랭킹·지도·
+     * 마이페이지)이고 여기는 목적지 셋에 동작 둘이 섞여 있다. 한 컴포넌트를 양쪽 모양으로
+     * 비틀어 쓰다가 "랭킹을 보는 중인데 주변 탐색이 켜진" 상태가 생겼다.
+     */
+    <div data-hud className="absolute top-hud-t right-[18px] z-[22] flex items-center gap-2 max-tablet:hidden">
+      {/* 이벤트(콘테스트)는 기간이 있어 알약 밖 왼쪽에 따로 선다 (S15P21A405-602). 진행 중인 회차가 없으면 없다 */}
+      {features.contest && <ContestButton />}
+      <nav aria-label="네비" className="glass-liquid flex gap-0.5 rounded-pill! p-px">
         {panelEnabled.friends && (
           <RailButton label="주변 사람" active={activePanel === "friends"} onClick={() => toggle("friends")} data-tutorial="friends">
             <FriendsIcon />
@@ -63,6 +73,7 @@ export default function Rail() {
           </RailButton>
         )}
       </nav>
+      {/* 프사는 알약 밖에 따로 선다 (S15P21A405-434) — "나" 는 목적지가 아니라 주인이라 따로 */}
       {panelEnabled.feed && <ProfileButton />}
     </div>
   );

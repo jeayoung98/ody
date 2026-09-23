@@ -36,17 +36,16 @@ export function mockMusic(id: number): Music {
 export function mockMusicDetail(id: number): MusicDetail {
   const base = mockMusic(id);
   const s = songById(id);
-  const genreId = s?.genreId ?? id % GENRE_NAMES.length;
   const pc = s?.pc ?? [];
   return {
     ...base,
     albumCoverUrl: null,
+    liked: false,
     country: "KR",
     language: "ko",
     composer: `Composer ${(id % 15) + 1}`,
     lyricist: `Lyricist ${(id % 12) + 1}`,
     moods: [MOODS[id % MOODS.length], MOODS[(id + 2) % MOODS.length]],
-    genres: [{ id: genreId, name: GENRE_NAMES[genreId] }],
     principalComponents: pc.map((v, i) => ({ axis: i, value: v })),
     nearby: (s ? nearestSongs(s, NEARBY_COUNT) : []).map((p) => ({ id: p.musicId, title: p.title, artist: p.artist })),
     relatedPlaylists: [
@@ -123,7 +122,7 @@ export function mockJourney(startId: number, endId: number): JourneyRoute {
   path.push(b);
   const stops = path.map((s, i) => {
     const m = mockMusic(s.musicId);
-    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId], pc: [...s.pc] };
+    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, pc: [...s.pc] };
   });
   return { startMusicId: a.musicId, endMusicId: b.musicId, stops, totalDuration: stops.reduce((sum, s) => sum + (s.duration ?? 0), 0) };
 }

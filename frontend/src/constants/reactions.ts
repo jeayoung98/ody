@@ -1,21 +1,20 @@
-/** 반응하기 기본 이모지 세트. 앱 기능과 연관된 표정들 */
+/**
+ * 반응하기 기본 이모지 세트 (SOCIAL-02).
+ *
+ * `key` 는 서버로 그대로 나간다 — 백엔드 `ReactionRequest.reactionKey` 가 `^[a-z_]{1,32}$` 만
+ * 받는다. 목록은 프론트가 소유하고, 받는 쪽이 모르는 키는 ✨ 로 그린다 (`nearby-radar`).
+ */
 export const REACTIONS = [
+  { key: "rocket", emoji: "🚀", label: "출발" },
   { key: "fire", emoji: "🔥", label: "불" },
-  { key: "board", emoji: "🚌", label: "탑승" },
-  { key: "friend", emoji: "🤝", label: "친구하기" },
-  { key: "wave", emoji: "👋", label: "인사" },
-  { key: "star", emoji: "⭐", label: "별" },
+  { key: "heart", emoji: "💓", label: "하트" },
+  { key: "poop", emoji: "💩", label: "응" },
+  { key: "pray", emoji: "🙏", label: "기도" },
 ] as const;
 export type ReactionKey = (typeof REACTIONS)[number]["key"];
 
-/** 동일 사용자에게 재전송 가능한 최소 간격(ms) */
-export const REACTION_COOLDOWN_MS = 5_000;
+/** 키 → 이모지. 서버를 거쳐 온 모르는 키는 ✨ 로 그린다 */
+export const emojiOf = (key: string) => REACTIONS.find((r) => r.key === key)?.emoji ?? "✨";
 
 /** 화면에 반응이 떠 있는 시간(ms) */
 export const REACTION_VISIBLE_MS = 2_000;
-
-/**
- * 목 데이터 전용 — 지도에 떠 있는 다른 사용자가 스스로 반응을 쏘는 간격(ms).
- * 실서비스에서는 소켓 이벤트(`user:reaction`)가 이 자리를 대신한다.
- */
-export const MOCK_FRIEND_REACTION_INTERVAL_MS = 4_200;

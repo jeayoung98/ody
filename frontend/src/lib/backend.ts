@@ -1,16 +1,20 @@
 /**
  * **서버 전용.** `src/app/bff/` 라우트 핸들러에서만 쓴다 — 브라우저 번들에 들어가면 토큰이 샌다.
  *
- * 로그인이 목이라 브라우저에는 백엔드가 인정하는 토큰이 없다. 그래서 지도·주변 탐색·경로 탐색처럼
- * 실데이터가 필요한 것만 Next 서버가 서비스 토큰을 붙여 대신 호출한다.
+ * **호출자의 토큰을 그대로 넘긴다** (S15P21A405-481). 로그인이 항상 필수가 되면서
+ * (S15P21A405-480) 이 라우트들을 부르는 사람은 언제나 로그인한 사람이다. `BACKEND_ACCESS_TOKEN`
+ * 은 그 토큰이 없을 때의 **폴백**으로만 남는다 — 예전에는 이쪽이 기본이었고, 그때는 백엔드
+ * 로그에서 전원이 한 사람으로 보였다.
  *
  * `BACKEND_ACCESS_TOKEN` 이 없으면 `isBackendEnabled()` 가 false 이고, 라우트는 목으로 답한다.
  * 토큰이 있는데 실패하면 **목으로 조용히 떨어지지 않고 오류를 그대로 올린다** — 유저 테스트 중에
  * 실데이터인 줄 알고 목을 보는 일이 없어야 한다.
  */
+import { NextResponse } from "next/server";
 import { NO_GENRE_ID } from "@/constants";
 import { PC_DIMS, type MapPoint } from "@/types";
-import type { Music } from "@/types";
+import type { Music, PlaylistSummary, User, UserProfile } from "@/types";
+import { failLive, LIVE_HEADERS } from "./api-response";
 
 const BACKEND_ORIGIN = process.env.BACKEND_ORIGIN ?? "https://j15a405.p.ssafy.io";
 const BACKEND_ACCESS_TOKEN = process.env.BACKEND_ACCESS_TOKEN;
@@ -48,13 +52,60 @@ interface Envelope<T> {
   error: { code: string; message: string } | null;
 }
 
+/**
+ * **지금 처리 중인 요청이 들고 온 `Authorization`** (S15P21A405-481).
+ *
+ * 라우트 핸들러 안에서만 부른다. `headers()` 는 요청 범위에서만 유효해서, 그 밖(빌드 타임
+ * 평가 등)에서 부르면 던진다 — 그래서 실패를 삼키고 "토큰 없음" 으로 본다. 여기서 못 읽으면
+ * 아래 서비스 토큰으로 떨어질 뿐이라, 예전 동작 그대로다.
+ *
+ * `req` 를 인자로 받지 않는 이유는 **빼먹을 수 없게** 하기 위해서다. 라우트마다 손으로
+ * `callerAuth(req)` 를 달면 하나만 빠져도 그 라우트만 조용히 서비스 토큰으로 돌아가고,
+ * 백엔드 로그에서는 그 사람만 다른 계정으로 보인다 — 찾기 어려운 종류의 어긋남이다.
+ */
+async function callerToken(): Promise<string | null> {
+  try {
+    const { headers } = await import("next/headers");
+    return (await headers()).get("authorization");
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 백엔드에 붙일 `Authorization` 을 고른다 (S15P21A405-481).
+ *
+ * **호출자의 토큰이 서비스 토큰을 이긴다.** 값이 둘 다 없으면 헤더를 아예 안 붙인다 —
+ * A-17(유저 테스트용 임시 인증 해제)이 살아 있는 동안은 그래도 조회가 됐다.
+ *
+ * 호출자 토큰은 이미 `Bearer ...` 형태로 온다(브라우저가 그렇게 보낸다). 서비스 토큰은
+ * 날값이라 여기서 `Bearer` 를 붙인다.
+ *
+ * 순수 함수로 뺀 것은 **시험할 수 있게** 하기 위해서다. `fetch` 안에 인라인으로 두면 우선순위가
+ * 뒤집혀도 배포 백엔드를 실제로 불러 보기 전에는 모른다.
+ */
+export function authHeader(caller: string | null | undefined, service: string | undefined): Record<string, string> {
+  if (caller) return { Authorization: caller };
+  if (service) return { Authorization: `Bearer ${service}` };
+  return {};
+}
+
 /** 배포 백엔드 호출. 봉투를 벗겨 data 만 돌려준다 */
-async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  // 토큰은 **있으면 붙인다.** A-17 해제 중에는 없어도 조회가 되고, 원복되면 이게 있어야 한다
+async function backendFetch<T>(path: string, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
+  /**
+   * **호출자의 토큰이 먼저다** (S15P21A405-481).
+   *
+   * 예전에는 서비스 토큰 하나로 전부 불렀다 — 로그인 없이도 지도가 보여야 했기 때문이다
+   * (A-17). S15P21A405-480 으로 로그인이 항상 필수가 되면서 그 전제가 없어졌고, 서비스
+   * 토큰으로 계속 부르면 백엔드 입장에서 **전원이 한 사람**으로 보인다.
+   *
+   * 셋의 우선순위: `init.headers`(라우트가 명시한 것) > 호출자 토큰 > 서비스 토큰.
+   * 이미 `callerAuth(req)` 를 넘기는 라우트 열 곳은 그래서 그대로 둔다 — 결과가 같다.
+   */
   const res = await fetch(`${BACKEND_ORIGIN}${path}`, {
     ...init,
     headers: {
-      ...(BACKEND_ACCESS_TOKEN ? { Authorization: `Bearer ${BACKEND_ACCESS_TOKEN}` } : {}),
+      ...authHeader(await callerToken(), BACKEND_ACCESS_TOKEN),
       ...init?.headers,
     },
     cache: "no-store",
@@ -82,16 +133,18 @@ async function backendFetch<T>(path: string, init?: RequestInit): Promise<T> {
       `${path} 가 401 입니다. 백엔드 인증이 다시 걸린 것으로 보입니다 (BACKEND-NOTES A-17 원복). BACKEND_ACCESS_TOKEN 을 넣거나 USE_MOCK_API=1 로 목을 쓰세요.`,
     );
   }
-  if (!res.ok || !body.success || body.data == null) {
+  // 지우기처럼 돌려줄 것이 없는 API 는 성공해도 `data` 가 null 이다 (`ApiResponse<Void>`)
+  if (!res.ok || !body.success || (body.data == null && !opts?.allowNullData)) {
     throw new BackendError(res.status, body.error?.code ?? "UNKNOWN", body.error?.message ?? "백엔드 호출에 실패했습니다.");
   }
 
-  return body.data;
+  // allowNullData 일 때만 null 일 수 있다 — 그 경로의 호출자(backendDelete)는 값을 읽지 않는다
+  return body.data as T;
 }
 
-/** 배포 백엔드 GET 호출 */
-export function backendGet<T>(path: string): Promise<T> {
-  return backendFetch<T>(path);
+/** 배포 백엔드 GET 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다 */
+export function backendGet<T>(path: string, init?: RequestInit): Promise<T> {
+  return backendFetch<T>(path, init);
 }
 
 /**
@@ -102,12 +155,130 @@ export function backendGet<T>(path: string): Promise<T> {
  * 로컬 `http://localhost:3000` 이 정확히 그 경우다 (S15P21A405-303).
  * 여기서 부르면 Next 서버가 새로 띄우는 요청이라 `Origin` 이 없어 통과한다.
  */
-export function backendPost<T>(path: string, body: unknown): Promise<T> {
+export function backendPost<T>(path: string, body: unknown, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
+  return backendFetch<T>(
+    path,
+    { ...init, method: "POST", headers: { "Content-Type": "application/json", ...init?.headers }, body: JSON.stringify(body) },
+    opts,
+  );
+}
+
+/**
+ * 배포 백엔드 DELETE 호출. 지우는 건 늘 주인만 할 수 있으니 {@link callerAuth} 가 필요하다.
+ * 성공 응답에 돌려줄 데이터가 없으므로(`data: null`) 그것을 실패로 보지 않는다.
+ */
+export function backendDelete(path: string, init?: RequestInit): Promise<unknown> {
+  return backendFetch<unknown>(path, { ...init, method: "DELETE" }, { allowNullData: true });
+}
+
+/**
+ * 배포 백엔드 PATCH 호출 — **파일**을 보낸다 (`multipart/form-data`, S15P21A405-474).
+ *
+ * `Content-Type` 을 **직접 넣지 않는다.** multipart 는 헤더에 경계 문자열(`boundary=...`)이
+ * 들어가야 하는데 그 값은 `fetch` 가 `FormData` 를 보고 만든다. 우리가 손으로 적으면
+ * 경계가 본문과 어긋나 백엔드가 파트를 하나도 못 읽는다.
+ */
+export function backendPatchForm<T>(path: string, form: FormData, init?: RequestInit): Promise<T> {
+  return backendFetch<T>(path, { ...init, method: "PATCH", body: form });
+}
+
+/** 배포 백엔드 PATCH 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다 */
+export function backendPatch<T>(path: string, body: unknown, init?: RequestInit): Promise<T> {
   return backendFetch<T>(path, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
+    ...init,
+    method: "PATCH",
+    headers: { "Content-Type": "application/json", ...init?.headers },
     body: JSON.stringify(body),
   });
+}
+
+// ---------------------------------------------------------------------------
+// 인증 통과 (S15P21A405-462) — 로그인한 그 사람 자격으로 백엔드를 부른다
+// ---------------------------------------------------------------------------
+
+/**
+ * 호출자(브라우저)가 들고 온 액세스 토큰을 그대로 얹는 헤더.
+ *
+ * **서버 토큰(`BACKEND_ACCESS_TOKEN`)과 용도가 다르다.** 그건 로그인 없는 화면에도 지도를
+ * 보여주려고 서비스가 **대신** 부르는 것이고, 이건 **로그인한 그 사람** 자격으로 부르는 것이다.
+ * 내 정보·닉네임 변경처럼 "누가 부르는가"가 답을 바꾸는 API 는 반드시 이쪽이어야 한다 —
+ * 서버 토큰으로 부르면 모두가 같은 계정의 답을 받는다.
+ */
+/**
+ * **이제 안 붙여도 된다** (S15P21A405-481). `backendFetch` 가 요청의 Authorization 을 스스로
+ * 읽어 붙이므로 결과가 같다. 이미 이걸 넘기고 있는 라우트 열 곳은 그대로 뒀다 — 명시가 이기고,
+ * 읽는 사람에게는 "이 라우트는 호출자 자격으로 부른다" 가 더 분명하다.
+ */
+export function callerAuth(req: Request): Record<string, string> {
+  const token = req.headers.get("authorization");
+  return token ? { Authorization: token } : {};
+}
+
+/**
+ * access token(JWT) 의 `sub`. 백엔드가 여기에 이메일을 넣는다 (2026-09-18 배포본에서 실측).
+ *
+ * **서명을 검증하지 않는다.** 여기서는 "누구 것을 물어볼지"만 정하고 진짜 인증은 그 요청을 받은
+ * 백엔드가 한다 — 위조한 토큰으로 남의 이메일을 넣어도 백엔드가 그 토큰을 거절한다.
+ * 백엔드에 본인 조회(`/me`) API 가 없어서 쓰는 우회다 (BACKEND-NOTES A-15).
+ */
+export function emailFromToken(req: Request): string | null {
+  const payload = req.headers
+    .get("authorization")
+    ?.replace(/^Bearer\s+/i, "")
+    .split(".")[1];
+  if (!payload) return null;
+  try {
+    const claims = JSON.parse(Buffer.from(payload, "base64url").toString("utf8")) as { sub?: unknown };
+    return typeof claims.sub === "string" ? claims.sub : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * 백엔드가 refresh 쿠키를 심는 경로 (`RefreshTokenCookie`). 우리 인증 경로는 `/bff/auth/*` 라
+ * 그대로 두면 **재발급 요청에 쿠키가 실리지 않는다.** 같은 오리진 안에서만 쓰이므로 경로만 넓힌다 —
+ * `HttpOnly; Secure; SameSite=Lax` 는 백엔드가 준 그대로 둔다.
+ */
+const REFRESH_PATH = { from: "Path=/api/auth", to: "Path=/" } as const;
+
+/**
+ * 인증 계열 **통과 프록시**. 봉투를 벗기지 않고 상태 코드·본문·`Set-Cookie` 를 그대로 넘긴다.
+ *
+ * **rewrite 로 흘려보내지 않고 이 프록시를 거치는 이유**는 다른 라우트와 같다 (S15P21A405-303):
+ * rewrite 는 브라우저의 `Origin` 을 그대로 전달하고, 백엔드는 허용 목록에 없는 오리진을
+ * `403 Invalid CORS request` 로 막는다 — 로컬 `http://localhost:3000` 이 그 경우다.
+ * 라우트 핸들러는 Next 서버가 새 요청을 띄우므로 `Origin` 이 안 붙어 로컬·배포가 똑같이 동작한다.
+ *
+ * 응답을 가공하지 않는 것도 의도다. 로그인 실패 코드(`INVALID_CREDENTIALS` ·
+ * `PASSWORD_MISMATCH` …)를 화면이 그대로 분기에 쓰므로 중간에서 갈아치우면 안 된다.
+ */
+export async function backendProxy(req: Request, upstream: string, method: "POST" | "PATCH" = "POST") {
+  const cookie = req.headers.get("cookie");
+  const body = await req.text();
+  const res = await fetch(`${BACKEND_ORIGIN}${upstream}`, {
+    method,
+    headers: {
+      "Content-Type": "application/json",
+      ...callerAuth(req),
+      // 재발급은 refresh 쿠키가 있어야 한다 — 브라우저가 우리에게 보낸 쿠키를 그대로 올린다
+      ...(cookie ? { Cookie: cookie } : {}),
+    },
+    body: body || undefined,
+    cache: "no-store",
+  });
+
+  const text = await res.text();
+  // nginx 가 백엔드로 넘기지 않는 경로는 SPA 의 index.html 이 돌아온다 (BACKEND-NOTES B-16)
+  if (!text.trimStart().startsWith("{")) {
+    return failLive("INTERNAL_ERROR", `${upstream} 가 JSON 을 주지 않았습니다. nginx 가 이 경로를 백엔드로 넘기지 않는 것으로 보입니다 (B-16).`, 502, upstream);
+  }
+
+  const out = new NextResponse(text, { status: res.status, headers: { "Content-Type": "application/json" } });
+  for (const cookie of res.headers.getSetCookie()) out.headers.append("Set-Cookie", cookie.replace(REFRESH_PATH.from, REFRESH_PATH.to));
+  out.headers.set(LIVE_HEADERS.source, "live");
+  out.headers.set(LIVE_HEADERS.upstream, upstream);
+  return out;
 }
 
 // ---------------------------------------------------------------------------
@@ -123,9 +294,10 @@ interface BackendMusicSummary {
   artist: string | null;
   album: string | null;
   /** 장르 **이름** 배열. genreId 가 없다 — 지도 색칠에 필요하다 (BACKEND-NOTES B-21) */
-  genres: string[] | null;
   /** 검색 URL. 재생 URL 이 아니다 (규칙 6) */
   youtubeUrl: string | null;
+  /** 이 곡이 실린 앨범의 MusicBrainz 릴리스 ID (S15P21A405-518) */
+  albumMbid?: string | null;
   location: BackendLocation | null;
 }
 
@@ -142,6 +314,15 @@ export interface BackendMusicDetail extends BackendMusicSummary {
 /** `/api/music/detail` 응답 — 상세 필드가 평탄하게 펼쳐지고 neighbors 가 붙는다 */
 export interface BackendMusicDetailResponse extends BackendMusicDetail {
   neighbors: (BackendMusicSummary & { distance: number })[];
+  /** 요청한 사람이 좋아요를 눌렀는지 (S15P21A405-611). 옛 배포는 안 줄 수 있어 선택이다 */
+  liked?: boolean;
+}
+
+/** `POST /api/music/like` 응답 (S15P21A405-611). `liked` 는 **변경 후** 값이다 */
+export interface BackendMusicLikeResponse {
+  musicId: number;
+  liked: boolean;
+  likedAt: string | null;
 }
 
 /**
@@ -154,6 +335,9 @@ export interface BackendPlaylistDetailResponse {
   playlistName: string;
   musicCnt: number;
   totalDuration: number;
+  /** 좋아요 수 · 내가 눌렀는지 (S15P21A405-492, A-43). `isLiked` 는 **요청한 사람** 기준이다 */
+  likeCnt: number;
+  isLiked: boolean;
   musics: BackendMusicDetail[];
 }
 
@@ -192,6 +376,11 @@ export interface BackendMapPoint {
    * 그래서 아래에서 null 로 받아 둔다.
    */
   youtubeUrl?: string | null;
+  /**
+   * 이 곡이 실린 앨범의 MusicBrainz **릴리스** ID (S15P21A405-518).
+   * 2026-09-21 배포 확인 — 스키마에 `albumMbid` 로 있고 지도 응답 100건 전부 값이 차 있다.
+   */
+  albumMbid?: string | null;
   playable: boolean;
 }
 
@@ -209,6 +398,7 @@ export function toResidentPoint(p: BackendMapPoint): MapPoint {
     title: p.title,
     artist: p.artist ?? null,
     youtubeUrl: p.youtubeUrl ?? null,
+    albumMbid: p.albumMbid ?? null,
     playable: p.playable,
   };
 }
@@ -232,6 +422,7 @@ export function toMusic(res: BackendMusicDetail): Music {
   return {
     id: res.id,
     mbid: res.mbid,
+    albumMbid: res.albumMbid ?? null,
     title: res.title,
     artist: res.artist,
     releaseYear: res.releaseYear ?? null,
@@ -258,4 +449,153 @@ export function toMapPoint(music: BackendMusicSummary): MapPoint {
     youtubeUrl: music.youtubeUrl ?? null,
     playable: music.youtubeUrl != null,
   };
+}
+
+// ---------------------------------------------------------------------------
+// 사용자 (S15P21A405-462)
+// ---------------------------------------------------------------------------
+
+/**
+ * `GET /api/user/detail?email=` 응답 (2026-09-18 배포 스펙 `UserDetailResponse`).
+ *
+ * 우리 {@link User} 와 다른 점: `followerCnt`·`followingCnt`·`isFollowing`·`isMe` 가 더 오고,
+ * `updatedAt` 은 오지 않는다.
+ */
+export interface BackendUserDetail {
+  email: string;
+  name: string | null;
+  nickname: string | null;
+  tutorialCompleted: boolean;
+  lastActiveAt: string | null;
+  createdAt: string;
+  imageUrl: string | null;
+  followerCnt: number;
+  followingCnt: number;
+  isFollowing: boolean;
+  isMe: boolean;
+  /**
+   * 이 사람이 재생을 누른 곡 수 (S15P21A405-531). 배포 스키마의 `UserDetailResponse` 에 있는데
+   * 여기 없어서 **받고도 버리고 있었다** — 마이페이지의 탐험한 곡 수가 늘 0 이던 이유다.
+   * 옛 배포에는 없을 수 있어 optional 로 둔다.
+   */
+  playedMusicCnt?: number;
+  /**
+   * 이 사람이 **서비스에서 처음 재생한** 곡 수 (S15P21A405-619). 이미 남이 들은 곡은 세지 않고,
+   * 같은 곡을 여러 번 들어도 1곡이다 — 출처는 주간 발견왕과 같은 `music_discovery` 다.
+   * 백엔드가 S15P21A405-597 에서 넣어 줬다. 옛 배포에는 없을 수 있어 optional 로 둔다.
+   */
+  discoveredMusicCnt?: number;
+  /**
+   * 지금 접속해 있는가 (3차 계약 §4, S15P21A405-545). **소켓 생존 기준**이다.
+   * optional 인 이유는 이 필드가 없던 배포를 만날 수 있어서다 — 그때는 `false` 로 떨어진다.
+   */
+  isOnline?: boolean;
+}
+
+export function toUser(u: BackendUserDetail): User {
+  return {
+    email: u.email,
+    name: u.name,
+    nickname: u.nickname,
+    tutorialCompleted: u.tutorialCompleted,
+    lastActiveAt: u.lastActiveAt,
+    createdAt: u.createdAt,
+    // 백엔드 응답에 없다. lastActiveAt 으로 대신 채우면 "마지막 접속"이 "마지막 수정"으로 둔갑한다
+    updatedAt: null,
+    imageUrl: u.imageUrl,
+  };
+}
+
+const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 백엔드 사용자 상세 → 마이페이지·프로필이 쓰는 {@link UserProfile}.
+ *
+ * **백엔드에 없는 것은 지어내지 않는다** (BACKEND-NOTES A-35). 지금 듣는 곡·만남 횟수·따라가는
+ * 대상·대시보드 통계는 배포 API 에 아예 없어서 빈 값으로 둔다 — 목으로 채우면 실데이터인 줄 알고
+ * 보게 되고, 그게 이 프로젝트에서 제일 비싼 종류의 착각이다.
+ */
+export function toUserProfile(u: BackendUserDetail): UserProfile {
+  const joined = Date.parse(u.createdAt);
+  return {
+    ...toUser(u),
+    /**
+     * **서버가 준 값을 그대로 쓴다** (3차 계약 §4, S15P21A405-545).
+     *
+     * 예전에는 `lastActiveAt` 이 5분 안이면 접속 중으로 봤다 — 백엔드에 플래그가 없어서
+     * 가늠한 값이었는데, `lastActiveAt` 은 **로그인 시각**이라 애초에 다른 것을 재고 있었다.
+     * 지금은 소켓 생존(45초 수명·15초 갱신)이 기준이다.
+     *
+     * 아직 안 내려주는 배포를 만나면 `false` 다. 접속 중인 사람을 오프라인으로 보이게 하는
+     * 쪽이, 아무도 없는데 불이 들어오는 쪽보다 낫다 — 따라가기 버튼이 그 값으로 열린다.
+     */
+    isOnline: u.isOnline ?? false,
+    followerCount: u.followerCnt,
+    followingCount: u.followingCnt,
+    // "N일째 탐험중" — 가입 당일이 1일째다
+    daysSinceJoined: Number.isFinite(joined) ? Math.max(1, Math.floor((Date.now() - joined) / DAY_MS) + 1) : 1,
+    isFollowing: u.isFollowing,
+    nowPlaying: null,
+    meetingCount: null,
+    followingTarget: null,
+    dashboard: {
+      exploredCount: u.playedMusicCnt ?? null,
+      /**
+       * **이제 서버가 준다** (S15P21A405-619). 예전에는 배포 API 어디에도 없어서 null 로 막아
+       * 뒀는데(S15P21A405-531), 백엔드가 S15P21A405-597 에서 `discoveredMusicCnt` 를 넣었다.
+       *
+       * 없으면 여전히 null 이다. **0 으로 떨어뜨리지 않는다** — 그러면 "한 곡도 발견 못 했다"
+       * 는 없는 사실이 되고, 화면은 그 줄을 지우는 대신 0 을 적는다.
+       */
+      discoveredCount: u.discoveredMusicCnt ?? null,
+      moodPreference: [],
+    },
+  };
+}
+
+// ---------------------------------------------------------------------------
+// 플레이리스트 (S15P21A405-468)
+// ---------------------------------------------------------------------------
+
+/**
+ * `POST /api/playlist/like` 응답 (S15P21A405-492, A-41).
+ * `likeCnt` 는 **변경 후** 값이라 화면이 다시 조회하지 않고 바로 쓴다.
+ */
+export interface BackendPlaylistLikeResponse {
+  playlistId: number;
+  liked: boolean;
+  likeCnt: number;
+}
+
+/**
+ * `GET /api/playlist/liked?email=` 의 원소 (S15P21A405-492, A-44).
+ *
+ * **남이 만든 플리가 섞인다** — 좋아요는 남의 플리에도 누를 수 있어서 소유자 정보가 함께 온다.
+ * 정렬은 좋아요를 누른 시각 역순이고 페이지네이션이 없다.
+ */
+export interface BackendLikedPlaylistSummary {
+  playlistId: number;
+  playlistName: string;
+  musicCnt: number;
+  likeCnt: number;
+  ownerEmail: string;
+  ownerNickname: string | null;
+  likedAt: string;
+}
+
+/** `GET /api/playlist/search?email=` 의 원소. **좋아요·무드 태그·소유자 닉네임이 없다** (A-36) */
+export interface BackendPlaylistSummary {
+  playlistId: number;
+  playlistName: string;
+  musicCnt: number;
+  createdAt: string;
+}
+
+/**
+ * 백엔드 플리 요약 → 화면이 쓰는 {@link PlaylistSummary}.
+ * 좋아요 수와 소유자 닉네임은 응답에 없어서 null 이다 — 0 으로 채우면 "좋아요가 0개" 라는
+ * 없는 사실이 된다. 화면은 null 을 "모름" 으로 다룬다.
+ */
+export function toPlaylistSummary(p: BackendPlaylistSummary): PlaylistSummary {
+  return { id: p.playlistId, playlistName: p.playlistName, likeCnt: null, itemCount: p.musicCnt, ownerNickname: null };
 }

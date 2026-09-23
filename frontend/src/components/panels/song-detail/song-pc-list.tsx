@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ChevronDownIcon } from "@/components/common/icons";
+import InfoHint from "@/components/common/info-hint";
 import ProgressBar from "@/components/common/progress-bar";
 import SectionTitle from "@/components/common/section-title";
 import { pcAxisPair } from "@/constants";
@@ -15,7 +16,7 @@ interface SongPcListProps {
 
 /** 차트로 세울 개수. 이 곡을 가장 잘 설명하는 축 다섯 */
 const TOP = 5;
-/** 바를 꽉 채우는 치우침. 이보다 더 치우친 곡은 드물다 */
+/** 바를 꽉 채우는 쏠림. 이보다 더 쏠린 곡은 드물다 */
 const FULL_SD = 3;
 
 /**
@@ -25,9 +26,9 @@ const FULL_SD = 3;
  * 예전에는 `PC1` … 처럼 번호만 달고 앞에서부터 여섯 개를 잘랐다. 숫자만으로는 그 값이 무슨
  * 소리를 뜻하는지 알 수 없고, 앞 여섯 개가 꼭 그 곡을 설명하는 축도 아니다 — 0 근처에 있는
  * 축은 아무 말도 안 해 준다. 지도가 겹마다 쓰는 축 이름을 그대로 가져와(`pcAxisPair`)
- * 사용자가 보는 말과 지도를 맞추고, **치우친 순서**로 세운다.
+ * 사용자가 보는 말과 지도를 맞추고, **세게 쏠린 순서**로 세운다.
  *
- * 치우침은 원값 크기가 아니라 **축별 표준편차로 나눈 값**으로 잰다. 축마다 흩어진 폭이
+ * 쏠림은 원값 크기가 아니라 **축별 표준편차로 나눈 값**으로 잰다. 축마다 흩어진 폭이
  * 달라서(PC1 은 ±20 대, PC8 은 ±1 대) 원값끼리 견주면 폭이 큰 축이 늘 이긴다. 잣대는
  * 지도가 들고 있는 이 겹 상주 집합이다 (`pcStats`).
  *
@@ -69,8 +70,11 @@ export default function SongPcList({ items }: SongPcListProps) {
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionTitle tone="sentence" aside={`치우친 순 ${open ? rows.length : top.length}/${rows.length}`}>
-        이 곡은 이런 소리예요!
+      <SectionTitle tone="sentence" aside={`강한 특징 ${open ? rows.length : top.length}/${rows.length}`}>
+        이 곡은 이런 소리예요!{" "}
+        <InfoHint label="소리 특징 설명">
+          <b className="font-medium text-ink">소리 특징</b>은 같은 겹의 다른 곡들과 견줘 이 곡이 유난히 한쪽으로 쏠린 축이에요. 세게 쏠린 축부터 보여 줘요.
+        </InfoHint>
       </SectionTitle>
       <SongPcChart rows={top} />
       {rest.length > 0 && (
@@ -97,7 +101,7 @@ export default function SongPcList({ items }: SongPcListProps) {
             onClick={() => setOpen((v) => !v)}
             aria-expanded={open}
             aria-label={open ? "고정 주성분 접기" : "고정 주성분 더보기"}
-            className="grid h-7 w-full place-items-center rounded-box-xs text-ink-3 transition-colors duration-fast hover:bg-white/[.05] hover:text-ink"
+            className="grid h-7 w-full place-items-center rounded-pill text-ink-3 transition-colors duration-fast hover:bg-white/[.05] hover:text-ink"
           >
             <ChevronDownIcon className={`transition-transform duration-normal ease-spring ${open ? "rotate-180" : ""}`} />
           </button>

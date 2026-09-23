@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -Eeuo pipefail
+set -Eeuo pipefail 
 
 readonly DEPLOY_ROOT="/var/www/ody"
 readonly RELEASES_DIR="${DEPLOY_ROOT}/releases"
@@ -138,7 +138,6 @@ validate_release() {
 nginx_check() {
     nginx -t
 }
-
 
 frontend_service_exists() {
     systemctl cat "${FRONTEND_SERVICE}" >/dev/null 2>&1

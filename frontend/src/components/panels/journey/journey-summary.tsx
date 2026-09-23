@@ -2,11 +2,11 @@
 
 import Button from "@/components/common/button";
 import { PlayIcon } from "@/components/common/icons";
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { formatDuration } from "@/lib/format";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
+import { rememberMusicHints } from "@/lib/music-hints";
 import { usePlayerStore } from "@/stores/use-player-store";
 import type { JourneyRoute } from "@/types";
 
@@ -19,7 +19,6 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
   const playQueue = usePlayerStore((s) => s.playQueue);
   const detachContext = usePlayerStore((s) => s.detachContext);
   const clearConstellation = useMapStore((s) => s.clearConstellation);
-  const recordPlay = useRecordPlayMutation();
   const startActivity = useStartActivity();
 
   if (!route) return null;
@@ -27,9 +26,10 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
   // ACT-01: 다른 활동(따라가기·플리)이 진행 중이면 확인 후 멈추고 시작한다
   const handlePlay = () => {
     const ids = route.stops.map((s) => s.id);
+    // 정거장 제목을 미리 넘겨 둔다 — 곡이 넘어갈 때마다 `Track <id>` 가 스치지 않게 (S15P21A405-585)
+    rememberMusicHints(route.stops);
     startActivity("journey", `${route.startMusicId}-${route.endMusicId}`, () => {
       playQueue({ kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId }, ids);
-      recordPlay.mutate({ musicId: ids[0], source: "JOURNEY", playedMs: 0 });
     });
   };
 

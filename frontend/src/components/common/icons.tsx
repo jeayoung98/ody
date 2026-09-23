@@ -27,6 +27,14 @@ export const MouseWheelIcon = ({ size = 40, ...p }: P) => (
     <path d="M12 6.5v3" />
   </svg>
 );
+/** 점점점 — 더 볼 것이 있다는 표시. 누르면 옵션 메뉴가 뜬다 (S15P21A405-524) */
+export const MoreIcon = ({ size = 16, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2.6}>
+    <path d="M5 12h.01" />
+    <path d="M12 12h.01" />
+    <path d="M19 12h.01" />
+  </svg>
+);
 /** 내 위치로 가기 — 지도 앱의 "현재 위치" 조준선 */
 export const LocateIcon = ({ size = 16, ...p }: P) => (
   <svg {...base(size, p)}>
@@ -58,6 +66,16 @@ export const JourneyIcon = ({ size = 18, ...p }: P) => (
     <circle cx="5.5" cy="18.5" r="2.4" />
     <circle cx="18.5" cy="5.5" r="2.4" />
     <path d="M7.6 16.8C11 14 9 10.5 12.4 7.6" />
+  </svg>
+);
+/** 하단 탭의 "지도" (S15P21A405-417) — 별 넷을 이은 작은 별자리 */
+export const MapIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M4.5 16.5 9 8l4.5 4.5L20 3" />
+    <circle cx="4.5" cy="16.5" r="1.6" />
+    <circle cx="9" cy="8" r="1.6" />
+    <circle cx="13.5" cy="12.5" r="1.6" />
+    <circle cx="20" cy="3" r="1.6" />
   </svg>
 );
 export const RankIcon = ({ size = 18, ...p }: P) => (
@@ -157,6 +175,12 @@ export const FlagIcon = ({ size = 14, ...p }: P) => (
     <path d="M5 4h11l-2.2 3.6L16 11H5" />
   </svg>
 );
+/** 오른쪽 홑화살. 레이어 자취의 칸 사이를 잇는 표시 (S15P21A405-477) */
+export const ChevronRightIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={2}>
+    <path d="M9.5 6l6 6-6 6" />
+  </svg>
+);
 /** 왼쪽 홑화살. 오른쪽은 `rotate-180` 으로 돌려 쓴다 (`ChevronDownIcon` 과 같은 이유) */
 export const ChevronLeftIcon = ({ size = 14, ...p }: P) => (
   <svg {...base(size, p)} strokeWidth={2.1}>
@@ -229,5 +253,52 @@ export const SirenIcon = ({ size = 18, ...p }: P) => (
     <path d="M5.2 18.6h13.6" />
     <path d="M12 8.6V6.4" />
     <path d="M6.3 11.5 4.2 10.3M17.7 11.5l2.1-1.2" />
+  </svg>
+);
+
+/**
+ * 잡고 옮기는 손잡이 — 가로 세 줄 (S15P21A405-540).
+ *
+ * 줄이 셋인 것은 **오래된 약속**이다. 목록에서 이 모양은 메뉴가 아니라 "여기를 잡아라" 로
+ * 읽힌다. 다른 손잡이 관용구(점 여섯 개)보다 작은 크기에서 덜 뭉친다.
+ *
+ * 다른 아이콘보다 획을 얇게(1.7) 두었다. 줄이 셋이라 같은 굵기면 까맣게 뭉쳐 보인다.
+ */
+export const GripIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={1.7}>
+    <path d="M4 8h16" />
+    <path d="M4 12h16" />
+    <path d="M4 16h16" />
+  </svg>
+);
+
+/**
+ * 고양이 별자리 — 귀 둘·둥근 얼굴을 점으로 잇고 눈 둘은 떨어진 별로 둔 모양.
+ * 이벤트(별자리 콘테스트) 진입 버튼 (S15P21A405-602). 획은 살짝 얇게(1.6) — 점이 많아 굵으면 뭉친다.
+ */
+export const CatConstellationIcon = ({ size = 18, ...p }: P) => (
+  <svg {...base(size, p)} strokeWidth={1.6}>
+    <path d="M4.5 5.5 8 9.5h8l3.5-4-1 8.5-3.5 5h-6l-3.5-5z" />
+    {[
+      [4.5, 5.5],
+      [8, 9.5],
+      [16, 9.5],
+      [19.5, 5.5],
+      [18.5, 14],
+      [15, 19],
+      [9, 19],
+      [5.5, 14],
+    ].map(([cx, cy]) => (
+      <circle key={`${cx}-${cy}`} cx={cx} cy={cy} r="1.45" fill="currentColor" stroke="none" />
+    ))}
+    <circle cx="9.8" cy="13.6" r="1.1" fill="currentColor" stroke="none" />
+    <circle cx="14.2" cy="13.6" r="1.1" fill="currentColor" stroke="none" />
+  </svg>
+);
+
+/** 하트 — 곡 좋아요 (S15P21A405-611). `filled` 면 속을 채운다 */
+export const HeartIcon = ({ size = 16, filled = false, ...p }: P & { filled?: boolean }) => (
+  <svg {...base(size, p)} fill={filled ? "currentColor" : "none"}>
+    <path d="M12 20.3S4.5 15.6 4.5 10.2A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.4-7.5 10.1-7.5 10.1z" />
   </svg>
 );

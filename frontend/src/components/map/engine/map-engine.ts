@@ -1,10 +1,20 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, GHOST, HOLD, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
-import type { ConstellationPoint, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
+import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
+import { arcBetween, atArc, type Arc } from "./arc";
+import { shouldRestartFollow } from "./follow-restart";
+import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
+import { nearestLayerWith } from "./reveal-layer";
+import { wheelIntent } from "./ride-zoom";
+import { acceptsAnchor } from "./stale-anchor";
+import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
+import { starMag } from "../render/star-look";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
+/** 스프링 — 목표를 10% 쯤 지나쳤다 돌아온다. 겹친 표식이 갈라질 때의 "도잉" (S15P21A405-618) */
+const springOut = (t: number) => (t >= 1 ? 1 : 1 - Math.exp(-5 * t) * Math.cos(7 * t));
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
@@ -89,7 +99,17 @@ export interface VisibleFriend {
   py: number;
   /** 진행 방향(rad). 우주선 기수 */
   heading: number;
+  /** 서 있는 별의 깊이 크기 배율({@link MapEngine.depthScaleOf}). 반지름·잔상에 곱한다 (S15P21A405-614) */
+  scale: number;
   isLeader: boolean;
+  /**
+   * 이 표식 **뒤에 겹쳐 선 사람들** (S15P21A405-550). 대표는 빼고 담는다.
+   *
+   * 예전에는 겹치면 그냥 버렸다. 이 지도는 비슷한 음악을 듣는 사람끼리 붙어 있는 것이
+   * 원리라 몰림이 기본값인데, 버리면 **같은 곡을 듣는 사람이 영영 안 보인다.**
+   * 명단을 들고 있으면 나중에 눌러서 펼치는 것도 여기서 나온다.
+   */
+  stacked: NearbyUser[];
 }
 
 export interface VisibleStar {
@@ -107,11 +127,20 @@ export interface VisibleStar {
  */
 export interface FollowState {
   leader: NearbyUser;
+  /**
+   * **서버가 몬다** (S15P21A405-530). `true` 면 아래 `phase`·`nextAt` 로 도는 목 시뮬레이션이
+   * 멎고, 인솔자의 동작은 소켓이 알려줄 때만 일어난다 (`rideTo` · `rideViewing`).
+   *
+   * 목을 지우지 않고 깃발로 가른 이유는 **잠금이 같은 자리에 걸려 있기 때문**이다.
+   * `this.follow` 하나가 팬·줌·레이어 이동·내 위치로 가기를 전부 막고 있어서(2차 명세 §6),
+   * 목만 들어내면 그 잠금까지 같이 사라진다.
+   */
+  driven: boolean;
   /** 인솔자가 지금 보고 있는 상세 곡 (뷰포트·우측 패널 기준) */
   viewingMusicId: number;
   /** 인솔자가 지금 재생 중인 곡 (우주선 위치 기준) */
   playingMusicId: number;
-  /** 다음에 일어날 인솔자 동작 */
+  /** 다음에 일어날 인솔자 동작. `driven` 이면 쓰이지 않는다 */
   phase: "view" | "play";
   /** 그 동작이 일어날 시각 */
   nextAt: number;
@@ -121,6 +150,32 @@ export interface FollowState {
   /** 방문한 곡 (하차 시 저장 대기) */
   visited: number[];
 }
+
+/**
+ * 지도가 **네 변에서 얼마나 가려져 있는지**(px) — {@link MapEngine.freeRect} 의 입력이다
+ * (S15P21A405-414).
+ *
+ * 데스크톱에서 움직이는 것은 `right`(우측 패널) 하나뿐이고, 모바일에서는 `bottom`(바텀시트)이
+ * 움직인다. `top` 은 늘 덮여 있는 상단 HUD 두께라 지금은 고정값이다. `left` 는 아직 아무것도
+ * 쓰지 않지만, 좌하단 계기판을 나중에 이 모델로 넣게 되면 그 자리가 된다.
+ */
+export interface Occlusion {
+  top: number;
+  right: number;
+  bottom: number;
+  left: number;
+}
+
+/** 보간 루프가 도는 변 목록. `Object.keys` 를 쓰면 타입이 string 으로 풀려 인덱싱이 막힌다 */
+const OCCLUSION_EDGES = ["top", "right", "bottom", "left"] as const;
+
+/**
+ * 아무도 값을 주지 않았을 때의 가림.
+ *
+ * `right: 76` 은 예전 `occludedRight` 의 초깃값을 그대로 가져온 것이다 — 첫 프레임에 `MainScreen`
+ * 이 실제 값을 내려주기 전까지만 쓰인다. 위아래는 {@link HUD_OCCLUSION}, 왼쪽은 0 이다.
+ */
+const DEFAULT_OCCLUSION: Occlusion = { top: HUD_OCCLUSION.top, right: 76, bottom: HUD_OCCLUSION.bottom, left: 0 };
 
 /**
  * 지도 엔진 — 좌표·카메라·레이어(재투영)·모프·따라가기·친구 배치를 한 곳에서 다룬다.
@@ -148,14 +203,18 @@ export class MapEngine {
 
   W = 1;
   H = 1;
-  occludedRight = 76;
+  /**
+   * 지금 지도가 가려져 있는 두께 (`occludedTarget` 을 프레임마다 따라간다).
+   * 읽는 곳은 {@link freeRect} 하나다 — 다른 데서 직접 보지 않는다.
+   */
+  private occluded: Occlusion = { ...DEFAULT_OCCLUSION };
   /**
    * 지도 위에 떠 있는 HUD 상자들 (화면 좌표). 화면 밖 표식을 여기에 가리지 않게 놓는다.
    * 상수로 박지 않고 **실제 DOM 을 재서** 받는다 — 패널이 열리고 닫히면 달라지기 때문이다.
    */
   private obstacles: { x0: number; y0: number; x1: number; y1: number }[] = [];
-  /** 패널이 열리고 닫히면 여기가 먼저 바뀌고 occludedRight 가 프레임마다 따라간다 */
-  private occludedTarget = 76;
+  /** 패널·시트가 움직이면 여기가 먼저 바뀌고 {@link occluded} 가 프레임마다 따라간다 */
+  private occludedTarget: Occlusion = { ...DEFAULT_OCCLUSION };
 
   layer = 0;
   cam: MapCamera = { cx: 0, cy: 0, s: 100 };
@@ -270,6 +329,8 @@ export class MapEngine {
     offTo: { x: number; y: number };
     offT0: number;
     pan: { x: number; y: number };
+    /** 고리를 얼마나 벌려 놓았나 (S15P21A405-593). 1 이 기본, 크면 넓게 퍼진다 */
+    zoom: number;
   } | null = null;
   /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
   route: number[] = [];
@@ -287,17 +348,48 @@ export class MapEngine {
 
   friends: NearbyUser[] = [];
   private friendsLayer = -1;
-  private friendPos = new Map<string, { x: number; y: number; heading: number }>();
+  /** "N명" 뭉치 (CLUSTERED 모드). 원시 PC 좌표다 */
+  crowd: CrowdCell[] = [];
+  crowdLayer = -1;
+  /**
+   * 사람마다의 **화면 자리와 진행 중인 비행** (S15P21A405-553).
+   *
+   * `mv` 가 있으면 지금 곡선을 타고 옮겨 가는 중이다. 예전에는 이 맵을 목록 갱신 때마다
+   * 통째로 비웠는데, 그러면 "직전에 어디 있었는지" 가 사라져 10초마다 매번 처음 보는 사람처럼
+   * 다시 놓게 된다 — 그게 뚝 사라졌다 뚝 나타나던 원인이다.
+   */
+  private friendPos = new Map<string, { x: number; y: number; heading: number; mv?: Arc }>();
+  /**
+   * 지난 프레임의 **표식 배치** — 누가 제 모습으로 서고 누가 그 자리에 묶였는지 (S15P21A405-566).
+   * 배율이 그대로면 이걸 다시 쓴다. 자리만 갱신하므로 사람이 움직여도 묶임이 안 흔들린다.
+   */
+  private friendPlan: FriendPlanEntry[] | null = null;
+  /** 그 배치를 정할 때의 배율. 이 값이 바뀌면 다시 정한다 */
+  private friendPlanScale = Number.NaN;
   private anchorCache = new Map<string, number>();
   private aliveIdx: number[] = [];
   visFriends: VisibleFriend[] = [];
+  /** 펼쳐 둔 묶음 — 대표 이메일과 펼치기 시작 시각 (S15P21A405-618). null 이면 전부 접혀 있다 */
+  private expandedStack: { email: string; since: number } | null = null;
   /** 이 레이어의 대표곡 (커버) */
   repIds = new Set<number>();
   private repLayer = -1;
   /** 레이어 전환 시 커버·프로필 페이드. 모프 중 0으로, 새 레이어 데이터가 오면 1로 */
   coverAlpha = 0;
   friendAlpha = 0;
+  /**
+   * **나를 따라오는 인원** (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
+   *
+   * 스토어(`use-follow-store.followerCount`)를 엔진이 직접 읽지 않는다 — 엔진은 화면 밖 상태를
+   * 모르는 채로 두는 것이 이 클래스의 전제다. 넣어 주는 쪽은 `map-view` 다.
+   */
+  myRiders = 0;
   follow: FollowState | null = null;
+  /**
+   * `follow` 를 건 시점의 겹. 좌표계가 겹마다 달라서, 겹이 바뀌면 다시 걸어야 한다
+   * (S15P21A405-559). `follow` 안에 두지 않은 이유는 그 타입이 명세가 정한 모양이기 때문이다.
+   */
+  private followLayer = -1;
   onFollowEnd: ((reason: string) => void) | null = null;
   onArrive: ((musicId: number) => void) | null = null;
   /** 인솔자가 보고 있는 곡이 바뀌면 알린다 (우측 패널에 상세를 띄우기 위해) */
@@ -338,20 +430,30 @@ export class MapEngine {
     this.H = Math.max(1, H);
     if (!this.inited || this.anim) return;
     if ((wasUnsized || !this.touched) && this.myId != null) {
-      this.cam = this.fitCam(this.layer, this.subset, this.fitAnchor(this.subset, this.layer));
+      const anchor = this.fitAnchor(this.subset, this.layer);
+      this.cam = this.fitCam(this.layer, this.subset, anchor);
       this.entryS = this.cam.s;
+      // 0겹은 첫 화면 규칙을 그대로 지킨다 — entryS 는 전역 맞춤, 카메라만 조임 (S15P21A405-469)
+      if (this.layer === 0) this.cam = this.startCam0(this.subset, anchor);
     }
     this.project();
   }
 
   /**
-   * 우측 패널 폭 변화. 값을 바로 갈아끼우면 freeRect 를 쓰는 것들(별자리 배치·주변 탐색 고리)이
-   * 한 프레임에 순간이동한다 — 목표만 잡아두고 frame() 에서 따라가게 한다.
+   * 지도를 덮고 있는 두께가 바뀌었다고 알린다. 준 변만 바뀌고 나머지는 그대로다.
+   *
+   * **기본은 `"ease"`** — 값을 바로 갈아끼우면 `freeRect` 를 쓰는 것들(별자리 배치·주변 탐색
+   * 고리·카메라 중앙)이 한 프레임에 순간이동한다. 목표만 잡아 두고 {@link frame} 에서 따라간다.
+   *
+   * **손가락을 따라가는 동안에는 `"now"`** (S15P21A405-414). 바텀시트를 끄는 중에 완충을 태우면
+   * 시트는 손끝에 붙어 있는데 지도만 늦게 와서 미끄러져 보인다. 끄는 동안은 즉시, 손을 떼고
+   * 단계에 붙을 때는 `"ease"` 로 부르면 된다.
+   *
+   * 첫 설정(`!inited`)은 따라갈 이전 값이 없으므로 언제나 즉시다.
    */
-  setOcclusion(right: number) {
-    this.occludedTarget = right;
-    // 첫 설정은 애니메이션 없이 바로
-    if (!this.inited) this.occludedRight = right;
+  setOcclusion(next: Partial<Occlusion>, mode: "ease" | "now" = "ease") {
+    this.occludedTarget = { ...this.occludedTarget, ...next };
+    if (mode === "now" || !this.inited) this.occluded = { ...this.occludedTarget };
   }
 
   /**
@@ -365,17 +467,10 @@ export class MapEngine {
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
-    // 깊이는 musicId 로 결정한다 (새로고침해도 같은 하늘)
+    // 깊이는 별 크기 등급에서 나온다 — 큰 별이 가깝다(z>0). 크기와 같은 해시라 새로고침해도 같은 하늘이고,
+    // 화면을 끌면 큰 별은 빨리, 작은 별은 천천히 지나가 겹겹의 원근으로 읽힌다 (S15P21A405-609)
     this.z = growF(this.z, this.N, keep);
-    for (let i = keep; i < this.N; i++) {
-      let h = (songs[i].musicId * 2654435761) >>> 0;
-      let g = 0;
-      for (let k = 0; k < 4; k++) {
-        h = (h * 1664525 + 1013904223) >>> 0;
-        g += h / 0xffffffff;
-      }
-      this.z[i] = ((g - 2) / 1.6) * 0.75;
-    }
+    for (let i = keep; i < this.N; i++) this.z[i] = (starMag(songs[i]) - 0.5) * 2;
     this.pos = growF(this.pos, this.N * 2, keep * 2);
     this.from = growF(this.from, this.N * 2, keep * 2);
     this.to = growF(this.to, this.N * 2, keep * 2);
@@ -409,8 +504,9 @@ export class MapEngine {
       const m = this.songs[this.index.get(this.myId)!];
       this.me = { x: m.pc[0], y: m.pc[1] };
     }
-    this.cam = this.fitCam(0, this.subset, anchor);
-    this.entryS = this.cam.s;
+    // entryS 는 전역 맞춤이고 첫 화면만 조인다 (S15P21A405-469, `startCam0`)
+    this.entryS = this.fitCam(0, this.subset, anchor).s;
+    this.cam = this.startCam0(this.subset, anchor);
     this.inited = true;
     this.rebuildAliveIdx();
     this.project();
@@ -533,11 +629,54 @@ export class MapEngine {
   }
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
+  /** 나를 따라오는 인원 (S15P21A405-557). 화면 쪽 스토어를 엔진이 직접 읽지 않으려고 둔 통로다 */
+  setMyRiders(n: number) {
+    this.myRiders = Math.max(0, n);
+  }
+
   setFriends(layer: number, friends: NearbyUser[]) {
+    /**
+     * **겹이 바뀔 때만 자리를 비운다** (S15P21A405-553). 좌표계가 겹마다 다르므로 그때는
+     * 버려야 맞지만, 같은 겹에서 목록만 다시 받은 것이라면 자리를 이어가야 한다 — 비우면
+     * 이동이라는 개념 자체가 없어져 사람이 순간이동한다.
+     *
+     * 목록에서 빠진 사람은 정리한다. 안 하면 오래 켜 둘수록 떠난 사람의 자리가 쌓인다.
+     */
+    if (layer !== this.friendsLayer) this.friendPos.clear();
+    else {
+      const here = new Set(friends.map((f) => f.email));
+      // 인솔자는 목록에 없다 (요청자 제외 규칙) — 지우면 우주선이 자리를 잃는다
+      const leader = this.follow?.leader.email;
+      for (const email of this.friendPos.keys()) if (!here.has(email) && email !== leader) this.friendPos.delete(email);
+    }
     this.friends = friends;
     this.friendsLayer = layer;
-    this.friendPos.clear();
     this.anchorCache.clear();
+  }
+
+  /**
+   * 사람이 많거나 화면이 넓을 때 오는 **"N명" 뭉치** (S15P21A405-482, 실시간 작업명세 §5.2 B).
+   *
+   * 이 모드에서는 개별 사람 정보가 오지 않는다. `friends` 와 **둘 중 하나만** 차 있다 —
+   * 서버가 `INDIVIDUAL`·`CLUSTERED` 중 하나로 답하기 때문이다.
+   */
+  setCrowd(layer: number, cells: CrowdCell[]) {
+    this.crowd = cells;
+    this.crowdLayer = layer;
+  }
+
+  /**
+   * 이 곡의 상주 집합 원소 — 이 겹에 있으면 (S15P21A405-518·527).
+   *
+   * **지도 밖 화면이 이미 들고 있는 값을 빌려 쓰는 창구다.** 곡 상세를 열 때 제목·가수·앨범
+   * 커버는 이 점에 다 들어 있는데, 그걸 안 쓰면 `/bff/music/{id}` 를 기다리는 동안 화면이 빈다.
+   * 주변 곡 카드도 마찬가지다 — 그쪽 응답(`NeighborTrack`)에는 `albumMbid` 가 아예 없다.
+   *
+   * 이 겹에 없는 곡(고스트·검색 결과)이면 null 이고, 부르는 쪽이 평소대로 응답을 기다린다.
+   */
+  pointOf(musicId: number): MapPoint | null {
+    const i = this.index.get(musicId);
+    return i == null ? null : this.songs[i];
   }
 
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
@@ -547,21 +686,17 @@ export class MapEngine {
   }
 
   /**
-   * 목 폴백: 사용자의 곡이 이 레이어 상주 집합에 없으면 이메일 해시로 상주 곡 하나를 정해 그 자리에 둔다.
-   * 실서비스는 백엔드가 현재 영역의 사용자만 내려주므로 필요 없다.
+   * 그 사람을 찍을 자리 (S15P21A405-482, 실시간 작업명세 §5.6).
+   *
+   * 둘 중 하나다. 그 사람의 곡이 이 겹 상주 집합에 있으면 **그 별 자리**, 없으면 서버가 준
+   * 원시 PC 좌표를 그대로 쓴다.
+   *
+   * **이메일 해시 폴백을 걷어냈다.** 목 시절에는 상주 집합에 없는 사람을 해시로 고른 아무 별에나
+   * 붙였는데, 실서비스에서는 서버가 진짜 좌표를 주므로 그 자리가 곧 거짓말이 된다.
    */
   private anchorFor(u: NearbyUser): { x: number; y: number } | null {
     if (this.isAlive(u.musicId)) return this.worldOf(u.musicId);
-    let idx = this.anchorCache.get(u.email);
-    if (idx == null) {
-      if (!this.aliveIdx.length) return null;
-      let h = 2166136261;
-      for (const ch of u.email) h = ((h ^ ch.charCodeAt(0)) * 16777619) >>> 0;
-      idx = this.aliveIdx[h % this.aliveIdx.length];
-      this.anchorCache.set(u.email, idx);
-    }
-    const s = this.songs[idx];
-    return { x: s.pc[this.dx()], y: s.pc[this.dy()] };
+    return u.x != null && u.y != null ? { x: u.x, y: u.y } : null;
   }
 
   private rebuildAliveIdx() {
@@ -765,6 +900,7 @@ export class MapEngine {
       offTo: { x: 0, y: 0 },
       offT0: now,
       pan: { x: 0, y: 0 },
+      zoom: 1,
     };
     this.nearby = { centerId, ids };
     this.selectedId = centerId;
@@ -822,20 +958,70 @@ export class MapEngine {
     return null;
   }
 
+  /**
+   * 주변 탐색을 **확대한다** (S15P21A405-593).
+   *
+   * 처음에는 고리 반지름만 키웠다. 그랬더니 중심 별도 제목도 배경 별밭도 그대로인 채
+   * **살만 길어져서** "확대가 아니라 줄이 늘어난 것" 으로 보였다 — 이 뷰는 카메라가 아니라
+   * 화면 크기에서 반지름을 뽑아 세운 배치라(`freeRect`) 확대할 카메라가 없었기 때문이다.
+   *
+   * 그래서 **배치는 그대로 두고 화면을 통째로 키운다** ({@link probeView}). 캔버스 변환 한 번이라
+   * 배경·별·글씨·선이 같은 비율로 커진다. 배치 좌표(`probePos`)는 확대 전 자리 그대로이고,
+   * 클릭은 {@link unview} 가 눌린 자리를 확대 전으로 되돌려 맞춘다.
+   */
+  probeZoom(factor: number): number {
+    const p = this.probe;
+    if (!p || p.exitingAt) return 1;
+    p.zoom = Math.min(PROBE.maxZoom, Math.max(PROBE.minZoom, p.zoom * factor));
+    return p.zoom;
+  }
+
+  /**
+   * 주변 탐색을 들여다보는 **화면 확대**와 그 중심 (S15P21A405-593). 확대 중이 아니면 null.
+   *
+   * 중심은 지금 고리의 중심 별이다 — 키워도 보고 있던 별이 제자리에 남는다.
+   * **1 배 아래로는 안 내려간다.** 줄이면 배경 별밭 바깥의 빈 자리가 드러나는데, 어차피
+   * 바닥(`PROBE.minZoom`)에 닿는 입력은 뷰를 나가는 뜻이다 (`map-view` 의 휠 처리).
+   */
+  probeView(): { cx: number; cy: number; z: number } | null {
+    const p = this.probe;
+    if (!p || p.exitingAt || p.zoom <= 1) return null;
+    const cur = this.currentRing();
+    const c = cur ? this.probePos(cur.centerId) : null;
+    const f = this.freeRect();
+    return { cx: c?.x ?? f.cx, cy: c?.y ?? f.cy, z: p.zoom };
+  }
+
+  /**
+   * 눌린 화면 좌표 → **확대 전 좌표** (S15P21A405-593).
+   *
+   * 확대는 캔버스 변환으로만 걸리므로 `visible`·`hopLink` 같은 판정용 좌표는 확대 전 자리에
+   * 그대로 남는다. 들어오는 점만 되돌리면 그리기와 클릭이 어긋나지 않는다.
+   */
+  private unview(mx: number, my: number): [number, number] {
+    const v = this.probeView();
+    if (!v) return [mx, my];
+    return [v.cx + (mx - v.cx) / v.z, v.cy + (my - v.cy) / v.z];
+  }
+
   /** 주변 탐색 중 드래그 — 오버레이 전체를 민다. 고리 하나 반지름 안에서만 (다 밀어내면 빈 화면이 된다) */
   probePan(dx: number, dy: number) {
     const p = this.probe;
     if (!p || p.exitingAt) return;
     const f = this.freeRect();
     const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
-    p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx));
-    p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy));
+    // 손가락이 민 것은 **확대된 화면의 px** 이다 — 배치는 확대 전 공간이므로 배율로 나눠 단위를
+    // 맞춘다. 안 그러면 키워 놓을수록 같은 손짓이 몇 배로 밀린다
+    const z = Math.max(1, p.zoom);
+    p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx / z));
+    p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy / z));
   }
 
   /** 오버레이 공간 → 화면 중심 기준 이동량. 새 중심으로 미끄러지는 중이면 그 사이 값 */
   private probeOffset(now = performance.now()) {
     const p = this.probe!;
     const k = easeInOut(Math.min(1, (now - p.offT0) / PROBE.enterMs));
+    // `pan` 은 `probePan` 에서 이미 오버레이 공간으로 환산해 둔다 (S15P21A405-593)
     return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
   }
 
@@ -927,6 +1113,7 @@ export class MapEngine {
     if (!sl) return real;
     const f = this.freeRect();
     const off = this.probeOffset();
+    // 배치는 **확대 전 자리**다 (S15P21A405-593). 확대는 캔버스 변환이 통째로 건다 (`probeView`)
     const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
     // 밀려나는 고리의 곡도 제자리로 돌아가지 않고 **그 자리에서 옅어진다** — 돌아가면 화면을 가로질러 튄다
     if (p.exitingAt) {
@@ -1192,6 +1379,7 @@ export class MapEngine {
 
   /** 고스트별 클릭 판정 — 맞으면 그 곡 ID */
   hitGhost(mx: number, my: number): number | null {
+    [mx, my] = this.unview(mx, my);
     const p = this.ghostPos();
     if (!p || !this.ghost) return null;
     return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
@@ -1277,7 +1465,7 @@ export class MapEngine {
       }
     }
     this.meHop = null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
     const fl = this.meFlight;
     return { px, py, from: fl ? this.worldToScreen(fl.ax, fl.ay) : null, onRing: false };
   }
@@ -1301,7 +1489,7 @@ export class MapEngine {
     if (elsewhere) {
       dir = this.awayDir(id);
     } else {
-      const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+      const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
       const f = this.freeRect();
       const m = ME_OFFSCREEN.inset;
       if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
@@ -1343,10 +1531,24 @@ export class MapEngine {
     return !!this.constellation && !this.constellation.exitingAt;
   }
 
+  /**
+   * 좌하단 계기판이 가리는 폭. **화면에 계기판이 없으면 0 이다** (S15P21A405-417).
+   *
+   * 좁은 화면에서는 계기판을 걷어냈는데(`minimap/minimap-panel.tsx`) 이 값이 260 으로
+   * 남아 있어서, 375px 폰에서 별자리를 놓을 폭이 `375 − 45 − 260 = 70px` 이 됐다.
+   * 경로가 점 하나로 뭉쳐 보이던 원인이다. 화면에 무엇이 떠 있는지는 엔진이 모르므로
+   * 재는 쪽(`map-view.tsx`)이 알려 준다.
+   */
+  private instrumentInset: number = CONSTELLATION.instrumentInsetPx;
+
+  setInstrumentInset(px: number) {
+    this.instrumentInset = px;
+  }
+
   /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
   private constellationRect() {
     const base = this.freeRect();
-    const x0 = base.x0 + CONSTELLATION.instrumentInsetPx;
+    const x0 = base.x0 + this.instrumentInset;
     const y1 = base.y1 - 20;
     return { x0, y0: base.y0, x1: base.x1, y1, cx: (x0 + base.x1) / 2, cy: (base.y0 + y1) / 2 };
   }
@@ -1359,17 +1561,30 @@ export class MapEngine {
     return this.layer * 2 + 1;
   }
 
-  /** 패널·HUD를 뺀 "실제로 지도가 보이는 사각형" */
+  /**
+   * 패널·HUD를 뺀 **"실제로 지도가 보이는 사각형"**. 이 클래스에서 "어디에 놓을지" 를 정하는
+   * 것들이 전부 이걸 읽는다 — 카메라 한계, 주변 탐색 고리, 별자리, 파고들 때 맞출 배율,
+   * 화면 밖 표식, 튜토리얼이 짚을 별, 게이트 판정까지.
+   *
+   * **네 변이 다 움직인다** (S15P21A405-414). 예전에는 우측만 변수고 위아래는 `58`·`92` 로
+   * 박혀 있었다 — 열고 닫히는 것이 우측 패널뿐이었기 때문이다. 모바일에서는 그 패널이
+   * 바텀시트로 내려가 아래를 덮으므로 그 모델로는 표현이 안 된다.
+   *
+   * **최소 120px 는 남긴다.** 시트를 끝까지 올려 덮어도 사각형이 뒤집히거나 0 이 되면 그걸 읽는
+   * 스물몇 군데가 전부 NaN·무한대로 번진다. 좁아도 유효한 사각형이 나가는 편이 낫다.
+   */
   freeRect() {
-    const x0 = 0;
-    const x1 = Math.max(120, this.W - this.occludedRight);
-    const y0 = 58;
-    const y1 = Math.max(y0 + 120, this.H - 92);
+    const o = this.occluded;
+    const x0 = o.left;
+    const x1 = Math.max(x0 + 120, this.W - o.right);
+    const y0 = o.top;
+    const y1 = Math.max(y0 + 120, this.H - o.bottom);
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
   }
 
-  worldToScreen(x: number, y: number, cam = this.cam) {
-    return { px: this.W / 2 + (x - cam.cx) * cam.s, py: this.H / 2 - (y - cam.cy) * cam.s };
+  /** `p` 는 깊이 시차 배율({@link parOf}). 별 위에 서는 것(나·사람·선택 링)은 그 별의 값을 넘겨야 별과 같이 움직인다 */
+  worldToScreen(x: number, y: number, cam = this.cam, p = 1) {
+    return { px: this.W / 2 + (x - cam.cx) * cam.s * p, py: this.H / 2 - (y - cam.cy) * cam.s * p };
   }
 
   screenToWorld(px: number, py: number, cam = this.cam) {
@@ -1380,7 +1595,7 @@ export class MapEngine {
    * 지금 화면에 담긴 영역을 이 겹의 축 범위로 (countInView 가 세는 사각형과 같다).
    * 파고들 때 이 범위를 누적에 쌓아 다음 겹 상주 집합을 요청한다.
    */
-  private viewBox(): LayerBox {
+  viewBox(): LayerBox {
     const f = this.freeRect();
     const lo = this.screenToWorld(f.x0, f.y1);
     const hi = this.screenToWorld(f.x1, f.y0);
@@ -1390,6 +1605,23 @@ export class MapEngine {
   /** 깊이 시차 — 앞쪽(z>0) 별이 조금 더 크게 움직인다 (프로토타입 par) */
   private par(i: number) {
     return 1 + this.z[i] * STAR_VIEW.parallax;
+  }
+
+  /** 그 곡의 깊이 시차 배율. 상주 집합에 없는 곡은 기준 평면(1) */
+  parOf(id: number | null): number {
+    const i = id == null ? undefined : this.index.get(id);
+    return i == null ? 1 : this.par(i);
+  }
+
+  /** 깊이 크기 배율 — 별 위에 서는 것(커버·사람)이 가까운 별 위에서 커진다 (S15P21A405-614) */
+  depthScale(i: number): number {
+    return 1 + this.z[i] * STAR_VIEW.depthSize;
+  }
+
+  /** {@link depthScale} 을 곡 id 로. 상주 집합에 없는 곡은 기준 평면(1) */
+  depthScaleOf(id: number | null): number {
+    const i = id == null ? undefined : this.index.get(id);
+    return i == null ? 1 : this.depthScale(i);
   }
 
   private proj(i: number, layer: number, cam: MapCamera, out: Float32Array, k: number) {
@@ -1409,6 +1641,16 @@ export class MapEngine {
   }
 
   /** 곡의 현재 레이어 월드 좌표 */
+  /**
+   * 그 곡의 장르 (S15P21A405-482). 실시간으로 받은 사람의 헬멧 색을 정하는 데 쓴다 —
+   * 서버는 사람의 장르를 주지 않고 듣는 곡만 주므로, 상주 집합에서 곡을 찾아 그 장르를 쓴다.
+   * 상주 집합 밖의 곡이면 알 수 없어 `null` 이다.
+   */
+  genreOf(id: number): number | null {
+    const i = this.index.get(id);
+    return i == null ? null : this.songs[i].genreId;
+  }
+
   worldOf(id: number): { x: number; y: number } | null {
     const i = this.index.get(id);
     if (i == null) return null;
@@ -1419,6 +1661,29 @@ export class MapEngine {
   isAlive(id: number) {
     const i = this.index.get(id);
     return i != null && this.subset[i] === 1;
+  }
+
+  /**
+   * 곡 하나를 **이 자리에서 조용히 뺀다** (S15P21A405-544). 못 튼다고 판명된 곡에 쓴다.
+   *
+   * `setLayerSongs` 에 한 곡 짧은 목록을 다시 주는 길도 있지만 그러면 **겹 전환 연출이 통째로
+   * 다시 돈다** — 곡 하나 빠졌다고 지도가 모프하고 "상주 N곡" 안내까지 뜬다. 여기는 마스크
+   * 한 칸만 끄고 다시 그린다.
+   *
+   * 전환 중이면 **도착할 집합에서도** 뺀다. 안 그러면 전환이 끝나는 순간 그 별이 되살아난다.
+   *
+   * @returns 실제로 뺐으면 true. 이 겹에 없던 곡이면 false
+   */
+  hideSong(musicId: number): boolean {
+    const i = this.index.get(musicId);
+    if (i == null) return false;
+    const inAnim = this.anim != null && this.anim.subset[i] === 1;
+    if (this.subset[i] !== 1 && !inAnim) return false;
+    this.subset[i] = 0;
+    if (this.anim) this.anim.subset[i] = 0;
+    this.rebuildAliveIdx();
+    this.project();
+    return true;
   }
 
   private centerMost() {
@@ -1460,6 +1725,26 @@ export class MapEngine {
     return this.saneCam({ cx: b.cx - (f.cx - this.W / 2) / b.s, cy: b.cy + (f.cy - this.H / 2) / b.s, s: b.s });
   }
 
+  /**
+   * 0겹 **첫 화면**의 카메라 (S15P21A405-469). 기준 곡은 `fitCam` 과 같고 배율만 조인다.
+   *
+   * `fitCam` 의 0겹 맞춤은 구름이 다 들어오게 맞춘다. 그런데 상주 집합의 분위수 상자는 거의
+   * 정사각인데 화면은 2배 넘게 가로로 길어서, 실측상 첫 화면이 **가로 30% · 세로 62%** 만 차고
+   * 좌우가 통째로 비었다 — 지도가 줌아웃된 채로 열린 것처럼 보인다. 그래서 첫 화면만
+   * **긴 쪽을 채우는 배율**로 연다. 짧은 쪽으로는 넘쳐서 상주 집합의 절반가량이 화면 밖이다.
+   *
+   * **`entryS` 는 건드리지 않는다.** 줌 한계(`zoomRange`)·파고들기 임계(`gateMinZoom`)·
+   * 떠오르기 압력(`riseScaleRatio`)·곡 맞춤(`FOCUS.zoomMul`)이 전부 `entryS` 대비라, 그걸 같이
+   * 조이면 "줌아웃해서 전체를 본다" 가 막히고 파고들기 임계까지 그만큼 깊어진다.
+   * 조이는 건 첫 프레임의 카메라뿐이고, 휠을 뒤로 굴리면 예전처럼 전역이 들어온다.
+   */
+  private startCam0(mask: Uint8Array<ArrayBufferLike>, centerId: number): MapCamera {
+    const s = this.fitBox(0, 1, mask).sCover;
+    const c = this.songs[this.index.get(centerId)!];
+    const f = this.freeRect();
+    return this.saneCam({ cx: c.pc[0] - (f.cx - this.W / 2) / s, cy: c.pc[1] + (f.cy - this.H / 2) / s, s });
+  }
+
   /** 배율이 0·무한대·NaN 이면 카메라가 통째로 깨져 모든 좌표가 NaN 이 된다 — 그럴 땐 지금 카메라를 그대로 쓴다 */
   private saneCam(c: MapCamera): MapCamera {
     return Number.isFinite(c.s) && c.s > 0 && Number.isFinite(c.cx) && Number.isFinite(c.cy) ? c : { ...this.cam };
@@ -1487,7 +1772,7 @@ export class MapEngine {
       xs.push(this.songs[i].pc[dx]);
       ys.push(this.songs[i].pc[dy]);
     }
-    if (!xs.length) return { s: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
+    if (!xs.length) return { s: this.cam.s, sCover: this.cam.s, cx: this.cam.cx, cy: this.cam.cy };
     xs.sort((a, b) => a - b);
     ys.sort((a, b) => a - b);
     const lo = Math.floor((xs.length - 1) * DRILL.deepFit.trim);
@@ -1495,8 +1780,10 @@ export class MapEngine {
     const w = Math.max(1e-6, xs[hi] - xs[lo]);
     const h = Math.max(1e-6, ys[hi] - ys[lo]);
     const f = this.freeRect();
-    const s = Math.min(((f.x1 - f.x0) * DRILL.deepFit.fill) / w, ((f.y1 - f.y0) * DRILL.deepFit.fill) / h);
-    return { s, cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
+    const byW = ((f.x1 - f.x0) * DRILL.deepFit.fill) / w;
+    const byH = ((f.y1 - f.y0) * DRILL.deepFit.fill) / h;
+    // `s` 는 상자가 다 들어오는 배율(contain), `sCover` 는 짧은 쪽이 넘치더라도 긴 쪽을 채우는 배율
+    return { s: Math.min(byW, byH), sCover: Math.max(byW, byH), cx: (xs[lo] + xs[hi]) / 2, cy: (ys[lo] + ys[hi]) / 2 };
   }
 
   // ------------------------------------------------------------------ layer transitions
@@ -1713,8 +2000,24 @@ export class MapEngine {
 
   /** 한 겹 떠오르기 — 두고 온 곡이 돌아오고 좌표 복원. 그 아래에서 좁혔던 범위는 버린다 */
   ascend() {
+    this.ascendTo(this.layer - 1);
+  }
+
+  /**
+   * **여러 겹을 한 번에 떠오른다** (S15P21A405-477).
+   *
+   * `stack[i]` 는 겹 `i` 를 떠날 때 남긴 프레임이라(`tryStartPending` 의 push) 목표 겹까지
+   * 거슬러 꺼내면 그 자리의 카메라·상주 집합·진입 배율이 그대로 나온다. 중간 겹을 하나씩
+   * 거치지 않는 이유는 모프가 비동기라 그렇다 — `ascend()` 를 연달아 불러도 두 번째는
+   * `this.anim` 에 막혀 아무 일도 안 일어난다.
+   *
+   * 한 칸 떠오르기(`ascend`)도 이 길을 쓴다. 목표가 바로 위 겹일 뿐이다.
+   */
+  ascendTo(target: number) {
     if (this.anim || this.pending || !this.stack.length || this.follow) return;
-    const p = this.stack.pop()!;
+    if (target < 0 || target >= this.layer) return;
+    let p = this.stack.pop()!;
+    while (p.layer > target && this.stack.length) p = this.stack.pop()!;
     this.boxes = this.boxes.slice(0, p.layer);
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
@@ -1750,16 +2053,29 @@ export class MapEngine {
   // ------------------------------------------------------------------ input
   /** 휠. 게이트가 열리면 배율은 멈추고 압력만 찬다 */
   wheel(deltaY: number, mx: number, my: number): "zoom" | "pressure" | "blocked" {
-    if (this.anim || this.pending || this.follow) return "blocked";
+    if (this.anim || this.pending) return "blocked";
+    /**
+     * **따라가는 중에는 휠도 막는다** (S15P21A405-605, SOCIAL-08).
+     *
+     * 562 에서 배율만 열어 두었는데, 기획이 "따라가는 동안 지도 조작은 전부 금지" 로 정했다 —
+     * 확대해 놓으면 인솔자가 옮길 때 화면이 어긋나 보이고, 겹 이동 압력과 구분도 안 된다.
+     * 화면 쪽(`map-view`)이 "blocked" 를 보고 이유를 토스트로 말한다.
+     */
+    if (this.follow) return "blocked";
     // 확대·축소도 "내가 화면을 움직인" 것이다 — 가운데 고정을 푼다
     this.centerLock = false;
     this.centerHoldId = null;
     const zoomIn = deltaY < 0;
-    const canDig = zoomIn && this.gateOpen();
     // 파고든 겹에서는 진입 배율이 곧 축소 한계다 — 거기서 더 줄이려 하면 바로 떠오르기다
     const riseAt = this.layer > 0 ? DRILL.deepZoomOutRatio : DRILL.riseScaleRatio;
-    const canRise = !zoomIn && this.stack.length > 0 && this.cam.s <= this.entryS * riseAt;
-    if (canDig || canRise) {
+    const intent = wheelIntent({
+      zoomIn,
+      gateOpen: this.gateOpen(),
+      zoomedOutEnough: this.cam.s <= this.entryS * riseAt,
+      hasStack: this.stack.length > 0,
+    });
+    const canDig = intent === "dig";
+    if (intent !== "zoom") {
       this.pressureDir = canDig ? 1 : -1;
       // 압력이 차는 동안 카메라는 멈춰 있으므로 지금 상자가 곧 파고들 때의 상자다 — 미리 받게 알린다
       if (canDig && !this.prefetch) this.prefetch = [...this.boxes, this.drillBox()];
@@ -1873,6 +2189,7 @@ export class MapEngine {
 
   /** 라벨 링크 위인가 — 히트 영역은 그리는 쪽이 적어 둔 것이다 */
   hitHopLink(mx: number, my: number): { id: number } | null {
+    [mx, my] = this.unview(mx, my);
     const l = this.hopLink;
     if (!l) return null;
     return mx >= l.x && mx <= l.x + l.w && my >= l.y && my <= l.y + l.h ? { id: l.id } : null;
@@ -1970,6 +2287,7 @@ export class MapEngine {
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {
+    [mx, my] = this.unview(mx, my);
     let best: VisibleStar | null = null;
     let bd = 1e9;
     // 오버레이(별자리·주변 탐색)가 떠 있으면 그 안의 곡만 잡힌다 — 어둡게 덮인 뒷별이 호버·클릭에
@@ -1990,28 +2308,105 @@ export class MapEngine {
     return best;
   }
 
-  /** 내 위치(우주선·헬멧)의 화면 좌표. 반응 이모지가 여기서 떠오른다 (SOCIAL-02) */
-  mePos(): { x: number; y: number } | null {
-    if (this.myId == null) return null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
-    return { x: px, y: py };
-  }
-
-  /** 지도에 떠 있는 사용자의 화면 좌표. 내 뷰 안에 없으면 null (남의 반응은 그때만 보인다) */
-  friendScreenPos(email: string): { x: number; y: number } | null {
-    const f = this.visFriends.find((v) => v.user.email === email);
-    return f ? { x: f.px, y: f.py } : null;
-  }
-
+  /** 가장 가까운 표식. 갈라진 표식은 서로 닿을 만큼 가까워서 첫 것을 집으면 옆 사람이 눌린다 (S15P21A405-618) */
   hitFriend(mx: number, my: number): VisibleFriend | null {
-    for (const fr of this.visFriends) if ((fr.px - mx) ** 2 + (fr.py - my) ** 2 < 22 * 22) return fr;
-    return null;
+    [mx, my] = this.unview(mx, my);
+    let best: VisibleFriend | null = null;
+    let bd = 22 * 22;
+    for (const fr of this.visFriends) {
+      const d = (fr.px - mx) ** 2 + (fr.py - my) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = fr;
+      }
+    }
+    return best;
+  }
+
+  /** 배지(+N) 있는 표식을 펼친다 (S15P21A405-618). 다음 프레임부터 `spreadExpandedStack` 이 갈라 그린다 */
+  expandStack(email: string): void {
+    this.expandedStack = { email, since: performance.now() };
+  }
+
+  /** 펼친 묶음을 다시 하나로. 드래그·확대·다른 곳 클릭이 부른다 — 접힐 것이 없으면 아무 일도 없다 */
+  collapseStack(): void {
+    this.expandedStack = null;
+  }
+
+  /**
+   * 펼친 묶음을 **대표 + 뒤사람** 개별 표식으로 갈라 둘레에 놓는다 (S15P21A405-618).
+   *
+   * `updateFriends` 가 끝난 뒤의 후처리다 — 묶음 계산(칸·대표 유지)은 건드리지 않고 그 결과
+   * 한 칸만 여러 칸으로 바꾼다. 그래서 지도를 밀어도 대표가 바뀌지 않는 성질이 그대로 남는다.
+   *
+   * 둘이면 좌우로, 셋 이상이면 원 둘레에 고르게 선다. 반지름은 헬멧이 서로 닿지 않는 값이다.
+   * 퍼지는 동안은 스프링 곡선으로 반지름을 키운다. 대표가 화면에서 사라졌거나 뒤에 아무도
+   * 없게 됐으면 저절로 접는다.
+   */
+  private spreadExpandedStack(): void {
+    const ex = this.expandedStack;
+    if (!ex) return;
+    const at = this.visFriends.findIndex((v) => v.user.email === ex.email);
+    if (at < 0 || this.visFriends[at].stacked.length === 0) {
+      this.expandedStack = null;
+      return;
+    }
+    const v = this.visFriends[at];
+    const people = [v.user, ...v.stacked];
+    const n = people.length;
+    const R = 12.5 * v.scale;
+    // 이웃 사이 현이 헬멧 지름 + 틈 이상이 되는 반지름
+    const fit = (2 * R + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
+    const radius = Math.max(FRIEND_SPREAD.radiusPx * v.scale, fit) * springOut((performance.now() - ex.since) / FRIEND_SPREAD.durationMs);
+    const parts: VisibleFriend[] = people.map((u, i) => {
+      const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;
+      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale: v.scale, isLeader: false, stacked: [] };
+    });
+    this.visFriends.splice(at, 1, ...parts);
   }
 
   // ------------------------------------------------------------------ me / play / follow
+  /**
+   * **나는 지금 이 곡에 서 있다** — 날아가지 않고 그 자리에 놓는다.
+   *
+   * 부르는 자리가 전부 그 뜻이다 (presence 의 `PRESENCE_JOINED`, 탑승, `RIDE_TRACK`, 하차).
+   * 예전에는 표식만 옮기고 `home`·`playingId` 는 그대로 뒀는데, 그 둘은 `travelTo` 안에서만
+   * 갱신되고 **탑승은 그 길을 안 탄다** — 그래서 남을 따라다니는 내내 "내 위치로 가기" 가
+   * 타기 전 곡을 가리켰다 (S15P21A405-551).
+   *
+   * `travelTo` 와 다른 점은 비행 애니메이션이 없다는 것뿐이다. 탑승은 우주선이 나를 데려가므로
+   * 따로 날아갈 이유가 없고, presence 는 서버가 정해 준 자리라 이동 자체가 없다.
+   */
+  /**
+   * 이 자리를 받아도 되는가 — **날아가는 중이면 옛 자리를 거른다** (S15P21A405-565).
+   *
+   * 판단을 밖에 열어 두는 이유는 스토어도 같이 걸러야 하기 때문이다. 엔진만 무시하면
+   * `myMusicId` 는 옛 곡으로 바뀌어, 레이더 가운데와 지도 표식이 서로 다른 곡을 가리킨다.
+   */
+  acceptsAnchor(id: number): boolean {
+    return acceptsAnchor(this.travelToId, id);
+  }
+
   setMy(id: number | null) {
     if (id == null || !this.index.has(id)) return;
     this.myId = id;
+    this.playingId = id;
+    this.home = { musicId: id, boxes: [...this.boxes] };
+    /**
+     * **앞서 누른 별을 놓아 준다** (S15P21A405-566).
+     *
+     * 예전에는 이 두 줄이 아래 `isAlive` 검사 **뒤에** 있었다. 그래서 지금 겹 상주 집합에 없는
+     * 곡을 재생하면(주변 탐색 카드·검색·이웃 목록에서 고른 곡이 흔히 그렇다) 그 검사에서
+     * 빠져나가며 `centerHoldId` 가 **직전에 누른 별에 그대로 남았다.** 가운데 고정이 매 프레임
+     * 그리로 당기니, 카메라가 새 곡 쪽으로 가다가 이전 곡으로 되돌아갔다.
+     *
+     * "나는 지금 이 곡을 튼다" 는 곧 "앞서 보던 별은 놓는다" 는 뜻이다 — 자리를 잡을 수 있든
+     * 없든 그 사실은 같다.
+     */
+    this.centerLock = true;
+    this.centerHoldId = null;
+    // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다 (`travelTo` 와 같은 처리)
+    if (this.pinned && this.pinned.id !== id) this.pinned = null;
     const w = this.worldOf(id)!;
     this.me = { ...w };
   }
@@ -2034,6 +2429,19 @@ export class MapEngine {
      */
     this.playingId = id;
     this.home = { musicId: id, boxes: [...this.boxes] };
+    /**
+     * **앞서 누른 별을 놓아 준다** (S15P21A405-566).
+     *
+     * 예전에는 이 두 줄이 아래 `isAlive` 검사 **뒤에** 있었다. 그래서 지금 겹 상주 집합에 없는
+     * 곡을 재생하면(주변 탐색 카드·검색·이웃 목록에서 고른 곡이 흔히 그렇다) 그 검사에서
+     * 빠져나가며 `centerHoldId` 가 **직전에 누른 별에 그대로 남았다.** 가운데 고정이 매 프레임
+     * 그리로 당기니, 카메라가 새 곡 쪽으로 가다가 이전 곡으로 되돌아갔다.
+     *
+     * "나는 지금 이 곡을 튼다" 는 곧 "앞서 보던 별은 놓는다" 는 뜻이다 — 자리를 잡을 수 있든
+     * 없든 그 사실은 같다.
+     */
+    this.centerLock = true;
+    this.centerHoldId = null;
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
     // 여기부터는 좌표가 있어야 한다 — 지도에 없는 곡은 데려갈 자리가 없다
@@ -2060,8 +2468,6 @@ export class MapEngine {
       return;
     }
     this.travelToId = id;
-    this.centerLock = true;
-    this.centerHoldId = null;
     // 있던 자리에서 그 곡까지 곡선 비행 — 어디선가 날아오는 게 보이게
     const to = this.worldOf(id)!;
     const dx = to.x - this.me.x;
@@ -2111,6 +2517,19 @@ export class MapEngine {
    * 겹을 옮기면 그 겹의 규칙을 따라야 하므로 **못 박은 겹에서만** 유효하다.
    */
   private pinned: { id: number; layer: number } | null = null;
+
+  /**
+   * 마스크를 **지금 곡 수에 맞춘다** (S15P21A405-581).
+   *
+   * 스택 프레임의 마스크는 쌓일 당시의 곡 수로 만들어진 것이라, 그 뒤에 곡을 편입(`adopt`)하면
+   * 짧아진다. 짧은 채로 `subset` 에 앉히면 뒤쪽 색인이 `undefined` 라 상주 판정이 전부 어긋난다.
+   */
+  private fitMask(m: Uint8Array): Uint8Array {
+    if (m.length === this.N) return m.slice();
+    const out = new Uint8Array(this.N);
+    out.set(m.subarray(0, Math.min(m.length, this.N)));
+    return out;
+  }
 
   /** 못 박은 곡을 이 겹 상주 마스크에 되살린다 */
   private keepPinned(mask: Uint8Array, layer: number) {
@@ -2234,13 +2653,85 @@ export class MapEngine {
   }
 
   /**
+   * **검색한 곡을 지도에 실제로 띄운다** (S15P21A405-581).
+   *
+   * 지금 겹에 있으면 그대로 확대해 간다. 없으면 파고든 길을 거슬러 **그 곡이 상주하는 가장
+   * 가까운 겹**까지만 올라간다 — 필요한 만큼만 올라가야 그 아래 경로만 잃는다. 어느 겹에도
+   * 없으면 최상위까지 올라가 그 자리에 끼워 넣는다.
+   *
+   * **내 위치는 건드리지 않는다.** 내 자리는 재생 중인 곡이지 보러 간 곡이 아니다 (MAP-08).
+   * 그래서 이동한 뒤에도 `내 위치로 가기` 는 원래 자리를 가리킨다.
+   *
+   * SEARCH-01 은 "레이어를 자동으로 옮기지 않는다" 로 확정돼 있다. 이 메서드는 그 결정을
+   * 되돌리는 것이라 **기획 확인이 필요하고**, FEATURES.md 변경 제안에 올려 두었다.
+   */
+  revealSong(id: number): "focused" | "risen" | "surfaced" | "none" {
+    if (this.follow || this.anim || this.pending || !this.index.has(id)) return "none";
+    // 이미 이 겹에 있다 — 지금까지도 되던 길이다 (SEARCH-01 그대로)
+    if (this.isAlive(id)) {
+      this.ghost = null;
+      this.focusSong(id);
+      return "focused";
+    }
+    const i = this.index.get(id)!;
+    const target = nearestLayerWith(this.stack, i);
+    if (target != null) {
+      this.ghost = null;
+      this.selectedId = id;
+      // 모프가 끝나면 그 곡을 한복판에 놓는다 — `ascendTo` 는 내 곡을 기준으로 자리를 잡는다
+      this.centerAfterMorph = id;
+      this.ascendTo(target);
+      return "risen";
+    }
+    /**
+     * 어느 위 겹에도 없다. 최상위라면 옮길 데가 없으니 **그 자리에 끼워 넣고** 그리로 간다 —
+     * 요청받은 "최상위면 그냥 그 자리에서 바로 띄워 주고 그 자리로 가기" 가 이것이다.
+     */
+    if (this.layer === 0) {
+      this.ghost = null;
+      this.pinSong(i);
+      this.focusSong(id);
+      return "focused";
+    }
+    this.surfaceToSong(id);
+    return "surfaced";
+  }
+
+  /**
+   * 그 곡을 **이 겹에 끼워 넣고 못 박는다** (S15P21A405-581).
+   *
+   * 겹의 상주 집합은 서버가 고른 top-k 라 검색한 곡이 빠져 있을 수 있다. 못 박아 두지 않으면
+   * 다음 상주 집합 응답이 오는 순간 도로 사라진다 — `내 위치로 가기` 가 쓰는 것과 같은 장치다.
+   */
+  private pinSong(i: number) {
+    this.pinned = { id: this.songs[i].musicId, layer: this.layer };
+    if (this.subset[i]) return;
+    this.subset[i] = 1;
+    this.alpha[i] = 1;
+    this.rebuildAliveIdx();
+    this.project();
+  }
+
+  /**
    * 레이어 0(전 우주)까지 떠오른 뒤 그 곡을 확대한다 (MAP-12 "이 곡이 있는 곳으로 가기").
    * 파고든 경로를 버리는 큰 이동이라 사용자가 명시적으로 눌렀을 때만 부른다.
    */
   surfaceToSong(id: number) {
     if (this.follow || this.anim || !this.index.has(id)) return;
-    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 처음 받아 둔 그 집합이고, 그 겹에는 이 곡도 있다
-    const ns = this.stack[0]?.subset ?? this.subset.slice();
+    // 도착 겹(레이어 0)의 상주 집합으로 되돌린다 — 처음 받아 둔 그 집합이다
+    const ns = this.fitMask(this.stack[0]?.subset ?? this.subset);
+    /**
+     * **그 겹에 이 곡이 있다고 믿지 않는다** (S15P21A405-581).
+     *
+     * 예전에는 "레이어 0 집합에는 이 곡도 있다" 고 보고 그냥 썼다. 레이어 0 도 서버가 주는
+     * top-k 라 그 말이 늘 맞지는 않고, 검색으로 **방금 편입한 곡**은 아예 들어 있을 수가 없다 —
+     * 그러면 올라가긴 하는데 정작 찾던 별이 화면에 없다. 못 박아 두면 상주 집합 응답이 와도
+     * 빠지지 않는다 (`keepPinned`).
+     */
+    const i = this.index.get(id)!;
+    ns[i] = 1;
+    this.pinned = { id, layer: 0 };
+    this.ghost = null;
     this.stack = [];
     this.boxes = [];
     this.selectedId = id;
@@ -2257,8 +2748,25 @@ export class MapEngine {
     );
   }
 
-  startFollow(leader: NearbyUser) {
+  /**
+   * 따라가기를 켠다. `driven` 이면 **서버가 모는 것**이고, 인솔자의 다음 동작을 스스로 지어내지
+   * 않는다 (S15P21A405-530). `driven` 이 아닌 길은 목이고 디자인 확인용으로만 남아 있다.
+   */
+  startFollow(leader: NearbyUser, driven = false) {
     if (!this.index.has(leader.musicId)) return;
+    /**
+     * **이미 같은 사람을 같은 겹에서 따라가는 중이면 다시 걸지 않는다** (S15P21A405-559).
+     *
+     * 이 메서드는 진행 중인 우주선 비행(`mv`)을 지우고 처음부터 세운다. 그런데 부르는 쪽은
+     * 인솔자의 곡이 바뀔 때마다 다시 부르고 있었다 — `rideTo` 가 방금 건 비행이 곧바로
+     * 취소돼서 **화면만 옮겨가고 우주선은 제자리에 멈춰 있었다.**
+     *
+     * 곡을 옮기는 것은 `rideTo` 가 맡는 일이다. 여기서는 표시 정보만 갱신하고 비켜난다.
+     */
+    if (!shouldRestartFollow(this.follow ? { email: this.follow.leader.email, layer: this.followLayer } : null, { email: leader.email, layer: this.layer })) {
+      this.follow!.leader = { ...this.follow!.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      return;
+    }
     this.travelToId = null;
     this.camTarget = null;
     // 별자리는 다른 활동이므로 함께 사라진다 (ACT-01)
@@ -2267,6 +2775,7 @@ export class MapEngine {
     const viewingMusicId = this.index.has(leader.viewingMusicId) ? leader.viewingMusicId : leader.musicId;
     this.follow = {
       leader,
+      driven,
       viewingMusicId,
       playingMusicId: leader.musicId,
       // 탑승 직후엔 인솔자가 이미 보고 있는 곡이 있으므로, 다음 동작은 그 곡의 재생이다
@@ -2276,7 +2785,30 @@ export class MapEngine {
       mv: null,
       visited: [],
     };
-    this.onLeaderViewingChange?.(viewingMusicId);
+    this.followLayer = this.layer;
+    // 서버가 몰 때는 우측 패널을 소켓의 `RIDE_PANEL` 이 정한다 — 여기서 열면 그걸 덮어쓴다
+    if (!driven) this.onLeaderViewingChange?.(viewingMusicId);
+  }
+
+  /**
+   * 인솔자가 곡을 바꿨다 — `RIDE_TRACK` 이 오면 부른다 (S15P21A405-530).
+   * 우주선이 이전 곡에서 새 곡으로 날아오고 나는 그 선미를 따라간다.
+   *
+   * **재생은 여기서 걸지 않는다.** 소켓 처리기가 이미 플레이어를 돌렸다 — `onArrive` 를 또
+   * 부르면 같은 곡을 두 번 건다.
+   */
+  rideTo(musicId: number) {
+    const f = this.follow;
+    if (!f || !this.index.has(musicId)) return;
+    f.viewingMusicId = musicId;
+    this.launchLeaderMove(performance.now(), f, musicId, { notify: false });
+  }
+
+  /** 인솔자가 보고 있는 곡만 바뀌었다 — `RIDE_PANEL` 이 오면 부른다. 뷰만 그리로 간다 */
+  rideViewing(musicId: number) {
+    const f = this.follow;
+    if (!f || !this.index.has(musicId)) return;
+    f.viewingMusicId = musicId;
   }
 
   stopFollow() {
@@ -2326,45 +2858,96 @@ export class MapEngine {
 
   /** ② 인솔자가 보고 있던 곡을 재생한다 — 우주선이 그 방향에서 날아온다. 뷰는 고정 */
   private leaderPlaysSong(now: number, f: FollowState) {
-    const target = this.worldOf(f.viewingMusicId);
-    const known = this.friendPos.get(f.leader.email);
-    const from = known ?? this.worldOf(f.playingMusicId);
-    if (!target || !from) return;
-    const side = Math.random() < 0.5 ? 1 : -1;
-    const L = Math.hypot(target.x - from.x, target.y - from.y) || 1e-6;
-    f.mv = {
-      ax: from.x,
-      ay: from.y,
-      bx: target.x,
-      by: target.y,
-      cx: (from.x + target.x) / 2 - ((target.y - from.y) / L) * L * 0.35 * side,
-      cy: (from.y + target.y) / 2 + ((target.x - from.x) / L) * L * 0.35 * side,
-      t0: now,
-      dur: FOLLOW.moveMs,
-      toId: f.viewingMusicId,
-    };
-    f.visited.push(f.viewingMusicId);
+    if (!this.launchLeaderMove(now, f, f.viewingMusicId, { notify: true })) return;
     f.phase = "view";
     f.nextAt = now + FOLLOW.moveMs + FOLLOW.playToViewMs;
-    this.onArrive?.(f.viewingMusicId);
+  }
+
+  /**
+   * 우주선을 지금 자리에서 `toId` 로 띄운다. 목과 서버 양쪽이 같은 연출을 쓴다.
+   *
+   * `notify` 는 도착을 알릴지다 — 목은 이걸로 재생을 걸지만, 서버가 몰 때는 소켓 처리기가
+   * 이미 플레이어를 돌린 뒤라 다시 걸면 같은 곡이 두 번 시작된다.
+   *
+   * @returns 띄웠으면 true. 좌표를 모르면 false
+   */
+  private launchLeaderMove(now: number, f: FollowState, toId: number, { notify }: { notify: boolean }): boolean {
+    const target = this.worldOf(toId);
+    const known = this.friendPos.get(f.leader.email);
+    const from = known ?? this.worldOf(f.playingMusicId);
+    if (!target || !from) return false;
+    // 사람 표식과 **같은 호를 쓴다** (S15P21A405-553) — 휘는 정도를 손볼 일이 생기면 한 군데만 고친다
+    f.mv = { ...arcBetween(from, target, now, FOLLOW.moveMs, FOLLOW.bow), toId };
+    f.visited.push(toId);
+    if (notify) this.onArrive?.(toId);
+    return true;
   }
 
   /** 인솔자가 레이어를 바꾼다 — 따라가는 사람도 같은 레이어로 전환 (모프) */
   private leaderChangesLayer(f: FollowState): boolean {
     const dir = this.layer >= LAYER_COUNT - 1 ? -1 : this.layer <= 0 ? 1 : Math.random() < 0.6 ? 1 : -1;
-    const target = this.layer + dir;
-    if (target < 0 || target >= LAYER_COUNT) return false;
-    const view = { x: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2], y: this.songs[this.index.get(f.viewingMusicId)!].pc[target * 2 + 1] };
+    // 목은 **방향만** 고른다. 옮기는 일 자체는 서버가 모는 길과 같은 입구를 쓴다 (§560)
+    if (!this.rideToLayer(this.layer + dir)) return false;
+    f.phase = "view";
+    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+    return true;
+  }
+
+  /**
+   * **인솔자를 따라 겹을 옮긴다** (S15P21A405-560).
+   *
+   * 탑승 응답과 `RIDE_TRACK` 이 `layer` 를 같이 주는데 그 값을 버리고 있었다 — 인솔자가
+   * 파고들면 따라가는 사람만 제자리에 남고, 그 겹에 없는 곡을 가리키는 바람에 우주선까지
+   * 사라졌다. 옮기는 몸통은 원래 목 안에 갇혀 있던 것을 그대로 꺼낸 것이다.
+   *
+   * **누적 범위(`boxes`)를 같이 맞춘다.** 그 겹의 상주 집합을 받아 오는 키라서, 안 맞추면
+   * 화면만 바뀌고 별이 안 온다. 파고들 때는 지금 보이는 범위를 한 칸 쌓고, 떠오를 때는 자른다.
+   *
+   * 한 번에 여러 겹을 뛰면 쌓는 칸이 모자라지만, 인솔자는 한 겹씩 움직인다 — 그때는 같은
+   * 범위를 반복해 채운다. 정확한 조상 범위는 다음 조회가 바로잡는다.
+   */
+  rideToLayer(target: number, anchorMusicId?: number): boolean {
+    if (target < 0 || target >= LAYER_COUNT || target === this.layer) return false;
+    const f = this.follow;
+    /**
+     * 기준 곡을 **받을 수 있게 열어 둔다.** 탑승 직후에는 `follow` 가 아직 안 걸려 있다 —
+     * 그건 스토어가 바뀐 뒤 화면이 거는 것이라 한 박자 늦는다. 그때는 응답이 준 곡을 쓴다.
+     */
+    const anchor = anchorMusicId ?? f?.viewingMusicId;
+    const at = anchor == null ? null : this.index.get(anchor);
+    if (at == null) return false;
+
+    const view = { x: this.songs[at].pc[target * 2], y: this.songs[at].pc[target * 2 + 1] };
     const fr = this.freeRect();
     const s = this.entryS * FOLLOW.zoomMul;
     const cam: MapCamera = { s, cx: view.x - (fr.cx - this.W / 2) / s, cy: view.y + (fr.cy - this.H / 2) / s };
-    // 인솔자를 따라 겹을 옮겨도 누적 범위는 맞춰 둔다 (그 겹 상주 집합을 받아야 하므로)
-    this.boxes = dir > 0 ? [...this.boxes, this.viewBox()] : this.boxes.slice(0, target);
-    // 우주선·내 위치는 새 레이어 좌표로 옮긴다
-    this.friendPos.delete(f.leader.email);
-    this.morph(target, cam, this.subset, `${f.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
-    f.phase = "view";
-    f.nextAt = performance.now() + DRILL.morphMs + FOLLOW.playToViewMs;
+
+    if (target > this.layer) {
+      const box = this.viewBox();
+      const grown = [...this.boxes];
+      while (grown.length < target) grown.push(box);
+      this.boxes = grown;
+    } else {
+      this.boxes = this.boxes.slice(0, target);
+    }
+    /**
+     * **떠오를 길을 같이 남긴다** (S15P21A405-627). `ascendTo` 는 `stack` 을 거슬러 올라가는데
+     * 여기서 안 쌓으면 따라가기로 내려간 사람은 하차한 뒤 그 겹에 갇힌다 — 휠도 `hasStack` 이
+     * 없어 축소만 하고 떠오르지 않는다. 지금 겹은 떠날 때 모습 그대로, 건너뛴 중간 겹은
+     * `goHome` 처럼 맞춤 카메라로 합성한다. 떠오를 때는 `boxes` 와 같이 그 겹 위를 자른다.
+     */
+    const known = new Map(this.stack.map((fr) => [fr.layer, fr]));
+    known.set(this.layer, { layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
+    this.stack = Array.from({ length: target }, (_, l) => {
+      const have = known.get(l);
+      if (have) return have;
+      const sub = this.maskForBoxes(this.boxes, l);
+      const c = this.fitCam(l, sub, this.songs[at].musicId);
+      return { layer: l, cam: c, subset: sub, entryS: c.s };
+    });
+    // 우주선·내 위치는 새 겹 좌표로 다시 잡힌다
+    if (f) this.friendPos.delete(f.leader.email);
+    this.morph(target, cam, this.subset, `${f?.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);
     return true;
   }
 
@@ -2391,14 +2974,17 @@ export class MapEngine {
     this.time = now / 1000;
     if (!this.inited) return;
 
-    // 패널 폭을 부드럽게 따라간다 (사이드 패널 열고 닫을 때 화면이 끊기며 튀지 않게)
-    if (this.occludedRight !== this.occludedTarget) {
-      this.occludedRight = lerp(this.occludedRight, this.occludedTarget, OCCLUSION_EASE);
-      if (Math.abs(this.occludedRight - this.occludedTarget) < 0.5) this.occludedRight = this.occludedTarget;
+    // 가림 두께를 부드럽게 따라간다 (패널·시트가 열고 닫힐 때 화면이 끊기며 튀지 않게)
+    for (const edge of OCCLUSION_EDGES) {
+      const to = this.occludedTarget[edge];
+      if (this.occluded[edge] === to) continue;
+      this.occluded[edge] = lerp(this.occluded[edge], to, OCCLUSION_EASE);
+      // 0.5px 아래로 붙으면 끝낸다 — 안 그러면 영원히 수렴만 하며 매 프레임 project() 를 부른다
+      if (Math.abs(this.occluded[edge] - to) < 0.5) this.occluded[edge] = to;
     }
 
     /**
-     * 가운데 고정. 패널이 열리고 닫히면 `occludedRight` 가 부드럽게 변하므로,
+     * 가운데 고정. 패널·시트가 열리고 닫히면 가림 두께가 부드럽게 변하므로,
      * 여기서 매 프레임 다시 맞추면 '나'도 그 속도로 자연스럽게 따라간다.
      * 배율은 건드리지 않는다 — 가운데로 "옮기는" 것이지 확대하는 게 아니다.
      */
@@ -2566,6 +3152,7 @@ export class MapEngine {
 
     this.updateReveal();
     this.updateFriends();
+    this.spreadExpandedStack();
     if (!this.anim) this.pickRepresentatives();
     this.publish();
   }
@@ -2573,21 +3160,36 @@ export class MapEngine {
   private stepFollow(now: number) {
     const f = this.follow;
     if (!f) return;
-    if (!f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
-    // 뷰는 인솔자가 "보고 있는 곡"만 좇는다. 우주선이 날아오는 동안(mv)에는 고정 (SOCIAL-07)
-    if (!f.mv) this.trackViewing(f);
+    // 서버가 몰면 인솔자의 다음 동작을 지어내지 않는다 — 소켓이 알려줄 때만 움직인다
+    if (!f.driven && !f.mv && !this.anim && now >= f.nextAt) this.stepLeader(now);
+    /**
+     * 뷰는 인솔자가 **보고 있는 곡**을 좇는다 (SOCIAL-07).
+     *
+     * **비행 중에도 멈추지 않는다** (S15P21A405-576). 명세는 "우주선이 오는 동안 뷰는 움직이지
+     * 않는다" 고 적는데, 그건 **인솔자가 곡을 클릭해 내 뷰가 먼저 가 있다는 전제** 위의 말이다.
+     * 그 순서에서는 목적지가 이미 화면 한복판이라 여기서 좇아도 **어차피 제자리다** — 같은
+     * 점으로 보간하는 것이라 한 픽셀도 안 움직인다.
+     *
+     * 문제는 서버가 모는 길이다. 인솔자가 상세를 안 열고 바로 재생하면 `RIDE_TRACK` 하나로
+     * 뷰 목표와 비행이 동시에 잡히고, 여기서 멈추면 **비행 2.4초를 목적지가 화면 밖 1000px 에
+     * 있는 채로 보낸다.** 명세가 전제한 "먼저 이동" 이 없는 경우라 뷰가 배와 함께 간다.
+     */
+    this.trackViewing(f);
     if (!f.mv) return;
     const m = f.mv;
-    const t = Math.min(1, (now - m.t0) / m.dur);
-    const e = easeInOut(t);
-    const q = 1 - e;
-    const x = q * q * m.ax + 2 * q * e * m.cx + e * e * m.bx;
-    const y = q * q * m.ay + 2 * q * e * m.cy + e * e * m.by;
-    const hx = 2 * q * (m.cx - m.ax) + 2 * e * (m.bx - m.cx);
-    const hy = 2 * q * (m.cy - m.ay) + 2 * e * (m.by - m.cy);
-    this.friendPos.set(f.leader.email, { x, y, heading: Math.atan2(hy, hx) });
-    // 나는 선미 바로 뒤
-    const back = Math.max(0, e - 0.06);
+    const at = atArc(m, now);
+    const t = at.t;
+    this.friendPos.set(f.leader.email, { x: at.x, y: at.y, heading: at.heading });
+    /**
+     * 나는 선미 바로 뒤. 호 위에서 **조금 뒤처진 지점**을 그대로 쓴다 — `atArc` 는 시간으로
+     * 받으므로, 진행도를 직접 깎으려면 여기서 한 번 더 편다.
+     *
+     * **도착하면 뒤처짐을 거둔다** (S15P21A405-576). 안 거두면 비행이 끝난 자리가 호의 94%
+     * 지점이고, 그대로 굳는다 — 카메라는 목적지 별을 한복판에 잡는데 **내 표식만 72px 옆에
+     * 남아** 곡을 옮길 때마다 같은 만큼 어긋났다. 이 엔진의 다른 비행(`travelToId`)과
+     * 하차(`stopFollow`)는 둘 다 끝점으로 붙이고 있었고, 여기만 빠져 있었다.
+     */
+    const back = t >= 1 ? 1 : Math.max(0, easeInOut(t) - 0.06);
     const qb = 1 - back;
     this.me.x = qb * qb * m.ax + 2 * qb * back * m.cx + back * back * m.bx;
     this.me.y = qb * qb * m.ay + 2 * qb * back * m.cy + back * back * m.by;
@@ -2605,6 +3207,7 @@ export class MapEngine {
     const view = this.worldOf(f.viewingMusicId);
     if (!view) return;
     const fr = this.freeRect();
+    // 따라가는 동안 휠이 막혀 있어(S15P21A405-605) 배율은 늘 따라가기 배율로 수렴한다
     const targetS = this.entryS * FOLLOW.zoomMul;
     this.cam.s = this.cam.s * Math.pow(targetS / this.cam.s, 0.06);
     this.cam.cx = lerp(this.cam.cx, view.x - (fr.cx - this.W / 2) / this.cam.s, 0.06);
@@ -2612,36 +3215,170 @@ export class MapEngine {
     this.project();
   }
 
+  /**
+   * 지도에 찍을 사람 고르기 — **화면에 골고루** (S15P21A405-542).
+   *
+   * 예전에는 받은 배열 순서대로 훑으며 자리가 비면 찍고 `MAP_FRIENDS_MAX` 에서 멈췄다. 그
+   * 순서는 서버 응답 순서라 화면상의 자리와 아무 상관이 없었다 — **한쪽에 몰린 사람들이 먼저
+   * 칸을 차지하고 그 밖 영역은 통째로 비어 보였다.** 비슷한 곡을 듣는 사람끼리 지도에서 붙어
+   * 있는 것이 이 지도의 원리라, 몰림은 예외가 아니라 기본값이다.
+   *
+   * 같은 문제를 앨범 커버에서 먼저 겪었고 [`cover-spread`](../render/cover-spread.ts) 로 풀어
+   * 뒀다 (S15P21A405-518). 화면을 뽑을 개수만큼 칸으로 나누고 칸마다 하나씩 앞세운다.
+   * 규칙을 두 벌로 두지 않으려고 그 함수를 그대로 부른다.
+   *
+   * **58px 경합 검사는 남겨 둔다.** 칸 나누기는 "고루 퍼짐" 을 만들고 이건 "겹쳐 그리지 않음"
+   * 을 만든다 — 목적이 다르고, 칸이 커도 한 칸 안에서 둘이 겹칠 수 있다.
+   */
+  /**
+   * 사람 하나를 목적지 쪽으로 **곡선을 그리며** 옮긴다 (S15P21A405-553).
+   *
+   * 예전에는 목적지를 그 자리에 바로 넣어서, 누가 곡을 옮기면 뚝 사라졌다 뚝 나타났다.
+   * 내가 움직일 때와 같은 호를 쓴다 (`ME_FLIGHT`).
+   *
+   * **처음 보는 사람은 그냥 놓는다.** 없던 사람이 어디선가 날아오면 그것만큼 이상하다.
+   */
+  private glideFriend(u: NearbyUser, was: { x: number; y: number; heading: number; mv?: Arc } | undefined, base: { x: number; y: number }, now: number) {
+    if (!was) {
+      const fresh = { x: base.x, y: base.y, heading: (u.avatarSeed[0] ?? 0.5) * Math.PI * 2 };
+      this.friendPos.set(u.email, fresh);
+      return fresh;
+    }
+
+    /**
+     * 목적지가 바뀌었나. **지금 날아가는 중이면 그 도착지와** 견준다 — 지금 자리와 견주면
+     * 비행 도중 매 프레임이 "목적지가 다르다" 로 읽혀 호를 끝없이 새로 만든다.
+     */
+    const to = was.mv ? { x: was.mv.bx, y: was.mv.by } : was;
+    if (Math.hypot(base.x - to.x, base.y - to.y) > FRIEND_MOVE_EPS) {
+      was = { ...was, mv: arcBetween(was, base, now, ME_FLIGHT.ms, ME_FLIGHT.bow) };
+    }
+
+    if (!was.mv) return was;
+    const at = atArc(was.mv, now);
+    const next = { x: at.x, y: at.y, heading: at.heading, mv: at.t >= 1 ? undefined : was.mv };
+    this.friendPos.set(u.email, next);
+    return next;
+  }
+
   private updateFriends() {
-    this.visFriends = [];
+    const now = performance.now();
     const f = this.freeRect();
     const G = 58;
-    const occ = new Set<string>();
-    const capN = MAP_FRIENDS_MAX;
-    const list = this.follow ? [this.follow.leader, ...this.friends.filter((x) => x.email !== this.follow!.leader.email)] : this.friends;
-    for (const u of list) {
-      if (this.visFriends.length >= capN) break;
-      if (!u.isOnline || !u.isPublic) continue;
-      const isLeader = this.follow?.leader.email === u.email;
+    /**
+     * **개수 상한이 아니라 칸 나누기 단위다** (S15P21A405-550). 화면을 몇 칸으로 쪼개 고루
+     * 뽑을지에만 쓴다 — 예전에는 이 수에서 그리기를 멈췄고, 그래서 뒤쪽 사람들이 묶이지도
+     * 못하고 사라졌다. 지금은 아무도 안 버린다.
+     */
+    const spreadCells = MAP_FRIENDS_MAX;
+    const isLeaderOf = (u: NearbyUser) => this.follow?.leader.email === u.email;
+
+    /**
+     * 지난 프레임에 보이던 사람. **칸 경계는 카메라를 따라 움직인다** — 그냥 두면 지도를 밀
+     * 때마다 칸의 승자가 바뀌어 사람이 깜빡인다. 같은 칸을 다투면 이미 서 있던 쪽이 이긴다.
+     */
+    const wasVisible = new Set(this.visFriends.map((v) => v.user.email));
+    this.visFriends = [];
+
+    // 1) 그릴 수 있는 사람만 추려 화면 좌표를 구한다. 인솔자는 경합 밖이라 따로 둔다
+    type Cand = { u: NearbyUser; px: number; py: number; heading: number; scale: number };
+    const leader: Cand[] = [];
+    const cands: Cand[] = [];
+    for (const u of this.friends) {
+      if (!u.isOnline) continue;
+      const isLeader = isLeaderOf(u);
       let w = this.friendPos.get(u.email);
-      if (!w || !isLeader) {
+      // 인솔자 자리는 `stepFollow` 의 우주선 비행이 정한다 — 여기서 건드리면 그 비행이 끊긴다
+      if (!isLeader) {
         const base = this.anchorFor(u);
         if (!base) continue;
-        w = w && isLeader ? w : { x: base.x, y: base.y, heading: w?.heading ?? ((u.avatarSeed[0] ?? 0.5) * Math.PI * 2) };
-        this.friendPos.set(u.email, w);
+        w = this.glideFriend(u, w, base, now);
       }
-      const { px, py } = this.worldToScreen(w.x, w.y);
+      if (!w) continue;
+      // 서 있는 곡과 같은 시차를 받아야 별 위에 그대로 선다 (S15P21A405-609)
+      const { px, py } = this.worldToScreen(w.x, w.y, this.cam, this.parOf(u.musicId));
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
-      if (!isLeader && (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104)) continue;
-      const key = `${Math.floor(px / G)},${Math.floor(py / G)}`;
-      if (!isLeader) {
-        let clash = false;
-        for (let a = -1; a <= 1 && !clash; a++) for (let b = -1; b <= 1; b++) if (occ.has(`${Math.floor(px / G) + a},${Math.floor(py / G) + b}`)) clash = true;
-        if (clash) continue;
+      const scale = this.depthScaleOf(u.musicId);
+      if (isLeader) {
+        leader.push({ u, px, py, heading: w.heading, scale });
+        continue;
       }
-      occ.add(key);
-      this.visFriends.push({ user: u, px, py, heading: w.heading, isLeader });
+      if (px < 20 || px > f.x1 - 20 || py < 76 || py > this.H - 104) continue;
+      cands.push({ u, px, py, heading: w.heading, scale });
     }
+
+    // 2) 칸마다 하나씩 앞세운 순서로. 지난 프레임에 보이던 사람이 제 칸을 먼저 집는다
+    const order = keptFirst(cands, (c) => wasVisible.has(c.u.email));
+    const rect: Rect = { x0: 20, y0: 76, x1: Math.max(21, f.x1 - 20), y1: Math.max(77, this.H - 104) };
+    const spread = spreadOrder(order, (i) => ({ x: cands[i].px, y: cands[i].py }), rect, spreadCells);
+
+    /**
+     * 3) 그 순서대로 채운다. **겹치면 버리지 않고 먼저 선 사람에게 묶는다** (S15P21A405-550).
+     *
+     * 예전에는 주변 칸이 차 있으면 `return` 으로 그냥 건너뛰었다. 화면에서 58~170픽셀 안에
+     * 있으면 묻힌다는 뜻이고, **같은 곡이면 좌표가 완전히 같아서 무조건 한 명만 남았다.**
+     * 접속자가 여럿인데 화면에는 하나만 뜨던 것이 이것이다.
+     *
+     * 이제 그 자리의 주인을 찾아 명단에 얹는다. 그리는 쪽이 그 수를 배지로 적는다.
+     *
+     * **개수 상한도 없앴다.** 묶음이 생기면서 표식 수는 칸 크기가 이미 제한한다 — 한 표식이
+     * 주변 3×3 칸을 차지하므로 1024×768 화면이면 많아야 예순 몇 개다. 상한을 두면 그 뒤
+     * 사람들이 묶이지도 못하고 조용히 사라진다.
+     *
+     * 인솔자는 예외다. 자리를 다투지 않고 늘 제 모습으로 선다 — 따라가는 동안 인솔자가
+     * 남의 배지 속 숫자로 들어가면 누구를 따라가는지 알 수 없다.
+     */
+    const owner = new Map<string, number>();
+    const place = (c: Cand, isLeader: boolean) => {
+      const cx = Math.floor(c.px / G);
+      const cy = Math.floor(c.py / G);
+      if (!isLeader) {
+        for (let a = -1; a <= 1; a++) {
+          for (let b = -1; b <= 1; b++) {
+            const at = owner.get(`${cx + a},${cy + b}`);
+            if (at != null) {
+              this.visFriends[at].stacked.push(c.u);
+              return;
+            }
+          }
+        }
+      }
+      owner.set(`${cx},${cy}`, this.visFriends.length);
+      this.visFriends.push({ user: c.u, px: c.px, py: c.py, heading: c.heading, scale: c.scale, isLeader, stacked: [] });
+    };
+    /**
+     * **배율이 그대로면 지난 배치를 그대로 쓴다** (S15P21A405-566).
+     *
+     * 위 `place` 는 화면 좌표로 칸을 나눈다. 그 좌표는 사람이 움직이거나 지도를 밀기만 해도
+     * 바뀌므로, 매 프레임 다시 정하면 칸 경계를 넘나들 때마다 묶임이 붙었다 떨어졌다 한다 —
+     * 그게 깜빡임이다. 자리는 아래에서 매 프레임 갱신하되 **누가 대표인지만** 붙들어 둔다.
+     *
+     * 앨범 커버가 먼저 쓰던 규칙과 같다 (S15P21A405-529).
+     */
+    const byEmail = new Map([...leader, ...cands].map((c) => [c.u.email, c]));
+    // 인솔자가 남의 묶음 속이면 다시 정한다 — 안 그러면 따라가는 우주선이 배지 숫자로만 남는다 (S15P21A405-625)
+    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys()), this.follow?.leader.email ?? null) : null;
+    this.friendPlanScale = this.cam.s;
+
+    if (keep) {
+      for (const entry of keep) {
+        const c = byEmail.get(entry.marker)!;
+        this.visFriends.push({
+          user: c.u,
+          px: c.px,
+          py: c.py,
+          heading: c.heading,
+          scale: c.scale,
+          isLeader: isLeaderOf(c.u),
+          stacked: entry.stacked.map((e) => byEmail.get(e)!.u),
+        });
+      }
+      return;
+    }
+
+    for (const c of leader) place(c, true);
+    for (const i of spread) place(cands[i], false);
+    this.friendPlan = this.visFriends.map((v) => ({ marker: v.user.email, stacked: v.stacked.map((u) => u.email) }));
   }
 
   /**
@@ -2719,6 +3456,7 @@ export class MapEngine {
         // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
         const k = this.visible.findIndex((v) => v.i === i);
         if (k >= 0) this.visible.splice(k, 1);
+        // 확대는 캔버스 변환이 건다 (S15P21A405-593) — 집는 범위는 확대 전 자리 기준이다 (`unview`)
         this.visible.push({ i, px: pp.x, py: pp.y, r: 16 });
         continue;
       }
@@ -2747,7 +3485,7 @@ export class MapEngine {
       morph: this.anim
         ? { big: this.anim.big }
         : this.pending
-          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중`, sub: `화면 안 ${this.pending.inView.toLocaleString()}곡 기준` }
+          ? { big: `${LAYER_NAMES[this.layer + 1]} 불러오는 중` }
           : null,
       myMusicId: this.myId,
       // travelTo 때만 새 객체가 되므로 참조 비교로 변화가 잡힌다

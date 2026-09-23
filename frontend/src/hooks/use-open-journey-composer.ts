@@ -1,8 +1,11 @@
 "use client";
 
 import { useCallback } from "react";
+import { RIDING_JOURNEY_BLOCKED } from "@/constants";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
+import { isRiding } from "@/stores/use-follow-store";
+import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 
 /**
@@ -40,10 +43,26 @@ export function useOpenJourneyComposer() {
 
   return useCallback(
     (target?: "start" | "end") => {
+      /**
+       * **따라가는 중에는 막는다** (S15P21A405-557). 여정은 출발·도착을 직접 골라야 하는데
+       * 따라가는 동안에는 지도를 만질 수 없다 — 열어 줘도 그 다음에 할 수 있는 것이 없다.
+       * ACT-01 의 "멈추고 시작할까요" 를 묻지 않는 이유가 이것이다.
+       */
+      if (isRiding()) {
+        useToastStore.getState().show(RIDING_JOURNEY_BLOCKED);
+        return;
+      }
       closePanel();
       /**
-       * 채운 뒤에도 `target` 은 그대로 쓴다 — 출발 칸이 포커스된 채로 열리므로 자동으로
-       * 들어온 곡이 마음에 안 들면 그 자리에서 바꾼다.
+       * **`target` 을 안 넘기면 스토어가 고른다** (S15P21A405-547). `openComposer` 가
+       * "출발이 비었으면 출발, 차 있으면 도착" 으로 이미 판단한다.
+       *
+       * 여정 버튼은 그래서 아무것도 안 넘긴다. 예전에는 늘 `"start"` 를 넘겼는데, 바로 위에서
+       * 내 위치를 출발에 채워 놓고도 포커스를 출발에 두는 바람에 **지도에서 별을 누르면 방금
+       * 채운 출발점이 덮어쓰였다.**
+       *
+       * 넘기는 쪽은 **일부러 그 칸을 고르는 자리**만 남는다 — 곡 상세의 `출발점으로`(다음은
+       * 도착), `도착점으로`(다음은 출발), 여정 패널의 출발·도착 칸.
        */
       const { startMusicId, endMusicId } = useJourneyStore.getState();
       const start = journeyStartFor(startMusicId, endMusicId, usePlayerStore.getState().currentMusicId);

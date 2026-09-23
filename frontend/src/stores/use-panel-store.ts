@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import { useFollowStore } from "./use-follow-store";
 import { devtools } from "zustand/middleware";
 import type { PanelType } from "@/constants";
 import { useJourneyStore } from "./use-journey-store";
@@ -53,7 +54,7 @@ function hideComposer() {
 const open = (panel: PanelType, patch: object = {}) => {
   syncMapView(panel);
   hideComposer();
-  return { activePanel: panel, back: null, collapsed: false, ...patch } as const;
+  return { activePanel: panel, back: null, snap: OPEN_SNAP, ...patch } as const;
 };
 
 /**
@@ -63,7 +64,27 @@ const open = (panel: PanelType, patch: object = {}) => {
  * **한 겹만 기억한다.** 카드를 타고 계속 들어가도 쌓지 않는다 — 돌아가는 곳은 늘 "직전 곡" 이고,
  * 더 거슬러 올라가는 길은 지도가 대신한다.
  */
-export type PanelReturn = { panel: "journey" } | { panel: "playlist"; playlistId: number } | { panel: "song"; musicId: number };
+export type PanelReturn = { panel: "journey" } | { panel: "playlist"; playlistId: number } | { panel: "song"; musicId: number } | { panel: "friends" };
+
+/**
+ * 폰에서 시트가 설 수 있는 **세 자리** (S15P21A405-416). 숫자가 클수록 많이 올라온다.
+ *
+ * | 단 | 보이는 것 | 높이 |
+ * | --- | --- | --- |
+ * | 1 | 머리글과 곡 제목 줄 | `--spacing-sheet-s1` |
+ * | 2 | 칩과 "출발점으로 · 도착점으로" 까지 | `--spacing-sheet-s2` |
+ * | 3 | 전부 (지금까지의 "펼침") | 화면 높이 |
+ *
+ * 2 를 **여는 자리**로 둔다 — 곡이 무엇인지와 바로 할 수 있는 일까지는 보이되 지도도 절반쯤
+ * 남는다. 지도를 덮어 버리면 다음 별을 못 찾는다는 것이 폰 배치의 출발점이었다.
+ *
+ * 세 자리 모두 **화면을 다 덮지는 않는다.** 덮으면 뒤로 가는 길을 따로 만들어야 하는데,
+ * 지금 구조는 지도가 늘 뒤에 살아 있는 것을 전제로 서 있다.
+ */
+export type SheetSnap = 1 | 2 | 3;
+
+/** 여는 자리. 위 표 참고 */
+const OPEN_SNAP: SheetSnap = 2;
 
 interface PanelState {
   /** 열려 있는 우측 패널. null이면 닫힘 */
@@ -77,15 +98,30 @@ interface PanelState {
   /** 뒤로가기로 돌아갈 자리. null이면 뒤로가기를 그리지 않는다 */
   back: PanelReturn | null;
   /**
-   * 패널이 접혀 있는가 (S15P21A405-318).
+   * 시트가 어느 **단**에 있는가 (S15P21A405-416).
    *
-   * **닫기와 다르다.** 닫으면 패널도 별자리도 사라지지만, 접으면 둘 다 살아 있고 패널만
+   * **닫기와 다르다.** 닫으면 패널도 별자리도 사라지지만, 내리면 둘 다 살아 있고 패널만
    * 화면 밖으로 미끄러진다 — 별자리를 넓게 보려고 잠깐 치우는 동작이다.
    * 지도 가림 폭도 이 값을 따라간다 (`main-screen.tsx`).
+   *
+   * **데스크톱은 1 과 3 만 쓴다.** 거기서는 패널이 옆으로 접히는 두 상태뿐이라
+   * `snap !== 1` 이면 전부 "펼침" 으로 그린다 — 그래서 여는 순간의 2 도 데스크톱에서는
+   * 예전과 똑같이 펼쳐진 패널이다.
    */
-  collapsed: boolean;
+  snap: SheetSnap;
 
   openSong: (musicId: number) => void;
+  /**
+   * 지도에서 별을 눌러 곡 상세로 들어간다.
+   *
+   * **어느 패널이 열려 있든 같다** (S15P21A405-547). 한때 주변 사람만 예외였다
+   * (S15P21A405-515) — 펼쳐 놓고 있으면 패널을 안 갈아탔다. 레이더를 보면서 곡만 바꾸라는
+   * 뜻이었는데, 예외가 하나만 있으니 같은 조작에 화면마다 다르게 반응해서 규칙이 안 읽혔다.
+   *
+   * 함수는 남겨 둔다 — 부르는 쪽이 "지도에서 눌렀다" 를 말하고 있고, 다시 갈라야 할 때
+   * 여기 한 군데만 고치면 된다.
+   */
+  openSongFromMap: (musicId: number, snap?: SheetSnap) => void;
   /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
   openSongFromList: (musicId: number) => void;
   /** 주변 음악 카드로 이웃 곡에 들어간다 — 직전 곡을 돌아갈 자리로 기억한다 (S15P21A405-384) */
@@ -93,15 +129,29 @@ interface PanelState {
   /** 기억해 둔 자리로 돌아간다 */
   goBack: () => void;
   openPlaylist: (playlistId: number) => void;
-  openFeed: (email?: string | null) => void;
+  /** `back` 은 돌아갈 자리. 주변 사람 패널에서 열 때 `{ panel: "friends" }` 를 넘긴다 (S15P21A405-610) */
+  openFeed: (email?: string | null, back?: PanelReturn | null) => void;
   openJourney: () => void;
   openFriends: () => void;
   openChart: () => void;
   /** 네비바 토글: 같은 패널이면 닫고, 다르면 연다 */
   toggle: (panel: PanelType) => void;
   close: () => void;
-  /** 패널을 접었다 폈다 (S15P21A405-318). 별자리·패널 종류는 건드리지 않는다 */
+  /** 패널을 접었다 폈다 (S15P21A405-318). 데스크톱 손잡이 — 1 과 3 만 오간다 */
   toggleCollapsed: () => void;
+  /**
+   * 시트를 **한 단 올린다** (S15P21A405-416). 손잡이를 눌렀을 때.
+   * 1→2→3 이고, 꼭대기에서 한 번 더 누르면 1 로 내려온다 — 그래야 손가락만으로 왕복이 된다.
+   */
+  raiseSnap: () => void;
+  /**
+   * 바깥을 눌렀을 때 (S15P21A405-416). **2·3 단은 1 단으로 내려오고, 1 단이면 닫는다.**
+   * 예전에는 어느 단이든 바로 닫혔는데, 그러면 펼쳐 놓고 지도를 한 번 보려는 동작이
+   * 매번 닫기가 된다.
+   */
+  lowerSnap: () => void;
+  /** 드래그로 단을 직접 정한다 (S15P21A405-416) */
+  setSnap: (snap: SheetSnap) => void;
   /**
    * 자리를 비켜 준다 (S15P21A405-404). 지도를 움직이는 동안 불린다.
    * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
@@ -117,15 +167,28 @@ export const usePanelStore = create<PanelState>()(
       playlistId: null,
       profileEmail: null,
       back: null,
-      collapsed: false,
+      snap: OPEN_SNAP,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
+
+      /**
+       * `snap` 을 주면 그 자리에 선다 (S15P21A405-593). **폰은 1 단으로 연다** — 별을 눌렀을 때
+       * 알고 싶은 것은 "이게 무슨 곡이냐" 하나뿐이고, 지도는 그대로 보여야 다음 별을 고른다.
+       * 부르는 쪽이 정하는 이유는 화면 폭을 아는 쪽이 거기이기 때문이다.
+       */
+      openSongFromMap: (musicId, snap) => set(open("song", snap ? { musicId, snap } : { musicId }), false, "openSongFromMap"),
 
       openSongFromList: (musicId) => {
         const { activePanel, playlistId } = get();
         const back: PanelReturn | null =
           activePanel === "journey" ? { panel: "journey" } : activePanel === "playlist" && playlistId != null ? { panel: "playlist", playlistId } : null;
-        set(open("song", { musicId, back }), false, "openSongFromList");
+        /**
+         * **3 단으로 연다** (S15P21A405-593). 목록에서 곡을 골라 들어간 것은 그 곡을 지금
+         * 보겠다는 뜻인데, 여는 자리(2 단)로 열면 시트가 도리어 **내려가면서** 상세가 떠서
+         * 방금 누른 것이 작아지는 것처럼 보인다. 지도에서 별을 눌러 여는 길(2 단)과 다른 이유는
+         * 그쪽은 지도를 보며 곡을 갈아 끼우는 동작이라 지도가 남아야 하기 때문이다.
+         */
+        set(open("song", { musicId, back, snap: 3 }), false, "openSongFromList");
       },
 
       openNeighborSong: (musicId, fromMusicId) =>
@@ -134,13 +197,20 @@ export const usePanelStore = create<PanelState>()(
       goBack: () => {
         const back = get().back;
         if (!back) return;
-        if (back.panel === "journey") set({ activePanel: "journey", back: null, collapsed: false }, false, "goBack/journey");
-        else if (back.panel === "song") set({ activePanel: "song", musicId: back.musicId, back: null, collapsed: false }, false, "goBack/song");
-        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, collapsed: false }, false, "goBack/playlist");
+        if (back.panel === "journey") set({ activePanel: "journey", back: null, snap: OPEN_SNAP }, false, "goBack/journey");
+        else if (back.panel === "friends") set({ activePanel: "friends", back: null, snap: OPEN_SNAP }, false, "goBack/friends");
+        else if (back.panel === "song") set({ activePanel: "song", musicId: back.musicId, back: null, snap: OPEN_SNAP }, false, "goBack/song");
+        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, snap: OPEN_SNAP }, false, "goBack/playlist");
       },
 
       openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
-      openFeed: (email = null) => set(open("feed", { profileEmail: email }), false, "openFeed"),
+      /**
+       * **돌아갈 자리는 여는 쪽이 말한다** (S15P21A405-610). 처음엔 "지금 주변 사람 패널이 열려 있나"
+       * 로 추측했는데, 좁은 화면의 `/friends` 탭처럼 패널이 아닌 자리에서 열면 그 추측이 빗나간다.
+       * 피드 안(팔로워·팔로잉 목록)에서 다른 사람으로 갈아탈 때는 들고 있던 기억을 그대로 잇는다.
+       */
+      openFeed: (email = null, back = null) =>
+        set((s) => open("feed", { profileEmail: email, back: back ?? (s.activePanel === "feed" ? s.back : null) }), false, "openFeed"),
       openJourney: () => set(open("journey"), false, "openJourney"),
       openFriends: () => set(open("friends"), false, "openFriends"),
       openChart: () => set(open("chart"), false, "openChart"),
@@ -155,20 +225,51 @@ export const usePanelStore = create<PanelState>()(
         else set(open(panel), false, `toggle/${panel}`);
       },
 
+      /**
+       * **따라가는 중에는 닫히지 않고 1 단으로 내려온다** (S15P21A405-557).
+       *
+       * 따라가는 사람은 **곡을 직접 고를 수가 없다.** 상세를 없애 버리면 인솔자가 다음 조작을
+       * 할 때까지 우측이 통째로 빈 화면이고, 스스로 다시 띄울 방법도 없다. 내려 두면 자리는
+       * 비켜 주면서 인솔자가 곡을 옮길 때 그대로 되살아난다.
+       *
+       * 다른 패널(주변 사람·랭킹 등)을 닫을 때도 **내려간 상세로 돌아온다** — 그게 따라가는
+       * 동안의 기본 화면이다.
+       */
       close: () => {
+        const ride = useFollowStore.getState();
+        const riding = ride.leaderViewingMusicId ?? ride.leaderMusicId;
+        if (ride.leaderEmail && riding != null) {
+          syncMapView("song");
+          set({ activePanel: "song", musicId: riding, back: null, snap: 1 }, false, "close/riding");
+          return;
+        }
         hideMapView();
-        set({ activePanel: null, back: null, collapsed: false }, false, "close");
+        set({ activePanel: null, back: null, snap: OPEN_SNAP }, false, "close");
       },
 
       /** 접기는 닫기가 아니다 — 별자리도 열린 패널도 그대로 두고 자리만 비켜 준다 */
-      toggleCollapsed: () => set((s) => ({ collapsed: !s.collapsed }), false, "toggleCollapsed"),
+      toggleCollapsed: () => set((s) => ({ snap: s.snap === 1 ? 3 : 1 }) as const, false, "toggleCollapsed"),
+
+      raiseSnap: () => set((s) => ({ snap: (s.snap === 3 ? 1 : s.snap + 1) as SheetSnap }), false, "raiseSnap"),
+
+      lowerSnap: () => {
+        if (get().snap === 1) return void get().close();
+        set({ snap: 1 }, false, "lowerSnap");
+      },
+
+      setSnap: (snap) => set((s) => (s.snap === snap ? {} : { snap }), false, "setSnap"),
 
       /**
        * 드래그 중에 매 프레임 불릴 수 있다. **바뀔 때만 set 한다** — 같은 값을 계속 넣으면
        * 구독자가 매번 깨어나고, 그 끝에 지도 가림폭 계산이 달려 있어 드래그가 무거워진다.
        */
       collapse: () =>
-        set((s) => (s.activePanel && !s.collapsed ? { collapsed: true } : {}), false, "collapse"),
+        /**
+         * **패널 종류를 가리지 않는다** (S15P21A405-547). S15P21A405-515 에서 주변 사람만
+         * 예외로 뒀었다 — 지도를 움직이며 같이 보는 화면이라는 이유였다. 예외가 하나만 있으니
+         * 같은 조작에 화면마다 다르게 반응해서 규칙이 안 읽혔고, 그래서 통일하기로 했다.
+         */
+        set((s) => (s.activePanel && s.snap !== 1 ? { snap: 1 as SheetSnap } : {}), false, "collapse"),
     }),
     { name: "panel-store" },
   ),

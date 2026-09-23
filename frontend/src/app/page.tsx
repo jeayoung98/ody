@@ -1,12 +1,8 @@
-import AuthGuard from "@/components/auth/auth-guard";
-import MainScreen from "@/components/layout/main-screen";
-import TutorialGate from "@/components/tutorial/tutorial-gate";
-
+/**
+ * 지도 탭 (`/`). **아무것도 그리지 않는다** — 지도와 HUD 는 `app-shell.tsx` 가 들고 있다
+ * (S15P21A405-417). 하단 탭이 여러 경로를 오가는데 경로마다 지도를 다시 만들면 매번 처음부터
+ * 불러오고 재생도 끊기므로, 지도는 경로 위가 아니라 **루트 레이아웃 밑**에 둔다.
+ */
 export default function HomePage() {
-  return (
-    <AuthGuard>
-      <TutorialGate />
-      <MainScreen />
-    </AuthGuard>
-  );
+  return null;
 }

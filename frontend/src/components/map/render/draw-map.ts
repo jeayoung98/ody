@@ -1,9 +1,18 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
-import { drawFriends } from "./draw-friends";
+import { drawFriends, drawQueue, drawShip } from "./draw-friends";
+
+/**
+ * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
+ * 남의 우주선(12.5~15)과 같은 눈높이로 둔다 — 내 것만 크면 축척이 어긋나 보인다.
+ */
+const ME_SHIP_R = 13;
+/** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
+const TEAL_RGB: readonly [number, number, number] = [79, 227, 206];
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
+import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
 
 const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 
@@ -11,10 +20,17 @@ const clamp = (v: number, a: number, b: number) => Math.min(b, Math.max(a, v));
 function lumOf(i: number, mag: number) {
   return clamp(0.28 * mag + 0.72 * Math.pow(((i * 7919) % 1000) / 1000, 0.8), 0, 1);
 }
-function twinkle(id: number, t: number) {
-  const dep = 0.05 + (id % 13) / 34;
-  const spd = 0.5 + (id % 23) / 9;
-  return 1 - dep * (0.5 + 0.5 * Math.sin(t * spd + id * 0.7));
+/**
+ * 큰 별 몇 개만 느리게 숨 쉰다 — 기준값과 왜 이렇게 눌렀는지는 {@link STAR_TWINKLE} 에 있다.
+ * 해당 없는 별은 1 을 돌려주므로 밝기가 그대로다 — **사라지는 별은 없다.**
+ */
+function twinkle(id: number, t: number, mag: number) {
+  if (mag < STAR_TWINKLE.minMag || id % STAR_TWINKLE.nth !== 0) return 1;
+  const [dLo, dHi] = STAR_TWINKLE.depth;
+  const [pLo, pHi] = STAR_TWINKLE.period;
+  const dep = dLo + ((id % 11) / 10) * (dHi - dLo);
+  const period = pLo + ((id % 7) / 6) * (pHi - pLo);
+  return 1 - dep * (0.5 + 0.5 * Math.sin(((2 * Math.PI) / period) * t + id * 0.7));
 }
 
 /**
@@ -36,9 +52,22 @@ function appear(id: number, t: number) {
   // 별은 기록이 남아 있어 **뚝** 하고 나온다 (S15P21A405-284)
   if ((t - e.last) * 1000 > STAR_VIEW.reappearGapMs) e.first = t;
   e.last = t;
-  if (seenAt.size > 4000 && t - e.first > 3) seenAt.delete(id);
   return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
 }
+/**
+ * 기억이 너무 불면 **한동안 안 그려진** 별만 잊는다 (S15P21A405-479).
+ *
+ * 예전에는 `appear` 안에서 `seenAt.size > 4000 && t - e.first > 3` 이면 지웠다. 그런데 그 줄은
+ * **지금 그리고 있는 별**을 지웠다 — 처음 나타나고 3초가 지나기만 하면 대상이라, 다음 프레임에
+ * `appear` 가 기억을 못 찾고 0(투명)부터 다시 밝혔다. 별이 3초마다 사라졌다 나타나는 것처럼
+ * 보이는 길이 여기였다. 기준을 `first`(언제 처음 봤나)에서 `last`(마지막으로 그린 때)로 바꾸면
+ * 화면에 있는 별은 절대 대상이 되지 않는다.
+ */
+function forgetStale(t: number) {
+  if (seenAt.size <= STAR_VIEW.memoryCap) return;
+  for (const [id, e] of seenAt) if ((t - e.last) * 1000 > STAR_VIEW.forgetMs) seenAt.delete(id);
+}
+
 /**
  * 화면 밖이지만 살아 있는 별은 "본 것" 으로 친다 — 지도를 밀어 다시 들어올 때는 페이드하지 않는다.
  * 페이드는 **집합에 없던 별이 생길 때**만이다
@@ -211,13 +240,13 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
       alpha = 1;
     } else if (on) {
       d = (STAR_SIZE.min + Math.pow(mag, 1.75) * (STAR_SIZE.max - STAR_SIZE.min)) * grow;
-      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t) * born;
+      alpha = (0.42 + lumOf(i, mag) * 0.58) * twinkle(s.musicId, t, mag) * born;
     } else {
       // 배경 별: 작고, 밝기는 별마다 다르고, 하늘처럼 함께 흐른다 (깊이만큼 시차)
       // 집을 수 없는 별이라 눌리는 별(0.42~1)과 확실히 갈라놓는다 — 임시 랜덤 크기로 배경도 커진 뒤로
       // 둘이 섞여 보여서 더 옅고 작게 눌렀다 (S15P21A405-283). 최대 알파 0.13
       d = (2.2 + Math.pow(mag, 1.6) * 3.6) * grow * fieldSize;
-      alpha = (0.04 + lumOf(i, mag) * 0.09) * twinkle(s.musicId, t) * fieldAlpha * born;
+      alpha = (0.04 + lumOf(i, mag) * 0.09) * fieldAlpha * born;
       const drift = 0.34 + e.z[i] * 0.05;
       px += swx * drift;
       py += swy * drift;
@@ -281,6 +310,8 @@ function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
  */
 let coverIdx: number[] = [];
 let coverLayer = -1;
+/** 지난 프레임의 카메라. 미는 중인지 확대하는 중인지를 여기서 가른다 (S15P21A405-529) */
+let coverCam = { cx: Number.NaN, cy: Number.NaN, s: Number.NaN };
 
 /**
  * 대표성이 가장 높은 몇 곡은 앨범 커버로 띄운다.
@@ -297,7 +328,10 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   e.coverHits = [];
   if (e.anim) return;
   const f = e.freeRect();
+  /** 새로 올릴 때 가장자리에서 띄워 둘 거리(px) */
   const M = 42;
+  /** 이미 그린 커버를 놓아 주는 선 — 그림이 통째로 화면 밖으로 나가면 (S15P21A405-529) */
+  const KEEP = COVER_COUNT.sizePx;
   const grow = clamp(0.86 + Math.log(Math.max(1, e.cam.s / 100)) * 0.13, 0.85, 1.35);
   if (e.coverAlpha < 0.01) return;
 
@@ -305,16 +339,39 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   if (coverLayer !== e.layer) {
     coverIdx = [];
     coverLayer = e.layer;
+    // 겹이 바뀐 것은 미는 것이 아니다 — 곧바로 채우게 카메라 기억도 비운다 (S15P21A405-529)
+    coverCam = { cx: Number.NaN, cy: Number.NaN, s: Number.NaN };
   }
 
   const n = e.cam.s < COVER_COUNT.nearScale ? COVER_COUNT.far : COVER_COUNT.near;
   const gap2 = COVER_COUNT.minGapPx * COVER_COUNT.minGapPx;
-  /** 아직 이 겹에 살아 있고 화면 안(여백 M)인가 */
-  const usable = (i: number) => {
+
+  /**
+   * **미는 동안에는 새 커버를 올리지 않는다** (S15P21A405-529).
+   *
+   * 예전에는 밀면서 가장자리 커버가 내려가고 그 자리를 다른 곡이 채우기를 반복했다 — 화면이
+   * 계속 깜빡였다. 미는 것은 "지금 있는 것을 계속 보겠다" 는 뜻이지 새 그림을 달라는 게 아니다.
+   *
+   * **배율이 바뀌면 예외다.** 줌은 보이는 범위 자체가 달라지는 일이라 새로 뽑는 것이 맞고,
+   * 사용자도 그때는 바뀌기를 기대한다. 줌은 커서 기준이라 cx·cy 도 같이 움직이므로 배율을 먼저 본다.
+   */
+  const zooming = e.cam.s !== coverCam.s;
+  const panning = !zooming && (e.cam.cx !== coverCam.cx || e.cam.cy !== coverCam.cy);
+  coverCam = { cx: e.cam.cx, cy: e.cam.cy, s: e.cam.s };
+  /**
+   * 아직 이 겹에 살아 있고 화면 안인가.
+   *
+   * **지킬 때와 올릴 때 기준이 다르다** (히스테리시스, S15P21A405-529). 예전에는 둘 다 여백
+   * 42px 이라, 화면 안에 멀쩡히 보이는 커버가 가장자리에 닿는 순간 내려갔다가 조금만 되밀면
+   * 다시 올라왔다. 올릴 때는 안쪽에 편히 들어와야 하고(`M`), **이미 그린 것은 화면 밖으로
+   * 완전히 나갈 때까지 남긴다**(`-KEEP`).
+   */
+  const usable = (i: number, forNew = false) => {
     if (!e.subset[i]) return false;
+    const m = forNew ? M : -KEEP;
     const px = e.pos[i * 2];
     const py = e.pos[i * 2 + 1];
-    return px > f.x0 + M && px < f.x1 - M && py > f.y0 + M && py < f.y1 - M;
+    return px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m;
   };
   /** 이미 고른 것들과 충분히 떨어져 있는가 (줌아웃하면 별이 모여 커버가 겹친다) */
   const spaced = (i: number, picked: number[]) =>
@@ -326,17 +383,49 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     if (picked.length >= n) break;
     if (usable(i) && spaced(i, picked)) picked.push(i);
   }
-  // ② 남는 자리만 새로 채운다. 후보는 예전과 같다 (백엔드 대표곡 → 없으면 격자 대표곡)
-  if (picked.length < n) {
+  /*
+   * ② 남는 자리를 **화면 전체에 고루** 채운다 (S15P21A405-518).
+   *
+   * 예전에는 후보를 배열 순서대로 훑어 앞에서부터 집었다. `weight` 정렬이 붙어 있었지만
+   * 실데이터는 전부 0 이라 정렬이 아무것도 안 하고, 결국 **상주 집합이 담겨 온 순서**가 곧
+   * 우선순위였다 — 그 순서가 좌표와 상관있어서 커버가 화면 왼쪽에만 우르르 몰렸다.
+   * 최소 간격(`spaced`)은 54px 겹침만 막을 뿐 "고루 퍼짐" 을 만들지는 못한다.
+   *
+   * 그래서 **화면을 커버 수만큼 칸으로 나누고 칸마다 하나씩** 집는다. 이미 커버가 있는 칸은
+   * 건너뛰므로 새 커버는 늘 비어 있는 쪽으로 간다.
+   */
+  if (picked.length < n && !panning) {
     const candidates = new Set<number>();
     for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
-    if (candidates.size < COVER_COUNT.far) for (const i of e.chosen) candidates.add(i);
-    const fill = [...candidates].filter((i) => !picked.includes(i)).sort((a, b) => e.songs[b].weight - e.songs[a].weight);
+    /**
+     * 격자 대표곡을 **늘 함께 넣는다.** 예전에는 후보가 모자랄 때만 더했는데, 대표곡 40곡이
+     * 한쪽에 뭉쳐 있으면 개수는 충분하면서 자리는 비는 일이 생긴다. `chosen` 은 86px 월드
+     * 격자에서 칸마다 하나씩 뽑은 것이라 화면에 고르게 흩어져 있다.
+     */
+    for (const i of e.chosen) candidates.add(i);
+
+    // 칸마다 하나씩 (규칙과 검사는 `cover-spread.ts`)
+    const at = (i: number) => ({ x: e.pos[i * 2], y: e.pos[i * 2 + 1] });
+    const { cols, rows } = gridFor(n, f);
+    const taken = new Set(picked.map((i) => cellOf(at(i).x, at(i).y, f, cols, rows)));
+    /*
+     * 같은 칸에 여럿이면 `spreadOrder` 가 **먼저 온 것**을 남긴다. 그래서 넣기 전에 줄을
+     * 세워 둔다 — 앨범 ID 있음 > 재생수 > 받은 순서 (S15P21A405-528).
+     */
+    const fill = spreadOrder(
+      [...candidates]
+        .filter((i) => !picked.includes(i) && usable(i, true))
+        .sort(byCoverPriority((i) => e.songs[i].albumMbid != null, (i) => e.songs[i].weight)),
+      at,
+      f,
+      n,
+      taken,
+    );
     // 처음(들고 있던 게 없다)에는 한 번에 채운다. 그 뒤로는 한 칸씩만 — 위 주석 참고
     let room = coverIdx.length === 0 ? n : COVER_COUNT.fillPerFrame;
     for (const i of fill) {
       if (picked.length >= n || room <= 0) break;
-      if (usable(i) && spaced(i, picked)) {
+      if (spaced(i, picked)) {
         picked.push(i);
         room--;
       }
@@ -351,8 +440,9 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.font = `500 9.5px ${FONTS.body}`;
   for (const i of picked) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
-    const mag = starMag(it.s);
-    const S = (19 + Math.pow(mag, 1.4) * 14) * grow;
+    // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
+    // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)
+    const S = COVER_COUNT.sizePx * grow * e.depthScale(i);
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다
@@ -371,7 +461,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     g.strokeStyle = "rgba(255,255,255,.24)";
     g.lineWidth = 1;
     g.stroke();
-    g.fillStyle = `rgba(233,241,255,${(0.34 + mag * 0.34).toFixed(2)})`;
+    g.fillStyle = "rgba(233,241,255,.58)";
     g.fillText(fitText(g, it.s.title, 88), it.px, it.py + S / 2 + 9);
   }
   g.globalAlpha = 1;
@@ -544,6 +634,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   for (let ri = p.rings.length - 1; ri >= 0; ri--) {
     const r = p.rings[ri];
     const isCur = r === cur;
+    /**
+     * **벌려 본 배율이 크기에도 걸린다** (S15P21A405-593). 자리만 벌리면 별은 그대로인 채
+     * 이웃이 멀어질 뿐이라 "확대" 로 안 읽힌다 — 간격과 크기가 같이 커져야 다가간 것이 된다.
+     * 이 값은 별 지름과 가운데 점, 강조 링에 함께 쓰인다.
+     */
     const sc = e.ringScale(r);
     // 물러난 고리는 오므라드는 만큼 옅어진다 — 뭉치가 될 때 밝기가 그대로면 새 고리보다 눈에 띈다
     const a = k * e.ringK(r) * (isCur ? 1 : PROBE.prevAlpha);
@@ -841,8 +936,23 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
     g.stroke();
     g.globalCompositeOperation = "source-over";
   }
-  drawMeMarker(g, px, py, e.time);
-  g.globalCompositeOperation = "source-over";
+  /**
+   * **누가 나를 따라오면 나도 우주선이다** (S15P21A405-557).
+   *
+   * 예전에는 내가 따라갈 때만 우주선 뒤에 줄이 섰다 — 인솔자 쪽은 제 선단을 볼 길이 없어서
+   * 혼자 다니는 것과 구분이 안 됐다. 그리는 모양은 따라갈 때와 같고 '나' 자리만 다르다.
+   *
+   * 기수는 **날아온 방향**을 쓴다. 서 있을 때는 방향이랄 것이 없으므로 위를 본다.
+   */
+  if (e.myRiders > 0) {
+    const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang, e.time, e.myRiders, 0);
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
+    g.globalCompositeOperation = "source-over";
+  } else {
+    drawMeMarker(g, px, py, e.time);
+    g.globalCompositeOperation = "source-over";
+  }
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillStyle = "rgba(79,227,206,.95)";
@@ -948,7 +1058,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
 function drawSelected(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.selectedId == null || e.probe || !e.isAlive(e.selectedId)) return;
   const w = e.worldOf(e.selectedId)!;
-  const { px, py } = e.worldToScreen(w.x, w.y);
+  const { px, py } = e.worldToScreen(w.x, w.y, e.cam, e.parOf(e.selectedId));
   const song = e.songs.find((s) => s.musicId === e.selectedId)!;
   const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
   g.globalCompositeOperation = "lighter";
@@ -1023,8 +1133,27 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
 
 /** 한 프레임 */
 export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
+  // 별을 그릴 때 쓰는 시계와 같아야 한다 — `appear` 가 이 잣대로 `last` 를 적는다
+  forgetStale(e.time);
   // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
   e.hopLink = null;
+  /**
+   * **주변 탐색의 확대는 여기 한 곳이다** (S15P21A405-593).
+   *
+   * 고리 반지름만 키우던 때는 중심 별도 제목도 배경도 그대로라 살만 길어졌다 — 확대가 아니라
+   * "줄이 늘어난 것" 으로 보였다. 화면을 통째로 키우면 배경 별밭·별 크기·글씨·선이 같은
+   * 비율로 커진다. 그리는 좌표는 아무 데도 안 고쳐도 된다.
+   *
+   * 되돌리는 쪽은 {@link MapEngine.unview} 하나다 — 클릭 판정이 보는 `visible`·`hopLink` 는
+   * 확대 전 자리에 그대로 남으므로, 눌린 점만 되돌리면 그리기와 클릭이 안 어긋난다.
+   */
+  const view = e.probeView();
+  if (view) {
+    g.save();
+    g.translate(view.cx, view.cy);
+    g.scale(view.z, view.z);
+    g.translate(-view.cx, -view.cy);
+  }
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
   drawBackground(g, e, depthOf(e));
   if (e.anim) {
@@ -1050,4 +1179,5 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawProbe(g, e);
   drawHold(g, e);
   drawPressure(g, e);
+  if (view) g.restore();
 }

@@ -1,3 +1,4 @@
+import { FRIEND_MARKER } from "@/constants";
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
 import type { MapEngine } from "../engine/map-engine";
@@ -65,50 +66,78 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
   g.stroke();
 }
 
-/** 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향) */
-export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
+/**
+ * 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향).
+ *
+ * **평면 아이콘식 로켓** (S15P21A405-624). 둥근 코에서 꼬리로 좁아지는 물방울 몸통(두 톤),
+ * 큰 창, 뒤로 뻗은 둥근 지느러미 두 개, 꼬리 밴드. **불꽃은 없다** — 예전의 뾰족한 삼각 로켓과
+ * 불꽃은 차갑고 각져서 뺐다. 색은 서비스 팔레트: 몸통 ink, 창 테 ink4, 유리 violet, 지느러미는
+ * 장르색(`rgb`, 내 우주선은 teal).
+ *
+ * **창이 원점이다.** 부르는 쪽이 그 위에 `drawVisor(…, R * 0.72)` 로 사진을 얹으므로 창 중심이
+ * `(px, py)` 여야 한다. 그래서 몸통은 원점보다 아래로 더 길다(코 -1.25R, 꼬리 1.75R).
+ * 파비콘(`src/app/icon.svg`)이 이 좌표를 그대로 옮긴다 — 둘을 같이 고친다.
+ */
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
-  const boost = (1 + Math.min(riders, 6) * 0.2) * (1 + thrust * 1.8);
-  const fl = R * (1.5 + Math.sin(t * 9 + px) * 0.18) * boost;
-  const gr = g.createLinearGradient(0, R * 1.15, 0, R * 1.15 + fl);
-  gr.addColorStop(0, rgba(rgb, 0.95));
-  gr.addColorStop(0.38, rgba(rgb, 0.36));
-  gr.addColorStop(1, rgba(rgb, 0));
-  g.fillStyle = gr;
+
+  // 지느러미 — 뒤로 뻗은 둥근 날. 몸통 뒤에 깔린다
+  g.fillStyle = rgba(rgb, 1);
+  for (const sx of [-1, 1]) {
+    g.beginPath();
+    g.moveTo(sx * R * 0.75, R * 0.55);
+    g.bezierCurveTo(sx * R * 1.25, R * 0.85, sx * R * 1.45, R * 1.25, sx * R * 1.4, R * 1.55);
+    g.bezierCurveTo(sx * R * 1.25, R * 1.6, sx * R * 0.9, R * 1.5, sx * R * 0.65, R * 1.4);
+    g.closePath();
+    g.fill();
+  }
+
+  // 몸통 — 둥근 코, 꼬리로 갈수록 좁아지는 물방울
+  const body = () => {
+    g.beginPath();
+    g.moveTo(0, -R * 1.25);
+    g.bezierCurveTo(R * 0.65, -R * 1.25, R * 1.05, -R * 0.5, R * 1.05, R * 0.15);
+    g.bezierCurveTo(R * 1.05, R * 0.8, R * 0.75, R * 1.35, R * 0.45, R * 1.5);
+    g.lineTo(-R * 0.45, R * 1.5);
+    g.bezierCurveTo(-R * 0.75, R * 1.35, -R * 1.05, R * 0.8, -R * 1.05, R * 0.15);
+    g.bezierCurveTo(-R * 1.05, -R * 0.5, -R * 0.65, -R * 1.25, 0, -R * 1.25);
+    g.closePath();
+  };
+  body();
+  g.fillStyle = "#e9f1ff";
+  g.fill();
+  // 오른쪽 절반 음영 — 평면 아이콘의 두 톤
+  g.save();
+  body();
+  g.clip();
+  g.fillStyle = "#cfd9f7";
+  g.fillRect(0, -R * 1.3, R * 1.2, R * 3);
+  g.restore();
+
+  // 꼬리 밴드(분사구)
+  g.fillStyle = "#3a4761";
   g.beginPath();
-  g.moveTo(-R * 0.5, R * 1.15);
-  g.lineTo(R * 0.5, R * 1.15);
-  g.lineTo(0, R * 1.15 + fl);
+  g.moveTo(-R * 0.45, R * 1.5);
+  g.lineTo(R * 0.45, R * 1.5);
+  g.bezierCurveTo(R * 0.45, R * 1.65, R * 0.25, R * 1.75, 0, R * 1.75);
+  g.bezierCurveTo(-R * 0.25, R * 1.75, -R * 0.45, R * 1.65, -R * 0.45, R * 1.5);
   g.closePath();
   g.fill();
-  g.fillStyle = "rgba(16,24,44,.9)";
-  g.strokeStyle = "rgba(216,233,255,.82)";
-  g.lineWidth = 1.5;
-  g.lineJoin = "round";
+
+  // 창 — 얇은 어두운 테와 보라 유리. 사진이 있으면 부르는 쪽이 유리 위에 덮는다 (R * 0.72)
+  g.fillStyle = "#3a4761";
   g.beginPath();
-  g.moveTo(0, -R * 1.6);
-  g.lineTo(R * 0.62, -R * 0.2);
-  g.lineTo(R * 1.5, R * 1.0);
-  g.lineTo(R * 0.5, R * 0.85);
-  g.lineTo(R * 0.5, R * 1.2);
-  g.lineTo(-R * 0.5, R * 1.2);
-  g.lineTo(-R * 0.5, R * 0.85);
-  g.lineTo(-R * 1.5, R * 1.0);
-  g.lineTo(-R * 0.62, -R * 0.2);
-  g.closePath();
+  g.arc(0, 0, R * 0.84, 0, 6.284);
   g.fill();
-  g.stroke();
-  g.strokeStyle = rgba(rgb, 0.75);
-  g.lineWidth = 1.2;
+  g.fillStyle = "#a67cff";
   g.beginPath();
-  g.moveTo(-R * 0.2, -R * 0.95);
-  g.lineTo(R * 0.2, -R * 0.95);
-  g.stroke();
-  g.fillStyle = rgba(rgb, 0.55);
+  g.arc(0, 0, R * 0.72, 0, 6.284);
+  g.fill();
+  g.fillStyle = "rgba(255,255,255,.35)";
   g.beginPath();
-  g.roundRect(-R * 0.5, R * 0.98, R * 1.0, R * 0.24, R * 0.1);
+  g.arc(-R * 0.22, -R * 0.22, R * 0.16, 0, 6.284);
   g.fill();
   g.restore();
 }
@@ -151,7 +180,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
       g.lineWidth = 1.6;
       g.stroke();
       g.fillStyle = "rgba(79,227,206,.95)";
-      g.font = `600 8.5px ${FONTS.mono}`;
+      g.font = `600 10px ${FONTS.mono}`;
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText("나", qx, qy + rr * 2.6);
@@ -240,12 +269,19 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
 
   g.textAlign = "center";
   g.textBaseline = "middle";
-  for (const fr of e.visFriends) {
+  /**
+   * 그리는 순서 = 깊이 순서. **먼(작은) 표식부터, 가까운(큰) 표식이 위에** (S15P21A405-632) —
+   * 크기는 서 있는 별의 깊이를 따르는데(614) 순서가 이를 모르면 뒤쪽 작은 헬멧이 앞쪽 큰 헬멧을
+   * 덮어 원근이 뒤집힌다. 인솔자는 그 위 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는
+   * 우주선이 가려지지 않는다 (S15P21A405-625).
+   */
+  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader) || a.scale - b.scale);
+  for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
     // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
-    const R = (isLeader ? 15 : 12.5) * fr.scale;
+    const R = (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;
@@ -258,8 +294,9 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     if (ship) {
       const ang = fr.heading + Math.PI / 2;
       if (isLeader) drawQueue(g, px, py, R, ang, t, u.riderCount);
-      drawShip(g, px, py, R, rgb, ang, t, riders, isLeader && e.follow?.mv ? 0.6 : 0);
-      drawVisor(g, px, py, R * 0.66, u);
+      drawShip(g, px, py, R, rgb, ang);
+      // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
+      drawVisor(g, px, py, R * 0.72, u);
     } else {
       drawHelmet(g, px, py, R, rgb, isLeader);
       drawVisor(g, px, py, R, u);
@@ -286,7 +323,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       const bx = px - R * (ship ? 0.95 : 0.82);
       const by = py - R * (ship ? 0.95 : 0.82);
       const label = `+${more}`;
-      g.font = `600 9px ${FONTS.body}`;
+      g.font = `600 11px ${FONTS.body}`;
       // 자릿수가 늘면 알약이 옆으로 늘어난다. 동그라미로 두면 세 자리에서 글자가 삐져나온다
       const w = Math.max(15, g.measureText(label).width + 9);
       const h = 13;
@@ -301,9 +338,14 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       g.fillText(label, bx, by + 0.5);
     }
 
+    /**
+     * 닉네임은 **별 제목 줄보다 아래**에 둔다 (S15P21A405-618). 사람이 선 별에는 커버 제목
+     * (`py + 14~23 + 9`)이나 선택 링 제목(`py + rr + 15.5`)이 같은 자리에 오는데, 예전 `+9` 는
+     * 그 줄과 겹쳐 둘 다 읽히지 않았다. 헬멧 지름 하나만큼 더 내려 제목 줄 밑으로 보낸다.
+     */
     g.fillStyle = "rgba(233,241,255,.62)";
-    g.font = `500 9.5px ${FONTS.body}`;
-    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 9);
+    g.font = `500 ${FRIEND_MARKER.namePx}px ${FONTS.body}`;
+    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 22);
   }
   g.globalAlpha = 1;
 }

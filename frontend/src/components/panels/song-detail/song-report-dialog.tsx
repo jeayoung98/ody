@@ -100,7 +100,7 @@ export default function SongReportDialog({ musicId, title, unplayable = false, o
             </IconButton>
           }
         >
-          <p className="truncate text-[13px] text-ink-2">{title}</p>
+          <p className="truncate text-[14px] text-ink-2">{title}</p>
           {detailFor ? (
             <>
               <label className="flex flex-col gap-1.5">
@@ -112,7 +112,7 @@ export default function SongReportDialog({ musicId, title, unplayable = false, o
                   maxLength={REPORT_DETAIL_MAX}
                   onChange={(e) => setDetail(e.target.value)}
                   placeholder={REPORT_DETAIL_PLACEHOLDER}
-                  className="w-full resize-none rounded-box border border-line bg-glass px-3 py-2 text-[13px] text-ink placeholder:text-ink-4 focus:border-teal focus:outline-none"
+                  className="w-full resize-none rounded-box border border-line bg-glass px-3 py-2 text-[14px] text-ink placeholder:text-ink-4 focus:border-teal focus:outline-none"
                 />
               </label>
               <div className="flex gap-2">
@@ -132,7 +132,7 @@ export default function SongReportDialog({ musicId, title, unplayable = false, o
                 {reasons.map((r) => (
                   <Button key={r.value} className="justify-start! text-left" onClick={() => pick(r.value)}>
                     <span className="font-medium">{r.label}</span>
-                    <span className="ml-1.5 text-[11.5px] text-ink-3">{r.detail}</span>
+                    <span className="ml-1.5 text-[12.5px] text-ink-3">{r.detail}</span>
                   </Button>
                 ))}
               </div>

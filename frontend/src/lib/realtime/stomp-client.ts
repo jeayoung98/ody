@@ -130,6 +130,29 @@ export function isConnected(): boolean {
   return connected;
 }
 
+/** 마지막 재연결 시각. 만료는 오류를 여러 번 겹쳐 뱉으므로 한 번만 돈다 */
+let lastReconnectAt = 0;
+
+/**
+ * 끊고 다시 연다 — **presence 가 만료됐을 때의 유일한 복구 수단이다** (S15P21A405-555).
+ *
+ * 서버는 소켓 CONNECT 시점에만 presence 행을 만든다(`WebSocketConnectionListener.onConnected`).
+ * 그 행은 45초 TTL 이고 heartbeat 로만 연장되는데, 브라우저가 안 보이는 탭의 타이머를 1분 가까이
+ * 늘려서 실측 53~61초 간격으로 나간다 — **백그라운드 탭의 presence 는 만료된다.**
+ *
+ * 만료돼도 **소켓은 멀쩡히 열려 있다.** 그래서 stompjs 의 `reconnectDelay` 도 `onWebSocketClose`
+ * 도 돌지 않고, join 을 다시 보내 봐야 `PRESENCE_NOT_CONNECTED` 만 돌아온다 — 그 행을 만드는
+ * 것이 CONNECT 뿐이기 때문이다. 여기서 끊어 줘야 새 접속이 생긴다.
+ */
+export async function reconnect(): Promise<void> {
+  const now = Date.now();
+  // 재연결이 끝나기 전에 밀린 오류가 또 부르는 것을 막는다. 끊었다 붙는 사이에 다시 끊으면 제자리다
+  if (now - lastReconnectAt < REALTIME.reconnectDelayMs) return;
+  lastReconnectAt = now;
+  await disconnect();
+  connect();
+}
+
 /** 모든 수신 프레임을 듣는다. 해제 함수를 돌려준다 */
 export function subscribe(listen: Listener): () => void {
   listeners.add(listen);

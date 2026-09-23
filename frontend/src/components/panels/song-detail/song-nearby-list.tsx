@@ -179,7 +179,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
           **목록을 듣는 버튼**임을 말한다 — 껍데기는 앱의 그 동그란 재생 버튼 그대로다.
         */}
         <TransportButton label={`${NEARBY_COUNT}곡 순차 재생`} primary disabled={items.length === 0} onClick={handlePlayAll}>
-          <ListPlayIcon size={15} />
+          <ListPlayIcon size={16} />
         </TransportButton>
       </div>
       {/*

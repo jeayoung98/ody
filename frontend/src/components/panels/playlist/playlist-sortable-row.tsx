@@ -76,7 +76,7 @@ export default function PlaylistSortableRow({ item, index, active, editable, onC
                 {...attributes}
                 {...listeners}
               >
-                <GripIcon size={13} />
+                <GripIcon size={15} />
               </IconButton>
             )}
             {actions}

@@ -1,10 +1,9 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { CatConstellationIcon, JourneyIcon } from "@/components/common/icons";
+import { JourneyIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
-import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
-import { useContestStore } from "@/stores/use-contest-store";
+import { usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -24,9 +23,7 @@ import RailButton from "./rail-button";
 export default function MapActions() {
   const pathname = usePathname();
   const panelEnabled = usePanelEnabled();
-  const features = useFeatures();
   const toggle = usePanelStore((s) => s.toggle);
-  const toggleContest = useContestStore((s) => s.toggleOpen);
   const hasJourney = useJourneyStore((s) => s.isRouteRequested);
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
@@ -56,15 +53,14 @@ export default function MapActions() {
       <NearbyExploreButton />
       {panelEnabled.journey && (
         <RailButton label="여정" active={composerOpen} onClick={pressJourney} data-tutorial="journey">
-          <JourneyIcon size={16} />
+          <JourneyIcon size={17} />
         </RailButton>
       )}
-      {/* 폰의 이벤트 입구 — 데스크톱은 우상단 원형 버튼이 맡는다 (S15P21A405-602). 모달이라 패널 상태와 무관 */}
-      {features.contest && (
-        <RailButton label="이벤트" active={false} onClick={toggleContest} data-tutorial="contest">
-          <CatConstellationIcon size={16} />
-        </RailButton>
-      )}
+      {/*
+        **폰에는 이벤트 입구를 두지 않는다** (S15P21A405-617). S15P21A405-602 에서 여기에 넣었던
+        것을 기획 판단으로 걷었다. 데스크톱은 우상단 원형 버튼(`contest-button`)이 그대로 맡는다 —
+        모달이라 패널 상태와 무관하고, 이 줄에서 빠져도 그쪽은 영향이 없다.
+      */}
     </div>
   );
 }

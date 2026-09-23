@@ -92,7 +92,7 @@ export default function JourneyComposer() {
         <span className="lbl">여정 만들기</span>
         <span className="flex-1" />
         <button type="button" onClick={close} aria-label="닫기" className="text-ink-3 transition-colors hover:text-ink">
-          <CloseIcon size={13} />
+          <CloseIcon size={15} />
         </button>
       </header>
 
@@ -122,7 +122,7 @@ export default function JourneyComposer() {
           onClick={() => { track("journey_endpoints_swapped"); swap(); }}
           aria-label="출발·도착 바꾸기"
           title="출발·도착 바꾸기"
-          className="shrink-0 rounded-pill px-2 py-1.5 text-[13px] text-ink-3 transition-colors hover:bg-white/[.07] hover:text-ink"
+          className="shrink-0 rounded-pill px-2 py-1.5 text-[14px] text-ink-3 transition-colors hover:bg-white/[.07] hover:text-ink"
         >
           ⇅
         </button>
@@ -149,13 +149,13 @@ export default function JourneyComposer() {
       )}
 
       <div className="flex items-center justify-between gap-2 border-t border-line px-4 py-2.5">
-        <span className="text-[11px] text-ink-4">{ready ? "지도에서 눌러 바꿀 수도 있어요" : "지도에서 곡을 눌러도 채워집니다"}</span>
+        <span className="text-[12px] text-ink-4">{ready ? "지도에서 눌러 바꿀 수도 있어요" : "지도에서 곡을 눌러도 채워집니다"}</span>
         <button
           type="button"
           onClick={handleCreate}
           disabled={!ready}
           data-tutorial="journey-create"
-          className="grad-bg rounded-pill px-3.5 py-1.5 text-[12.5px] font-medium text-void transition-opacity duration-fast disabled:pointer-events-none disabled:opacity-30"
+          className="grad-bg rounded-pill px-3.5 py-1.5 text-[13.5px] font-medium text-void transition-opacity duration-fast disabled:pointer-events-none disabled:opacity-30"
         >
           경로 만들기
         </button>

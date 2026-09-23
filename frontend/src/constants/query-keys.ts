@@ -78,6 +78,14 @@ export const QUERY_KEYS = {
     weekly: ["chart", "weekly"] as const,
   },
 
+  /**
+   * 음악 취향 분석 (S15P21A405-630). **인자가 없다** — 백엔드가 토큰으로 사람을 정하므로
+   * 이 키가 가리키는 것은 언제나 "내 것" 하나다.
+   */
+  taste: {
+    analysis: ["taste", "analysis"] as const,
+  },
+
   /** 별자리 콘테스트 (S15P21A405-602). 표·출품이 회차 정보와 목록 양쪽에 걸려 `all` 로 함께 무효화한다 */
   contest: {
     all: ["contest"] as const,

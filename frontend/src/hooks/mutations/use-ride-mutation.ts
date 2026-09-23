@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { API_ENDPOINTS, BOTS, RIDE_REJECTED } from "@/constants";
+import { API_ENDPOINTS, BOTS, RIDE_CAPTAIN_UNREACHABLE, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
@@ -7,8 +7,9 @@ import { isAudible, markDead, pickSong } from "@/lib/bots/pick-song";
 import { dropSong, setSong } from "@/lib/bots/sim";
 import { isBot } from "@/lib/bots/roster";
 import { botLiveOf, useBotStore } from "@/stores/use-bot-store";
-import { sendJoinNow } from "@/hooks/use-presence-join";
+import { joinAndWait } from "@/hooks/use-presence-join";
 import { playFrom } from "@/lib/realtime/ride";
+import { isConnected } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -29,9 +30,10 @@ export interface RideTarget {
  * 막혔을 때 아무 응답이 없어 버튼만 안 먹는 것처럼 보인다.
  *
  * **422 는 presence 만료일 때가 많다** (1차 §12.1). 재생 선언과 같은 처리를 한다 — 부르기 전에
- * join 을 한 번 보내고, 그래도 422 면 join 재전송 뒤 **한 번만** 재시도한다.
+ * join 을 보내 **응답까지 기다리고**, 그래도 422 면 한 번 더 기다린 뒤 **한 번만** 재시도한다.
  */
-export function useRideMutation() {
+/** `silent` 면 거부 토스트를 띄우지 않는다 — 다시 잇기(`ride-resume`)가 재시도마다 토스트를 내지 않으려고 쓴다 */
+export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
   const showToast = useToastStore((s) => s.show);
   const qc = useQueryClient();
 
@@ -39,14 +41,22 @@ export function useRideMutation() {
     mutationFn: async (target: RideTarget): Promise<RideResponse> => {
       // 봇은 서버에 없는 사람이다. 보내 봐야 404 고, 보내면 안 되는 요청이다 (S15P21A405-536)
       if (isBot(target.email)) return mountBot(target.email, qc);
-      // presence 가 살아 있어야 200 이 온다. 만료 상태에서 누르면 422 라 미리 깨워 둔다
-      sendJoinNow();
+      /**
+       * presence 가 살아 있어야 200 이 온다. **응답을 기다린다** (S15P21A405-555) — 예전에는
+       * 던지고 바로 REST 를 불러서, 서버가 join 을 처리하기 전에 요청이 닿으면 그대로 422 였다.
+       */
+      await joinAndWait();
       try {
         return await mount(target.email);
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "PRESENCE_ERROR") throw e;
-        // 자동 복구는 한 번뿐이다. 반복하면 사용자는 아무것도 모른 채 기다리기만 한다
-        sendJoinNow();
+        /**
+         * 자동 복구는 한 번뿐이다. 반복하면 사용자는 아무것도 모른 채 기다리기만 한다.
+         *
+         * presence 가 만료됐던 경우 첫 join 은 `PRESENCE_NOT_CONNECTED` 로 튕기고 오류 핸들러가
+         * 소켓을 다시 연다. 이 두 번째 기다림이 그 새 연결의 join 응답을 받아 낸다.
+         */
+        await joinAndWait();
         return await mount(target.email);
       }
     },
@@ -93,7 +103,20 @@ export function useRideMutation() {
     },
 
     onError: (e) => {
+      if (silent) return;
       const code = e instanceof ApiError ? e.code : "UNKNOWN";
+      /**
+       * **422 는 두 가지를 한 코드로 말한다** (S15P21A405-628). 내 presence 가 없거나,
+       * 상대가 탈 수 있는 상태가 아니거나. 앞엣것은 여기서 직접 확인할 수 있다 —
+       * 소켓이 붙어 있으면 내 presence 는 있는 것이므로 남은 건 상대·서버 쪽이다.
+       *
+       * 구분 없이 "연결이 불안정해요" 만 띄우면 **서버가 거절한 것도 내 인터넷 탓으로
+       * 읽힌다.** 폰에서는 콘솔을 못 보므로 이 문구가 유일한 단서다.
+       */
+      if (code === "PRESENCE_ERROR" && isConnected()) {
+        showToast(RIDE_CAPTAIN_UNREACHABLE);
+        return;
+      }
       showToast(RIDE_REJECTED[code as keyof typeof RIDE_REJECTED] ?? RIDE_REJECTED.UNKNOWN);
     },
   });

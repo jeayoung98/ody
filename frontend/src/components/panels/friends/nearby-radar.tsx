@@ -242,7 +242,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           className="animate-breathe grid place-items-center rounded-pill p-[3px] shadow-[0_0_18px_-2px_rgba(79,227,206,.8)] ring-2 ring-teal/80"
           style={{ ["--breathe-hi" as string]: 1.12, animationDuration: "1.9s" }}
         >
-          <HelmetAvatar email={me?.email ?? "me"} imageUrl={me?.imageUrl} musicId={myMusicId} size={44} />
+          <HelmetAvatar email={me?.email ?? "me"} imageUrl={me?.imageUrl} musicId={myMusicId} size={RADAR.sizeMax} />
         </span>
       </span>
 

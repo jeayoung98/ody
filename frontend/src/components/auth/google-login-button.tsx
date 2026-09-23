@@ -103,7 +103,7 @@ export default function GoogleLoginButton() {
   // 기본값이 지워지는 날 버튼이 조용히 사라지는 것보다 이유가 적힌 화면이 낫다.
   if (!CLIENT_ID) {
     return (
-      <p className="rounded-pill border border-line px-3 py-3 text-center text-[12.5px] leading-[1.62] text-ink-2">
+      <p className="rounded-pill border border-line px-3 py-3 text-center text-[13.5px] leading-[1.62] text-ink-2">
         구글 로그인이 설정되지 않았습니다 — <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> 가 필요합니다.
       </p>
     );
@@ -114,7 +114,7 @@ export default function GoogleLoginButton() {
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={renderGoogleButton} />
       {/* 구글 버튼이 이 폭에 맞춰 그려진다 — `w-full` 이라야 잰 값이 카드 폭과 같다 */}
       <div ref={slot} className="flex w-full justify-center overflow-hidden" />
-      {isError && <p className="mt-2 text-center text-[12.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
+      {isError && <p className="mt-2 text-center text-[13.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
     </>
   );
 }

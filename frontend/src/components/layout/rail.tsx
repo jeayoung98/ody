@@ -69,7 +69,7 @@ export default function Rail() {
         <NearbyExploreButton />
         {panelEnabled.journey && (
           <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
-            <JourneyIcon size={16} />
+            <JourneyIcon size={17} />
           </RailButton>
         )}
       </nav>

@@ -38,7 +38,7 @@ export default function DrillHint() {
           />
         </div>
       )}
-      <p className={`mt-1.5 text-[11px] leading-[1.45] ${tone}`}>{message}</p>
+      <p className={`mt-1.5 text-[12px] leading-[1.45] ${tone}`}>{message}</p>
     </>
   );
 }

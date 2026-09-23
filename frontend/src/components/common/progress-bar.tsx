@@ -15,12 +15,12 @@ export default function ProgressBar({ percent, label, valueText, code }: Progres
     <div className="grid grid-cols-[1fr_76px_34px] items-center gap-[9px]">
       <span className="truncate text-xs text-ink-2">
         {label}
-        {code && <span className="ml-1 font-mono text-[9px] text-ink-4">{code}</span>}
+        {code && <span className="ml-1 font-mono text-[11px] text-ink-4">{code}</span>}
       </span>
       <span className="h-1 overflow-hidden rounded-pill bg-white/[.08]">
         <i className="grad-bg block h-full rounded-pill" style={{ width: `${p}%` }} />
       </span>
-      <span className="num text-right text-[10px] text-ink-3">{valueText ?? `${Math.round(percent)}%`}</span>
+      <span className="num text-right text-[11.5px] text-ink-3">{valueText ?? `${Math.round(percent)}%`}</span>
     </div>
   );
 }

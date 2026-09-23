@@ -90,7 +90,7 @@ export default function SearchBar() {
       >
         <SearchIcon className="shrink-0 opacity-50" />
         {expanded && chip && (
-          <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[11.5px] whitespace-nowrap text-ink-2">
+          <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[12.5px] whitespace-nowrap text-ink-2">
             {CHIP_LABEL[chip.kind]}: {chip.value}
             <button
               type="button"
@@ -99,7 +99,7 @@ export default function SearchBar() {
               onClick={removeChip}
               className="cursor-pointer rounded-pill p-0.5 text-ink-3 transition-colors hover:text-ink"
             >
-              <CloseIcon size={10} />
+              <CloseIcon size={12} />
             </button>
           </span>
         )}
@@ -108,7 +108,7 @@ export default function SearchBar() {
           ref={inputRef}
           tabIndex={expanded ? 0 : -1}
           aria-hidden={!expanded}
-          className={`min-w-0 bg-transparent text-[13px] outline-none placeholder:text-ink-3 ${expanded ? "flex-1" : "w-0 flex-none"}`}
+          className={`min-w-0 bg-transparent text-[14px] outline-none placeholder:text-ink-3 ${expanded ? "flex-1" : "w-0 flex-none"}`}
           placeholder={chip ? (chip.kind === "artist" ? "제목 검색..." : "아티스트 검색...") : "음악 · 아티스트 검색"}
           autoComplete="off"
           spellCheck={false}

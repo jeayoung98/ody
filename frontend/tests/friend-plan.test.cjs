@@ -33,6 +33,15 @@ test("한 명이라도 들어오면 다시 정한다", () => {
   assert.equal(reusablePlan(plan, setOf("a", "b", "c", "d", "e")), null);
 });
 
+/** 묶여 있던 사람을 따라가기 시작했다 — 배지 숫자 속에 남으면 우주선이 화면에 없다 (S15P21A405-625) */
+test("인솔자가 남의 묶음 속이면 다시 정한다", () => {
+  assert.equal(reusablePlan(plan, setOf("a", "b", "c", "d"), "b"), null);
+});
+
+test("인솔자가 이미 제 표식이면 그대로 쓴다 — 따라가는 중 깜빡이지 않는다", () => {
+  assert.deepEqual(reusablePlan(plan, setOf("a", "b", "c", "d"), "d"), plan);
+});
+
 test("아무도 없으면 빈 배치를 그대로 쓴다", () => {
   assert.deepEqual(reusablePlan([], setOf()), []);
   assert.equal(reusablePlan([], setOf("a")), null, "없던 사람이 생겼다");

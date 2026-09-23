@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
+  <!-- ODY 파비콘 — 지도 위 사람 표식과 같은 우주복 헬멧. 바이저는 보라(design-tokens violet #a67cff) -->
+  <defs>
+    <radialGradient id="visor" cx="40%" cy="35%" r="70%">
+      <stop offset="0" stop-color="#d9c6ff"/>
+      <stop offset="0.45" stop-color="#a67cff"/>
+      <stop offset="1" stop-color="#4b2a9e"/>
+    </radialGradient>
+    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#e6effc"/>
+      <stop offset="1" stop-color="#9fb3d6"/>
+    </linearGradient>
+  </defs>
+  <!-- 좌우 통신 포드 -->
+  <rect x="2" y="24" width="8" height="16" rx="3.5" fill="#c4d6f5"/>
+  <rect x="54" y="24" width="8" height="16" rx="3.5" fill="#c4d6f5"/>
+  <!-- 헬멧 껍질 -->
+  <circle cx="32" cy="32" r="27" fill="url(#shell)" stroke="#f3f7ff" stroke-width="2"/>
+  <!-- 바이저 -->
+  <circle cx="32" cy="33" r="19" fill="url(#visor)" stroke="#2a1a55" stroke-width="1.5"/>
+  <!-- 바이저 반사광 -->
+  <path d="M19 27a15 13 0 0 1 16-9" fill="none" stroke="#ffffff" stroke-opacity="0.75" stroke-width="2.4" stroke-linecap="round"/>
+</svg>

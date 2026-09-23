@@ -133,8 +133,18 @@ export const API_ENDPOINTS = {
    */
   playlist: {
     list: "/bff/playlists",
-    mine: "/bff/playlists/mine",
-    liked: "/bff/playlists/liked",
+    /**
+     * 만든 플리 · 좋아요한 플리. **이메일을 주면 그 사람 것**이다 (S15P21A405-587).
+     *
+     * 백엔드 `GET /api/playlist/search` · `/liked` 는 처음부터 `email` 로 **아무나** 조회하는
+     * API 다 ("본인 목록도 이 API(email에 본인 email)" — 컨트롤러 주석). 공개 범위 판정도
+     * 서비스 안에 있다. 우리 쪽만 토큰 주체로 박아 두고 있어서 남의 피드에 못 붙였다.
+     *
+     * 경로 이름은 `mine` 그대로 둔다 — 부르는 쪽 대부분이 실제로 내 것을 원하고(플리 추가 메뉴 ·
+     * 플리 패널), 이름을 바꾸면 그 자리들까지 건드리게 된다. 안 주면 예전과 똑같이 토큰 주체다.
+     */
+    mine: (email?: string | null) => (email ? `/bff/playlists/mine?email=${encodeURIComponent(email)}` : "/bff/playlists/mine"),
+    liked: (email?: string | null) => (email ? `/bff/playlists/liked?email=${encodeURIComponent(email)}` : "/bff/playlists/liked"),
     detail: (id: number) => `/bff/playlists/${id}`,
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,

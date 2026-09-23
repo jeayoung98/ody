@@ -21,7 +21,7 @@ export function useRemovePlaylistItemMutation() {
       api<DeleteResult>(API_ENDPOINTS.playlist.item(playlistId, musicId), { method: "DELETE" }),
     onSuccess: (_data, { playlistId }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.detail(playlistId) });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mine });
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mineAll });
     },
   });
 }

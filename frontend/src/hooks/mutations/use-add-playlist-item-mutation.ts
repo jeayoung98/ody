@@ -22,7 +22,7 @@ export function useAddPlaylistItemMutation() {
       api<InsertResult>(API_ENDPOINTS.playlist.items(playlistId), { method: "POST", body: JSON.stringify({ musicId }) }),
     onSuccess: (_data, { playlistId }) => {
       qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.detail(playlistId) });
-      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mine });
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mineAll });
     },
   });
 }

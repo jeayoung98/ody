@@ -10,7 +10,7 @@
 
 ## R2. 순위 계산
 
-- **Decision**: 리더보드 SQL 에서 계산한다. `rank_score = like_cnt + score * ai_weight / 100.0`, `ORDER BY rank_score DESC, score DESC, created_at ASC`. 저장하지 않는다.
+- **Decision**: 리더보드 SQL 에서 계산한다. 회차 `ai_weight` 를 파라미터로 넘겨 `rank_score = like_cnt + score * #{aiWeight} / 100.0`, `ORDER BY rank_score DESC, score DESC, created_at ASC`. 저장하지 않는다.
 - **Rationale**: `like_cnt` 는 이미 비정규화 사본(563)이고 `score` 는 채점 뒤 고정이다. 저장하면 좋아요·K 변경마다 갱신해야 한다. 회차당 작품이 수백 개 수준이라 정렬 비용은 무시할 만하다.
 - `ponytail:` 작품이 수만 개가 되면 `(round_id, rank_score)` 표현식 인덱스. 지금은 불필요.
 
@@ -22,7 +22,7 @@
 
 ## R4. 표 세기와 돌려받기
 
-- **Decision**: 쓴 표 = `artwork_like` ⋈ `artwork` 중 `round_id = 그 회차 AND email = 나` 의 수. 새 테이블 없음.
+- **Decision**: 쓴 표 = `artwork_like` ⋈ `artwork` 중 `round_id = 그 회차 AND l.email = 나 AND a.email <> 나` 의 수 — 배포 전 자기 작품에 눌러 둔 좋아요는 세지 않는다(analyze E1). 새 테이블 없음.
 - **Rationale**: 거두면 행이 지워지고, 재출품·삭제는 FK CASCADE 로 좋아요가 지워진다 — 표 반납(FR-007)이 저절로 된다. 기존 초과분(배포 전 4개 이상)도 그대로 세어져 한도 밑으로 내려갈 때까지 새 좋아요가 막힌다(spec 가정).
 
 ## R5. 닫힌 회차·내 작품
@@ -34,7 +34,7 @@
 ## R6. 리더보드의 곡·좌표
 
 - **Decision**: `ArtworkSummary` 에 `points: [{musicId, title, artist, x, y}]` 를 붙인다. 페이지 작품 id 로 `artwork_point` 한 번(`WHERE artwork_id IN (...)`), 곡 이름은 `MusicDetailReader.findSummariesByIds` 한 번(PK 일괄, 598 과 같은 경로).
-- **Rationale**: FE 갤러리·순위 카드가 썸네일(좌표)과 곡 이름을 그린다. 지금 리더보드는 `musicCnt` 뿐이라 FE 가 카드마다 상세를 부르게 된다(N+1). 상세 응답은 이미 `musics`(곡 상세)를 실어 FR-015 의 상세 쪽은 **변경 없음**.
+- **Rationale**: FE 갤러리·순위 카드가 썸네일(좌표)과 곡 이름을 그린다. 지금 리더보드는 `musicCnt` 뿐이라 FE 가 카드마다 상세를 부르게 된다(N+1). 상세 응답의 기존 `musics` 는 지워진 곡이 빠지는 별도 배열이라 `points` 와 순번이 어긋날 수 있다 — 상세에도 같은 원소(`tracks`)를 더한다. 곡 상세는 이미 읽으므로 조립만 추가된다(analyze U1).
 - 요소 모양은 598 `DrawTrack` 과 같다. 두 브랜치가 머지되면 하나로 합친다(`ponytail:` 주석).
 
 ## R7. 닫힌 모양 렌더

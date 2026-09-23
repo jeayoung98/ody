@@ -34,7 +34,8 @@
 
 ## `GET /api/artwork/detail`
 
-- `closed` 추가. 곡 이름은 기존 `musics`(곡 상세, 저장 순서)에 이미 있다 — 변경 없음.
+- `closed` 추가.
+- `tracks: [{musicId, title, artist, x, y}]` 추가 — 리더보드 `points` 와 같은 원소. 좌표와 곡 이름이 한 원소라 순번이 어긋나지 않는다. 기존 `points`(좌표)·`musics`(곡 상세)는 호환을 위해 그대로 둔다(`musics` 는 지워진 곡이 빠져 `points` 와 순번이 다를 수 있다).
 
 ## `GET /api/artwork/mine`
 

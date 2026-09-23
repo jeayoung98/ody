@@ -102,3 +102,74 @@ test("자리를 모르면 방향도 없다", () => {
   assert.equal(bearingOf(null, at(1, 1)), null);
   assert.equal(bearingOf(ORIGIN, null), null);
 });
+
+/**
+ * **겹친 헬멧을 밀어낸다** (S15P21A405-596). 각도를 좌표로 잡으면 같은 곡을 듣는 사람이
+ * 완전히 포개져 맨 위 한 명만 눌린다. 레이더에서 사람을 누르는 것이 프로필로 가는 길이라
+ * 그냥 안 보이는 것보다 나쁘다.
+ *
+ * 화면으로는 "좀 겹쳐 보이네" 로만 읽혀서 숫자로 고정한다.
+ */
+const { spreadApart } = require("../src/components/panels/friends/nearby-radar.tsx");
+
+/** 가장 가까운 두 점 사이 거리 */
+function closest(pts) {
+  let min = Infinity;
+  for (let i = 0; i < pts.length; i++)
+    for (let j = i + 1; j < pts.length; j++) min = Math.min(min, Math.hypot(pts[i].x - pts[j].x, pts[i].y - pts[j].y));
+  return min;
+}
+
+test("완전히 같은 자리에 겹친 사람들을 떼어 놓는다", () => {
+  // 같은 곡을 듣는 다섯 명 — 좌표가 똑같다
+  const items = Array.from({ length: 5 }, () => ({ x: 20, y: -10, d: RADAR.sizeMin }));
+  const out = spreadApart(items, RADAR.size / 2);
+  assert.ok(closest(out) >= RADAR.sizeMin, `아직 겹친다: ${closest(out).toFixed(1)}px`);
+});
+
+test("상한 인원이 전부 한 점에 몰려도 떼어 놓는다", () => {
+  const items = Array.from({ length: 12 }, () => ({ x: 0, y: 30, d: RADAR.sizeMin }));
+  const out = spreadApart(items, RADAR.size / 2);
+  assert.ok(closest(out) >= RADAR.sizeMin, `아직 겹친다: ${closest(out).toFixed(1)}px`);
+});
+
+test("헬멧 크기가 다르면 큰 쪽 기준으로 벌린다", () => {
+  const items = [
+    { x: 0, y: 0, d: RADAR.sizeMax },
+    { x: 0, y: 0, d: RADAR.sizeMax },
+  ];
+  const out = spreadApart(items, RADAR.size / 2);
+  assert.ok(closest(out) >= RADAR.sizeMax, `큰 헬멧끼리 겹친다: ${closest(out).toFixed(1)}px`);
+});
+
+test("안 겹치면 그대로 둔다 — 방향이 뜻을 잃지 않게", () => {
+  const items = [
+    { x: -60, y: 0, d: RADAR.sizeMin },
+    { x: 60, y: 0, d: RADAR.sizeMin },
+  ];
+  const out = spreadApart(items, RADAR.size / 2);
+  assert.deepEqual(out, [
+    { x: -60, y: 0 },
+    { x: 60, y: 0 },
+  ]);
+});
+
+/** 난수를 쓰면 다시 그릴 때마다 헬멧이 튄다 */
+test("같은 입력이면 같은 그림이 나온다", () => {
+  const items = Array.from({ length: 6 }, () => ({ x: 10, y: 10, d: RADAR.sizeMin }));
+  assert.deepEqual(spreadApart(items, RADAR.size / 2), spreadApart(items, RADAR.size / 2));
+});
+
+test("밀어내도 판 밖으로 나가지 않는다 — 잘리면 누를 수가 없다", () => {
+  const R = RADAR.size / 2;
+  const items = Array.from({ length: 12 }, () => ({ x: R, y: 0, d: RADAR.sizeMin }));
+  for (const p of spreadApart(items, R)) {
+    assert.ok(Math.hypot(p.x, p.y) <= R - RADAR.sizeMin / 2 + 1e-6, `판 밖이다: ${Math.hypot(p.x, p.y).toFixed(1)}`);
+  }
+});
+
+test("원본을 건드리지 않는다", () => {
+  const items = [{ x: 1, y: 2, d: RADAR.sizeMin }];
+  spreadApart(items, RADAR.size / 2);
+  assert.deepEqual(items[0], { x: 1, y: 2, d: RADAR.sizeMin });
+});

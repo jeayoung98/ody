@@ -22,9 +22,14 @@ export interface FriendPlanEntry {
  * **명단이 정확히 같을 때만 쓴다.** 한 명이라도 들거나 나면 다시 정한다 — 빠진 사람을 그대로
  * 그리면 없는 사람이 남고, 새로 온 사람은 아예 안 그려진다. "거의 같으면 재활용" 같은 여지를
  * 두지 않는 이유는, 그 틈으로 새는 사람이 생기면 **화면에는 아무 표시도 안 남기 때문이다.**
+ *
+ * **인솔자는 반드시 제 표식이어야 한다** (S15P21A405-625). 묶여 있던 사람을 따라가기 시작하면
+ * 명단은 그대로인데 그 사람이 남의 배지 숫자 속에 남아 **우주선이 화면에 없다.** 인솔자가 지난
+ * 배치의 대표가 아니면 다시 정한다 — 새로 정할 때는 인솔자가 경합 밖이라 늘 제 모습으로 선다.
  */
-export function reusablePlan(plan: readonly FriendPlanEntry[] | null, present: ReadonlySet<string>): FriendPlanEntry[] | null {
+export function reusablePlan(plan: readonly FriendPlanEntry[] | null, present: ReadonlySet<string>, leader: string | null = null): FriendPlanEntry[] | null {
   if (!plan) return null;
+  if (leader && !plan.some((entry) => entry.marker === leader)) return null;
   let count = 0;
   for (const entry of plan) {
     if (!present.has(entry.marker)) return null;

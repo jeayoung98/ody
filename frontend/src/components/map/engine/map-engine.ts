@@ -3341,7 +3341,8 @@ export class MapEngine {
      * 앨범 커버가 먼저 쓰던 규칙과 같다 (S15P21A405-529).
      */
     const byEmail = new Map([...leader, ...cands].map((c) => [c.u.email, c]));
-    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys())) : null;
+    // 인솔자가 남의 묶음 속이면 다시 정한다 — 안 그러면 따라가는 우주선이 배지 숫자로만 남는다 (S15P21A405-625)
+    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys()), this.follow?.leader.email ?? null) : null;
     this.friendPlanScale = this.cam.s;
 
     if (keep) {

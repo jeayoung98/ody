@@ -16,4 +16,8 @@ public class ArtworkRoundRow {
 	private String themePrompt;
 	private OffsetDateTime startsAt;
 	private OffsetDateTime endsAt;
+	/** 회차당 한 사람이 남의 작품에 줄 수 있는 좋아요 수 (S15P21A405-616). DB 에서 고친다. */
+	private int voteLimit;
+	/** 순위 점수의 AI 가중치 K — AI 만점이 좋아요 몇 개인가 (S15P21A405-616). DB 에서 고친다. */
+	private double aiWeight;
 }

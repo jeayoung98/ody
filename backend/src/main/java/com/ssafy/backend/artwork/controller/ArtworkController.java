@@ -21,6 +21,8 @@ import com.ssafy.backend.artwork.dto.ArtworkLeaderboardResponse;
 import com.ssafy.backend.artwork.dto.CatPlaylistRequest;
 import com.ssafy.backend.artwork.dto.CatPlaylistResponse;
 import com.ssafy.backend.artwork.dto.CatTemplateSummary;
+import com.ssafy.backend.artwork.dto.DrawRequest;
+import com.ssafy.backend.artwork.dto.DrawResponse;
 import com.ssafy.backend.artwork.service.CatPlaylistGenerator;
 import com.ssafy.backend.artwork.dto.ArtworkLikeRequest;
 import com.ssafy.backend.artwork.dto.ArtworkLikeResponse;
@@ -59,11 +61,13 @@ public class ArtworkController {
 	@Value("${ody.artwork.evaluation.max-attempts:3}")
 	private int maxAttempts;
 
-	/** 지금 열린 회차. 없으면 data 가 null 이다(오류가 아니다). */
-	@Operation(summary = "현재 회차 조회", description = "지금 열려 있는 회차를 반환한다. 없으면 data 가 null 이다.")
+	/** 지금 열린 회차. 없으면 data 가 null 이다(오류가 아니다). 로그인이면 남은 좋아요 수가 함께 온다. */
+	@Operation(summary = "현재 회차 조회",
+			description = "지금 열려 있는 회차를 반환한다. 없으면 data 가 null 이다. voteLimit 은 회차당 좋아요 한도, "
+					+ "myVotesLeft 는 로그인 사용자의 남은 좋아요 수(비로그인이면 null)다.")
 	@GetMapping("/round/current")
-	public ApiResponse<ArtworkRound> currentRound() {
-		return ApiResponse.success(artworkService.findOpenRound().orElse(null));
+	public ApiResponse<ArtworkRound> currentRound(Authentication authentication) {
+		return ApiResponse.success(artworkService.findOpenRound(emailOrNull(authentication)).orElse(null));
 	}
 
 	/**
@@ -101,9 +105,22 @@ public class ArtworkController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
 	}
 
-	/** 회차 리더보드. 점수 내림차순 → 좋아요 내림차순 → 먼저 제출한 순. 채점된 작품만 보인다. */
+	/**
+	 * 사용자가 그린 별자리에 곡을 대응시킨다 (S15P21A405-598). <b>플레이리스트를 만들지 않는다</b> — 결과를 보고
+	 * {@code /api/playlist/create} 로 저장한다. 품질이 LOW 여도 200 이다.
+	 */
+	@Operation(summary = "그린 별자리 매칭",
+			description = "캔버스 좌표(0~1, y 아래) 점 3~20개마다 서로 다른 곡을 pc1/pc2 에서 골라 좌표·모양 일치도(0~100)·"
+					+ "품질(HIGH/MEDIUM/LOW)을 반환한다. 플레이리스트는 만들지 않는다 — 저장은 /api/playlist/create.")
+	@PostMapping("/draw")
+	public ApiResponse<DrawResponse> draw(@RequestBody @Valid DrawRequest request) {
+		return ApiResponse.success(catPlaylistGenerator.draw(request.points()));
+	}
+
+	/** 회차 리더보드. 순위 점수(좋아요 + AI / 100 × K) → AI 점수 → 먼저 제출한 순. 채점된 작품만 보인다. */
 	@Operation(summary = "리더보드 조회",
-			description = "회차의 작품을 점수 내림차순으로 반환한다. roundId 를 생략하면 지금 열린 회차다. 채점된 작품만 보인다.")
+			description = "회차의 작품을 순위 점수(좋아요 + AI 점수 / 100 × K, K 는 회차별 기본 5) 내림차순으로 반환한다. "
+					+ "roundId 를 생략하면 지금 열린 회차다. 채점된 작품만 보인다.")
 	@GetMapping("/leaderboard")
 	public ApiResponse<ArtworkLeaderboardResponse> leaderboard(
 			@RequestParam(required = false) Long roundId,

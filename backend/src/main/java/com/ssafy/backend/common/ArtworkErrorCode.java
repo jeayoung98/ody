@@ -16,7 +16,13 @@ public enum ArtworkErrorCode implements ErrorCode {
 	ARTWORK_NOT_FOUND(HttpStatus.NOT_FOUND, "ARTWORK_NOT_FOUND", "존재하지 않는 작품입니다."),
 	ARTWORK_ROUND_CLOSED(HttpStatus.CONFLICT, "ARTWORK_ROUND_CLOSED", "지금 열려 있는 회차가 없습니다."),
 	ARTWORK_NOT_FAILED(HttpStatus.CONFLICT, "ARTWORK_NOT_FAILED", "평가에 실패한 작품만 다시 평가할 수 있습니다."),
-	ARTWORK_RETRY_EXHAUSTED(HttpStatus.CONFLICT, "ARTWORK_RETRY_EXHAUSTED", "재평가 횟수를 모두 사용했습니다.");
+	ARTWORK_RETRY_EXHAUSTED(HttpStatus.CONFLICT, "ARTWORK_RETRY_EXHAUSTED", "재평가 횟수를 모두 사용했습니다."),
+	/** 그린 점이 한 곳에 몰려 모양이 없다 (S15P21A405-598). 점 개수 부족은 {@code INVALID_INPUT} 이다. */
+	ARTWORK_DRAWING_DEGENERATE(HttpStatus.BAD_REQUEST, "ARTWORK_DRAWING_DEGENERATE", "점이 한 곳에 몰려 모양을 알 수 없습니다."),
+	/** 회차당 좋아요 한도를 다 썼다 (S15P21A405-616). 하나를 거두면 다시 줄 수 있다. */
+	ARTWORK_VOTE_LIMIT(HttpStatus.CONFLICT, "ARTWORK_VOTE_LIMIT", "이번 회차 좋아요를 모두 썼습니다."),
+	/** 내 작품에는 좋아요를 줄 수 없다 (S15P21A405-616). */
+	ARTWORK_VOTE_SELF(HttpStatus.BAD_REQUEST, "ARTWORK_VOTE_SELF", "내 작품에는 좋아요를 줄 수 없습니다.");
 
 	private final HttpStatus httpStatus;
 	private final String code;

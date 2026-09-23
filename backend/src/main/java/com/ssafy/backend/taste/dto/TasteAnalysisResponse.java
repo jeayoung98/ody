@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import com.ssafy.backend.taste.analysis.TasteAxisStatistics;
+import com.ssafy.backend.taste.analysis.TasteFinding;
 
 public record TasteAnalysisResponse(
         String state,
@@ -25,12 +26,17 @@ public record TasteAnalysisResponse(
     public record Point(long musicId, String title, String artist, List<Double> coordinates) {
     }
 
+    /**
+     * @param findings 문장의 근거가 된 축별 판정. {@code narratives} 와 {@code findingId} 로 1:1 대응한다.
+     *                 화면이 태그(방향·세기)를 그리려면 문장이 아니라 이 값을 봐야 한다 [S15P21A405-634].
+     */
     public record Report(
             String level,
             boolean aiGenerated,
             boolean fresh,
             String summary,
             List<Narrative> narratives,
+            List<TasteFinding> findings,
             OffsetDateTime analyzedAt,
             OffsetDateTime generatedAt,
             OffsetDateTime lastRefreshedAt) {

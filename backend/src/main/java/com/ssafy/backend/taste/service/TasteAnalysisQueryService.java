@@ -18,6 +18,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.TasteErrorCode;
 import com.ssafy.backend.taste.analysis.TasteAxisStatistics;
+import com.ssafy.backend.taste.analysis.TasteFinding;
 import com.ssafy.backend.taste.analysis.TasteSnapshotHasher;
 import com.ssafy.backend.taste.analysis.TasteStatisticsCalculator;
 import com.ssafy.backend.taste.dto.TasteAnalysisResponse;
@@ -136,6 +137,7 @@ public class TasteAnalysisQueryService {
         TasteAnalysisResponse.Report report = new TasteAnalysisResponse.Report(
                 latest.getReportLevel(), true, fresh, latest.getSummary(),
                 readNarratives(latest.getNarratives()),
+                readFindings(latest.getFindings()),
                 latest.getRequestedAt(), latest.getCompletedAt(), latest.getCompletedAt());
         TasteAnalysisResponse.Generation generation = new TasteAnalysisResponse.Generation(
                 current.generation().status(), false, usedToday, false, null,
@@ -149,6 +151,22 @@ public class TasteAnalysisQueryService {
     public record AnalysisSnapshot(TasteAnalysisResponse response, List<Long> likedMusicIds) {
         public AnalysisSnapshot {
             likedMusicIds = List.copyOf(likedMusicIds);
+        }
+    }
+
+    /**
+     * 저장된 findings 를 그대로 되돌린다. 생성 직후 응답과 이후 조회 응답이 같아야 한다.
+     * 값이 없는 행이 있어도 리포트 전체를 죽이지 않고 빈 목록으로 둔다.
+     */
+    private List<TasteFinding> readFindings(String json) {
+        if (json == null || json.isBlank()) {
+            return List.of();
+        }
+        try {
+            return objectMapper.readValue(json, new TypeReference<>() {
+            });
+        } catch (JsonProcessingException error) {
+            throw new IllegalStateException("stored taste findings are invalid", error);
         }
     }
 

@@ -25,9 +25,14 @@ public record TasteReference(
             Label label) {
     }
 
+    /**
+     * @param axis 축 이름 한 단어. 화면이 "#밝기 폭넓음" 처럼 태그를 만들 때 쓴다 [S15P21A405-634].
+     *             {@code low}/{@code high} 가 양 끝 이름이라면 이것은 축 자체의 이름이다.
+     */
     public record Label(
             String status,
             String strength,
+            String axis,
             String low,
             String high,
             String evidence) {

@@ -54,6 +54,6 @@ class TasteReferenceLoaderTests {
 
     private static TasteReference.Axis axis(int pc, List<Double> quantiles) {
         return new TasteReference.Axis(pc, 0.01, quantiles,
-                new TasteReference.Label("VERIFIED", "MEDIUM", "low", "high", "test"));
+                new TasteReference.Label("VERIFIED", "MEDIUM", "axis", "low", "high", "test"));
     }
 }

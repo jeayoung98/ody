@@ -9,9 +9,12 @@ import com.ssafy.backend.taste.dto.TasteAnalysisResponse;
 @Component
 public class TasteFallbackRenderer {
 
+    /**
+     * 표본이 적다는 안내는 문장에 넣지 않는다. {@code report.level} 로 화면이 배지를 붙인다 [S15P21A405-634].
+     * 요약이 "나를 설명하는 한 문장"이어야 한다는 FE 요청이다.
+     */
     public RenderedReport render(String level, List<TasteFinding> findings) {
-        String prefix = "INITIAL".equals(level) ? "현재 좋아요에서 보이는 잠정 경향으로, " : "";
-        String summary = prefix + phrase(findings.get(0)) + " 음악을 즐기는 모습이 보여요.";
+        String summary = phrase(findings.get(0)) + " 음악을 즐기는 모습이 보여요.";
         List<TasteAnalysisResponse.Narrative> narratives = findings.stream()
                 .map(finding -> new TasteAnalysisResponse.Narrative(
                         finding.id(), sentence(finding), finding.evidence()))

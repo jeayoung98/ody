@@ -6,19 +6,28 @@
  */
 
 /**
- * 소켓 오리진. 비면 지금 페이지에서 유추한다 — `http`→`ws`, `https`→`wss`.
+ * 배포 백엔드의 소켓 주소. `lib/backend.ts` 의 `BACKEND_ORIGIN` 기본값과 **같은 곳을 가리킨다** —
+ * 그쪽을 옮기면 여기도 같이 옮긴다. 거기는 서버 전용 모듈이라 가져다 쓸 수가 없어서 값을 두 번 적는다.
+ */
+const DEPLOYED_WS_ORIGIN = "wss://j15a405.p.ssafy.io";
+
+/**
+ * 소켓 오리진. 비면 **배포 백엔드**로 간다 (S15P21A405-638).
  *
- * 배포는 페이지와 백엔드가 같은 오리진이라 유추가 맞는다. **로컬은 다르다** — Next 가 3000,
- * 백엔드가 8080 이라 유추하면 3000 으로 붙어 연결이 안 된다. 그래서 로컬은 `.env.local` 에
- * `NEXT_PUBLIC_WS_ORIGIN=ws://localhost:8080` 을 넣어야 한다.
+ * 예전에는 비면 지금 페이지 주소에서 유추했다 (`http`→`ws`). 배포본은 페이지와 백엔드가 같은
+ * 오리진이라 그게 맞았는데, **로컬은 Next 가 3000 이라 `ws://localhost:3000` 이 되고 거긴
+ * STOMP 가 없다.** 그래서 `.env.local` 에 값을 넣은 사람만 실시간이 돌고, 안 넣은 사람은
+ * **자기도 남도 지도에 안 보이는** 상태로 개발했다 — presence 가 등록이 안 되니 따라가기도
+ * 422 로 떨어졌다. 실측으로 팀원 한 명이 접속해 있는데 서버 접속자가 15분간 0명이었다.
  *
- * 서버에서는 `location` 이 없으므로 빈 문자열이다. 소켓은 브라우저에서만 열리니 상관없다.
+ * 기본값을 백엔드로 두면 로컬·LAN·배포 어디서든 맞는다. 배포본에서는 이 주소가 곧 자기
+ * 자신이라 달라지는 것이 없다.
+ *
+ * `NEXT_PUBLIC_WS_ORIGIN` 은 **덮어쓰는 용도로 남긴다** — 로컬 백엔드(8080)를 보고 개발할 때
+ * `ws://localhost:8080` 을 넣는다.
  */
 export function wsOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_WS_ORIGIN;
-  if (configured) return configured;
-  if (typeof location === "undefined") return "";
-  return location.origin.replace(/^http/, "ws");
+  return process.env.NEXT_PUBLIC_WS_ORIGIN || DEPLOYED_WS_ORIGIN;
 }
 
 export const REALTIME = {

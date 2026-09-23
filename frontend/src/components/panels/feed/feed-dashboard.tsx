@@ -11,7 +11,9 @@ import type { ProfileDashboard } from "@/types";
 export default function FeedDashboard({ dashboard }: { dashboard: ProfileDashboard }) {
   /**
    * **모르는 값은 그리지 않는다** (S15P21A405-531). 0곡 이라고 적으면 "한 곡도 안 들었다" 는
-   * 없는 사실이 된다. 처음 재생한 곡 수는 아직 백엔드에 없어서 늘 비어 있다.
+   * 없는 사실이 된다. 서버가 안 주면 그 줄이 통째로 빠지고, 진짜 0 이면 `0곡` 이 선다.
+   *
+   * 처음 재생한 곡 수도 이제 서버가 준다 (S15P21A405-619, 백엔드 597).
    */
   const rows = [
     { label: "탐험한 곡 (재생)", value: dashboard.exploredCount },

@@ -27,7 +27,7 @@ export default function SkeletonRows({ count = 5, thumb = "square", right = true
     <div aria-hidden className="flex flex-col">
       {Array.from({ length: count }, (_, i) => (
         <div key={i} className="flex items-center gap-2.5 px-[9px] py-2">
-          {thumb !== "none" && <Skeleton w={30} h={30} rounded={thumb === "circle" ? "pill" : "box"} />}
+          {thumb !== "none" && <Skeleton w={36} h={36} rounded={thumb === "circle" ? "pill" : "box"} />}
           <div className="flex min-w-0 flex-1 flex-col gap-1.5">
             <Skeleton w={TITLE_W[i % TITLE_W.length]} h={11} />
             {sub && <Skeleton w={SUB_W[i % SUB_W.length]} h={9} />}

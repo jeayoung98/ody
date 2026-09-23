@@ -30,8 +30,8 @@ export default function JourneyComposerResult({ result, isStart, isEnd, onPick }
     >
       <span className="h-[22px] w-[3px] shrink-0 rounded-pill" style={{ background: color }} />
       <span className="min-w-0 flex-1">
-        <span className="block truncate text-[14.5px]">{result.title}</span>
-        <span className="block truncate text-[12px] text-ink-3">{result.artist ?? "-"}</span>
+        <span className="block truncate text-[15.5px]">{result.title}</span>
+        <span className="block truncate text-[13px] text-ink-3">{result.artist ?? "-"}</span>
       </span>
       {badge && <span className="lbl shrink-0 text-teal">{badge}</span>}
     </button>

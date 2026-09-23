@@ -52,7 +52,7 @@ export default function FeedTasteReport() {
       {report ? (
         <>
           {/* 요약은 이 칸에서 제일 큰 글자다 — 나머지는 그 한 줄을 뒷받침하는 근거다 */}
-          <p className={`font-display text-[16px] leading-snug font-medium ${view.stale ? "text-ink-2" : "text-ink"}`}>
+          <p className={`font-display text-[17px] leading-snug font-medium ${view.stale ? "text-ink-2" : "text-ink"}`}>
             {report.summary}
           </p>
           {report.narratives.length > 0 && (
@@ -71,7 +71,7 @@ export default function FeedTasteReport() {
       )}
 
       <div className="flex items-center justify-between gap-2">
-        {view.notice ? <span className="min-w-0 flex-1 text-[12px] text-ink-4">{view.notice}</span> : <span className="flex-1" />}
+        {view.notice ? <span className="min-w-0 flex-1 text-[13px] text-ink-4">{view.notice}</span> : <span className="flex-1" />}
         <Button
           size="sm"
           variant={report ? "secondary" : "primary"}

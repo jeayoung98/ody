@@ -18,7 +18,7 @@
  * `features.social` 로 갈라 둔 자리가 "항상 참" 으로 좁혀지고 비교문이 타입 오류가 난다
  * (`help-dialog.tsx` 의 `when !== false`). 지금 값이 전부 참인 것은 상태일 뿐 타입이 아니다.
  */
-type Features = { profile: boolean; playlist: boolean; social: boolean; chart: boolean; contest: boolean };
+type Features = { profile: boolean; playlist: boolean; social: boolean; chart: boolean; contest: boolean; playHint: boolean };
 
 export const FEATURES: Features = {
   /** 마이페이지 — 내 프로필 패널, 지도에서 남의 프로필 열기 */
@@ -35,6 +35,21 @@ export const FEATURES: Features = {
   chart: true,
   /** 이벤트(별자리 콘테스트) — 상단 원형 버튼이 여는 전체 화면 모달 (S15P21A405-602). 우측 패널이 아니라 `PANEL_ENABLED` 에는 없다. 아직 전부 목이다 */
   contest: true,
+  /**
+   * 바로재생 안내 — **지금은 꺼 둔다** (S15P21A405-636).
+   *
+   * "별을 더블클릭하면 바로 재생돼요" 를 문맥(지도·주변 탐색·여정)마다 한 번 짚어 주는
+   * 자리다 (`components/discovery/play-hint.tsx`, S15P21A405-393). 튜토리얼과 **다른 물건**인데
+   * 덤과 반짝임 고리까지 모양을 일부러 같게 만들어 둔 터라, 화면에서는 튜토리얼이 한 번 더
+   * 뚫고 나온 것처럼 읽힌다.
+   *
+   * **걷어낸 것이 아니라 내려 둔 것이다.** 컴포넌트도 문구도 저장소 키(`playHintSeen`)도
+   * 그대로 있어서, 이 한 줄을 `true` 로 되돌리면 예전 그대로 돈다.
+   *
+   * 안내만 안 뜨고 **동작은 살아 있다** — 이미 고른 별을 다시 누르면 재생되는 지도의 클릭
+   * 문법(S15P21A405-288)은 이 스위치와 상관이 없다.
+   */
+  playHint: false,
 };
 
 /** 지금 열 수 있는 패널인가. 숨긴 기능의 패널은 프로그램으로 열려도 렌더하지 않는다 */

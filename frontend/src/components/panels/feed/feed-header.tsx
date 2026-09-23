@@ -87,7 +87,7 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
         <Avatar src={profile.imageUrl} name={profile.nickname} size={56} online={online} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-xl font-semibold">{profile.nickname ?? profile.name ?? "익명"}</p>
-          <p className="mt-[3px] text-[12.5px] text-ink-2">
+          <p className="mt-[3px] text-[13.5px] text-ink-2">
             {online ? "접속 중" : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
           </p>
           {profile.nowPlaying && (

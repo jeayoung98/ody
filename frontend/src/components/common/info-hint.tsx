@@ -27,7 +27,7 @@ export default function InfoHint({ label, children }: { label: string; children:
       </button>
       <span
         role="tooltip"
-        className={`glass pointer-events-none absolute top-full left-1/2 z-30 mt-1.5 w-[230px] -translate-x-1/2 rounded-box-sm! px-3 py-2 text-[12.5px] leading-[1.55] font-normal text-ink-2 transition-opacity duration-fast ${
+        className={`glass pointer-events-none absolute top-full left-1/2 z-30 mt-1.5 w-[230px] -translate-x-1/2 rounded-box-sm! px-3 py-2 text-[13.5px] leading-[1.55] font-normal text-ink-2 transition-opacity duration-fast ${
           pinned ? "opacity-100" : "opacity-0 group-hover:opacity-100"
         }`}
       >

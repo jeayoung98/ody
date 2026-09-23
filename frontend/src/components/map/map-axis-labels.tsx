@@ -53,7 +53,7 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
   const x = ax.x[0] ? ax.x : (["미세한 차이", "미세한 차이"] as const);
   const y = ax.y[0] ? ax.y : (["미세한 차이", "미세한 차이"] as const);
 
-  const cl = `pointer-events-none absolute z-[19] max-w-[26vw] truncate text-[12px] tracking-[0.02em] transition-[opacity,color] duration-500 ${
+  const cl = `pointer-events-none absolute z-[19] max-w-[26vw] truncate text-[13px] tracking-[0.02em] transition-[opacity,color] duration-500 ${
     awake ? "text-ink-2 opacity-90" : "text-ink-4 opacity-30"
   }`;
   return (

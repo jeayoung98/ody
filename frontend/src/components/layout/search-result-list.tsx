@@ -88,7 +88,7 @@ export default function SearchResultList({
         </div>
       )}
 
-      <p className="px-[13px] pt-[9px] pb-1 text-[12px] text-ink-4">{heading(condition)}</p>
+      <p className="px-[13px] pt-[9px] pb-1 text-[13px] text-ink-4">{heading(condition)}</p>
 
       {isError ? (
         /* 빈 결과와 실패를 같은 화면으로 처리하지 않는다 — 다시 눌러 볼 수 있어야 한다 */
@@ -115,15 +115,15 @@ export default function SearchResultList({
               >
                 <span className="h-[7px] w-[7px] shrink-0 rounded-pill" style={{ background: color, boxShadow: `0 0 10px ${color}` }} />
                 <span className="min-w-0 flex-1">
-                  <span className="block truncate text-[13.5px] leading-[1.3]">{r.title}</span>
-                  <span className="block truncate text-[12px] text-ink-3">{r.artist ?? "-"}</span>
+                  <span className="block truncate text-[14.5px] leading-[1.3]">{r.title}</span>
+                  <span className="block truncate text-[13px] text-ink-3">{r.artist ?? "-"}</span>
                 </span>
               </button>
             );
           })}
           {/* 한 페이지에 20초 가까이 걸린다 — 멈춘 것처럼 보이지 않게 바닥에 상태를 남긴다 */}
-          {isLoadingMore && <p className="px-[13px] py-[9px] text-center text-[12px] text-ink-3">다음 10곡 불러오는 중...</p>}
-          {!hasMore && !isLoadingMore && <p className="px-[13px] py-[9px] text-center text-[12px] text-ink-4">결과 끝</p>}
+          {isLoadingMore && <p className="px-[13px] py-[9px] text-center text-[13px] text-ink-3">다음 10곡 불러오는 중...</p>}
+          {!hasMore && !isLoadingMore && <p className="px-[13px] py-[9px] text-center text-[13px] text-ink-4">결과 끝</p>}
         </>
       )}
     </div>
@@ -131,4 +131,4 @@ export default function SearchResultList({
 }
 
 const ACTION_CLASS =
-  "flex w-full cursor-pointer items-center justify-between gap-2 px-[13px] py-[9px] text-left text-[13px] text-ink-2 transition-colors hover:bg-white/[.06]";
+  "flex w-full cursor-pointer items-center justify-between gap-2 px-[13px] py-[9px] text-left text-[14px] text-ink-2 transition-colors hover:bg-white/[.06]";

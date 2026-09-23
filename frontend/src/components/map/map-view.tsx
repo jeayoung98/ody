@@ -778,19 +778,26 @@ export default function MapView({ occlusion }: MapViewProps) {
         // 엔진 호버와 `heldSong` 은 페이드가 끝난 뒤 위쪽 이펙트가 푼다
         if (heldSong.current) setCardOn(false);
         /**
-         * **빈 곳을 눌러도 고리를 닫지 않는다** (S15P21A405-593).
+         * **폰에서만 빈 곳을 눌러도 고리를 안 닫는다** (S15P21A405-593).
          *
-         * 예전에는 여기서 닫았다 (S15P21A405-384) — 곡 상세에서 켜는 버튼이 없어지면서 끄는
-         * 길이 사라졌다는 이유였다. 지금은 **뷰 칩에 ✕ 가 있고** 축소로도 나갈 수 있어 그
-         * 이유가 사라졌다.
+         * 이 규칙 자체는 S15P21A405-384(`55219af2`)에서 들어왔다 — 곡 상세에서 켜는 버튼이
+         * 없어지면서 끄는 길도 같이 사라졌다는 이유였고, 여기는 공용 코드라 **데스크톱에도
+         * 그대로 있다.** 마우스로 빈 곳을 누르는 건 한 번에 깔끔히 끝나고 확대도 휠로 하므로
+         * 거기서는 이 규칙이 걸리적거리지 않는다.
          *
-         * 그리고 이게 **확대가 안 유지되던 원인**이다. 핀치는 두 손가락이 한 박자 어긋나게
-         * 닿는데, 둘째 손가락이 늦거나 누락되면 그 제스처가 통째로 "빈 곳 탭" 으로 읽혀
-         * 뷰가 닫혔다. 벌리는 손이 곧 나가는 손이 되니 확대가 되다 말고 원래대로 돌아갔다.
+         * 손가락은 다르다. 핀치는 두 손가락이 한 박자 어긋나게 닿는데, 둘째 손가락이 늦거나
+         * 누락되면 그 제스처가 통째로 "빈 곳 탭" 으로 읽혀 뷰가 닫혔다 — 벌리는 손이 곧
+         * 나가는 손이 되니 **확대가 되다 말고 원래대로 돌아갔다.** 폰에는 대신 뷰 칩의 ✕ 와
+         * 축소로 나가는 길이 있고, 별자리(경로 탐색)도 처음부터 빈 곳으로는 안 닫혔다 —
+         * 폰에서는 둘이 같아진다.
          *
-         * **별자리(경로 탐색)와 같아진다.** 거기는 처음부터 빈 곳을 눌러도 안 닫혔다 —
-         * 같은 성격의 오버레이 뷰가 한쪽만 다르게 굴 이유가 없다.
+         * **데스크톱은 그대로 둔다.**
          */
+        if (!narrow) {
+          // 분석 이벤트(`nearby_closed`)는 스토어 구독자가 알아서 남긴다 (`analytics/observe`)
+          const map = useMapStore.getState();
+          if (map.viewMode === "nearby") map.exitNearby();
+        }
         return;
       }
       const id = song.musicId;
@@ -810,7 +817,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       pressSong(song);
     },
-    [engine, cancelHold, openFeed, openSongFromMap, pressSong, selectMusic],
+    [engine, cancelHold, narrow, openFeed, openSongFromMap, pressSong, selectMusic],
   );
   /**
    * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.

@@ -72,9 +72,13 @@ public class ArtworkService {
 		this.layoutVersion = layoutVersion;
 	}
 
-	/** 지금 열린 회차. 없으면 빈 값 — 오류가 아니다(화면이 "이번 회차 없음" 을 그린다). */
-	public Optional<ArtworkRound> findOpenRound() {
-		return Optional.ofNullable(artworkMapper.findOpenRound()).map(ArtworkService::toRound);
+	/**
+	 * 지금 열린 회차. 없으면 빈 값 — 오류가 아니다(화면이 "이번 회차 없음" 을 그린다).
+	 *
+	 * @param requesterEmail 로그인이면 남은 좋아요 수({@code myVotesLeft})를 채운다. 비로그인이면 null
+	 */
+	public Optional<ArtworkRound> findOpenRound(String requesterEmail) {
+		return Optional.ofNullable(artworkMapper.findOpenRound()).map(r -> toRound(r, requesterEmail));
 	}
 
 	/**
@@ -170,7 +174,8 @@ public class ArtworkService {
 	}
 
 	/**
-	 * 회차 리더보드. 점수 내림차순 → 좋아요 내림차순 → 먼저 제출한 순.
+	 * 회차 리더보드. 순위 점수(좋아요 + AI / 100 × K) 내림차순 → AI 점수 내림차순 → 먼저 제출한 순 (S15P21A405-616).
+	 * K 는 회차 행의 {@code ai_weight} — DB 에서 고치면 다음 조회에 바로 반영된다.
 	 *
 	 * @param roundId        null 이면 지금 열린 회차
 	 * @param requesterEmail 비로그인이면 null
@@ -188,7 +193,7 @@ public class ArtworkService {
 		int offset = safePage * safeSize;
 
 		List<ArtworkSummaryRow> rows =
-				artworkMapper.findLeaderboard(round.getId(), requesterEmail, offset, safeSize);
+				artworkMapper.findLeaderboard(round.getId(), round.getAiWeight(), requesterEmail, offset, safeSize);
 
 		List<ArtworkSummary> items = new ArrayList<>(rows.size());
 		for (int i = 0; i < rows.size(); i++) {
@@ -197,7 +202,7 @@ public class ArtworkService {
 
 		int totalCnt = artworkMapper.countLeaderboard(round.getId());
 		log.info("[Artwork] 리더보드 조회 완료 roundId={} page={} count={}", round.getId(), safePage, items.size());
-		return new ArtworkLeaderboardResponse(toRound(round), items, safePage, safeSize, totalCnt);
+		return new ArtworkLeaderboardResponse(toRound(round, requesterEmail), items, safePage, safeSize, totalCnt);
 	}
 
 	/** 내 작품. 상태를 가리지 않는다. */
@@ -208,10 +213,14 @@ public class ArtworkService {
 	}
 
 	/**
-	 * 좋아요 변경. 남의 작품에도 누를 수 있으므로 소유자 검사는 없다.
+	 * 좋아요 변경. 남의 작품에만, 작품 회차가 열려 있을 때만, 회차당 {@code vote_limit} 개까지 (S15P21A405-616).
 	 *
-	 * <p>{@code liked} 는 토글이 아니라 목표 상태라 같은 요청을 반복해도 결과가 같다.
+	 * <p>{@code liked} 는 토글이 아니라 목표 상태라 같은 요청을 반복해도 결과가 같다 — 이미 누른 작품에
+	 * 다시 {@code true} 를 보내면 표를 더 쓰지 않는다. 거두기는 한도와 무관하다(표가 돌아온다).
 	 * {@code like_cnt} 는 {@code artwork_like} 의 집계 사본이므로 기록이 실제로 바뀐 경우에만 움직인다.
+	 *
+	 * @throws CustomException 없는 작품·남의 미채점 {@code ARTWORK_NOT_FOUND}, 내 작품 {@code ARTWORK_VOTE_SELF},
+	 *                         닫힌 회차 {@code ARTWORK_ROUND_CLOSED}, 한도 {@code ARTWORK_VOTE_LIMIT}
 	 */
 	@Transactional
 	public ArtworkLikeResponse changeLike(ArtworkLikeRequest request, String requesterEmail) {
@@ -228,6 +237,26 @@ public class ArtworkService {
 						&& !artwork.getEmail().equals(requesterEmail))) {
 			throw new CustomException(ArtworkErrorCode.ARTWORK_NOT_FOUND);
 		}
+		if (artwork.getEmail().equals(requesterEmail)) {
+			throw new CustomException(ArtworkErrorCode.ARTWORK_VOTE_SELF);
+		}
+		// 끝난 회차 순위가 흔들리지 않게 누르기·거두기 모두 막는다.
+		ArtworkRoundRow round = artworkMapper.findOpenRound();
+		if (round == null || round.getId() != artwork.getRoundId()) {
+			throw new CustomException(ArtworkErrorCode.ARTWORK_ROUND_CLOSED);
+		}
+
+		Integer votesUsed = null;
+		if (liked && !artworkMapper.existsLike(artworkId, requesterEmail)) {
+			// 잠금 → 세기 → 넣기가 한 트랜잭션. 같은 사람의 동시 요청이 한도를 넘지 못한다.
+			artworkMapper.lockVotes(requesterEmail, round.getId());
+			votesUsed = artworkMapper.countVotesInRound(requesterEmail, round.getId());
+			if (votesUsed >= round.getVoteLimit()) {
+				log.info("[Artwork] 좋아요 거절 — 회차 한도 artworkId={} votesUsed={} limit={}",
+						artworkId, votesUsed, round.getVoteLimit());
+				throw new CustomException(ArtworkErrorCode.ARTWORK_VOTE_LIMIT);
+			}
+		}
 
 		int changed = liked
 				? artworkMapper.insertLike(artworkId, requesterEmail)
@@ -237,8 +266,8 @@ public class ArtworkService {
 		}
 
 		int likeCnt = artworkMapper.findLikeCnt(artworkId);
-		log.info("[Artwork] 좋아요 변경 완료 artworkId={} liked={} changed={} likeCnt={}",
-				artworkId, liked, changed > 0, likeCnt);
+		log.info("[Artwork] 좋아요 변경 완료 artworkId={} liked={} changed={} likeCnt={} votesUsedBefore={}",
+				artworkId, liked, changed > 0, likeCnt, votesUsed);
 		return new ArtworkLikeResponse(artworkId, liked, likeCnt);
 	}
 
@@ -312,10 +341,16 @@ public class ArtworkService {
 				row.getLikeCnt(),
 				row.isLikedByMe(),
 				row.getMusicCnt(),
-				row.getCreatedAt());
+				row.getCreatedAt(),
+				row.getRankScore());
 	}
 
-	private static ArtworkRound toRound(ArtworkRoundRow row) {
-		return new ArtworkRound(row.getId(), row.getTheme(), row.getStartsAt(), row.getEndsAt());
+	/** 회차 응답. 로그인이면 남은 좋아요 수를 센다 — 배포 전 초과분이 있어도 음수로 내려가지 않는다. */
+	private ArtworkRound toRound(ArtworkRoundRow row, String requesterEmail) {
+		Integer votesLeft = requesterEmail == null
+				? null
+				: Math.max(0, row.getVoteLimit() - artworkMapper.countVotesInRound(requesterEmail, row.getId()));
+		return new ArtworkRound(
+				row.getId(), row.getTheme(), row.getStartsAt(), row.getEndsAt(), row.getVoteLimit(), votesLeft);
 	}
 }

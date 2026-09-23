@@ -10,13 +10,13 @@
 
 ## Phase 1: Setup
 
-- [ ] T001 `backend/src/main/resources/db/artwork_003_ranking_votes.sql` 신규 — data-model.md 의 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 3줄(`artwork_round.vote_limit int4 NOT NULL DEFAULT 3`, `artwork_round.ai_weight numeric NOT NULL DEFAULT 5`, `artwork.closed boolean NOT NULL DEFAULT false`)과 머리 주석(운영 수동 적용·배포 전·롤백 DROP COLUMN 3줄). `artwork_001_tables.sql` 머리 주석 형식을 따른다
+- [x] T001 `backend/src/main/resources/db/artwork_003_ranking_votes.sql` 신규 — data-model.md 의 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` 3줄(`artwork_round.vote_limit int4 NOT NULL DEFAULT 3`, `artwork_round.ai_weight numeric NOT NULL DEFAULT 5`, `artwork.closed boolean NOT NULL DEFAULT false`)과 머리 주석(운영 수동 적용·배포 전·롤백 DROP COLUMN 3줄). `artwork_001_tables.sql` 머리 주석 형식을 따른다
 
 ## Phase 2: Foundational (모든 스토리 공통 — 칸 읽기)
 
-- [ ] T002 `A/dto/ArtworkRoundRow.java` 에 `int voteLimit`, `double aiWeight` 추가. `M` 의 `findOpenRound`·`findRoundById` SELECT 에 `vote_limit, ai_weight` 추가
-- [ ] T003 `A/dto/ArtworkRow.java` 에 `boolean closed` 추가. `M` 의 `<sql id="artworkColumns">` 에 `closed` 추가
-- [ ] T004 `./gradlew test --tests 'com.ssafy.backend.artwork.*'` — 기존 테스트가 그대로 통과(칸 추가만으로 동작 불변)
+- [x] T002 `A/dto/ArtworkRoundRow.java` 에 `int voteLimit`, `double aiWeight` 추가. `M` 의 `findOpenRound`·`findRoundById` SELECT 에 `vote_limit, ai_weight` 추가
+- [x] T003 `A/dto/ArtworkRow.java` 에 `boolean closed` 추가. `M` 의 `<sql id="artworkColumns">` 에 `closed` 추가
+- [x] T004 `./gradlew test --tests 'com.ssafy.backend.artwork.*'` — 기존 테스트가 그대로 통과(칸 추가만으로 동작 불변)
 
 **Checkpoint**: 새 칸을 읽을 수 있고 기존 동작 불변
 
@@ -26,10 +26,10 @@
 
 **Independent Test**: 매퍼 목이 돌려준 순서를 서비스가 보존하고 `rankScore`·`rank` 를 싣는지 + SQL 정렬식 리뷰. (정렬 자체는 SQL 이라 단위 테스트는 조립·필드 검증, 정렬식은 T005 에서 문자열 그대로 고정)
 
-- [ ] T005 [US1] `M` 의 `findLeaderboard` 를 바꾼다: SELECT 에 `(a.like_cnt + a.score * r.ai_weight / 100.0) AS rank_score` (회차 `artwork_round r` 조인 또는 `#{aiWeight}` 파라미터 — 파라미터 방식이 조인 없이 단순하므로 `#{aiWeight}` 로), `ORDER BY rank_score DESC, a.score DESC, a.created_at ASC`. `A/mapper/ArtworkMapper.java` `findLeaderboard` 시그니처에 `double aiWeight` 추가
-- [ ] T006 [US1] `A/dto/ArtworkSummaryRow.java` 에 `double rankScore`, `A/dto/ArtworkSummary.java` 에 `Double rankScore`(리더보드만 값, `findMine` 은 null) 추가
-- [ ] T007 [US1] `A/service/ArtworkService.java` `getLeaderboard` 가 `round.getAiWeight()` 를 매퍼에 넘기고 `toSummary` 가 `rankScore` 를 싣게 한다. 클래스·메서드 javadoc 의 "점수 → 좋아요 → 먼저 제출" 문구를 새 정렬로 고친다. `A/controller/ArtworkController.java` 리더보드 `@Operation`·javadoc 문구도
-- [ ] T008 [US1] `T/ArtworkServiceTests.java` 에 추가: (a) 리더보드가 매퍼에 회차 `aiWeight` 를 넘긴다, (b) 항목 `rankScore` 가 행 값 그대로이고 `rank` 가 offset+순번, (c) `findMine` 항목의 `rankScore` 는 null
+- [x] T005 [US1] `M` 의 `findLeaderboard` 를 바꾼다: SELECT 에 `(a.like_cnt + a.score * r.ai_weight / 100.0) AS rank_score` (회차 `artwork_round r` 조인 또는 `#{aiWeight}` 파라미터 — 파라미터 방식이 조인 없이 단순하므로 `#{aiWeight}` 로), `ORDER BY rank_score DESC, a.score DESC, a.created_at ASC`. `A/mapper/ArtworkMapper.java` `findLeaderboard` 시그니처에 `double aiWeight` 추가
+- [x] T006 [US1] `A/dto/ArtworkSummaryRow.java` 에 `double rankScore`, `A/dto/ArtworkSummary.java` 에 `Double rankScore`(리더보드만 값, `findMine` 은 null) 추가
+- [x] T007 [US1] `A/service/ArtworkService.java` `getLeaderboard` 가 `round.getAiWeight()` 를 매퍼에 넘기고 `toSummary` 가 `rankScore` 를 싣게 한다. 클래스·메서드 javadoc 의 "점수 → 좋아요 → 먼저 제출" 문구를 새 정렬로 고친다. `A/controller/ArtworkController.java` 리더보드 `@Operation`·javadoc 문구도
+- [x] T008 [US1] `T/ArtworkServiceTests.java` 에 추가: (a) 리더보드가 매퍼에 회차 `aiWeight` 를 넘긴다, (b) 항목 `rankScore` 가 행 값 그대로이고 `rank` 가 offset+순번, (c) `findMine` 항목의 `rankScore` 는 null
 
 **Checkpoint**: 리더보드 순위 규칙 적용 — 단독 배포해도 의미 있음
 
@@ -39,12 +39,12 @@
 
 **Independent Test**: 목 매퍼로 4번째 누름 거절·거둔 뒤 성공·내 작품 거절·닫힌 회차 거절·이미 누른 작품 재요청 시 한도 검사 없음, 락 쿼리가 누를 때만 호출.
 
-- [ ] T009 [P] [US2] `backend/src/main/java/com/ssafy/backend/common/ArtworkErrorCode.java` 에 `ARTWORK_VOTE_LIMIT(HttpStatus.CONFLICT, "ARTWORK_VOTE_LIMIT", "이번 회차 좋아요를 모두 썼습니다.")`, `ARTWORK_VOTE_SELF(HttpStatus.BAD_REQUEST, "ARTWORK_VOTE_SELF", "내 작품에는 좋아요를 줄 수 없습니다.")`
-- [ ] T010 [P] [US2] `M` + `A/mapper/ArtworkMapper.java` 에 두 쿼리: `lockVotes(email, roundId)` = `SELECT pg_advisory_xact_lock(hashtext(#{email} || ':' || #{roundId}))`(주석: 사용자×회차 단위, 트랜잭션 끝에 해제, research R3), `countVotesInRound(email, roundId)` = `SELECT count(*) FROM artwork_like l JOIN artwork a ON a.id = l.artwork_id WHERE a.round_id = #{roundId} AND l.email = #{email} AND a.email &lt;&gt; #{email}` — 배포 전 자기 작품에 눌러 둔 좋아요는 세지 않는다(analyze E1). 두 쿼리 모두 주석에 "PostgreSQL 전용 — H2 로컬 실행에서는 좋아요 불가"
-- [ ] T011 [US2] `A/service/ArtworkService.java` `changeLike` 에 검사 추가 (research R5 순서): 기존 존재·권한 → `artwork.getEmail().equals(email)` 이면 `ARTWORK_VOTE_SELF` → `findOpenRound()` 가 null 이거나 id 가 `artwork.getRoundId()` 와 다르면 `ARTWORK_ROUND_CLOSED` → `liked && !existsLike` 일 때만 `lockVotes` 후 `countVotesInRound >= round.getVoteLimit()` 이면 `ARTWORK_VOTE_LIMIT`. 로그에 `votesUsed` 추가. 기존 "내 작품은 미채점이어도 누를 수 있음" 분기는 내 작품 금지로 대체된다(주석 정리)
-- [ ] T012 [US2] `A/dto/ArtworkRound.java` 에 `int voteLimit`, `Integer myVotesLeft` 추가. `A/service/ArtworkService.java` 의 `findOpenRound()` 를 `findOpenRound(String requesterEmail)` 로 바꿔 로그인이면 `max(0, voteLimit − countVotesInRound)`, 비로그인이면 null. `toRound` 호출처(리더보드 응답의 round)도 같은 값을 싣는다(`getLeaderboard` 에 이미 email 이 있다)
-- [ ] T013 [US2] `A/controller/ArtworkController.java` `currentRound(Authentication)` 로 바꿔 `emailOrNull` 전달. `@Operation` 설명에 voteLimit·myVotesLeft
-- [ ] T014 [US2] `T/ArtworkServiceTests.java` 에 추가: 3표 쓴 뒤 4번째 → `ARTWORK_VOTE_LIMIT` 이고 insertLike 미호출, 거두기(`liked=false`)는 한도·락 없이 성공, 내 작품 → `ARTWORK_VOTE_SELF`, 작품 회차 ≠ 열린 회차 → `ARTWORK_ROUND_CLOSED`(누르기·거두기 둘 다), 이미 누른 작품에 `liked=true` 재요청 → `lockVotes`·`countVotesInRound` 미호출, 새로 누를 때 `lockVotes` 가 `countVotesInRound` 보다 먼저 호출(InOrder), 회차 조회 `myVotesLeft` = 한도−사용(로그인)·null(비로그인)·음수 방지(사용 4 → 0)
+- [x] T009 [P] [US2] `backend/src/main/java/com/ssafy/backend/common/ArtworkErrorCode.java` 에 `ARTWORK_VOTE_LIMIT(HttpStatus.CONFLICT, "ARTWORK_VOTE_LIMIT", "이번 회차 좋아요를 모두 썼습니다.")`, `ARTWORK_VOTE_SELF(HttpStatus.BAD_REQUEST, "ARTWORK_VOTE_SELF", "내 작품에는 좋아요를 줄 수 없습니다.")`
+- [x] T010 [P] [US2] `M` + `A/mapper/ArtworkMapper.java` 에 두 쿼리: `lockVotes(email, roundId)` = `SELECT pg_advisory_xact_lock(hashtext(#{email} || ':' || #{roundId}))`(주석: 사용자×회차 단위, 트랜잭션 끝에 해제, research R3), `countVotesInRound(email, roundId)` = `SELECT count(*) FROM artwork_like l JOIN artwork a ON a.id = l.artwork_id WHERE a.round_id = #{roundId} AND l.email = #{email} AND a.email &lt;&gt; #{email}` — 배포 전 자기 작품에 눌러 둔 좋아요는 세지 않는다(analyze E1). 두 쿼리 모두 주석에 "PostgreSQL 전용 — H2 로컬 실행에서는 좋아요 불가"
+- [x] T011 [US2] `A/service/ArtworkService.java` `changeLike` 에 검사 추가 (research R5 순서): 기존 존재·권한 → `artwork.getEmail().equals(email)` 이면 `ARTWORK_VOTE_SELF` → `findOpenRound()` 가 null 이거나 id 가 `artwork.getRoundId()` 와 다르면 `ARTWORK_ROUND_CLOSED` → `liked && !existsLike` 일 때만 `lockVotes` 후 `countVotesInRound >= round.getVoteLimit()` 이면 `ARTWORK_VOTE_LIMIT`. 로그에 `votesUsed` 추가. 기존 "내 작품은 미채점이어도 누를 수 있음" 분기는 내 작품 금지로 대체된다(주석 정리)
+- [x] T012 [US2] `A/dto/ArtworkRound.java` 에 `int voteLimit`, `Integer myVotesLeft` 추가. `A/service/ArtworkService.java` 의 `findOpenRound()` 를 `findOpenRound(String requesterEmail)` 로 바꿔 로그인이면 `max(0, voteLimit − countVotesInRound)`, 비로그인이면 null. `toRound` 호출처(리더보드 응답의 round)도 같은 값을 싣는다(`getLeaderboard` 에 이미 email 이 있다)
+- [x] T013 [US2] `A/controller/ArtworkController.java` `currentRound(Authentication)` 로 바꿔 `emailOrNull` 전달. `@Operation` 설명에 voteLimit·myVotesLeft
+- [x] T014 [US2] `T/ArtworkServiceTests.java` 에 추가: 3표 쓴 뒤 4번째 → `ARTWORK_VOTE_LIMIT` 이고 insertLike 미호출, 거두기(`liked=false`)는 한도·락 없이 성공, 내 작품 → `ARTWORK_VOTE_SELF`, 작품 회차 ≠ 열린 회차 → `ARTWORK_ROUND_CLOSED`(누르기·거두기 둘 다), 이미 누른 작품에 `liked=true` 재요청 → `lockVotes`·`countVotesInRound` 미호출, 새로 누를 때 `lockVotes` 가 `countVotesInRound` 보다 먼저 호출(InOrder), 회차 조회 `myVotesLeft` = 한도−사용(로그인)·null(비로그인)·음수 방지(사용 4 → 0)
 
 **Checkpoint**: 표 규칙 완성 — US1 과 함께 기획 결정 전부 반영
 

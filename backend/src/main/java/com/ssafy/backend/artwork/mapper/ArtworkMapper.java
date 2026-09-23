@@ -88,12 +88,14 @@ public interface ArtworkMapper {
 	// ---- 목록 ----
 
 	/**
-	 * 리더보드. {@code SCORED} 만, 점수 내림차순 → 좋아요 내림차순 → 먼저 제출한 순.
+	 * 리더보드. {@code SCORED} 만, 순위 점수(좋아요 + AI / 100 × K) 내림차순 → AI 점수 내림차순 → 먼저 제출한 순.
 	 *
+	 * @param aiWeight       K — 회차의 {@code ai_weight}
 	 * @param requesterEmail 비로그인이면 null. {@code likedByMe} 가 전부 false 가 된다
 	 */
 	List<ArtworkSummaryRow> findLeaderboard(
 			@Param("roundId") long roundId,
+			@Param("aiWeight") double aiWeight,
 			@Param("requesterEmail") String requesterEmail,
 			@Param("offset") int offset,
 			@Param("limit") int limit);
@@ -117,4 +119,13 @@ public interface ArtworkMapper {
 	int findLikeCnt(@Param("artworkId") long artworkId);
 
 	boolean existsLike(@Param("artworkId") long artworkId, @Param("email") String email);
+
+	/**
+	 * 사용자×회차 단위 잠금 (S15P21A405-616). 같은 사람이 동시에 여러 번 눌러도 표 세기와 INSERT 가 한 줄로 선다.
+	 * 트랜잭션이 끝나면 풀린다. PostgreSQL 전용 — H2 로컬 실행에서는 좋아요를 누를 수 없다.
+	 */
+	void lockVotes(@Param("email") String email, @Param("roundId") long roundId);
+
+	/** 그 회차의 <b>남의</b> 작품에 내가 준 좋아요 수 = 쓴 표 (S15P21A405-616). */
+	int countVotesInRound(@Param("email") String email, @Param("roundId") long roundId);
 }

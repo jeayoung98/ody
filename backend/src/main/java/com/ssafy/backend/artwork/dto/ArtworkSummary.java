@@ -8,6 +8,7 @@ import java.time.OffsetDateTime;
  * @param rank       리더보드에서만 채운다. 내 작품 목록에서는 null
  * @param score      평가 전·실패면 null. <b>0 이 아니다</b>
  * @param failReason 실패 사유. 소유자 조회에서만 채운다
+ * @param rankScore  순위 점수 = 좋아요 + AI / 100 × K (S15P21A405-616). 리더보드에서만, 내 작품 목록에서는 null
  */
 public record ArtworkSummary(
 		long artworkId,
@@ -21,5 +22,6 @@ public record ArtworkSummary(
 		int likeCnt,
 		boolean likedByMe,
 		int musicCnt,
-		OffsetDateTime createdAt) {
+		OffsetDateTime createdAt,
+		Double rankScore) {
 }

@@ -11,7 +11,7 @@
 	<!-- ============================ 회차 ============================ -->
 
 	<select id="findOpenRound" resultType="com.ssafy.backend.artwork.dto.ArtworkRoundRow">
-		SELECT id, theme, theme_prompt, starts_at, ends_at
+		SELECT id, theme, theme_prompt, starts_at, ends_at, vote_limit, ai_weight
 		FROM artwork_round
 		WHERE now() BETWEEN starts_at AND ends_at
 		ORDER BY starts_at DESC
@@ -19,7 +19,7 @@
 	</select>
 
 	<select id="findRoundById" resultType="com.ssafy.backend.artwork.dto.ArtworkRoundRow">
-		SELECT id, theme, theme_prompt, starts_at, ends_at
+		SELECT id, theme, theme_prompt, starts_at, ends_at, vote_limit, ai_weight
 		FROM artwork_round
 		WHERE id = #{roundId}
 	</select>
@@ -36,7 +36,7 @@
 
 	<sql id="artworkColumns">
 		id, round_id, email, playlist_id, title, layout_version, status,
-		score, ai_comment, model, attempt_cnt, fail_reason, like_cnt, is_anchor AS anchor, evaluated_at, created_at
+		score, ai_comment, model, attempt_cnt, fail_reason, like_cnt, is_anchor AS anchor, closed, evaluated_at, created_at
 	</sql>
 
 	<select id="findById" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
@@ -183,10 +183,13 @@
 					EXISTS(SELECT 1 FROM artwork_like l WHERE l.artwork_id = a.id AND l.email = #{requesterEmail})
 				</when>
 				<otherwise>false</otherwise>
-			</choose> AS liked_by_me
+			</choose> AS liked_by_me,
+			<!-- 순위 점수 = 좋아요 + AI / 100 × K (S15P21A405-616). K 는 회차 행의 ai_weight 를 서비스가 넘긴다.
+			     저장하지 않는다 — 좋아요·K 가 바뀌면 다음 조회에 바로 반영된다. -->
+			(a.like_cnt + a.score * #{aiWeight} / 100.0) AS rank_score
 		FROM artwork a
 		WHERE a.round_id = #{roundId} AND a.status = 'SCORED' AND a.is_anchor = false
-		ORDER BY a.score DESC, a.like_cnt DESC, a.created_at ASC
+		ORDER BY rank_score DESC, a.score DESC, a.created_at ASC
 		LIMIT #{limit} OFFSET #{offset}
 	</select>
 
@@ -229,5 +232,23 @@
 
 	<select id="existsLike" resultType="boolean">
 		SELECT EXISTS(SELECT 1 FROM artwork_like WHERE artwork_id = #{artworkId} AND email = #{email})
+	</select>
+
+	<!-- ============================ 회차당 좋아요 한도 (S15P21A405-616) ============================ -->
+
+	<!--
+		사용자×회차 단위 트랜잭션 잠금. 같은 사람이 동시에 4번 눌러도 "센다 → 넣는다" 가 한 줄로 서서 한도를 넘지 않는다.
+		다른 사용자끼리는 막지 않는다. 트랜잭션이 끝나면 저절로 풀린다. PostgreSQL 전용 — H2 로컬에서는 좋아요 불가.
+	-->
+	<select id="lockVotes" resultType="int">
+		SELECT 1 FROM (SELECT pg_advisory_xact_lock(hashtext(#{email} || ':' || #{roundId}::text))) AS locked
+	</select>
+
+	<!-- 쓴 표 = 그 회차 남의 작품에 준 좋아요. 배포 전 자기 작품에 눌러 둔 좋아요는 세지 않는다. -->
+	<select id="countVotesInRound" resultType="int">
+		SELECT count(*)
+		FROM artwork_like l
+		JOIN artwork a ON a.id = l.artwork_id
+		WHERE a.round_id = #{roundId} AND l.email = #{email} AND a.email &lt;&gt; #{email}
 	</select>
 </mapper>

@@ -59,11 +59,13 @@ public class ArtworkController {
 	@Value("${ody.artwork.evaluation.max-attempts:3}")
 	private int maxAttempts;
 
-	/** 지금 열린 회차. 없으면 data 가 null 이다(오류가 아니다). */
-	@Operation(summary = "현재 회차 조회", description = "지금 열려 있는 회차를 반환한다. 없으면 data 가 null 이다.")
+	/** 지금 열린 회차. 없으면 data 가 null 이다(오류가 아니다). 로그인이면 남은 좋아요 수가 함께 온다. */
+	@Operation(summary = "현재 회차 조회",
+			description = "지금 열려 있는 회차를 반환한다. 없으면 data 가 null 이다. voteLimit 은 회차당 좋아요 한도, "
+					+ "myVotesLeft 는 로그인 사용자의 남은 좋아요 수(비로그인이면 null)다.")
 	@GetMapping("/round/current")
-	public ApiResponse<ArtworkRound> currentRound() {
-		return ApiResponse.success(artworkService.findOpenRound().orElse(null));
+	public ApiResponse<ArtworkRound> currentRound(Authentication authentication) {
+		return ApiResponse.success(artworkService.findOpenRound(emailOrNull(authentication)).orElse(null));
 	}
 
 	/**
@@ -101,9 +103,10 @@ public class ArtworkController {
 		return ResponseEntity.status(HttpStatus.CREATED).body(ApiResponse.success(response));
 	}
 
-	/** 회차 리더보드. 점수 내림차순 → 좋아요 내림차순 → 먼저 제출한 순. 채점된 작품만 보인다. */
+	/** 회차 리더보드. 순위 점수(좋아요 + AI / 100 × K) → AI 점수 → 먼저 제출한 순. 채점된 작품만 보인다. */
 	@Operation(summary = "리더보드 조회",
-			description = "회차의 작품을 점수 내림차순으로 반환한다. roundId 를 생략하면 지금 열린 회차다. 채점된 작품만 보인다.")
+			description = "회차의 작품을 순위 점수(좋아요 + AI 점수 / 100 × K, K 는 회차별 기본 5) 내림차순으로 반환한다. "
+					+ "roundId 를 생략하면 지금 열린 회차다. 채점된 작품만 보인다.")
 	@GetMapping("/leaderboard")
 	public ApiResponse<ArtworkLeaderboardResponse> leaderboard(
 			@RequestParam(required = false) Long roundId,

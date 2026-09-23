@@ -25,5 +25,7 @@ public class ArtworkSummaryRow {
 	private int likeCnt;
 	private int musicCnt;
 	private boolean likedByMe;
+	/** 리더보드에서만 계산한다 (S15P21A405-616). 내 작품 목록에서는 null. */
+	private Double rankScore;
 	private OffsetDateTime createdAt;
 }

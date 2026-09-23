@@ -55,13 +55,7 @@ export default function HelpButton() {
         aria-label="도움말"
         title="도움말"
         onClick={() => { track("help_opened"); setAnalyticsContext({ help_open: true }); setOpen(true); }}
-        /*
-          **폰에서는 왼쪽, 검색 알약 오른쪽에 선다** (S15P21A405-593). 데스크톱에서는 계기판
-          오른쪽에 붙어 같이 접히는데(S15P21A405-434), 폰에는 계기판이 없어 그 자리가 화면
-          오른쪽 끝이었다. 상단 줄을 재 보면 오브(16~50)·검색(50~94) 다음이 비어 있다 —
-          손이 닿는 것들끼리 왼쪽에 모인다.
-        */
-        className="glass-liquid absolute -right-[52px] bottom-0 z-[22] grid h-11 w-11 place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink max-tablet:right-auto max-tablet:left-0"
+        className="glass-liquid absolute -right-[52px] bottom-0 z-[22] grid h-11 w-11 place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink"
       >
         <HelpIcon />
       </button>

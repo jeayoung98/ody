@@ -1,6 +1,8 @@
 /**
  * 음악 취향 분석 (S15P21A405-630). 백엔드 계약은 `backend/.../taste/dto/TasteAnalysisResponse.java`
  * 이고, 이 파일은 2026-09-23 `origin/backend/dev` 의 그 파일을 읽어 옮긴 것이다 (S15P21A405-512).
+ * 같은 날 백엔드 S15P21A405-634 가 `report.findings[]` 와 `axes[].label.axis` 를 더했고
+ * INITIAL 요약의 "잠정 경향" 접두사를 뺐다 — 화면이 `report.level` 로 배지를 붙인다 (S15P21A405-639).
  *
  * **본인 것만 나온다.** 두 엔드포인트 다 `Authentication` 으로 사람을 정하므로 남의 취향은
  * 물어볼 수가 없다 — 남의 프로필 화면에 붙일 수 없다는 뜻이다.
@@ -53,6 +55,36 @@ export interface TasteNarrative {
   evidence: string;
 }
 
+/**
+ * 판정 종류 (`backend/.../taste/analysis/TasteFindingSelector.java`).
+ *
+ * - `CONSISTENT_BIAS` 한쪽으로 기울고 흩어짐도 작다 — 가장 뚜렷한 취향
+ * - `BIAS` 한쪽으로 기울었지만 폭도 있다
+ * - `DIVERSE` 양 끝을 다 듣는다 (`direction` 은 `BOTH`)
+ * - `BALANCED` 어느 축도 튀지 않을 때 하나만 온다 (`pc` 는 `null`, `direction` 은 `CENTER`)
+ */
+export type TasteFindingType = "CONSISTENT_BIAS" | "BIAS" | "DIVERSE" | "BALANCED";
+export type TasteFindingDirection = "LOW" | "HIGH" | "BOTH" | "CENTER";
+
+/**
+ * 문장의 근거가 된 축별 판정 (S15P21A405-634). `narratives` 와 `findingId` 로 1:1 이다.
+ *
+ * **태그는 이걸로 그린다.** 예전에는 문장만 와서 `findingId` 를 쪼개고 median 을 다시 재서
+ * 방향을 짐작해야 했다. `axisPhrase` 는 축 라벨의 그 극 말(`어두운`)이고, `BOTH` 면
+ * `"어두운 / 밝은"` 처럼 `" / "` 로 잇는다.
+ */
+export interface TasteFinding {
+  id: string;
+  type: TasteFindingType;
+  /** `BALANCED` 면 `null` */
+  pc: number | null;
+  direction: TasteFindingDirection;
+  /** 세기. 백엔드가 이 값으로 순위를 정해 내려 준다 — 순서를 다시 매기지 않는다 */
+  effectSize: number;
+  evidence: string;
+  axisPhrase: string;
+}
+
 export interface TasteReport {
   level: TasteReportLevel;
   /** 외부 생성 문장인가. `false` 면 백엔드가 규칙으로 채운 대체 문장이다 */
@@ -61,6 +93,10 @@ export interface TasteReport {
   fresh: boolean;
   summary: string;
   narratives: TasteNarrative[];
+  /**
+   * 축별 판정 (S15P21A405-634). 그 전에 만들어진 응답에는 없을 수 있어 화면은 없으면 태그를 안 그린다.
+   */
+  findings?: TasteFinding[];
   /** ISO 8601 (오프셋 포함) */
   analyzedAt: string;
   generatedAt: string;
@@ -83,8 +119,20 @@ export interface TasteGeneration {
 export interface TasteAxisLabel {
   status: string;
   strength: string;
+  /**
+   * 축 이름 한 단어 — 밝기·저음·밀도… (S15P21A405-634). `low`/`high` 가 양 끝 이름이라면 이건 축 자체다.
+   * `DIVERSE` 태그(`#밝기 폭넓음`)를 만들 수 있는 유일한 길이라 백엔드에 요청해 받았다. 기준 산출물이
+   * 낡으면 비어 올 수 있어 `null` 도 받는다
+   */
+  axis: string | null;
   low: string;
   high: string;
+  /**
+   * 태그 어형 — **아직 백엔드에 없다** (2026-09-23, BACKEND-NOTES A-54 ④ 선택 항목). 오면 그대로 쓰고,
+   * 없으면 화면이 `low`/`high` 에 " 곡" 을 붙인다
+   */
+  lowTag?: string | null;
+  highTag?: string | null;
   evidence: string;
 }
 

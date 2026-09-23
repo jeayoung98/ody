@@ -4,6 +4,7 @@ import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import Skeleton from "@/components/common/skeleton";
+import Tag from "@/components/common/tag";
 import { useGenerateTasteAnalysisMutation } from "@/hooks/mutations/use-generate-taste-analysis-mutation";
 import { useTasteAnalysisQuery } from "@/hooks/queries/use-taste-analysis-query";
 import { tasteView } from "@/lib/taste-view";
@@ -51,10 +52,34 @@ export default function FeedTasteReport() {
 
       {report ? (
         <>
-          {/* 요약은 이 칸에서 제일 큰 글자다 — 나머지는 그 한 줄을 뒷받침하는 근거다 */}
+          {/*
+            요약은 이 칸에서 제일 큰 글자다 — 나머지는 그 한 줄을 뒷받침하는 근거다.
+            표본이 적다는 말(잠정)은 문장이 아니라 **배지**다 (S15P21A405-639) — 문장 안에 박히면
+            "나를 설명하는 한 문장" 이 아니라 면책 문구가 된다.
+          */}
           <p className={`font-display text-[17px] leading-snug font-medium ${view.stale ? "text-ink-2" : "text-ink"}`}>
+            {view.badge && (
+              <span
+                title={view.badge.title}
+                className="mr-1.5 inline-block translate-y-[-2px] rounded-pill border border-warn/30 bg-warn/[.07] px-1.5 py-px align-middle text-2xs font-medium text-warn"
+              >
+                {view.badge.text}
+              </span>
+            )}
             {report.summary}
           </p>
+          {/* 태그는 판정값(findings)으로 그린다 — 문장을 쪼개 짐작하지 않는다. 구 응답엔 없어 줄이 비면 안 그린다 */}
+          {view.tags.length > 0 && (
+            <ul className="m-0 flex list-none flex-wrap gap-1.5 p-0">
+              {view.tags.map((t) => (
+                <li key={t.id}>
+                  <Tag tone={t.strength === "strong" ? "teal" : "default"} title={t.title}>
+                    {t.text}
+                  </Tag>
+                </li>
+              ))}
+            </ul>
+          )}
           {report.narratives.length > 0 && (
             <ul className="m-0 flex list-none flex-col gap-1 p-0">
               {report.narratives.map((n) => (

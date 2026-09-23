@@ -72,8 +72,8 @@ public class PlaylistController {
 				new LikedPlaylistSearchResponse(playlistService.searchLiked(email, authentication.getName())));
 	}
 
-	/** 플레이리스트 상세 조회 (정본 §4.2). 소유자만 접근 가능. */
-	@Operation(summary = "플레이리스트 상세 조회", description = "playlistId로 플레이리스트 상세를 조회한다. 소유자만 접근할 수 있다.")
+	/** 플레이리스트 상세 조회 (정본 §4.2). 로그인한 누구나 조회 가능 (S15P21A405-603). */
+	@Operation(summary = "플레이리스트 상세 조회", description = "playlistId로 플레이리스트 상세를 조회한다. 로그인한 사용자라면 누구의 플레이리스트든 조회할 수 있다.")
 	@GetMapping("/detail")
 	public ApiResponse<PlaylistDetailResponse> detail(
 			@RequestParam @Min(1) long playlistId, Authentication authentication) {

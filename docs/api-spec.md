@@ -135,7 +135,8 @@
   - 해당: `auth/logout`, `user/update`, `user/ispublic`, `user/delete`, `user/follow/insert`, `user/follow/delete`, `playlist/create`
   - 이유: body의 email을 신뢰하면 남의 email만 알아도 정보 수정·탈퇴 가능. 파라미터 자체 제거.
 - **타인 조회 API는 `email` 유지** — `user/detail`, `user/follow/list`, `playlist/search`
-- 소유 리소스 ID 접근 API(`playlist/detail`, `playlist/update`, `playlist/delete`, `playlist/music/*`)는 서버가 `playlist.ownerEmail == token.email` 검증, 불일치 시 `FORBIDDEN`.
+- 소유 리소스 ID 접근 API(`playlist/update`, `playlist/delete`, `playlist/music/*`)는 서버가 `playlist.ownerEmail == token.email` 검증, 불일치 시 `FORBIDDEN`.
+  `playlist/detail` 은 조회 전용이라 소유자 검증을 하지 않는다 — 로그인한 누구나 조회 가능 (S15P21A405-603).
 
 ---
 
@@ -525,7 +526,8 @@ param: `level`(int, required, 1~8), `size`(int, optional, 1~10,000), 누적 축 
   "musics": [ { "id": 10234, "mbid": "...", "title": "Love wins all", "artist": "IU", "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"], "youtubeUrl": "https://...", "location": { "pc1": -0.4213, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3 } ]
 }, "error": null }
 ```
-- `youtubeUrl`이 null인 곡은 클라이언트에서 재생 불가로 표시. 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`.
+- 로그인한 사용자라면 **누구의 플레이리스트든** 조회할 수 있다. 소유자의 공개 여부(`isPublic`)와도 무관하다 (S15P21A405-603).
+- `youtubeUrl`이 null인 곡은 클라이언트에서 재생 불가로 표시. 에러: `PLAYLIST_NOT_FOUND`.
 
 ### 4.3 플레이리스트 생성
 `POST /playlist/create` · 인증 필요. body: `playlistName`(String, required), `musicIdList`(Array\<int\>, required, 빈 배열 허용). res 201:

@@ -133,13 +133,14 @@ class PlaylistServiceTests {
 	// ---- getDetail (§4.2) ----
 
 	@Test
-	void getDetail_notOwner_throwsForbidden() {
+	void getDetail_notOwner_returnsDetail() { // S15P21A405-603: 소유자가 아니어도 조회된다
 		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of());
 
-		assertThatThrownBy(() -> serviceWithAdapter().getDetail(42, "someone-else@gmail.com"))
-				.isInstanceOf(CustomException.class)
-				.extracting(e -> ((CustomException) e).getErrorCode())
-				.isEqualTo(GlobalErrorCode.FORBIDDEN);
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "someone-else@gmail.com");
+
+		assertThat(response.playlistId()).isEqualTo(42);
+		assertThat(response.playlistName()).isEqualTo("드라이브");
 	}
 
 	@Test

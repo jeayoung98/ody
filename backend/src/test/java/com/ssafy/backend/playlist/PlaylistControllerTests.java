@@ -29,7 +29,6 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.PlaylistErrorCode;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.music.dto.Location;
@@ -130,13 +129,13 @@ class PlaylistControllerTests {
 	}
 
 	@Test
-	void detail_forbidden_returns403() throws Exception {
+	void detail_notFound_returns404() throws Exception {
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
-				.thenThrow(new CustomException(GlobalErrorCode.FORBIDDEN));
+				.thenThrow(new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND));
 
 		mockMvc.perform(get("/api/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code").value("PLAYLIST_NOT_FOUND"));
 	}
 
 	@Test

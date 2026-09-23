@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.ssafy.backend.taste.music.TasteMusicMapper">
+    <select id="findLikedMusic" resultType="com.ssafy.backend.taste.music.TasteMusicRow">
+        SELECT m.id AS music_id, m.title, m.artist,
+               (m.location::real[])[1] AS pc1, (m.location::real[])[2] AS pc2,
+               (m.location::real[])[3] AS pc3, (m.location::real[])[4] AS pc4,
+               (m.location::real[])[5] AS pc5, (m.location::real[])[6] AS pc6,
+               (m.location::real[])[7] AS pc7, (m.location::real[])[8] AS pc8,
+               (m.location::real[])[9] AS pc9, (m.location::real[])[10] AS pc10,
+               (m.location::real[])[11] AS pc11, (m.location::real[])[12] AS pc12,
+               (m.location::real[])[13] AS pc13, (m.location::real[])[14] AS pc14,
+               (m.location::real[])[15] AS pc15, (m.location::real[])[16] AS pc16
+        FROM music_like ml
+        JOIN music m ON m.id = ml.music_id
+        WHERE ml.email = #{email}
+        ORDER BY ml.created_at DESC, ml.music_id DESC
+    </select>
+</mapper>

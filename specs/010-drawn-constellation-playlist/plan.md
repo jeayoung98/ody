@@ -36,7 +36,7 @@
 
 | 원칙 | 판정 | 근거 |
 | --- | --- | --- |
-| I 명세 우선 | ⚠️ 조건부 | spec Clarified. **FEATURES.md 항목 없음** — 변경 제안 #29 에 자유 그리기 확장 제안을 올린다(tasks 에 포함). 기획 확인 전까지 "제안" 상태 |
+| I 명세 우선 | ✅ | spec Clarified. FEATURES 변경 제안 #29 에 자유 그리기 확장 반영 — 기획(효정, 기획·구현 겸임) 결정으로 선행 구현 (2026-09-23) |
 | II 계약 우선 | ✅ | [contracts/draw-match.md](./contracts/draw-match.md). 신규 에러 코드 1개 → BACKEND-NOTES 갱신 + FE 통보 |
 | III 완료 전 검증 | ✅ | 불변성·단계·중복·입력 오류 단위 테스트, `./gradlew test build`, 배포 후 quickstart |
 | IV 데이터 재현성 | ✅ 해당 적음 | 새 데이터 산출물 없음 |
@@ -113,10 +113,10 @@ backend/src/test/java/com/ssafy/backend/artwork/
 
 **Structure Decision**: 기존 `artwork` 모듈 안에서 끝낸다. 생성기 클래스 이름이 "Cat" 이지만 이번에 바꾸지 않는다 — 이름 변경은 동작 없는 diff 이고 595 리뷰 이력과 어긋난다.
 
-## 상대 파트에 알릴 것 (구현 후)
+## 상대 파트에 알린 것
 
-- **[FE]** 캔버스 그리기 화면 전체(US1~4 UI), `POST /api/artwork/draw` 계약, 신규 에러 코드 `ARTWORK_DRAWING_DEGENERATE`(`types/api.ts`), LOW 는 경고+저장 허용, 요청 타임아웃 10 s.
-- **[기획]** FEATURES #29 에 자유 그리기 확장 제안.
+- **[FE]** 완료 — BACKEND-NOTES §6-8 계약, 노션 「결정 통보 · 물음」 🔴 `그린 별자리 화면 — draw API 연동`(담당 정유진, 2026-09-23). 화면 전체(US1~4, 엣지 케이스 포함)·신규 에러 코드·LOW 경고+저장·요청 타임아웃 10 s.
+- **[기획]** 완료 — FEATURES #29 확장 반영(기획 겸임).
 
 ## Complexity Tracking
 

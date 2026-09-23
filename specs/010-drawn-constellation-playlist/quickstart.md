@@ -9,7 +9,7 @@ cd backend && ./gradlew test && ./gradlew build
 테스트가 보장하는 것 (tasks 에서 작성):
 
 - 점수: 같은 도형을 이동·회전(임의 각)·확대(0.5~2배) → 점수 차 ≤ 1 (SC-003). 좌우 반전 → 점수 하락.
-- 단계: 기준 도형 + 잡음 σ 0.05 / 0.2 / 0.5 → HIGH / MEDIUM / LOW.
+- 단계: 기준 도형 + 잡음 σ 0.03 / 0.15 / 0.5 (도형 RMS 반지름 대비) → HIGH / MEDIUM / LOW.
 - 매칭: 곡 중복 없음 · 점 수 = 곡 수 · 순서 유지 (SC-002) · 같은 입력 → 같은 결과 (FR-012).
 - 입력: 2개·21개 → 400 `INVALID_INPUT`, 한 점에 몰림 → 400 `ARTWORK_DRAWING_DEGENERATE`.
 - 템플릿 `generate` 기존 테스트 그대로 통과 (리팩터로 동작이 안 바뀜).

@@ -23,6 +23,7 @@ import com.ssafy.backend.artwork.dto.ArtworkRow;
 import com.ssafy.backend.artwork.dto.ArtworkSubmitResponse;
 import com.ssafy.backend.artwork.dto.ArtworkSummary;
 import com.ssafy.backend.artwork.dto.ArtworkSummaryRow;
+import com.ssafy.backend.artwork.dto.ArtworkTrack;
 import com.ssafy.backend.artwork.mapper.ArtworkMapper;
 import com.ssafy.backend.common.ArtworkErrorCode;
 import com.ssafy.backend.common.CustomException;
@@ -30,6 +31,7 @@ import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.ConstellationPoint;
 import com.ssafy.backend.music.dto.MusicDetail;
+import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.service.ConstellationService;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
 import com.ssafy.backend.playlist.service.PlaylistService;
@@ -155,6 +157,14 @@ public class ArtworkService {
 		ArtworkRoundRow round = artworkMapper.findRoundById(artwork.getRoundId());
 		List<ArtworkPointRow> pointRows = artworkMapper.findPoints(artworkId);
 		List<Long> musicIds = pointRows.stream().map(ArtworkPointRow::getMusicId).toList();
+		List<MusicDetail> musics = loadMusicDetails(musicIds);
+		Map<Long, MusicDetail> musicById = new HashMap<>();
+		musics.forEach(m -> musicById.put(m.id(), m));
+		List<ArtworkTrack> tracks = pointRows.stream().map(p -> {
+			MusicDetail m = musicById.get(p.getMusicId());
+			return new ArtworkTrack(p.getMusicId(), m == null ? null : m.title(), m == null ? null : m.artist(),
+					p.getX(), p.getY());
+		}).toList();
 
 		log.info("[Artwork] 상세 조회 완료 artworkId={} status={}", artworkId, artwork.getStatus());
 		return new ArtworkDetailResponse(
@@ -171,10 +181,11 @@ public class ArtworkService {
 				artwork.getLikeCnt(),
 				requesterEmail != null && artworkMapper.existsLike(artworkId, requesterEmail),
 				pointRows.stream().map(p -> new ArtworkPoint(p.getMusicId(), p.getX(), p.getY())).toList(),
-				loadMusicDetails(musicIds),
+				musics,
 				artwork.getCreatedAt(),
 				artwork.getEvaluatedAt(),
-				artwork.isClosed());
+				artwork.isClosed(),
+				tracks);
 	}
 
 	/**
@@ -199,9 +210,11 @@ public class ArtworkService {
 		List<ArtworkSummaryRow> rows =
 				artworkMapper.findLeaderboard(round.getId(), round.getAiWeight(), requesterEmail, offset, safeSize);
 
+		Map<Long, List<ArtworkTrack>> tracksByArtwork = loadTracks(rows.stream().map(ArtworkSummaryRow::getId).toList());
 		List<ArtworkSummary> items = new ArrayList<>(rows.size());
 		for (int i = 0; i < rows.size(); i++) {
-			items.add(toSummary(rows.get(i), offset + i + 1));
+			ArtworkSummaryRow row = rows.get(i);
+			items.add(toSummary(row, offset + i + 1, tracksByArtwork.getOrDefault(row.getId(), List.of())));
 		}
 
 		int totalCnt = artworkMapper.countLeaderboard(round.getId());
@@ -212,8 +225,31 @@ public class ArtworkService {
 	/** 내 작품. 상태를 가리지 않는다. */
 	public List<ArtworkSummary> findMine(String requesterEmail) {
 		return artworkMapper.findMine(requesterEmail).stream()
-				.map(row -> toSummary(row, null))
+				.map(row -> toSummary(row, null, List.of()))
 				.toList();
+	}
+
+	/**
+	 * 리더보드 한 페이지의 별자리 좌표·곡 이름 (S15P21A405-616). 좌표 1회 + 곡 이름 1회 — 카드마다 왕복하지 않는다.
+	 * 곡 조회 어댑터가 없거나 곡이 지워졌으면 이름만 null 이고 점은 남는다.
+	 */
+	private Map<Long, List<ArtworkTrack>> loadTracks(List<Long> artworkIds) {
+		if (artworkIds.isEmpty()) {
+			return Map.of();
+		}
+		List<ArtworkPointRow> rows = artworkMapper.findPointsByArtworkIds(artworkIds);
+		Map<Long, MusicSummary> names = new HashMap<>();
+		List<Long> musicIds = rows.stream().map(ArtworkPointRow::getMusicId).distinct().toList();
+		if (!musicIds.isEmpty()) {
+			musicDetailReader.ifPresent(r -> r.findSummariesByIds(musicIds).forEach(s -> names.put(s.id(), s)));
+		}
+		Map<Long, List<ArtworkTrack>> out = new HashMap<>();
+		for (ArtworkPointRow p : rows) {   // 작품 id → position 순으로 온다
+			MusicSummary s = names.get(p.getMusicId());
+			out.computeIfAbsent(p.getArtworkId(), k -> new ArrayList<>()).add(new ArtworkTrack(
+					p.getMusicId(), s == null ? null : s.title(), s == null ? null : s.artist(), p.getX(), p.getY()));
+		}
+		return out;
 	}
 
 	/**
@@ -332,7 +368,7 @@ public class ArtworkService {
 		return musics;
 	}
 
-	private static ArtworkSummary toSummary(ArtworkSummaryRow row, Integer rank) {
+	private static ArtworkSummary toSummary(ArtworkSummaryRow row, Integer rank, List<ArtworkTrack> points) {
 		return new ArtworkSummary(
 				row.getId(),
 				rank,
@@ -347,7 +383,8 @@ public class ArtworkService {
 				row.getMusicCnt(),
 				row.getCreatedAt(),
 				row.getRankScore(),
-				row.isClosed());
+				row.isClosed(),
+				points);
 	}
 
 	/** 회차 응답. 로그인이면 남은 좋아요 수를 센다 — 배포 전 초과분이 있어도 음수로 내려가지 않는다. */

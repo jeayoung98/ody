@@ -69,11 +69,11 @@
 
 **Independent Test**: 항목 2개 페이지 → `findPointsByArtworkIds` 1회, `findSummariesByIds` 1회, 항목별 points 순서가 position 순, 곡 이름이 채워짐.
 
-- [ ] T021 [P] [US4] `A/dto/ArtworkTrack.java` 신규 record `(long musicId, String title, String artist, double x, double y)` — javadoc 에 "598 `DrawTrack` 과 같은 모양, 두 브랜치 머지 후 하나로" `ponytail:` 주석
-- [ ] T022 [P] [US4] `M` + `A/mapper/ArtworkMapper.java` 에 `findPointsByArtworkIds(List<Long> artworkIds)` — `SELECT artwork_id, position, music_id, x, y FROM artwork_point WHERE artwork_id IN (...) ORDER BY artwork_id, position` (`<foreach>`). `ArtworkPointRow` 에 `artworkId` 가 없으면 추가
-- [ ] T023 [US4] `A/dto/ArtworkSummary.java` 에 `List<ArtworkTrack> points`(리더보드만, `findMine` 은 빈 목록). `A/service/ArtworkService.java` `getLeaderboard` 에서 페이지 작품 id 로 T022 1회, 곡 id 모아 `musicDetailReader.findSummariesByIds` 1회(어댑터 없으면 이름 null), 항목별 조립. 빈 페이지면 두 조회 모두 생략
-- [ ] T024 [US4] `A/dto/ArtworkDetailResponse.java` 에 `List<ArtworkTrack> tracks` 추가 — `ArtworkService.getDetail` 이 이미 읽은 곡 상세(`loadMusicDetails`)를 musicId 로 짝지어 좌표 순서대로 조립(지워진 곡은 이름 null, 원소는 유지). 기존 `points`·`musics` 는 그대로(analyze U1)
-- [ ] T025 [US4] `T/ArtworkServiceTests.java` 에 추가: 리더보드 항목 2개 → 두 조회 각 1회, points 순서·이름, 빈 페이지 → 조회 0회. 상세 `tracks` 가 좌표 순서·이름을 갖고, 곡이 지워진 자리도 원소가 남는다
+- [x] T021 [P] [US4] `A/dto/ArtworkTrack.java` 신규 record `(long musicId, String title, String artist, double x, double y)` — javadoc 에 "598 `DrawTrack` 과 같은 모양, 두 브랜치 머지 후 하나로" `ponytail:` 주석
+- [x] T022 [P] [US4] `M` + `A/mapper/ArtworkMapper.java` 에 `findPointsByArtworkIds(List<Long> artworkIds)` — `SELECT artwork_id, position, music_id, x, y FROM artwork_point WHERE artwork_id IN (...) ORDER BY artwork_id, position` (`<foreach>`). `ArtworkPointRow` 에 `artworkId` 가 없으면 추가
+- [x] T023 [US4] `A/dto/ArtworkSummary.java` 에 `List<ArtworkTrack> points`(리더보드만, `findMine` 은 빈 목록). `A/service/ArtworkService.java` `getLeaderboard` 에서 페이지 작품 id 로 T022 1회, 곡 id 모아 `musicDetailReader.findSummariesByIds` 1회(어댑터 없으면 이름 null), 항목별 조립. 빈 페이지면 두 조회 모두 생략
+- [x] T024 [US4] `A/dto/ArtworkDetailResponse.java` 에 `List<ArtworkTrack> tracks` 추가 — `ArtworkService.getDetail` 이 이미 읽은 곡 상세(`loadMusicDetails`)를 musicId 로 짝지어 좌표 순서대로 조립(지워진 곡은 이름 null, 원소는 유지). 기존 `points`·`musics` 는 그대로(analyze U1)
+- [x] T025 [US4] `T/ArtworkServiceTests.java` 에 추가: 리더보드 항목 2개 → 두 조회 각 1회, points 순서·이름, 빈 페이지 → 조회 0회. 상세 `tracks` 가 좌표 순서·이름을 갖고, 곡이 지워진 자리도 원소가 남는다
 
 **Checkpoint**: FE 갤러리·순위 카드가 추가 호출 없이 그려짐
 

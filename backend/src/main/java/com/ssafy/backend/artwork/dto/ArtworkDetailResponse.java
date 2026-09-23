@@ -32,5 +32,10 @@ public record ArtworkDetailResponse(
 		OffsetDateTime createdAt,
 		OffsetDateTime evaluatedAt,
 		/** 닫힌 모양 — 마지막 곡과 첫 곡을 잇는다 (S15P21A405-616). */
-		boolean closed) {
+		boolean closed,
+		/**
+		 * 좌표 + 곡 이름을 한 원소로, position 순 (S15P21A405-616). {@code musics} 는 지워진 곡이 빠져
+		 * {@code points} 와 순번이 어긋날 수 있다 — 이쪽은 원소가 빠지지 않고 이름만 null 이 된다.
+		 */
+		List<ArtworkTrack> tracks) {
 }

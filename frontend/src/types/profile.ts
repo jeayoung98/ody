@@ -89,14 +89,6 @@ export interface WeeklyRanking {
   contribution: UserRankingItem[];
 }
 
-/** 반응 이벤트 (수신) */
-export interface ReactionEvent {
-  id: string;
-  fromEmail: Email;
-  reactionKey: string;
-  sentAt: ISODateString;
-}
-
 /**
  * 팔로우 등록·해제 응답 (S15P21A405-489, BACKEND-NOTES A-37·A-38).
  * `followeeFollowerCnt` 는 **바뀐 뒤** 값이라 화면이 다시 조회하지 않고 바로 쓴다.

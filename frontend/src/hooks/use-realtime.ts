@@ -8,6 +8,7 @@ import { readStorage, subscribeStorage } from "@/lib/storage";
 import { usePresenceJoin } from "./use-presence-join";
 import { useRideCaptain } from "./use-ride-captain";
 import { useRideSession } from "./use-ride-session";
+import { useReactionLive } from "./use-reaction-live";
 
 /**
  * 실시간 전체의 시작점 (S15P21A405-482).
@@ -45,4 +46,6 @@ export function useRealtime(): void {
    */
   useRideSession();
   useRideCaptain();
+  // 남이 보낸 반응 (S15P21A405-607). 지도를 안 보고 있어도 받아 둔다 — 떠 있는 동안 지도로 오면 보인다
+  useReactionLive();
 }

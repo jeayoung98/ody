@@ -59,6 +59,8 @@ export type RealtimeMessageType =
   | "RIDE_RIDER_JOINED"
   | "RIDE_RIDER_LEFT"
   | "RIDE_ENDED"
+  // 반응하기 (S15P21A405-607). 받는 사람 개인 큐로만 온다
+  | "REACTION"
   | "PRESENCE_ERROR";
 
 // ── 내 위치 ────────────────────────────────────────────────────────────────
@@ -534,4 +536,18 @@ export interface CrowdCell {
   x: number;
   y: number;
   count: number;
+}
+
+// ── 반응하기 ───────────────────────────────────────────────────────────────
+
+/**
+ * `REACTION` — 누가 나에게 어떤 반응을 보냈다 (SOCIAL-02, S15P21A405-607).
+ * 보낸 사람의 닉네임·사진은 없다 — 받는 쪽이 이미 들고 있는 주변 사람 목록에서 찾는다.
+ */
+export interface ReactionPayload {
+  fromEmail: string;
+  /** 프론트 이모지 세트의 키 (`REACTIONS`). 모르는 키는 ✨ 로 그린다 */
+  reactionKey: string;
+  /** 서버가 보낸 시각(ISO-8601) */
+  sentAt: string;
 }

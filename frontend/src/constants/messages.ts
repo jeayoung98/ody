@@ -104,6 +104,18 @@ export const RIDE_DISBAND_REJECTED = {
   UNKNOWN: "강제 하차에 실패했어요. 잠시 후 다시 시도해 주세요",
 } as const;
 
+/**
+ * 반응이 거부됐을 때 (SOCIAL-02·04, S15P21A405-607, 백엔드 `RealtimeErrorCode`).
+ * 패널에 뜬 전원에게 보내므로 **전부 거부됐을 때만** 첫 사유를 말한다.
+ */
+export const REACTION_REJECTED = {
+  REACTION_SELF: "자기 자신에게는 반응을 보낼 수 없어요",
+  REACTION_NOT_NEARBY: "같은 영역에 있는 사람에게만 보낼 수 있어요",
+  REACTION_COOLDOWN: "같은 사람에게는 잠시 뒤에 다시 보낼 수 있어요",
+  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  UNKNOWN: "반응을 보내지 못했어요",
+} as const;
+
 /** 재연결·새 탭으로 서버 쪽 탑승이 끊겼다 (§8.3). **자동으로 다시 태우지 않는다** */
 export const RIDE_DROPPED = "따라가기가 끊겼어요. 다시 눌러 주세요";
 

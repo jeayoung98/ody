@@ -1053,7 +1053,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
 function drawSelected(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.selectedId == null || e.probe || !e.isAlive(e.selectedId)) return;
   const w = e.worldOf(e.selectedId)!;
-  const { px, py } = e.worldToScreen(w.x, w.y);
+  const { px, py } = e.worldToScreen(w.x, w.y, e.cam, e.parOf(e.selectedId));
   const song = e.songs.find((s) => s.musicId === e.selectedId)!;
   const rr = 19 + Math.sin(e.time * 2.2) * 2.4;
   g.globalCompositeOperation = "lighter";

@@ -9,6 +9,7 @@ import { nearestLayerWith } from "./reveal-layer";
 import { wheelIntent } from "./ride-zoom";
 import { acceptsAnchor } from "./stale-anchor";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
+import { starMag } from "../render/star-look";
 
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
 const easeInOut = (t: number) => (t < 0.5 ? 4 * t * t * t : 1 - Math.pow(-2 * t + 2, 3) / 2);
@@ -458,17 +459,10 @@ export class MapEngine {
     this.N = songs.length;
     this.index = new Map(songs.map((s, i) => [s.musicId, i]));
     this.byWeight = songs.map((_, i) => i).sort((a, b) => songs[b].weight - songs[a].weight);
-    // 깊이는 musicId 로 결정한다 (새로고침해도 같은 하늘)
+    // 깊이는 별 크기 등급에서 나온다 — 큰 별이 가깝다(z>0). 크기와 같은 해시라 새로고침해도 같은 하늘이고,
+    // 화면을 끌면 큰 별은 빨리, 작은 별은 천천히 지나가 겹겹의 원근으로 읽힌다 (S15P21A405-609)
     this.z = growF(this.z, this.N, keep);
-    for (let i = keep; i < this.N; i++) {
-      let h = (songs[i].musicId * 2654435761) >>> 0;
-      let g = 0;
-      for (let k = 0; k < 4; k++) {
-        h = (h * 1664525 + 1013904223) >>> 0;
-        g += h / 0xffffffff;
-      }
-      this.z[i] = ((g - 2) / 1.6) * 0.75;
-    }
+    for (let i = keep; i < this.N; i++) this.z[i] = (starMag(songs[i]) - 0.5) * 2;
     this.pos = growF(this.pos, this.N * 2, keep * 2);
     this.from = growF(this.from, this.N * 2, keep * 2);
     this.to = growF(this.to, this.N * 2, keep * 2);
@@ -1410,7 +1404,7 @@ export class MapEngine {
       }
     }
     this.meHop = null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
     const fl = this.meFlight;
     return { px, py, from: fl ? this.worldToScreen(fl.ax, fl.ay) : null, onRing: false };
   }
@@ -1434,7 +1428,7 @@ export class MapEngine {
     if (elsewhere) {
       dir = this.awayDir(id);
     } else {
-      const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+      const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
       const f = this.freeRect();
       const m = ME_OFFSCREEN.inset;
       if (px > f.x0 + m && px < f.x1 - m && py > f.y0 + m && py < f.y1 - m) return null;
@@ -1527,8 +1521,9 @@ export class MapEngine {
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
   }
 
-  worldToScreen(x: number, y: number, cam = this.cam) {
-    return { px: this.W / 2 + (x - cam.cx) * cam.s, py: this.H / 2 - (y - cam.cy) * cam.s };
+  /** `p` 는 깊이 시차 배율({@link parOf}). 별 위에 서는 것(나·사람·선택 링)은 그 별의 값을 넘겨야 별과 같이 움직인다 */
+  worldToScreen(x: number, y: number, cam = this.cam, p = 1) {
+    return { px: this.W / 2 + (x - cam.cx) * cam.s * p, py: this.H / 2 - (y - cam.cy) * cam.s * p };
   }
 
   screenToWorld(px: number, py: number, cam = this.cam) {
@@ -1549,6 +1544,12 @@ export class MapEngine {
   /** 깊이 시차 — 앞쪽(z>0) 별이 조금 더 크게 움직인다 (프로토타입 par) */
   private par(i: number) {
     return 1 + this.z[i] * STAR_VIEW.parallax;
+  }
+
+  /** 그 곡의 깊이 시차 배율. 상주 집합에 없는 곡은 기준 평면(1) */
+  parOf(id: number | null): number {
+    const i = id == null ? undefined : this.index.get(id);
+    return i == null ? 1 : this.par(i);
   }
 
   private proj(i: number, layer: number, cam: MapCamera, out: Float32Array, k: number) {
@@ -2236,7 +2237,7 @@ export class MapEngine {
   /** 내 위치(우주선·헬멧)의 화면 좌표. 반응 이모지가 여기서 떠오른다 (SOCIAL-02) */
   mePos(): { x: number; y: number } | null {
     if (this.myId == null) return null;
-    const { px, py } = this.worldToScreen(this.me.x, this.me.y);
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
     return { x: px, y: py };
   }
 
@@ -3164,7 +3165,8 @@ export class MapEngine {
         w = this.glideFriend(u, w, base, now);
       }
       if (!w) continue;
-      const { px, py } = this.worldToScreen(w.x, w.y);
+      // 서 있는 곡과 같은 시차를 받아야 별 위에 그대로 선다 (S15P21A405-609)
+      const { px, py } = this.worldToScreen(w.x, w.y, this.cam, this.parOf(u.musicId));
       if (!Number.isFinite(px) || !Number.isFinite(py)) continue;
       if (isLeader) {
         leader.push({ u, px, py, heading: w.heading });

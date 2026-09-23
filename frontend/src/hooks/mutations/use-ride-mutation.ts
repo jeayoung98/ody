@@ -31,7 +31,8 @@ export interface RideTarget {
  * **422 는 presence 만료일 때가 많다** (1차 §12.1). 재생 선언과 같은 처리를 한다 — 부르기 전에
  * join 을 한 번 보내고, 그래도 422 면 join 재전송 뒤 **한 번만** 재시도한다.
  */
-export function useRideMutation() {
+/** `silent` 면 거부 토스트를 띄우지 않는다 — 다시 잇기(`ride-resume`)가 재시도마다 토스트를 내지 않으려고 쓴다 */
+export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
   const showToast = useToastStore((s) => s.show);
   const qc = useQueryClient();
 
@@ -76,6 +77,7 @@ export function useRideMutation() {
     },
 
     onError: (e) => {
+      if (silent) return;
       const code = e instanceof ApiError ? e.code : "UNKNOWN";
       showToast(RIDE_REJECTED[code as keyof typeof RIDE_REJECTED] ?? RIDE_REJECTED.UNKNOWN);
     },

@@ -103,3 +103,9 @@ export const RIDING_JOURNEY_BLOCKED = "따라가는 중에는 여정을 만들 �
 
 /** 따라가는 동안 막힌 조작을 눌렀다 (§6). 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다 */
 export const RIDING_LOCKED = "따라가는 중에는 직접 고를 수 없어요. 하차하면 다시 돼요";
+
+/**
+ * 따라가는 동안 지도를 움직이려 했다 — 휠·드래그·주변 탐색·내 위치로 가기 (S15P21A405-605, SOCIAL-08).
+ * 곡 고르기(`RIDING_LOCKED`)와 갈라 둔다: 이쪽은 "화면" 이고 저쪽은 "곡" 이다.
+ */
+export const RIDING_MAP_LOCKED = "따라가는 중에는 지도를 움직일 수 없어요. 하차하면 다시 돼요";

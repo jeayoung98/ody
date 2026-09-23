@@ -2930,6 +2930,21 @@ export class MapEngine {
     } else {
       this.boxes = this.boxes.slice(0, target);
     }
+    /**
+     * **떠오를 길을 같이 남긴다** (S15P21A405-627). `ascendTo` 는 `stack` 을 거슬러 올라가는데
+     * 여기서 안 쌓으면 따라가기로 내려간 사람은 하차한 뒤 그 겹에 갇힌다 — 휠도 `hasStack` 이
+     * 없어 축소만 하고 떠오르지 않는다. 지금 겹은 떠날 때 모습 그대로, 건너뛴 중간 겹은
+     * `goHome` 처럼 맞춤 카메라로 합성한다. 떠오를 때는 `boxes` 와 같이 그 겹 위를 자른다.
+     */
+    const known = new Map(this.stack.map((fr) => [fr.layer, fr]));
+    known.set(this.layer, { layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
+    this.stack = Array.from({ length: target }, (_, l) => {
+      const have = known.get(l);
+      if (have) return have;
+      const sub = this.maskForBoxes(this.boxes, l);
+      const c = this.fitCam(l, sub, this.songs[at].musicId);
+      return { layer: l, cam: c, subset: sub, entryS: c.s };
+    });
     // 우주선·내 위치는 새 겹 좌표로 다시 잡힌다
     if (f) this.friendPos.delete(f.leader.email);
     this.morph(target, cam, this.subset, `${f?.leader.nickname ?? "인솔자"} 님을 따라 ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])}`);

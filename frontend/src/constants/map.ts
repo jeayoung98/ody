@@ -791,8 +791,10 @@ export const FRIEND_MARKER = {
   /** 클릭·호버 판정 반경(px) */
   hitPx: 25,
   /** 헬멧 아래 닉네임 글자 크기(px) */
-  namePx: 11,
+  /** 11 이었다 (S15P21A405-631). 이 값을 바꾸면 위 닉네임 폭 어림도 같이 따라간다 */
+  namePx: 12,
 } as const;
 
 /** 지도 위 곡 제목 글자 크기(px) (S15P21A405-622). 커버 아래 제목과 대표 별·고스트 라벨이 쓴다 */
-export const MAP_TITLE_PX = { cover: 11, label: 12 } as const;
+/** 지도 위 곡 제목 글자 크기(px). 11·12 였다 — DOM 쪽과 같은 폭으로 올렸다 (S15P21A405-631) */
+export const MAP_TITLE_PX = { cover: 12, label: 13 } as const;

@@ -96,7 +96,7 @@ export default function FriendsPanel() {
       */}
       <div className="flex h-9 items-center justify-center">
         {notice && (
-          <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[11.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
+          <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[12.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
             {notice}
           </div>
         )}

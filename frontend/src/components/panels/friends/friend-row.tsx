@@ -63,7 +63,7 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
               e.stopPropagation();
               handleRide();
             }}
-            className="shrink-0 rounded-pill border border-violet/35 bg-violet/[.14] px-2.5 py-1 text-[11px] text-ink-2 transition-colors hover:bg-violet/25 disabled:opacity-45"
+            className="shrink-0 rounded-pill border border-violet/35 bg-violet/[.14] px-2.5 py-1 text-[12px] text-ink-2 transition-colors hover:bg-violet/25 disabled:opacity-45"
           >
             {isRidingThis ? "탑승 중" : "🚀 따라가기"}
           </button>

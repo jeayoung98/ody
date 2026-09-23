@@ -29,7 +29,7 @@ export default function PlaylistRow({ playlist, actions, onClick }: PlaylistRowP
           {playlist.ownerNickname ?? "-"} · {playlist.itemCount}곡
         </p>
       </div>
-      <span className="num shrink-0 text-[10px] text-ink-3">♥ {playlist.likeCnt ?? 0}</span>
+      <span className="num shrink-0 text-[11.5px] text-ink-3">♥ {playlist.likeCnt ?? 0}</span>
       {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>
   );

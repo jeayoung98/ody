@@ -27,13 +27,13 @@ export default function LoginPage() {
 
         <GoogleLoginButton />
 
-        <p className="mt-6 border-t border-line pt-5 text-center text-[12px] text-ink-2">
+        <p className="mt-6 border-t border-line pt-5 text-center text-[13px] text-ink-2">
           계정이 없으신가요?{" "}
           <Link href={ROUTES.signup} className="font-semibold text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink">
             ODY 가입하기
           </Link>
         </p>
-        <p className="mt-3 text-center text-[10.5px] leading-[1.7] text-ink-4">
+        <p className="mt-3 text-center text-[12px] leading-[1.7] text-ink-4">
           로그인하면 이용약관과 개인정보 처리방침에 동의하는 것으로 간주됩니다.
           <br />
           SSAFY 특화 프로젝트 프로토타입 · 실제 음원 재생은 지원하지 않습니다.

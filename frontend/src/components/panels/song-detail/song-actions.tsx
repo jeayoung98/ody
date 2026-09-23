@@ -10,7 +10,7 @@ import type { MusicDetail } from "@/types";
 
 /** 세그먼트 한 칸 — 둘이 한 덩어리라 `Button` 을 쓰지 않는다 (테두리가 두 겹이 된다) */
 const HALF =
-  "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[14px] transition-colors duration-fast not-disabled:hover:bg-white/[.07] disabled:cursor-not-allowed disabled:opacity-40";
+  "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[15px] transition-colors duration-fast not-disabled:hover:bg-white/[.07] disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
  * 이 곡을 여정의 **출발점 / 도착점**으로 지정 (JOURNEY-01).

@@ -551,7 +551,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
    */
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 11px ${FONTS.body}`;
+  g.font = `600 12px ${FONTS.body}`;
   const H = 17;
   const gap = CONSTELLATION.labelGapPx;
   // 별 자리를 먼저 채워 둔다 — 남의 제목이 별을 덮으면 그 별이 안 보인다
@@ -727,14 +727,14 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     g.fillStyle = "rgba(233,241,255,.92)";
     g.fillText(title, x, y + 22.5);
     if (sub) {
-      g.font = `500 8.5px ${FONTS.mono}`;
+      g.font = `500 10px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
       g.fillText(sub, x, y + 34);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
       g.globalAlpha = a * pulse;
-      g.font = `600 10px ${FONTS.body}`;
+      g.font = `600 11.5px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
       const label = "주변 보기 ›";
       const lw = g.measureText(label).width;
@@ -799,14 +799,14 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.lineWidth = 1;
   g.stroke();
   g.globalCompositeOperation = "source-over";
-  g.font = `600 12.5px ${FONTS.body}`;
+  g.font = `600 13.5px ${FONTS.body}`;
   const tw = g.measureText(song.title).width;
   g.fillStyle = MAP_COLORS.labelBg;
   roundRect(g, tx - tw / 2 - 7, ty + rr + 6, tw + 14, 19, 6);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
   g.fillText(song.title, tx, ty + rr + 15.5);
-  g.font = `500 9.5px ${FONTS.mono}`;
+  g.font = `500 11px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
   g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + 30);
 
@@ -895,7 +895,7 @@ function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number;
   // 라벨 — 화살촉 반대쪽에 붙여 겹치지 않게
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 9.5px ${FONTS.mono}`;
+  g.font = `600 11px ${FONTS.mono}`;
   g.fillStyle = c.core;
   g.fillText("나", x - dir.x * 13, y - dir.y * 13);
   g.restore();
@@ -956,7 +956,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillStyle = "rgba(79,227,206,.95)";
-  g.font = `600 10px ${FONTS.mono}`;
+  g.font = `600 11.5px ${FONTS.mono}`;
   // 고리 위에서는 별 아래에 제목·순위 라벨이 붙어 있으니 '나' 는 위로 올린다
   g.fillText("나", px, onRing ? py - 22 : py + 24);
 }
@@ -1037,7 +1037,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   const label = "이 영역에 없는 곡";
-  g.font = `600 9px ${FONTS.mono}`;
+  g.font = `600 11px ${FONTS.mono}`;
   const labelW = g.measureText(label).width;
   g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
   const title = fitText(g, s.title, 150);
@@ -1049,7 +1049,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fill();
   g.fillStyle = "rgba(233,241,255,.82)";
   g.fillText(title, lx, ly + 9);
-  g.font = `600 9px ${FONTS.mono}`;
+  g.font = `600 11px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.8)";
   g.fillText(label, lx, ly + 25);
 }
@@ -1121,7 +1121,7 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fillStyle = color;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 13px ${FONTS.body}`;
+  g.font = `600 14px ${FONTS.body}`;
   g.fillText(label, f.cx, y);
   const bw = 160;
   g.fillStyle = "rgba(255,255,255,.12)";

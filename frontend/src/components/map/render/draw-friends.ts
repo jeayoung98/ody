@@ -180,7 +180,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
       g.lineWidth = 1.6;
       g.stroke();
       g.fillStyle = "rgba(79,227,206,.95)";
-      g.font = `600 8.5px ${FONTS.mono}`;
+      g.font = `600 10px ${FONTS.mono}`;
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText("나", qx, qy + rr * 2.6);
@@ -318,7 +318,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       const bx = px - R * (ship ? 0.95 : 0.82);
       const by = py - R * (ship ? 0.95 : 0.82);
       const label = `+${more}`;
-      g.font = `600 9px ${FONTS.body}`;
+      g.font = `600 11px ${FONTS.body}`;
       // 자릿수가 늘면 알약이 옆으로 늘어난다. 동그라미로 두면 세 자리에서 글자가 삐져나온다
       const w = Math.max(15, g.measureText(label).width + 9);
       const h = 13;

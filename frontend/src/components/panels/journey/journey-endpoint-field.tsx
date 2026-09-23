@@ -24,10 +24,10 @@ export default function JourneyEndpointField({ label, tone, musicId, onOpenCompo
     >
       <span className={`h-1.5 w-1.5 shrink-0 rounded-pill ${dot}`} />
       <span className="lbl w-6 shrink-0">{label}</span>
-      <span className="min-w-0 flex-1 truncate text-[13px] transition-colors group-hover:text-teal">
+      <span className="min-w-0 flex-1 truncate text-[14px] transition-colors group-hover:text-teal">
         {musicId == null ? <span className="text-ink-4">지정 안 됨</span> : title}
       </span>
-      <span className="shrink-0 truncate text-[11px] text-ink-3">{artist ?? ""}</span>
+      <span className="shrink-0 truncate text-[12px] text-ink-3">{artist ?? ""}</span>
     </button>
   );
 }

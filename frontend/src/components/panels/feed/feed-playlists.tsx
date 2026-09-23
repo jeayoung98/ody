@@ -82,7 +82,7 @@ export default function FeedPlaylists({ email, isMe }: FeedPlaylistsProps) {
                     remove.mutate(playlist.id);
                   }}
                 >
-                  <CloseIcon size={13} />
+                  <CloseIcon size={15} />
                 </IconButton>
               ) : undefined
             }

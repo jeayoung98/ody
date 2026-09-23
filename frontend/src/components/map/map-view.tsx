@@ -450,9 +450,19 @@ export default function MapView({ occlusion }: MapViewProps) {
         engine.overlayWheel(deltaY);
         return;
       }
-      // 주변 탐색 중 줌아웃 → 모드 해제 (곡들이 실제 자리로 돌아간다)
+      /**
+       * 주변 탐색 — **확대는 고리를 벌리고, 축소는 뷰를 나간다** (S15P21A405-593).
+       *
+       * 예전에는 확대가 아무 일도 안 했다. 이 뷰는 카메라가 아니라 화면 크기에서 반지름을
+       * 뽑아 세운 배치라 확대할 카메라가 없었기 때문인데, 이웃 열 곡의 제목이 겹쳐 읽히는
+       * 자리가 계속 나왔다. 배치를 벌리는 것으로 그 자리를 만든다 (`probeZoom`).
+       *
+       * 축소는 그대로 **나가기**다 — 벌린 것을 되돌리는 뜻으로 바꾸면 이 뷰를 빠져나가는
+       * 길이 사라진다. 휠 한 칸의 비율을 그대로 배율로 쓴다.
+       */
       if (mode === "nearby") {
         if (deltaY > 0) useMapStore.getState().exitNearby();
+        else engine.probeZoom(Math.exp(-deltaY * WHEEL_ZOOM));
         return;
       }
       // 확대 단계를 넘기는 판정은 여기서 하지 않는다 (S15P21A405-351) — 휠 한 칸으로 끝나 버린다.

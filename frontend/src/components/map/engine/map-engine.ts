@@ -324,6 +324,8 @@ export class MapEngine {
     offTo: { x: number; y: number };
     offT0: number;
     pan: { x: number; y: number };
+    /** 고리를 얼마나 벌려 놓았나 (S15P21A405-593). 1 이 기본, 크면 넓게 퍼진다 */
+    zoom: number;
   } | null = null;
   /** 별자리 뷰 곡 ID (순서 = 경로 순서) */
   route: number[] = [];
@@ -903,6 +905,7 @@ export class MapEngine {
       offTo: { x: 0, y: 0 },
       offT0: now,
       pan: { x: 0, y: 0 },
+      zoom: 1,
     };
     this.nearby = { centerId, ids };
     this.selectedId = centerId;
@@ -960,12 +963,28 @@ export class MapEngine {
     return null;
   }
 
+  /**
+   * 주변 탐색을 **벌려 본다** (S15P21A405-593). 고리가 넓게 퍼져 이웃이 서로 안 겹친다.
+   *
+   * 지도 카메라가 아니라 배치만 키운다 — 이 뷰는 카메라가 아니라 **화면 크기에서 고리 반지름을
+   * 뽑아** 세운 것이라(`freeRect`) 확대할 카메라 자체가 없다. `probePos` 한 곳이 배치를 만들고
+   * 그리기·선·클릭 판정이 전부 그걸 따르므로, 거기서 한 번 곱하면 셋이 같이 따라온다.
+   *
+   * 별 크기는 그대로다. 커지는 것은 **간격**이고, 겹쳐 읽히던 제목이 갈리는 것이 목적이다.
+   */
+  probeZoom(factor: number) {
+    const p = this.probe;
+    if (!p || p.exitingAt) return;
+    p.zoom = Math.min(PROBE.maxZoom, Math.max(1, p.zoom * factor));
+  }
+
   /** 주변 탐색 중 드래그 — 오버레이 전체를 민다. 고리 하나 반지름 안에서만 (다 밀어내면 빈 화면이 된다) */
   probePan(dx: number, dy: number) {
     const p = this.probe;
     if (!p || p.exitingAt) return;
     const f = this.freeRect();
-    const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
+    // 벌려 놓았으면 그만큼 더 밀 수 있어야 한다 — 안 그러면 가장자리 고리에 손이 안 닿는다
+    const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio * p.zoom;
     p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx));
     p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy));
   }
@@ -974,7 +993,13 @@ export class MapEngine {
   private probeOffset(now = performance.now()) {
     const p = this.probe!;
     const k = easeInOut(Math.min(1, (now - p.offT0) / PROBE.enterMs));
-    return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
+    /**
+     * `pan` 은 손가락이 민 **화면 px** 이고 나머지는 오버레이 공간이다. 돌려주는 값이
+     * 오버레이 공간이므로 배율로 나눠 단위를 맞춘다 (S15P21A405-593) — `probePos` 가
+     * 이 값에 다시 배율을 곱하면 민 만큼이 화면에서 그대로 복원된다.
+     */
+    const z = p.zoom;
+    return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x / z, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y / z };
   }
 
   /** 고리 반지름(px) — 남은 화면의 짧은 변 기준 */
@@ -1065,7 +1090,9 @@ export class MapEngine {
     if (!sl) return real;
     const f = this.freeRect();
     const off = this.probeOffset();
-    const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
+    /** 벌려 보는 배율 (S15P21A405-593). 배치에만 걸린다 — 그리기·선·클릭이 전부 이 자리를 따른다 */
+    const z = p.zoom;
+    const target = { x: f.cx + (off.x + sl.x) * z, y: f.cy + (off.y + sl.y) * z };
     // 밀려나는 고리의 곡도 제자리로 돌아가지 않고 **그 자리에서 옅어진다** — 돌아가면 화면을 가로질러 튄다
     if (p.exitingAt) {
       const k = this.probeK();

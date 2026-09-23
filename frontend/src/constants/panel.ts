@@ -1,5 +1,5 @@
 /** 우측 패널 종류 */
-export const PANEL_TYPES = ["song", "playlist", "feed", "journey", "friends", "chart", "contest"] as const;
+export const PANEL_TYPES = ["song", "playlist", "feed", "journey", "friends", "chart"] as const;
 export type PanelType = (typeof PANEL_TYPES)[number];
 
 /** 맵 뷰 모드 */

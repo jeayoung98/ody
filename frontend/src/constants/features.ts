@@ -32,7 +32,7 @@ export const FEATURES: Features = {
   social: true,
   /** 차트 — 인기 플리·유저 랭킹 */
   chart: true,
-  /** 별자리 콘테스트 — 상단 원형 버튼, 그리기·갤러리·순위 패널 (S15P21A405-602). 아직 전부 목이다 */
+  /** 이벤트(별자리 콘테스트) — 상단 원형 버튼이 여는 전체 화면 모달 (S15P21A405-602). 우측 패널이 아니라 `PANEL_ENABLED` 에는 없다. 아직 전부 목이다 */
   contest: true,
 };
 
@@ -44,7 +44,6 @@ const panelsFor = (f: typeof FEATURES): Record<string, boolean> => ({
   playlist: f.playlist,
   friends: f.social,
   chart: f.chart,
-  contest: f.contest,
 });
 
 /**

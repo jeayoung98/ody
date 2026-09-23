@@ -16,6 +16,8 @@ const EMPTY_POINTS: SketchPoint[] = [];
  * 남아 있으면 다른 모양에 붙은 점수처럼 보인다.
  */
 interface ContestState {
+  /** 이벤트 모달이 떠 있는가. 우측 패널과 무관한 **별개 화면**이다 */
+  open: boolean;
   tab: ContestTab;
   sort: ContestSort;
   points: SketchPoint[];
@@ -25,6 +27,8 @@ interface ContestState {
   judge: ContestJudge | null;
   title: string;
 
+  toggleOpen: () => void;
+  close: () => void;
   setTab: (tab: ContestTab) => void;
   setSort: (sort: ContestSort) => void;
   addPoint: (p: SketchPoint) => void;
@@ -43,6 +47,7 @@ const invalidate = { match: null, judge: null } as const;
 export const useContestStore = create<ContestState>()(
   devtools(
     (set) => ({
+      open: false,
       tab: "sketch",
       sort: "latest",
       points: EMPTY_POINTS,
@@ -51,6 +56,8 @@ export const useContestStore = create<ContestState>()(
       judge: null,
       title: "",
 
+      toggleOpen: () => set((s) => ({ open: !s.open }), false, "toggleOpen"),
+      close: () => set({ open: false }, false, "close"),
       setTab: (tab) => set({ tab }, false, "setTab"),
       setSort: (sort) => set({ sort }, false, "setSort"),
       addPoint: (p) => set((s) => ({ points: [...s.points, p], ...invalidate }), false, "addPoint"),

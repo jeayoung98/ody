@@ -8,7 +8,6 @@ import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePanelSwipe } from "@/hooks/use-panel-swipe";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
-import ContestPanel from "./contest/contest-panel";
 import FeedPanel from "./feed/feed-panel";
 import FriendsPanel from "./friends/friends-panel";
 import JourneyPanel from "./journey/journey-panel";
@@ -176,7 +175,6 @@ export default function RightPanel() {
       {activePanel === "journey" && <JourneyPanel />}
       {activePanel === "friends" && <FriendsPanel />}
       {activePanel === "chart" && <ChartPanel />}
-      {activePanel === "contest" && <ContestPanel />}
     </aside>
   );
 }

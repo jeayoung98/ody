@@ -1,9 +1,10 @@
 "use client";
 
 import { usePathname } from "next/navigation";
-import { ConstellationIcon, JourneyIcon } from "@/components/common/icons";
+import { CatConstellationIcon, JourneyIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
-import { usePanelEnabled } from "@/hooks/use-features";
+import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
+import { useContestStore } from "@/stores/use-contest-store";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -23,7 +24,9 @@ import RailButton from "./rail-button";
 export default function MapActions() {
   const pathname = usePathname();
   const panelEnabled = usePanelEnabled();
+  const features = useFeatures();
   const toggle = usePanelStore((s) => s.toggle);
+  const toggleContest = useContestStore((s) => s.toggleOpen);
   const hasJourney = useJourneyStore((s) => s.isRouteRequested);
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
@@ -57,10 +60,10 @@ export default function MapActions() {
           <JourneyIcon size={16} />
         </RailButton>
       )}
-      {/* 폰의 콘테스트 입구 — 데스크톱은 우상단 원형 버튼이 맡는다 (S15P21A405-602) */}
-      {panelEnabled.contest && (
-        <RailButton label="별자리 콘테스트" active={false} onClick={() => toggle("contest")} data-tutorial="contest">
-          <ConstellationIcon size={16} />
+      {/* 폰의 이벤트 입구 — 데스크톱은 우상단 원형 버튼이 맡는다 (S15P21A405-602). 모달이라 패널 상태와 무관 */}
+      {features.contest && (
+        <RailButton label="이벤트" active={false} onClick={toggleContest} data-tutorial="contest">
+          <CatConstellationIcon size={16} />
         </RailButton>
       )}
     </div>

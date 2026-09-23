@@ -9,8 +9,8 @@ import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
 
-/** 카드 폭(패널 376 - 여백 30 - 틈 10)/2 에서 카드 안쪽 여백 16 을 뺀 값 */
-const THUMB = 150;
+/** 썸네일 한 변. 카드 최소 폭 210 - 안쪽 여백 16 (`gallery-tab` 의 minmax 와 맞춘다) */
+const THUMB = 194;
 
 /** 갤러리 카드 — 썸네일 · 이름 · 만든 사람 · AI 한 줄 평 · 표 · 가져오기 */
 export default function EntryCard({ entry, contest }: { entry: ContestEntry; contest: Contest }) {

@@ -28,7 +28,7 @@ export default function GalleryTab({ contest }: { contest: Contest }) {
       {isError && <ErrorMessage />}
       {data && data.length === 0 && <EmptyState message="아직 출품작이 없어요. 첫 별자리를 그려 보세요." />}
       {data && data.length > 0 && (
-        <div className="grid grid-cols-2 gap-2.5">
+        <div className="grid grid-cols-[repeat(auto-fill,minmax(210px,1fr))] gap-3 max-tablet:grid-cols-2">
           {data.map((e) => (
             <EntryCard key={e.id} entry={e} contest={contest} />
           ))}

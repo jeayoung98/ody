@@ -41,6 +41,8 @@
 | E-5 | `music` | 곡 상세에 필요한 필드가 ERD에 없음: 앨범 커버 URL, 발매 국가, 언어, 작곡가, 작사가, 무드 태그 | 곡 상세 패널 구성 항목 (SONG-02, 유저 플로우) | 상세 화면의 절반이 빈칸 | 일부 해소 — 앨범 커버는 `music.album_mbid` 로 대체했다(A-47). 나머지는 협의 전 |
 | E-6 | `user` | `nickname` 에 **UNIQUE 제약 + NOT NULL**. 길이 2~20자 검증 | 가입 직후 닉네임을 직접 받고 **중복을 허용하지 않는다** (AUTH-01, 2026-09-10 기획 확정). 지금은 `VARCHAR(100) NULL` 로 중복이 들어간다 | 같은 닉네임이 여러 개 생겨 프로필·따라가기에서 사람을 구분할 수 없다 | 협의 전 |
 | E-7 | `user` | 비밀번호 해시 컬럼 추가(예: `password_hash VARCHAR(255) NULL`) + **PK 정책 재검토** | 이메일·비밀번호 가입이 확정됐다 (AUTH-01). 현재 PK 는 "구글 계정 이메일"이라 소셜 가입만 전제한다 | 이메일 가입 자체가 불가능 | 협의 전 |
+| E-8 | `music_like` 테이블 신규 | PK `(email, music_id)`, `created_at TIMESTAMPTZ NOT NULL DEFAULT now()`, `user`·`music` FK, `(email, created_at DESC, music_id DESC)` 인덱스. DDL: `backend/src/main/resources/db/music_like_001_table.sql` | 곡 단위 좋아요(MUSIC-LIKE). 좋아요 목록은 **가상 플레이리스트**라 `playlist`/`playlist_item` 레코드를 만들지 않는다 | 곡 좋아요와 마이페이지 좋아요 목록 전부 불가 | ✅ **운영 적용 완료** (2026-09-22 14:13 KST, Backend 가 직접 적용). PK·FK 2개·정렬 인덱스 생성 확인 (S15P21A405-512) |
+| E-9 | `taste_analysis` 테이블 신규 | `(email, analysis_date)` 단위 생성 이력 + snapshot hash·버전·결과 JSON·lease. PENDING 사용자별 partial unique index와 최신 SUCCESS 조회 인덱스 포함. DDL: `backend/src/main/resources/db/taste_analysis_001_table.sql` | AI 취향 리포트의 1일 1회 제한, 동시 생성 배제, snapshot 재사용, stale 판정의 저장소 | 취향 분석 API 전체 불가 | ✅ **운영 적용 완료** (2026-09-22 14:13 KST, Backend 가 직접 적용). PENDING partial unique index·최신 SUCCESS 인덱스·CHECK 3개 생성 확인 (S15P21A405-512) |
 
 ---
 
@@ -84,6 +86,38 @@
 | A-45 | `GET /api/stats/weekly` | 없음 (전체 집계) | `{ weekStart, weekEnd, discovery[], explore[], contribution[] }`. 각 항목: `{ rank, email, nickname, imageUrl, count }`, 각 10명 이하 | 이번 주 랭킹. 구간은 **한국 시간 월요일 00:00 이상 ~ 다음 월요일 00:00 미만**이고 서버 시간대와 무관하다. `discovery` 는 그 주에 처음 재생된 곡 수, `explore` 는 재생 횟수(같은 곡 중복 포함), `contribution` 은 신고 건수(비로그인 신고 제외). 동점자도 서로 다른 순위를 받고 같은 점수면 email 순이다. 탈퇴해 `user` 에 없는 사람은 순위에서 빠진다. ⚠️ **DB 담당**: `db/music_discovery_001_table_and_indexes.sql` 적용 필요 — `music_discovery` 테이블 생성, 과거 재생 기록 백필, 세 테이블의 구간 인덱스가 들어 있다 | ✅ 구현됨 (S15P21A405-448) · **프론트 반영 필요** · **DDL 적용 필요** |
 | A-47 | `GET /api/music/major` · `GET /api/music/detail` | 기존과 같음 | 응답에 `albumMbid` 추가 (대표곡은 `content[]` 원소에, 곡 상세는 top-level 에) | 앨범(MusicBrainz release) MBID. 커버를 여는 열쇠는 `mbid`(recording) 가 아니라 이 값이다 — FE 가 Cover Art Archive 를 직접 받는다(S15P21A405-518). 출처는 `music.album_mbid`(S15P21A405-291 적재분) 이고 **값이 없는 곡은 `null`** 이라 절차적 커버 폴백이 계속 필요하다. Jackson 기본 설정이라 JSON 키는 **`albumMbid`** 이다(`album_mbid` 아님) | ✅ 구현됨 (S15P21A405-520) · **프론트 반영 필요** |
 | A-46 | `music_discovery` 테이블 | — | — | 곡별 **최초 청취자**를 기록한다. `music_id` 가 PK 라 곡당 한 줄이고 그 줄을 만든 사람이 발견자다. 곡 재생(`MusicPlayService.play`) 때 `INSERT ... ON CONFLICT DO NOTHING` 으로 같은 트랜잭션에서 넣는다. ⚠️ **기록은 realtime 프로파일의 재생 경로에서만 쌓인다** — 그 경로를 타지 않는 재생은 발견왕에 반영되지 않는다 | ✅ 구현됨 (S15P21A405-448) · **적용 필요** |
+| A-48 | `POST /api/music/like` | `{ musicId, liked }` — `liked` 는 토글이 아니라 **목표 상태** (A-41 과 같은 규약) | `{ musicId, liked, likedAt }` — 취소면 `likedAt` 은 `null` | 곡 단위 좋아요. 같은 요청을 반복해도 결과가 같다(멱등). 오류: 없는 곡 404 `MUSIC_NOT_FOUND`, 필드 누락 400 `INVALID_INPUT`. DDL(E-8)은 운영에 적용됐다 | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** |
+| A-49 | `GET /api/music/liked` | 없음 (인증 주체 기준) | `{ content: [{ musicId, title, artist, duration, youtubeUrl, videoId, likedAt }] }` — 최근 좋아요순 | 마이페이지의 **가상 플레이리스트**. 별도 `playlist` 레코드를 만들지 않으므로 `playlistId` 가 없다. 목록의 임의 곡부터 끝까지 기존 재생 큐에 그대로 넣는 것이 전제(SC-009). 페이지네이션 없음. `albumMbid` 는 **일부러 넣지 않았다** — 목록형 곡 DTO 기준인 `MusicSummary`(검색·주변곡·경로 노드)에도 없고, FE 의 `coverFor` 가 `albumMbid` 없으면 절차적 커버로 떨어진다(`player-backdrop` 이 이미 그렇게 쓴다). 목록에 실커버가 필요해지면 `MusicSummary` 와 함께 움직일 문제다 | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** |
+| A-50 | `GET /api/taste-analysis` | 없음 (인증 주체 기준) | `{ state, counts{ totalLiked, valid, excluded, exclusions }, reportEligibility{ eligible, level, additionalLikesNeeded }, analysisVersion, axes[], points[{ musicId, title, artist, coordinates[16] }], report{ level, aiGenerated, fresh, summary, narratives[{ findingId, text, evidence }], analyzedAt, generatedAt, lastRefreshedAt }, generation{ status, generatedThisRequest, dailyLimitUsedToday, canRetry, failureCode, nextAvailableAt } }` | 현재 좋아요 곡의 **기존 PC 좌표** 통계와 마지막 성공 리포트를 함께 준다. PCA 재학습·좌표 재산출은 이 기능 범위가 아니다. 유효 곡 10개 미만은 분포만, 10~29 `INITIAL`, 30 이상 `STANDARD`. `report.fresh=false` 면 좋아요나 분석 버전이 바뀌어 리포트가 STALE 이라는 뜻이다. 오류: 기준 산출물 없으면 503 `TASTE_REFERENCE_UNAVAILABLE` | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** · **기준 산출물 필요** |
+| A-51 | `POST /api/taste-analysis` | 없음 (인증 주체 기준) | A-50 과 같은 스키마 | 성공·재사용·fallback 모두 **200** 이다(201 아님) — 같은 요청이 결과에 따라 201/200 을 오가지 않게 통일했고, 신규 생성 여부는 `generation.status` 로 구분한다(2026-09-22 확정). 사용자가 **버튼을 눌렀을 때만** 리포트를 생성한다. 성공한 생성만 KST 기준 1일 1회 한도를 차감한다. 같은 snapshot 이면 저장 결과를 재사용한다(`generation.status=REUSED`, GMS 미호출). GMS 실패는 `FALLBACK` 으로 내려가고 **한도를 차감하지 않으며 같은 날 재시도할 수 있다**. 오류: 생성 진행 중 409 `TASTE_ANALYSIS_IN_PROGRESS`(`error.details.nextAvailableAt` = lease 만료 시각), 유효 곡 10개 미만 422 `TASTE_INSUFFICIENT_SAMPLE`, 당일 한도 소진 429 `TASTE_DAILY_LIMIT`(`error.details.nextAvailableAt` = 다음 KST 자정), 기준 산출물 없음 503 `TASTE_REFERENCE_UNAVAILABLE` | ✅ 구현됨 (S15P21A405-512) · **프론트 반영 필요** · **기준 산출물 필요** (GMS key 는 운영에 `GMS_API_KEY` 로 주입돼 있다) |
+
+> **취향 분석 기준 산출물을 둘로 쪼개자는 제안 (2026-09-22, BE2) — 협의 필요, 미구현**
+>
+> 현재 `taste-reference-v1.json` 은 **축별 101분위**와 **축 라벨**을 한 파일에 담고, 둘 중 하나라도 없으면
+> 취향 분석 API 2개가 `TASTE_REFERENCE_UNAVAILABLE`(503) 로 멈춘다. 그런데 이 둘은 성질이 전혀 다르다.
+>
+> | | 101분위 · explainedVariance · lineage | 축 라벨 (`low`/`high`) |
+> | --- | --- | --- |
+> | 만드는 방법 | `music.location` 집계 — **SQL 한 번** | 태그 log-odds + **사람 3명 검수** |
+> | 선행 조건 | 없음 | 데이터 스펙 13(장르 계층) → 14(축 라벨) |
+> | 현재 상태 | 언제든 생성 가능 | 스펙 13·14 **둘 다 ⬜ 미착수**, 14 는 **컷 후보** |
+>
+> 2026-09-22 에 BE 가 운영 `music.location` 28,065곡 표본으로 101분위를 직접 만들어 봤다 — 쿼리 하나에
+> 수초다. 반면 라벨은 스펙 13 선행이 걸려 있고, 장르 테이블이 이미 드롭돼(S15P21A405-475, 변경 제안 27)
+> 13 을 살릴 동기 자체가 불확실하다.
+>
+> **제안**: 분위수 산출물과 라벨 산출물을 분리하고, 라벨을 **선택**으로 만든다. 그러면 두 단계로 동작한다.
+>
+> - **분위수만 있을 때** — 분포 차트·축별 통계·백분위가 전부 동작한다. 축 이름은 `PC3` 같은 중립 표기로
+>   내리고 **근거 문장·태그는 비활성**한다(`report` 없이 `state=DISTRIBUTION_ONLY` 유지).
+> - **분위수 + 라벨** — 지금 설계대로 문장·태그까지 동작한다.
+>
+> 이러면 스펙 14 가 컷돼도 취향 분석의 **분포 부분은 살아남는다.** 지금 구조에서는 라벨이 영구히 안 오면
+> 기능 전체가 503 으로 멈춘다. ⚠️ 라벨이 PC1~PC4 네 축만 오는 경우도 이 분리로 자연히 처리된다 —
+> 나머지 12축은 `unlabeled` 로 두면 통계는 나가고 문장에서만 빠진다.
+>
+> **Data 파트 확인 필요**: 분위수 산출물을 라벨과 떼어 먼저 줄 수 있는지. **기획 확인 필요**: 축 이름 없는
+> 분포 차트만으로 이 기능을 1차 배포할 수 있는지.
 
 > **A-5 곡 수 개정 (2026-09-13, BE2)** — 여정 응답의 `musicCnt` 범위가 **12~22 에서 2~20 으로** 바뀐다.
 > 무작위 쌍 기준 **중앙값이 12곡에서 6곡**이 되고, **중간 곡 없이 출발·도착 2곡만 나가는 응답이 정상**이다(오류 아님).
@@ -113,7 +147,7 @@
 | S-1 | 따라가기 동기화 — 인솔자의 동작을 **세 종류 이벤트로 따로** 보내야 한다 (SOCIAL-07): ① `leader:view` = 곡 클릭(`viewingMusicId`) ② `leader:play` = 재생 시작(`playingMusicId`) ③ `leader:layer` = 레이어 전환(`layer`) | 뷰는 ①에서 먼저 움직이고, 우주선은 ②가 와야 출발한다. 두 개를 한 이벤트로 합쳐 보내면 이 연출이 불가능하다 | 협의 전 |
 | S-2 | 따라가기 자동 종료: 인솔자 접속 종료·비공개 전환 시 (SOCIAL-10-1) | 서버가 알려줘야 한다 | 협의 전 |
 | S-3 | 접속 상태·현재 탐색 좌표 실시간 관리 (USER-03) | 주변 사람 목록의 실시간성 | 협의 전 |
-| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 협의 전 |
+| S-4 | 반응 전송·수신 (SOCIAL-02, SOCIAL-04 쿨다운) | 같은 영역 사용자에게 즉시 전달 | 백엔드 반영 · 프론트 반영 필요 (S15P21A405-590, §7) |
 | S-5 | 따라가는 인원 수 (SOCIAL-11), 만난 횟수 카운팅 (SOCIAL-05) | 서버 집계 필요 | 협의 전 |
 | S-6 | `/app/presence/join {requestSeq, layer, musicId}`: 최초 입장은 요청 곡, 이후 레이어 이동은 서버 현재 곡 유지. 성공 `PRESENCE_JOINED`, 실패 개인 오류 큐. 프론트는 ACK 뒤 viewport·새 곡 play 진행 | REST와 STOMP 사이 처리 순서를 ACK로 보장하고 이전 소켓 요청을 epoch로 차단 | 백엔드 반영 · 프론트 반영 필요 (S15P21A405-423) |
 
@@ -169,3 +203,139 @@
 - 목 라우트 `GET /bff/users/nearby?layer=` 를 이 API 로 갈아탈 때 **`layer` 그대로 넘기면 된다**(둘 다 0-based).
 - 격자 16×16 셀 전부를 파이프라인 1회로 읽는다. 현재 규모에서 충분. 사용자 수 제한(`individual-user-cap`)은 이 API 에 **적용하지 않는다** — 전부 준다.
 - `email` 이 응답에 있다. 계약서 §0 "payload 에 email 금지" 와 어긋나지만, `users` PK 가 email 이고 FE 가 email 을 아바타 키로 쓰며 backend/dev 의 `ViewportUser` 도 이미 email 을 실어 보내므로 그 관례를 따랐다.
+
+---
+
+## 6. 별자리 작품 AI 평가·회차 리더보드 — 프론트 전달 (S15P21A405-563, 2026-09-22)
+
+설계 문서는 `specs/009-constellation-artwork-ai/`(spec·plan·tasks). 여기는 프론트가 붙일 때 필요한 것만 적는다.
+
+**기능 요약**: 사용자가 만든 플레이리스트의 별자리 모양을 회차 주제(1회차 고양이)에 얼마나 닮았는지 AI가 채점하고, 채점된 작품을 점수 순 리더보드로 겨룬다.
+
+⚠️ **이 기능은 FEATURES.md 에 항목이 없다.** `SOCIAL-12`(랭킹, 미확정)는 주간 **좋아요** 기준이라 다른 줄이다. 기획 확인 대상.
+
+### 6-1. 엔드포인트
+
+| 메서드 | 경로 | 인증 | 설명 |
+| --- | --- | --- | --- |
+| `GET` | `/api/artwork/round/current` | 선택 | 지금 열린 회차. 없으면 `data: null` (오류 아님) |
+| `POST` | `/api/artwork/submit` | 필요 | 플레이리스트를 작품으로 제출 → `201` |
+| `GET` | `/api/artwork/leaderboard` | 선택 | 회차 리더보드 (`SCORED` 만) |
+| `GET` | `/api/artwork/detail` | 선택 | 작품 상세 |
+| `GET` | `/api/artwork/mine` | 필요 | 내 작품 (모든 상태) |
+| `POST` | `/api/artwork/like` | 필요 | 좋아요 목표 상태 변경 |
+| `POST` | `/api/artwork/retry/{artworkId}` | 필요 | 실패 작품 재평가 |
+| `DELETE` | `/api/artwork/{artworkId}` | 필요 | 작품 삭제 |
+
+인증 "선택" 은 비로그인도 볼 수 있다는 뜻이고, 로그인 상태면 `likedByMe` 가 채워진다.
+
+### 6-2. 제출은 즉시 끝나지 않는다 — **프론트가 다시 조회해야 한다**
+
+```jsonc
+// POST /api/artwork/submit  요청
+{ "playlistId": 12 }
+// 201
+{ "success": true, "data": { "artworkId": 501, "status": "PENDING" }, "error": null }
+```
+
+평가는 서버 스케줄러가 뒤에서 한다(기본 5초 주기). 제출 응답은 **언제나 `PENDING`** 이다. 점수를 보려면 `/api/artwork/detail` 이나 `/api/artwork/mine` 을 다시 부른다. **소켓 알림은 없다** — 폴링하거나 화면 재진입 때 갱신한다.
+
+`status` 는 `PENDING` · `SCORED` · `FAILED` 셋이다. `FAILED` 는 `score` 가 **`null`** 이다(0 이 아니다) — 0점으로 표시하면 "못생겼다"는 뜻이 된다.
+
+### 6-3. 같은 회차 재제출은 기존 작품을 **지우고** 새로 만든다
+
+점수·좋아요가 승계되지 않는다. 누르기 전에 "지금 점수와 좋아요가 사라진다"를 고지해야 한다. 서버는 확인 없이 바로 교체한다.
+
+### 6-4. 응답 모양
+
+```jsonc
+// GET /api/artwork/leaderboard?roundId=&page=0&size=20   (roundId 생략 = 열린 회차, size 최대 50)
+{ "round": { "roundId": 1, "theme": "고양이", "startsAt": "...", "endsAt": "..." },
+  "items": [ { "artworkId": 501, "rank": 1, "title": "밤산책", "ownerEmail": "a@b.c",
+               "status": "SCORED", "score": 87, "aiComment": "귀 두 개가 또렷하다",
+               "failReason": null, "likeCnt": 12, "likedByMe": false,
+               "musicCnt": 14, "createdAt": "..." } ],
+  "page": 0, "size": 20, "totalCnt": 137 }
+
+// GET /api/artwork/detail?artworkId=501
+{ "artworkId": 501, "roundId": 1, "theme": "고양이", "title": "밤산책",
+  "ownerEmail": "a@b.c", "mine": false, "status": "SCORED", "score": 87,
+  "aiComment": "...", "failReason": null, "likeCnt": 12, "likedByMe": false,
+  "points": [ { "musicId": 900, "x": -0.42, "y": 0.13 } ],
+  "musics": [ /* MusicDetail. points 와 같은 순서 */ ],
+  "createdAt": "...", "evaluatedAt": "..." }
+
+// POST /api/artwork/like   { "artworkId": 501, "liked": true }
+{ "artworkId": 501, "liked": true, "likeCnt": 13 }
+```
+
+- `points` 의 `musicId`·`x`·`y` 는 `POST /api/constellations/layout`(A-9) 응답과 **필드명·의미가 같다** — 별자리 뷰를 그대로 재사용할 수 있다.
+- `rank` 는 서버가 매긴다. 정렬은 `score` 내림차순 → `likeCnt` 내림차순 → 먼저 제출한 순이라 동점도 순서가 확정된다.
+- `musics` 는 곡이 지워졌으면 그 자리만 빠진다. `points` 는 그대로다 — 그림이 깨지지 않는 것이 우선이다.
+- `failReason` 은 **소유자에게만** 채워진다.
+
+### 6-5. 신규 에러 코드 — `frontend/src/types/api.ts` 에 추가 필요
+
+| code | HTTP | 언제 |
+| --- | --- | --- |
+| `ARTWORK_NOT_FOUND` | 404 | 없는 작품, 또는 **남의 미채점 작품** |
+| `ARTWORK_ROUND_CLOSED` | 409 | 열린 회차가 없는데 제출 |
+| `ARTWORK_NOT_FAILED` | 409 | 실패가 아닌 작품에 재평가 요청 |
+| `ARTWORK_RETRY_EXHAUSTED` | 409 | 재시도 3회 소진 |
+
+제출 시 기존 코드도 그대로 온다: 남의 플레이리스트 403 `FORBIDDEN`, 곡 수 2~30 위반 400 `INVALID_INPUT`, 없는 플레이리스트 404 `PLAYLIST_NOT_FOUND`, 좌표 없는 곡 404 `MUSIC_NOT_FOUND`.
+
+### 6-6. 전제·주의
+
+- **곡 수는 2~30.** 배치 API(A-9)와 같은 제약이다. 31곡 이상 플레이리스트는 제출이 400 이다 — 프론트가 미리 막거나 안내해야 한다.
+- 아직 점수가 없는 **남의** 작품은 상세가 `404` 다(403 이 아니다 — 존재 여부를 흘리지 않는다). 좋아요도 누를 수 없다.
+- 채점 이미지는 **서버가 저장된 좌표로 렌더한다.** 프론트가 캔버스 이미지를 보내는 API 는 없고 앞으로도 두지 않는다(점수 조작 방지).
+- ⚠️ **DB 담당**: `backend/src/main/resources/db/artwork_001_tables.sql` 적용 필요 — 테이블 4개·시퀀스 2개·인덱스 4개와 1회차 행이 들어 있다. 적용 전에는 작품 API 전부가 실패한다.
+- ⚠️ **인프라**: 배포 호스트 env 에 `GMS_BASE_URL`·`GMS_API_KEY`·`GMS_MODEL` 필요. 비어 있어도 서버는 뜨고 작품만 `FAILED` 로 남는다.
+
+---
+
+## 8. 인솔자 지도 화면 종류 공유(RIDE_VIEW) — 프론트 전달 (S15P21A405-591, 2026-09-22)
+
+따라가기가 옮겨 주던 것(곡·재생·화면 위 사람·곡 상세 패널)에 **인솔자가 지도를 어떤 모양으로 보고 있는지**를 더했다. `RIDE_PANEL` 과 같은 방식 — 내용은 안 보내고 "무엇을 보는지" 만 보낸다. 받는 쪽이 그 번호로 기존 조회 API 를 부른다. 기존 코드는 수정하지 않았다(enum 값 추가·탑승 직후 발송 한 줄·해체·마지막 하차 시 키 삭제 추가만).
+
+### 8-1. 인솔자 → 서버 (C→S)
+
+`/app/ride/view` 로 보낸다. 라이더가 보내면 개인 오류 큐로 `RIDE_NOT_CAPTAIN`.
+
+| `kind` | 필수 번호 | 프론트 상태 대응 |
+| --- | --- | --- |
+| `default` | 없음 | `viewMode = "default"` |
+| `journey` | `startMusicId`, `endMusicId` | `viewMode = "constellation"` + 여정 결과 |
+| `playlist` | `playlistId` | `viewMode = "constellation"` + 플레이리스트 |
+| `nearby` | `centerMusicId` | `viewMode = "nearby"` (`nearbyCenterMusicId`) |
+
+```json
+{ "kind": "journey", "startMusicId": 10877, "endMusicId": 4927 }
+```
+
+번호가 빠지거나 `kind` 를 모르면 개인 오류 큐로 `RIDE_VIEW_INVALID`.
+
+### 8-2. 서버 → 라이더 (S→C)
+
+라이더 개인 큐 `/user/queue/presence`, 봉투 `type` = `RIDE_VIEW`. payload 는 요청과 같은 모양이고 종류에 맞지 않는 번호는 `null` 이다.
+
+```json
+{ "type": "RIDE_VIEW", "seq": 31,
+  "payload": { "kind": "journey", "startMusicId": 10877, "endMusicId": 4927, "playlistId": null, "centerMusicId": null } }
+```
+
+- **중간에 탄 사람도 받는다.** 탑승 응답(`POST /api/realtime/ride`) 직후 `RIDE_VIEWPORT` 와 같은 타이밍에 `RIDE_VIEW` 가 한 번 온다. 인솔자가 기본 지도면 **안 온다** — 라이더도 기본이라 보낼 것이 없다.
+- 라이더는 이 값으로 자기가 조회한다: `journey` → `GET /api/music/journey?start=&end=`, `playlist` → 플레이리스트 조회, `nearby` → `GET /api/music/nearby?id=`. 한 명이 조회에 실패해도 그 사람만 빈 화면이다.
+- 선단이 흩어지거나(`RIDE_ENDED`) 마지막 라이더가 내리면 서버가 저장값을 지운다. 라이더는 `RIDE_ENDED` 를 받으면 자기 화면을 기본으로 돌린다(이미 그렇게 하고 있을 것).
+
+### 8-3. 프론트 반영 필요
+
+1. **인솔자 발송 4지점** — `viewMode`/여정/플레이리스트/주변 탐색 상태가 바뀌는 자리에서 `/app/ride/view` 발송. 따라오는 사람이 0명이어도 보낸다(저장만 되고 나중에 타는 사람이 받는다). 따라가는 중(`riding`)이면 보내지 않는다 — 569 의 `shouldDeclare` 와 같은 함정.
+2. **라이더 수신** — `RIDE_VIEW` 핸들러: `kind` 에 따라 기존 진입 함수(여정 열기·플레이리스트 별자리·`enterNearby`·`exitNearby`) 호출. 라이더 쪽 오버레이 조작 UI 는 막혀 있어야 한다(B-5).
+3. `RIDE_VIEW_INVALID` 오류 코드 타입 추가.
+
+### 8-4. 하지 않은 것
+
+- 오른쪽 패널(주변사람·랭킹) 공유. 별도 요청이 있을 때.
+- 여정·플레이리스트 내용 전송. 조회 API 가 이미 있어 받는 쪽이 부른다.

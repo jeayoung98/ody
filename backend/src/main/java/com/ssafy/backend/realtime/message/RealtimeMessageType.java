@@ -44,6 +44,8 @@ public enum RealtimeMessageType {
 	RIDE_VIEWPORT_RIDER_COUNT,
 	/** 인솔자가 곡 상세를 열거나 닫거나 탭을 바꿨다. */
 	RIDE_PANEL,
+	/** 인솔자가 지도를 보는 모양(기본·여정·플레이리스트·주변 탐색)을 바꿨다. 내용은 받는 쪽이 조회한다. */
+	RIDE_VIEW,
 	/** 누가 따라오기 시작했다. 인솔자에게만 간다. */
 	RIDE_RIDER_JOINED,
 	/** 따라오던 사람이 내렸다. 인솔자에게만 간다. */
@@ -52,5 +54,7 @@ public enum RealtimeMessageType {
 	RIDE_ENDED,
 	/** 선단이 흩어져 여러 사람이 한 자리에 한꺼번에 나타났다. */
 	VIEWPORT_BULK_ENTER,
+	/** 같은 층의 누군가가 나에게 반응(이모지)을 보냈다. 받는 사람에게만 간다. */
+	REACTION,
 	PRESENCE_ERROR
 }

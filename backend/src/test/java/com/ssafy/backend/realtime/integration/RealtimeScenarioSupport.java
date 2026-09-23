@@ -121,7 +121,6 @@ abstract class RealtimeScenarioSupport {
 		}
 		for (long musicId : List.of(SONG_A, SONG_B, SONG_C)) {
 			keys.add("listeners:" + musicId);
-			keys.add("nearby:subscribers:" + musicId);
 			for (int layer : List.of(LAYER, OTHER_LAYER)) {
 				keys.add("layer-listeners:" + layer + ":" + musicId);
 			}
@@ -130,6 +129,7 @@ abstract class RealtimeScenarioSupport {
 			keys.add("active-song:cells:" + layer);
 			keys.add("cell:usercount:" + layer);
 			keys.add("viewport:clustered:" + layer);
+			keys.add("nearby:layer-subscribers:" + layer);
 			keys.addAll(redis.keys("active-song:cell:" + layer + ":*"));
 			keys.addAll(redis.keys("viewport:cell:" + layer + ":*"));
 		}

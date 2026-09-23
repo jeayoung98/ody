@@ -14,6 +14,8 @@ import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
+
 /**
  * videoId 실시간 조회·저장 단위 테스트 (S15P21A405-312, 프로토타입).
  * lookup/writer port 는 mock 이고, 검색·상세·주변·경로 네 어댑터가 이 하나를 공유한다.
@@ -22,7 +24,15 @@ class VideoIdEnricherTests {
 
 	private final VideoIdLookupPort lookupPort = mock(VideoIdLookupPort.class);
 	private final VideoIdWriterPort writerPort = mock(VideoIdWriterPort.class);
-	private final VideoIdEnricher enricher = new VideoIdEnricher(lookupPort, writerPort);
+	private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+	private final VideoIdEnricher enricher = new VideoIdEnricher(lookupPort, writerPort, meterRegistry);
+
+	/** outcome 태그별 기록 횟수. 0 이면 그 경로에서 지표가 안 남은 것이다. */
+	private long recorded(String outcome) {
+		return meterRegistry.find("ody.videoid.resolve").tag("outcome", outcome).timer() == null
+				? 0
+				: meterRegistry.find("ody.videoid.resolve").tag("outcome", outcome).timer().count();
+	}
 
 	@Test
 	void resolve_returnsExisting_withoutCallingLookupOrWriter() {
@@ -112,5 +122,43 @@ class VideoIdEnricherTests {
 		enricher.resolve(1L, "a", "t", "al", null, null);
 
 		verify(lookupPort).lookup("a", "t", "al", null);
+	}
+
+	/**
+	 * S15P21A405-572 — 상세가 느릴 때 좌표 조회인지 이 외부 호출인지 가르려면 구간이 지표로 남아야 한다.
+	 * cached 만 DB 값으로 끝난 요청이라, cached 아닌 비율이 곧 외부 호출 비율이다.
+	 */
+	@Test
+	void resolve_recordsOutcome_separatingCachedFromExternalCall() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of("xyz12345678"));
+
+		enricher.resolve(1L, "a", "t", "al", "existing1234", 200);
+		enricher.resolve(2L, "a", "t", "al", null, 200);
+
+		assertEquals(1, recorded("cached"));
+		assertEquals(1, recorded("found"));
+	}
+
+	/** 외부 API 가 실패하거나 타임아웃이면 lookup 이 빈 값을 준다. 그 경로야말로 지표가 필요하다. */
+	@Test
+	void resolve_recordsOutcome_whenExternalCallFindsNothing() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.empty());
+
+		assertNull(enricher.resolve(1L, "a", "t", "al", null, 200));
+
+		assertEquals(1, recorded("miss"));
+		assertEquals(0, recorded("cached"));
+	}
+
+	/** 판정 저장이 터져도 구간 기록은 남는다 — 예외 경로에서 지표가 비면 계측이 무의미하다. */
+	@Test
+	void resolve_recordsOutcome_evenWhenWriterThrows() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of("xyz12345678"));
+		org.mockito.Mockito.doThrow(new RuntimeException("db down")).when(writerPort).save(1L, "xyz12345678");
+
+		org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+				() -> enricher.resolve(1L, "a", "t", "al", null, 200));
+
+		assertEquals(1, recorded("found"));
 	}
 }

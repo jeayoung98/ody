@@ -32,6 +32,9 @@ import com.ssafy.backend.realtime.dto.ride.PlaybackState;
 import com.ssafy.backend.realtime.dto.ride.RidePanelPayload;
 import com.ssafy.backend.realtime.dto.ride.RidePanelTab;
 import com.ssafy.backend.realtime.dto.ride.RidePlayback;
+import com.ssafy.backend.realtime.dto.ride.DisbandResponse;
+import com.ssafy.backend.realtime.dto.ride.RideEndReason;
+import com.ssafy.backend.realtime.dto.ride.RideEndedPayload;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
 import com.ssafy.backend.realtime.error.RealtimeErrorCode;
 import com.ssafy.backend.realtime.event.PositionChanged;
@@ -80,6 +83,7 @@ class RideServiceTests {
 	@Mock RidePlaybackService ridePlaybackService;
 	@Mock RideSubscriptionService rideSubscriptionService;
 	@Mock RideViewportService rideViewportService;
+	@Mock RideViewService rideViewService;
 	@Mock RealtimeEventService realtimeEventService;
 	@Mock RealtimeMessageService realtimeMessageService;
 	@Mock MeetingService meetingService;
@@ -659,7 +663,7 @@ class RideServiceTests {
 		service.dismount(RIDER);
 
 		verify(viewportDeltaService).sendRiderCount(CAPTAIN, LAYER, MUSIC, "7:5", 2);
-		verify(nearbyChangeService).sendRiderCount(CAPTAIN, MUSIC, 2);
+		verify(nearbyChangeService).sendRiderCount(CAPTAIN, LAYER, MUSIC, 2);
 	}
 
 	/** 인솔자가 지도에 없으면 보여 줄 자리가 없다. */
@@ -675,7 +679,7 @@ class RideServiceTests {
 
 		verify(viewportDeltaService, never()).sendRiderCount(
 				anyString(), anyInt(), anyLong(), anyString(), anyInt());
-		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyLong(), anyInt());
+		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyInt(), anyLong(), anyInt());
 	}
 
 	// ── 선단 해체 ───────────────────────────────────────────
@@ -696,7 +700,7 @@ class RideServiceTests {
 	void disbandTellsEveryRider() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(realtimeMessageService).sendToUser(eq(RIDER), anyString(),
 				eq(RealtimeMessageType.RIDE_ENDED), any());
@@ -710,7 +714,7 @@ class RideServiceTests {
 	void disbandSendsOneBulkMessage() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(viewportDeltaService).sendBulkEnter(List.of(RIDER, MATE), LAYER, MUSIC, "7:5");
 	}
@@ -721,7 +725,7 @@ class RideServiceTests {
 	void disbandRecordsMeetingsWithoutFleet() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(meetingService).recordOnDismount(
 				List.of(RIDER, MATE), List.of(CAPTAIN, OUTSIDER), Set.of(CAPTAIN, RIDER, MATE));
@@ -734,9 +738,9 @@ class RideServiceTests {
 	void disbandTellsNearbyPanels() {
 		givenDisbandOk();
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
-		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
+		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), LAYER, MUSIC);
 	}
 
 	/** 여기까지 왔으면 Redis 는 이미 바뀐 뒤다. 하나가 터졌다고 나머지를 건너뛰면 안 된다. */
@@ -747,9 +751,9 @@ class RideServiceTests {
 		doThrow(new IllegalStateException("화면 알림 실패"))
 				.when(viewportDeltaService).sendBulkEnter(any(), anyInt(), anyLong(), anyString());
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
-		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), MUSIC);
+		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), LAYER, MUSIC);
 		verify(meetingService).recordOnDismount(any(), any(), any());
 	}
 
@@ -763,7 +767,7 @@ class RideServiceTests {
 		when(musicLocationService.findLocation(MUSIC)).thenReturn(Optional.of(location));
 		when(musicPositionCalculator.calculate(location, LAYER)).thenReturn(placement);
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verify(realtimeMessageService).sendToUser(eq(MATE), anyString(),
 				eq(RealtimeMessageType.RIDE_ENDED), any());
@@ -778,7 +782,7 @@ class RideServiceTests {
 		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(new DisbandResult(
 				true, 0, 0, 0, 0, List.of(RIDER), List.of(), List.of()));
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verifyNoInteractions(realtimeMessageService, viewportDeltaService,
 				nearbyChangeService, meetingService);
@@ -790,7 +794,7 @@ class RideServiceTests {
 		when(rideRedisRepository.disband(CAPTAIN))
 				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
 
-		service.disband(CAPTAIN);
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
 
 		verifyNoInteractions(realtimeMessageService, viewportDeltaService,
 				nearbyChangeService, meetingService);
@@ -824,5 +828,88 @@ class RideServiceTests {
 
 		verifyNoInteractions(realtimeMessageService, realtimeEventService,
 				viewportDeltaService, meetingService);
+	}
+
+	// ── 인솔자가 스스로 해체 ───────────────────────────────
+
+	@Test
+	@DisplayName("스스로 풀면 사유가 CAPTAIN_ENDED 로 나간다")
+	void captainDisbandSendsEndedReason() {
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(2);
+		givenDisbandOk();
+
+		service.disbandByCaptain(CAPTAIN);
+
+		ArgumentCaptor<RideEndedPayload> sent = ArgumentCaptor.forClass(RideEndedPayload.class);
+		verify(realtimeMessageService).sendToUser(eq(RIDER), anyString(),
+				eq(RealtimeMessageType.RIDE_ENDED), sent.capture());
+		assertThat(sent.getValue().reason()).isEqualTo(RideEndReason.CAPTAIN_ENDED);
+	}
+
+	/** 인솔자는 안 움직인다. 돌려주는 자리는 내려간 사람들이 남은 곳이다. */
+	@Test
+	@DisplayName("내린 인원과 남은 자리를 돌려준다")
+	void captainDisbandAnswersWithCount() {
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(2);
+		givenDisbandOk();
+
+		assertThat(service.disbandByCaptain(CAPTAIN))
+				.isEqualTo(new DisbandResponse(2, MUSIC, LAYER));
+	}
+
+	@Test
+	@DisplayName("따라오는 사람이 없으면 인솔자가 아니라고 거부한다")
+	void captainDisbandWithoutRidersIsRejected() {
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(0);
+
+		assertThatThrownBy(() -> service.disbandByCaptain(CAPTAIN))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_CAPTAIN));
+	}
+
+	/**
+	 * 해체 스크립트는 인원이 0 이어도 재생 정보와 열어 둔 곡 상세를 지운다. 사라진 사람에게는
+	 * 맞지만, 살아 있는 인솔자에게는 나중에 타는 사람이 곡을 처음부터 듣게 되는 손해다.
+	 * 그래서 세는 것이 먼저고, 0 이면 스크립트까지 가면 안 된다.
+	 */
+	@Test
+	@DisplayName("거부할 때는 해체 스크립트를 부르지 않는다")
+	void rejectedDisbandNeverTouchesRedis() {
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(0);
+
+		assertThatThrownBy(() -> service.disbandByCaptain(CAPTAIN))
+				.isInstanceOf(CustomException.class);
+
+		verify(rideRedisRepository, never()).disband(anyString());
+	}
+
+	/** 세고 나서 부르는 사이가 비어 있다. 그 틈에 전원이 내리면 푼 것이 없다. */
+	@Test
+	@DisplayName("세고 나서 전원이 내렸으면 같은 거부가 나간다")
+	void everyoneLeftInBetweenIsRejected() {
+		when(rideRedisRepository.riderCount(CAPTAIN)).thenReturn(2);
+		when(rideRedisRepository.disband(CAPTAIN))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
+
+		assertThatThrownBy(() -> service.disbandByCaptain(CAPTAIN))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.RIDE_NOT_CAPTAIN));
+	}
+
+	/**
+	 * 끊김 정리는 거부를 던지면 안 된다. 던지면 뒤따르는 leaveRide 가 멈춰서, 인솔자도
+	 * 따라가던 사람도 아니었던 사람이 끊길 때마다 정리가 통째로 빠진다.
+	 */
+	@Test
+	@DisplayName("끊김 정리는 따라오는 사람이 없어도 던지지 않고 끝까지 간다")
+	void goneUserCleanupNeverThrows() {
+		when(rideRedisRepository.disband(CAPTAIN))
+				.thenReturn(new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
+		when(rideRedisRepository.riderLeave(CAPTAIN)).thenReturn(new RiderLeaveResult(RIDER, 0));
+
+		service.onUserGone(CAPTAIN);
+
+		verify(rideRedisRepository).riderLeave(CAPTAIN);
+		verify(rideRedisRepository, never()).riderCount(anyString());
 	}
 }

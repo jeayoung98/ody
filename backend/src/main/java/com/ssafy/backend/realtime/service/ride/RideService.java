@@ -12,6 +12,7 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.realtime.dto.play.PlaySource;
 import com.ssafy.backend.realtime.dto.ride.PlaybackState;
+import com.ssafy.backend.realtime.dto.ride.DisbandResponse;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
 import com.ssafy.backend.realtime.dto.ride.RideEndReason;
 import com.ssafy.backend.realtime.dto.ride.RideEndedPayload;
@@ -74,6 +75,7 @@ public class RideService {
 	private final RidePlaybackService ridePlaybackService;
 	private final RideSubscriptionService rideSubscriptionService;
 	private final RideViewportService rideViewportService;
+	private final RideViewService rideViewService; // 탑승 직후 인솔자 지도 화면 종류 전달
 	private final RealtimeEventService realtimeEventService;
 	private final RealtimeMessageService realtimeMessageService; // 인솔자에게 하차 알림
 	private final MeetingService meetingService; // 하차 시점 만남 기록
@@ -145,6 +147,8 @@ public class RideService {
 			//    이후로는 누가 들어오고 나갔다는 변화만 오기 때문에, 여기서 안 채우면
 			//    인솔자가 지도를 움직일 때까지 빈 지도를 보게 된다.
 			rideViewportService.sendCurrentScreen(riderEmail, captainEmail);
+			//    지도를 보는 모양(여정·플레이리스트·주변 탐색)도 같은 이유로 한 번 보낸다.
+			rideViewService.sendCurrent(riderEmail, captainEmail);
 
 			// 10. 인솔자에게 누가 탔는지 알린다. 인솔자가 인원수를 아는 유일한 길이다.
 			//     아래 11번은 인솔자 자리를 보는 사람들에게 가는 것이라 인솔자 본인은 빠진다.
@@ -195,7 +199,7 @@ public class RideService {
 		notifyQuietly("인원수 화면 알림", () -> viewportDeltaService.sendRiderCount(
 				captainEmail, captain.layer(), captain.musicId(), cell, riderCount));
 		notifyQuietly("인원수 주변사람 알림", () -> nearbyChangeService.sendRiderCount(
-				captainEmail, captain.musicId(), riderCount));
+				captainEmail, captain.layer(), captain.musicId(), riderCount));
 	}
 
 	/**
@@ -312,6 +316,11 @@ public class RideService {
 
 		// 7. 인솔자를 보고 있는 사람들에게 인원수가 줄었다고 알린다.
 		notifyRiderCount(ride.captainEmail(), result.remainingRiders());
+		//    마지막 한 명이 내렸으면 선단이 없어진 것이다. 스크립트가 재생 정보·곡 상세를 지우는 것과
+		//    같은 이유로 지도 화면 모양도 지운다. 남겨 두면 다음에 타는 사람이 옛 화면을 받는다.
+		if (result.remainingRiders() == 0) {
+			notifyQuietly("하차 지도 화면 정리", () -> rideRedisRepository.deleteView(ride.captainEmail()));
+		}
 
 		// 8. 만남을 센다. 내리는 순간 보통 사용자가 되므로 그 곡에 원래 있던 사람과는 만남이다.
 		//    명단은 지도에 다시 들어가기 전에 찍힌 것이라 자기 자신이 섞여 있지 않다.
@@ -335,7 +344,9 @@ public class RideService {
 	 * @param email 사라진 사람
 	 */
 	public void onUserGone(String email) {
-		disband(email);
+		// 사라진 경우다. 여기서 거부를 던지면 뒤따르는 정리가 통째로 멈춘다 — 인솔자도
+		// 따라가던 사람도 아니었던 사람이 끊길 때마다 그렇게 된다. 그래서 조용히 끝나는 쪽을 쓴다.
+		disband(email, RideEndReason.CAPTAIN_LEFT);
 		leaveRide(email);
 	}
 
@@ -360,28 +371,64 @@ public class RideService {
 	}
 
 	/**
-	 * 인솔자가 사라졌을 때 그 선단을 해제한다.
+	 * 인솔자가 스스로 선단을 푼다.
 	 *
-	 * 따라가던 사람은 전원 강제로 내리고, 인솔자가 마지막으로 있던 곡에 그대로 남는다.
+	 * 따라오던 사람이 없으면 인솔자가 아니므로 거부한다. 이때 스크립트를 부르기 전에
+	 * 인원을 먼저 세는 것이 중요하다 — 스크립트는 인원이 0 이어도 재생 정보와 열어 둔 곡 상세를
+	 * 지운다. 사라진 사람에게는 맞지만, 살아 있는 인솔자에게는 나중에 타는 사람이 곡을
+	 * 처음부터 듣게 되는 손해다.
+	 *
+	 * @param captainEmail 선단을 푸는 인솔자
+	 * @return 내린 인원과 그 사람들이 남은 자리
+	 * @throws CustomException 따라오는 사람이 없으면 거부한다
+	 */
+	@Transactional
+	public DisbandResponse disbandByCaptain(String captainEmail) {
+		if (rideRedisRepository.riderCount(captainEmail) == 0) {
+			log.info("해체 거부 reason={}", RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+			throw new CustomException(RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+		}
+
+		DisbandResult result = disband(captainEmail, RideEndReason.CAPTAIN_ENDED);
+		if (!result.hadRiders()) {
+			// 세고 나서 부르는 사이에 전원이 내렸다. 푼 것이 없으니 인솔자가 아닌 것과 같다.
+			log.info("해체 거부 reason={} 사유=사이에 전원이 내렸다", RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+			throw new CustomException(RealtimeErrorCode.RIDE_NOT_CAPTAIN);
+		}
+		return new DisbandResponse(result.riders().size(), result.musicId(), result.layer());
+	}
+
+	/**
+	 * 선단을 해제한다.
+	 *
+	 * 따라가던 사람은 전원 내리고, 인솔자가 마지막으로 있던 곡에 그대로 남는다.
 	 * 듣던 곡은 끊기지 않는다. 스스로 내렸을 때와 결과가 같다.
 	 *
-	 * 인솔자가 창을 닫든 접속이 만료되든 여기로 들어온다. 길을 둘로 두면 한쪽만 고쳐진다.
+	 * 들어오는 길이 셋이다 — 인솔자가 창을 닫든, 접속이 만료되든, 스스로 풀든 여기로 온다.
+	 * 길을 나누면 한쪽만 고쳐진다. 다른 것은 받는 쪽에 실어 보내는 사유뿐이다.
 	 *
-	 * @param captainEmail 사라진 인솔자
+	 * 여기서는 아무것도 던지지 않는다. 끊김 정리 중에 불리는 자리라, 거부를 던지면
+	 * 그 뒤의 정리가 멈춘다. 거부가 필요한 쪽은 {@link #disbandByCaptain(String)} 이 맡는다.
+	 *
+	 * @param captainEmail 선단의 인솔자
+	 * @param reason 받는 사람에게 알릴 끝난 이유
+	 * @return 해제 결과. 따라오던 사람이 없었으면 빈 결과
 	 */
-	public void disband(String captainEmail) {
+	public DisbandResult disband(String captainEmail, RideEndReason reason) {
 		// 1. 등록을 지우고 전원을 지도에 다시 넣는다. 한 번에 끝난다.
 		//    누가 따라가고 있었는지도 스크립트가 같이 돌려준다. 자바에서 따로 읽으면
 		//    그 사이에 새로 탄 사람이 명단에서 빠져 같은 선단인데 만남으로 세어진다.
 		DisbandResult result = rideRedisRepository.disband(captainEmail);
+		//    지도 화면 모양은 스크립트 밖의 키라 여기서 같이 지운다. 재생 정보·곡 상세와 같은 운명이다.
+		notifyQuietly("해체 지도 화면 정리", () -> rideRedisRepository.deleteView(captainEmail));
 		if (!result.hadRiders()) {
-			return; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
+			return result; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
 		}
 		if (result.musicId() <= 0) {
 			// 아무도 서 있는 자리를 갖고 있지 않았다. 등록은 지웠지만 어디에 남았다고
 			// 알릴 자리가 없다. 여기까지 온 것 자체가 이상하므로 남겨 둔다.
 			log.warn("[Ride] 선단 해체 — 돌아갈 자리를 찾지 못했다 인원={}", result.riders().size());
-			return;
+			return result;
 		}
 
 		// 2. 만남에서 뺄 명단은 따라가던 전원에 인솔자를 더한 것이다.
@@ -393,7 +440,7 @@ public class RideService {
 		//    지도에 못 돌아간 사람에게도 보낸다. 끝난 것은 그 사람도 마찬가지다.
 		Spot spot = spotOf(result.musicId(), result.layer());
 		RideEndedPayload ended = new RideEndedPayload(
-				captainEmail, RideEndReason.CAPTAIN_LEFT,
+				captainEmail, reason,
 				result.musicId(), result.layer(),
 				spot.rawX(), spot.rawY(), result.cellX(), result.cellY());
 		for (String rider : result.riders()) {
@@ -410,15 +457,16 @@ public class RideService {
 		// 5. 주변사람 목록에도 알린다. 해체는 위치 변경 알림을 거치지 않아
 		//    이걸 안 보내면 패널을 열어 둔 사람의 목록에 이 사람들이 끝내 안 나타난다.
 		notifyQuietly("해체 주변사람 알림", () ->
-				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.musicId()));
+				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.layer(), result.musicId()));
 
 		// 6. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
 		//    한 명이 스스로 내릴 때와 같은 함수다. 두 벌로 두면 한쪽만 고쳐진다.
 		notifyQuietly("해체 만남 기록", () ->
 				meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers));
 
-		log.info("[Ride] 선단 해체 musicId={} layer={} 내린인원={}",
-				result.musicId(), result.layer(), result.leftRiders().size());
+		log.info("[Ride] 선단 해체 사유={} musicId={} layer={} 내린인원={}",
+				reason, result.musicId(), result.layer(), result.leftRiders().size());
+		return result;
 	}
 
 	/**

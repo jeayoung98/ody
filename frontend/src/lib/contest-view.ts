@@ -1,4 +1,4 @@
-import type { Contest, ContestEntry, ContestSort } from "@/types";
+import type { Contest, ContestEntry, ContestSort, MatchQuality } from "@/types";
 
 /**
  * 콘테스트 응답을 화면이 묻는 것으로 (S15P21A405-640). 순수 함수만 — `tests/contest-view.test.cjs` 가 묶는다.
@@ -32,6 +32,16 @@ export function sortEntries(items: readonly ContestEntry[], sort: ContestSort): 
     default:
       return list.sort((a, b) => (a.rank ?? Infinity) - (b.rank ?? Infinity));
   }
+}
+
+/**
+ * AI 추천 모양의 적합도를 그린 별자리의 "모양 일치도" 와 같은 0~100 척도로 (S15P21A405-595).
+ * `fitError` 는 평균 어긋남 ÷ 템플릿 반폭이라 0 이 완벽, 1 이면 반폭만큼 어긋난 것 — 그 위는 0점으로 눌러 둔다.
+ * 등급 문턱은 서버 `DrawResponse.quality` 와 같다 (HIGH ≥ 90 · MEDIUM ≥ 70).
+ */
+export function templateScore(fitError: number): { score: number; quality: MatchQuality } {
+  const score = Math.round(Math.max(0, Math.min(1, 1 - fitError)) * 100);
+  return { score, quality: score >= 90 ? "HIGH" : score >= 70 ? "MEDIUM" : "LOW" };
 }
 
 /** 작품 주인 표시 — 닉네임이 안 와서 이메일 앞부분을 쓴다 (BACKEND-NOTES A-83) */

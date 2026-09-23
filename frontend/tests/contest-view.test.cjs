@@ -4,7 +4,7 @@
 // 버튼이 열려 있거나 "최신순" 이 순위순으로 보인다.
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
-const { roundPhase, sortEntries, ownerLabel, awaitingScore, myEntry } = require("../src/lib/contest-view.ts");
+const { roundPhase, sortEntries, ownerLabel, awaitingScore, myEntry, templateScore } = require("../src/lib/contest-view.ts");
 
 const round = { startsAt: "2026-09-20T00:00:00+09:00", endsAt: "2026-09-27T00:00:00+09:00" };
 const at = (iso) => new Date(iso).getTime();
@@ -41,4 +41,12 @@ test("채점 대기 중인 내 작품이 있을 때만 폴링한다", () => {
   assert.equal(awaitingScore([entry({ status: "PENDING" })]), true);
   assert.equal(myEntry([entry({ artworkId: 7 })]).artworkId, 7);
   assert.equal(myEntry([]), null);
+});
+
+test("AI 추천 적합도는 그린 별자리와 같은 0~100·등급 척도로 옮긴다", () => {
+  assert.deepEqual(templateScore(0), { score: 100, quality: "HIGH" });
+  assert.deepEqual(templateScore(0.08), { score: 92, quality: "HIGH" });
+  assert.deepEqual(templateScore(0.25), { score: 75, quality: "MEDIUM" });
+  assert.deepEqual(templateScore(0.5), { score: 50, quality: "LOW" });
+  assert.deepEqual(templateScore(3), { score: 0, quality: "LOW" }, "반폭 넘게 어긋나면 0 으로 누른다");
 });

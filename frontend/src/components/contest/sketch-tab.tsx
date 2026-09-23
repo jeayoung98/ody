@@ -15,12 +15,14 @@ import MatchResult from "./match-result";
 import MyArtworkCard from "./my-artwork-card";
 import SketchCanvas from "./sketch-canvas";
 import SubmitForm from "./submit-form";
+import TemplatePicker from "./template-picker";
 
 /**
  * 별자리 그리기 (S15P21A405-602 · 598 · 640).
  *
  * 흐름: 점 찍기 → **별 찾기**(`/api/artwork/draw`) → 이름 짓고 출품 → **AI 채점은 출품 뒤** 서버가 하고 내 작품 카드가
- * 결과를 받아 보인다. 602 목의 "결과가 오면 바로 심사" 는 기획에서 빠졌다 (호출당 비용, 출품당 1회).
+ * 결과를 받아 보인다. 그리기 대신 **AI 추천 모양**(`/api/artwork/generate`, `TemplatePicker`)으로 시작할 수도 있다 —
+ * 그 결과도 같은 `match` 자리에 들어와 뒤는 같다. 602 목의 "결과가 오면 바로 심사" 는 기획에서 빠졌다 (호출당 비용, 출품당 1회).
  * 점을 건드리면 매칭 결과가 사라진다 — 다른 모양에 붙은 결과가 남아 있으면 안 된다.
  */
 export default function SketchTab({ contest }: { contest: Contest }) {
@@ -68,10 +70,11 @@ export default function SketchTab({ contest }: { contest: Contest }) {
           <Button size="sm" onClick={undo} disabled={!count}>
             한 점 되돌리기
           </Button>
-          <Button size="sm" active={closed} onClick={toggleClosed} disabled={count < 3} title="마지막 점과 첫 점을 이어 닫힌 모양으로">
+          <Button size="sm" active={closed} onClick={toggleClosed} disabled={count < 3 && !match} title="마지막 점과 첫 점을 이어 닫힌 모양으로">
             마지막 → 첫 점 잇기
           </Button>
-          <Button size="sm" variant="ghost" onClick={clear} disabled={!count}>
+          <TemplatePicker loggedIn={!!me} theme={contest.theme} />
+          <Button size="sm" variant="ghost" onClick={clear} disabled={!count && !match}>
             지우기
           </Button>
           <span className="num ml-auto text-xs text-ink-3">
@@ -79,9 +82,11 @@ export default function SketchTab({ contest }: { contest: Contest }) {
           </span>
         </div>
         <Note>
-          {match
-            ? "점을 더 찍거나 빼면 결과가 지워지고 다시 찾아요."
-            : `빈 곳을 누르면 점이 붙고, 찍힌 점을 다시 누르면 빠져요. 찍은 순서대로 이어져요. ${minPoints}개 이상이면 별을 찾을 수 있어요.`}
+          {match?.template
+            ? `AI 가 ${match.template.label} 모양대로 고른 곡이에요. 이름을 지어 그대로 출품하거나, 점을 찍어 새로 그릴 수 있어요.`
+            : match
+              ? "점을 더 찍거나 빼면 결과가 지워지고 다시 찾아요."
+              : `빈 곳을 누르면 점이 붙고, 찍힌 점을 다시 누르면 빠져요. 찍은 순서대로 이어져요. ${minPoints}개 이상이면 별을 찾을 수 있어요. 막막하면 ✨ AI 추천 모양으로 시작해 보세요.`}
         </Note>
         <Button variant="primary" className="w-full" disabled={!canMatch || matchMut.isPending} onClick={findStars}>
           {matchMut.isPending ? "별을 찾는 중..." : match ? "이 모양으로 다시 찾기" : "이 모양으로 별 찾기"}

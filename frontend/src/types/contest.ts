@@ -45,13 +45,35 @@ export interface ContestTrack {
 /** 그린 모양과 찾은 배치가 얼마나 닮았나 (`DrawResponse.quality`). `LOW` 도 정상 응답이다 — 경고만 띄운다 */
 export type MatchQuality = "HIGH" | "MEDIUM" | "LOW";
 
-/** `POST /api/artwork/draw` 결과. **AI 채점이 아니다** — 모양 일치도다 */
+/** AI 추천 모양 한 줄 (`CatTemplateSummary`). `pointCount` 가 곧 만들어질 플레이리스트의 곡 수다 */
+export interface ContestTemplate {
+  name: string;
+  label: string;
+  pointCount: number;
+}
+
+/**
+ * 별자리 후보 — 그려서 찾았거나(`POST /api/artwork/draw`), AI 추천 모양으로 만들었거나(`POST /api/artwork/generate`).
+ * **AI 채점이 아니다** — 그린 것은 모양 일치도, 추천은 템플릿 적합도다.
+ */
 export interface ContestMatch {
-  /** 모양 일치도 0~100. 이동·회전·확대 불변, 좌우 반전은 다른 모양 */
+  /** 모양 일치도 0~100. 그린 것은 서버 값, 추천은 `fitError` 를 화면 척도로 옮긴 값 (`lib/contest-view` `templateScore`) */
   score: number;
   quality: MatchQuality;
   /** 점 입력 순서와 같은 순서. 곡 중복 없음 */
   tracks: ContestTrack[];
+  /**
+   * AI 추천 모양으로 만든 것이면 채워진다 (S15P21A405-595). 서버가 **플레이리스트를 이미 만들었다** — 출품은 그 플리를
+   * 그대로 내고(이름만 바꾼다), 다시 플리를 만들지 않는다.
+   */
+  template?: {
+    name: string;
+    label: string;
+    playlistId: Id;
+    playlistName: string;
+    /** 템플릿 점과 실제 곡 위치의 평균 거리 ÷ 템플릿 반폭. 0 이 완벽 */
+    fitError: number;
+  };
 }
 
 /**

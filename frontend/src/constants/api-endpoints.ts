@@ -248,6 +248,10 @@ export const API_ENDPOINTS = {
     current: "/bff/contests/current",
     /** `POST /api/artwork/draw` — 그린 점 → 곡·좌표·모양 일치도 */
     match: "/bff/contests/match",
+    /** `GET /api/artwork/templates` — AI 추천 모양 목록 (S15P21A405-595) */
+    templates: "/bff/contests/templates",
+    /** `POST /api/artwork/generate { template }` — 추천 모양대로 곡을 골라 **내 플리를 만든다**. 출품은 따로 */
+    generate: "/bff/contests/generate",
     /** GET = 리더보드(`/api/artwork/leaderboard`) · POST = 출품(플리 생성 → `/api/artwork/submit`) */
     entries: "/bff/contests/entries",
     /** `GET /api/artwork/mine` — 내 작품(모든 상태). 채점 결과는 여기서 읽는다 */

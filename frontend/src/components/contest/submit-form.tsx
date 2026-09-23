@@ -39,7 +39,7 @@ export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormP
   const handleSubmit = () => {
     if (disabled) return;
     submit.mutate(
-      { title: trimmed, musicIds: match.tracks.map((t) => t.musicId), closed },
+      match.template ? { title: trimmed, playlistId: match.template.playlistId, closed } : { title: trimmed, musicIds: match.tracks.map((t) => t.musicId), closed },
       {
         onSuccess: () => {
           toast(`「${trimmed}」 출품 완료 · AI 채점이 끝나면 알려 드려요`);
@@ -60,7 +60,7 @@ export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormP
         id="contest-title"
         value={title}
         maxLength={titleMax}
-        placeholder={`예: 창가의 회색 ${contest.theme}`}
+        placeholder={match.template ? match.template.playlistName : `예: 창가의 회색 ${contest.theme}`}
         autoComplete="off"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -75,7 +75,9 @@ export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormP
         {my
           ? `이미 「${my.title}」을 냈어요. 다시 내면 이전 작품이 지워지고 점수·좋아요가 초기화돼요.`
           : !trimmed
-            ? "별자리 이름을 지어 주면 출품할 수 있어요. 같은 이름의 플레이리스트가 함께 만들어져요."
+            ? match.template
+              ? "별자리 이름을 지어 주면 그 이름으로 플레이리스트가 바뀌고 출품돼요."
+              : "별자리 이름을 지어 주면 출품할 수 있어요. 같은 이름의 플레이리스트가 함께 만들어져요."
             : "출품하면 AI 가 잠시 뒤 채점해요. 회차당 작품 1개."}
       </Note>
     </div>

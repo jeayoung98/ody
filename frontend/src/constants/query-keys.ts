@@ -95,6 +95,7 @@ export const QUERY_KEYS = {
     current: ["contest", "current"] as const,
     entries: ["contest", "entries"] as const,
     mine: ["contest", "mine"] as const,
+    templates: ["contest", "templates"] as const,
   },
   /**
    * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준

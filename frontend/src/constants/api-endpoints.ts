@@ -105,6 +105,8 @@ export const API_ENDPOINTS = {
 
   music: {
     detail: (id: number) => `/bff/music/${id}`,
+    /** 곡 좋아요 (S15P21A405-611) — 백엔드 `POST /api/music/like`, 본문 `{musicId, liked}`. `liked` 는 목표 상태다 */
+    like: "/bff/music/like",
     search: "/bff/music/search",
     /**
      * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.

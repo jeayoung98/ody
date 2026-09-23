@@ -104,6 +104,9 @@ export const RIDE_DISBAND_REJECTED = {
   UNKNOWN: "강제 하차에 실패했어요. 잠시 후 다시 시도해 주세요",
 } as const;
 
+/** 곡 좋아요 요청이 실패했다 (S15P21A405-611). 낙관적으로 켠 하트는 되돌린다 */
+export const LIKE_FAILED = "좋아요를 반영하지 못했어요. 잠시 후 다시 시도해 주세요";
+
 /**
  * 반응이 거부됐을 때 (SOCIAL-02·04, S15P21A405-607, 백엔드 `RealtimeErrorCode`).
  * 패널에 뜬 전원에게 보내므로 **전부 거부됐을 때만** 첫 사유를 말한다.

@@ -27,6 +27,7 @@ function toMusicDetail(res: BackendMusicDetailResponse): MusicDetail {
     principalComponents: pc.map((v, i) => ({ axis: i, value: v })),
     nearby: res.neighbors.map((n) => ({ id: n.id, title: n.title, artist: n.artist })),
     relatedPlaylists: [],
+    liked: res.liked ?? false,
   };
 }
 

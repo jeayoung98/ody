@@ -495,9 +495,11 @@ export default function MapView({ occlusion }: MapViewProps) {
   const onWheel = useCallback(
     (e: WheelEvent<HTMLDivElement>) => {
       const r = e.currentTarget.getBoundingClientRect();
+      // 확대는 "다른 동작" 이다 — 펼쳐 둔 사람 묶음을 접는다 (S15P21A405-618)
+      engine.collapseStack();
       zoomBy(e.deltaY, e.clientX - r.left, e.clientY - r.top);
     },
-    [zoomBy],
+    [zoomBy, engine],
   );
   /**
    * 길게 누르기 = 그 별 주변으로 **파고들기** (S15P21A405-288). 휠 압력으로 다음 겹에 파고드는 것과 같은 은유다.
@@ -610,6 +612,8 @@ export default function MapView({ occlusion }: MapViewProps) {
         const dx = e.clientX - drag.current.x;
         const dy = e.clientY - drag.current.y;
         drag.current.moved += Math.abs(dx) + Math.abs(dy);
+        // 지도를 끌기 시작하면 펼쳐 둔 사람 묶음을 접는다 (S15P21A405-618)
+        if (drag.current.moved > 5) engine.collapseStack();
         drag.current.x = e.clientX;
         drag.current.y = e.clientY;
         // 움직였으면 누르기가 아니라 드래그다
@@ -768,9 +772,21 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       const fr = engine.hitFriend(mx, my);
       if (fr) {
+        /**
+         * 겹친 표식(+N)은 **먼저 갈라 보인다** (S15P21A405-618). 같은 노래를 듣는 사람은 좌표가 같아
+         * 확대해도 안 풀리므로, 누르는 것이 뒤사람을 보는 유일한 길이다. 갈라진 개별 표식은
+         * `stacked` 가 비어 있어 예전처럼 바로 프로필이다.
+         */
+        if (fr.stacked.length > 0) {
+          engine.expandStack(fr.user.email);
+          return;
+        }
+        engine.collapseStack();
         openFeed(fr.user.email);
         return;
       }
+      // 사람 아닌 곳을 눌렀다 — 펼쳐 둔 묶음은 접는다
+      engine.collapseStack();
       if (engine.follow) return;
       // 고스트별을 누르면 상세만 열고 화면은 그대로 둔다 — 이동은 상세 안 버튼으로 (MAP-12)
       const gid = engine.hitGhost(mx, my);

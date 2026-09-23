@@ -78,7 +78,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
    */
   const handleRide = () =>
     startActivity("follow", profile.email, () =>
-      ride.mutate({ email: profile.email, nickname: profile.nickname, imageUrl: profile.imageUrl }),
+      // 지금 듣는 곡이 곧 그 사람이 선 자리다 — 넘기면 표식이 응답을 안 기다린다 (S15P21A405-642)
+      ride.mutate({ email: profile.email, nickname: profile.nickname, imageUrl: profile.imageUrl, musicId: profile.nowPlaying?.id ?? null }),
     );
 
   return (

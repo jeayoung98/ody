@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends, drawQueue, drawShip } from "./draw-friends";
@@ -6,8 +6,11 @@ import { drawFriends, drawQueue, drawShip } from "./draw-friends";
 /**
  * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
  * 남의 우주선(12.5~15)과 같은 눈높이로 둔다 — 내 것만 크면 축척이 어긋나 보인다.
+ *
+ * **배율은 남의 배와 같은 것을 쓴다** (S15P21A405-642). 하나만 올리면 그 "같은 눈높이" 가
+ * 그대로 깨진다 — 배가 커지는 규칙은 `FRIEND_MARKER.shipScale` 한 곳에만 둔다.
  */
-const ME_SHIP_R = 13;
+const ME_SHIP_R = 13 * FRIEND_MARKER.shipScale;
 /** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
 import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";

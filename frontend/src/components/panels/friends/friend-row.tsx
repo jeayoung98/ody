@@ -40,7 +40,8 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
   const isRidingThis = leaderEmail === person.email;
   const handleRide = () =>
     startActivity("follow", person.email, () => {
-      ride.mutate({ email: person.email, nickname: person.nickname, imageUrl: person.imageUrl });
+      // 목록은 그 사람이 선 곡을 안다 — 넘기면 표식이 응답을 안 기다리고 바로 옮겨진다 (S15P21A405-642)
+      ride.mutate({ email: person.email, nickname: person.nickname, imageUrl: person.imageUrl, musicId: person.musicId });
       backToMap();
     });
 

@@ -151,8 +151,13 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
 export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
-  const rr = R * 0.5;
-  const step = R * 1.62;
+  /**
+   * 동승자 프로필 크기·간격 (S15P21A405-642). 0.5·1.62 였다 — 내 우주선(R=13) 기준 반지름이
+   * 6.5px 라, 누가 몇 명 달렸는지는 보여도 **누구인지**는 안 보였다. 얼굴이 읽히는 크기로 올린다.
+   * 간격도 같이 벌린다 — 반지름만 키우면 지름 1.16R 이 간격 1.62R 을 거의 채워 붙어 보인다.
+   */
+  const rr = R * 0.58;
+  const step = R * 1.78;
   const shown = Math.min(5, riders + 1);
   const extra = riders + 1 - shown;
   const at = (i: number): [number, number] => {
@@ -298,10 +303,12 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     }
     if (ship) {
       const ang = fr.heading + Math.PI / 2;
-      if (isLeader) drawQueue(g, px, py, R, ang, t, u.riderCount);
-      drawShip(g, px, py, R, ang);
+      // 배는 헬멧보다 크다 (S15P21A405-642). 접속 점·닉네임 자리는 헬멧 기준 `R` 을 그대로 쓴다
+      const SR = R * FRIEND_MARKER.shipScale;
+      if (isLeader) drawQueue(g, px, py, SR, ang, t, u.riderCount);
+      drawShip(g, px, py, SR, ang);
       // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
-      drawVisor(g, px, py, R * 0.72, u);
+      drawVisor(g, px, py, SR * 0.72, u);
     } else {
       drawHelmet(g, px, py, R, rgb, isLeader);
       drawVisor(g, px, py, R, u);

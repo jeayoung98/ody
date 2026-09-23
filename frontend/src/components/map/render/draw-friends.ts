@@ -301,9 +301,14 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       g.fillText(label, bx, by + 0.5);
     }
 
+    /**
+     * 닉네임은 **별 제목 줄보다 아래**에 둔다 (S15P21A405-618). 사람이 선 별에는 커버 제목
+     * (`py + 14~23 + 9`)이나 선택 링 제목(`py + rr + 15.5`)이 같은 자리에 오는데, 예전 `+9` 는
+     * 그 줄과 겹쳐 둘 다 읽히지 않았다. 헬멧 지름 하나만큼 더 내려 제목 줄 밑으로 보낸다.
+     */
     g.fillStyle = "rgba(233,241,255,.62)";
     g.font = `500 9.5px ${FONTS.body}`;
-    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 9);
+    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 22);
   }
   g.globalAlpha = 1;
 }

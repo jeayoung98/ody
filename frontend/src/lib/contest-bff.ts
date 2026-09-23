@@ -1,23 +1,113 @@
-import { fail } from "@/lib/api-response";
-import { emailFromToken } from "@/lib/backend";
-import { ContestMockError } from "@/mocks/contest";
-
-/** 목 플레이리스트 주인과 같은 기본값 — 토큰이 없을 때(설문 모드 등) 쓴다 */
-const FALLBACK_ME = "me@ody.app";
+import { failLive } from "@/lib/api-response";
+import type { BackendError } from "@/lib/backend";
+import type { ApiErrorCode, Contest, ContestEntry, ContestMatch, ContestTrack } from "@/types";
 
 /**
- * 콘테스트 BFF 라우트 공통 (S15P21A405-602).
- * "나" 는 토큰의 `sub`(이메일)로 정한다 — 목이라도 사람마다 다른 표·출품작을 봐야 흐름이 검증된다.
+ * 콘테스트 BFF 라우트 공통 (S15P21A405-640) — 백엔드 `artwork` 응답을 화면 타입으로 옮기고, 오류 코드를 고른다.
+ * 백엔드 모양은 `backend/.../artwork/dto/*.java` (origin/backend/dev, 2026-09-23).
  */
-export function contestCaller(req: Request): { email: string; nickname: string } {
-  const email = emailFromToken(req) ?? FALLBACK_ME;
-  return { email, nickname: email.split("@")[0] };
+
+export interface BackendArtworkRound {
+  roundId: number;
+  theme: string;
+  startsAt: string;
+  endsAt: string;
+  voteLimit: number;
+  myVotesLeft: number | null;
 }
 
-/** 목이 던진 오류를 응답 봉투로. 그 외는 500 */
-export function contestFail(e: unknown) {
-  if (e instanceof ContestMockError) return fail(e.code, e.message, e.status);
-  return fail("INTERNAL_ERROR", e instanceof Error ? e.message : "콘테스트 처리에 실패했습니다.", 500);
+export interface BackendArtworkTrack {
+  musicId: number;
+  title: string | null;
+  artist: string | null;
+  x: number;
+  y: number;
+}
+
+export interface BackendArtworkSummary {
+  artworkId: number;
+  rank: number | null;
+  title: string;
+  ownerEmail: string | null;
+  status: "PENDING" | "SCORED" | "FAILED";
+  score: number | null;
+  aiComment: string | null;
+  failReason: string | null;
+  likeCnt: number;
+  likedByMe: boolean;
+  musicCnt: number;
+  createdAt: string;
+  rankScore: number | null;
+  closed: boolean;
+  points: BackendArtworkTrack[] | null;
+}
+
+export interface BackendDrawResponse {
+  score: number;
+  quality: "HIGH" | "MEDIUM" | "LOW";
+  points: BackendArtworkTrack[];
+}
+
+export const toRound = (r: BackendArtworkRound): Contest => ({
+  roundId: r.roundId,
+  theme: r.theme,
+  startsAt: r.startsAt,
+  endsAt: r.endsAt,
+  voteLimit: r.voteLimit,
+  myVotesLeft: r.myVotesLeft ?? null,
+});
+
+export const toTrack = (p: BackendArtworkTrack): ContestTrack => ({ musicId: p.musicId, title: p.title ?? null, artist: p.artist ?? null, x: p.x, y: p.y });
+
+export const toEntry = (s: BackendArtworkSummary): ContestEntry => ({
+  artworkId: s.artworkId,
+  rank: s.rank ?? null,
+  title: s.title,
+  ownerEmail: s.ownerEmail ?? null,
+  status: s.status,
+  score: s.score ?? null,
+  aiComment: s.aiComment ?? null,
+  failReason: s.failReason ?? null,
+  likeCnt: s.likeCnt,
+  likedByMe: s.likedByMe,
+  musicCnt: s.musicCnt,
+  createdAt: s.createdAt,
+  rankScore: s.rankScore ?? null,
+  closed: s.closed,
+  tracks: (s.points ?? []).map(toTrack),
+});
+
+export const toMatch = (d: BackendDrawResponse): ContestMatch => ({ score: d.score, quality: d.quality, tracks: d.points.map(toTrack) });
+
+/**
+ * **그대로 올리는 코드.** 사유마다 화면이 할 말이 다르다 — 표를 다 썼는지(409), 내 작품인지(400), 모양이
+ * 없는지(400), 플리 이름이 겹치는지(409). 상태 코드로 뭉치면 못 고른다.
+ */
+const PASS_THROUGH = new Set<string>([
+  "ARTWORK_NOT_FOUND",
+  "ARTWORK_ROUND_CLOSED",
+  "ARTWORK_NOT_FAILED",
+  "ARTWORK_RETRY_EXHAUSTED",
+  "ARTWORK_DRAWING_DEGENERATE",
+  "ARTWORK_VOTE_LIMIT",
+  "ARTWORK_VOTE_SELF",
+  "PLAYLIST_NAME_DUPLICATED",
+  "PLAYLIST_NOT_FOUND",
+  "MUSIC_NOT_FOUND",
+  "INVALID_INPUT",
+  "FORBIDDEN",
+]);
+
+export function artworkCode(err: BackendError): ApiErrorCode {
+  if (PASS_THROUGH.has(err.code)) return err.code as ApiErrorCode;
+  // `backendFetch` 가 401 을 자기 코드로 바꿔 던진다 — 화면에는 로그인 문제로 보여야 한다
+  if (err.status === 401) return "UNAUTHENTICATED";
+  return "INTERNAL_ERROR";
+}
+
+export function artworkFail(e: unknown, upstream: string) {
+  const err = e as BackendError;
+  return failLive(artworkCode(err), err.message ?? "콘테스트 처리에 실패했습니다.", err.status || 502, upstream);
 }
 
 export function parseId(raw: string): number | null {

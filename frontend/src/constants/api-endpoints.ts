@@ -238,18 +238,26 @@ export const API_ENDPOINTS = {
   },
 
   /**
-   * 별자리 콘테스트 (S15P21A405-602). **전부 목이다** — 배포 API 에 없다. 백엔드 설계는
-   * S15P21A405-548(AI 평가·리더보드) · 598(그린 점 → 곡 매칭) 에서 진행 중이고, 프론트가 기대하는
-   * 요청·응답 모양은 BACKEND-NOTES "별자리 콘테스트" 절에 적어 두었다.
+   * 별자리 콘테스트 (S15P21A405-602 · 640) — **실연동**. 라우트 핸들러가 배포 백엔드 `/api/artwork/*`
+   * (S15P21A405-563 · 598 · 616)를 호출자 토큰으로 대신 부른다. 대응표는 BACKEND-NOTES §6-9.
+   *
+   * 목이던 때의 `{id}` 경로 인자가 없다 — 백엔드는 "지금 열린 회차" 하나만 다룬다(출품·리더보드 모두).
    */
   contest: {
+    /** `GET /api/artwork/round/current`. 열린 회차가 없으면 `null` */
     current: "/bff/contests/current",
-    match: (id: number) => `/bff/contests/${id}/match`,
-    judge: (id: number) => `/bff/contests/${id}/judge`,
-    /** 목록(GET, `sort` 필수) 과 출품(POST, 정렬 없음) 이 같은 경로다 */
-    entries: (id: number, sort?: string) => `/bff/contests/${id}/entries${sort ? `?sort=${sort}` : ""}`,
-    vote: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/vote`,
-    save: (id: number, entryId: number) => `/bff/contests/${id}/entries/${entryId}/save`,
+    /** `POST /api/artwork/draw` — 그린 점 → 곡·좌표·모양 일치도 */
+    match: "/bff/contests/match",
+    /** GET = 리더보드(`/api/artwork/leaderboard`) · POST = 출품(플리 생성 → `/api/artwork/submit`) */
+    entries: "/bff/contests/entries",
+    /** `GET /api/artwork/mine` — 내 작품(모든 상태). 채점 결과는 여기서 읽는다 */
+    mine: "/bff/contests/mine",
+    /** `POST /api/artwork/like { artworkId, liked }` — 토글이 아니라 목표 상태 */
+    like: (artworkId: number) => `/bff/contests/entries/${artworkId}/like`,
+    /** `POST /api/artwork/retry/{id}` — 실패한 내 작품 재평가 */
+    retry: (artworkId: number) => `/bff/contests/entries/${artworkId}/retry`,
+    /** 남의 작품을 내 플리로 — `POST /api/playlist/create` (곡 순서 그대로) */
+    save: "/bff/contests/save",
   },
 
   /**

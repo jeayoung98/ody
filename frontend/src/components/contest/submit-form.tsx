@@ -3,46 +3,48 @@
 import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import TextInput from "@/components/common/text-input";
+import { SKETCH_RULES } from "@/constants";
 import { useSubmitContestEntryMutation } from "@/hooks/mutations/use-submit-contest-entry-mutation";
+import { roundPhase } from "@/lib/contest-view";
 import { useContestStore } from "@/stores/use-contest-store";
 import { useToastStore } from "@/stores/use-toast-store";
-import type { Contest, ContestJudge, ContestMatch } from "@/types";
+import type { Contest, ContestEntry, ContestMatch } from "@/types";
 
 interface SubmitFormProps {
   contest: Contest;
   match: ContestMatch;
-  judge: ContestJudge | null;
+  /** 이미 낸 내 작품. 있으면 다시 내는 것이고 **이전 것이 지워진다** */
+  my: ContestEntry | null;
+  loggedIn: boolean;
 }
 
 /**
- * 이름을 짓고 **그 점수로** 출품한다. 이름이 비면 못 낸다.
- * 이미 낸 것이 있으면 대체(재출품)이고 횟수를 쓴다 — 표는 남는다.
+ * 이름을 짓고 출품한다 (S15P21A405-640). 이름 = 만들어지는 플레이리스트 이름이다.
+ * AI 점수는 여기서 안 보인다 — 출품 뒤 서버가 매기고 `MyArtworkCard` 가 받아 보인다.
+ * 재출품은 **교체**다: 서버가 이전 작품을 지우고 점수·좋아요를 초기화한다 (§6-3) — 누르기 전에 말해 준다.
  */
-export default function SubmitForm({ contest, match, judge }: SubmitFormProps) {
+export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormProps) {
   const title = useContestStore((s) => s.title);
   const setTitle = useContestStore((s) => s.setTitle);
   const closed = useContestStore((s) => s.closed);
   const clear = useContestStore((s) => s.clear);
-  const setTab = useContestStore((s) => s.setTab);
   const toast = useToastStore((s) => s.show);
   const submit = useSubmitContestEntryMutation();
 
-  const { titleMax, resubmitLimit } = contest.rules;
-  const resubmitting = contest.myEntryId != null;
-  const exhausted = resubmitting && contest.myResubmitsLeft <= 0;
+  const { titleMax } = SKETCH_RULES;
+  const open = roundPhase(contest) === "OPEN";
   const trimmed = title.trim();
-  const disabled = !trimmed || !judge || exhausted || submit.isPending;
+  const disabled = !trimmed || !loggedIn || !open || submit.isPending;
 
   const handleSubmit = () => {
     if (disabled) return;
     submit.mutate(
-      { contestId: contest.id, title: trimmed, tracks: match.tracks, closed },
+      { title: trimmed, musicIds: match.tracks.map((t) => t.musicId), closed },
       {
-        onSuccess: (entry) => {
-          toast(`「${entry.title}」 출품 완료 · AI ${entry.aiScore ?? "-"}점 · 갤러리에 올라갔어요`);
+        onSuccess: () => {
+          toast(`「${trimmed}」 출품 완료 · AI 채점이 끝나면 알려 드려요`);
           clear();
           setTitle("");
-          setTab("gallery");
         },
         onError: (e) => toast(e.message),
       },
@@ -58,7 +60,7 @@ export default function SubmitForm({ contest, match, judge }: SubmitFormProps) {
         id="contest-title"
         value={title}
         maxLength={titleMax}
-        placeholder="예: 창가의 회색 고양이"
+        placeholder={`예: 창가의 회색 ${contest.theme}`}
         autoComplete="off"
         onChange={(e) => setTitle(e.target.value)}
         onKeyDown={(e) => e.key === "Enter" && handleSubmit()}
@@ -67,14 +69,14 @@ export default function SubmitForm({ contest, match, judge }: SubmitFormProps) {
         {title.length} / {titleMax}
       </p>
       <Button variant="primary" className="w-full" disabled={disabled} onClick={handleSubmit}>
-        {submit.isPending ? "출품하는 중..." : exhausted ? "재출품 횟수를 모두 썼어요" : `${judge ? `${judge.score}점으로 ` : ""}${resubmitting ? "다시 출품하기" : "출품하기"}`}
+        {submit.isPending ? "출품하는 중..." : !loggedIn ? "로그인하면 출품할 수 있어요" : !open ? "접수가 끝났어요" : my ? "다시 출품하기" : "출품하기"}
       </Button>
       <Note>
-        {resubmitting
-          ? `이미 출품했어요. 다시 내면 이전 작품을 대체해요 · 남은 재출품 ${contest.myResubmitsLeft}회`
-          : judge && !trimmed
-            ? "별자리 이름을 지어 주면 출품할 수 있어요"
-            : `회차당 출품 1개 · 재출품 ${resubmitLimit}회까지 · 이름 필수`}
+        {my
+          ? `이미 「${my.title}」을 냈어요. 다시 내면 이전 작품이 지워지고 점수·좋아요가 초기화돼요.`
+          : !trimmed
+            ? "별자리 이름을 지어 주면 출품할 수 있어요. 같은 이름의 플레이리스트가 함께 만들어져요."
+            : "출품하면 AI 가 잠시 뒤 채점해요. 회차당 작품 1개."}
       </Note>
     </div>
   );

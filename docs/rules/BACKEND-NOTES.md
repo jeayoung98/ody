@@ -255,7 +255,7 @@
 ```jsonc
 // GET /api/artwork/leaderboard?roundId=&page=0&size=20   (roundId 생략 = 열린 회차, size 최대 50)
 { "round": { "roundId": 1, "theme": "고양이", "startsAt": "...", "endsAt": "..." },
-  "items": [ { "artworkId": 501, "rank": 1, "title": "밤산책", "ownerEmail": "a@b.c",
+  "items": [ { "artworkId": 501, "rank": 1, "title": "밤산책", "ownerEmail": "a@b.c", "ownerNickname": "루나",
                "status": "SCORED", "score": 87, "aiComment": "귀 두 개가 또렷하다",
                "failReason": null, "likeCnt": 12, "likedByMe": false,
                "musicCnt": 14, "createdAt": "..." } ],
@@ -263,7 +263,7 @@
 
 // GET /api/artwork/detail?artworkId=501
 { "artworkId": 501, "roundId": 1, "theme": "고양이", "title": "밤산책",
-  "ownerEmail": "a@b.c", "mine": false, "status": "SCORED", "score": 87,
+  "ownerEmail": "a@b.c", "ownerNickname": "루나", "mine": false, "status": "SCORED", "score": 87,
   "aiComment": "...", "failReason": null, "likeCnt": 12, "likedByMe": false,
   "points": [ { "musicId": 900, "x": -0.42, "y": 0.13 } ],
   "musics": [ /* MusicDetail. points 와 같은 순서 */ ],

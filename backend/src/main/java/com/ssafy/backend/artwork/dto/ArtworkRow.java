@@ -14,6 +14,8 @@ public class ArtworkRow {
 	private long roundId;
 	/** 제출자. */
 	private String email;
+	/** 제출자 닉네임. {@code findById} 만 채운다 (S15P21A405-645). */
+	private String ownerNickname;
 	/** 출처 플레이리스트. FK 가 아니라 기록용이며 원본이 지워져도 남는다. */
 	private Long playlistId;
 	private String title;

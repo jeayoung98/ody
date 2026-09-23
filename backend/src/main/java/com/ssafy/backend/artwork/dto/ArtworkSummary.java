@@ -16,6 +16,8 @@ public record ArtworkSummary(
 		Integer rank,
 		String title,
 		String ownerEmail,
+		/** 작품 주인 닉네임. user 행이 없으면 null (S15P21A405-645). */
+		String ownerNickname,
 		String status,
 		Integer score,
 		String aiComment,

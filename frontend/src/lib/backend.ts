@@ -314,6 +314,15 @@ export interface BackendMusicDetail extends BackendMusicSummary {
 /** `/api/music/detail` 응답 — 상세 필드가 평탄하게 펼쳐지고 neighbors 가 붙는다 */
 export interface BackendMusicDetailResponse extends BackendMusicDetail {
   neighbors: (BackendMusicSummary & { distance: number })[];
+  /** 요청한 사람이 좋아요를 눌렀는지 (S15P21A405-611). 옛 배포는 안 줄 수 있어 선택이다 */
+  liked?: boolean;
+}
+
+/** `POST /api/music/like` 응답 (S15P21A405-611). `liked` 는 **변경 후** 값이다 */
+export interface BackendMusicLikeResponse {
+  musicId: number;
+  liked: boolean;
+  likedAt: string | null;
 }
 
 /**

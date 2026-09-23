@@ -295,3 +295,10 @@ export const CatConstellationIcon = ({ size = 18, ...p }: P) => (
     <circle cx="14.2" cy="13.6" r="1.1" fill="currentColor" stroke="none" />
   </svg>
 );
+
+/** 하트 — 곡 좋아요 (S15P21A405-611). `filled` 면 속을 채운다 */
+export const HeartIcon = ({ size = 16, filled = false, ...p }: P & { filled?: boolean }) => (
+  <svg {...base(size, p)} fill={filled ? "currentColor" : "none"}>
+    <path d="M12 20.3S4.5 15.6 4.5 10.2A4.2 4.2 0 0 1 12 7.6a4.2 4.2 0 0 1 7.5 2.6c0 5.4-7.5 10.1-7.5 10.1z" />
+  </svg>
+);

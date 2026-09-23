@@ -43,4 +43,9 @@ export const STORAGE_KEYS = {
    * **지난 값을 먼저 보여 줘도 되는 것**만 들어간다. 넣고 빼는 쪽은 [`query-persist`](../lib/query-persist.ts).
    */
   queryCache: "ody:query-cache",
+  /**
+   * 따라가는 인솔자 `{email, nickname, imageUrl}` (S15P21A405-615). **sessionStorage** 에만 둔다 —
+   * 새로고침은 이어 타고, 새 탭은 새로 시작한다. 하차하면 지운다. 읽는 쪽은 `use-ride-session` 하나다.
+   */
+  rideLeader: "ody:ride-leader",
 } as const;

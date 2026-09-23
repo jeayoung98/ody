@@ -2,10 +2,12 @@
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { QUERY_KEYS, RIDE_DROPPED, RIDE_ENDED_BY_CAPTAIN, RIDE_ENDED_BY_DISBAND } from "@/constants";
+import { QUERY_KEYS, RIDE_ENDED_BY_CAPTAIN, RIDE_ENDED_BY_DISBAND, STORAGE_KEYS } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
+import { useRideMutation, type RideTarget } from "@/hooks/mutations/use-ride-mutation";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
+import { readStorage } from "@/lib/storage";
 import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -138,20 +140,32 @@ export function useRideSession(): void {
   }, [qc, showToast]);
 
   /**
-   * **재연결하면 탑승은 이미 끊겨 있다** (§8.3). 소켓이 새로 열리면 서버가 이전 위치를 지우고
-   * 따라가기도 끊는다. 상태를 들고 있다가 자동으로 다시 태우면 **서버에 없는 선단을 화면만
-   * 그리게 된다** — 조작은 막혀 있는데 아무것도 안 오는 최악의 상태다.
+   * **소켓이 열리면 다시 탄다** (S15P21A405-615). 서버는 소켓이 새로 열리면 이전 탑승을 지우므로
+   * (§8.3) 들고 있던 상태로 그냥 그리면 서버에 없는 선단이 된다 — 그래서 예전에는 끊고 알렸다.
+   * 이제는 인솔자를 저장해 두고(`use-follow-store.start`) **새 탑승 요청을 보낸다.** 새로고침도
+   * 같은 길이다 — 스토어는 비어 있지만 sessionStorage 에 인솔자가 남는다.
    *
-   * 그래서 끊고 알린다. 다시 타는 것은 사용자가 정한다.
+   * 실패(인솔자 없음·자리 없음·연결 문제)는 뮤테이션이 사유를 토스트로 말한다. 여기서는 상태와
+   * 저장을 지워 "타고 있는 척" 이 남지 않게만 한다.
+   *
+   * **인솔자 본인의 새로고침은 못 살린다.** 서버가 선단을 해체해 따라오던 사람 전부에게
+   * `RIDE_ENDED` 가 간다 — 백엔드 유예 기간이 필요하다 (BACKEND-NOTES A-72).
    */
+  const { mutateAsync: remount } = useRideMutation();
   useEffect(
     () =>
       onConnectionChange((up) => {
-        if (!up || !useFollowStore.getState().leaderEmail) return;
-        const map = useMapStore.getState();
-        endRide({ musicId: map.myMusicId, layer: map.layer });
-        showToast(RIDE_DROPPED);
+        if (!up) return;
+        const s = useFollowStore.getState();
+        const target: RideTarget | null = s.leaderEmail
+          ? { email: s.leaderEmail, nickname: s.leaderNickname, imageUrl: s.leaderImageUrl }
+          : readStorage<RideTarget>(STORAGE_KEYS.rideLeader);
+        if (!target) return;
+        remount(target).catch(() => {
+          const map = useMapStore.getState();
+          endRide({ musicId: map.myMusicId, layer: map.layer });
+        });
       }),
-    [showToast],
+    [remount],
   );
 }

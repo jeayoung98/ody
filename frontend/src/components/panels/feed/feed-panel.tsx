@@ -10,7 +10,6 @@ import { BackIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useUserProfileQuery } from "@/hooks/queries/use-user-profile-query";
-import { isBot } from "@/lib/bots/roster";
 import { usePanelStore } from "@/stores/use-panel-store";
 import PanelCloseButton from "../panel-close-button";
 import FeedDashboard from "./feed-dashboard";
@@ -106,7 +105,7 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
           {isError && <ErrorMessage />}
           {data && (
             <>
-              <FeedHeader profile={data} isMe={isMe} onOpenFollows={isBot(targetEmail) ? undefined : openFollows} />
+              <FeedHeader profile={data} isMe={isMe} onOpenFollows={openFollows} />
               <Divider />
               <FeedDashboard dashboard={data.dashboard} />
               {isMe && (

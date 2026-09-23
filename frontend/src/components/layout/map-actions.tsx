@@ -28,16 +28,8 @@ export default function MapActions() {
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
   const openComposer = useOpenJourneyComposer();
-  const activePanel = usePanelStore((s) => s.activePanel);
-  const sheetUp = activePanel != null;
 
   if (pathname !== ROUTES.home) return null;
-  /**
-   * 시트가 떠 있으면 숨는다 (S15P21A405-417). 이 줄은 z-22 라 시트(z-20) 위에 뜨는데,
-   * 펼치면 내용을 가리고 **접어도 그 자리가 곧 시트가 걸쳐 있는 자리**라 제목 위에 얹힌다.
-   * 시트를 닫으면 다시 나온다.
-   */
-  if (sheetUp) return null;
 
   /** 레일의 여정 버튼과 같은 규칙이다 (S15P21A405-434) — 상자가 떠 있으면 상자를, 아니면 패널을 */
   const pressJourney = () => {
@@ -49,7 +41,14 @@ export default function MapActions() {
   return (
     <div
       data-hud
-      className="glass-liquid absolute right-gutter-sm bottom-[calc(var(--nav-bottom)+8px)] z-[22] hidden gap-0.5 rounded-pill! p-px max-tablet:flex"
+      /*
+        **윗줄, 도움말 왼쪽에 붙는다** (S15P21A405-593). 예전에는 재생바 위 오른쪽 아래에
+        있었는데, 거기가 곧 시트가 걸쳐 있는 자리라 **시트가 뜨면 통째로 숨겨야 했다** —
+        시트는 거의 항상 열려 있으므로 사실상 안 보이는 버튼이었다.
+        윗줄은 시트(`--spacing-hud-t` + 52 아래에서 시작)가 닿지 않는 자리라 숨길 이유가 없다.
+        오른쪽 68px = 여백 16 + 도움말 44 + 틈 8.
+      */
+      className="glass-liquid absolute top-hud-t right-[68px] z-[22] hidden gap-0.5 rounded-pill! p-px max-tablet:flex"
     >
       <NearbyExploreButton />
       {panelEnabled.journey && (

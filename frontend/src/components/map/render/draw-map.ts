@@ -634,7 +634,12 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   for (let ri = p.rings.length - 1; ri >= 0; ri--) {
     const r = p.rings[ri];
     const isCur = r === cur;
-    const sc = e.ringScale(r);
+    /**
+     * **벌려 본 배율이 크기에도 걸린다** (S15P21A405-593). 자리만 벌리면 별은 그대로인 채
+     * 이웃이 멀어질 뿐이라 "확대" 로 안 읽힌다 — 간격과 크기가 같이 커져야 다가간 것이 된다.
+     * 이 값은 별 지름과 가운데 점, 강조 링에 함께 쓰인다.
+     */
+    const sc = e.ringScale(r) * (e.probe?.zoom ?? 1);
     // 물러난 고리는 오므라드는 만큼 옅어진다 — 뭉치가 될 때 밝기가 그대로면 새 고리보다 눈에 띈다
     const a = k * e.ringK(r) * (isCur ? 1 : PROBE.prevAlpha);
     if (a < 0.01) continue;

@@ -3364,7 +3364,8 @@ export class MapEngine {
         // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
         const k = this.visible.findIndex((v) => v.i === i);
         if (k >= 0) this.visible.splice(k, 1);
-        this.visible.push({ i, px: pp.x, py: pp.y, r: 16 });
+        // 벌려 보면 별도 그만큼 커지므로 집는 범위도 같이 넓힌다 (S15P21A405-593)
+        this.visible.push({ i, px: pp.x, py: pp.y, r: 16 * (this.probe?.zoom ?? 1) });
         continue;
       }
       if (this.chosen.has(i)) continue;

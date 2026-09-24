@@ -77,10 +77,12 @@ public class TasteFindingSelector {
                 .comparingDouble(Scored::strength).reversed()
                 .thenComparing(scored -> scored.finding().pc()));
         if (candidates.isEmpty()) {
+            // axisPhrase 는 검증기가 문장에 그대로 있기를 요구한다. "보다" 같은 방향 뒤집기 표현을 넣으면
+            // 어떤 출력도 통과하지 못해 매번 FALLBACK 이 된다 (S15P21A405-646).
             return List.of(new TasteFinding(
                     "balanced", "BALANCED", null, "CENTER", 0,
                     "어느 축에서도 뚜렷한 편향이나 넓은 분포가 발견되지 않음",
-                    "뚜렷한 한 방향보다 여러 특성을 고르게 듣는 경향"));
+                    "여러 특성을 고르게 듣는 경향"));
         }
         return candidates.stream().limit(3).map(Scored::finding).toList();
     }

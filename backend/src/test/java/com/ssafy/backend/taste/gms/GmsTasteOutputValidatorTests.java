@@ -8,6 +8,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 import com.ssafy.backend.taste.analysis.TasteFinding;
+import com.ssafy.backend.taste.analysis.TasteFindingSelector;
 
 class GmsTasteOutputValidatorTests {
 
@@ -129,6 +130,18 @@ class GmsTasteOutputValidatorTests {
 
         assertThatThrownBy(() -> validator.validate(output, List.of(diverseFinding())))
                 .isInstanceOf(IllegalArgumentException.class);
+    }
+
+    /** 뚜렷한 축이 없는 사용자의 finding. 문구에 "보다" 가 있던 때는 어떤 출력도 통과하지 못했다 (S15P21A405-646). */
+    @Test
+    void acceptsOutputForBalancedFinding() {
+        List<TasteFinding> findings = new TasteFindingSelector().select(List.of(), 10);
+        String phrase = findings.get(0).axisPhrase();
+        GmsTasteOutput output = new GmsTasteOutput(
+                "resp", phrase + "이 보여요.",
+                List.of(new GmsTasteOutput.Narrative("balanced", "한쪽에 치우치지 않고 " + phrase + "이 있어요.")));
+
+        assertThatCode(() -> validator.validate(output, findings)).doesNotThrowAnyException();
     }
 
     private static TasteFinding diverseFinding() {

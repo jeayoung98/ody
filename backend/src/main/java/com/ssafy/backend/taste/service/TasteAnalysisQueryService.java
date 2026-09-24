@@ -124,13 +124,46 @@ public class TasteAnalysisQueryService {
         return new AnalysisSnapshot(inProgress, likedMusicIds);
     }
 
+    /**
+     * 가장 최근 완료 시도를 붙인다. 성공이면 AI 리포트, 그보다 나중에 실패했으면 그때 저장한 대체 리포트를
+     * {@code aiGenerated=false} 로 내린다 — 생성 응답과 새로고침 뒤 조회가 같아야 한다 (S15P21A405-647).
+     *
+     * <p>대체 문장이 없는 실패 행(이 변경 전 행, lease 만료)은 이전 성공 리포트를 그대로 두고
+     * {@code failureCode} 만 싣는다.
+     */
     private TasteAnalysisResponse attachLatestReport(
             String email, TasteAnalysisResponse current, List<Long> likedMusicIds) {
         TasteAnalysisRow latest = analysisMapper.findLatestSuccess(email);
-        if (latest == null) {
-            return current;
-        }
+        TasteAnalysisRow failed = analysisMapper.findLatestFailed(email);
+        boolean failedLast = failed != null
+                && (latest == null || failed.getCompletedAt().isAfter(latest.getCompletedAt()));
         String currentHash = hasher.hash(likedMusicIds, current.analysisVersion());
+        if (failedLast && failed.getSummary() != null) {
+            boolean fresh = currentHash.equals(failed.getLikedSetHash());
+            TasteAnalysisResponse.Report report = new TasteAnalysisResponse.Report(
+                    failed.getReportLevel(), false, fresh, failed.getSummary(),
+                    readNarratives(failed.getNarratives()),
+                    readFindings(failed.getFindings()),
+                    failed.getRequestedAt(), failed.getCompletedAt(),
+                    latest == null ? null : latest.getCompletedAt());
+            return new TasteAnalysisResponse(
+                    fresh ? "FRESH" : "STALE",
+                    current.counts(), current.reportEligibility(), current.analysisVersion(),
+                    current.axes(), current.points(), report,
+                    new TasteAnalysisResponse.Generation(
+                            "FALLBACK", false, false, true, failed.getFailureCode(), null));
+        }
+        String failureCode = failedLast ? failed.getFailureCode() : null;
+        if (latest == null) {
+            if (failureCode == null) {
+                return current;
+            }
+            return new TasteAnalysisResponse(
+                    current.state(), current.counts(), current.reportEligibility(), current.analysisVersion(),
+                    current.axes(), current.points(), null,
+                    new TasteAnalysisResponse.Generation(
+                            current.generation().status(), false, false, true, failureCode, null));
+        }
         boolean fresh = currentHash.equals(latest.getLikedSetHash());
         OffsetDateTime now = OffsetDateTime.ofInstant(clock.instant(), zoneId);
         boolean usedToday = latest.getAnalysisDate().equals(now.toLocalDate());
@@ -140,7 +173,7 @@ public class TasteAnalysisQueryService {
                 readFindings(latest.getFindings()),
                 latest.getRequestedAt(), latest.getCompletedAt(), latest.getCompletedAt());
         TasteAnalysisResponse.Generation generation = new TasteAnalysisResponse.Generation(
-                current.generation().status(), false, usedToday, false, null,
+                current.generation().status(), false, usedToday, failureCode != null, failureCode,
                 usedToday ? now.toLocalDate().plusDays(1).atStartOfDay(zoneId).toOffsetDateTime() : null);
         return new TasteAnalysisResponse(
                 fresh ? "FRESH" : "STALE",

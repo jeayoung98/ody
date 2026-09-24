@@ -131,17 +131,21 @@ public class TasteAnalysisGenerationService {
                     ? gms.code() : "GMS_OUTPUT_REJECTED";
             meterRegistry.counter("ody.taste.gms.failures", "code", failureCode).increment();
             OffsetDateTime completedAt = OffsetDateTime.ofInstant(clock.instant(), zoneId);
-            if (mapper.markFailed(email, analysisDate, requestedAt, completedAt, failureCode) != 1) {
+            TasteFallbackRenderer.RenderedReport fallback =
+                    fallbackRenderer.render(current.reportEligibility().level(), findings);
+            if (mapper.markFailed(
+                    email, analysisDate, requestedAt, completedAt, failureCode, hash,
+                    current.counts().valid(), current.reportEligibility().level(), current.analysisVersion(),
+                    json(current.axes()), json(findings), fallback.summary(), json(fallback.narratives())) != 1) {
                 throw new IllegalStateException("taste analysis failure transition failed");
             }
             meterRegistry.counter("ody.taste.generation.outcomes", "outcome", "fallback").increment();
-            TasteFallbackRenderer.RenderedReport fallback =
-                    fallbackRenderer.render(current.reportEligibility().level(), findings);
             TasteAnalysisResponse.Report report = new TasteAnalysisResponse.Report(
                     current.reportEligibility().level(), false, true,
                     fallback.summary(), fallback.narratives(), findings, requestedAt, completedAt,
                     latest == null ? null : latest.getCompletedAt());
-            return withReport(current, "FALLBACK", report,
+            // state 는 A-79 의 6종 중 하나다. 대체 리포트도 방금 이 스냅샷으로 만들었으니 FRESH (S15P21A405-647)
+            return withReport(current, "FRESH", report,
                     new TasteAnalysisResponse.Generation(
                             "FALLBACK", false, false, true, failureCode, null));
         }

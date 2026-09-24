@@ -9,6 +9,8 @@ public interface TasteAnalysisMapper {
 
     TasteAnalysisRow findLatestSuccess(@Param("email") String email);
 
+    TasteAnalysisRow findLatestFailed(@Param("email") String email);
+
     TasteAnalysisRow findByDate(@Param("email") String email, @Param("analysisDate") LocalDate analysisDate);
 
     TasteAnalysisRow findActivePending(
@@ -46,5 +48,13 @@ public interface TasteAnalysisMapper {
             @Param("analysisDate") LocalDate analysisDate,
             @Param("requestedAt") OffsetDateTime requestedAt,
             @Param("completedAt") OffsetDateTime completedAt,
-            @Param("failureCode") String failureCode);
+            @Param("failureCode") String failureCode,
+            @Param("likedSetHash") String likedSetHash,
+            @Param("validMusicCount") int validMusicCount,
+            @Param("reportLevel") String reportLevel,
+            @Param("analysisVersion") String analysisVersion,
+            @Param("axisStats") String axisStats,
+            @Param("findings") String findings,
+            @Param("summary") String summary,
+            @Param("narratives") String narratives);
 }

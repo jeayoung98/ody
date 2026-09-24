@@ -174,6 +174,21 @@ class ArtworkServiceTests {
 		assertThat(service.getLeaderboard(1L, null, 0, 20).items().get(0).closed()).isTrue();
 	}
 
+	@Test
+	void detailAndLeaderboard_carryOwnerNickname() {
+		ArtworkRow artwork = artwork(5L, ArtworkStatus.SCORED, OWNER);
+		artwork.setOwnerNickname("루나");
+		when(artworkMapper.findById(5L)).thenReturn(artwork);
+		when(artworkMapper.findPoints(5L)).thenReturn(List.of());
+		when(artworkMapper.findRoundById(1L)).thenReturn(round());
+		ArtworkSummaryRow row = summaryRow(5L);
+		row.setOwnerNickname("루나");
+		when(artworkMapper.findLeaderboard(anyLong(), anyDouble(), any(), anyInt(), anyInt())).thenReturn(List.of(row));
+
+		assertThat(service.getDetail(5L, OTHER).ownerNickname()).isEqualTo("루나");
+		assertThat(service.getLeaderboard(1L, null, 0, 20).items().get(0).ownerNickname()).isEqualTo("루나");
+	}
+
 	/** 같은 회차 재제출은 기존 작품을 지우고 새로 만든다 — 점수·좋아요를 승계하지 않는다. */
 	@Test
 	void submit_replacesExistingArtworkInSameRound() {

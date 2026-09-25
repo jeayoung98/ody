@@ -60,6 +60,11 @@ export const TASTE_NOTICE = {
   stale: "좋아요한 곡이 바뀌었어요. 다시 만들면 지금 취향에 맞춰집니다.",
   /** 외부 생성이 안 돼서 백엔드가 규칙으로 채운 문장이다. 실패가 아니라 **덜 다듬어진 것**이다 */
   fallback: "이번에는 간단한 요약으로 대신했어요.",
+  /**
+   * 지난 시도가 **아무것도 남기지 못했다** (S15P21A405-647). 대체 문장조차 없이 끝난 행이라
+   * 보여 줄 리포트가 없다 — 그냥 빈 칸으로 두면 눌러 본 적이 없는 것과 구별이 안 된다.
+   */
+  lastFailed: "지난번에는 만들지 못했어요. 다시 해 볼 수 있어요.",
 } as const;
 
 export function tasteView(analysis: TasteAnalysis): TasteView {
@@ -135,5 +140,10 @@ function noticeOf(analysis: TasteAnalysis, generating: boolean, stale: boolean):
   if (generation.dailyLimitUsedToday) return TASTE_NOTICE.dailyLimit;
   if (stale) return TASTE_NOTICE.stale;
   if (report && !report.aiGenerated) return TASTE_NOTICE.fallback;
+  /**
+   * 리포트는 없는데 실패 코드만 온 경우 (S15P21A405-647). 백엔드가 "마지막 시도가 실패였다" 를
+   * 조회에도 실어 주기 시작했다 — 보여 줄 글이 없어도 **눌렀다는 사실은 남아야** 한다.
+   */
+  if (!report && generation.failureCode) return TASTE_NOTICE.lastFailed;
   return null;
 }

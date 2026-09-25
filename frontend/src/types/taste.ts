@@ -100,7 +100,12 @@ export interface TasteReport {
   /** ISO 8601 (오프셋 포함) */
   analyzedAt: string;
   generatedAt: string;
-  lastRefreshedAt: string;
+  /**
+   * 마지막으로 성공한 리포트의 완료 시각. **`null` 일 수 있다** (S15P21A405-647) — 한 번도
+   * 성공한 적 없이 대체 리포트만 있는 경우다. 백엔드가 그 분기에서 `latest == null ? null : …`
+   * 을 싣는다.
+   */
+  lastRefreshedAt: string | null;
 }
 
 export interface TasteGeneration {

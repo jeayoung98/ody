@@ -31,6 +31,11 @@ interface FollowState {
    */
   leaderMusicId: number | null;
   /**
+   * 인솔자가 서 있는 **겹** (S15P21A405-676). 탑승 응답·`RIDE_TRACK` 이 준다. `null` 이면 모른다(누르는 순간의 임시 화면).
+   * 지도가 이 겹이 아니면 `map-view` 가 먼저 옮긴다 — 새로고침 복원처럼 응답이 지도 데이터보다 먼저 온 경우를 위해서다.
+   */
+  leaderLayer: number | null;
+  /**
    * 인솔자가 **열어 둔 상세 곡** (2차 명세 §4.4 `RIDE_PANEL`). `null` 이면 닫혀 있다.
    *
    * 서 있는 곡(`leaderMusicId`)과 **다를 수 있다.** 옆 별을 눌러 보는 동안이 그렇다 —
@@ -69,9 +74,11 @@ interface FollowState {
     imageUrl: string | null;
     musicId: number;
     snapshotSeq: number;
+    layer?: number | null;
   }) => void;
   /** 인솔자가 곡을 옮겼다 (`RIDE_TRACK`). 표식이 따라가도록 자리만 갱신한다 */
   setLeaderMusicId: (musicId: number) => void;
+  setLeaderLayer: (layer: number | null) => void;
   /** 인솔자가 상세를 열거나 닫았다 (`RIDE_PANEL`). 재생은 건드리지 않는다 */
   setLeaderViewingMusicId: (musicId: number | null) => void;
   /** 하차·강제 종료 공통. 자리는 그대로 두고(map-store 가 남는다) 탑승 상태만 지운다 */
@@ -92,13 +99,14 @@ export const useFollowStore = create<FollowState>()(
       leaderNickname: null,
       leaderImageUrl: null,
       leaderMusicId: null,
+      leaderLayer: null,
       leaderViewingMusicId: null,
       followerCount: 0,
       snapshotSeq: 0,
       pointRevision: 0,
       riders: [],
 
-      start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) => {
+      start: ({ email, nickname, imageUrl, musicId, snapshotSeq, layer = null }) => {
         writeStorage(STORAGE_KEYS.rideLeader, { email, nickname, imageUrl }, "session");
         set(
           {
@@ -106,6 +114,7 @@ export const useFollowStore = create<FollowState>()(
             leaderNickname: nickname,
             leaderImageUrl: imageUrl,
             leaderMusicId: musicId,
+            leaderLayer: layer,
             leaderViewingMusicId: null,
             snapshotSeq,
           },
@@ -114,6 +123,7 @@ export const useFollowStore = create<FollowState>()(
         );
       },
       setLeaderMusicId: (leaderMusicId) => set({ leaderMusicId }, false, "setLeaderMusicId"),
+      setLeaderLayer: (leaderLayer) => set({ leaderLayer }, false, "setLeaderLayer"),
       setLeaderViewingMusicId: (leaderViewingMusicId) => set({ leaderViewingMusicId }, false, "setLeaderViewingMusicId"),
       stop: () => {
         removeStorage(STORAGE_KEYS.rideLeader);
@@ -123,6 +133,7 @@ export const useFollowStore = create<FollowState>()(
             leaderNickname: null,
             leaderImageUrl: null,
             leaderMusicId: null,
+            leaderLayer: null,
             leaderViewingMusicId: null,
             snapshotSeq: 0,
             followerCount: 0,

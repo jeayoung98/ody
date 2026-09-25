@@ -149,6 +149,8 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
         imageUrl: target.imageUrl,
         musicId: r.musicId,
         snapshotSeq: r.snapshotSeq,
+        // 지도가 아직 안 떴으면 아래 `rideToLayer` 는 헛돈다 — `map-view` 가 이 값을 보고 데이터가 오면 옮긴다 (S15P21A405-676)
+        layer: r.layer,
       });
       useFollowStore.getState().setLeaderViewingMusicId(r.panel.open ? r.panel.musicId : null);
       // 인솔자가 다른 겹에 있으면 거기부터 간다 (S15P21A405-560)

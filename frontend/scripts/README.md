@@ -7,6 +7,10 @@
 | `perf-bench.js` | 콘솔에 붙여넣어 실행하는 계측 스크립트 |
 | `../PERF-LOG.md` | 측정 기록 (표 + 상세 JSON). 스크립트가 자동으로 덧붙인다 |
 | `../src/app/dev-perf-log/route.ts` | 자동 기록을 받는 **개발 전용** 라우트 |
+| `login-bench.mjs` | **배포본 로딩**을 잰다 — 로그인 상태에서 첫 곡이 그려지기까지, 망·CPU 를 고정해서. 쓰는 법은 파일 머리 주석 |
+
+`perf-bench.js` 는 개발 빌드의 **그리기**를, `login-bench.mjs` 는 배포본의 **로딩**을 잰다. 배포 빌드엔 `__odyEngine` 이 없어서
+`perf-bench.js` 는 배포본에서 돌지 않는다.
 
 앱 소스는 건드리지 않는다 — 캔버스 2D 컨텍스트와 `window.__odyEngine` 을 런타임에
 가로채서 잰다. 그래서 `draw-map.ts` 나 `map-engine.ts` 가 바뀌어도 계측이 따라 깨지지 않는다.

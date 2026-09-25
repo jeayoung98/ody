@@ -29,9 +29,20 @@ test("정렬은 원본을 건드리지 않고, 순위순은 rank 없는 것을 �
   assert.equal(items[0].artworkId, 1, "원본 순서 그대로");
 });
 
-test("주인은 이메일 앞부분, 없으면 익명", () => {
-  assert.equal(ownerLabel("luna@ody.app"), "luna");
-  assert.equal(ownerLabel(null), "익명");
+/**
+ * 백엔드가 `ownerNickname` 을 주기 시작했다 (S15P21A405-645). 이메일 앞부분은 **대비책으로만**
+ * 남는다 — 사람 이름도 아니고 남에게 이메일 일부를 흘리는 것이기도 했다.
+ */
+test("주인은 닉네임으로 적는다", () => {
+  assert.equal(ownerLabel("luna@ody.app", "루나"), "루나");
+  assert.equal(ownerLabel(null, "루나"), "루나", "이메일이 없어도 닉네임이 있으면 그것이 이름이다");
+});
+
+test("닉네임이 없으면 이메일 앞부분, 그것도 없으면 익명", () => {
+  assert.equal(ownerLabel("luna@ody.app", null), "luna", "탈퇴 등으로 user 행이 없으면 닉네임이 null 이다");
+  assert.equal(ownerLabel("luna@ody.app"), "luna", "닉네임을 안 넘긴 자리도 예전처럼 돈다");
+  assert.equal(ownerLabel("luna@ody.app", "   "), "luna", "공백뿐인 닉네임은 이름이 아니다");
+  assert.equal(ownerLabel(null, null), "익명");
   assert.equal(ownerLabel("noat"), "noat");
 });
 

@@ -45,7 +45,17 @@ export function templateScore(fitError: number): { score: number; quality: Match
 }
 
 /** 작품 주인 표시 — 닉네임이 안 와서 이메일 앞부분을 쓴다 (BACKEND-NOTES A-83) */
-export function ownerLabel(email: string | null): string {
+export function ownerLabel(email: string | null, nickname?: string | null): string {
+  /**
+   * **닉네임이 있으면 그것이 이름이다** (S15P21A405-645·654). 예전에는 백엔드가 닉네임을 안 줘서
+   * 이메일 앞부분을 이름인 척 썼다 — `hong.gildong@…` 이 `hong.gildong` 으로 보이는 식이라
+   * 사람 이름도 아니고 남에게 이메일 일부를 흘리는 것이기도 했다.
+   *
+   * 이메일 앞부분은 **닉네임이 없을 때의 대비책**으로만 남긴다. 탈퇴 등으로 user 행이 사라지면
+   * 백엔드가 닉네임에 null 을 주는데, 그때 빈칸을 두면 누구 작품인지 아예 안 보인다.
+   */
+  const name = nickname?.trim();
+  if (name) return name;
   if (!email) return "익명";
   const at = email.indexOf("@");
   return at > 0 ? email.slice(0, at) : email;

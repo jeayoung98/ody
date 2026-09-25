@@ -10,7 +10,7 @@ import { send } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePlayerStore } from "@/stores/use-player-store";
-import type { RidePanelTab, RidePlaybackEvent, RidePlaybackState } from "@/types";
+import type { RidePanelTab, RidePlaybackEvent, RidePlaybackState, RideViewRequest } from "@/types";
 
 /**
  * 따라가기의 **플레이어 쪽 배선** (2차 실시간 명세 §4.1·§5.1, S15P21A405-530).
@@ -129,6 +129,12 @@ export function endRide(at: { musicId: number | null; layer: number }): void {
    */
   const map = useMapStore.getState();
   if (at.layer < map.layer) map.surfaceTo(at.layer);
+  /**
+   * 인솔자 화면(여정·플리 별자리·주변 탐색)을 따라 보고 있었으면 **기본으로 돌아간다** (S15P21A405-653, §8-2).
+   * 그 뷰는 내 것이 아니라 인솔자 것이었다 — 내리고도 남아 있으면 끌 길이 없는 화면이 된다.
+   */
+  if (map.viewMode === "nearby") map.exitNearby();
+  else if (map.viewMode === "constellation") map.clearConstellation();
   // 평소 상태로 돌아왔다 — 서버에 다시 알려야 지도가 멈춘 채로 남지 않는다 (§4.3)
   sendJoinNow(at.layer);
   pushViewport();
@@ -177,6 +183,15 @@ export function publishSeek(positionMs: number): void {
     publishPlayback("SEEK", seekPending);
     seekPending = null;
   }, REALTIME.rideSeekThrottleMs - since);
+}
+
+/**
+ * 지도를 보는 모양을 알린다 (BACKEND-NOTES §8, S15P21A405-653). 따라오는 사람이 없어도 보낸다 — 서버가 저장해 뒀다가
+ * 나중에 타는 사람에게 준다. 따라가는 중이면 보내지 않는다(`RIDE_NOT_CAPTAIN`).
+ */
+export function publishView(view: RideViewRequest): void {
+  if (useFollowStore.getState().leaderEmail) return;
+  send(REALTIME.send.rideView, view);
 }
 
 /** 곡 상세를 열고 닫은 것을 알린다 (명세 §5.2). 닫을 때는 `open:false` 만 보낸다 */

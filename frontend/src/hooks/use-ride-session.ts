@@ -2,10 +2,13 @@
 
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { QUERY_KEYS, RIDE_ENDED_BY_DISBAND, RIDE_REJECTED, RIDE_RESUME_FAILED, STORAGE_KEYS } from "@/constants";
+import { API_ENDPOINTS, NO_GENRE_ID, QUERY_KEYS, REALTIME, RIDE_ENDED_BY_DISBAND, RIDE_REJECTED, RIDE_RESUME_FAILED, STORAGE_KEYS } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { useRideMutation, type RideTarget } from "@/hooks/mutations/use-ride-mutation";
+import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query";
+import { api } from "@/lib/api";
+import { musicToMapPoint } from "@/lib/map-point";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
 import { readStorage } from "@/lib/storage";
 import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
@@ -16,6 +19,9 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type {
+  JourneyRoute,
+  MapPoint,
+  PlaylistDetail,
   PresenceErrorPayload,
   RideEndedPayload,
   RidePanelPayload,
@@ -23,6 +29,7 @@ import type {
   RideRiderJoinedPayload,
   RideRiderLeftPayload,
   RideTrackPayload,
+  RideViewPayload,
 } from "@/types";
 
 /**
@@ -55,10 +62,27 @@ export function useRideSession(): void {
      * 인솔자가 곡을 바꿨다. **새 곡은 처음부터 튼다** — 그래서 재생 위치가 실려 오지 않는다.
      * `playable` 이 false 면 소리 없는 곡이라 **자리만 옮기고 틀지 않는다.**
      */
+    let trackSeq = 0;
     const stopTrack = onType<RideTrackPayload>(["RIDE_TRACK"], (p) => {
-      const ride = useFollowStore.getState();
-      if (!ride.leaderEmail) return;
+      if (!useFollowStore.getState().leaderEmail) return;
+      /**
+       * **제목을 받은 뒤 넘어간다** (S15P21A405-656). 바로 넘기면 플레이어바가 상세가 올 때까지 "Track 3242" 를
+       * 보인다. 상세는 캐시(`staleTime: Infinity`)에 있으면 즉시, 없으면 한 번의 조회다. 상한을 넘기거나 실패하면
+       * 제목 없이 진행한다. 기다리는 사이 더 새 곡이 오면 먼저 것은 버린다 — 옛 곡을 뒤늦게 틀면 안 된다.
+       */
+      const seq = ++trackSeq;
+      const detail = qc.fetchQuery(musicDetailQueryOptions(p.musicId)).catch(() => undefined);
+      const deadline = new Promise<void>((resolve) => setTimeout(resolve, REALTIME.rideTrackTitleWaitMs));
+      void Promise.race([detail, deadline]).then(() => {
+        if (seq !== trackSeq) return;
+        const ride = useFollowStore.getState();
+        if (!ride.leaderEmail) return;
+        applyTrack(p);
+      });
+    });
 
+    function applyTrack(p: RideTrackPayload) {
+      const ride = useFollowStore.getState();
       ride.setLeaderMusicId(p.musicId);
       /**
        * **겹도 같이 따라간다** (S15P21A405-560). 알림이 `layer` 를 주는데 버리고 있었다 —
@@ -72,7 +96,7 @@ export function useRideSession(): void {
       getMapEngine()?.rideTo(p.musicId);
       if (p.playable) playFrom(p.musicId, 0, true);
       else usePlayerStore.getState().pause();
-    });
+    }
 
     /**
      * 인솔자가 재생·정지·구간 이동을 했다.
@@ -104,6 +128,69 @@ export function useRideSession(): void {
       getMapEngine()?.rideViewing(p.musicId);
       useMapStore.getState().selectMusic(p.musicId);
       panel.openSong(p.musicId);
+    });
+
+    /**
+     * 인솔자가 지도를 보는 모양을 바꿨다 (BACKEND-NOTES §8, S15P21A405-653). **내용은 안 온다** — 번호만 받고
+     * 각자 조회한다. 그래야 한 명이 조회에 실패해도 그 사람만 빈 화면이다.
+     *
+     * 여정·플리는 조회가 비동기라 **그 사이 더 새 화면이 오면 먼저 것은 버린다** (`viewSeq`). 안 그러면 늦게
+     * 도착한 옛 여정이 새 플리 별자리를 덮는다. 주변 탐색은 `panelHandled` 로 연다 — 중심곡 상세는 인솔자의
+     * `RIDE_PANEL` 이 따로 옮기므로 여기서 또 열면 두 번 열린다.
+     */
+    let viewSeq = 0;
+    const stopView = onType<RideViewPayload>(["RIDE_VIEW"], (p) => {
+      if (!useFollowStore.getState().leaderEmail) return;
+      const seq = ++viewSeq;
+      const map = useMapStore.getState();
+      const fresh = () => seq === viewSeq && !!useFollowStore.getState().leaderEmail;
+      if (p.kind === "nearby" && p.centerMusicId != null) {
+        map.enterNearby(p.centerMusicId, true);
+        return;
+      }
+      if (p.kind === "journey" && p.startMusicId != null && p.endMusicId != null) {
+        const start = p.startMusicId;
+        const end = p.endMusicId;
+        void qc
+          .fetchQuery({
+            queryKey: QUERY_KEYS.journey.route(start, end),
+            queryFn: () => api<JourneyRoute>(`${API_ENDPOINTS.journey.route}?start=${start}&end=${end}`),
+            staleTime: 10 * 60 * 1000,
+          })
+          .then((route) => {
+            if (!fresh() || route.stops.length < 2) return;
+            // 좌표를 함께 넘긴다 — 경로 곡은 상주 집합 밖일 수 있어 엔진이 모른다 (`journey-panel` 과 같다)
+            useMapStore.getState().showConstellation(
+              route.stops.map((s) => s.id),
+              route.stops.map((s) => ({ musicId: s.id, pc: s.pc, genreId: NO_GENRE_ID, weight: 1, title: s.title, artist: s.artist, youtubeUrl: null, playable: true })),
+              { kind: "journey", startMusicId: route.startMusicId, endMusicId: route.endMusicId },
+            );
+          })
+          .catch(() => {
+            /* 나만 빈 화면 — 인솔자 쪽 잘못이 아니라 알리지 않는다 */
+          });
+        return;
+      }
+      if (p.kind === "playlist" && p.playlistId != null) {
+        const playlistId = p.playlistId;
+        void qc
+          .fetchQuery({ queryKey: QUERY_KEYS.playlist.detail(playlistId), queryFn: () => api<PlaylistDetail>(API_ENDPOINTS.playlist.detail(playlistId)) })
+          .then((pl) => {
+            if (!fresh() || pl.items.length < 2) return;
+            useMapStore.getState().showConstellation(
+              pl.items.map((it) => it.musicId),
+              pl.items.map((it) => musicToMapPoint(it.music)).filter((pt): pt is MapPoint => pt != null),
+              { kind: "playlist", playlistId },
+            );
+          })
+          .catch(() => {
+            /* 위와 같다 */
+          });
+        return;
+      }
+      // 기본 지도 (또는 재현할 수 없는 값) — 인솔자 화면을 따라 켠 것을 끈다
+      if (map.viewMode === "nearby") map.exitNearby();
+      else if (map.viewMode === "constellation") map.clearConstellation();
     });
 
     /**
@@ -155,6 +242,7 @@ export function useRideSession(): void {
       stopTrack();
       stopPlayback();
       stopPanel();
+      stopView();
       stopEnded();
       stopRiders();
       stopErr();

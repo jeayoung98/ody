@@ -47,6 +47,8 @@ export const REALTIME = {
      */
     ridePlayback: "/app/ride/playback",
     ridePanel: "/app/ride/panel",
+    /** 인솔자가 지도를 보는 모양(기본·여정·플리·주변 탐색) — BACKEND-NOTES §8 (S15P21A405-591 · 653) */
+    rideView: "/app/ride/view",
   },
 
   /**
@@ -54,6 +56,12 @@ export const REALTIME = {
    * **마지막 위치는 반드시 나간다** — 안 그러면 동승자가 끌다 만 자리에 멈춘다.
    */
   rideSeekThrottleMs: 500,
+  /**
+   * `RIDE_TRACK` 을 받고 곡 상세(제목)를 **이만큼까지 기다린 뒤** 넘어간다 (S15P21A405-656). 상세 없이 넘어가면
+   * 플레이어바가 "Track 3242" 를 보이다 제목으로 바뀐다. 대개 캐시나 한 번의 조회라 수십~수백 ms 다.
+   * 넘기면 제목 없이 진행한다 — 곡을 안 트는 것보다 낫다
+   */
+  rideTrackTitleWaitMs: 1500,
   /** 한 인솔자를 따라갈 수 있는 최대 인원 (2차 명세 §10). 넘으면 `RIDE_FULL` 이다 */
   maxRiders: 20,
   /**

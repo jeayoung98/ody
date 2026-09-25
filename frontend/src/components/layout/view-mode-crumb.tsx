@@ -1,5 +1,6 @@
 "use client";
 
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
@@ -35,6 +36,8 @@ export default function ViewModeCrumb() {
   const openJourney = usePanelStore((s) => s.openJourney);
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
+  /** 따라가는 동안 뷰는 인솔자 것이다 (S15P21A405-653, B-5) — 여기서 끄면 다음 알림까지 인솔자와 다른 화면이 된다 */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
 
   const nearby = viewMode === "nearby";
   const constellation = viewMode === "constellation";
@@ -64,8 +67,8 @@ export default function ViewModeCrumb() {
    * 예전에는 켜져 있을 때 안의 ✕ 만 먹었다 — 칩은 누를 만한 크기인데 그 안의 10px 만 눌리는
    * 게 이유가 없다. 눌 데가 없으면 `null` 이고, 그때는 칩이 그냥 표시가 된다.
    */
-  const press = on ? turnOff : canOpen ? openConstellation : null;
-  const hint = on ? `${label} 끄기` : press ? "별자리 뷰 켜기" : undefined;
+  const press = riding ? null : on ? turnOff : canOpen ? openConstellation : null;
+  const hint = riding ? "따라가는 동안은 인솔자의 화면을 같이 봐요" : on ? `${label} 끄기` : press ? "별자리 뷰 켜기" : undefined;
 
   // 켜져 있지도, 켤 수 있지도 않으면 그릴 것이 없다
   if (!on && !canOpen) return null;
@@ -91,7 +94,7 @@ export default function ViewModeCrumb() {
           닫는 길임을 보이는 **표식**이다 — 버튼이 아니다. 칩 안에 또 버튼을 두면 클릭이 위로
           번져 핸들러가 두 번 돌고, 별자리 뷰는 토글이라 껐다가 그 자리에서 다시 켜진다.
         */}
-        {on && <span aria-hidden className="ml-0.5 text-ink-3 transition-colors group-hover:text-ink">✕</span>}
+        {on && !riding && <span aria-hidden className="ml-0.5 text-ink-3 transition-colors group-hover:text-ink">✕</span>}
       </span>
     </div>
   );

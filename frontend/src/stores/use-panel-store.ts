@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { useFollowStore } from "./use-follow-store";
 import { devtools } from "zustand/middleware";
 import type { PanelType } from "@/constants";
+import { pushHistory, snapshotOf, type FollowType, type PanelReturn } from "@/lib/panel-history";
 import { useJourneyStore } from "./use-journey-store";
 import { useMapStore } from "./use-map-store";
 
@@ -50,21 +51,36 @@ function hideComposer() {
   if (useJourneyStore.getState().isComposerOpen) useJourneyStore.getState().closeComposer();
 }
 
-/** 패널을 여는 모든 길이 거쳐 간다 — 한 군데라도 빠지면 지도 뷰가 어긋난 채 남는다 */
+/**
+ * 패널을 여는 모든 길이 거쳐 간다 — 한 군데라도 빠지면 지도 뷰가 어긋난 채 남는다.
+ * **새로 여는 것이라 스택을 비운다** (S15P21A405-659). 타고 들어가는 길은 {@link drill} 이다.
+ */
 const open = (panel: PanelType, patch: object = {}) => {
   syncMapView(panel);
   hideComposer();
-  return { activePanel: panel, back: null, snap: OPEN_SNAP, ...patch } as const;
+  return { activePanel: panel, history: [] as PanelReturn[], feedFollows: null, snap: OPEN_SNAP, ...patch } as const;
 };
 
+/** 돌아갈 자리 하나를 패널 상태 조각으로 */
+function patchOf(target: PanelReturn): object {
+  switch (target.panel) {
+    case "song":
+      return { musicId: target.musicId };
+    case "playlist":
+      return { playlistId: target.playlistId };
+    case "feed":
+      return { profileEmail: target.profileEmail, feedFollows: target.follows ?? null };
+    default:
+      return {};
+  }
+}
+
 /**
- * 곡 상세에서 **돌아갈 자리**. 여정·플리 목록에서 곡을 눌러 들어왔거나, 주변 음악 카드로
- * 이웃에 들어왔을 때 잡힌다 (S15P21A405-384) — 지도에서 바로 연 곡 상세에는 돌아갈 자리가 없다.
+ * 돌아갈 자리 (S15P21A405-384 · 610 · 659). 정의는 `lib/panel-history` — 여기서는 이름만 다시 내보낸다.
  *
- * **한 겹만 기억한다.** 카드를 타고 계속 들어가도 쌓지 않는다 — 돌아가는 곳은 늘 "직전 곡" 이고,
- * 더 거슬러 올라가는 길은 지도가 대신한다.
+ * **이제 스택이다.** 예전에는 한 겹만 기억해서 카드를 타고 계속 들어가면 첫 자리로 못 돌아갔다.
  */
-export type PanelReturn = { panel: "journey" } | { panel: "playlist"; playlistId: number } | { panel: "song"; musicId: number } | { panel: "friends" };
+export type { FollowType, PanelReturn };
 
 /**
  * 폰에서 시트가 설 수 있는 **세 자리** (S15P21A405-416). 숫자가 클수록 많이 올라온다.
@@ -95,8 +111,13 @@ interface PanelState {
   playlistId: number | null;
   /** 피드 대상 이메일. null이면 내 프로필 */
   profileEmail: string | null;
-  /** 뒤로가기로 돌아갈 자리. null이면 뒤로가기를 그리지 않는다 */
-  back: PanelReturn | null;
+  /**
+   * 타고 들어온 길 — 뒤로가기가 되돌아갈 자리들. 맨 뒤가 직전 자리다. 비어 있으면 뒤로가기를 그리지 않는다
+   * (S15P21A405-659). 패널 안에서 눌러 연 것만 쌓이고, 레일·탭·지도·플레이어바·검색·닫기는 비운다
+   */
+  history: PanelReturn[];
+  /** 프로필에서 팔로워·팔로잉 목록을 보는 중인가. `null` 이면 본문. 되돌아갈 때 목록까지 복원하려고 스토어에 둔다 */
+  feedFollows: FollowType | null;
   /**
    * 시트가 어느 **단**에 있는가 (S15P21A405-416).
    *
@@ -122,15 +143,28 @@ interface PanelState {
    * 여기 한 군데만 고치면 된다.
    */
   openSongFromMap: (musicId: number, snap?: SheetSnap) => void;
-  /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 돌아갈 자리를 기억한다 */
+  /**
+   * **타고 들어간다** (S15P21A405-659) — 지금 패널을 스택에 쌓고 `target` 을 연다. 패널 안에서 사람·플리·곡을
+   * 눌렀을 때의 유일한 길이다. 레일·탭·지도에서 여는 것은 `open*` 이고 스택을 비운다
+   */
+  drill: (target: PanelReturn) => void;
+  /** 지금 열린 목록(여정·플리)에서 곡 상세로 들어간다 — 3 단으로 연다 (`drill` + snap) */
   openSongFromList: (musicId: number) => void;
-  /** 주변 음악 카드로 이웃 곡에 들어간다 — 직전 곡을 돌아갈 자리로 기억한다 (S15P21A405-384) */
-  openNeighborSong: (musicId: number, fromMusicId: number) => void;
-  /** 기억해 둔 자리로 돌아간다 */
-  goBack: () => void;
+  /** 주변 음악 카드로 이웃 곡에 들어간다 — 직전 곡이 스택에 남는다 (S15P21A405-384) */
+  openNeighborSong: (musicId: number) => void;
+  /** 스택의 마지막 자리로 돌아간다. 돌아간 자리를 돌려준다 — 폰에서 탭 화면으로 옮겨야 할지는 부르는 쪽이 정한다 */
+  goBack: () => PanelReturn | null;
+  /** 프로필 안에서 팔로워·팔로잉 목록을 편다 / 접는다 */
+  openFollows: (type: FollowType) => void;
+  closeFollows: () => void;
+  /**
+   * 열려 있는 곡 상세를 **재생이 넘어간 곡으로** 갈아 끼운다 (S15P21A405-656). `openSong` 과 달리 돌아갈 자리·시트
+   * 단을 그대로 둔다 — 순차 재생이 넘어갈 때마다 목록으로 돌아갈 길이 지워지면 안 된다. 곡 상세가 아니면 아무 일도 없다
+   */
+  followSong: (musicId: number) => void;
   openPlaylist: (playlistId: number) => void;
-  /** `back` 은 돌아갈 자리. 주변 사람 패널에서 열 때 `{ panel: "friends" }` 를 넘긴다 (S15P21A405-610) */
-  openFeed: (email?: string | null, back?: PanelReturn | null) => void;
+  /** 새로 연다 — 레일·탭·지도 표식. 패널 안에서 사람을 눌렀으면 `drill({ panel: "feed", ... })` 다 */
+  openFeed: (email?: string | null) => void;
   openJourney: () => void;
   openFriends: () => void;
   openChart: () => void;
@@ -166,10 +200,12 @@ export const usePanelStore = create<PanelState>()(
       musicId: null,
       playlistId: null,
       profileEmail: null,
-      back: null,
+      history: [],
+      feedFollows: null,
       snap: OPEN_SNAP,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
+      followSong: (musicId) => set((s) => (s.activePanel === "song" && s.musicId !== musicId ? { musicId } : {}), false, "followSong"),
 
       /**
        * `snap` 을 주면 그 자리에 선다 (S15P21A405-593). **폰은 1 단으로 연다** — 별을 눌렀을 때
@@ -178,39 +214,41 @@ export const usePanelStore = create<PanelState>()(
        */
       openSongFromMap: (musicId, snap) => set(open("song", snap ? { musicId, snap } : { musicId }), false, "openSongFromMap"),
 
-      openSongFromList: (musicId) => {
-        const { activePanel, playlistId } = get();
-        const back: PanelReturn | null =
-          activePanel === "journey" ? { panel: "journey" } : activePanel === "playlist" && playlistId != null ? { panel: "playlist", playlistId } : null;
-        /**
-         * **3 단으로 연다** (S15P21A405-593). 목록에서 곡을 골라 들어간 것은 그 곡을 지금
-         * 보겠다는 뜻인데, 여는 자리(2 단)로 열면 시트가 도리어 **내려가면서** 상세가 떠서
-         * 방금 누른 것이 작아지는 것처럼 보인다. 지도에서 별을 눌러 여는 길(2 단)과 다른 이유는
-         * 그쪽은 지도를 보며 곡을 갈아 끼우는 동작이라 지도가 남아야 하기 때문이다.
-         */
-        set(open("song", { musicId, back, snap: 3 }), false, "openSongFromList");
-      },
+      drill: (target) =>
+        set(
+          (s) => {
+            const history = pushHistory(s.history, snapshotOf(s), target);
+            /**
+             * 곡은 **3 단으로 연다** (S15P21A405-593). 목록에서 곡을 골라 들어간 것은 그 곡을 지금
+             * 보겠다는 뜻인데, 여는 자리(2 단)로 열면 시트가 도리어 **내려가면서** 상세가 떠서
+             * 방금 누른 것이 작아지는 것처럼 보인다. 지도에서 별을 눌러 여는 길(2 단)과 다른 이유는
+             * 그쪽은 지도를 보며 곡을 갈아 끼우는 동작이라 지도가 남아야 하기 때문이다.
+             */
+            const snap = target.panel === "song" ? { snap: 3 as SheetSnap } : {};
+            return { ...open(target.panel, patchOf(target)), ...snap, history };
+          },
+          false,
+          `drill/${target.panel}`,
+        ),
 
-      openNeighborSong: (musicId, fromMusicId) =>
-        set(open("song", { musicId, back: { panel: "song", musicId: fromMusicId } }), false, "openNeighborSong"),
+      openSongFromList: (musicId) => get().drill({ panel: "song", musicId }),
+
+      openNeighborSong: (musicId) => get().drill({ panel: "song", musicId }),
 
       goBack: () => {
-        const back = get().back;
-        if (!back) return;
-        if (back.panel === "journey") set({ activePanel: "journey", back: null, snap: OPEN_SNAP }, false, "goBack/journey");
-        else if (back.panel === "friends") set({ activePanel: "friends", back: null, snap: OPEN_SNAP }, false, "goBack/friends");
-        else if (back.panel === "song") set({ activePanel: "song", musicId: back.musicId, back: null, snap: OPEN_SNAP }, false, "goBack/song");
-        else set({ activePanel: "playlist", playlistId: back.playlistId, back: null, snap: OPEN_SNAP }, false, "goBack/playlist");
+        const history = get().history;
+        const target = history[history.length - 1];
+        if (!target) return null;
+        syncMapView(target.panel);
+        set({ activePanel: target.panel, ...patchOf(target), history: history.slice(0, -1), snap: OPEN_SNAP }, false, `goBack/${target.panel}`);
+        return target;
       },
 
+      openFollows: (type) => set((s) => (s.activePanel === "feed" ? { feedFollows: type } : {}), false, "openFollows"),
+      closeFollows: () => set({ feedFollows: null }, false, "closeFollows"),
+
       openPlaylist: (playlistId) => set(open("playlist", { playlistId }), false, "openPlaylist"),
-      /**
-       * **돌아갈 자리는 여는 쪽이 말한다** (S15P21A405-610). 처음엔 "지금 주변 사람 패널이 열려 있나"
-       * 로 추측했는데, 좁은 화면의 `/friends` 탭처럼 패널이 아닌 자리에서 열면 그 추측이 빗나간다.
-       * 피드 안(팔로워·팔로잉 목록)에서 다른 사람으로 갈아탈 때는 들고 있던 기억을 그대로 잇는다.
-       */
-      openFeed: (email = null, back = null) =>
-        set((s) => open("feed", { profileEmail: email, back: back ?? (s.activePanel === "feed" ? s.back : null) }), false, "openFeed"),
+      openFeed: (email = null) => set(open("feed", { profileEmail: email }), false, "openFeed"),
       openJourney: () => set(open("journey"), false, "openJourney"),
       openFriends: () => set(open("friends"), false, "openFriends"),
       openChart: () => set(open("chart"), false, "openChart"),
@@ -218,7 +256,7 @@ export const usePanelStore = create<PanelState>()(
       toggle: (panel) => {
         if (get().activePanel === panel) {
           hideMapView();
-          set({ activePanel: null, back: null }, false, "toggle/close");
+          set({ activePanel: null, history: [], feedFollows: null }, false, "toggle/close");
           return;
         }
         if (panel === "feed") set(open("feed", { profileEmail: null }), false, "toggle/feed");
@@ -240,11 +278,11 @@ export const usePanelStore = create<PanelState>()(
         const riding = ride.leaderViewingMusicId ?? ride.leaderMusicId;
         if (ride.leaderEmail && riding != null) {
           syncMapView("song");
-          set({ activePanel: "song", musicId: riding, back: null, snap: 1 }, false, "close/riding");
+          set({ activePanel: "song", musicId: riding, history: [], feedFollows: null, snap: 1 }, false, "close/riding");
           return;
         }
         hideMapView();
-        set({ activePanel: null, back: null, snap: OPEN_SNAP }, false, "close");
+        set({ activePanel: null, history: [], feedFollows: null, snap: OPEN_SNAP }, false, "close");
       },
 
       /** 접기는 닫기가 아니다 — 별자리도 열린 패널도 그대로 두고 자리만 비켜 준다 */

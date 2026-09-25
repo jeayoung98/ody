@@ -2967,7 +2967,19 @@ export class MapEngine {
      * 곡을 옮기는 것은 `rideTo` 가 맡는 일이다. 여기서는 표시 정보만 갱신하고 비켜난다.
      */
     if (!shouldRestartFollow(this.follow ? { email: this.follow.leader.email, layer: this.followLayer } : null, { email: leader.email, layer: this.layer })) {
-      this.follow!.leader = { ...this.follow!.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      const f = this.follow!;
+      f.leader = { ...f.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      /**
+       * **곡이 바뀌어 있으면 그리로 옮긴다** (S15P21A405-676). 따라가기를 누르는 순간 세우는 화면은 인솔자 곡을
+       * 모를 수 있어 **내 곡을 임시로** 쓴다 (`use-ride-mutation` onMutate — 프로필에서 탈 때는 `nowPlaying` 이 없어
+       * 늘 그렇다, A-35). 탑승 응답이 진짜 곡을 가져오면 여기로 다시 오는데, 예전에는 표시 정보만 갱신하고
+       * 비켜나서 **우주선도 뷰도 임시 곡에 남았다** — 새로고침해야 가운데로 왔다.
+       * `rideTo` 가 이미 그리로 날고 있으면(`RIDE_TRACK`) 건드리지 않는다 — 그 비행을 지우면 559 의 버그가 돌아온다.
+       */
+      if (leader.musicId !== f.playingMusicId && f.mv?.toId !== leader.musicId) {
+        f.viewingMusicId = this.index.has(leader.viewingMusicId) ? leader.viewingMusicId : leader.musicId;
+        this.launchLeaderMove(performance.now(), f, leader.musicId, { notify: false });
+      }
       return;
     }
     this.travelToId = null;

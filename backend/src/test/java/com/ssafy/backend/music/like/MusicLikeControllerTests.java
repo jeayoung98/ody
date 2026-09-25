@@ -24,6 +24,7 @@ import org.springframework.security.authentication.UsernamePasswordAuthenticatio
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 import com.ssafy.backend.music.dto.Location;
+import com.ssafy.backend.music.dto.MusicDetail;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.config.SecurityConfig;
@@ -68,32 +69,36 @@ class MusicLikeControllerTests {
     @Test
     void liked_returnsVirtualPlaylistOrder() throws Exception {
         Location location = new Location(0.5, -0.25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0);
-        LikedMusicItem item = new LikedMusicItem(7, "title", "artist", 180,
-                "https://youtube.test/7", "video7", location, 42,
-                OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
+        MusicDetail music = new MusicDetail(7L, "mbid7", "title", "artist", 120.0, 180, "album",
+                "album-mbid-7", 2024, "https://youtube.test/7", "video7", location, 42, 3);
+        LikedMusicItem item = new LikedMusicItem(music, OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
         when(service.findAll("me@example.com")).thenReturn(new LikedMusicResponse(List.of(item)));
 
         mockMvc.perform(get("/api/music/liked")
                         .principal(new UsernamePasswordAuthenticationToken("me@example.com", null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].musicId").value(7))
+                // 곡 필드는 MusicDetail 과 같은 모양으로 평평하게 나간다 — 플레이리스트 상세의 곡과 같다 [S15P21A405-650]
+                .andExpect(jsonPath("$.data.content[0].id").value(7))
+                .andExpect(jsonPath("$.data.content[0].music").doesNotExist())
                 .andExpect(jsonPath("$.data.content[0].videoId").value("video7"))
-                // 좋아요 목록을 재생하면 FE 가 별자리를 띄운다 — 좌표·재생 수가 있어야 한다 [S15P21A405-650]
                 .andExpect(jsonPath("$.data.content[0].location").exists())
-                .andExpect(jsonPath("$.data.content[0].playCnt").value(42));
+                .andExpect(jsonPath("$.data.content[0].playCnt").value(42))
+                .andExpect(jsonPath("$.data.content[0].albumMbid").value("album-mbid-7"))
+                .andExpect(jsonPath("$.data.content[0].likedAt").exists());
     }
 
     /** 좌표가 없는 곡도 목록에서 빠지지 않는다. FE 는 그 곡만 별자리에서 뺀다. */
     @Test
     void liked_keepsTrackWithoutLocation() throws Exception {
-        LikedMusicItem item = new LikedMusicItem(8, "title", "artist", 180,
-                null, null, null, null, OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
+        MusicDetail music = new MusicDetail(8L, null, "title", "artist", null, 180, null,
+                null, null, null, null, null, null, null);
+        LikedMusicItem item = new LikedMusicItem(music, OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
         when(service.findAll("me@example.com")).thenReturn(new LikedMusicResponse(List.of(item)));
 
         mockMvc.perform(get("/api/music/liked")
                         .principal(new UsernamePasswordAuthenticationToken("me@example.com", null)))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.data.content[0].musicId").value(8))
+                .andExpect(jsonPath("$.data.content[0].id").value(8))
                 .andExpect(jsonPath("$.data.content[0].location").doesNotExist());
     }
 }

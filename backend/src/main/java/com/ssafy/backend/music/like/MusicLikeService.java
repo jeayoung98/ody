@@ -59,14 +59,9 @@ public class MusicLikeService {
 
         List<LikedMusicItem> items = likes.stream()
                 .filter(like -> byId.containsKey(like.getMusicId()))
-                .map(like -> toItem(byId.get(like.getMusicId()), like.getLikedAt()))
+                .map(like -> new LikedMusicItem(byId.get(like.getMusicId()), like.getLikedAt()))
                 .toList();
         return new LikedMusicResponse(items);
     }
 
-    private static LikedMusicItem toItem(MusicDetail music, OffsetDateTime likedAt) {
-        return new LikedMusicItem(
-                music.id(), music.title(), music.artist(), music.duration(),
-                music.youtubeUrl(), music.videoId(), music.location(), music.playCnt(), likedAt);
-    }
 }

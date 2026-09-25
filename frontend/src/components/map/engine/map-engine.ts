@@ -2638,6 +2638,31 @@ export class MapEngine {
     this.meFlight = null;
   }
 
+  /**
+   * 디버그 (S15P21A405-670) — 콘솔용. 지금 겹·보는 경로·재생 경로·갈래 판정·돌아갈 길을 한눈에.
+   * `window.__ODY_ENGINE__.debugHome()` (개발 빌드만, `engine-registry`).
+   */
+  debugHome() {
+    const id = this.playingId ?? this.myId;
+    const i = id != null ? this.index.get(id) : undefined;
+    return {
+      layer: this.layer,
+      viewBoxes: this.boxes,
+      home: this.home,
+      playingId: this.playingId,
+      myId: this.myId,
+      known: i != null,
+      isAlive: id != null && this.isAlive(id),
+      inBranch: this.inBranch(id),
+      playingElsewhere: this.playingElsewhere(),
+      route: this.home ? homeRoute(this.boxes, this.home.boxes) : null,
+      anim: this.anim ? { layer: this.anim.layer, big: this.anim.big } : null,
+      pending: !!this.pending,
+      stack: this.stack.map((f) => f.layer),
+      homeRoute: this.homeRoute,
+    };
+  }
+
   /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
   canGoHome() {
     return this.home != null && this.index.has(this.home.musicId);
@@ -2694,6 +2719,7 @@ export class MapEngine {
     this.camTarget = null;
     const target = h.boxes.length;
     const route = homeRoute(this.boxes, h.boxes);
+    if (process.env.NODE_ENV !== "production") console.info("[goHome]", { layer: this.layer, viewBoxes: this.boxes, home: h, route, pending: !!this.pending, stack: this.stack.map((f) => f.layer) });
 
     // **같은 갈래의 같은 겹**이면 카메라만 — 곡 집합을 다시 받을 이유가 없다. 같은 겹이어도 다른 갈래면 아래 길이다
     if (route.riseTo === this.layer && route.dives.length === 0) {

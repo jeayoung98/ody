@@ -128,6 +128,11 @@ interface PanelState {
   openNeighborSong: (musicId: number, fromMusicId: number) => void;
   /** 기억해 둔 자리로 돌아간다 */
   goBack: () => void;
+  /**
+   * 열려 있는 곡 상세를 **재생이 넘어간 곡으로** 갈아 끼운다 (S15P21A405-656). `openSong` 과 달리 돌아갈 자리·시트
+   * 단을 그대로 둔다 — 순차 재생이 넘어갈 때마다 목록으로 돌아갈 길이 지워지면 안 된다. 곡 상세가 아니면 아무 일도 없다
+   */
+  followSong: (musicId: number) => void;
   openPlaylist: (playlistId: number) => void;
   /** `back` 은 돌아갈 자리. 주변 사람 패널에서 열 때 `{ panel: "friends" }` 를 넘긴다 (S15P21A405-610) */
   openFeed: (email?: string | null, back?: PanelReturn | null) => void;
@@ -170,6 +175,7 @@ export const usePanelStore = create<PanelState>()(
       snap: OPEN_SNAP,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
+      followSong: (musicId) => set((s) => (s.activePanel === "song" && s.musicId !== musicId ? { musicId } : {}), false, "followSong"),
 
       /**
        * `snap` 을 주면 그 자리에 선다 (S15P21A405-593). **폰은 1 단으로 연다** — 별을 눌렀을 때

@@ -41,6 +41,64 @@ export function glowSprites(): HTMLCanvasElement[] {
 }
 
 /** 먼 배경 별 — 화면 비율 좌표에 고정 */
+/**
+ * **먼 별밭 두 겹을 통째로 구워 둔 타일** (S15P21A405-499).
+ *
+ * 배경 별밭은 프레임당 5,170번 `drawImage` 를 부른다. 트레이스에서 `drawBackground` 가
+ * `drawMap` 의 88%(11,232ms)를 먹은 원인이 여기였는데, **draw 한 번이 비싼 게 아니라 횟수가
+ * 많은 것**이었다 — 스프라이트를 미리 줄여 1:1 로 찍거나(A) 알파를 단계로 뭉쳐도(B) 오히려
+ * 느려졌다 (실측: 6.43 → 7.13 / 7.05ms). 줄여야 하는 것은 호출 수다.
+ *
+ * 그래서 시차 중간·원경 두 겹(1,100 + 770 = 1,870 draw)을 화면 한 장에 구워 두고 **감아 붙인다**
+ * (4 blit × 2겹). 타일이 곧 별밭의 한 주기라 감아 붙이면 **시차는 그대로 살아 있다.**
+ *
+ * **잃는 것: 이 두 겹의 반짝임.** 별마다 다른 위상으로 깜빡이던 것이 평균 밝기로 굳는다.
+ * 가장 먼 별밭과 가까운 별먼지는 손대지 않아 화면의 반짝임 자체는 남는다 — 이 두 겹은
+ * `farFieldAlpha` 가 곱해져 원래도 어두운 쪽이라 굳은 것이 덜 보인다.
+ *
+ * **밝기(aK)는 굽지 않는다.** 겹 깊이에 따라 `dim` 이 계속 변하는데 그때마다 다시 구우면
+ * 아무것도 아끼지 못한다. 붙일 때 `globalAlpha` 로 곱한다 — `lighter` 는 더하기라 전체에
+ * 한 번 곱하는 것과 별마다 곱하는 것이 같다.
+ *
+ * **기기 픽셀이 아니라 CSS 픽셀로 굽는다.** dpr 2 로 구우면 1600x900 화면에서 두 장이 49MB 다
+ * (실측). CSS 픽셀이면 12.2MB 이고, 대신 빨라지는 폭이 1.67배에서 1.33배로 준다 — 이 두 겹이
+ * 화면에서 가장 어두운 겹이라 살짝 뭉개지는 쪽을 골랐다 (S15P21A405-586 의 캐시 예산과 같은 저울).
+ */
+const farTiles = new Map<string, HTMLCanvasElement>();
+
+export interface FarFieldTile {
+  canvas: HTMLCanvasElement;
+  /** 타일 한 변 = 별밭 한 주기 (CSS px) */
+  w: number;
+  h: number;
+}
+
+export function farFieldTile(id: string, W: number, H: number, sizeK: number, stars: SkyStar[], n: number): FarFieldTile {
+  const w = W + 64;
+  const h = H + 64;
+  const key = `${id}:${w}x${h}`;
+  const hit = farTiles.get(key);
+  if (hit) return { canvas: hit, w, h };
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d")!;
+  g.globalCompositeOperation = "lighter";
+  for (let k = 0; k < n; k++) {
+    const bg = stars[k];
+    const px = (bg.u % 1) * w - 32;
+    const py = (bg.v % 1) * h - 32;
+    const d = bg.d0 * sizeK;
+    // 반짝임(0.55~1.0)의 한가운데 값으로 굳힌다 — 평균보다 밝지도 어둡지도 않게
+    g.globalAlpha = (0.06 + bg.lum * 0.19) * 0.775;
+    g.drawImage(glowSprites()[bg.spr], px - d / 2, py - d / 2, d, d);
+  }
+  // 화면이 바뀌면 이전 크기 타일은 쓸 데가 없다. 두 겹뿐이라 통째로 비운다
+  if (farTiles.size >= 2) farTiles.clear();
+  farTiles.set(key, c);
+  return { canvas: c, w, h };
+}
+
 export interface SkyStar {
   i: number;
   u: number;
@@ -48,19 +106,29 @@ export interface SkyStar {
   m: number;
   spr: number;
   lum: number;
+  /**
+   * 크기의 밑값(px). `m` 만으로 정해지므로 **프레임마다 다시 잴 이유가 없다** (S15P21A405-499).
+   * 예전에는 `Math.pow(m, 1.5)` 를 별마다 매 프레임 돌렸다 — 배경 별이 5,170개라 그만큼이었다.
+   * 쓰는 쪽은 여기에 그 겹의 `sizeK` 만 곱한다.
+   */
+  d0: number;
 }
 let sky: SkyStar[] | null = null;
 export function skyStars(): SkyStar[] {
   if (sky) return sky;
   const rnd = mulberry32(20260902);
-  sky = Array.from({ length: 1100 }, (_, i) => ({
-    i,
-    u: rnd(),
-    v: rnd(),
-    m: Math.pow(rnd(), 1.9),
-    spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
-    lum: Math.pow(rnd(), 0.7),
-  }));
+  sky = Array.from({ length: 1100 }, (_, i) => {
+    const m = Math.pow(rnd(), 1.9);
+    return {
+      i,
+      u: rnd(),
+      v: rnd(),
+      m,
+      spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
+      lum: Math.pow(rnd(), 0.7),
+      d0: 1.3 + Math.pow(m, 1.5) * 4.2,
+    };
+  });
   return sky;
 }
 
@@ -73,15 +141,19 @@ let dust: SkyStar[] | null = null;
 export function dustStars(): SkyStar[] {
   if (dust) return dust;
   const rnd = mulberry32(20260912);
-  dust = Array.from({ length: 2200 }, (_, i) => ({
-    i,
-    u: rnd(),
-    v: rnd(),
+  dust = Array.from({ length: 2200 }, (_, i) => {
     // skyStars(1.9)보다 완만해 큰 별의 비율이 높다 — 상주 별과 같은 크기대로 올라온다
-    m: Math.pow(rnd(), 1.15),
-    spr: Math.floor(rnd() * NO_GENRE_ID), // 장식이라 색 있는 장르만 (무장르 회색 제외)
-    lum: Math.pow(rnd(), 0.6),
-  }));
+    const m = Math.pow(rnd(), 1.15);
+    return {
+      i,
+      u: rnd(),
+      v: rnd(),
+      m,
+      spr: Math.floor(rnd() * NO_GENRE_ID), // 장식이라 색 있는 장르만 (무장르 회색 제외)
+      lum: Math.pow(rnd(), 0.6),
+      d0: 1.3 + Math.pow(m, 1.5) * 4.2,
+    };
+  });
   return dust;
 }
 

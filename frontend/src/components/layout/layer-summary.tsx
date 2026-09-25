@@ -14,7 +14,8 @@ export default function LayerSummary() {
 
   return (
     <p // 들여쓰기는 자취 첫 칸의 좌우 여백(px-2)에 맞춘다 — 글머리가 어긋나면 딴 덩어리로 보인다
-      className="max-w-[min(34vw,420px)] pl-2 text-[13px] leading-[1.4] text-ink-3">
+      // 13px 이었다 (S15P21A405-649). 바로 위 자취가 17px 이라 설명줄만 유난히 작아 안 읽혔다
+      className="max-w-[min(34vw,420px)] pl-2 text-[14.5px] leading-[1.4] text-ink-3">
       {LAYER_SUMMARIES[layer]}
     </p>
   );

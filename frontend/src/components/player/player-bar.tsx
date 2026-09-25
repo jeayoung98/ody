@@ -139,7 +139,8 @@ export default function PlayerBar() {
           {!idle && blocked && <span className="ml-2 text-[12.5px] font-normal text-warn">{blocked.badge}</span>}
         </p>
         {/* 고를 곡이 없을 때의 안내는 좁은 화면에서 뺀다 — 한 줄에 제목과 같이 들어가면 둘 다 잘린다 */}
-        <p className={`mt-0.5 truncate text-[13px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
+        {/* 가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다 */}
+        <p className={`mt-0.5 truncate text-[14.5px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
 
       {/*

@@ -27,7 +27,7 @@ interface FeedHeaderProps {
 function StatInline({ label, value, onClick }: { label: string; value: number | string; onClick?: () => void }) {
   const body = (
     <>
-      {label} <b className="num text-sm normal-case tracking-normal text-ink">{value}</b>
+      {label} <b className="num text-md normal-case tracking-normal text-ink">{value}</b>
     </>
   );
   if (!onClick) return <span className="lbl">{body}</span>;

@@ -36,13 +36,25 @@ export function photoFor(url: string | null | undefined): HTMLImageElement | nul
   if (failed.has(url) || loading.has(url)) return null;
 
   loading.add(url);
+  load(url, "cors");
+  return null;
+}
+
+/**
+ * 세 단계로 받는다 (S15P21A405-676, troubleshooting 016).
+ *
+ * 1. `crossOrigin=anonymous` 로 — **캔버스가 오염되지 않는다.** 이 그림이 들어간 캔버스를 `toDataURL` 로 읽는
+ *    자리가 지금은 없지만(호버 카드·배경은 커버 캔버스를 읽는다), 오염은 읽는 쪽에서 예외로 터지고 그린 쪽에는
+ *    아무 표시가 없어 원인을 찾기 어렵다. 구글 프로필 사진도 우리 백엔드(`/api/user/images/**`)도 ACAO 를 준다.
+ * 2. 그래도 실패하면 **주소를 살짝 바꿔 다시 CORS 로** — 같은 사진을 `<img>` 가 먼저 받아 두면(프로필·주변 사람
+ *    카드) 브라우저가 그 응답을 캐시에서 꺼내 주는데, CORS 없이 받은 응답에는 ACAO 가 없어 캔버스용 요청이
+ *    거부된다. 이게 인솔자·동승자 사진만 유독 안 뜨던 이유다 — 지도에서 처음 보는 사람은 캔버스가 먼저 받아 멀쩡했다.
+ * 3. 그것도 실패하면 **CORS 없이** — 캔버스는 오염되지만 사진이 뜨는 편이 낫다. 오염된 캔버스를 읽는 코드가
+ *    생기면 여기부터 의심한다.
+ */
+function load(url: string, mode: "cors" | "cors-fresh" | "plain") {
   const img = new Image();
-  /**
-   * **캔버스가 오염되면 안 된다.** 이 그림이 들어간 캔버스를 나중에 `toDataURL` 로 읽는 자리가
-   * 지금은 없지만(호버 카드·배경은 커버 캔버스를 읽는다), 오염은 읽는 쪽에서 예외로 터지고
-   * 그린 쪽에는 아무 표시가 없어 원인을 찾기 어렵다. 구글 프로필 사진은 ACAO 를 준다.
-   */
-  img.crossOrigin = "anonymous";
+  if (mode !== "plain") img.crossOrigin = "anonymous";
   img.onload = () => {
     loading.delete(url);
     // 오래 돌면 사람이 계속 들고 난다. 통째로 비우고 다시 받는 편이 관리보다 싸다
@@ -51,11 +63,17 @@ export function photoFor(url: string | null | undefined): HTMLImageElement | nul
     for (const cb of waiters) cb();
   };
   img.onerror = () => {
+    if (mode === "cors") return load(url, "cors-fresh");
+    if (mode === "cors-fresh") return load(url, "plain");
     loading.delete(url);
     failed.add(url);
   };
-  img.src = url;
-  return null;
+  img.src = mode === "cors-fresh" ? withFreshQuery(url) : url;
+}
+
+/** 캐시 키를 바꾸는 쿼리 — 구글 사진(`=s96-c`)도 우리 백엔드 정적 서빙도 모르는 쿼리는 무시한다 */
+export function withFreshQuery(url: string): string {
+  return `${url}${url.includes("?") ? "&" : "?"}cors=1`;
 }
 
 /**

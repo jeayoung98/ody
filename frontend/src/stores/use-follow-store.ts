@@ -2,6 +2,7 @@ import { create } from "zustand";
 import { devtools } from "zustand/middleware";
 import { STORAGE_KEYS } from "@/constants";
 import { removeStorage, writeStorage } from "@/lib/storage";
+import type { RideRider } from "@/types";
 
 /**
  * 따라가기 = **탑승(ride)** 상태 (2차 실시간 명세 §12, S15P21A405-530).
@@ -56,6 +57,11 @@ interface FollowState {
    * 두어 다시 돈다 — 스토어의 다른 값은 그대로라 이게 없으면 `startFollow` 를 다시 부를 계기가 없다.
    */
   pointRevision: number;
+  /**
+   * 나를 따라오는 사람들 (S15P21A405-676). `followerCount` 가 수고, 이건 **누구**다 — 헬멧에 얼굴을 넣으려면
+   * 사람이 필요하다. 수와 목록이 어긋날 수 있다(새로고침 뒤엔 목록이 비어 있다): 모자란 만큼은 빈 헬멧으로 그린다.
+   */
+  riders: RideRider[];
 
   start: (input: {
     email: string;
@@ -73,6 +79,10 @@ interface FollowState {
   setFollowerCount: (n: number) => void;
   /** 인솔자 곡 좌표를 편입했다 — 따라가기 효과를 한 번 더 돌린다 */
   markPointAdopted: () => void;
+  addRider: (rider: RideRider) => void;
+  removeRider: (email: string) => void;
+  setRiderImage: (email: string, imageUrl: string | null) => void;
+  setRiders: (riders: RideRider[]) => void;
 }
 
 export const useFollowStore = create<FollowState>()(
@@ -86,6 +96,7 @@ export const useFollowStore = create<FollowState>()(
       followerCount: 0,
       snapshotSeq: 0,
       pointRevision: 0,
+      riders: [],
 
       start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) => {
         writeStorage(STORAGE_KEYS.rideLeader, { email, nickname, imageUrl }, "session");
@@ -115,6 +126,7 @@ export const useFollowStore = create<FollowState>()(
             leaderViewingMusicId: null,
             snapshotSeq: 0,
             followerCount: 0,
+            riders: [],
           },
           false,
           "stop",
@@ -122,6 +134,11 @@ export const useFollowStore = create<FollowState>()(
       },
       setFollowerCount: (followerCount) => set({ followerCount }, false, "setFollowerCount"),
       markPointAdopted: () => set((s) => ({ pointRevision: s.pointRevision + 1 }), false, "markPointAdopted"),
+      // 같은 사람이 두 번 오면(재탑승, A-74) 한 줄로 둔다
+      addRider: (rider) => set((s) => ({ riders: [...s.riders.filter((r) => r.email !== rider.email), rider] }), false, "addRider"),
+      removeRider: (email) => set((s) => ({ riders: s.riders.filter((r) => r.email !== email) }), false, "removeRider"),
+      setRiderImage: (email, imageUrl) => set((s) => ({ riders: s.riders.map((r) => (r.email === email ? { ...r, imageUrl } : r)) }), false, "setRiderImage"),
+      setRiders: (riders) => set({ riders }, false, "setRiders"),
     }),
     { name: "follow-store" },
   ),

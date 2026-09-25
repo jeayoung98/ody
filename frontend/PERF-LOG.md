@@ -20,6 +20,8 @@
 | 2026-09-18 | d230453 | 7752 | 미측정 | 미측정 | 미측정 | **2.72~2.95ms** | 미측정 | 2겹 7,000곡 주입. rAF 미동작으로 프레임·그리기 무효, **엔진 수치는 유효** |
 | 2026-09-18 | d230453 | 754 | 76.3 | 8.1ms | 48.5% | 0.063ms | 미측정 | 사용자 실행. 400x678 창 · DPR2. 위 754 측정(1024x768)과 거의 같다 — **독립 재현** |
 | 2026-09-18 | d230453 | 7752 | **35.4** | **20.17ms** | **120.8%** | 0.633ms | 미측정 | 사용자 실행. 화면 안 7,000곡. **예산 초과** · 33ms↑ 62프레임 · 별 12,170회/프레임 |
+| 2026-09-25 | 6e7c22e1 (배포 next-25) | 5745 | 37~39 | 15.9ms | 95% | ≈0.9ms(상한 근사) | 420KB | **배포본 기준선 (499 전).** 폰 레이아웃 511x743 DPR2 정지 · 곡 76~78% 화면 안. 그리기 = drawMap 벽시계(배경 8.0 + 나머지 7.9). **테스터 아님** — 배포 빌드엔 `__odyEngine` 이 없어 iframe 하네스로 잼. 아래 상세 |
+| 2026-09-25 | 6e7c22e1 (배포 next-25) | 5745 | 52~56 | 9.4ms | 56% | ≈1.0ms(상한 근사) | 420KB | 배포본 기준선. 데스크톱 1600x900 DPR2 정지 · 곡 15% 화면 안. 배경 7.9 + 나머지 1.5 |
 <!-- /PERF_ROWS -->
 
 <details><summary>2026-09-10 · cf2c691 · 상세</summary>
@@ -1374,6 +1376,186 @@ N 전체를 그리지 않는다. 곡 수 확장에서 **미니맵은 병목이 �
   ]
 }
 ```
+
+</details>
+
+</details>
+
+<details><summary>2026-09-25 · 6e7c22e1 (배포 next-25) · 배포본 기준선 — 로딩·API·그리기 (S15P21A405-438)</summary>
+
+**배포 서버(`j15a405.p.ssafy.io`)를 그대로 잰 기준선이다.** 프론트 성능 개선을 시작하기 전 상태를 남긴다.
+배포본은 `frontend/jenkins` 6e7c22e1(664까지)이라 **배경 별밭 타일화(499)가 안 들어간 상태**다.
+
+**테스터(`perf-bench.js`)로 잰 것이 아니다.** 테스터는 `window.__odyEngine` 이 없으면 바로 멈추는데
+배포 빌드에는 엔진이 노출되지 않는다. 그래서 같은 원리(캔버스·rAF 를 런타임에 가로채기)로 iframe 하네스를 짜서 쟀다
+— 맨 아래 **측정 코드** 참고. 위 표의 `그리기/프레임` 은 테스터의 "drawImage 합" 이 아니라 **drawMap 벽시계 시간**
+(그라데이션·arc·상태 변경 포함)이라 이전 행과 정의가 다르다.
+
+### 조건
+
+| 항목 | 값 |
+|---|---|
+| 일시 | 2026-09-25 21:30~23:10 KST (저녁, 배포 없음) |
+| 망 | SSAFY 학교망 · 서버까지 RTT 약 7ms (keep-alive TTFB 기준) |
+| CPU | 데스크톱. 폰 CPU 는 헤드리스 크롬 CPU×4 감속으로만 흉내 냈다 — **실제 폰 기기 측정은 없다** |
+| 브라우저 | 앱 내 브라우저 Chrome 152 (로그인·재방문·캐시 있음) / 헤드리스 Chrome 153 + CDP (빈 캐시·비로그인) |
+| 데이터 | 실데이터 1겹 **5,745곡** (`/api/music/major?level=1`) |
+
+**버린 수치**: 브라우저 패널에 패널보다 큰 크기를 에뮬레이션하면 페이지가 `hidden` 이 기본이고 2초마다 잠깐만
+`visible` 이 된다 (`visibility-state` 엔트리로 확인). 그 상태에서 찍힌 FCP 2,080ms 는 가짜라 버렸다.
+아래 수치는 전부 `hidden` 0회를 확인한 측정이다.
+
+### 첫 로딩 — 로그인·재방문 (ms, 앱 코드보다 먼저 계측을 건 iframe)
+
+| 시점 | 폰 511x743 | 데스크톱 1600x900 | 폰 390x844 |
+|---|---|---|---|
+| HTML 첫 바이트 | 19 | 20 | 25 |
+| 첫 그림 (Splash) | 68 | 40 | 48 |
+| 배경 별밭 첫 프레임 | 97 | 71 | 65 |
+| 지도 요청 출발 | 89 | 60 | 58 |
+| 지도 응답 첫 바이트 | 391 | 363 | 342 |
+| 지도 응답 완료 | 448 | 417 | 399 |
+| JSON 파싱 완료 | 465 | 441 | 418 |
+| **곡이 처음 그려진 프레임** | **487** | **462** | **435** |
+
+- 첫 곡까지 시간의 **60~65% 가 지도 API 대기**(약 300ms)다. 첫 곡 프레임 자체는 22~31ms
+- 빈 하늘 먼저는 이미 된다 — 응답 전 65~97ms 에 배경 별밭이 그려진다
+- 지도 요청은 `me` 를 기다리지 않는다 (둘 사이 23ms)
+- DPR 는 2 로 막혀 있다 — DPR 3 을 주입해도 캔버스가 780x1688(2배)
+
+### 첫 방문 — 빈 캐시·비로그인 `/` → `/login` (헤드리스, PostHog·GA 차단)
+
+| 조건 | JS | `auth/me` 출발 | 로그인 폼 | long task |
+|---|---|---|---|---|
+| 데스크톱 무감속 1600x900 DPR1 | 18개 · 487KB | 172 | 323 | 0 |
+| CPU×4 + 10Mbps/60ms · 390x844 DPR3 | 〃 | **1,009** | **1,844** | 7개 · 1,038ms (TBT 688) |
+| CPU×4 + 1.6Mbps/150ms · 390x844 DPR3 | 〃 | 2,991 | 3,798 | 3개 · 589ms (TBT 439) |
+
+로그인한 사용자는 `auth/me` 출발 시점에 지도 요청도 같이 나간다 — 폰 조건이면 **지도 요청이 떠나기까지만 약 1초**.
+로그인 상태의 빈 캐시 첫 방문은 헤드리스에서 로그인할 수 없어 **미측정**.
+
+### API (로그인, 페이지 안 fetch, keep-alive, 7회 p50/p90 ms)
+
+| 경로 | BFF 경유 | 백엔드 직접 | 크기 |
+|---|---|---|---|
+| 지도 level=1 | ttfb 264/401 · 완료 292 | ttfb 161/316 · 완료 207 | **1,576KB · 압축 없음** |
+| 지도 level=2 (1,000곡) | 257/375 · 277 | 207/219 · 215 | 271KB |
+| 곡 상세 — 1겹 곡 14개 | 72/111 | 38~122 | |
+| **곡 상세 — 깊은 겹 곡 12개, 처음** | | **2,149~2,713 (12/12)** → 다시 부르면 41~66 | |
+| **상세 + video-id 동시 (앱과 같은 방식, 새 곡 4개)** | **2,104~3,027** | | |
+| auth/me | 21/155 | | |
+| realtime/layers/0/users (10초 폴링) | 38/45 | 37/38 | |
+| map/nearby | 40/190 | | |
+| charts/weekly | 22/25 | 17/20 | |
+| music/search 8가지 | 21~69 | | |
+| 20분 샘플링 (healthz·hello·HTML·contests 각 397회) | p50 9~15 · p99 29~52 · 최대 133 · 오류 0 | | |
+
+- BFF 오버헤드는 작은 응답에서 1~6ms, 지도(1.6MB 재파싱·재직렬화)에서 약 +100ms
+- 처음 여는 곡 2~3초는 백엔드가 외부 videoId 조회를 응답 안에서 기다리는 것 (`MusicService.getDetail`, `VideoIdApiClient` 2s/3s). 프론트 몫 아님
+- 캐시 헤더: 지도 응답은 `no-store`(백엔드) · 없음(BFF), ETag 없음 — **새로고침마다 1.58MB 를 다시 받는다**
+
+### 지도 level=1 응답 구성 (5,745곡)
+
+| 필드 | 크기 | 비고 |
+|---|---|---|
+| pc[16] | 618KB (39%) | 소수 3자리 |
+| albumMbid · title · artist | 222 · 159 · 138KB | |
+| youtubeUrl | 101KB | 전부 null |
+| musicId | 100KB | |
+| playable | 90KB | 전부 true |
+| genreId | 73KB | 전부 10 |
+| weight | 62KB | 전부 0 |
+| **합** | **1,576KB → gzip 535KB** | 늘 같은 4필드를 빼면 1,248KB 지만 **gzip 후 522KB (−2%)** — 뺄 가치 없음 |
+
+`JSON.parse` 14~22ms. IndexedDB 에 5,745곡 쓰기 35~63ms · 읽기 13~15ms (데스크톱, 임시 DB 로 재고 지움).
+
+### 그리기 — 정지 상태 프레임 구간 분해 (겹 0, 데스크톱 CPU)
+
+배경 5,170회가 `drawMap` 앞쪽에 먼저 그려지는 순서를 이용해 **5,170번째 drawImage 시각**에서 잘랐다.
+경계 직후 소스가 208x208(성운)인 것을 매 프레임 확인했다 (200/200, 138/138).
+
+| | 배경 별밭 | 나머지 drawMap | 엔진(근사) | 콜백 합 | drawImage/프레임 | FPS |
+|---|---|---|---|---|---|---|
+| 데스크톱 1600x900 | **7.9ms (75%)** | 1.5ms | 1.0ms | 10.5ms | 6,051 | 52~56 |
+| 폰 511x743 | **8.0ms (47%)** | 7.9ms | 0.9ms | 17.1ms | 9,697 | 37~39 |
+
+**폰이 더 비싼 이유 — 화면 안 곡 별이 5배다**
+
+| 레이아웃 | 곡 별/프레임 | 5,745곡 중 | 흐린 별 (α<0.15) |
+|---|---|---|---|
+| 1600x900 | 855 | 15% | 646 |
+| 1280x800 | 1,006 | 18% | 835 |
+| 511x743 | 4,465 | **78%** | 4,398 |
+| 390x844 | 4,377 | **76%** | 4,315 |
+
+겹 0 첫 카메라(`startCam0`, S15P21A405-469)가 화면 모양·가림으로 배율을 정하는 탓으로 본다 — 계산이 레이아웃마다
+달라지는 것은 코드로 확인했고, **왜 딱 5배인지는 미확정**.
+
+그 밖:
+
+- **탭 화면(`/chart`)에 덮여 지도가 안 보이는 동안에도** 10,294 호출/프레임 · 16.3ms · 38.8fps — 지도 탭과 같다
+- 미니맵은 0.07ms(데스크톱 396x188) · 0.13ms(폰, 숨겨진 2x2) — **병목 아님**. 다만 숨겨져도 돈다
+- `globalAlpha` 대입 10,648/프레임 (폰) — 499 가 보였듯 이건 비싼 게 아니다
+- 파고들기: 다음 겹 요청이 휠 압력 중에 먼저 나가서(prefetch) TTFB 78~88ms · 267KB 가 겹이 바뀌기 전에 도착. 50ms↑ 프레임 0
+- PostHog 캔버스 캡처: `createImageBitmap`·`toDataURL` 0회, recorder 미로드 — 설정(`replay:true`, `captureCanvas`)은 켜져 있지만 지금은 안 돈다
+- 폰(<900px)의 유리 패널 5개가 **배경이 불투명(rgb(5,8,15))인데 `blur(10px)` 가 걸려 있다** — 비용은 미측정
+
+### 외부 리소스
+
+| 항목 | 값 |
+|---|---|
+| **YouTube 빈 플레이어** (곡 선택 전, 앱 마운트 89ms 에 `iframe_api`) — 따로 떼어 잼 | 데스크톱: **1,150KB** · 준비 753ms · 메인 스레드 213ms · long task 0 |
+| 〃 CPU×4 + 10Mbps, iframe 같은 프로세스 (iOS·저사양 안드로이드 방식) | **1,142KB · 준비 1,631ms · 메인 스레드 1,081ms · long task 8개 780ms (최대 189)** |
+| 앨범 커버 (coverartarchive 직접) | 첫 로드 29장 p50 1,283 · p90 5,613 · 최대 20,055ms. 리다이렉트 2번에 1.45~2.22s, 3/12 는 404(0.93s), 일부는 CORS 실패로 안 뜸 |
+| posthog-js | 청크 94KB gz (297KB) 매 페이지. 이벤트 전송 몇 분에 50여 건 (us.i.posthog.com) |
+| 폰트 | jsDelivr Pretendard CSS 가 첫 그림을 막는다 (여기서 43~88ms) |
+| HTTP | **HTTP/1.1 만** (ALPN). 정적 청크는 gzip(br 없음)·1년 immutable. JSON 은 압축·캐시 헤더·ETag 전부 없음 |
+| 번들 | 첫 화면 JS 16개 **420KB gz / 1.30MB** + CSS 15KB. 최대 청크 425KB / 143KB gz. 9/10 대비 +59% |
+
+### 여기서 드러난 것
+
+- **서버는 대부분 빠르다.** 느린 곳은 둘 — 처음 여는 곡 2~3초(백엔드 외부 조회), 지도 1.58MB 를 압축·캐시 없이 매번
+- **폰이 오래 기다리는 건 대부분 기기·망 조건이다.** 같은 PC·같은 망이면 폰 뷰도 첫 곡이 웹과 같다(435~487 대 462ms).
+  우리 코드 중에서는 지도 1.58MB 와 YouTube 1.14MB·CPU 1초가 그 차이를 키운다
+- **499 가 겨눈 배경은 여전히 그리기 1위다** — 데스크톱 75%, 폰 47%. 폰은 그 뒤로 **흐린 곡 별**(나머지 7.9ms)이 배경만큼 남는다
+- **지도가 가려져도, 멈춰 있어도 매 프레임 다시 그린다**
+
+### 측정 코드
+
+<details><summary>iframe 하네스 (앱 코드보다 먼저 계측 걸기 · 프레임 구간 분해)</summary>
+
+같은 오리진의 가벼운 페이지(`/healthz.txt`)를 연 뒤 콘솔에서 돌린다. 데스크톱 레이아웃은 iframe 을 1600x900 으로
+만들고 `transform: scale()` 로 줄인다 — 에뮬레이션과 달리 `hidden` 이 되지 않는다.
+
+```js
+// 1) 앱이 돌기 전에 훅 걸기 — MessageChannel 로 촘촘히 폴링하다 iframe 문서가 '/' 가 되는 순간
+const ifr = Object.assign(document.createElement("iframe"), { style: "position:fixed;inset:0;border:0;width:1600px;height:900px;transform:scale(.32);transform-origin:0 0" });
+document.body.appendChild(ifr);
+const mc = new MessageChannel();
+const hooked = new Promise((res) => { mc.port1.onmessage = () => {
+  try { const w = ifr.contentWindow; if (w.location.pathname === "/") return res(w); } catch {}
+  mc.port2.postMessage(0);
+}; });
+ifr.src = "/?probe=" + Date.now(); mc.port2.postMessage(0);
+const win = await hooked; // 이 시점 canvas 0개 · bff 요청 0건인지 확인한다
+
+// 2) 프레임 구간 분해 — 배경 5,170회가 drawMap 앞쪽이라 그 시각에서 자른다
+const C = win.CanvasRenderingContext2D.prototype, P = win.performance, BG = 5170;
+let inF = false, di = 0, tDraw = 0, tBg = 0; const frames = [];
+const mark = () => { if (inF && !tDraw) tDraw = P.now(); };
+for (const m of ["fillRect", "createRadialGradient", "fill"]) { const o = C[m]; C[m] = function (...a) { mark(); return o.apply(this, a); }; }
+const oDI = C.drawImage;
+C.drawImage = function (img, ...a) { mark(); const r = oDI.call(this, img, ...a); if (inF && this.canvas.width > 500 && ++di === BG) tBg = P.now(); return r; };
+const oRAF = win.requestAnimationFrame;
+win.requestAnimationFrame = (fn) => oRAF.call(win, (ts) => { inF = true; di = 0; tDraw = tBg = 0; const t0 = P.now();
+  try { fn(ts); } finally { const t1 = P.now(); inF = false; if (di > BG) frames.push({ engine: tDraw - t0, bg: tBg - tDraw, rest: t1 - tBg, total: t1 - t0, draws: di }); } });
+// 몇 초 뒤 frames 의 중앙값을 본다. 곡 별 개수는 BG 뒤의 48x48 drawImage 를 세고 globalAlpha<0.15 를 흐린 별로 센다
+```
+
+첫 로딩 타임라인은 같은 훅에서 `Response.prototype.json` 을 감싸 파싱 완료 시각을, rAF 콜백 안 drawImage 수가
+6,000 을 넘는 첫 프레임을 "곡이 처음 그려진 프레임"으로 잡았다. 폰 CPU 조건은 헤드리스 크롬에
+`Emulation.setCPUThrottlingRate({rate: 4})` · `Network.emulateNetworkConditions` · `Network.setBlockedURLs`(PostHog·GA)를 걸었다.
+YouTube 는 `--disable-site-isolation-trials` 로 띄운 크롬에서 `/healthz.txt` 위에 앱과 같은 `playerVars` 로 빈 `YT.Player` 만 만들어 쟀다.
 
 </details>
 

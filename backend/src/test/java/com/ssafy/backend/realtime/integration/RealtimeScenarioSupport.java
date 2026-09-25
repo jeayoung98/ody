@@ -21,6 +21,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
+import com.ssafy.backend.realtime.dto.presence.JoinRequest;
 import com.ssafy.backend.realtime.dto.presence.UserDisplay;
 import com.ssafy.backend.realtime.message.RealtimeMessageService;
 import com.ssafy.backend.realtime.repository.mapper.MeetingMapper;
@@ -75,6 +76,7 @@ abstract class RealtimeScenarioSupport {
 	private final Set<String> emails = new LinkedHashSet<>();
 	private final Map<String, Long> lastPlayed = new HashMap<>();
 	private long nextId = 7000L;
+	private long nextJoinSeq = 1L;
 
 	@BeforeEach
 	void prepareOutsideWorld() {
@@ -153,6 +155,17 @@ abstract class RealtimeScenarioSupport {
 		musicPlayService.play(email, musicId, "MAP", LAYER);
 		lastPlayed.put(email, musicId);
 		return email;
+	}
+
+	/**
+	 * 이미 서 있는 사람을 다른 층으로 옮긴다.
+	 *
+	 * 재생 선언(play)은 층을 안 바꾼다 — 서 있는 층이 있으면 그대로 두고 요청 값을 무시한다.
+	 * 층을 바꾸는 길은 join 하나뿐이다.
+	 */
+	protected void moveToLayer(String email, int layer, long musicId) {
+		presenceService.join(email, 1L, new JoinRequest(nextJoinSeq++, layer, musicId));
+		lastPlayed.put(email, musicId);
 	}
 
 	/** 이미 서 있는 사람을 다른 곡으로 옮긴다. */

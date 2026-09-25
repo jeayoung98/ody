@@ -348,6 +348,27 @@ public class RideRedisRepository {
 		return emails;
 	}
 
+	/**
+	 * 지금 누군가를 태우고 있는 사람 전원. 랭킹 조회 전용이다.
+	 *
+	 * 마지막 한 명이 내리면 Redis 가 ride:riders 키를 스스로 지운다. 그래서 키가 있다는 것이
+	 * 곧 "지금 태우고 있다" 는 뜻이라, 인원을 따로 세지 않고 키 이름만 모은다.
+	 *
+	 * ride:captain 과 앞부분이 겹치지 않도록 ride:riders: 로 시작하는 것만 고른다.
+	 *
+	 * ponytail: 매번 SCAN 으로 전체를 훑는다. 인솔자가 수천 명이 되면 별도 인덱스를 둔다.
+	 *
+	 * @return 태우고 있는 인솔자들의 이메일. 아무도 없으면 빈 집합
+	 */
+	public Set<String> captainsWithRiders() {
+		Set<String> emails = new LinkedHashSet<>();
+		try (Cursor<String> cursor = redis.scan(
+				ScanOptions.scanOptions().match(RIDERS_PREFIX + "*").count(100).build())) {
+			cursor.forEachRemaining(key -> emails.add(key.substring(RIDERS_PREFIX.length())));
+		}
+		return emails;
+	}
+
 	/** 나를 따라오는 인원 수. */
 	public int riderCount(String captainEmail) {
 		Long n = redis.opsForSet().size(RIDERS_PREFIX + captainEmail);

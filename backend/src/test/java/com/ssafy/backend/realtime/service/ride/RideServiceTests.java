@@ -743,6 +743,54 @@ class RideServiceTests {
 		verify(nearbyChangeService).sendEnteredTogether(List.of(RIDER, MATE), LAYER, MUSIC);
 	}
 
+	/**
+	 * 남들 화면에서 선단은 인솔자 한 점이고 그 옆 숫자가 선단임을 아는 유일한 표시다.
+	 * 해체했는데 안 알리면 그 숫자가 옛 값으로 남아, 인솔자가 곡을 바꿀 때까지 안 사라진다.
+	 */
+	@Test
+	@DisplayName("해체하면 인솔자를 보는 사람들에게 0 명이 됐다고 알린다")
+	void disbandPushesZeroRiderCount() {
+		givenDisbandOk();
+		when(presenceRedisRepository.snapshot(CAPTAIN))
+				.thenReturn(new PresenceSnapshot(MUSIC, LAYER, 7, 5, 9L));
+
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_ENDED);
+
+		verify(viewportDeltaService).sendRiderCount(CAPTAIN, LAYER, MUSIC, "7:5", 0);
+		verify(nearbyChangeService).sendRiderCount(CAPTAIN, LAYER, MUSIC, 0);
+	}
+
+	/** 원래 0 명이었으면 바뀐 것이 없다. 쓸데없는 알림을 내보내지 않는다. */
+	@Test
+	@DisplayName("따라오던 사람이 없었으면 인원수를 알리지 않는다")
+	void disbandWithoutRidersPushesNothing() {
+		when(rideRedisRepository.disband(CAPTAIN)).thenReturn(
+				new DisbandResult(false, 0, 0, 0, 0, List.of(), List.of(), List.of()));
+
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_ENDED);
+
+		verify(viewportDeltaService, never()).sendRiderCount(
+				anyString(), anyInt(), anyLong(), anyString(), anyInt());
+		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyInt(), anyLong(), anyInt());
+	}
+
+	/**
+	 * 접속이 끊겨 들어온 경우다. 이때는 접속 정보가 이미 지워져 있어 알림 쪽이 스스로 멈춘다.
+	 * 지도에서는 점 자체가 사라진 뒤라 인원수를 따로 알릴 것도 없다.
+	 */
+	@Test
+	@DisplayName("끊겨서 해체되면 인원수를 알리지 않는다")
+	void disbandOnDisconnectPushesNothing() {
+		givenDisbandOk();
+		when(presenceRedisRepository.snapshot(CAPTAIN)).thenReturn(null);
+
+		service.disband(CAPTAIN, RideEndReason.CAPTAIN_LEFT);
+
+		verify(viewportDeltaService, never()).sendRiderCount(
+				anyString(), anyInt(), anyLong(), anyString(), anyInt());
+		verify(nearbyChangeService, never()).sendRiderCount(anyString(), anyInt(), anyLong(), anyInt());
+	}
+
 	/** 여기까지 왔으면 Redis 는 이미 바뀐 뒤다. 하나가 터졌다고 나머지를 건너뛰면 안 된다. */
 	@Test
 	@DisplayName("알림 하나가 터져도 나머지는 나간다")

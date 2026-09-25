@@ -1,25 +1,32 @@
 package com.ssafy.backend.realtime.controller.rest;
 
 import java.security.Principal;
+import java.util.List;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.DeleteMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.ssafy.backend.common.ApiResponse;
 import com.ssafy.backend.realtime.dto.ride.DisbandResponse;
 import com.ssafy.backend.realtime.dto.ride.DismountResponse;
+import com.ssafy.backend.realtime.dto.ride.RideRankingItem;
 import com.ssafy.backend.realtime.dto.ride.RideRequest;
 import com.ssafy.backend.realtime.dto.ride.RideResponse;
+import com.ssafy.backend.realtime.service.ride.RideRankingService;
 import com.ssafy.backend.realtime.service.ride.RideService;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
 import lombok.RequiredArgsConstructor;
 
 /**
@@ -37,6 +44,7 @@ import lombok.RequiredArgsConstructor;
 public class RideRestController {
 
 	private final RideService rideService;
+	private final RideRankingService rideRankingService;
 
 	/** 따라가기 시작. 상대가 서 있는 곡으로 옮겨지고, 그가 듣던 위치부터 재생이 이어진다. */
 	@Operation(summary = "따라가기 시작",
@@ -74,5 +82,20 @@ public class RideRestController {
 	@DeleteMapping("/ride/fleet")
 	public ApiResponse<DisbandResponse> disband(Principal principal) {
 		return ApiResponse.success(rideService.disbandByCaptain(principal.getName()));
+	}
+
+	/**
+	 * 실시간 탑 버스기사. 지금 따라오는 사람이 가장 많은 순으로 준다.
+	 *
+	 * 누가 물어도 같은 답이라 토큰의 이메일을 쓰지 않는다. 다만 인증은 필요하다 —
+	 * 목록에 이메일이 실리므로 로그인하지 않은 쪽에 내보내지 않는다.
+	 */
+	@Operation(summary = "실시간 탑 버스기사",
+			description = "지금 따라오는 사람이 가장 많은 사용자를 인원 많은 순으로 준다. "
+					+ "인원이 같으면 닉네임 오름차순이다. 아무도 태우고 있지 않으면 빈 목록이다.")
+	@GetMapping("/ride/ranking")
+	public ApiResponse<List<RideRankingItem>> ranking(
+			@RequestParam(defaultValue = "10") @Min(1) @Max(10) int limit) {
+		return ApiResponse.success(rideRankingService.top(limit));
 	}
 }

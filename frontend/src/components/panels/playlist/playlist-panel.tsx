@@ -36,21 +36,25 @@ export default function PlaylistPanel() {
    */
   const { data: myPlaylists } = useMyPlaylistsQuery();
   const isMine = data != null && (myPlaylists?.some((p) => p.id === data.id) ?? false);
-  const setConstellationList = useMapStore((s) => s.setConstellationList);
+  const showConstellation = useMapStore((s) => s.showConstellation);
 
-  // 뷰를 켜지는 않고 목록만 걸어둔다 — 켜는 건 사용자가 택을 눌렀을 때
+  /**
+   * **열면 바로 별자리 뷰다** (S15P21A405-667). 예전에는 목록만 걸어 두고(`setConstellationList`) 택을 누르거나
+   * 재생해야 켜졌는데, 여정은 경로가 오면 바로 켜지는데 플리만 한 번 더 눌러야 해서 같은 물건이 다르게 굴었다.
+   * 곡이 둘은 돼야 켠다 — 하나짜리는 이을 선이 없어 빈 오버레이만 덮는다.
+   */
   const items = data?.items;
   useEffect(() => {
     if (!items || items.length < 2 || playlistId == null) return;
     // 목록이 어디서 왔는지 함께 남긴다 — 이 안의 곡을 누르면 단일 재생이 아니라 이 플리로 이어진다.
     // 좌표도 함께 넘긴다 (S15P21A405-214) — 이 겹 상주 집합 밖의 곡은 좌표가 있어야 별자리에 그려진다.
     // 좌표가 없는 곡은 빼고 넘긴다 (0 으로 채우면 원점에 뭉친다)
-    setConstellationList(
+    showConstellation(
       items.map((it) => it.musicId),
       items.map((it) => musicToMapPoint(it.music)).filter((p): p is MapPoint => p != null),
       { kind: "playlist", playlistId },
     );
-  }, [items, playlistId, setConstellationList]);
+  }, [items, playlistId, showConstellation]);
 
   return (
     <Box lead={<PanelBackButton />} title="플레이리스트" actions={<PanelCloseButton />}>

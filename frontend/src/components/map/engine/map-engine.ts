@@ -6,6 +6,7 @@ import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
 import { nearestLayerWith } from "./reveal-layer";
+import { riseLandingScale } from "./rise-scale";
 import { wheelIntent } from "./ride-zoom";
 import { acceptsAnchor } from "./stale-anchor";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
@@ -27,6 +28,11 @@ const approxNameWidth = (s: string) => {
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
+import { homeRoute, insideBoxes, sharedDepth } from "./my-place";
+
+/** "내 위치로 가기" 전환 자막 — 떠오를 때도 파고들 때도 같은 한 줄 (S15P21A405-670). 겹 이름은 좌상단 표시가 말한다 */
+const HOME_BIG = "내 위치 찾아가는 중";
+
 const sameBoxes = (a: readonly LayerBox[], b: readonly LayerBox[]) =>
   a.length === b.length && a.every((x, i) => x.layer === b[i].layer && x.xMin === b[i].xMin && x.xMax === b[i].xMax && x.yMin === b[i].yMin && x.yMax === b[i].yMax);
 /** 화면 좌표 단위벡터. 길이가 0이면 방향이 없다는 뜻이라 null */
@@ -49,8 +55,11 @@ const growU = (a: Uint8Array<ArrayBufferLike>, n: number) => {
 /**
  * "내 위치로 가기" 결과. 안 움직였으면 **왜** 안 움직였는지 UI 가 알려 줄 수 있어야 한다 —
  * 눌렀는데 아무 일도 안 나는 게 제일 나쁘다.
+ *
+ * `unknown` 은 **자리는 있는데 지도가 그 곡의 좌표를 모른다**는 뜻이다 (S15P21A405-670). 랭킹·검색·플리처럼
+ * 지도 밖에서 튼 곡, 새로고침으로 되살린 자리가 그렇다 — 부른 쪽이 좌표를 구해 `adopt` 하고 다시 부른다.
  */
-export type GoHomeResult = "moved" | "queued" | "overlay" | "follow" | "none";
+export type GoHomeResult = "moved" | "queued" | "overlay" | "follow" | "none" | "unknown";
 
 interface Frame {
   layer: number;
@@ -320,6 +329,17 @@ export class MapEngine {
   private centerHoldId: number | null = null;
   /** 겹 전환 중에 "내 위치로 가기" 를 누르면 전환이 끝난 뒤 처리한다 */
   private pendingHome = false;
+  /**
+   * "내 위치로 가기" 의 남은 길 (S15P21A405-670). 갈리는 겹까지 떠오른 뒤 재생 때 사각형을 따라 한 겹씩 파고든다 —
+   * 전환이 끝날 때마다 {@link continueHomeRoute} 가 다음 겹을 출발시킨다.
+   */
+  private homeRoute: { musicId: number; dives: LayerBox[] } | null = null;
+  /** "내 위치로 가기" 로 옮겨 가는 중인가 — 누른 순간부터 도착까지. 화면이 이걸 보고 패널을 접었다 편다 (S15P21A405-670) */
+  private homeTraveling = false;
+
+  isHomeTraveling() {
+    return this.homeTraveling;
+  }
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -393,6 +413,13 @@ export class MapEngine {
    * 모르는 채로 두는 것이 이 클래스의 전제다. 넣어 주는 쪽은 `map-view` 다.
    */
   myRiders = 0;
+  /** 그 사람들 (S15P21A405-676). 수(`myRiders`)보다 적을 수 있다 — 모자란 만큼은 빈 헬멧이다 */
+  myRiderUsers: NearbyUser[] = [];
+  /**
+   * 내 프로필 — 내 우주선 창과, 따라갈 때 뒤에 매달린 "나" 헬멧에 들어간다 (S15P21A405-676).
+   * 예전에는 둘 다 사진 없는 절차적 얼굴이었다. 스토어를 엔진이 읽지 않으므로 `map-view` 가 넣어 준다.
+   */
+  myProfile: { nickname: string | null; imageUrl: string | null } | null = null;
   follow: FollowState | null = null;
   /**
    * `follow` 를 건 시점의 겹. 좌표계가 겹마다 달라서, 겹이 바뀌면 다시 걸어야 한다
@@ -496,7 +523,14 @@ export class MapEngine {
 
   /** 첫 진입 — 레이어 0(전 우주)의 상주 집합 */
   setSongs(songs: MapPoint[]) {
-    this.allocate(songs, 0);
+    /**
+     * **첫 데이터보다 먼저 편입된 곡은 살린다** (S15P21A405-676). 새로고침 뒤 소켓 재탑승이 지도 데이터보다 먼저
+     * 끝나면 `ensureSongPoint` 가 인솔자 곡을 빈 엔진에 편입하는데, 여기서 통째로 갈아끼우면 그 곡이 사라져
+     * 우주선이 영영 안 걸렸다. 첫 진입 전의 `songs` 는 그렇게 편입된 것뿐이다.
+     */
+    const ids = new Set(songs.map((s) => s.musicId));
+    const carry = this.inited ? [] : this.songs.filter((s) => !ids.has(s.musicId));
+    this.allocate(carry.length ? [...songs, ...carry] : songs, 0);
     this.subset = this.residentMask();
     this.alpha.set(this.subset);
     this.stack = [];
@@ -639,8 +673,13 @@ export class MapEngine {
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
   /** 나를 따라오는 인원 (S15P21A405-557). 화면 쪽 스토어를 엔진이 직접 읽지 않으려고 둔 통로다 */
-  setMyRiders(n: number) {
+  setMyRiders(n: number, users: NearbyUser[] = []) {
     this.myRiders = Math.max(0, n);
+    this.myRiderUsers = users;
+  }
+
+  setMyProfile(profile: { nickname: string | null; imageUrl: string | null } | null) {
+    this.myProfile = profile;
   }
 
   setFriends(layer: number, friends: NearbyUser[]) {
@@ -1493,7 +1532,8 @@ export class MapEngine {
     const id = this.playingId ?? this.myId;
     // 고리 안 곡에 앉아 있으면 화면 안이다 — 상주하지 않는 이웃이라도 "다른 데 있다" 화살표로 갈리지 않는다
     if (this.probe && !this.probe.exitingAt && this.overlaySlot(id)) return null;
-    const elsewhere = !this.isAlive(id);
+    // 갈래 안이면 자리가 있다 — 서버 목록에 빠졌어도 `keepMine` 이 끼워 넣어 두었다 (S15P21A405-670)
+    const elsewhere = !this.inBranch(id);
     let dir: { x: number; y: number } | null;
     if (elsewhere) {
       dir = this.awayDir(id);
@@ -1525,6 +1565,17 @@ export class MapEngine {
     const i = this.index.get(id);
     if (i == null) return null;
     const pc = this.songs[i].pc;
+    /**
+     * **갈래가 갈린 겹에서 잰다** (S15P21A405-670). 그 곡이 처음으로 사각형 밖으로 나간 겹이 곧 갈림길이고,
+     * 그 겹을 떠날 때의 카메라 중심(스택 프레임)에서 그 곡까지가 "저쪽" 이다. 프레임이 없으면(같은 겹) 아래 폴백.
+     */
+    const h = this.home;
+    const split = h && h.musicId === id ? sharedDepth(this.boxes, h.boxes) : null;
+    const frame = split != null && split < this.layer ? this.stack.find((f) => f.layer === split) : undefined;
+    if (frame && split != null) {
+      const d = unit(pc[split * 2] - frame.cam.cx, -(pc[split * 2 + 1] - frame.cam.cy));
+      if (d) return d;
+    }
     for (let k = this.stack.length - 1; k >= 0; k--) {
       const f = this.stack[k];
       if (!f.subset[i]) continue;
@@ -1951,6 +2002,7 @@ export class MapEngine {
     const ns = new Uint8Array(this.N);
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
     this.keepPinned(ns, layer);
+    this.keepMine(ns, layer);
     return ns;
   }
 
@@ -2022,7 +2074,7 @@ export class MapEngine {
    *
    * 한 칸 떠오르기(`ascend`)도 이 길을 쓴다. 목표가 바로 위 겹일 뿐이다.
    */
-  ascendTo(target: number) {
+  ascendTo(target: number, big?: string) {
     if (this.anim || this.pending || !this.stack.length || this.follow) return;
     if (target < 0 || target >= this.layer) return;
     let p = this.stack.pop()!;
@@ -2038,13 +2090,21 @@ export class MapEngine {
      * 최대 확대 상태의 좁은 구역에 착지하고**, 그 구역이 비어 있으면 화면에 별이 하나도 없다.
      * 진입 배율은 그 겹이 화면에 맞춰지던 배율이므로 여기로 오면 별이 화면을 채운다.
      */
-    const s = p.entryS;
+    /**
+     * **0겹만 진입 배율로는 부족하다** (S15P21A405-673). 0겹의 `entryS` 는 반지름 맞춤이라
+     * 정사각 상자를 가로로 긴 화면에 넣어 좌우가 통째로 빈다 — 469 가 첫 화면에서 실측한
+     * 그 화면(가로 30%·세로 62%)이다. 첫 화면만 덮는 배율로 고쳤던 걸 떠오르는 길에도 준다.
+     * 자세한 이유는 {@link riseLandingScale}.
+     */
+    const s = riseLandingScale(p.layer, p.entryS, this.fitBox(dx, dy, p.subset).sCover);
     /**
      * 내 곡을 가운데 두는 건 **그 곡이 이 겹에 상주할 때만** 이다.
      * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.
      */
     const mi0 = this.myId != null ? this.index.get(this.myId) : undefined;
-    const mi = mi0 != null && p.subset[mi0] ? mi0 : undefined;
+    // 갈래 안이면 가운데 둔다 — 서버 목록에 빠져 있었어도 그 겹에 있는 곡이다 (S15P21A405-670)
+    const mi = mi0 != null && this.inBranch(this.myId, p.layer, this.boxes) ? mi0 : undefined;
+    if (mi != null && !p.subset[mi]) p.subset[mi] = 1;
     const f = this.freeRect();
     // 내 자리가 있으면 그 곡을 가운데 두고 떠오른다. 없으면 두고 온 카메라 그대로
     const c: MapCamera =
@@ -2056,7 +2116,7 @@ export class MapEngine {
             cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
             cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, -1, p.entryS);
+    this.morph(p.layer, c, p.subset, big ?? `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, -1, p.entryS);
   }
 
   // ------------------------------------------------------------------ input
@@ -2410,9 +2470,18 @@ export class MapEngine {
 
   setMy(id: number | null) {
     if (id == null || !this.index.has(id)) return;
+    /**
+     * **같은 곡이면 재생 때 경로를 지키고, 곡이 바뀌었을 때만 새로 적는다** (S15P21A405-670).
+     *
+     * 겹이 바뀔 때마다 presence join 을 다시 보내고 서버가 `PRESENCE_JOINED` 로 내 곡을 되돌려 주는데
+     * (`use-presence-join`), 그때마다 여기로 와서 `home` 이 **지금 보는 경로**로 덮였다. 그래서 왼쪽 갈래에서
+     * 튼 곡이 오른쪽으로 파고들면 오른쪽 경로가 "재생 때 경로" 가 돼 늘 같은 자리로 읽혔다.
+     * 곡이 그대로면 위치가 바뀐 게 아니다 — 새로고침 복원(`restoreHome`)도 이 덕에 살아남는다.
+     */
+    const changed = this.home?.musicId !== id;
     this.myId = id;
     this.playingId = id;
-    this.home = { musicId: id, boxes: [...this.boxes] };
+    if (changed) this.home = { musicId: id, boxes: [...this.boxes] };
     /**
      * **앞서 누른 별을 놓아 준다** (S15P21A405-566).
      *
@@ -2465,6 +2534,18 @@ export class MapEngine {
     this.centerHoldId = null;
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
+    /**
+     * **따라가는 중이면 우주선이 나를 데려간다** (S15P21A405-677) — 내 비행을 걸지 않는다. 예전에는 여기서
+     * `travelToId` 를 걸어 두고 프레임이 따라가기 중엔 처리하지 않아 값이 **묵은 채로 남았고**, 그 값이
+     * `acceptsAnchor` 에서 다음 곡의 `setMyMusicId` 를 계속 거절해 스토어의 내 자리가 한 곡씩 뒤처졌다.
+     * 자리 기록(`home`·`playingId`)은 위에서 이미 적었다.
+     */
+    if (this.follow) {
+      this.meHop = null;
+      this.meFlight = null;
+      this.travelToId = null;
+      return;
+    }
     // 여기부터는 좌표가 있어야 한다 — 지도에 없는 곡은 데려갈 자리가 없다
     if (!this.index.has(id)) return;
     /**
@@ -2484,6 +2565,14 @@ export class MapEngine {
       return;
     }
     this.meHop = null;
+    // 갈래 안인데 서버 목록에 없는 곡이면 끼워 넣고 간다 — 자리가 있는 곡을 "없다" 고 두지 않는다 (S15P21A405-670)
+    if (!this.isAlive(id) && this.inBranch(id)) {
+      const i = this.index.get(id)!;
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      this.rebuildAliveIdx();
+      this.project();
+    }
     if (!this.isAlive(id)) {
       this.travelToId = null;
       return;
@@ -2509,9 +2598,38 @@ export class MapEngine {
     if (!this.follow && !this.constellationActive()) this.focus(id);
   }
 
-  /** 재생 중인 곡이 이 겹 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08) */
+  /**
+   * 그 곡이 **이 겹의 갈래 안**에 있는가 (S15P21A405-670). 서버 top-k 목록(`isAlive`)이 아니라 파고든 사각형으로 본다 —
+   * 최상단은 모든 곡의 겹인데도 top-k 에 빠지면 "다른 갈래" 로 읽히던 것이 이것이다. 좌표를 모르는 곡은 판단할 수 없어 거짓.
+   */
+  private inBranch(id: number | null, layer = this.layer, boxes: readonly LayerBox[] = this.boxes): boolean {
+    if (id == null) return false;
+    const i = this.index.get(id);
+    if (i == null || !insideBoxes(this.songs[i].pc, boxes, layer)) return false;
+    /**
+     * **내 곡은 재생한 그 갈래에만 있다.** 좌표만 보면 다른 쪽으로 파고든 사각형이 넓어 내 곡을 품는 일이 흔한데,
+     * 그러면 왼쪽에서 튼 곡이 오른쪽 갈래에 "둥" 하고 나타난다. 지도에서 보는 것처럼, 내 자리는 재생 때 걸어온
+     * 경로(`home.boxes`) 위에만 있고 다른 경로에서는 그 갈래로 돌아가야 보인다. 재생 기록이 없는 곡은 좌표만 본다.
+     */
+    const h = this.home;
+    if (h && h.musicId === id) return sharedDepth(boxes.slice(0, layer), h.boxes) === layer;
+    return true;
+  }
+
+  /**
+   * 갈래 안인데 서버 목록에 빠진 내 곡을 **이 겹에 끼워 넣는다** — 자리는 있는데 별이 없으면 표식만 허공에 뜬다.
+   * `pinned` 와 같은 장치지만 내 곡은 겹마다 다시 판단하므로 못 박지 않고 마스크에만 넣는다.
+   */
+  private keepMine(mask: Uint8Array, layer: number, boxes: readonly LayerBox[] = this.boxes) {
+    const id = this.playingId ?? this.myId;
+    if (id == null || !this.inBranch(id, layer, boxes)) return;
+    const i = this.index.get(id);
+    if (i != null && !this.songs[i].ghostOnly) mask[i] = 1;
+  }
+
+  /** 재생 중인 곡이 이 겹의 갈래 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08 · 670) */
   playingElsewhere() {
-    return this.playingId != null && !this.isAlive(this.playingId);
+    return this.playingId != null && !this.inBranch(this.playingId);
   }
 
   // ------------------------------------------------------------------ 내 위치로 가기
@@ -2579,9 +2697,16 @@ export class MapEngine {
     this.meFlight = null;
   }
 
-  /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
+  /**
+   * 돌아갈 자리가 있는가 (재생한 적이 있는가).
+   *
+   * **좌표를 아는지는 안 본다** (S15P21A405-670). 예전에는 `index.has` 까지 걸어서, 랭킹·검색·플리에서 튼 곡이나
+   * 새로고침으로 되살린 자리는 지도가 그 곡을 받기 전까지 버튼이 **말없이 꺼져 있었다** — 겹 상주 집합은
+   * 서버가 고른 top-k 라 그 곡이 영영 안 올 수도 있다. 지금은 버튼을 살려 두고, 누르면 `goHome` 이
+   * `"unknown"` 을 돌려 좌표를 구해 오게 한다.
+   */
   canGoHome() {
-    return this.home != null && this.index.has(this.home.musicId);
+    return this.home != null;
   }
 
   /**
@@ -2617,7 +2742,8 @@ export class MapEngine {
     const h = this.home;
     if (!h) return "none";
     const i = this.index.get(h.musicId);
-    if (i == null) return "none";
+    // 자리는 있는데 좌표가 없다 — 부른 쪽이 곡 상세에서 좌표를 받아 `adopt` 한 뒤 다시 부른다
+    if (i == null) return "unknown";
     // 따라가기 중에는 화면을 직접 조작하지 않는다 (SOCIAL-08)
     if (this.follow) return "follow";
     /**
@@ -2634,12 +2760,40 @@ export class MapEngine {
     this.ghost = null;
     this.camTarget = null;
     const target = h.boxes.length;
+    const route = homeRoute(this.boxes, h.boxes);
 
-    // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
-    if (target === this.layer) {
+    // **같은 갈래의 같은 겹**이면 카메라만 — 곡 집합을 다시 받을 이유가 없다. 같은 겹이어도 다른 갈래면 아래 길이다
+    if (route.riseTo === this.layer && route.dives.length === 0) {
       this.settleHome(i);
       this.centerOn(h.musicId, FOCUS.zoomMul);
       return "moved";
+    }
+
+    /**
+     * **지도처럼 간다** (S15P21A405-670). 지금 경로와 재생 때 경로가 마지막으로 같았던 겹까지만 떠오른 뒤
+     * (`ascendTo`), 재생 때 사각형을 따라 한 겹씩 다시 파고든다 (`continueHomeRoute`). 우주까지 다 올라가지
+     * 않는다 — 한 겹 위에서 두 곡이 같이 보이면 한 겹만 오르내리는 것이 지도 문법이다.
+     * 떠오를 수 없는 상태(대기 중인 파고들기 등)면 아래 예전 길(직행 전환)로 떨어진다.
+     */
+    if (route.riseTo < this.layer || route.dives.length) {
+      this.pinned = { id: h.musicId, layer: target };
+      this.homeRoute = { musicId: h.musicId, dives: [...route.dives] };
+      if (route.riseTo < this.layer) {
+        // 갈리는 겹까지 **한 번에** 떠오른다 — 중간 겹을 하나씩 밟지 않는다. 좌상단 겹 표시는 도착 겹으로 짧아진다
+        this.ascendTo(route.riseTo, HOME_BIG);
+        if (this.anim) {
+          this.homeTraveling = true;
+          return "moved";
+        }
+        this.homeRoute = null;
+      } else {
+        this.continueHomeRoute();
+        if (this.anim) {
+          this.homeTraveling = true;
+          return "moved";
+        }
+        this.homeRoute = null;
+      }
     }
 
     const ns = this.maskForBoxes(h.boxes, target);
@@ -2663,14 +2817,61 @@ export class MapEngine {
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
     this.touched = true;
+    // 도착 처리(패널 다시 펴기)는 두 단계 길과 같은 자리에서 — 남은 사각형 없는 길을 걸어 둔다
+    this.homeRoute = { musicId: h.musicId, dives: [] };
+    this.homeTraveling = true;
     this.morph(
       target,
       { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
       ns,
-      `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
+      HOME_BIG,
       target > this.layer ? 1 : -1,
     );
     return "moved";
+  }
+
+  /**
+   * "내 위치로 가기" 의 둘째 단계 (S15P21A405-670) — 떠오르기가 끝나면 남은 사각형을 **한 번의 전환으로** 파고든다.
+   * 3→1→3 이지 3→2→1→2→3 이 아니다: 겹마다 멈추면 지도가 아니라 엘리베이터처럼 읽힌다. 중간 겹의 스택 프레임은
+   * 쌓아 둔다 — 나중에 휠로 떠오를 때 한 겹씩 돌아올 수 있어야 한다. 남은 사각형이 없으면 도착이다.
+   */
+  private continueHomeRoute() {
+    const r = this.homeRoute;
+    if (!r) return;
+    this.homeRoute = null;
+    const i = this.index.get(r.musicId);
+    if (i == null) {
+      this.homeTraveling = false;
+      return;
+    }
+    if (!r.dives.length) {
+      this.settleHome(i);
+      this.centerOn(r.musicId, FOCUS.zoomMul);
+      // 도착 — 화면은 이 순간 패널을 다시 편다
+      this.homeTraveling = false;
+      return;
+    }
+    const target = this.layer + r.dives.length;
+    for (let l = this.layer; l < target; l++) {
+      const boxesAt = [...this.boxes, ...r.dives.slice(0, l - this.layer)];
+      const sub = l === this.layer ? this.subset.slice() : this.maskForBoxes(boxesAt, l);
+      if (l !== this.layer) sub[i] = 1;
+      const cam = l === this.layer ? { ...this.cam } : this.fitCam(l, sub, r.musicId);
+      this.stack.push({ layer: l, cam, subset: sub, entryS: l === this.layer ? this.entryS : cam.s });
+    }
+    this.boxes = [...this.boxes, ...r.dives];
+    const ns = this.maskForBoxes(this.boxes, target);
+    ns[i] = 1;
+    const song = this.songs[i];
+    const scale = this.fitCam(target, ns, r.musicId).s * FOCUS.zoomMul;
+    const f = this.freeRect();
+    this.centerAfterMorph = r.musicId;
+    this.myId = r.musicId;
+    this.meFlight = null;
+    this.touched = true;
+    this.morph(target, { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale }, ns, HOME_BIG, 1);
+    // 파고들기가 끝나면 한 번 더 들어와 도착 처리를 한다
+    this.homeRoute = { musicId: r.musicId, dives: [] };
   }
 
   /**
@@ -2785,7 +2986,19 @@ export class MapEngine {
      * 곡을 옮기는 것은 `rideTo` 가 맡는 일이다. 여기서는 표시 정보만 갱신하고 비켜난다.
      */
     if (!shouldRestartFollow(this.follow ? { email: this.follow.leader.email, layer: this.followLayer } : null, { email: leader.email, layer: this.layer })) {
-      this.follow!.leader = { ...this.follow!.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      const f = this.follow!;
+      f.leader = { ...f.leader, nickname: leader.nickname, imageUrl: leader.imageUrl, riderCount: leader.riderCount };
+      /**
+       * **곡이 바뀌어 있으면 그리로 옮긴다** (S15P21A405-676). 따라가기를 누르는 순간 세우는 화면은 인솔자 곡을
+       * 모를 수 있어 **내 곡을 임시로** 쓴다 (`use-ride-mutation` onMutate — 프로필에서 탈 때는 `nowPlaying` 이 없어
+       * 늘 그렇다, A-35). 탑승 응답이 진짜 곡을 가져오면 여기로 다시 오는데, 예전에는 표시 정보만 갱신하고
+       * 비켜나서 **우주선도 뷰도 임시 곡에 남았다** — 새로고침해야 가운데로 왔다.
+       * `rideTo` 가 이미 그리로 날고 있으면(`RIDE_TRACK`) 건드리지 않는다 — 그 비행을 지우면 559 의 버그가 돌아온다.
+       */
+      if (leader.musicId !== f.playingMusicId && f.mv?.toId !== leader.musicId) {
+        f.viewingMusicId = this.index.has(leader.viewingMusicId) ? leader.viewingMusicId : leader.musicId;
+        this.launchLeaderMove(performance.now(), f, leader.musicId, { notify: false });
+      }
       return;
     }
     this.travelToId = null;
@@ -2830,6 +3043,32 @@ export class MapEngine {
     const f = this.follow;
     if (!f || !this.index.has(musicId)) return;
     f.viewingMusicId = musicId;
+  }
+
+  /**
+   * 하차한 자리를 **못 박는다** (S15P21A405-677). 듣던 곡은 인솔자 것이었으니 내 자리도 거기다 — 표식·`myId`·
+   * 재생 곡·돌아갈 자리(`home`)를 그 곡으로 두고, 묵은 내 비행은 지우고, 가운데 고정을 그 곡에 건다.
+   * `stopFollow` 가 표식은 놓지만 나머지는 안 건드려서, 뒤이어 오는 것들(묵은 `travelToId`, 예전 `home`)이
+   * 자리를 되돌릴 수 있었다.
+   */
+  settleAfterRide(musicId: number) {
+    this.travelToId = null;
+    this.meFlight = null;
+    this.meHop = null;
+    const i = this.index.get(musicId);
+    if (i == null) return;
+    if (!this.subset[i]) {
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      this.rebuildAliveIdx();
+      this.project();
+    }
+    this.myId = musicId;
+    this.playingId = musicId;
+    this.home = { musicId, boxes: [...this.boxes] };
+    this.me = { ...this.worldOf(musicId)! };
+    this.centerHoldId = null;
+    this.centerLock = true;
   }
 
   stopFollow() {
@@ -3071,6 +3310,8 @@ export class MapEngine {
           this.centerAfterMorph = null;
           this.centerOn(id, FOCUS.zoomMul);
         }
+        // 내 위치로 가는 길이 남았으면 다음 겹으로 (S15P21A405-670)
+        if (this.homeRoute) this.continueHomeRoute();
         // 전환 중에 눌린 "내 위치로 가기" 를 이제 처리한다
         if (this.pendingHome) {
           this.pendingHome = false;
@@ -3514,6 +3755,7 @@ export class MapEngine {
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
       canGoHome: this.canGoHome(),
+      homeTraveling: this.homeTraveling,
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

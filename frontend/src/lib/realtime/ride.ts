@@ -4,7 +4,7 @@ import { REALTIME } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { getPlayer } from "@/components/player/player-registry";
 import { sendJoinNow } from "@/hooks/use-presence-join";
-import { pushViewport } from "@/hooks/use-viewport-subscription";
+import { adjustRiderCount, pushViewport } from "@/hooks/use-viewport-subscription";
 import { subscribePlayback } from "@/lib/playback-events";
 import { send } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -113,13 +113,28 @@ export function cancelPendingSeek(): void {
  * **자리는 응답이 말한 곳이다.** 탑승 전 자리로 되돌리지 않는다. 인솔자가 층을 옮겼으면
  * `layer` 가 탈 때와 다르게 온다 (§8.4) — 그대로 두면 하차 직후 한 겹 어긋난 화면이 된다.
  */
-export function endRide(at: { musicId: number | null; layer: number }): void {
+/**
+ * **화면에서 먼저 내린다** (S15P21A405-674) — 우주선·배너를 지우고, 기다리던 위치 맞추기를 버린다.
+ * 서버에는 아직 아무 말도 하지 않는다. 하차 버튼이 누르는 순간 이걸 부르고, 응답이 오면 `endRide` 가
+ * 자리를 바로잡고 presence 를 보낸다. presence 를 먼저 보내면 서버는 아직 나를 태우고 있는 채라 순서가 어긋난다.
+ */
+export function leaveRideLocally(): void {
   cancelPendingSeek();
+  const leader = useFollowStore.getState().leaderEmail;
   useFollowStore.getState().stop();
-  const engine = getMapEngine();
-  engine?.stopFollow();
+  getMapEngine()?.stopFollow();
+  // 인솔자 표식의 동승 인원도 먼저 하나 뺀다 — 혼자 타고 있었으면 우주선이 바로 헬멧이 된다 (S15P21A405-677)
+  if (leader) adjustRiderCount(leader, -1);
+}
+
+export function endRide(at: { musicId: number | null; layer: number }): void {
+  leaveRideLocally();
   // 자리를 모르는 길이 하나 있다 — 이미 끝나 있어 `RIDE_NOT_RIDING` 이 온 경우다. 그때는 안 옮긴다
-  if (at.musicId != null) useMapStore.getState().setMyMusicId(at.musicId);
+  if (at.musicId != null) {
+    useMapStore.getState().setMyMusicId(at.musicId);
+    // 듣던 곡이 곧 내 자리다 — 표식·돌아갈 자리·가운데 고정을 그 곡에 못 박는다 (S15P21A405-677)
+    getMapEngine()?.settleAfterRide(at.musicId);
+  }
   /**
    * 겹 맞추기. **내려가는 쪽도 된다** (S15P21A405-560) — 엔진에 겹을 직접 지정하는 입구가
    * 생겼다. 예전에는 떠오르는 쪽만 할 수 있어서, 인솔자가 더 깊이 내려간 상태로 내리면

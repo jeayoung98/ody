@@ -4,6 +4,7 @@ import type { NearbyUser } from "@/types";
 import type { MapEngine } from "../engine/map-engine";
 import { drawCropped, photoFor } from "@/lib/avatar-photo";
 import { avatarFor, ME_AVATAR, trailOf } from "./sprites";
+import { queueSlots, type QueueInput } from "./queue-slots";
 
 const TEAL: readonly [number, number, number] = [79, 227, 206];
 
@@ -175,8 +176,17 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
   g.restore();
 }
 
-/** 탑승 후 선미 뒤로 줄줄이 달리는 동승자 (나 + 다른 사람들) */
-export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
+/** 내 얼굴 — 내 우주선 창과 매달린 "나" 헬멧에 (S15P21A405-676). 프로필을 아직 못 받았으면 절차적 얼굴이다 */
+export function meAvatar(e: MapEngine): NearbyUser {
+  const p = e.myProfile;
+  return p ? { ...ME_AVATAR, nickname: p.nickname ?? ME_AVATAR.nickname, imageUrl: p.imageUrl } : ME_AVATAR;
+}
+
+/**
+ * 선미 뒤로 줄줄이 달리는 동승자. 누가 서는지는 `queueSlots` 가 정한다 (S15P21A405-676) — 내가 따라갈 때는 내가
+ * 맨 앞이고, 내가 인솔자면 나는 조종석이라 줄에 없다. 헬멧마다 그 사람 사진(없으면 절차적 얼굴)이 들어간다.
+ */
+export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, queue: QueueInput) {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
   /**
@@ -187,8 +197,10 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
    */
   const rr = R * 0.68;
   const step = R * 1.92;
-  const shown = Math.min(5, riders + 1);
-  const extra = riders + 1 - shown;
+  const slots = queueSlots(queue);
+  if (!slots.length) return;
+  const shown = Math.min(5, slots.length);
+  const extra = slots.length - shown;
   const at = (i: number): [number, number] => {
     const wob = Math.sin(t * 2.2 - i * 0.9) * R * 0.17;
     const d = step * (i + 2.7);
@@ -208,10 +220,10 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
   g.restore();
   for (let i = 0; i < shown; i++) {
     const [qx, qy] = at(i);
-    const mine = i === 0;
-    const rgb: readonly [number, number, number] = mine ? TEAL : genreRgb(i * 3);
+    const { user, mine } = slots[i];
+    const rgb: readonly [number, number, number] = mine ? TEAL : genreRgb(user.genreId);
     drawHelmet(g, qx, qy, rr, rgb, mine);
-    drawVisor(g, qx, qy, rr, mine ? ME_AVATAR : { ...ME_AVATAR, email: `rider-${i}`, genreId: i * 3, avatarSeed: [0.1 * i, 0.4, 0.6, 0.3, 0.7, 0.2] });
+    drawVisor(g, qx, qy, rr, user);
     if (mine) {
       g.beginPath();
       g.arc(qx, qy, rr * 1.75, 0, 6.284);
@@ -319,8 +331,12 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
-    // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
-    const R = (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
+    /**
+     * 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614).
+     * **우주선은 예외다** (S15P21A405-677). 가까운 별에 서면 우주선과 매달린 헬멧이 커지고 먼 별에 서면 작아져서,
+     * 따라가는 내내 크기가 오락가락했다. 우주선은 헬멧이 아니라 탈것이라 한 크기로 두고, 내 우주선(`draw-map`)과도 같다.
+     */
+    const R = ship ? FRIEND_MARKER.leaderRadiusPx : (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;
@@ -334,7 +350,8 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       const ang = fr.heading + Math.PI / 2;
       // 배는 헬멧보다 크다 (S15P21A405-642). 접속 점·닉네임 자리는 헬멧 기준 `R` 을 그대로 쓴다
       const SR = R * FRIEND_MARKER.shipScale;
-      if (isLeader) drawQueue(g, px, py, SR, ang, t, u.riderCount);
+      // 인솔자의 `riderCount` 에는 나도 들어 있다(오면). 나 말고 몇 명인지만 빈 헬멧으로 — 지금은 안 와서 0 이다 (A-86)
+      if (isLeader) drawQueue(g, px, py, SR, ang, t, { me: meAvatar(e), riders: [], count: Math.max(0, u.riderCount - 1) });
       drawShip(g, px, py, SR, ang, t);
       // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
       drawVisor(g, px, py, SR * 0.72, u);

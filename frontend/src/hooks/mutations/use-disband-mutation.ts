@@ -14,19 +14,33 @@ import type { DisbandResponse } from "@/types";
  *
  * `RIDE_NOT_CAPTAIN` 은 여기서 "따라오는 사람이 없다" 는 뜻이다 — 누르는 사이 전원이 스스로
  * 내렸을 때다. 실패가 아니라 이미 원하는 상태이므로 인원도 0 으로 맞춘다.
+ *
+ * **누르는 순간 배너가 사라진다** (S15P21A405-675). 하차(674)와 같은 결이다 — 인원을 먼저 0 으로 두고,
+ * 정말 실패했을 때만 누르기 전 인원으로 되돌린다.
  */
 export function useDisbandMutation() {
   const showToast = useToastStore((s) => s.show);
   const setFollowerCount = useFollowStore((s) => s.setFollowerCount);
   return useMutation({
     mutationFn: () => api<DisbandResponse>(API_ENDPOINTS.realtime.rideFleet, { method: "DELETE" }),
+    onMutate: () => {
+      const ride = useFollowStore.getState();
+      const before = { count: ride.followerCount, riders: ride.riders };
+      setFollowerCount(0);
+      ride.setRiders([]);
+      return before;
+    },
     onSuccess: (res) => {
       setFollowerCount(0);
+      useFollowStore.getState().setRiders([]);
       showToast(RIDE_DISBANDED(res.riderCount));
     },
-    onError: (e) => {
+    onError: (e, _v, before) => {
       const code = e instanceof ApiError ? e.code : "UNKNOWN";
-      if (code === "RIDE_NOT_CAPTAIN") setFollowerCount(0);
+      if (code !== "RIDE_NOT_CAPTAIN" && before) {
+        setFollowerCount(before.count);
+        useFollowStore.getState().setRiders(before.riders);
+      }
       showToast(RIDE_DISBAND_REJECTED[code as keyof typeof RIDE_DISBAND_REJECTED] ?? RIDE_DISBAND_REJECTED.UNKNOWN);
     },
   });

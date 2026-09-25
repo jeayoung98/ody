@@ -1,12 +1,14 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, PROBE, REPRESENTATIVE_COUNT, RIDE_LOCK_TOAST_MS, RIDING_LOCKED, RIDING_MAP_LOCKED, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
+import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useBots } from "@/hooks/use-bots";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
@@ -14,6 +16,7 @@ import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscripti
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
+import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
@@ -25,6 +28,7 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
+import { rideLayerTarget } from "./engine/ride-layer";
 import { MapEngine } from "./engine/map-engine";
 import HoverCard from "./hover-card";
 import LayerToast from "./layer-toast";
@@ -144,14 +148,39 @@ export default function MapView({ occlusion }: MapViewProps) {
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
   const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
   const leaderViewingMusicId = useFollowStore((s) => s.leaderViewingMusicId);
+  const leaderLayer = useFollowStore((s) => s.leaderLayer);
+  // 인솔자 곡 좌표가 뒤늦게 편입되면 다시 건다 — 첫 시도는 `startFollow` 가 `index.has` 에서 빠져나갔다 (S15P21A405-674)
+  const leaderPointRevision = useFollowStore((s) => s.pointRevision);
   /**
    * 나를 따라오는 인원 (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
    * 엔진은 스토어를 모르므로 여기서 넣어 준다.
    */
   const followerCount = useFollowStore((s) => s.followerCount);
+  const riders = useFollowStore((s) => s.riders);
   useEffect(() => {
-    engine.setMyRiders(followerCount);
-  }, [engine, followerCount]);
+    // 얼굴을 아는 사람은 얼굴로, 수만 아는 만큼은 빈 헬멧으로 (S15P21A405-676)
+    engine.setMyRiders(
+      followerCount,
+      riders.map((r) => ({
+        email: r.email,
+        nickname: r.nickname,
+        imageUrl: r.imageUrl,
+        isOnline: true,
+        musicId: 0,
+        viewingMusicId: 0,
+        genreId: NO_GENRE_ID,
+        meetingCount: 0,
+        riderCount: 0,
+        followingNickname: null,
+        avatarSeed: seedOf(r.email),
+      })),
+    );
+  }, [engine, followerCount, riders]);
+  // 내 얼굴 — 내 우주선 창과 매달린 "나" 헬멧에 (S15P21A405-676)
+  const { data: me } = useMeQuery();
+  useEffect(() => {
+    engine.setMyProfile(me ? { nickname: me.nickname, imageUrl: me.imageUrl } : null);
+  }, [engine, me]);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**
@@ -358,11 +387,29 @@ export default function MapView({ occlusion }: MapViewProps) {
    * `leaderMusicId` 를 의존성에 둔 이유는 **겹이 바뀌면 다시 걸어야** 하기 때문이다 —
    * `startFollow` 는 그 곡이 지금 겹의 상주 집합에 있을 때만 켜진다.
    */
+  const residentCount = useMapStore((s) => s.residentCount);
+  const qc = useQueryClient();
   useEffect(() => {
     if (!leaderEmail || leaderMusicId == null) {
       engine.stopFollow();
       return;
     }
+    /**
+     * **지도가 준비되기 전에는 걸지 않고, 준비되면 다시 온다** (S15P21A405-676). 새로고침 복원은 소켓 재탑승이
+     * 지도 데이터보다 먼저 끝나서, 예전에는 여기서 `startFollow` 가 `index.has` 에 걸려 빠져나간 뒤 다시 부를
+     * 계기가 없었다 — 우주선도 안 뜨고 카메라도 안 움직였다. `residentCount` 를 의존성에 둔 것이 그 계기다:
+     * 겹 집합이 도착할 때마다 바뀐다.
+     */
+    if (!engine.ready) return;
+    if (!engine.pointOf(leaderMusicId)) {
+      void ensureSongPoint(qc, leaderMusicId).then((ok) => ok && useFollowStore.getState().markPointAdopted());
+      return;
+    }
+    // 겹을 건너는 중이면 도착한 뒤에 — `layer` 가 바뀌며 다시 온다
+    if (engine.anim) return;
+    // 인솔자가 다른 겹이면 먼저 그 겹으로. 탑승 응답이 지도보다 먼저 온 경우 `use-ride-mutation` 의 이동은 헛돌았다
+    const toLayer = rideLayerTarget(layer, leaderLayer);
+    if (toLayer != null && engine.rideToLayer(toLayer, leaderMusicId)) return;
     engine.startFollow(
       {
         email: leaderEmail,
@@ -382,7 +429,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       },
       true,
     );
-  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, layer]);
+  }, [engine, qc, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, leaderLayer, leaderPointRevision, layer, residentCount]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {

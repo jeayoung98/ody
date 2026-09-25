@@ -1,7 +1,7 @@
 import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
-import { drawFriends, drawQueue, drawShip } from "./draw-friends";
+import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
 
 /**
  * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
@@ -10,9 +10,10 @@ import { drawFriends, drawQueue, drawShip } from "./draw-friends";
  * **배율은 남의 배와 같은 것을 쓴다** (S15P21A405-642). 하나만 올리면 그 "같은 눈높이" 가
  * 그대로 깨진다 — 배가 커지는 규칙은 `FRIEND_MARKER.shipScale` 한 곳에만 둔다.
  */
-const ME_SHIP_R = 13 * FRIEND_MARKER.shipScale;
+// 인솔자 우주선(`draw-friends`)과 같은 크기 — 누가 나를 따라오든 내가 따라가든 우주선은 한 크기다 (S15P21A405-677)
+const ME_SHIP_R = FRIEND_MARKER.leaderRadiusPx * FRIEND_MARKER.shipScale;
 /** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
-import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
+import { coverFor, dustStars, farFieldTile, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type FarFieldTile, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
 import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
 
@@ -127,9 +128,24 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
       const bg = stars[k];
       const px = ((((bg.u - ox) % 1) + 1) % 1) * (W + 64) - 32;
       const py = ((((bg.v - oy) % 1) + 1) % 1) * (H + 64) - 32;
-      const d = (1.3 + Math.pow(bg.m, 1.5) * 4.2) * sizeK;
+      const d = bg.d0 * sizeK;
       g.globalAlpha = (0.06 + bg.lum * 0.19) * (0.55 + 0.45 * Math.sin(t * (0.35 + (bg.i % 17) / 14) + bg.i)) * aK;
       g.drawImage(spr[bg.spr], px - d / 2, py - d / 2, d, d);
+    }
+  };
+  /**
+   * 구워 둔 별밭 한 장을 화면에 **감아 붙인다**. 타일이 별밭의 한 주기(W+64 × H+64)라
+   * 어긋난 만큼 밀어 2×2 로 깔면 이음매가 없다. 밝기는 여기서 한 번만 곱한다.
+   */
+  const tiled = (ox: number, oy: number, aK: number, tile: FarFieldTile) => {
+    if (aK <= 0) return;
+    g.globalAlpha = aK;
+    const sx = -((((ox % 1) + 1) % 1)) * tile.w;
+    const sy = -((((oy % 1) + 1) % 1)) * tile.h;
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        g.drawImage(tile.canvas, sx + i * tile.w - 32, sy + j * tile.h - 32, tile.w, tile.h);
+      }
     }
   };
   // 가장 먼 별밭은 카메라와 무관하다 — 아무리 밀어도 제자리인 것이 오히려 "아주 멀다"로 읽힌다
@@ -149,8 +165,13 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
     const camV = -(e.cam.cy * e.cam.s) / (H + 64);
     const par = LAYER_DEPTH.parallax;
     const A = LAYER_DEPTH.farFieldAlpha;
-    field(camU * par.mid + t * 0.0026 + 0.37, camV * par.mid - t * 0.0009 + 0.61, 0.92, dim * A * farK);
-    field(camU * par.far + t * 0.0013 + 0.71, camV * par.far - t * 0.0004 + 0.23, 0.8, dim * A * 0.82 * farK, sky, Math.round(sky.length * 0.7));
+    /**
+     * 시차 중간·원경 두 겹은 **구워 둔 타일을 감아 붙인다** (S15P21A405-499). 별마다 그리면
+     * 1,870 draw 인데 타일이면 8 blit 이다. 타일이 별밭 한 주기라 시차는 그대로고, 잃는 것은
+     * 이 두 겹의 반짝임뿐이다 — 자세한 저울질은 `farFieldTile` 주석에 있다.
+     */
+    tiled(camU * par.mid + t * 0.0026 + 0.37, camV * par.mid - t * 0.0009 + 0.61, dim * A * farK, farFieldTile("mid", W, H, 0.92, sky, sky.length));
+    tiled(camU * par.far + t * 0.0013 + 0.71, camV * par.far - t * 0.0004 + 0.23, dim * A * 0.82 * farK, farFieldTile("far", W, H, 0.8, sky, Math.round(sky.length * 0.7)));
     // 가장 가까운 별먼지 — 상주 별과 거의 같은 평면에서, 같은 크기대로 섞인다
     field(camU * par.near + 0.14, camV * par.near + 0.42, 1.4, dim * LAYER_DEPTH.dustAlpha * farK, dustStars());
   }
@@ -959,8 +980,11 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    // 나는 조종석에 있다 — 줄에는 따라오는 사람만 선다 (S15P21A405-676)
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, { me: null, riders: e.myRiderUsers, count: e.myRiders });
     drawShip(g, px, py, ME_SHIP_R, ang, e.time);
-    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
+    // 창 크기는 남의 우주선(`draw-friends`)과 같은 비율 — 내 얼굴이 유리 안에 든다
+    drawVisor(g, px, py, ME_SHIP_R * 0.72, meAvatar(e));
     g.globalCompositeOperation = "source-over";
   } else {
     drawMeMarker(g, px, py, e.time);

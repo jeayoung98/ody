@@ -1,5 +1,6 @@
 "use client";
 
+import { useDrill } from "@/hooks/use-drill";
 import Avatar from "@/components/common/avatar";
 import Button from "@/components/common/button";
 import Note from "@/components/common/note";
@@ -7,7 +8,6 @@ import { useFollowMutation, useUnfollowMutation } from "@/hooks/mutations/use-fo
 import { useRideMutation } from "@/hooks/mutations/use-ride-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useFollowStore } from "@/stores/use-follow-store";
-import { usePanelStore } from "@/stores/use-panel-store";
 import type { UserProfile } from "@/types";
 
 interface FeedHeaderProps {
@@ -47,7 +47,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
   const ride = useRideMutation();
   const follow = useFollowMutation();
   const unfollow = useUnfollowMutation();
-  const drill = usePanelStore((s) => s.drill);
+  // 탭 화면에서는 지도로 돌아가서 연다 (S15P21A405-666)
+  const drill = useDrill();
   const startActivity = useStartActivity();
 
   /** 지금 이 사람의 우주선에 **타고 있는가** (지금 이 순간의 일) */

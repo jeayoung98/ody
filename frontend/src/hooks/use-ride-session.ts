@@ -6,12 +6,12 @@ import { API_ENDPOINTS, NO_GENRE_ID, QUERY_KEYS, REALTIME, RIDE_ENDED_BY_DISBAND
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { useRideMutation, type RideTarget } from "@/hooks/mutations/use-ride-mutation";
-import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query";
 import { api } from "@/lib/api";
 import { musicToMapPoint } from "@/lib/map-point";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
 import { readStorage } from "@/lib/storage";
 import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
+import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { cancelResume, resumeRide } from "@/lib/realtime/ride-resume";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -30,6 +30,7 @@ import type {
   RideRiderLeftPayload,
   RideTrackPayload,
   RideViewPayload,
+  UserProfile,
 } from "@/types";
 
 /**
@@ -71,7 +72,8 @@ export function useRideSession(): void {
        * 제목 없이 진행한다. 기다리는 사이 더 새 곡이 오면 먼저 것은 버린다 — 옛 곡을 뒤늦게 틀면 안 된다.
        */
       const seq = ++trackSeq;
-      const detail = qc.fetchQuery(musicDetailQueryOptions(p.musicId)).catch(() => undefined);
+      // 제목과 함께 **좌표도 갖춘다** (S15P21A405-674) — 상주 집합 밖의 곡이면 우주선이 날아갈 자리가 없었다
+      const detail = ensureSongPoint(qc, p.musicId);
       const deadline = new Promise<void>((resolve) => setTimeout(resolve, REALTIME.rideTrackTitleWaitMs));
       void Promise.race([detail, deadline]).then(() => {
         if (seq !== trackSeq) return;
@@ -84,6 +86,7 @@ export function useRideSession(): void {
     function applyTrack(p: RideTrackPayload) {
       const ride = useFollowStore.getState();
       ride.setLeaderMusicId(p.musicId);
+      ride.setLeaderLayer(p.layer);
       /**
        * **겹도 같이 따라간다** (S15P21A405-560). 알림이 `layer` 를 주는데 버리고 있었다 —
        * 인솔자가 파고들면 나만 제자리에 남고, 그 겹에 없는 곡을 가리켜 우주선까지 사라졌다.
@@ -225,8 +228,25 @@ export function useRideSession(): void {
      * 둘 다 **바뀐 뒤의** 인원을 싣는다. 탑승 쪽(`RIDE_RIDER_JOINED`)이 3차 계약에서 새로
      * 생겼고(S15P21A405-545), 그 전에는 누가 내릴 때까지 숫자를 몰라 아예 숨겨 뒀다.
      */
-    const stopRiders = onType<RideRiderJoinedPayload | RideRiderLeftPayload>(["RIDE_RIDER_JOINED", "RIDE_RIDER_LEFT"], (p) => {
-      useFollowStore.getState().setFollowerCount(p.riderCount);
+    const stopJoined = onType<RideRiderJoinedPayload>(["RIDE_RIDER_JOINED"], (p) => {
+      const ride = useFollowStore.getState();
+      ride.setFollowerCount(p.riderCount);
+      ride.addRider({ email: p.email, nickname: p.nickname, imageUrl: null });
+      /**
+       * **사진은 알림에 없다** (S15P21A405-676, BACKEND-NOTES A-85) — 사용자 상세로 받아 헬멧에 넣는다.
+       * 못 받으면 절차적 아바타로 남는다. 그 사이 내렸으면 `setRiderImage` 가 빈 목록을 그대로 둔다.
+       */
+      void qc
+        .fetchQuery({ queryKey: QUERY_KEYS.user.profile(p.email), queryFn: () => api<UserProfile>(API_ENDPOINTS.user.detail(p.email)), staleTime: 5 * 60 * 1000 })
+        .then((u) => useFollowStore.getState().setRiderImage(p.email, u.imageUrl))
+        .catch(() => {
+          /* 얼굴 없이 간다 */
+        });
+    });
+    const stopLeft = onType<RideRiderLeftPayload>(["RIDE_RIDER_LEFT"], (p) => {
+      const ride = useFollowStore.getState();
+      ride.setFollowerCount(p.riderCount);
+      ride.removeRider(p.email);
     });
 
     /**
@@ -244,7 +264,8 @@ export function useRideSession(): void {
       stopPanel();
       stopView();
       stopEnded();
-      stopRiders();
+      stopJoined();
+      stopLeft();
       stopErr();
       cancelResume();
     };

@@ -60,6 +60,8 @@ export interface EngineSnapshot {
   playingElsewhere: boolean;
   /** "내 위치로 가기" 로 돌아갈 자리가 있는가 (재생한 적이 있는가) */
   canGoHome: boolean;
+  /** "내 위치로 가기" 로 옮겨 가는 중 — 누른 순간부터 도착까지 (S15P21A405-670). 패널이 이걸 보고 접혔다 펴진다 */
+  homeTraveling: boolean;
 }
 
 interface MapState extends EngineSnapshot {
@@ -167,6 +169,7 @@ export const useMapStore = create<MapState>()(
       ghostMusicId: null,
       playingElsewhere: false,
       canGoHome: false,
+      homeTraveling: false,
 
       viewMode: "default",
       nearbyPanelHandled: false,

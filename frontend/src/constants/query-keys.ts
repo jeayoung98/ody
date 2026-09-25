@@ -53,6 +53,8 @@ export const QUERY_KEYS = {
     profile: (email: string) => ["user", "profile", email] as const,
     /** 팔로워·팔로잉 목록 (S15P21A405-489). 보는 사람 기준 값이 섞여 있어 email·type·page 가 다 키다 */
     followList: (email: string, type: "follower" | "following", page: number) => ["user", "follow-list", email, type, page] as const,
+    /** 모든 팔로워·팔로잉 목록 — 구독이 바뀌면 줄마다 있는 `isFollowing` 을 한꺼번에 고친다 (S15P21A405-675) */
+    followListAll: ["user", "follow-list"] as const,
   },
 
   playlist: {

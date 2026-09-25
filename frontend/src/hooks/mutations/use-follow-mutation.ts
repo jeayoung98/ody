@@ -1,9 +1,12 @@
-import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { isBot } from "@/lib/bots/roster";
+import { withFollow, withFollowInList } from "@/lib/optimistic";
+import { snapshotQueries } from "@/lib/query-snapshot";
 import { isFollowingBot, useBotStore } from "@/stores/use-bot-store";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
-import type { FollowResponse } from "@/types";
+import { API_ENDPOINTS, CHANGED, FOLLOW_FAILED, QUERY_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
+import type { FollowListResponse, FollowResponse, User, UserProfile } from "@/types";
 
 /**
  * 팔로우 = **구독** (S15P21A405-489, BACKEND-NOTES A-37·A-38). **실연동이다** — 목이었다.
@@ -20,15 +23,38 @@ import type { FollowResponse } from "@/types";
  * 구독 하나가 바뀌면 최소 네 군데가 같이 틀어진다 — 상대의 팔로워 수, **내 팔로잉 수**,
  * 그리고 양쪽의 팔로워·팔로잉 목록(`isFollowing` 이 보는 사람 기준이라 남의 목록도 바뀐다).
  * 어느 것이 화면에 떠 있는지 여기서는 알 수 없고, 사용자 조회는 작아서 다시 읽어도 싸다.
+ *
+ * **누르는 순간 버튼과 수가 바뀐다** (S15P21A405-675). 상대 프로필의 `isFollowing`·팔로워 수, 내 프로필의
+ * 팔로잉 수, 떠 있는 팔로워·팔로잉 목록의 그 사람 줄을 먼저 고치고, 실패하면 전부 되돌린다.
+ * 응답 뒤 무효화는 그대로다 — 서버 값으로 다시 맞춘다.
  */
 export function useFollowMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (followeeEmail: string) =>
       // 봇은 서버에 없는 계정이라 구독 관계를 보낼 곳이 없다. 이 브라우저에만 남는다 (S15P21A405-536)
       isBot(followeeEmail) ? followBotLocally(followeeEmail, true) : api<FollowResponse>(API_ENDPOINTS.user.followInsert, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all }),
+    onMutate: (followeeEmail) => applyFollow(qc, followeeEmail, true),
+    onSuccess: () => {
+      showToast(CHANGED.followed);
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all });
+    },
+    onError: (_e, _email, restore) => {
+      restore?.();
+      showToast(FOLLOW_FAILED);
+    },
   });
+}
+
+/** 구독 상태를 캐시에 먼저 적는다. 돌려주는 함수가 되돌리기다 */
+async function applyFollow(qc: QueryClient, email: string, follow: boolean) {
+  const restore = await snapshotQueries(qc, [QUERY_KEYS.user.all]);
+  const me = qc.getQueryData<User>(QUERY_KEYS.auth.me)?.email;
+  qc.setQueryData<UserProfile>(QUERY_KEYS.user.profile(email), (prev) => withFollow(prev, follow, "target"));
+  if (me) qc.setQueryData<UserProfile>(QUERY_KEYS.user.profile(me), (prev) => withFollow(prev, follow, "me"));
+  qc.setQueriesData<FollowListResponse>({ queryKey: QUERY_KEYS.user.followListAll }, (prev) => withFollowInList(prev, email, follow));
+  return restore;
 }
 
 /**
@@ -46,9 +72,18 @@ function followBotLocally(email: string, want: boolean): Promise<FollowResponse>
 /** 구독 해제. **팔로우 중이 아니어도 200** 이라 화면이 상태를 먼저 확인할 필요가 없다 */
 export function useUnfollowMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (followeeEmail: string) =>
       isBot(followeeEmail) ? followBotLocally(followeeEmail, false) : api<FollowResponse>(API_ENDPOINTS.user.followDelete, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all }),
+    onMutate: (followeeEmail) => applyFollow(qc, followeeEmail, false),
+    onSuccess: () => {
+      showToast(CHANGED.unfollowed);
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all });
+    },
+    onError: (_e, _email, restore) => {
+      restore?.();
+      showToast(FOLLOW_FAILED);
+    },
   });
 }

@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useRef, useState } from "react";
+import ProfileEditDialog from "@/components/auth/profile-edit-dialog";
 import { MoreIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
 import { useLogoutMutation } from "@/hooks/mutations/use-logout-mutation";
@@ -15,9 +16,14 @@ import { useLogoutMutation } from "@/hooks/mutations/use-logout-mutation";
  *
  * **내 페이지에서만 그린다.** 남의 프로필에서 "로그아웃" 이 보이면 그 사람을 로그아웃시키는
  * 것처럼 읽힌다 — 부르는 쪽(`feed-panel`)이 `isMe` 로 가른다.
+ *
+ * **"내 정보 수정" 은 팝업으로 연다** (S15P21A405-672). `/profile` 로 넘어가면 그 경로가
+ * `APP_ROUTES` 에 없어 지도와 플레이어가 통째로 내려가고 듣던 곡이 끊겼다. 팝업 상태를 여기서
+ * 드는 이유는 드롭다운이 닫혀도 이 컴포넌트는 그대로 서 있기 때문이다 — 안쪽에 두면 같이 사라진다.
  */
 export default function FeedMenu() {
   const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
   const router = useRouter();
   const logout = useLogoutMutation();
@@ -60,7 +66,7 @@ export default function FeedMenu() {
           role="menu"
           className="glass-liquid animate-rpop absolute top-full right-0 z-30 mt-1.5 w-[132px] overflow-hidden rounded-box-sm py-1 shadow-[0_18px_44px_-16px_#000]"
         >
-          <button type="button" role="menuitem" className={item} onClick={() => router.push(ROUTES.profile)}>
+          <button type="button" role="menuitem" className={item} onClick={() => (setOpen(false), setEditing(true))}>
             내 정보 수정
           </button>
           <button
@@ -75,6 +81,7 @@ export default function FeedMenu() {
           </button>
         </div>
       )}
+      {editing && <ProfileEditDialog onClose={() => setEditing(false)} />}
     </div>
   );
 }

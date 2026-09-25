@@ -651,3 +651,35 @@ FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15
 | A-79 | `state` 6종 · `generation.status` 5종 | `EMPTY` `DISTRIBUTION_ONLY` `READY` `FRESH` `STALE` `IN_PROGRESS` / `NOT_REQUESTED` `INELIGIBLE` `IN_PROGRESS` `GENERATED` `FALLBACK` | `lib/taste-view.ts` 가 화면이 묻는 것(무엇을 띄우나·버튼을 눌러도 되나·뭐라고 적나)으로 바꾼다. 조합 판정은 `tests/taste-view.test.cjs` 가 묶는다 | 반영됨 |
 | A-80 | `IN_PROGRESS` 를 끝나는 것을 알 길이 없다 | 응답에 `generation.nextAvailableAt`(lease 만료)만 있고 완료 알림은 없다 | 프론트가 3초 간격으로 다시 묻는다(`use-taste-analysis-query`). **소켓 이벤트가 생기면 폴링을 걷어낸다** — 지금은 생성 중일 때만 돌아서 부담이 크지 않다 | 협의 전 (제안) |
 | A-81 | `report.aiGenerated` 가 조회에서는 늘 `true` | `TasteAnalysisQueryService.attachLatestReport` 가 상수 `true` 로 채운다. 생성 응답의 `FALLBACK` 분기만 규칙 기반임을 알 수 있다 | 화면은 `aiGenerated === false` 일 때만 "간단한 요약으로 대신했어요" 를 띄운다 — **새로고침하면 그 사실이 사라진다.** 저장된 리포트가 대체 문장인지 같이 내려 주면 정확해진다 | 협의 전 |
+
+---
+
+## 주변 곡 카드의 앨범 커버 (S15P21A405-671, 2026-09-25)
+
+곡 상세의 "이 곡과 가장 비슷해요!" 카드에 **진짜 앨범 커버가 조건부로만 뜬다.**
+
+배포 백엔드 스키마를 직접 읽어 확인했다 (`GET /api/v3/api-docs`, 2026-09-25).
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-84 | **`NeighborTrack` 에 `albumMbid` 를 실어 달라** | 지금 필드는 `album` `artist` `distance` `id` `location` `title` `videoId` `youtubeUrl` 뿐이다. 같은 문서의 `MusicDetail`·`MusicDetailResponse` 에는 `albumMbid` 가 **이미 있다** — 곡 하나를 열 때는 주고 주변 10곡에는 안 준다 | 주변 곡 카드가 **대부분 절차적 커버로 떨어진다.** 프론트는 지도 엔진의 상주 집합에서 빌려 쓰는데(`song-nearby-card` 의 `getMapEngine().pointOf(musicId).albumMbid`), 주변 10곡은 PC 공간에서 가장 가까운 곡이라 같거나 인접한 격자에 모여 있고 상주 집합은 **격자당 대표 1곡만** 뽑는다. 그래서 겹치는 곡이 많아야 한두 곡이다 (추정 — 실측 못 함) | 협의 전 |
+
+**우회로는 둘 다 접었다.**
+
+- 주변곡마다 곡 상세를 따로 부르기 — 카드 한 줄 띄우려고 요청이 10개 늘고, 그 응답에는 주변 10곡과
+  16차원 좌표까지 들어 있다. S15P21A405-514 가 줄이려던 것과 정면으로 충돌한다
+- `videoId` 로 유튜브 썸네일 쓰기 — S15P21A405-516·517 에서 이미 기각했다. 앨범 아트가 아니라 영상
+  썸네일이라 실데이터 16곡 중 절반이 번호판 사진·인물 스틸이었다
+
+`albumMbid` 는 백엔드가 이미 들고 있는 값이라 **필드 하나 추가**면 된다. 그러면 `song-nearby-card` 의
+상주 집합 우회도 같이 걷어낼 수 있다.
+
+## 따라가기 우주선의 얼굴 (S15P21A405-676, 2026-09-25)
+
+인솔자 화면에서 내 우주선 창에 내 사진이 없고, 뒤에 매달린 동승자 헬멧에도 얼굴이 없었다. 프론트 쪽 원인(내 프로필을
+엔진이 몰랐다 · 줄에 인솔자 자신을 한 칸 더 세웠다)은 고쳤고, 아래 둘은 백엔드 계약이 걸린다.
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-85 | `RIDE_RIDER_JOINED` 에 `imageUrl` 이 없다 | 3차 계약 §2 페이로드는 `email` `nickname` `riderCount` 뿐이다 (`types/realtime.ts` `RideRiderJoinedPayload`) | 동승자 헬멧에 사진을 넣으려고 프론트가 사람마다 `GET /api/user/detail?email=` 을 한 번 더 부른다 (`use-ride-session`). 실어 주면 요청 하나가 준다 — 급하지 않다 | 협의 전 (우회 중) |
+| A-86 | 동승자는 **같은 선단의 다른 동승자를 모른다** | 뷰포트·주변 사람 목록은 요청자를 빼고(2차 명세 §4.2), 인솔자의 `riderCount` 는 동승자에게 오지 않아 `map-view` 가 0 으로 둔다. 선단 목록을 주는 API 도 없다 | 따라가는 사람 화면에는 우주선 뒤에 **나 혼자**만 매달린다 — 셋이 같이 타도 서로 안 보인다. 탑승 응답(`POST /api/realtime/ride`)에 동승자 목록을 싣거나 `RIDE_RIDER_JOINED/LEFT` 를 동승자에게도 보내 주면 프론트가 그린다 (`queueSlots` 가 이미 목록·수를 받는다) | 협의 전 |

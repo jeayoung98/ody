@@ -2,7 +2,7 @@ import { useMutation } from "@tanstack/react-query";
 import { API_ENDPOINTS, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
 import { isBot } from "@/lib/bots/roster";
-import { endRide } from "@/lib/realtime/ride";
+import { endRide, leaveRideLocally } from "@/lib/realtime/ride";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { useToastStore } from "@/stores/use-toast-store";
@@ -35,8 +35,13 @@ export function useDismountMutation() {
  *
  * **성공·실패 모두 화면의 탑승 상태를 걷어낸다.** 요청이 실패했는데 배너만 남으면 조작은
  * 잠긴 채 내릴 수도 없는 상태가 된다 — 그게 이 기능에서 제일 나쁜 결말이다.
+ *
+ * **누르는 순간 내린다** (S15P21A405-674). 예전에는 `DELETE` 응답이 올 때까지 우주선과 배너가 남아 있어
+ * 버튼이 안 먹은 것처럼 보였다. 지금은 화면부터 내리고(`leaveRideLocally`), 응답은 자리(곡·겹)를 바로잡고
+ * presence 를 다시 보내는 데만 쓴다. 그 사이 `RIDE_*` 알림이 와도 처리기가 `leaderEmail` 을 보고 흘려보낸다.
  */
 export async function dismountRide(): Promise<void> {
+  const wasRiding = useFollowStore.getState().leaderEmail != null;
   /**
    * 봇에서 내리는 길 (S15P21A405-536). 서버는 내가 탄 적도 모르므로 `DELETE` 를 보내면
    * `RIDE_NOT_RIDING` 만 돌아온다. 자리는 지금 있는 곳 그대로다 — 봇을 따라다니는 동안
@@ -47,16 +52,18 @@ export async function dismountRide(): Promise<void> {
     endRide({ musicId: map.myMusicId, layer: map.layer });
     return;
   }
+  leaveRideLocally();
   try {
     endRide(await api<DismountResponse>(API_ENDPOINTS.realtime.ride, { method: "DELETE" }));
   } catch (e) {
     /**
      * **`RIDE_NOT_RIDING` 은 조용히 넘긴다** (§3.3). 인솔자가 먼저 사라져 `RIDE_ENDED` 로 이미
      * 끝나 있던 경우인데, 사용자 입장에서는 눌러서 내려진 것이 맞다. 다만 자리 정보가 없으니
-     * 지금 자리를 그대로 둔다 — `RIDE_ENDED` 가 이미 맞춰 놓았다.
+     * 지금 자리를 그대로 둔다 — `RIDE_ENDED` 가 이미 맞춰 놓았다. 누르기 전에 타고 있었으면(화면은 이미
+     * 내렸다) presence 만 다시 보내야 지도가 멈춘 채로 남지 않는다.
      */
     const map = useMapStore.getState();
-    if (useFollowStore.getState().leaderEmail) endRide({ musicId: null, layer: map.layer });
+    if (wasRiding) endRide({ musicId: null, layer: map.layer });
     throw e;
   }
 }

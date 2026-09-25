@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { API_ENDPOINTS, STORAGE_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, STORAGE_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
 import { clearPersistedQueries } from "@/lib/query-persist";
 import { readStorage, removeStorage } from "@/lib/storage";
 import type { ApiResponse } from "@/types";
@@ -70,6 +71,8 @@ export function useLogoutMutation() {
           clearPersistedQueries();
         },
       });
+      // 토스트 스토어는 쿼리 캐시가 아니라 살아남는다 — 로그인 화면으로 넘어가도 한 번 보인다 (S15P21A405-667)
+      useToastStore.getState().show(CHANGED.loggedOut);
       return null;
     },
   });

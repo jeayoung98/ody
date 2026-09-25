@@ -94,3 +94,29 @@ test("탑승하면 인솔자 자리가 한복판으로 온다", () => {
   assert.ok(starOff(e, HOME) < 1);
   assert.ok(meOff(e) < 1);
 });
+
+/**
+ * 탑승을 누르는 순간의 화면은 인솔자 곡을 모를 수 있어 **내 곡을 임시로** 쓴다 (프로필에서 탈 때는 늘 그렇다).
+ * 응답이 진짜 곡을 가져오면 같은 사람·같은 겹이라 `startFollow` 가 "다시 걸지 않는" 길로 들어오는데,
+ * 예전에는 거기서 표시 정보만 갱신하고 비켜나 우주선도 뷰도 임시 곡에 남았다 — 새로고침해야 가운데로 왔다 (S15P21A405-676).
+ */
+test("탑승 응답이 진짜 곡을 가져오면 임시 곡의 우주선이 그리로 날고 뷰도 따라간다", () => {
+  const { e, t } = board(); // 임시 곡(HOME)에 세워 둔 상태
+  e.startFollow(leader(FAR), true); // 같은 사람·같은 겹 — 진짜 곡이 도착했다
+  assert.ok(e.follow.mv && e.follow.mv.toId === FAR, "우주선이 진짜 곡으로 난다");
+  e.follow.mv.t0 = t;
+  let now = t;
+  for (let k = 0; k <= FOLLOW.moveMs / 16 + 200; k++) e.frame((now += 16));
+  assert.equal(e.follow.playingMusicId, FAR);
+  assert.ok(starOff(e, FAR) < 1, `인솔자 곡이 한복판에서 ${starOff(e, FAR).toFixed(0)}px 떨어져 있다`);
+  assert.ok(meOff(e) < 1, `내 표식이 한복판에서 ${meOff(e).toFixed(1)}px 떨어져 있다`);
+});
+
+test("이미 그 곡으로 날고 있으면(RIDE_TRACK) 다시 걸어도 비행을 지우지 않는다", () => {
+  const { e, t } = board();
+  e.rideTo(FAR);
+  const mv = e.follow.mv;
+  e.startFollow(leader(FAR), true);
+  assert.equal(e.follow.mv, mv, "같은 비행이 그대로다");
+  void t;
+});

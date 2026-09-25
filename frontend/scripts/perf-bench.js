@@ -277,7 +277,12 @@
   const sumBytes = (arr) => arr.reduce((n, r) => n + (r.transferSize || 0), 0);
   const js = res.filter((r) => r.name.endsWith(".js") || r.name.includes("/_next/static/chunks/"));
   const imgs = res.filter((r) => r.initiatorType === "img" || /\.(png|jpe?g|webp|avif|gif|svg)(\?|$)/.test(r.name));
-  const songsReq = res.filter((r) => r.name.includes("/api/map/songs")).at(-1);
+  /*
+   * 지도 응답은 **`/bff/map/songs`** 다 (S15P21A405-438). 목 시절 경로 `/api/map/songs` 로 찾아서
+   * 실데이터가 붙은 뒤로는 map/songs 칸이 늘 비어 있었다 — 배포에서 `/api/` 는 백엔드 몫이라
+   * 우리 라우트는 전부 `/bff/` 로 옮겨 갔다 (S15P21A405-273).
+   */
+  const songsReq = res.filter((r) => r.name.includes("/bff/map/songs")).at(-1);
   const paint = Object.fromEntries(performance.getEntriesByType("paint").map((p) => [p.name, num(p.startTime)]));
 
   const vitals = {};

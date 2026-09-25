@@ -62,6 +62,9 @@ class GmsTasteClientTests {
         assertThat(authorization.get()).isEqualTo("Bearer secret");
         assertThat(requestBody.get())
                 .contains("\"store\":false", "\"type\":\"json_schema\"", "pc1-high")
+                // 스키마가 JsonNode 게터로 펼쳐져 나가면 GMS 가 400 을 낸다 (S15P21A405-648)
+                .contains("\"additionalProperties\":false", "\"required\":[\"summary\",\"narratives\"]")
+                .doesNotContain("\"nodeType\"")
                 .contains("sampleSize")
                 .doesNotContain("email", "musicId", "title");
     }

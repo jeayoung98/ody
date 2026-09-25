@@ -12,6 +12,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.backend.taste.analysis.TasteFinding;
@@ -48,7 +49,12 @@ public class GmsTasteClient {
     private final RestClient restClient;
     private final String key;
     private final String model;
-    private final JsonNode outputSchema;
+    /**
+     * {@code Map} 으로 들고 있는다. {@code JsonNode}(Jackson 2) 를 요청 Map 에 넣으면 RestClient 의
+     * Jackson 3 가 트리로 알아보지 못하고 게터를 펼쳐 {@code {"array":false,...,"nodeType":"OBJECT"}} 가
+     * 스키마 자리에 나간다 — strict json_schema 가 400 을 내고 모든 리포트가 FALLBACK 이 됐다 (S15P21A405-648).
+     */
+    private final Map<String, Object> outputSchema;
 
     public GmsTasteClient(
             @Value("${ody.taste.gms.base-url}") String baseUrl,
@@ -163,12 +169,13 @@ public class GmsTasteClient {
         }
     }
 
-    private static JsonNode readSchema(ObjectMapper objectMapper) {
+    private static Map<String, Object> readSchema(ObjectMapper objectMapper) {
         try (InputStream input = GmsTasteClient.class.getResourceAsStream("/taste/taste-gms-output-v1.json")) {
             if (input == null) {
                 throw new IllegalStateException("taste GMS output schema missing");
             }
-            return objectMapper.readTree(input);
+            return objectMapper.readValue(input, new TypeReference<>() {
+            });
         } catch (IOException error) {
             throw new IllegalStateException("taste GMS output schema unreadable", error);
         }

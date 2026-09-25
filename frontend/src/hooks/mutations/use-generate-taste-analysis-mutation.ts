@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api, ApiError } from "@/lib/api";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, QUERY_KEYS } from "@/constants";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { TasteAnalysis } from "@/types";
 
@@ -20,7 +20,11 @@ export function useGenerateTasteAnalysisMutation() {
 
   return useMutation({
     mutationFn: () => api<TasteAnalysis>(API_ENDPOINTS.taste.analysis, { method: "POST" }),
-    onSuccess: (data) => queryClient.setQueryData(QUERY_KEYS.taste.analysis, data),
+    onSuccess: (data) => {
+      queryClient.setQueryData(QUERY_KEYS.taste.analysis, data);
+      // 규칙 대체(FALLBACK)는 화면 안내가 따로 말하므로 진짜 만들어졌을 때만 (S15P21A405-667)
+      if (data.generation.status === "GENERATED") showToast(CHANGED.tasteGenerated);
+    },
     onError: (error) => {
       const code = error instanceof ApiError ? error.code : "UNKNOWN";
       if (code === "TASTE_ANALYSIS_IN_PROGRESS") {

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, QUERY_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
 
 /** 백엔드 `PlaylistMusicDeleteResponse` */
 interface DeleteResult {
@@ -16,10 +17,12 @@ interface Input {
 
 export function useRemovePlaylistItemMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: ({ playlistId, musicId }: Input) =>
       api<DeleteResult>(API_ENDPOINTS.playlist.item(playlistId, musicId), { method: "DELETE" }),
     onSuccess: (_data, { playlistId }) => {
+      showToast(CHANGED.playlistItemRemoved);
       qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.detail(playlistId) });
       qc.invalidateQueries({ queryKey: QUERY_KEYS.playlist.mineAll });
     },

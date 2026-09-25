@@ -171,3 +171,26 @@ export const RIDING_MAP_LOCKED = "따라가는 중에는 지도를 움직일 수
  * 모르게 된다. "움직일 수 없어요" 도 "고를 수 없어요" 도 맞는 말이 아니다.
  */
 export const RIDING_CONTEST_BLOCKED = "따라가는 중에는 이벤트를 열 수 없어요. 하차하면 다시 돼요";
+
+/**
+ * **바뀌었다는 한 줄** (S15P21A405-667). 조용히 끝나던 변경마다 토스트 하나 — 눌렀는데 아무 표시가 없으면 됐는지
+ * 모른다. 이름을 알면 이름을 적고, 훅이 모르면(캐시에 없으면) 종류만 적는다. 실패 문구는 각자 자리에 따로 있다.
+ */
+export const CHANGED = {
+  playlistItemAdded: (name: string | null) => (name ? `「${name}」에 담았어요` : "플레이리스트에 담았어요"),
+  playlistItemDuplicate: "이미 담긴 곡이에요",
+  playlistItemRemoved: "플레이리스트에서 뺐어요",
+  playlistCreated: (name: string) => `「${name}」 만들었어요`,
+  playlistDeleted: (name: string | null) => (name ? `「${name}」 지웠어요` : "플레이리스트를 지웠어요"),
+  nicknameChanged: (nickname: string) => `닉네임을 바꿨어요 · ${nickname}`,
+  profileImageChanged: "프로필 사진을 바꿨어요",
+  musicLiked: "좋아요했어요",
+  musicUnliked: "좋아요를 취소했어요",
+  playlistLiked: "플레이리스트를 좋아요했어요",
+  playlistUnliked: "플레이리스트 좋아요를 취소했어요",
+  followed: "팔로우했어요",
+  unfollowed: "팔로우를 취소했어요",
+  rideStarted: (who: string) => `${who} 님을 따라가요`,
+  tasteGenerated: "취향 리포트를 만들었어요",
+  loggedOut: "로그아웃했어요",
+} as const;

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, QUERY_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
 import type { PlaylistDetail } from "@/types";
 
 interface LikeResponse {
@@ -21,10 +22,12 @@ interface LikeResponse {
  */
 export function useLikePlaylistMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: ({ playlistId, liked }: { playlistId: number; liked: boolean }) =>
       api<LikeResponse>(API_ENDPOINTS.playlist.like(playlistId), { method: "POST", body: JSON.stringify({ liked }) }),
     onSuccess: (data, { playlistId }) => {
+      showToast(data.isLiked ? CHANGED.playlistLiked : CHANGED.playlistUnliked);
       qc.setQueryData<PlaylistDetail>(QUERY_KEYS.playlist.detail(playlistId), (prev) =>
         prev ? { ...prev, isLiked: data.isLiked, likeCnt: data.likeCnt } : prev,
       );

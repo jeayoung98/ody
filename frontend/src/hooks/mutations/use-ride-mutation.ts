@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
-import { API_ENDPOINTS, BOTS, RIDE_CAPTAIN_UNREACHABLE, RIDE_REJECTED } from "@/constants";
+import { API_ENDPOINTS, BOTS, CHANGED, RIDE_CAPTAIN_UNREACHABLE, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
@@ -147,6 +147,8 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
       const leaderPanel = r.panel.open && r.panel.musicId != null ? r.panel.musicId : null;
       const songToOpen = leaderPanel ?? (silent ? null : r.musicId);
       if (songToOpen != null) usePanelStore.getState().openSong(songToOpen);
+      // 탔다는 한 줄 (S15P21A405-667). 조용한 재탑승은 말하지 않는다 — 재시도마다 뜨면 시끄럽다
+      if (!silent) showToast(CHANGED.rideStarted(target.nickname ?? target.email));
       /**
        * 지도는 곧 도착하는 `RIDE_VIEWPORT` 가 그린다 (§3.1-3). 내 뷰포트·주변 사람 구독은
        * **서버가 끊는다** — 프론트가 close 를 보낼 필요가 없고, 보내면 막힌다 (§6).

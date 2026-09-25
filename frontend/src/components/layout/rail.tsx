@@ -1,8 +1,10 @@
 "use client";
 
 import { FriendsIcon, JourneyIcon, RankIcon } from "@/components/common/icons";
+import { RIDING_JOURNEY_BLOCKED } from "@/constants";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ContestButton from "./contest-button";
@@ -44,6 +46,13 @@ export default function Rail() {
   };
   const panelEnabled = usePanelEnabled();
   const features = useFeatures();
+  /**
+   * **따라가는 동안에는 잠근다** (S15P21A405-660). 여정은 출발·도착을 지도에서 골라야 하는
+   * 일인데 그 동안 지도를 못 만진다 — `use-open-journey-composer` 가 토스트로 막고는 있었지만
+   * **버튼이 멀쩡해 보여서** 눌러야 막혔다는 걸 알게 됐다. 게다가 이미 만든 여정이 있으면
+   * 그 경로는 토스트도 안 거치고 패널이 그냥 열렸다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
 
   return (
     /*
@@ -68,7 +77,14 @@ export default function Rail() {
         )}
         <NearbyExploreButton />
         {panelEnabled.journey && (
-          <RailButton label="여정" active={composerOpen || activePanel === "journey"} onClick={pressJourney} data-tutorial="journey">
+          <RailButton
+            label="여정"
+            active={composerOpen || activePanel === "journey"}
+            disabled={riding}
+            title={riding ? RIDING_JOURNEY_BLOCKED : "여정"}
+            onClick={pressJourney}
+            data-tutorial="journey"
+          >
             <JourneyIcon size={17} />
           </RailButton>
         )}

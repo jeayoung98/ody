@@ -2534,6 +2534,18 @@ export class MapEngine {
     this.centerHoldId = null;
     // 자리가 바뀌었으니 앞서 못 박아 둔 곡은 놓아 준다
     if (this.pinned && this.pinned.id !== id) this.pinned = null;
+    /**
+     * **따라가는 중이면 우주선이 나를 데려간다** (S15P21A405-677) — 내 비행을 걸지 않는다. 예전에는 여기서
+     * `travelToId` 를 걸어 두고 프레임이 따라가기 중엔 처리하지 않아 값이 **묵은 채로 남았고**, 그 값이
+     * `acceptsAnchor` 에서 다음 곡의 `setMyMusicId` 를 계속 거절해 스토어의 내 자리가 한 곡씩 뒤처졌다.
+     * 자리 기록(`home`·`playingId`)은 위에서 이미 적었다.
+     */
+    if (this.follow) {
+      this.meHop = null;
+      this.meFlight = null;
+      this.travelToId = null;
+      return;
+    }
     // 여기부터는 좌표가 있어야 한다 — 지도에 없는 곡은 데려갈 자리가 없다
     if (!this.index.has(id)) return;
     /**
@@ -3031,6 +3043,32 @@ export class MapEngine {
     const f = this.follow;
     if (!f || !this.index.has(musicId)) return;
     f.viewingMusicId = musicId;
+  }
+
+  /**
+   * 하차한 자리를 **못 박는다** (S15P21A405-677). 듣던 곡은 인솔자 것이었으니 내 자리도 거기다 — 표식·`myId`·
+   * 재생 곡·돌아갈 자리(`home`)를 그 곡으로 두고, 묵은 내 비행은 지우고, 가운데 고정을 그 곡에 건다.
+   * `stopFollow` 가 표식은 놓지만 나머지는 안 건드려서, 뒤이어 오는 것들(묵은 `travelToId`, 예전 `home`)이
+   * 자리를 되돌릴 수 있었다.
+   */
+  settleAfterRide(musicId: number) {
+    this.travelToId = null;
+    this.meFlight = null;
+    this.meHop = null;
+    const i = this.index.get(musicId);
+    if (i == null) return;
+    if (!this.subset[i]) {
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      this.rebuildAliveIdx();
+      this.project();
+    }
+    this.myId = musicId;
+    this.playingId = musicId;
+    this.home = { musicId, boxes: [...this.boxes] };
+    this.me = { ...this.worldOf(musicId)! };
+    this.centerHoldId = null;
+    this.centerLock = true;
   }
 
   stopFollow() {

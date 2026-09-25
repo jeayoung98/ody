@@ -47,6 +47,8 @@ export const REALTIME = {
      */
     ridePlayback: "/app/ride/playback",
     ridePanel: "/app/ride/panel",
+    /** 인솔자가 지도를 보는 모양(기본·여정·플리·주변 탐색) — BACKEND-NOTES §8 (S15P21A405-591 · 653) */
+    rideView: "/app/ride/view",
   },
 
   /**

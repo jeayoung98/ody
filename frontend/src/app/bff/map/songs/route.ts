@@ -1,6 +1,7 @@
 import { LAYER_SONG_COUNT } from "@/constants";
-import { failLive, ok, okLive } from "@/lib/api-response";
+import { failLive, ok } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, toResidentPoint, type BackendMapPoint } from "@/lib/backend";
+import { okLiveGzip } from "@/lib/gzip-json";
 import { allSongs } from "@/mocks/songs";
 import type { MapPoint } from "@/types";
 
@@ -31,7 +32,8 @@ export async function GET(req: Request) {
     const upstream = `/api/music/major?${qs || "level=1"}`;
     try {
       const res = await backendGet<BackendMajorResponse>(upstream);
-      return okLive(res.content.map(toResidentPoint), upstream);
+      // 1겹은 1,576KB 라 압축해서 보낸다 (S15P21A405-680). 파고든 겹(약 270KB)도 같은 길을 탄다
+      return await okLiveGzip(req, res.content.map(toResidentPoint), upstream);
     } catch (e) {
       const err = e as BackendError;
       return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);

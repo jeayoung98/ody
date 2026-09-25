@@ -27,6 +27,7 @@
 | [013](013-analytics-uuid-on-http.md) | HTTP 테스트 주소에서 분석 이벤트가 전부 멈춤 | 보안 컨텍스트 전용 `crypto.randomUUID()` 호출이 첫 이벤트 생성을 중단 | S15P21A405-295 |
 | [014](014-button-font-size-utilities-ignored.md) | 버튼 글씨 크기 클래스가 전부 무시됨 | 레이어 밖의 `button { font: inherit }` 가 `@layer utilities` 의 `.text-*` 를 항상 이김 | S15P21A405-384 |
 | [015](015-stars-blink-every-3-seconds.md) | 별이 3초마다 사라졌다 나타남 (재로딩처럼 보임) | 기억 정리가 `first`(처음 본 때)를 잣대로 써 **지금 그리는 별**을 지움 — 다음 프레임에 알파 0부터 다시 밝힘 | S15P21A405-479 |
+| [016](016-canvas-photo-blocked-by-img-cache.md) | 인솔자·동승자 헬멧에만 프로필 사진이 안 뜸 | 패널 `<img>` 가 CORS 없이 먼저 받아 캐시한 응답에 ACAO 가 없어 캔버스용 CORS 요청이 거부됨 (추정) — 캐시를 비켜 다시 받고, 안 되면 CORS 없이 | S15P21A405-676 |
 
 ---
 

@@ -47,7 +47,7 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
   const ride = useRideMutation();
   const follow = useFollowMutation();
   const unfollow = useUnfollowMutation();
-  const openSong = usePanelStore((s) => s.openSong);
+  const drill = usePanelStore((s) => s.drill);
   const startActivity = useStartActivity();
 
   /** 지금 이 사람의 우주선에 **타고 있는가** (지금 이 순간의 일) */
@@ -92,7 +92,7 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
             {online ? "접속 중" : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
           </p>
           {profile.nowPlaying && (
-            <button type="button" onClick={() => openSong(profile.nowPlaying!.id)} className="mt-0.5 block max-w-full truncate text-xs text-teal hover:underline">
+            <button type="button" onClick={() => drill({ panel: "song", musicId: profile.nowPlaying!.id })} className="mt-0.5 block max-w-full truncate text-xs text-teal hover:underline">
               ♪ {profile.nowPlaying.title} — {profile.nowPlaying.artist ?? ""}
             </button>
           )}

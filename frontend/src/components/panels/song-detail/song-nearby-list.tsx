@@ -133,7 +133,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     // 한 걸음 나와 있었으면(이 곡이 중심이 아니면) 먼저 고리를 이 곡으로 옮긴다
     if (!isOnHere) enterNearby(centerMusicId, true);
     useTutorialStore.getState().complete("nearby");
-    openNeighborSong(id, centerMusicId);
+    openNeighborSong(id);
     selectMusic(id);
   };
 

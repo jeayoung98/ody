@@ -255,7 +255,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           <button
             key={p.email}
             type="button"
-            onClick={() => openProfile(p.email, { panel: "friends" })}
+            onClick={() => openProfile(p.email, { drill: true })}
             title={`${p.nickname ?? "이름 없음"}${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
             className={`absolute grid place-items-center rounded-pill transition-opacity hover:opacity-80 ${breathes ? "animate-breathe" : ""}`}
             style={{

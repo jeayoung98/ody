@@ -22,6 +22,8 @@ import org.springframework.context.annotation.FilterType;
 import org.springframework.http.MediaType;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
+
+import com.ssafy.backend.music.dto.Location;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.config.SecurityConfig;
@@ -65,14 +67,33 @@ class MusicLikeControllerTests {
 
     @Test
     void liked_returnsVirtualPlaylistOrder() throws Exception {
+        Location location = new Location(0.5, -0.25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1.0);
         LikedMusicItem item = new LikedMusicItem(7, "title", "artist", 180,
-                "https://youtube.test/7", "video7", OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
+                "https://youtube.test/7", "video7", location, 42,
+                OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
         when(service.findAll("me@example.com")).thenReturn(new LikedMusicResponse(List.of(item)));
 
         mockMvc.perform(get("/api/music/liked")
                         .principal(new UsernamePasswordAuthenticationToken("me@example.com", null)))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.data.content[0].musicId").value(7))
-                .andExpect(jsonPath("$.data.content[0].videoId").value("video7"));
+                .andExpect(jsonPath("$.data.content[0].videoId").value("video7"))
+                // 좋아요 목록을 재생하면 FE 가 별자리를 띄운다 — 좌표·재생 수가 있어야 한다 [S15P21A405-650]
+                .andExpect(jsonPath("$.data.content[0].location").exists())
+                .andExpect(jsonPath("$.data.content[0].playCnt").value(42));
+    }
+
+    /** 좌표가 없는 곡도 목록에서 빠지지 않는다. FE 는 그 곡만 별자리에서 뺀다. */
+    @Test
+    void liked_keepsTrackWithoutLocation() throws Exception {
+        LikedMusicItem item = new LikedMusicItem(8, "title", "artist", 180,
+                null, null, null, null, OffsetDateTime.parse("2026-09-21T10:00:00+09:00"));
+        when(service.findAll("me@example.com")).thenReturn(new LikedMusicResponse(List.of(item)));
+
+        mockMvc.perform(get("/api/music/liked")
+                        .principal(new UsernamePasswordAuthenticationToken("me@example.com", null)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.data.content[0].musicId").value(8))
+                .andExpect(jsonPath("$.data.content[0].location").doesNotExist());
     }
 }

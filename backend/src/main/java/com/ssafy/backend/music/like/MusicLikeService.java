@@ -67,6 +67,6 @@ public class MusicLikeService {
     private static LikedMusicItem toItem(MusicDetail music, OffsetDateTime likedAt) {
         return new LikedMusicItem(
                 music.id(), music.title(), music.artist(), music.duration(),
-                music.youtubeUrl(), music.videoId(), likedAt);
+                music.youtubeUrl(), music.videoId(), music.location(), music.playCnt(), likedAt);
     }
 }

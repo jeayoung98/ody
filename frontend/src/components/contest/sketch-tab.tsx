@@ -59,27 +59,34 @@ export default function SketchTab({ contest }: { contest: Contest }) {
     addPoint(p);
   };
 
-  // 모달이라 넉넉하다 — 왼쪽은 캔버스(그리는 곳), 오른쪽은 결과·출품·내 작품(읽는 곳). 폰에서는 세로로 쌓인다
+  /*
+   * 모달이라 넉넉하다 — 왼쪽은 캔버스(그리는 곳), 오른쪽은 결과·출품·내 작품(읽는 곳). 폰에서는 세로로 쌓인다.
+   *
+   * **스크롤 없이 들어간다** (S15P21A405-665). 도구 버튼을 캔버스 **안** 상단에 얹어 한 줄을 아꼈고, 캔버스는 화면
+   * 높이(`52vh`)에도 매여 모달 높이(820)에서 아래 안내·별 찾기까지 보인다. 오른쪽은 결과가 오면 **곡 목록만 스크롤**하고
+   * 출품 폼은 그 아래에 고정이다 — 뿌리가 `min-h-0 flex-1` 로 남은 높이를 받고, 목록이 그 안에서만 넘친다.
+   */
   return (
-    <div className="grid grid-cols-[minmax(0,1fr)_360px] items-start gap-6 max-tablet:grid-cols-1">
-      <div className="flex flex-col gap-3">
-        <div className="mx-auto w-full max-w-[520px]">
+    <div className="grid min-h-0 flex-1 grid-cols-[minmax(0,1fr)_360px] items-stretch gap-6 max-tablet:grid-cols-1 max-tablet:items-start">
+      <div className="flex min-h-0 flex-col gap-3">
+        <div className="relative mx-auto w-full max-w-[min(520px,52vh)] max-tablet:max-w-none">
           <SketchCanvas points={points} closed={closed} result={match?.tracks ?? null} onAdd={handleAdd} onRemove={removePoint} />
-        </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          <Button size="sm" onClick={undo} disabled={!count}>
-            한 점 되돌리기
-          </Button>
-          <Button size="sm" active={closed} onClick={toggleClosed} disabled={count < 3 && !match} title="마지막 점과 첫 점을 이어 닫힌 모양으로">
-            마지막 → 첫 점 잇기
-          </Button>
-          <TemplatePicker loggedIn={!!me} theme={contest.theme} />
-          <Button size="sm" variant="ghost" onClick={clear} disabled={!count && !match}>
-            지우기
-          </Button>
-          <span className="num ml-auto text-xs text-ink-3">
-            점 {count} / {maxPoints}
-          </span>
+          {/* 도구는 캔버스 위 상단에 — 캔버스 클릭과 겹치지 않게 점은 그 아래에 찍힌다. 살짝 어두운 판 위에 얹어 별밭과 갈린다 */}
+          <div className="absolute inset-x-0 top-0 flex flex-wrap items-center gap-1.5 rounded-t-box-sm bg-void/55 px-2 py-1.5 backdrop-blur-[3px]">
+            <Button size="sm" onClick={undo} disabled={!count}>
+              한 점 되돌리기
+            </Button>
+            <Button size="sm" active={closed} onClick={toggleClosed} disabled={count < 3 && !match} title="마지막 점과 첫 점을 이어 닫힌 모양으로">
+              마지막 → 첫 점 잇기
+            </Button>
+            <TemplatePicker loggedIn={!!me} theme={contest.theme} />
+            <Button size="sm" variant="ghost" onClick={clear} disabled={!count && !match}>
+              지우기
+            </Button>
+            <span className="num ml-auto text-xs text-ink-3">
+              점 {count} / {maxPoints}
+            </span>
+          </div>
         </div>
         <Note>
           {match?.template
@@ -93,10 +100,10 @@ export default function SketchTab({ contest }: { contest: Contest }) {
         </Button>
       </div>
 
-      <div className="flex flex-col gap-3.5">
+      <div className="flex min-h-0 flex-col gap-3.5">
         {match ? (
           <>
-            <MatchResult match={match} />
+            <MatchResult match={match} className="min-h-0 flex-1" />
             <Divider />
             <SubmitForm contest={contest} match={match} my={my} loggedIn={!!me} />
           </>

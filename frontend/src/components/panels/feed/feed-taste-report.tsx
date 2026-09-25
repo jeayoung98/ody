@@ -81,9 +81,10 @@ export default function FeedTasteReport() {
             </ul>
           )}
           {report.narratives.length > 0 && (
+            /* 근거 문장은 text-xs 였다 (S15P21A405-649) — 요약(17px) 밑에서 두 단계나 작았다 */
             <ul className="m-0 flex list-none flex-col gap-1 p-0">
               {report.narratives.map((n) => (
-                <li key={n.findingId} className="text-xs leading-relaxed text-ink-3">
+                <li key={n.findingId} className="text-sm leading-relaxed text-ink-3">
                   {n.text}
                 </li>
               ))}
@@ -96,7 +97,7 @@ export default function FeedTasteReport() {
       )}
 
       <div className="flex items-center justify-between gap-2">
-        {view.notice ? <span className="min-w-0 flex-1 text-[13px] text-ink-4">{view.notice}</span> : <span className="flex-1" />}
+        {view.notice ? <span className="min-w-0 flex-1 text-[14px] text-ink-4">{view.notice}</span> : <span className="flex-1" />}
         <Button
           size="sm"
           variant={report ? "secondary" : "primary"}

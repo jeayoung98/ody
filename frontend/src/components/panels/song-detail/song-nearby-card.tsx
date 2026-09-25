@@ -75,8 +75,9 @@ export default function SongNearbyCard({ musicId, title, artist, rank, playing, 
       <span className="num absolute top-1 left-2 text-[12.5px] text-ink-2 drop-shadow-[0_1px_4px_rgba(4,6,13,.9)]">#{rank}</span>
       {playing && <span className="absolute top-1 right-2 text-[12px] text-teal drop-shadow-[0_1px_4px_rgba(4,6,13,.9)]">▶</span>}
       <span className="absolute inset-x-0 bottom-0 flex flex-col gap-px px-2 pb-2">
-        <MarqueeText text={title} className="text-[14px] leading-tight font-medium text-ink drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
-        <MarqueeText text={artist ?? "Unknown"} className="text-[13px] leading-tight text-ink-3 drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
+        {/* 14 / 13 이었다 (S15P21A405-649). 가수줄만 올리면 제목과 같아져 위계가 사라져서 둘 다 한 칸씩 올린다 */}
+        <MarqueeText text={title} className="text-[15.5px] leading-tight font-medium text-ink drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
+        <MarqueeText text={artist ?? "Unknown"} className="text-[14px] leading-tight text-ink-3 drop-shadow-[0_1px_5px_rgba(4,6,13,.95)]" />
       </span>
     </button>
   );

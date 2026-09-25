@@ -733,9 +733,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     g.fillStyle = "rgba(233,241,255,.92)";
     g.fillText(title, x, y + 22.5);
     if (sub) {
-      g.font = `500 10px ${FONTS.mono}`;
+      // 10px 이었다 (S15P21A405-649). 제목만 커지고 이 줄은 그대로라 `#3 · 가수` 가 안 읽혔다.
+      // 베이스라인도 같이 내린다 — 글자가 커지면 제목 상자(y+13 부터 19) 에 머리가 닿는다
+      g.font = `500 12px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
-      g.fillText(sub, x, y + 34);
+      g.fillText(sub, x, y + 36);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);

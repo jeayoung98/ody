@@ -51,6 +51,11 @@ interface FollowState {
    * 디버깅과 백엔드 확인용으로만 들고 있다.
    */
   snapshotSeq: number;
+  /**
+   * 인솔자 곡의 좌표가 **뒤늦게** 지도에 들어왔다 (S15P21A405-674). `map-view` 의 따라가기 효과가 이 값을 의존성에
+   * 두어 다시 돈다 — 스토어의 다른 값은 그대로라 이게 없으면 `startFollow` 를 다시 부를 계기가 없다.
+   */
+  pointRevision: number;
 
   start: (input: {
     email: string;
@@ -66,6 +71,8 @@ interface FollowState {
   /** 하차·강제 종료 공통. 자리는 그대로 두고(map-store 가 남는다) 탑승 상태만 지운다 */
   stop: () => void;
   setFollowerCount: (n: number) => void;
+  /** 인솔자 곡 좌표를 편입했다 — 따라가기 효과를 한 번 더 돌린다 */
+  markPointAdopted: () => void;
 }
 
 export const useFollowStore = create<FollowState>()(
@@ -78,6 +85,7 @@ export const useFollowStore = create<FollowState>()(
       leaderViewingMusicId: null,
       followerCount: 0,
       snapshotSeq: 0,
+      pointRevision: 0,
 
       start: ({ email, nickname, imageUrl, musicId, snapshotSeq }) => {
         writeStorage(STORAGE_KEYS.rideLeader, { email, nickname, imageUrl }, "session");
@@ -113,6 +121,7 @@ export const useFollowStore = create<FollowState>()(
         );
       },
       setFollowerCount: (followerCount) => set({ followerCount }, false, "setFollowerCount"),
+      markPointAdopted: () => set((s) => ({ pointRevision: s.pointRevision + 1 }), false, "markPointAdopted"),
     }),
     { name: "follow-store" },
   ),

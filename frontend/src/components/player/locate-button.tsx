@@ -3,6 +3,7 @@
 import { RIDING_MAP_LOCKED } from "@/constants";
 
 import { LocateIcon } from "@/components/common/icons";
+import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -39,6 +40,8 @@ export default function LocateButton() {
     backToMap();
     if (r === "follow") showToast(RIDING_MAP_LOCKED);
     else if (r !== "none") {
+      // 겹을 건너 찾아가는 중이면 도착했을 때 연다 (`use-home-travel-panel`). 지금 겹 안이면 바로 (S15P21A405-670)
+      if (getMapEngine()?.isHomeTraveling()) return;
       const musicId = usePlayerStore.getState().currentMusicId;
       if (musicId != null) usePanelStore.getState().openSong(musicId);
     }

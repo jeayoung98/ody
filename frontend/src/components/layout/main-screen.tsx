@@ -21,6 +21,7 @@ import GhostBanner from "@/components/map/ghost-banner";
 import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useHomeTravelPanel } from "@/hooks/use-home-travel-panel";
 import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
@@ -74,6 +75,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    */
   useRealtime();
   usePanelFollowsTrack();
+  useHomeTravelPanel();
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
   /**

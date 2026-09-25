@@ -70,9 +70,16 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
  * 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향).
  *
  * **평면 아이콘식 로켓** (S15P21A405-624). 둥근 코에서 꼬리로 좁아지는 물방울 몸통(두 톤),
- * 큰 창, 뒤로 뻗은 둥근 지느러미 두 개, 꼬리 밴드. **불꽃은 없다** — 예전의 뾰족한 삼각 로켓과
- * 불꽃은 차갑고 각져서 뺐다. 색은 서비스 팔레트: 몸통 ink, 창 테 ink4, 유리 violet,
- * 지느러미 teal, 꼬리 밴드 violet.
+ * 큰 창, 뒤로 뻗은 둥근 지느러미 두 개, 꼬리 밴드, **꼬리 불꽃**. 색은 서비스 팔레트:
+ * 몸통 ink, 창 테 ink4, 유리 violet, 지느러미 teal, 꼬리 밴드 violet, 불꽃 teal.
+ *
+ * **불꽃을 되살렸다** (요청, 2026-09-25). 624 에서 뺀 적이 있는데, 그때 뺀 것은 **뾰족한 삼각
+ * 로켓에 달린 각진 불꽃**이라 차가워 보였기 때문이다. 지금 몸통은 둥근 물방울이라 같은 이유가
+ * 그대로 적용되지 않는다 — 모서리 없는 물방울 두 겹으로 그리고, 꼬리 밴드 밑에서 시작해
+ * 배와 이어지게 둔다. 배가 서 있는 동안에도 흔들려서 "가고 있다" 가 읽힌다.
+ *
+ * **파비콘(`src/app/icon.svg`)에는 안 넣는다.** 그쪽은 16px 로도 읽혀야 하는 정지 그림이라
+ * 꼬리에 뭘 더하면 뭉갠다. 몸통·지느러미·밴드까지만 같게 둔다.
  *
  * **지느러미는 누구 것이든 teal 이다** (S15P21A405-641). 예전에는 그 사람의 장르색을 따랐는데,
  * 실데이터는 장르가 붙은 곡이 1% 뿐이라(`constants/map.ts` 의 `NO_GENRE_ID`) 거의 모든 배가
@@ -83,10 +90,31 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
  * `(px, py)` 여야 한다. 그래서 몸통은 원점보다 아래로 더 길다(코 -1.25R, 꼬리 1.75R).
  * 파비콘(`src/app/icon.svg`)이 이 좌표를 그대로 옮긴다 — 둘을 같이 고친다.
  */
-export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number) {
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
+
+  /**
+   * 꼬리 불꽃. **제일 먼저 그린다** — 몸통·지느러미 뒤로 깔려야 꼬리에서 뿜는 것으로 보인다.
+   * 나중에 그리면 밴드 위를 덮어 배에 얹힌 딱지가 된다.
+   *
+   * 흔들림에 `px` 를 섞는 이유: 선단에 배가 여럿일 때 같은 위상으로 뛰면 한 몸처럼 보인다.
+   * 자리마다 위상이 달라야 각자 나아가는 것으로 읽힌다.
+   */
+  const flicker = 0.78 + 0.22 * Math.sin(t * 8.5 + px * 0.6);
+  const plume = (len: number, halfW: number, alpha: number) => {
+    g.fillStyle = rgba(TEAL, alpha);
+    g.beginPath();
+    g.moveTo(-halfW, R * 1.66);
+    // 모서리 없는 물방울 — 624 가 뺀 "각진 불꽃" 과 갈라지는 지점이다
+    g.bezierCurveTo(-halfW, R * 1.66 + len * 0.55, -halfW * 0.5, R * 1.66 + len, 0, R * 1.66 + len);
+    g.bezierCurveTo(halfW * 0.5, R * 1.66 + len, halfW, R * 1.66 + len * 0.55, halfW, R * 1.66);
+    g.closePath();
+    g.fill();
+  };
+  plume(R * 1.25 * flicker, R * 0.42, 0.38);
+  plume(R * 0.72 * flicker, R * 0.22, 0.85);
 
   // 지느러미 — 뒤로 뻗은 둥근 날. 몸통 뒤에 깔린다
   g.fillStyle = rgba(TEAL, 1);
@@ -151,8 +179,14 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
 export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
-  const rr = R * 0.5;
-  const step = R * 1.62;
+  /**
+   * 동승자 프로필 크기·간격 (S15P21A405-642). 0.5·1.62 였다 — 내 우주선(R=13) 기준 반지름이
+   * 6.5px 라, 누가 몇 명 달렸는지는 보여도 **누구인지**는 안 보였다. 얼굴이 읽히는 크기로 올린다.
+   * 간격도 같이 벌린다 — 반지름만 키우면 지름이 간격을 채워 붙어 보인다.
+   * 0.58·1.78 → 0.68·1.92 (요청, 2026-09-25). 얼굴이 더 읽히게 한 번 더 올렸다.
+   */
+  const rr = R * 0.68;
+  const step = R * 1.92;
   const shown = Math.min(5, riders + 1);
   const extra = riders + 1 - shown;
   const at = (i: number): [number, number] => {
@@ -298,10 +332,12 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     }
     if (ship) {
       const ang = fr.heading + Math.PI / 2;
-      if (isLeader) drawQueue(g, px, py, R, ang, t, u.riderCount);
-      drawShip(g, px, py, R, ang);
+      // 배는 헬멧보다 크다 (S15P21A405-642). 접속 점·닉네임 자리는 헬멧 기준 `R` 을 그대로 쓴다
+      const SR = R * FRIEND_MARKER.shipScale;
+      if (isLeader) drawQueue(g, px, py, SR, ang, t, u.riderCount);
+      drawShip(g, px, py, SR, ang, t);
       // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
-      drawVisor(g, px, py, R * 0.72, u);
+      drawVisor(g, px, py, SR * 0.72, u);
     } else {
       drawHelmet(g, px, py, R, rgb, isLeader);
       drawVisor(g, px, py, R, u);

@@ -8,7 +8,8 @@ import { dropSong, setSong } from "@/lib/bots/sim";
 import { isBot } from "@/lib/bots/roster";
 import { botLiveOf, useBotStore } from "@/stores/use-bot-store";
 import { joinAndWait } from "@/hooks/use-presence-join";
-import { playFrom } from "@/lib/realtime/ride";
+import { endRide, playFrom } from "@/lib/realtime/ride";
+import { canRideOptimistically } from "@/lib/realtime/ride-optimistic";
 import { isConnected } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -21,6 +22,14 @@ export interface RideTarget {
   email: string;
   nickname: string | null;
   imageUrl: string | null;
+  /**
+   * 그 사람이 서 있는 곡 — **부르는 쪽이 아는 만큼만** (S15P21A405-642).
+   *
+   * 낙관적 진입이 표식을 미리 옮기는 데 쓴다. 주변 사람 목록은 이 값을 알고(`NearbyPerson.musicId`)
+   * 프로필 화면은 지금 듣는 곡으로 안다. 모르면 비워 두면 되고, 그때는 자리를 안 옮기고
+   * 따라가기 상태만 먼저 세운다. **진짜 자리는 어차피 응답이 정한다.**
+   */
+  musicId?: number | null;
 }
 
 /**
@@ -59,6 +68,39 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
         await joinAndWait();
         return await mount(target.email);
       }
+    },
+
+    /**
+     * **누르는 즉시 따라가는 화면이 된다** (S15P21A405-642).
+     *
+     * 여기까지 오는 길은 왕복 두 번이다 — `joinAndWait` 로 presence 를 확인하고, 그 다음
+     * `POST /api/realtime/ride`. 느린 망에서는 그 사이 화면에 아무 일도 안 일어나서 **버튼만
+     * 먹은 것처럼** 보였다.
+     *
+     * 먼저 세우는 것은 **화면뿐이다.** 재생은 건드리지 않는다 — 인솔자가 듣던 지점(`positionMs`)은
+     * 응답에만 있고, 0초부터 틀어 두면 답이 온 순간 소리가 튄다. 소리는 `onSuccess` 가 맞춘다.
+     *
+     * 거절되면 {@link endRide} 가 누르기 전 자리로 되돌린다. `silent`(다시 잇기)는 건너뛴다 —
+     * 그건 복구 경로라 확정 전에 화면을 세울 이유가 없다.
+     */
+    onMutate: (target) => {
+      const ok = canRideOptimistically({ ridingEmail: useFollowStore.getState().leaderEmail, targetEmail: target.email, silent });
+      if (!ok) return undefined;
+      const map = useMapStore.getState();
+      const before = { musicId: map.myMusicId, layer: map.layer };
+      useFollowStore.getState().start({
+        email: target.email,
+        nickname: target.nickname,
+        imageUrl: target.imageUrl,
+        // 모르면 내 자리에 세워 둔다. 응답이 오면 진짜 자리로 옮겨진다
+        musicId: target.musicId ?? map.myMusicId ?? -1,
+        snapshotSeq: 0,
+      });
+      if (target.musicId != null) {
+        map.setMyMusicId(target.musicId);
+        getMapEngine()?.rideTo(target.musicId);
+      }
+      return before;
     },
 
     onSuccess: (r, target) => {
@@ -102,7 +144,9 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
        */
     },
 
-    onError: (e) => {
+    onError: (e, _target, before) => {
+      // 낙관적으로 세워 둔 화면을 누르기 전으로 되돌린다 (S15P21A405-642)
+      if (before) endRide(before);
       if (silent) return;
       const code = e instanceof ApiError ? e.code : "UNKNOWN";
       /**

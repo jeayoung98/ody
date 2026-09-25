@@ -40,7 +40,10 @@ const CLIENT_ID = GOOGLE_CLIENT_ID;
 export default function GoogleLoginButton() {
   const router = useRouter();
   const { mutate, isError, error } = useGoogleLoginMutation();
+  /** 구글이 버튼을 그리는 자리. 버튼을 꼭 감싸고 알약으로 깎여 있다 (S15P21A405-652) */
   const slot = useRef<HTMLDivElement>(null);
+  /** 폭을 재는 자리 — 카드 폭 전체를 차지한다. 그 값을 구글에 넘긴다 (S15P21A405-575) */
+  const room = useRef<HTMLDivElement>(null);
   /** 마지막으로 구글에 넘긴 폭. 같은 값이면 다시 안 그린다 */
   const lastWidth = useRef(0);
 
@@ -65,20 +68,21 @@ export default function GoogleLoginButton() {
      *
      * 구글이 받는 상한이 400 이고 너무 좁으면 글자가 잘리므로 **200~400 으로 가둔다.**
      */
-    const room = slot.current.clientWidth || slot.current.getBoundingClientRect().width;
-    const width = Math.round(Math.min(400, Math.max(200, room)));
+    // 폭은 **바깥 상자**에서 잰다 (S15P21A405-652) — `slot` 은 이제 버튼을 꼭 감싸는 상자라
+    // 제 폭이 곧 버튼 폭이다. 거기서 재면 한 번 그려진 뒤로는 그 값에 갇힌다
+    const box = room.current ?? slot.current;
+    const available = box.clientWidth || box.getBoundingClientRect().width;
+    const width = Math.round(Math.min(400, Math.max(200, available)));
     lastWidth.current = width;
 
     window.google.accounts.id.renderButton(slot.current, {
       type: "standard",
       /**
-       * **어두운 버튼을 쓴다** (S15P21A405-644). `outline` 은 흰 바탕이라, 어두운 유리판 위에서
-       * 그 칸만 하얗게 떠서 붙여넣은 것처럼 보였다. 구글 세션이 살아 있으면 버튼이 개인화
-       * 형태(`○○ 계정 사용` + 이메일)로 그려져 더 넓어지는 탓에 더 눈에 띈다.
-       *
-       * **CSS 로는 못 바꾼다** — 버튼을 구글이 iframe 안에 직접 그리므로 이 옵션이 유일한 길이다.
+       * **흰 버튼이 원래 디자인이다** (S15P21A405-652). S15P21A405-644 에서 `filled_black` 으로
+       * 바꿨던 것을 되돌린다 — 문제는 버튼 색이 아니라 **알약 밖으로 비어져 나온 흰 모서리**였고,
+       * 그건 아래 `rounded-pill` 로 잘라낸다.
        */
-      theme: "filled_black",
+      theme: "outline",
       size: "large",
       shape: "pill",
       text: "continue_with",
@@ -96,11 +100,13 @@ export default function GoogleLoginButton() {
    * 그때마다 구글 스크립트를 다시 태우면 버튼이 깜빡인다.
    */
   useEffect(() => {
-    const el = slot.current;
+    // **바깥 상자를 본다** (S15P21A405-652). `slot` 은 버튼을 꼭 감싸므로 제 폭이 안 변한다 —
+    // 거기 달면 화면이 좁아져도 안 알아차린다
+    const el = room.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
-      const room = Math.round(Math.min(400, Math.max(200, el.clientWidth)));
-      if (room !== lastWidth.current) renderGoogleButton();
+      const available = Math.round(Math.min(400, Math.max(200, el.clientWidth)));
+      if (available !== lastWidth.current) renderGoogleButton();
     });
     ro.observe(el);
     return () => ro.disconnect();
@@ -119,8 +125,20 @@ export default function GoogleLoginButton() {
   return (
     <>
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={renderGoogleButton} />
-      {/* 구글 버튼이 이 폭에 맞춰 그려진다 — `w-full` 이라야 잰 값이 카드 폭과 같다 */}
-      <div ref={slot} className="flex w-full justify-center overflow-hidden" />
+      {/*
+        두 겹이다 (S15P21A405-652).
+
+        바깥은 **폭을 재는 자리**다. `w-full` 이라야 잰 값이 카드 폭과 같고, 그 값을 구글에
+        넘겨야 좁은 화면에서 버튼이 카드 밖으로 안 넘친다 (S15P21A405-575).
+
+        안쪽은 **구글이 그리는 자리**다. 구글은 알약 버튼을 **사각 iframe** 안에 그리는데 그
+        iframe 배경이 흰색이라, 알약 밖 네 모서리에 흰색이 남아 어두운 카드 위에서 흰 판처럼
+        보였다. iframe 을 꼭 감싸는 상자(`w-fit`)를 알약으로 깎아 **그 모서리를 잘라낸다.**
+        버튼 안쪽은 구글 것이라 못 건드리지만, 바깥 모양은 우리가 정할 수 있다.
+      */}
+      <div ref={room} className="w-full">
+        <div ref={slot} className="mx-auto w-fit overflow-hidden rounded-pill" />
+      </div>
       {isError && <p className="mt-2 text-center text-[14.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
     </>
   );

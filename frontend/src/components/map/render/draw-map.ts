@@ -1,7 +1,7 @@
 import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
-import { drawFriends, drawQueue, drawShip } from "./draw-friends";
+import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
 
 /**
  * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
@@ -979,8 +979,11 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    // 나는 조종석에 있다 — 줄에는 따라오는 사람만 선다 (S15P21A405-676)
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, { me: null, riders: e.myRiderUsers, count: e.myRiders });
     drawShip(g, px, py, ME_SHIP_R, ang, e.time);
-    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
+    // 창 크기는 남의 우주선(`draw-friends`)과 같은 비율 — 내 얼굴이 유리 안에 든다
+    drawVisor(g, px, py, ME_SHIP_R * 0.72, meAvatar(e));
     g.globalCompositeOperation = "source-over";
   } else {
     drawMeMarker(g, px, py, e.time);

@@ -30,6 +30,7 @@ import type {
   RideRiderLeftPayload,
   RideTrackPayload,
   RideViewPayload,
+  UserProfile,
 } from "@/types";
 
 /**
@@ -226,8 +227,25 @@ export function useRideSession(): void {
      * 둘 다 **바뀐 뒤의** 인원을 싣는다. 탑승 쪽(`RIDE_RIDER_JOINED`)이 3차 계약에서 새로
      * 생겼고(S15P21A405-545), 그 전에는 누가 내릴 때까지 숫자를 몰라 아예 숨겨 뒀다.
      */
-    const stopRiders = onType<RideRiderJoinedPayload | RideRiderLeftPayload>(["RIDE_RIDER_JOINED", "RIDE_RIDER_LEFT"], (p) => {
-      useFollowStore.getState().setFollowerCount(p.riderCount);
+    const stopJoined = onType<RideRiderJoinedPayload>(["RIDE_RIDER_JOINED"], (p) => {
+      const ride = useFollowStore.getState();
+      ride.setFollowerCount(p.riderCount);
+      ride.addRider({ email: p.email, nickname: p.nickname, imageUrl: null });
+      /**
+       * **사진은 알림에 없다** (S15P21A405-676, BACKEND-NOTES A-85) — 사용자 상세로 받아 헬멧에 넣는다.
+       * 못 받으면 절차적 아바타로 남는다. 그 사이 내렸으면 `setRiderImage` 가 빈 목록을 그대로 둔다.
+       */
+      void qc
+        .fetchQuery({ queryKey: QUERY_KEYS.user.profile(p.email), queryFn: () => api<UserProfile>(API_ENDPOINTS.user.detail(p.email)), staleTime: 5 * 60 * 1000 })
+        .then((u) => useFollowStore.getState().setRiderImage(p.email, u.imageUrl))
+        .catch(() => {
+          /* 얼굴 없이 간다 */
+        });
+    });
+    const stopLeft = onType<RideRiderLeftPayload>(["RIDE_RIDER_LEFT"], (p) => {
+      const ride = useFollowStore.getState();
+      ride.setFollowerCount(p.riderCount);
+      ride.removeRider(p.email);
     });
 
     /**
@@ -245,7 +263,8 @@ export function useRideSession(): void {
       stopPanel();
       stopView();
       stopEnded();
-      stopRiders();
+      stopJoined();
+      stopLeft();
       stopErr();
       cancelResume();
     };

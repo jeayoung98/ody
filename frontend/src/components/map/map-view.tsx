@@ -7,6 +7,7 @@ import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
+import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useBots } from "@/hooks/use-bots";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
@@ -151,9 +152,31 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 엔진은 스토어를 모르므로 여기서 넣어 준다.
    */
   const followerCount = useFollowStore((s) => s.followerCount);
+  const riders = useFollowStore((s) => s.riders);
   useEffect(() => {
-    engine.setMyRiders(followerCount);
-  }, [engine, followerCount]);
+    // 얼굴을 아는 사람은 얼굴로, 수만 아는 만큼은 빈 헬멧으로 (S15P21A405-676)
+    engine.setMyRiders(
+      followerCount,
+      riders.map((r) => ({
+        email: r.email,
+        nickname: r.nickname,
+        imageUrl: r.imageUrl,
+        isOnline: true,
+        musicId: 0,
+        viewingMusicId: 0,
+        genreId: NO_GENRE_ID,
+        meetingCount: 0,
+        riderCount: 0,
+        followingNickname: null,
+        avatarSeed: seedOf(r.email),
+      })),
+    );
+  }, [engine, followerCount, riders]);
+  // 내 얼굴 — 내 우주선 창과 매달린 "나" 헬멧에 (S15P21A405-676)
+  const { data: me } = useMeQuery();
+  useEffect(() => {
+    engine.setMyProfile(me ? { nickname: me.nickname, imageUrl: me.imageUrl } : null);
+  }, [engine, me]);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**

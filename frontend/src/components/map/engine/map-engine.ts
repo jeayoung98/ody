@@ -413,6 +413,13 @@ export class MapEngine {
    * 모르는 채로 두는 것이 이 클래스의 전제다. 넣어 주는 쪽은 `map-view` 다.
    */
   myRiders = 0;
+  /** 그 사람들 (S15P21A405-676). 수(`myRiders`)보다 적을 수 있다 — 모자란 만큼은 빈 헬멧이다 */
+  myRiderUsers: NearbyUser[] = [];
+  /**
+   * 내 프로필 — 내 우주선 창과, 따라갈 때 뒤에 매달린 "나" 헬멧에 들어간다 (S15P21A405-676).
+   * 예전에는 둘 다 사진 없는 절차적 얼굴이었다. 스토어를 엔진이 읽지 않으므로 `map-view` 가 넣어 준다.
+   */
+  myProfile: { nickname: string | null; imageUrl: string | null } | null = null;
   follow: FollowState | null = null;
   /**
    * `follow` 를 건 시점의 겹. 좌표계가 겹마다 달라서, 겹이 바뀌면 다시 걸어야 한다
@@ -659,8 +666,13 @@ export class MapEngine {
 
   /** 이 레이어(영역)의 주변 사용자. 레이어가 바뀌면 새 목록이 페이드인된다 */
   /** 나를 따라오는 인원 (S15P21A405-557). 화면 쪽 스토어를 엔진이 직접 읽지 않으려고 둔 통로다 */
-  setMyRiders(n: number) {
+  setMyRiders(n: number, users: NearbyUser[] = []) {
     this.myRiders = Math.max(0, n);
+    this.myRiderUsers = users;
+  }
+
+  setMyProfile(profile: { nickname: string | null; imageUrl: string | null } | null) {
+    this.myProfile = profile;
   }
 
   setFriends(layer: number, friends: NearbyUser[]) {

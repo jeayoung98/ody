@@ -464,6 +464,16 @@ export interface RidePlaybackPayload {
   serverTs: number;
 }
 
+/**
+ * 나를 따라오는 한 사람 — 인솔자 화면이 우주선 뒤 헬멧에 그린다 (S15P21A405-676).
+ * `RIDE_RIDER_JOINED` 가 주는 것은 이메일·이름뿐이라 사진은 사용자 상세로 따로 받는다 (BACKEND-NOTES A-85).
+ */
+export interface RideRider {
+  email: string;
+  nickname: string | null;
+  imageUrl: string | null;
+}
+
 /** `RIDE_RIDER_LEFT` — 따라오던 사람이 내렸다. **인솔자에게만** 온다 */
 export interface RideRiderLeftPayload {
   email: string;

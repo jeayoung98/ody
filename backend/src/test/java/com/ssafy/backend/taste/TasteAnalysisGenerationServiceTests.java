@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -104,19 +105,22 @@ class TasteAnalysisGenerationServiceTests {
     void gmsFailure_returnsFallbackAndAllowsRetry() {
         when(mapper.claim(eq("me@example.com"), any(LocalDate.class), any(), any())).thenReturn(1);
         when(mapper.markFailed(
-                eq("me@example.com"), any(), any(), any(), eq("GMS_REQUEST_FAILED"))).thenReturn(1);
+                eq("me@example.com"), any(), any(), any(), eq("GMS_REQUEST_FAILED"),
+                anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString())).thenReturn(1);
         when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt()))
                 .thenThrow(new GmsTasteClient.GmsTasteException("GMS_REQUEST_FAILED"));
 
         TasteAnalysisResponse response = service.generate("me@example.com");
 
-        assertThat(response.state()).isEqualTo("FALLBACK");
+        assertThat(response.state()).isEqualTo("FRESH");
+        assertThat(response.report().aiGenerated()).isFalse();
         assertThat(response.generation().canRetry()).isTrue();
         assertThat(response.generation().dailyLimitUsedToday()).isFalse();
         assertThat(meterRegistry.counter(
                 "ody.taste.gms.failures", "code", "GMS_REQUEST_FAILED").count()).isEqualTo(1);
         verify(mapper).markFailed(
-                eq("me@example.com"), any(), any(), any(), eq("GMS_REQUEST_FAILED"));
+                eq("me@example.com"), any(), any(), any(), eq("GMS_REQUEST_FAILED"),
+                anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString());
     }
 
     @Test

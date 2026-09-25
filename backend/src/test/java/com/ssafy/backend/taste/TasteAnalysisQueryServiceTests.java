@@ -209,6 +209,81 @@ class TasteAnalysisQueryServiceTests {
         assertThat(service.get("me@example.com").report().findings()).isEmpty();
     }
 
+    /** 새로고침해도 대체 리포트였다는 사실과 이유가 남아야 한다 (S15P21A405-647, A-81). */
+    @Test
+    void failureAfterSuccess_returnsStoredFallbackWithReason() {
+        stubTenLikes();
+        TasteAnalysisRow success = storedRow("SUCCESS", "AI 요약", "2026-09-20T08:00:05+09:00");
+        TasteAnalysisRow failed = storedRow("FAILED", "대체 요약", "2026-09-21T08:00:05+09:00");
+        failed.setFailureCode("GMS_OUTPUT_REJECTED");
+        when(analysisMapper.findLatestSuccess("me@example.com")).thenReturn(success);
+        when(analysisMapper.findLatestFailed("me@example.com")).thenReturn(failed);
+
+        TasteAnalysisResponse response = service.get("me@example.com");
+
+        assertThat(response.report().aiGenerated()).isFalse();
+        assertThat(response.report().summary()).isEqualTo("대체 요약");
+        assertThat(response.report().lastRefreshedAt()).isEqualTo(success.getCompletedAt());
+        assertThat(response.generation().status()).isEqualTo("FALLBACK");
+        assertThat(response.generation().failureCode()).isEqualTo("GMS_OUTPUT_REJECTED");
+        assertThat(response.generation().canRetry()).isTrue();
+    }
+
+    @Test
+    void successAfterFailure_returnsAiReport() {
+        stubTenLikes();
+        TasteAnalysisRow failed = storedRow("FAILED", "대체 요약", "2026-09-20T08:00:05+09:00");
+        failed.setFailureCode("GMS_REQUEST_FAILED");
+        when(analysisMapper.findLatestSuccess("me@example.com"))
+                .thenReturn(storedRow("SUCCESS", "AI 요약", "2026-09-21T08:00:05+09:00"));
+        when(analysisMapper.findLatestFailed("me@example.com")).thenReturn(failed);
+
+        TasteAnalysisResponse response = service.get("me@example.com");
+
+        assertThat(response.report().aiGenerated()).isTrue();
+        assertThat(response.report().summary()).isEqualTo("AI 요약");
+        assertThat(response.generation().failureCode()).isNull();
+    }
+
+    /** 대체 문장을 저장하기 전의 실패 행·lease 만료 행. 리포트는 없어도 이유는 내린다. */
+    @Test
+    void failureWithoutStoredFallback_stillReportsReason() {
+        stubTenLikes();
+        TasteAnalysisRow failed = new TasteAnalysisRow();
+        failed.setStatus("FAILED");
+        failed.setFailureCode("LEASE_EXPIRED");
+        failed.setCompletedAt(OffsetDateTime.parse("2026-09-21T08:00:05+09:00"));
+        when(analysisMapper.findLatestFailed("me@example.com")).thenReturn(failed);
+
+        TasteAnalysisResponse response = service.get("me@example.com");
+
+        assertThat(response.report()).isNull();
+        assertThat(response.generation().failureCode()).isEqualTo("LEASE_EXPIRED");
+        assertThat(response.generation().canRetry()).isTrue();
+    }
+
+    private void stubTenLikes() {
+        List<TasteMusicRow> rows = new java.util.ArrayList<>();
+        for (int i = 0; i < 10; i++) {
+            rows.add(row(i));
+        }
+        when(references.current()).thenReturn(Optional.of(reference()));
+        when(mapper.findLikedMusic("me@example.com")).thenReturn(rows);
+    }
+
+    private static TasteAnalysisRow storedRow(String status, String summary, String completedAt) {
+        TasteAnalysisRow row = new TasteAnalysisRow();
+        row.setStatus(status);
+        row.setAnalysisDate(java.time.LocalDate.of(2026, 9, 21));
+        row.setLikedSetHash("다른-해시");
+        row.setReportLevel("INITIAL");
+        row.setSummary(summary);
+        row.setNarratives("[]");
+        row.setRequestedAt(OffsetDateTime.parse(completedAt).minusSeconds(5));
+        row.setCompletedAt(OffsetDateTime.parse(completedAt));
+        return row;
+    }
+
     private TasteMusicRow row(int id) {
         TasteMusicRow row = new TasteMusicRow();
         row.setMusicId(id + 1L);

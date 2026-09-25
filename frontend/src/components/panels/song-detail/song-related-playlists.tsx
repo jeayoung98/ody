@@ -1,7 +1,7 @@
 "use client";
 
+import { useDrill } from "@/hooks/use-drill";
 import SectionTitle from "@/components/common/section-title";
-import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicDetail } from "@/types";
 
 /**
@@ -12,7 +12,8 @@ import type { MusicDetail } from "@/types";
  * 그 권유가 주변곡과 소리 사이에 늘 끼어든다. 만들기는 제목 줄의 플리 버튼에 있다.
  */
 export default function SongRelatedPlaylists({ items }: { items: MusicDetail["relatedPlaylists"] }) {
-  const drill = usePanelStore((s) => s.drill);
+  // 탭 화면에서는 지도로 돌아가서 연다 (S15P21A405-666)
+  const drill = useDrill();
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle>이 곡이 담긴 플레이리스트</SectionTitle>

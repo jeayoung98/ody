@@ -11,8 +11,9 @@
  *        --disable-site-isolation-trials --disable-features=IsolateOrigins,site-per-process https://j15a405.p.ssafy.io/login
  *   2. 그 창에서 **직접 로그인**한다 (이메일당 refresh token 이 하나라 다른 기기 세션이 풀린다)
  *   3. node scripts/login-bench.mjs 9335 phone,desktop 3
- *      프로필: phone(CPU×4·LTE 10Mbps/60ms·390x844 DPR3) · weak(CPU×4·1.6Mbps/150ms) · desktop(감속 없음·1600x900 DPR2)
- *      프로필마다 첫 방문(캐시 비움) N회 + 재방문 N회
+ *      프로필: phone(CPU×4·LTE 10Mbps/60ms·390x844 DPR3) · phonefast(CPU×4·망 감속 없음) · weak(CPU×4·1.6Mbps/150ms)
+ *              · desktop(감속 없음·1600x900 DPR2)
+ *      프로필마다 첫 방문(캐시 비움) N회 + 재방문 N회. `DETAIL=1` 을 앞에 붙이면 회차별 줄도 찍는다
  *
  * 결과는 PERF-LOG.md 에 손으로 옮긴다. 2026-09-26 기준선이 거기 있다 — 개선 뒤에 같은 명령으로 다시 잰다.
  * PostHog·GA 전송은 막는다(사용자 테스트 데이터 오염 방지). 전·후 모두 막으므로 비교에는 영향이 없다.
@@ -25,6 +26,8 @@ const BLOCK = ["*posthog.com*", "*google-analytics.com*", "*googletagmanager.com
 const P = {
   phone: { label: "폰 · CPU×4 · LTE 10Mbps/60ms · 390x844 DPR3", cpu: 4, net: { latency: 60, down: 10e6 / 8, up: 5e6 / 8 }, w: 390, h: 844, dpr: 3, mobile: true },
   weak: { label: "폰 · CPU×4 · 약한 신호 1.6Mbps/150ms · 390x844 DPR3", cpu: 4, net: { latency: 150, down: 1.6e6 / 8, up: 750e3 / 8 }, w: 390, h: 844, dpr: 3, mobile: true },
+  // 폰 + 빠른 와이파이 — 망은 빠르고 CPU 만 느리다. 유튜브가 첫 곡 전에 도착해 CPU 를 두고 겹치는지 보는 조건
+  phonefast: { label: "폰 · CPU×4 · 망 감속 없음 · 390x844 DPR3", cpu: 4, net: null, w: 390, h: 844, dpr: 3, mobile: true },
   desktop: { label: "데스크톱 · 감속 없음 · 1600x900 DPR2", cpu: 1, net: null, w: 1600, h: 900, dpr: 2, mobile: false },
 };
 const UA = "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/153.0.0.0 Mobile Safari/537.36";
@@ -128,6 +131,14 @@ async function run(p, cold) {
   };
 }
 
+// 같은 창의 다른 탭을 빈 페이지로 돌린다 (2026-09-26 확인). 로그인해 둔 지도 탭이 떠 있으면 매 프레임 그리느라 CPU 를 나눠 써서,
+// 같은 조건인데 첫 곡이 1초 가까이 늦고 50ms↑ 작업이 2~3배로 잡혔다. 로그인은 저장소에 남아 있으니 탭을 비워도 풀리지 않는다
+for (const t of (await send("Target.getTargets")).targetInfos.filter((t) => t.type === "page" && t.url !== "about:blank")) {
+  const { sessionId: s } = await send("Target.attachToTarget", { targetId: t.targetId, flatten: true });
+  await send("Page.navigate", { url: "about:blank" }, s).catch(() => {});
+  await send("Target.detachFromTarget", { sessionId: s }).catch(() => {});
+}
+
 // 로그인 확인 + 토큰 예열 (만료돼 있으면 앱이 여기서 재발급한다 — 측정 중 401→재발급이 끼지 않게)
 {
   const { targetId } = await send("Target.createTarget", { url: ORIGIN + "/" });
@@ -150,6 +161,8 @@ for (const name of PROFILES.split(",")) {
     ytApiStart: q(arr.map((r) => r.ytApiStart ?? -1), 0.5), longTasks: q(arr.map((r) => r.longTasksBeforeFirstSong), 0.5), longTaskMs: q(arr.map((r) => r.longTaskMsBeforeFirstSong), 0.5),
     fcp: q(arr.map((r) => r.fcp), 0.5), paths: [...new Set(arr.map((r) => r.path))],
   });
+  // DETAIL=1 이면 회차별로 찍는다 — 유튜브가 첫 곡 전에 겹친 회차와 안 겹친 회차를 가르려면 필요하다
+  if (process.env.DETAIL === "1") for (const [k, arr] of [["cold", out.cold], ["warm", out.warm]]) for (const r of arr) console.log(JSON.stringify({ profile: name, k, firstSong: r.firstSongFrame, meStart: r.meStart, songsStart: r.songsStart, songsEnd: r.songsEnd, songsJsonDone: r.songsJsonDone, ytKbBefore: r.ytKbBeforeFirstSong, ytKbTotal: r.ytKbTotal, lt: r.longTasksBeforeFirstSong, ltMs: r.longTaskMsBeforeFirstSong }));
   console.log(JSON.stringify({ profile: out.profile, cold: sum(out.cold), warm: sum(out.warm) }, null, 1));
 }
 ws.close();

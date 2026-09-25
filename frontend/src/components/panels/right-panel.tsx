@@ -6,6 +6,7 @@ import { useDismissOnOutside } from "@/hooks/use-dismiss-on-outside";
 import { usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePanelSwipe } from "@/hooks/use-panel-swipe";
+import { useContestStore } from "@/stores/use-contest-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
 import FeedPanel from "./feed/feed-panel";
@@ -47,7 +48,9 @@ export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
   const snap = usePanelStore((s) => s.snap);
   /** 데스크톱은 1(접힘)·3(펼침) 두 자리만 쓴다 — 여는 자리인 2 도 거기서는 펼친 것이다 */
-  const collapsed = snap === 1;
+  /** 이벤트 모달이 떠 있는 동안은 접힌다 (S15P21A405-665) — 닫으면 원래 단으로 돌아온다. 스토어는 안 건드린다 */
+  const contestOpen = useContestStore((s) => s.open);
+  const collapsed = snap === 1 || contestOpen;
   const raiseSnap = usePanelStore((s) => s.raiseSnap);
   const lowerSnap = usePanelStore((s) => s.lowerSnap);
   const panelEnabled = usePanelEnabled();

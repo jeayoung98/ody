@@ -6,7 +6,7 @@ import Box from "@/components/common/box";
 import Divider from "@/components/common/divider";
 import ErrorMessage from "@/components/common/error-message";
 import IconButton from "@/components/common/icon-button";
-import Tabs from "@/components/common/tabs";
+import UnderlineTabs from "@/components/common/underline-tabs";
 import { BackIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
@@ -27,12 +27,13 @@ const FOLLOW_TITLE: Record<FollowType, string> = { follower: "팔로워", follow
 /**
  * 본문 탭 (S15P21A405-662). 내 페이지는 셋, 남의 프로필은 취향 없이 둘 — 취향은 토큰 주체 것만 물을 수 있다 (630).
  * 한 줄로 이어 붙이던 것을 나눴다: 취향 리포트가 길어지면서 플리 목록이 화면 아래로 밀렸다.
+ * 순서는 플리가 먼저다 — 자주 여는 것이 앞이고 취향은 가끔 본다. 모양은 곡 상세가 쓰던 밑줄 탭(`UnderlineTabs`, 435).
  */
 type FeedTab = "taste" | "made" | "liked";
 const MY_TABS = [
-  { key: "taste", label: "음악 취향" },
   { key: "made", label: "내 플리" },
   { key: "liked", label: "좋아요한 플리" },
+  { key: "taste", label: "내 음악 취향" },
 ] as const satisfies ReadonlyArray<{ key: FeedTab; label: string }>;
 const OTHER_TABS = [
   { key: "made", label: "플레이리스트" },
@@ -64,10 +65,10 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
   const targetEmail = profileEmail ?? me?.email ?? null;
   const isMe = !profileEmail || profileEmail === me?.email;
   const { data, isPending, isError } = useUserProfileQuery(targetEmail);
-  /** 내 페이지는 취향부터, 남의 프로필은 플리부터. 사람이 바뀌면(남 → 나) 취향 탭이 없을 수 있어 아래에서 한 번 더 고른다 */
+  /** 기본은 플리. 사람이 바뀌면(나 → 남) 취향 탭이 없을 수 있어 아래에서 한 번 더 고른다 */
   const [tabChoice, setTabChoice] = useState<FeedTab | null>(null);
   const tabs = isMe ? MY_TABS : OTHER_TABS;
-  const tab: FeedTab = tabChoice && tabs.some((t) => t.key === tabChoice) ? tabChoice : isMe ? "taste" : "made";
+  const tab: FeedTab = tabChoice && tabs.some((t) => t.key === tabChoice) ? tabChoice : "made";
 
   /**
    * 팔로워·팔로잉 목록을 보는 중인가. null 이면 프로필 본문 (S15P21A405-577).
@@ -136,7 +137,7 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
               <Divider />
               <FeedDashboard dashboard={data.dashboard} />
               <Divider />
-              <Tabs items={tabs} value={tab} onChange={setTabChoice} />
+              <UnderlineTabs items={tabs} value={tab} onChange={setTabChoice} />
               {/* **취향은 내 페이지에만** (S15P21A405-630). 백엔드가 토큰으로 사람을 정해서 남의 취향은 물어볼 수가 없다 —
                   USER-04 의 "레이아웃 동일" 을 어기는 게 아니라 API 가 낼 수 없는 화면이다 */}
               {tab === "taste" && isMe && me && <FeedTasteReport />}

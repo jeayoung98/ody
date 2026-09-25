@@ -71,7 +71,14 @@ export default function GoogleLoginButton() {
 
     window.google.accounts.id.renderButton(slot.current, {
       type: "standard",
-      theme: "outline",
+      /**
+       * **어두운 버튼을 쓴다** (S15P21A405-644). `outline` 은 흰 바탕이라, 어두운 유리판 위에서
+       * 그 칸만 하얗게 떠서 붙여넣은 것처럼 보였다. 구글 세션이 살아 있으면 버튼이 개인화
+       * 형태(`○○ 계정 사용` + 이메일)로 그려져 더 넓어지는 탓에 더 눈에 띈다.
+       *
+       * **CSS 로는 못 바꾼다** — 버튼을 구글이 iframe 안에 직접 그리므로 이 옵션이 유일한 길이다.
+       */
+      theme: "filled_black",
       size: "large",
       shape: "pill",
       text: "continue_with",

@@ -24,18 +24,22 @@ interface CollapseHandleProps {
  * 폭은 내보낸다 — 접힌 패널이 화면을 얼마나 가리는지 계산하는 쪽(`main-screen.tsx`)이 이 값을
  * 손으로 옮겨 적고 있다가 22→17 변경을 놓쳤다 (S15P21A405-479).
  */
-export const HANDLE_W = 17;
+export const HANDLE_W = 22;
 /** `tokens.css` 의 `--spacing-handle-w` 와 같은 값이다 — 한쪽을 고치면 다른 쪽도 고친다 */
 const W = HANDLE_W;
-const H = 62;
+/**
+ * 17×62 → 22×76 (S15P21A405-664). 접힌 몸통을 다 밀어 넣으면서 화면에 남는 단서가 손잡이뿐이라 키웠다 —
+ * 예전 크기는 몸통 10px 이 같이 보일 때 맞춘 것이다.
+ */
+const H = 76;
 /**
  * 바깥쪽 변이 위아래로 깎이는 깊이 — 이만큼이 사다리꼴의 기울기다.
- * 4.5 는 너무 가팔라 혀가 아니라 화살표처럼 뾰족해 보였다. 긴 변 62 에 짧은 변 57 정도가
+ * 너무 가파르면 혀가 아니라 화살표처럼 뾰족해 보인다. 긴 변 76 에 짧은 변 70 정도가
  * "살짝 좁아진다" 로 읽히는 선이다.
  */
-const SLANT = 2.5;
+const SLANT = 3;
 /** 바깥쪽 두 모서리의 둥글기 */
-const R = 7;
+const R = 8;
 
 /**
  * 윤곽은 **하나뿐이다** — 바깥이 오른쪽인 모양 (S15P21A405-477).
@@ -65,9 +69,13 @@ const CLIP = `path("M0 0 L${W - R} ${SLANT} A${R} ${R} 0 0 1 ${W} ${SLANT + R} L
  *
  * 기울어진 위아래 변에는 테두리가 안 남는다(잘린 자리라서). 세로 변과 안쪽 하이라이트가 두께를 맡는다.
  *
- * **유리가 아니라 불투명한 남색 한 판이다** (`.glass-handle`, S15P21A405-477). 폭이 17px 뿐이라
+ * **유리가 아니라 불투명한 남색 한 판이다** (`.glass-handle`, S15P21A405-477). 폭이 좁아
  * 블러로는 뒤를 못 가렸고, 계기판 쪽은 부모가 유리라 블러가 먹지도 않아 좌우가 달라 보였다.
  * 색 하나로 칠해 어디에 붙어 있든 같게 만든다. 값은 `tokens.css` 의 `--glass-handle-bg`.
+ *
+ * **눈에 띄어야 한다** (S15P21A405-664). 접은 몸통이 화면 밖으로 다 들어가면서 이 손잡이가 유일한 단서다 —
+ * 청록 화살표와, 호스트에 `drop-shadow` 로 윤곽을 따라 번지는 빛. **테는 없다** — 선이 보이면 붙인 조각처럼
+ * 읽혀서 빛만 남겼다. `box-shadow` 는 `clip-path` 에 잘려 바깥으로 못 나가므로 빛은 잘리지 않는 호스트에 건다.
  */
 export default function CollapseHandle({ side, pointing, onClick, expanded, title, hitClassName = "" }: CollapseHandleProps) {
   const outerRight = side === "right";
@@ -79,11 +87,11 @@ export default function CollapseHandle({ side, pointing, onClick, expanded, titl
       title={title}
       aria-label={title}
       style={{ width: W, height: H, [outerRight ? "right" : "left"]: -W }}
-      className={`glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-ink-3 transition-colors hover:text-ink ${hitClassName}`}
+      className={`glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-teal drop-shadow-[0_0_11px_rgba(79,227,206,.7)] transition-[color,filter] hover:text-ink hover:drop-shadow-[0_0_16px_rgba(79,227,206,.95)] ${hitClassName}`}
     >
       {/* 색판. 왼쪽으로 나가는 손잡이는 같은 윤곽을 좌우로 뒤집어 쓴다 */}
       <span aria-hidden style={{ clipPath: CLIP, transform: outerRight ? undefined : "scaleX(-1)" }} className="glass-handle absolute inset-0" />
-      <svg className="relative" width="10" height="10" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+      <svg className="relative" width="13" height="13" viewBox="0 0 10 10" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
         <path d={pointing === "left" ? "M6.5 1.5 3 5l3.5 3.5" : "M3.5 1.5 7 5 3.5 8.5"} />
       </svg>
     </button>

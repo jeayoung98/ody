@@ -39,14 +39,15 @@ import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
  * 남아, 접었을 때 엔진이 19px 을 과하게 비우고 있었다. 세 군데에 같은 숫자를 손으로 적어 두면
  * 또 어긋난다.
  *
- * 접힘: 화면에 남는 몸통(여백 18 + 덜 민 10 = 28) + 핸들(17) = 45.
- *   `right-panel.tsx` 의 `translate-x-[calc(100%_-_10px)]` 와 `collapse-handle.tsx` 의 `W` 에서 온다.
+ * 접힘: 손잡이 폭(`collapse-handle.tsx` 의 `W`)만. 몸통은 화면 밖이다 (S15P21A405-664).
  * 펼침: 패널폭 + 여백(18) + 틈(16).
  */
 const PANEL_EDGE = 18;
-/** 접었을 때 화면 끝에 일부러 남기는 몸통 — `right-panel.tsx` 의 `calc(100% - 10px)` 의 10 */
-const PEEK_BODY = 10;
-const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
+/**
+ * 접었을 때 화면 끝에 남는 것은 **손잡이뿐**이다 (S15P21A405-664). 예전에는 몸통 10px 을 일부러 남겼는데
+ * (`calc(100% - 10px)`) 부스러기로 보여 다 밀어 넣었다 — `right-panel.tsx` 의 `calc(100% + 18px)`.
+ */
+const PEEK_OCCLUSION = HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
 interface MainScreenProps {

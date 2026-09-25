@@ -424,6 +424,15 @@ public class RideService {
 		if (!result.hadRiders()) {
 			return result; // 따라오던 사람이 없었다. 남아 있던 키는 스크립트가 이미 지웠다
 		}
+
+		// 2. 선단이 풀렸으니 인솔자를 보고 있던 사람들의 숫자도 0 으로 맞춘다.
+		//    안 보내면 인솔자 점 옆에 옛 숫자가 붙은 채로 남아, 그 인솔자가 다음에 곡을
+		//    바꿀 때까지 안 사라진다. 탑승·하차·이탈은 이미 보내고 있고 여기만 빠져 있었다.
+		//
+		//    끊김으로 들어온 경우에는 알림 쪽이 인솔자의 접속 정보를 못 찾아 스스로 아무것도
+		//    하지 않는다. 그쪽은 이미 지도에서 점이 통째로 사라진 뒤라 보낼 것도 없다.
+		notifyRiderCount(captainEmail, 0);
+
 		if (result.musicId() <= 0) {
 			// 아무도 서 있는 자리를 갖고 있지 않았다. 등록은 지웠지만 어디에 남았다고
 			// 알릴 자리가 없다. 여기까지 온 것 자체가 이상하므로 남겨 둔다.
@@ -431,12 +440,12 @@ public class RideService {
 			return result;
 		}
 
-		// 2. 만남에서 뺄 명단은 따라가던 전원에 인솔자를 더한 것이다.
+		// 3. 만남에서 뺄 명단은 따라가던 전원에 인솔자를 더한 것이다.
 		//    그 곡에 원래 있던 사람들과는 다른 명단이다.
 		Set<String> fleetMembers = new LinkedHashSet<>(result.riders());
 		fleetMembers.add(captainEmail);
 
-		// 3. 따라가던 사람에게 끝났다고 알린다. 남게 된 자리는 스스로 내렸을 때와 같은 모양이다.
+		// 4. 따라가던 사람에게 끝났다고 알린다. 남게 된 자리는 스스로 내렸을 때와 같은 모양이다.
 		//    지도에 못 돌아간 사람에게도 보낸다. 끝난 것은 그 사람도 마찬가지다.
 		Spot spot = spotOf(result.musicId(), result.layer());
 		RideEndedPayload ended = new RideEndedPayload(
@@ -449,17 +458,17 @@ public class RideService {
 					RealtimeMessageType.RIDE_ENDED, ended));
 		}
 
-		// 4. 남들 화면에는 한 덩어리로 알린다. 한 명씩 보내면 그 수만큼 다시 그린다.
+		// 5. 남들 화면에는 한 덩어리로 알린다. 한 명씩 보내면 그 수만큼 다시 그린다.
 		notifyQuietly("해체 화면 알림", () ->
 				viewportDeltaService.sendBulkEnter(result.leftRiders(), result.layer(),
 						result.musicId(), result.cellX() + ":" + result.cellY()));
 
-		// 5. 주변사람 목록에도 알린다. 해체는 위치 변경 알림을 거치지 않아
+		// 6. 주변사람 목록에도 알린다. 해체는 위치 변경 알림을 거치지 않아
 		//    이걸 안 보내면 패널을 열어 둔 사람의 목록에 이 사람들이 끝내 안 나타난다.
 		notifyQuietly("해체 주변사람 알림", () ->
 				nearbyChangeService.sendEnteredTogether(result.leftRiders(), result.layer(), result.musicId()));
 
-		// 6. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
+		// 7. 만남을 센다. 그 곡에 원래 있던 사람들 중 선단이 아닌 사람하고만 센다.
 		//    한 명이 스스로 내릴 때와 같은 함수다. 두 벌로 두면 한쪽만 고쳐진다.
 		notifyQuietly("해체 만남 기록", () ->
 				meetingService.recordOnDismount(result.leftRiders(), result.residents(), fleetMembers));

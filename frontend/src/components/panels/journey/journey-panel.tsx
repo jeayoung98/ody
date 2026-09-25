@@ -6,6 +6,7 @@ import { NO_GENRE_ID } from "@/constants";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
+import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import JourneyEmptyPrompt from "./journey-empty-prompt";
 import JourneyEndpoints from "./journey-endpoints";
@@ -57,7 +58,7 @@ export default function JourneyPanel() {
   const hasRoute = isRouteRequested && !!route.data;
 
   return (
-    <Box title="여정" actions={<PanelCloseButton />} footer={<JourneySummary route={route.data ?? null} />}>
+    <Box lead={<PanelBackButton />} title="여정" actions={<PanelCloseButton />} footer={<JourneySummary route={route.data ?? null} />}>
       {!isRouteRequested && <JourneyEmptyPrompt />}
       {isRouteRequested && route.isPending && <JourneySkeleton />}
       {hasRoute && (

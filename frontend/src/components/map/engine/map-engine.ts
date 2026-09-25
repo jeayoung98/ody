@@ -54,8 +54,11 @@ const growU = (a: Uint8Array<ArrayBufferLike>, n: number) => {
 /**
  * "내 위치로 가기" 결과. 안 움직였으면 **왜** 안 움직였는지 UI 가 알려 줄 수 있어야 한다 —
  * 눌렀는데 아무 일도 안 나는 게 제일 나쁘다.
+ *
+ * `unknown` 은 **자리는 있는데 지도가 그 곡의 좌표를 모른다**는 뜻이다 (S15P21A405-670). 랭킹·검색·플리처럼
+ * 지도 밖에서 튼 곡, 새로고침으로 되살린 자리가 그렇다 — 부른 쪽이 좌표를 구해 `adopt` 하고 다시 부른다.
  */
-export type GoHomeResult = "moved" | "queued" | "overlay" | "follow" | "none";
+export type GoHomeResult = "moved" | "queued" | "overlay" | "follow" | "none" | "unknown";
 
 interface Frame {
   layer: number;
@@ -2656,9 +2659,16 @@ export class MapEngine {
     this.meFlight = null;
   }
 
-  /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
+  /**
+   * 돌아갈 자리가 있는가 (재생한 적이 있는가).
+   *
+   * **좌표를 아는지는 안 본다** (S15P21A405-670). 예전에는 `index.has` 까지 걸어서, 랭킹·검색·플리에서 튼 곡이나
+   * 새로고침으로 되살린 자리는 지도가 그 곡을 받기 전까지 버튼이 **말없이 꺼져 있었다** — 겹 상주 집합은
+   * 서버가 고른 top-k 라 그 곡이 영영 안 올 수도 있다. 지금은 버튼을 살려 두고, 누르면 `goHome` 이
+   * `"unknown"` 을 돌려 좌표를 구해 오게 한다.
+   */
   canGoHome() {
-    return this.home != null && this.index.has(this.home.musicId);
+    return this.home != null;
   }
 
   /**
@@ -2694,7 +2704,8 @@ export class MapEngine {
     const h = this.home;
     if (!h) return "none";
     const i = this.index.get(h.musicId);
-    if (i == null) return "none";
+    // 자리는 있는데 좌표가 없다 — 부른 쪽이 곡 상세에서 좌표를 받아 `adopt` 한 뒤 다시 부른다
+    if (i == null) return "unknown";
     // 따라가기 중에는 화면을 직접 조작하지 않는다 (SOCIAL-08)
     if (this.follow) return "follow";
     /**

@@ -194,3 +194,12 @@ export const CHANGED = {
   tasteGenerated: "취향 리포트를 만들었어요",
   loggedOut: "로그아웃했어요",
 } as const;
+
+/**
+ * "내 위치로 가기" 를 눌렀는데 갈 수 없다 (S15P21A405-670). 눌렀는데 아무 일도 안 나는 것이 제일 나쁘다.
+ *
+ * 지도는 겹마다 서버가 고른 곡만 받으므로 랭킹·검색·플리에서 튼 곡은 지도가 좌표를 모를 수 있다.
+ * 그때는 곡 상세에서 좌표를 받아 오는데, 좌표가 아예 없는 곡(`location` null)이거나 그 조회가 실패하면 여기다.
+ */
+export const HOME_NO_COORDS = "이 곡은 지도에 자리가 없어서 갈 수 없어요";
+export const HOME_LOOKUP_FAILED = "곡의 자리를 못 불러왔어요. 다시 눌러 주세요";

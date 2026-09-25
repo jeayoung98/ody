@@ -3,9 +3,11 @@ package com.ssafy.backend.realtime.service.ride;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.anyCollection;
 import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import java.time.Clock;
 import java.util.Collection;
 import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
@@ -31,6 +33,7 @@ class RideRankingServiceTests {
 
 	@Mock RideRedisRepository rideRedisRepository;
 	@Mock UserDisplayService userDisplayService;
+	@Mock Clock clock;
 	@InjectMocks RideRankingService service;
 
 	private final Map<String, String> nicknameByEmail = new LinkedHashMap<>();
@@ -151,6 +154,46 @@ class RideRankingServiceTests {
 	void zeroLimitTouchesNothing() {
 		assertThat(service.top(0)).isEmpty();
 		verify(rideRedisRepository, never()).captainsWithRiders();
+	}
+
+	/** 새로고침 버튼 연타가 그대로 Redis 훑기가 되면 안 된다. */
+	@Test
+	@DisplayName("잠깐 사이에 또 물으면 다시 세지 않는다")
+	void reusesRecentAnswer() {
+		given(Map.of("a@x.com", 2), Map.of("a@x.com", "가"));
+
+		service.top(10);
+		service.top(10);
+
+		verify(rideRedisRepository, times(1)).captainsWithRiders();
+	}
+
+	@Test
+	@DisplayName("들고 있던 시간이 지나면 다시 센다")
+	void recountsAfterHoldingTime() {
+		given(Map.of("a@x.com", 2), Map.of("a@x.com", "가"));
+		when(clock.millis()).thenReturn(0L, 0L, 9_999L);
+
+		service.top(10);
+		service.top(10);
+		service.top(10);
+
+		verify(rideRedisRepository, times(2)).captainsWithRiders();
+	}
+
+	/** 들고 있는 답은 늘 열 명까지다. 더 적게 달라고 해도 세는 일은 한 번이어야 한다. */
+	@Test
+	@DisplayName("적게 달라고 해도 들고 있던 답을 잘라 준다")
+	void slicesHeldAnswerForSmallerLimit() {
+		given(Map.of("a@x.com", 5, "b@x.com", 4, "c@x.com", 3),
+				Map.of("a@x.com", "가", "b@x.com", "나", "c@x.com", "다"));
+
+		service.top(10);
+		List<RideRankingItem> two = service.top(2);
+
+		assertThat(two).extracting(RideRankingItem::email).containsExactly("a@x.com", "b@x.com");
+		assertThat(two).extracting(RideRankingItem::rank).containsExactly(1, 2);
+		verify(rideRedisRepository, times(1)).captainsWithRiders();
 	}
 
 	/** 인원과 닉네임을 정해 두고, 닉네임 조회는 넣은 순서대로 돌려주게 한다. */

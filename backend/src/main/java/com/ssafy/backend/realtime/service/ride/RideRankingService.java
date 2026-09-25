@@ -1,10 +1,12 @@
 package com.ssafy.backend.realtime.service.ride;
 
+import java.time.Clock;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import java.util.concurrent.atomic.AtomicReference;
 
 import org.springframework.context.annotation.Profile;
 import org.springframework.stereotype.Service;
@@ -21,6 +23,9 @@ import lombok.RequiredArgsConstructor;
  *
  * 미리 세어 두지 않고 물어볼 때마다 센다. 따로 만든 사본을 두면 정리 경로 하나만 빠져도
  * 아무도 안 태우는 사람이 1위에 남는다. 원본을 그대로 세면 그럴 일이 없다.
+ *
+ * 다만 세는 일이 Redis 전체 키를 훑는 일이라, 방금 만든 답을 잠깐 들고 있다가 그 사이에
+ * 또 물으면 그대로 준다. 화면에 새로고침 버튼이 있어 연타가 그대로 훑기가 되기 때문이다.
  */
 @Service
 @Profile("realtime")
@@ -39,8 +44,27 @@ public class RideRankingService {
 							Comparator.nullsLast(Comparator.naturalOrder()))
 					.thenComparing(RideRankingItem::email);
 
+	/** 화면이 열 줄이라 이보다 많이 만들 이유가 없다. 들고 있는 답도 이 수로 만든다. */
+	private static final int MAX_LIMIT = 10;
+
+	/** 답을 들고 있는 시간. 길면 방금 탄 사람이 안 보이고, 짧으면 연타가 그대로 훑기가 된다. */
+	private static final long CACHE_TTL_MS = 2_000L;
+
 	private final RideRedisRepository rideRedisRepository;
 	private final UserDisplayService userDisplayService; // 닉네임과 사진. 5분 동안 기억해 둔다
+	private final Clock clock;
+
+	/** 방금 만든 답과 그것이 쓸모 있는 시각. 사람마다 다른 값이 아니라 하나만 둔다. */
+	private final AtomicReference<Cached> cached = new AtomicReference<>();
+
+	/**
+	 * 들고 있는 답.
+	 *
+	 * @param expiresAt 이 시각이 지나면 다시 만든다
+	 * @param items 가장 많이 태운 순으로 MAX_LIMIT 명까지
+	 */
+	private record Cached(long expiresAt, List<RideRankingItem> items) {
+	}
 
 	/**
 	 * 상위 목록을 만든다.
@@ -52,7 +76,37 @@ public class RideRankingService {
 		if (limit < 1) {
 			return List.of();
 		}
+		// 들고 있는 답은 늘 MAX_LIMIT 명까지 만들어 두고, 더 적게 달라고 하면 앞에서 잘라 준다.
+		// 순위는 이미 1부터 매겨져 있어 앞을 자르면 그대로 1위부터가 된다.
+		List<RideRankingItem> all = cachedTop();
+		int wanted = Math.min(limit, MAX_LIMIT);
+		return wanted >= all.size() ? all : List.copyOf(all.subList(0, wanted));
+	}
 
+	/**
+	 * 들고 있는 답이 아직 쓸모 있으면 그대로 주고, 아니면 다시 만든다.
+	 *
+	 * 거의 같은 순간에 둘이 물으면 둘 다 만들 수 있다. 답이 같으므로 그냥 둔다 —
+	 * 자물쇠를 걸면 한쪽이 훑기가 끝날 때까지 기다린다.
+	 */
+	private List<RideRankingItem> cachedTop() {
+		long now = clock.millis();
+		Cached hit = cached.get();
+		if (hit != null && hit.expiresAt() > now) {
+			return hit.items();
+		}
+		List<RideRankingItem> fresh = compute(MAX_LIMIT);
+		cached.set(new Cached(now + CACHE_TTL_MS, fresh));
+		return fresh;
+	}
+
+	/**
+	 * 지금 이 순간의 상위 목록을 실제로 만든다.
+	 *
+	 * @param limit 최대 몇 명까지 담을지
+	 * @return 1위부터 차례로. 아무도 안 태우고 있으면 빈 목록
+	 */
+	private List<RideRankingItem> compute(int limit) {
 		// 1. 지금 태우고 있는 사람만 후보다. 아무도 안 태우면 키가 없어 여기서 끝난다.
 		Set<String> candidates = rideRedisRepository.captainsWithRiders();
 		if (candidates.isEmpty()) {

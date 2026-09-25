@@ -7,9 +7,9 @@ export const LAYER_COUNT = 8;
 export const LAYER_SONG_COUNT = 1000;
 
 /**
- * `bff/map/songs` 응답의 gzip 수준 (S15P21A405-680). 1겹 응답(약 1.6MB) 모양의 데이터로 재 보니
- * 3 은 479KB · 17ms, 기본값 6 은 449KB · 44ms 였다. 30KB(LTE 로 약 24ms)를 더 보내고 서버 CPU 를 절반 넘게 아낀다 —
- * 배포 서버는 백엔드·DB 와 CPU 를 나눠 쓴다.
+ * `bff/map/songs` 응답의 gzip 수준 (S15P21A405-680). 실제 1겹 응답(5,745곡 · 1,613,489바이트)으로 재 보니
+ * 3 은 561KB · 20ms, 기본값 6 은 535KB · 47ms 였다 (시간은 개발 PC). 26KB(LTE 10Mbps 로 약 22ms)를 더 보내고
+ * 서버 CPU 를 절반 넘게 아낀다 — 배포 서버는 백엔드·DB 와 CPU 를 나눠 쓴다.
  */
 export const MAP_SONGS_GZIP_LEVEL = 3;
 

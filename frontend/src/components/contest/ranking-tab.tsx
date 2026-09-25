@@ -52,7 +52,7 @@ export default function RankingTab({ contest }: { contest: Contest }) {
                   <TrackRow
                     index={e.rank ?? undefined}
                     title={e.title}
-                    artist={`@${ownerLabel(e.ownerEmail)}${isMine ? " · 나" : ""}`}
+                    artist={`@${ownerLabel(e.ownerEmail, e.ownerNickname)}${isMine ? " · 나" : ""}`}
                     active={isMine}
                     right={
                       <>

@@ -12,7 +12,7 @@ import type { MusicDetail } from "@/types";
  * 그 권유가 주변곡과 소리 사이에 늘 끼어든다. 만들기는 제목 줄의 플리 버튼에 있다.
  */
 export default function SongRelatedPlaylists({ items }: { items: MusicDetail["relatedPlaylists"] }) {
-  const openPlaylist = usePanelStore((s) => s.openPlaylist);
+  const drill = usePanelStore((s) => s.drill);
   return (
     <div className="flex flex-col gap-2">
       <SectionTitle>이 곡이 담긴 플레이리스트</SectionTitle>
@@ -21,7 +21,7 @@ export default function SongRelatedPlaylists({ items }: { items: MusicDetail["re
           <button
             key={p.id}
             type="button"
-            onClick={() => openPlaylist(p.id)}
+            onClick={() => drill({ panel: "playlist", playlistId: p.id })}
             className="flex w-full items-center gap-2.5 rounded-box-sm border border-transparent px-[9px] py-2 text-left text-sm transition-colors hover:border-line hover:bg-white/[.055]"
           >
             <span className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] text-xs shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]" style={{ background: "linear-gradient(140deg,#12203c,#1b1330)" }}>

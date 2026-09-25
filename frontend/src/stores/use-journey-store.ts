@@ -48,7 +48,11 @@ export const useJourneyStore = create<JourneyState>()(
        * 되돌려서, 도착 칸을 눌러 둔 채 다른 곡을 고르면 엉뚱하게 출발이 바뀌었다.
        * 출발을 고치는 길은 출발 칸을 눌러 포커스하는 것 하나로 둔다.
        */
-      setStart: (startMusicId) => set({ startMusicId, isRouteRequested: false, pickTarget: "end" }, false, "setStart"),
+      /**
+       * **출발을 비우면 차례는 출발이다** (S15P21A405-661). 비운 뒤에도 도착에 머물면 지도에서 별을 눌렀을 때
+       * 방금 비운 출발이 아니라 도착이 갈아 끼워진다 — 비웠다는 것은 다시 고르겠다는 뜻이다.
+       */
+      setStart: (startMusicId) => set({ startMusicId, isRouteRequested: false, pickTarget: startMusicId == null ? "start" : "end" }, false, "setStart"),
       setEnd: (endMusicId) => set({ endMusicId, isRouteRequested: false, pickTarget: "end" }, false, "setEnd"),
 
       /**

@@ -136,8 +136,17 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
       useMapStore.getState().setMyMusicId(r.musicId);
       // 인솔자가 듣던 지점부터. `PAUSED` 면 그 지점에서 멈춰 선다
       playFrom(r.musicId, r.positionMs, r.playback === "PLAYING");
-      // 중간에 타도 같은 화면이 되게 인솔자가 열어 둔 상세를 같이 연다 (§3.1)
-      if (r.panel.open && r.panel.musicId != null) usePanelStore.getState().openSong(r.panel.musicId);
+      /**
+       * **타는 순간 곡 상세가 뜬다** (S15P21A405-658). 인솔자가 열어 둔 상세가 있으면 그 곡(§3.1, 중간에 타도
+       * 같은 화면), 없으면 인솔자가 듣는 곡이다. 예전에는 앞엣것만 열어서, 프로필에서 따라가기를 누르면 곡은
+       * 틀리는데 프로필 패널이 그대로 남아 닫아야 곡 상세가 보였다.
+       *
+       * 조용한 재탑승(`silent` — 새로고침·재연결)은 예전대로 인솔자 상세가 있을 때만 연다. 보고 있던 화면을
+       * 재시도 때마다 곡 상세로 덮으면 안 된다.
+       */
+      const leaderPanel = r.panel.open && r.panel.musicId != null ? r.panel.musicId : null;
+      const songToOpen = leaderPanel ?? (silent ? null : r.musicId);
+      if (songToOpen != null) usePanelStore.getState().openSong(songToOpen);
       /**
        * 지도는 곧 도착하는 `RIDE_VIEWPORT` 가 그린다 (§3.1-3). 내 뷰포트·주변 사람 구독은
        * **서버가 끊는다** — 프론트가 close 를 보낼 필요가 없고, 보내면 막힌다 (§6).

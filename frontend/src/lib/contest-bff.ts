@@ -29,6 +29,8 @@ export interface BackendArtworkSummary {
   rank: number | null;
   title: string;
   ownerEmail: string | null;
+  /** 작품 주인 닉네임 (S15P21A405-645). user 행이 없으면 백엔드가 null 을 준다 */
+  ownerNickname: string | null;
   status: "PENDING" | "SCORED" | "FAILED";
   score: number | null;
   aiComment: string | null;
@@ -64,6 +66,7 @@ export const toEntry = (s: BackendArtworkSummary): ContestEntry => ({
   rank: s.rank ?? null,
   title: s.title,
   ownerEmail: s.ownerEmail ?? null,
+  ownerNickname: s.ownerNickname ?? null,
   status: s.status,
   score: s.score ?? null,
   aiComment: s.aiComment ?? null,

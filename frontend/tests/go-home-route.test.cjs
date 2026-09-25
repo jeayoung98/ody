@@ -73,3 +73,24 @@ test("내 위치로 가기: 최상단까지 떠올랐다가 왼쪽으로 다시 
   assert.equal(e.playingElsewhere(), false, "이제 내 자리다");
   assert.equal(e.myId, MINE);
 });
+
+/**
+ * **실제로 깨지던 길.** 겹이 바뀔 때마다 presence join 의 답(`PRESENCE_JOINED`)이 내 곡을 되돌려 주고
+ * 스토어가 `setMy` 를 부른다 — 그때 `home` 이 지금 경로로 덮이면 "재생 때 경로" 가 사라진다.
+ */
+test("겹을 옮긴 뒤 같은 곡으로 setMy 가 다시 와도 재생 때 경로는 그대로다", () => {
+  const { e, t } = scenario();
+  e.setMy(MINE); // 오른쪽 갈래에서 PRESENCE_JOINED 가 같은 곡을 되돌려 줬다
+  assert.deepEqual(e.home, { musicId: MINE, boxes: [LEFT] }, "오른쪽 경로로 덮이지 않는다");
+  assert.equal(e.playingElsewhere(), true);
+  assert.equal(e.goHome(), "moved");
+  assert.equal(e.anim && e.anim.layer, 0, "여전히 최상단으로 떠오른다");
+  let now = settle(e, t);
+  now = settle(e, now);
+  assert.deepEqual(e.boxes, [LEFT]);
+  // 곡이 바뀌면 그때는 새 경로가 기록된다
+  const OTHER = songs.find((s) => s.pc[0] === 1.4 && s.pc[1] === 0).musicId;
+  e.setMy(OTHER);
+  assert.equal(e.home.musicId, OTHER);
+  assert.deepEqual(e.home.boxes, [LEFT], "지금 경로(왼쪽)로 새로 적힌다");
+});

@@ -2432,9 +2432,18 @@ export class MapEngine {
 
   setMy(id: number | null) {
     if (id == null || !this.index.has(id)) return;
+    /**
+     * **같은 곡이면 재생 때 경로를 지키고, 곡이 바뀌었을 때만 새로 적는다** (S15P21A405-670).
+     *
+     * 겹이 바뀔 때마다 presence join 을 다시 보내고 서버가 `PRESENCE_JOINED` 로 내 곡을 되돌려 주는데
+     * (`use-presence-join`), 그때마다 여기로 와서 `home` 이 **지금 보는 경로**로 덮였다. 그래서 왼쪽 갈래에서
+     * 튼 곡이 오른쪽으로 파고들면 오른쪽 경로가 "재생 때 경로" 가 돼 늘 같은 자리로 읽혔다.
+     * 곡이 그대로면 위치가 바뀐 게 아니다 — 새로고침 복원(`restoreHome`)도 이 덕에 살아남는다.
+     */
+    const changed = this.home?.musicId !== id;
     this.myId = id;
     this.playingId = id;
-    this.home = { musicId: id, boxes: [...this.boxes] };
+    if (changed) this.home = { musicId: id, boxes: [...this.boxes] };
     /**
      * **앞서 누른 별을 놓아 준다** (S15P21A405-566).
      *

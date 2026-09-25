@@ -27,12 +27,19 @@ export default function LoginPage() {
 
         <GoogleLoginButton />
 
-        {/* 아래 두 줄(동의 고지·프로토타입 안내)을 빼면서 이 줄이 카드의 마지막이 됐다 */}
         <p className="mt-6 border-t border-line pt-5 text-center text-[14px] text-ink-2">
           계정이 없으신가요?{" "}
           <Link href={ROUTES.signup} className="font-semibold text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink">
             ODY 가입하기
           </Link>
+        </p>
+        {/*
+          **동의 고지는 남긴다** (S15P21A405-655). 이건 안내가 아니라 동의를 받았다는 근거라
+          화면에서 없애는 것이 기획·법무 쪽 판단이다. 대신 **한 줄로 줄여** 자리를 덜 먹게 한다 —
+          읽히라고 두는 줄이 아니라 있어야 해서 두는 줄이다.
+        */}
+        <p className="mt-2.5 text-center text-[9px] leading-[1.5] text-ink-4">
+          로그인하면 이용약관과 개인정보 처리방침에 동의하는 것으로 간주됩니다.
         </p>
       </AuthCard>
     </GuestGate>

@@ -74,8 +74,8 @@ const CLIP = `path("M0 0 L${W - R} ${SLANT} A${R} ${R} 0 0 1 ${W} ${SLANT + R} L
  * 색 하나로 칠해 어디에 붙어 있든 같게 만든다. 값은 `tokens.css` 의 `--glass-handle-bg`.
  *
  * **눈에 띄어야 한다** (S15P21A405-664). 접은 몸통이 화면 밖으로 다 들어가면서 이 손잡이가 유일한 단서다 —
- * 청록 테(안쪽 그림자, 잘리는 윤곽 안에 남는다)와 청록 화살표, 호스트에 `drop-shadow` 로 윤곽을 따라 번지는
- * 빛. `box-shadow` 는 `clip-path` 에 잘려 바깥으로 못 나가므로 빛은 잘리지 않는 호스트에 건다.
+ * 청록 화살표와, 호스트에 `drop-shadow` 로 윤곽을 따라 번지는 빛. **테는 없다** — 선이 보이면 붙인 조각처럼
+ * 읽혀서 빛만 남겼다. `box-shadow` 는 `clip-path` 에 잘려 바깥으로 못 나가므로 빛은 잘리지 않는 호스트에 건다.
  */
 export default function CollapseHandle({ side, pointing, onClick, expanded, title, hitClassName = "" }: CollapseHandleProps) {
   const outerRight = side === "right";
@@ -87,7 +87,7 @@ export default function CollapseHandle({ side, pointing, onClick, expanded, titl
       title={title}
       aria-label={title}
       style={{ width: W, height: H, [outerRight ? "right" : "left"]: -W }}
-      className={`glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-teal drop-shadow-[0_0_9px_rgba(79,227,206,.55)] transition-[color,filter] hover:text-ink hover:drop-shadow-[0_0_14px_rgba(79,227,206,.85)] ${hitClassName}`}
+      className={`glass-handle-host absolute top-1/2 z-10 grid -translate-y-1/2 place-items-center text-teal drop-shadow-[0_0_11px_rgba(79,227,206,.7)] transition-[color,filter] hover:text-ink hover:drop-shadow-[0_0_16px_rgba(79,227,206,.95)] ${hitClassName}`}
     >
       {/* 색판. 왼쪽으로 나가는 손잡이는 같은 윤곽을 좌우로 뒤집어 쓴다 */}
       <span aria-hidden style={{ clipPath: CLIP, transform: outerRight ? undefined : "scaleX(-1)" }} className="glass-handle absolute inset-0" />

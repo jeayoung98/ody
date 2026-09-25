@@ -21,6 +21,7 @@ import GhostBanner from "@/components/map/ghost-banner";
 import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
 import { useRealtime } from "@/hooks/use-realtime";
+import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
@@ -71,6 +72,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 화면 전체에 소켓 하나만 있어야 해서 지도가 아니라 여기서 연다 — 지도는 언마운트될 수 있다.
    */
   useRealtime();
+  usePanelFollowsTrack();
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
   /**

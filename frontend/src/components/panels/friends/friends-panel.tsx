@@ -8,6 +8,7 @@ import { isBot } from "@/lib/bots/roster";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import { useFollowStore } from "@/stores/use-follow-store";
+import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import FriendRow from "./friend-row";
 import NearbyRadar from "./nearby-radar";
@@ -70,7 +71,7 @@ export default function FriendsPanel() {
       : null;
 
   return (
-    <Box title="주변 사람" actions={<PanelCloseButton />}>
+    <Box lead={<PanelBackButton />} title="주변 사람" actions={<PanelCloseButton />}>
       {/*
         레이더가 위, 줄 목록이 아래다 (S15P21A405-496). 레이더는 **어느 쪽에 얼마나 멀리**
         있는지를 한눈에 보여주고(S15P21A405-582 로 각도도 진짜가 됐다), 목록은 레이더에 넣을

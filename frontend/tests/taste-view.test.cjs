@@ -114,6 +114,27 @@ test("안내는 하나만 뜬다 — 지금 벌어지는 일이 우선이다", (
   assert.equal(view.notice, TASTE_NOTICE.generating);
 });
 
+/**
+ * 백엔드가 마지막 실패를 조회에도 실어 주기 시작했다 (S15P21A405-647). 대체 문장조차 없는
+ * 실패라 보여 줄 리포트가 없는데, 그냥 빈 칸이면 눌러 본 적이 없는 것과 구별이 안 된다.
+ */
+test("리포트 없이 실패만 온 경우를 말해 준다", () => {
+  const view = tasteView(analysis({ generation: { ...analysis().generation, failureCode: "GMS_TIMEOUT", canRetry: true } }));
+  assert.equal(view.report, null);
+  assert.equal(view.notice, TASTE_NOTICE.lastFailed);
+  assert.equal(view.canGenerate, true, "다시 해 볼 수 있어야 한다");
+});
+
+/** 실패 코드가 있어도 **보여 줄 리포트가 있으면** 그쪽이 먼저다 — 대체 문장이 남은 경우다 */
+test("대체 리포트가 있으면 실패 문구 대신 대체 문구를 쓴다", () => {
+  const view = tasteView(analysis({
+    state: "FRESH",
+    report: report({ aiGenerated: false }),
+    generation: { ...analysis().generation, status: "FALLBACK", failureCode: "GMS_TIMEOUT", canRetry: true },
+  }));
+  assert.equal(view.notice, TASTE_NOTICE.fallback);
+});
+
 /** FALLBACK 은 실패가 아니라 덜 다듬어진 것이다. 오류로 말하면 안 된다 */
 test("규칙으로 채운 문장은 실패가 아니라고 말한다", () => {
   const view = tasteView(analysis({ state: "FRESH", report: report({ aiGenerated: false }) }));

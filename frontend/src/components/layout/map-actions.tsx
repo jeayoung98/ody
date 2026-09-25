@@ -3,8 +3,10 @@
 import { usePathname } from "next/navigation";
 import { JourneyIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
+import { RIDING_JOURNEY_BLOCKED } from "@/constants";
 import { usePanelEnabled } from "@/hooks/use-features";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import NearbyExploreButton from "./nearby-explore-button";
@@ -28,6 +30,7 @@ export default function MapActions() {
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
   const openComposer = useOpenJourneyComposer();
+  const riding = useFollowStore((s) => s.leaderEmail != null);
 
   if (pathname !== ROUTES.home) return null;
 
@@ -52,7 +55,15 @@ export default function MapActions() {
     >
       <NearbyExploreButton />
       {panelEnabled.journey && (
-        <RailButton label="여정" active={composerOpen} onClick={pressJourney} data-tutorial="journey">
+        /* 레일과 같은 규칙으로 잠근다 (S15P21A405-660) — 여기만 열려 있으면 폰에서만 뚫린다 */
+        <RailButton
+          label="여정"
+          active={composerOpen}
+          disabled={riding}
+          title={riding ? RIDING_JOURNEY_BLOCKED : "여정"}
+          onClick={pressJourney}
+          data-tutorial="journey"
+        >
           <JourneyIcon size={17} />
         </RailButton>
       )}

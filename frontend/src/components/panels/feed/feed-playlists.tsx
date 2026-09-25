@@ -45,7 +45,7 @@ export default function FeedPlaylists({ email, isMe }: FeedPlaylistsProps) {
   const target = isMe ? null : email;
   const mine = useMyPlaylistsQuery(target);
   const liked = useLikedPlaylistsQuery(target);
-  const openPlaylist = usePanelStore((s) => s.openPlaylist);
+  const drill = usePanelStore((s) => s.drill);
   const remove = useDeletePlaylistMutation();
 
   const loading = mine.isPending || liked.isPending;
@@ -70,7 +70,7 @@ export default function FeedPlaylists({ email, isMe }: FeedPlaylistsProps) {
           <PlaylistRow
             key={`${isMine ? "m" : "l"}:${playlist.id}`}
             playlist={playlist}
-            onClick={() => openPlaylist(playlist.id)}
+            onClick={() => drill({ panel: "playlist", playlistId: playlist.id })}
             actions={
               isMe && isMine ? (
                 <IconButton

@@ -89,6 +89,11 @@ export interface ContestEntry {
   rank: number | null;
   title: string;
   ownerEmail: Email | null;
+  /**
+   * 작품 주인 닉네임 (S15P21A405-645). **`null` 일 수 있다** — 탈퇴 등으로 user 행이 없는 경우다.
+   * 그때는 이메일 앞부분으로 떨어진다 (`ownerLabel`).
+   */
+  ownerNickname: string | null;
   status: ArtworkStatus;
   /** AI 점수 0~100. 평가 전·실패면 `null` */
   score: number | null;

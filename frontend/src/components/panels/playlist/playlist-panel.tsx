@@ -10,6 +10,7 @@ import { musicToMapPoint } from "@/lib/map-point";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { MapPoint } from "@/types";
+import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import PlaylistHeader from "./playlist-header";
 import PlaylistSkeleton from "./playlist-skeleton";
@@ -52,7 +53,7 @@ export default function PlaylistPanel() {
   }, [items, playlistId, setConstellationList]);
 
   return (
-    <Box title="플레이리스트" actions={<PanelCloseButton />}>
+    <Box lead={<PanelBackButton />} title="플레이리스트" actions={<PanelCloseButton />}>
       {isPending && <PlaylistSkeleton />}
       {isError && <ErrorMessage />}
       {data && (

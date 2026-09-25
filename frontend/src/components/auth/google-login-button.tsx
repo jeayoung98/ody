@@ -71,7 +71,14 @@ export default function GoogleLoginButton() {
 
     window.google.accounts.id.renderButton(slot.current, {
       type: "standard",
-      theme: "outline",
+      /**
+       * **어두운 버튼을 쓴다** (S15P21A405-644). `outline` 은 흰 바탕이라, 어두운 유리판 위에서
+       * 그 칸만 하얗게 떠서 붙여넣은 것처럼 보였다. 구글 세션이 살아 있으면 버튼이 개인화
+       * 형태(`○○ 계정 사용` + 이메일)로 그려져 더 넓어지는 탓에 더 눈에 띈다.
+       *
+       * **CSS 로는 못 바꾼다** — 버튼을 구글이 iframe 안에 직접 그리므로 이 옵션이 유일한 길이다.
+       */
+      theme: "filled_black",
       size: "large",
       shape: "pill",
       text: "continue_with",
@@ -103,7 +110,7 @@ export default function GoogleLoginButton() {
   // 기본값이 지워지는 날 버튼이 조용히 사라지는 것보다 이유가 적힌 화면이 낫다.
   if (!CLIENT_ID) {
     return (
-      <p className="rounded-pill border border-line px-3 py-3 text-center text-[12.5px] leading-[1.62] text-ink-2">
+      <p className="rounded-pill border border-line px-3 py-3 text-center text-[14.5px] leading-[1.62] text-ink-2">
         구글 로그인이 설정되지 않았습니다 — <code>NEXT_PUBLIC_GOOGLE_CLIENT_ID</code> 가 필요합니다.
       </p>
     );
@@ -114,7 +121,7 @@ export default function GoogleLoginButton() {
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={renderGoogleButton} />
       {/* 구글 버튼이 이 폭에 맞춰 그려진다 — `w-full` 이라야 잰 값이 카드 폭과 같다 */}
       <div ref={slot} className="flex w-full justify-center overflow-hidden" />
-      {isError && <p className="mt-2 text-center text-[12.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
+      {isError && <p className="mt-2 text-center text-[14.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
     </>
   );
 }

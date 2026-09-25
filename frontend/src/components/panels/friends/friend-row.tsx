@@ -40,7 +40,8 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
   const isRidingThis = leaderEmail === person.email;
   const handleRide = () =>
     startActivity("follow", person.email, () => {
-      ride.mutate({ email: person.email, nickname: person.nickname, imageUrl: person.imageUrl });
+      // 목록은 그 사람이 선 곡을 안다 — 넘기면 표식이 응답을 안 기다리고 바로 옮겨진다 (S15P21A405-642)
+      ride.mutate({ email: person.email, nickname: person.nickname, imageUrl: person.imageUrl, musicId: person.musicId });
       backToMap();
     });
 
@@ -54,7 +55,7 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
       }}
       right={
         <div className="flex items-center gap-2">
-          {person.meetingCount > 0 && <span className="num text-xs text-ink-3">{person.meetingCount}번째</span>}
+          {person.meetingCount > 0 && <span className="num text-[14px] text-ink-3">{person.meetingCount}번째</span>}
           {/* 줄 전체가 프로필로 가는 버튼이라, 여기서 클릭이 위로 올라가면 패널이 갈아탄다 */}
           <button
             type="button"
@@ -63,7 +64,7 @@ export default function FriendRow({ person }: { person: NearbyPerson }) {
               e.stopPropagation();
               handleRide();
             }}
-            className="shrink-0 rounded-pill border border-violet/35 bg-violet/[.14] px-2.5 py-1 text-[11px] text-ink-2 transition-colors hover:bg-violet/25 disabled:opacity-45"
+            className="shrink-0 rounded-pill border border-violet/35 bg-violet/[.14] px-3 py-1.5 text-[14px] text-ink-2 transition-colors hover:bg-violet/25 disabled:opacity-45"
           >
             {isRidingThis ? "탑승 중" : "🚀 따라가기"}
           </button>

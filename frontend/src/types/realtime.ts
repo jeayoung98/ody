@@ -49,6 +49,7 @@ export type RealtimeMessageType =
   | "RIDE_TRACK"
   | "RIDE_PLAYBACK"
   | "RIDE_PANEL"
+  | "RIDE_VIEW"
   | "RIDE_VIEWPORT"
   | "RIDE_VIEWPORT_ENTER"
   | "RIDE_VIEWPORT_MOVE"
@@ -503,6 +504,36 @@ export interface RidePanelRequest {
   tab?: RidePanelTab;
 }
 
+/**
+ * 인솔자가 지도를 보는 모양 (BACKEND-NOTES §8, S15P21A405-591 · 653). 프론트 `MapViewMode` 의 `constellation` 은
+ * 여기서 `journey`·`playlist` 로 갈린다 — 받는 쪽이 조회할 API 가 다르다.
+ */
+export type RideViewKind = "default" | "journey" | "playlist" | "nearby";
+
+/**
+ * C→S `/app/ride/view` — 내용(경로·곡 목록)은 안 보내고 **무엇을 보는지**만 보낸다. 받는 쪽이 번호로 자기가 조회한다.
+ * 종류마다 있어야 하는 번호가 다르다: journey → start/end, playlist → playlistId, nearby → centerMusicId. 빠지면 `RIDE_VIEW_INVALID`
+ */
+export interface RideViewRequest {
+  kind: RideViewKind;
+  startMusicId?: number;
+  endMusicId?: number;
+  playlistId?: number;
+  centerMusicId?: number;
+}
+
+/**
+ * S→C `RIDE_VIEW` — 요청과 같은 모양, 종류에 안 맞는 번호는 `null`. 중간에 탄 사람도 탑승 직후 한 번 받는다
+ * (인솔자가 기본 지도면 안 온다). 선단이 흩어지면 서버가 저장값을 지운다 — 라이더는 `RIDE_ENDED` 에서 기본으로 돌아간다
+ */
+export interface RideViewPayload {
+  kind: RideViewKind;
+  startMusicId: number | null;
+  endMusicId: number | null;
+  playlistId: number | null;
+  centerMusicId: number | null;
+}
+
 // ── 오류 ──────────────────────────────────────────────────────────────────
 
 export type WebSocketErrorCode =
@@ -517,7 +548,9 @@ export type WebSocketErrorCode =
   /** 인솔자만 보낼 수 있는 곳으로 동승자가 보냈다. 내리면 된다 */
   | "RIDE_NOT_CAPTAIN"
   | "RIDE_PLAYBACK_INVALID"
-  | "RIDE_PANEL_INVALID";
+  | "RIDE_PANEL_INVALID"
+  /** `/app/ride/view` 의 `kind` 를 모르거나 종류에 필요한 번호가 빠졌다 (§8-1) */
+  | "RIDE_VIEW_INVALID";
 
 export interface PresenceErrorPayload {
   code: WebSocketErrorCode;

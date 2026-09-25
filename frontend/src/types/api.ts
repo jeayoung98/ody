@@ -60,7 +60,35 @@ export type ImplementedErrorCode =
   /** 409 — 상대가 내 층에 없다. 접속이 없거나 다른 층이다 */
   | "REACTION_NOT_NEARBY"
   /** 429 — 같은 사람에게 너무 빨리 다시 보냈다 (SOCIAL-04) */
-  | "REACTION_COOLDOWN";
+  | "REACTION_COOLDOWN"
+  // 취향 분석 (S15P21A405-630, backend TasteErrorCode)
+  /**
+   * 422 — 유효한 좋아요 곡이 10개 미만이라 리포트를 만들 수 없다.
+   * **오류로 보여 주지 않는다** — 조회 응답의 `reportEligibility` 가 같은 사실을 미리 말해 주므로,
+   * 화면은 버튼을 잠그고 몇 곡이 더 필요한지 적는다. 이 코드는 그 잠금을 뚫고 눌렀을 때의 답이다.
+   */
+  | "TASTE_INSUFFICIENT_SAMPLE"
+  /** 429 — 오늘 몫을 이미 썼다. 생성은 하루 한 번이다 */
+  | "TASTE_DAILY_LIMIT"
+  /** 409 — 이미 만들고 있다. 기다리면 된다 */
+  | "TASTE_ANALYSIS_IN_PROGRESS"
+  /** 503 — 분석 기준(전체 카탈로그 통계)이 아직 준비되지 않았다. 우리가 할 수 있는 일이 없다 */
+  | "TASTE_REFERENCE_UNAVAILABLE"
+  // 별자리 작품 = 콘테스트 (S15P21A405-640, backend ArtworkErrorCode)
+  /** 404 — 없는 작품, 또는 **남의 미채점 작품** (403 으로 내면 존재가 새서 404 다) */
+  | "ARTWORK_NOT_FOUND"
+  /** 409 — 열린 회차가 없는데 출품·좋아요 */
+  | "ARTWORK_ROUND_CLOSED"
+  /** 409 — 실패하지 않은 작품에 재평가 요청 */
+  | "ARTWORK_NOT_FAILED"
+  /** 409 — 재평가 3회 소진 */
+  | "ARTWORK_RETRY_EXHAUSTED"
+  /** 400 — 그린 점이 한 곳에 몰려 모양이 없다. 점 개수 부족은 `INVALID_INPUT` */
+  | "ARTWORK_DRAWING_DEGENERATE"
+  /** 409 — 이번 회차 좋아요를 다 썼다. 하나를 거두면 다시 줄 수 있다 */
+  | "ARTWORK_VOTE_LIMIT"
+  /** 400 — 내 작품에 좋아요를 주려 했다 */
+  | "ARTWORK_VOTE_SELF";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =
@@ -89,21 +117,7 @@ export type SpecErrorCode =
  * `NOT_IMPLEMENTED` 는 **배포 API 에 그 기능이 아예 없다**는 뜻이다 (S15P21A405-468). 목으로
  * 성공한 척하면 새로고침 때 사라져서 "저장이 가끔 안 된다" 로 보이므로, 실패를 드러낸다.
  */
-export type BffErrorCode =
-  | "NOT_IMPLEMENTED"
-  /**
-   * 별자리 콘테스트 (S15P21A405-602). 지금은 목 라우트만 낸다 — 백엔드가 같은 이름을 쓰기를
-   * 제안해 두었다 (BACKEND-NOTES "별자리 콘테스트"). 사유마다 사용자가 할 일이 다르다.
-   */
-  | "CONTEST_NOT_FOUND"
-  | "CONTEST_NOT_OPEN"
-  | "CONTEST_ENTRY_NOT_FOUND"
-  /** 409 — 회차당 표를 다 썼다. 다른 표를 거두면 다시 줄 수 있다 */
-  | "CONTEST_VOTE_LIMIT"
-  /** 400 — 내 출품작에 표를 주려 했다 */
-  | "CONTEST_VOTE_SELF"
-  /** 409 — 재출품 횟수를 다 썼다 */
-  | "CONTEST_RESUBMIT_EXHAUSTED";
+export type BffErrorCode = "NOT_IMPLEMENTED";
 
 export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | BffErrorCode;
 

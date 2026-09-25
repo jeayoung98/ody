@@ -38,7 +38,7 @@ export default function FeedMenu() {
     };
   }, [open]);
 
-  const item = "w-full px-3.5 py-2.5 text-left text-[12.5px] text-ink-2 transition-colors hover:bg-white/[.055] hover:text-ink";
+  const item = "w-full px-3.5 py-2.5 text-left text-[14.5px] text-ink-2 transition-colors hover:bg-white/[.055] hover:text-ink";
 
   return (
     <div ref={ref} className="relative">

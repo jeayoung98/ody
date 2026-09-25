@@ -22,7 +22,7 @@ import NicknameCheckField from "./nickname-check-field";
 export default function ProfileEditForm() {
   const { data: me, isPending } = useMeQuery();
   if (isPending) return <EditSkeleton />;
-  if (!me) return <p className="text-center text-[12px] text-bad">내 정보를 불러오지 못했어요.</p>;
+  if (!me) return <p className="text-center text-[14px] text-bad">내 정보를 불러오지 못했어요.</p>;
   return <Fields key={me.email} me={me} />;
 }
 
@@ -92,7 +92,7 @@ function Fields({ me }: { me: User }) {
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2">
         <Avatar src={preview ?? me.imageUrl} name={nickname || me.name} size={64} />
-        <button type="button" onClick={() => pickFile.current?.click()} className="text-[11.5px] text-ink-2 underline underline-offset-2 hover:text-ink-1">
+        <button type="button" onClick={() => pickFile.current?.click()} className="text-[13.5px] text-ink-2 underline underline-offset-2 hover:text-ink-1">
           사진 바꾸기
         </button>
         <input
@@ -102,25 +102,25 @@ function Fields({ me }: { me: User }) {
           className="hidden"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
-        <p className="text-[11px] text-ink-3">{file ? `${file.name} — 저장하면 올라가요` : "5MB 까지, 이미지 파일만 올릴 수 있어요"}</p>
+        <p className="text-[13px] text-ink-3">{file ? `${file.name} — 저장하면 올라가요` : "5MB 까지, 이미지 파일만 올릴 수 있어요"}</p>
       </div>
 
       <NicknameCheckField value={nickname} onChange={setNickname} onStatus={useCallback((v: boolean) => setNicknameOk(v), [])} current={me.nickname} />
 
-      {error && <p className="text-[11.5px] text-bad">{error.message}</p>}
+      {error && <p className="text-[13.5px] text-bad">{error.message}</p>}
 
       <div className="flex gap-2">
         <button
           type="button"
           onClick={() => router.replace(ROUTES.home)}
-          className="flex-1 rounded-pill border border-line py-3 text-[13px] text-ink-2 transition-colors hover:border-line-2"
+          className="flex-1 rounded-pill border border-line py-3 text-[15px] text-ink-2 transition-colors hover:border-line-2"
         >
           취소
         </button>
         <button
           type="submit"
           disabled={pending || (nicknameChanged && !nicknameOk)}
-          className="grad-bg flex-[1.4] rounded-pill py-3 text-[13.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
+          className="grad-bg flex-[1.4] rounded-pill py-3 text-[15.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
         >
           {pending ? "저장 중…" : dirty ? "저장하기" : "그대로 두기"}
         </button>

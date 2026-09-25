@@ -68,7 +68,7 @@ export default function LayerStepper() {
         const enabled = !locked && (next ? gateOpen : i < layer && canRise);
         return (
           <div key={i} className="flex items-center">
-            {i > 0 && <ChevronRightIcon size={16} className="shrink-0 text-ink-4/60" />}
+            {i > 0 && <ChevronRightIcon size={17} className="shrink-0 text-ink-4/60" />}
             <button
               type="button"
               disabled={!enabled}

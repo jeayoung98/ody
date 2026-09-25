@@ -230,7 +230,7 @@ export default function PlayHint() {
       */}
       <div className="animate-tin fixed" style={{ left: tip.x, top: tip.y }}>
         <div ref={measure} className="glass-liquid flex items-center gap-2 rounded-pill px-3 py-1.5 whitespace-nowrap">
-          <span className="text-center text-[12.5px] text-ink">{LABEL[context]}</span>
+          <span className="text-center text-[14.5px] text-ink">{LABEL[context]}</span>
           {/*
             안내가 주인이다 — 건너뛰기를 같은 무게로 두면 둘 중 무엇을 보라는 건지 안 읽힌다.
             크기·색은 안쪽 span 에 준다. 예전에는 **그래야만** 했다 — `globals.css` 의 기본 블록이
@@ -239,7 +239,7 @@ export default function PlayHint() {
             docs/troubleshooting/014) **이제 버튼에 직접 걸어도 먹는다.** 여기는 굳이 바꾸지 않았다.
           */}
           <button type="button" onClick={skip} className="pointer-events-auto cursor-pointer">
-            <span className="text-[11.5px] text-ink-3 transition-colors hover:text-ink">건너뛰기</span>
+            <span className="text-[13.5px] text-ink-3 transition-colors hover:text-ink">건너뛰기</span>
           </button>
         </div>
       </div>

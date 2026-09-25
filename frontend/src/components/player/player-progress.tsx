@@ -126,7 +126,11 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
   return (
     <div className="flex items-center gap-2.5">
       {/* 못 트는 곡이어도 길이는 알려 준다 — 바만 잠근다 */}
-      <span className="num w-8 shrink-0 text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
+      {/*
+        12px · w-8 이었다 (S15P21A405-649). 키우면서 칸도 넓힌다 — `12:34` 와 `--:--` 가 다섯
+        글자라 32px 에서는 12px 로도 빠듯했고, 13.5px 이면 끝자리가 잘린다.
+      */}
+      <span className="num w-10 shrink-0 text-[13.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
       {/* 좁은 화면에서는 파형을 8px 로 눕힌다 — 자리는 거의 안 먹으면서 어디까지 왔는지는 보인다 */}
       <div className="relative h-8 min-w-0 flex-1 max-tablet:h-2">
         <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
@@ -153,7 +157,7 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
           className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"
         />
       </div>
-      <span className="num w-8 shrink-0 text-right text-[9.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
+      <span className="num w-10 shrink-0 text-right text-[13.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
     </div>
   );
 }

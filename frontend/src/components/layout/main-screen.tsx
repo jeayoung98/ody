@@ -138,8 +138,9 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       <MinimapPanel />
       <BottomBar />
       {overlay}
-      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다 */}
-      <PlayHint />
+      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다.
+          **지금은 스위치로 내려 둔 상태다** (S15P21A405-636) — `FEATURES.playHint` 참고 */}
+      {features.playHint && <PlayHint />}
       {/* 이벤트(별자리 콘테스트) — 우측 패널이 아니라 화면 대부분을 덮는 모달 (S15P21A405-602). body 에 포털로 그린다 */}
       {features.contest && <ContestModal />}
       <Toast />

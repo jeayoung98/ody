@@ -37,7 +37,7 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
       <span className={`h-[7px] w-[7px] shrink-0 rounded-pill transition-all duration-fast ${dot}`} />
       <span className="min-w-0 flex-1">
         <input
-          className={`w-full bg-transparent text-[14px] outline-none ${musicId != null ? "placeholder:text-ink" : "placeholder:text-ink-4"}`}
+          className={`w-full bg-transparent text-[16px] outline-none ${musicId != null ? "placeholder:text-ink" : "placeholder:text-ink-4"}`}
           placeholder={musicId != null ? title : `${isStart ? "출발" : "도착"} 지점 검색`}
           value={active ? keyword : musicId != null ? title : ""}
           onFocus={onFocusSlot}
@@ -46,7 +46,7 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
           autoComplete="off"
         />
       </span>
-      {musicId != null && !editing && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{artist}</span>}
+      {musicId != null && !editing && <span className="shrink-0 truncate text-[13.5px] text-ink-3">{artist}</span>}
       {musicId != null && !editing && (
         <button
           type="button"
@@ -54,7 +54,7 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
           aria-label={`${isStart ? "출발" : "도착"} 비우기`}
           className="shrink-0 text-ink-4 transition-colors hover:text-ink"
         >
-          <CloseIcon size={12} />
+          <CloseIcon size={14} />
         </button>
       )}
     </label>

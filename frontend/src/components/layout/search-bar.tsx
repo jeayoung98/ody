@@ -76,12 +76,25 @@ export default function SearchBar() {
       onBlur={handleBlur}
       // 폭만 바뀐다. 가운데 정렬(-translate-x-1/2)이라 양쪽으로 같이 늘어난다.
       // 좁은 화면에서는 34vw 가 127px 밖에 안 돼 글자가 안 들어간다 — 여백만 빼고 다 쓴다 (S15P21A405-417)
-      className={`absolute top-hud-t z-[22] transition-[width] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-[calc(var(--spacing-gutter-sm)+34px)] max-tablet:translate-x-0 ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-[104px] max-tablet:w-touch"}`}
+      /*
+       * **접힌 폭은 내용이 정한다** (S15P21A405-649). `104px` 로 박혀 있었는데 안에 든 것은
+       * 아이콘(16) + 틈(9) + `search` 라벨이라 실측 83.4px 이고, 좌우 여백까지 더하면 124px 가
+       * 필요했다 — 넘친 20px 을 `overflow-hidden` 이 잘라서 오른쪽 여백이 없는 것처럼 보였다.
+       * 라벨 크기를 올릴 때마다(9.5 → 11 → 12.5) 이 숫자가 조용히 어긋났으므로 `w-fit` 으로 둔다.
+       *
+       * `interpolate-size` 는 **펼침 애니메이션을 지키려고** 건다. 폭 전환은 원래 한쪽이
+       * 내용폭이면 보간되지 않고 튀는데, 이 속성이 있으면 `fit-content` ↔ px 사이도 이어진다
+       * (2026-09-25 크롬에서 확인: 300ms 중간 프레임이 실제로 사잇값이었다). 모르는 브라우저는
+       * 그냥 튈 뿐이라 기능이 깨지지는 않는다.
+       */
+      className={`absolute top-hud-t z-[22] [interpolate-size:allow-keywords] transition-[width] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-[calc(var(--spacing-gutter-sm)+34px)] max-tablet:translate-x-0 ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-fit max-tablet:w-touch"}`}
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div
         // 좁은 화면에서 접혀 있을 때는 아이콘만 남는 원이다 — 여백 41px 로는 44px 안에 못 들어간다
-        className={`glass-liquid flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! pl-[15px] pr-[26px] ${expanded ? "" : "cursor-pointer hover:border-line-2 max-tablet:justify-center max-tablet:px-0"}`}
+        // `pl-[15px] pr-[26px]` 이었다 (S15P21A405-649). 고정폭 안에서 오른쪽을 더 줘 균형을 맞추던
+        // 값인데, 폭이 내용을 따라가면 그냥 한쪽으로 치우친 여백이 된다 — 좌우를 같게 둔다
+        className={`glass-liquid flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! px-[15px] ${expanded ? "" : "cursor-pointer hover:border-line-2 max-tablet:justify-center max-tablet:px-0"}`}
         onMouseDown={(e) => {
           if (expanded) return;
           e.preventDefault(); // 포커스가 상자로 갔다가 입력으로 옮겨 가며 깜빡이지 않게
@@ -90,7 +103,7 @@ export default function SearchBar() {
       >
         <SearchIcon className="shrink-0 opacity-50" />
         {expanded && chip && (
-          <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[11.5px] whitespace-nowrap text-ink-2">
+          <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[13.5px] whitespace-nowrap text-ink-2">
             {CHIP_LABEL[chip.kind]}: {chip.value}
             <button
               type="button"
@@ -99,7 +112,7 @@ export default function SearchBar() {
               onClick={removeChip}
               className="cursor-pointer rounded-pill p-0.5 text-ink-3 transition-colors hover:text-ink"
             >
-              <CloseIcon size={10} />
+              <CloseIcon size={12} />
             </button>
           </span>
         )}
@@ -108,7 +121,7 @@ export default function SearchBar() {
           ref={inputRef}
           tabIndex={expanded ? 0 : -1}
           aria-hidden={!expanded}
-          className={`min-w-0 bg-transparent text-[13px] outline-none placeholder:text-ink-3 ${expanded ? "flex-1" : "w-0 flex-none"}`}
+          className={`min-w-0 bg-transparent text-[15px] outline-none placeholder:text-ink-3 ${expanded ? "flex-1" : "w-0 flex-none"}`}
           placeholder={chip ? (chip.kind === "artist" ? "제목 검색..." : "아티스트 검색...") : "음악 · 아티스트 검색"}
           autoComplete="off"
           spellCheck={false}
@@ -140,7 +153,11 @@ export default function SearchBar() {
             }
           }}
         />
-        <span className={`lbl shrink-0 ${expanded ? "" : "max-tablet:hidden"}`}>search</span>
+        {/*
+          `.lbl` 의 자간(0.14em ≈ 1.75px)은 **마지막 글자 뒤에도 붙는다.** 좌우 여백을 같게 줘도
+          오른쪽만 그만큼 넓어 보여서, 그 몫을 당겨 눈에 대칭으로 맞춘다 (S15P21A405-649)
+        */}
+        <span className={`lbl -mr-[1.75px] shrink-0 ${expanded ? "" : "max-tablet:hidden"}`}>search</span>
       </div>
       {expanded && open && (chip || input.trim()) && (
         <SearchResultList

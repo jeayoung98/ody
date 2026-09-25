@@ -586,7 +586,16 @@ BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리�
 | A-60 | 패널에 누구를 띄우나 — **물을 것 없음** | 5차 명세가 패널을 "그 층의 미니맵" 으로 적어서 층 전체가 보여야 하는지 물으려 했으나, 2026-09-23 프론트 확인 결과 **미니맵이 아니다.** 규칙은 둘이다. ① 내 곡 주변 `neighborK`(80)번째 곡까지의 거리를 경계로 삼아 그 안의 사람만 띄운다. 가까이 아무도 없으면 **비우고 안내만 띄운다.** ② 경계 안에 몰려 있으면 가까운 순 12명까지. 서버 `realtime.nearby.panel-cap` 12 는 **채우는 값**이라 사람이 적은 층에서 층 반대편 사람까지 넣어 주는데, 프론트가 경계로 다시 거른다 — 서버는 바꿀 것이 없다 | 확인함 · 조치 불필요 |
 | A-61 | `NEARBY_BULK_ENTER` 에 **사람별 좌표가 없다** | 5차 명세 §2 는 `ENTER`·`MOVE`·`BULK_ENTER` 가 `x`·`y` 를 담는다고 적었는데, `BULK_ENTER` 는 `musicId` 가 봉투에 하나뿐이라 사람마다 실리지 않는 것으로 읽힌다. 프론트는 그 곡으로 지도에서 자리를 찾아 메운다 — 그 곡이 이 층 상주 집합 밖이면 자리를 못 구해 목록 맨 뒤로 간다. 봉투에 `x`·`y` 를 하나만 넣어 주면 그 틈이 없어진다 | 협의 전 |
 
-## 별자리 콘테스트 — 프론트 목 계약 (S15P21A405-602, 2026-09-23)
+## 별자리 콘테스트 — 프론트 목 계약 (S15P21A405-602, 2026-09-23) → **백엔드 `artwork` API 로 실연동 (S15P21A405-640, 같은 날)**
+
+> **A-62~A-70 은 폐기됐다.** 백엔드가 `/api/artwork/*` (S15P21A405-563 · 595 · 598 · 616) 로 구현했고 `origin/backend/dev` 의
+> BACKEND-NOTES §6-9 에 "FE 콘테스트 목 → 실제 API" 대응표가 있다. 프론트는 그 표대로 라우트를 갈아 끼우고 목(`src/mocks/contest.ts`)을 지웠다.
+> 기획 결정으로 **즉시 심사(A-64)는 채택되지 않았다** — AI 채점은 출품 뒤 서버가 비동기로 하고 화면이 `/api/artwork/mine` 을 폴링한다.
+> 타입은 `frontend/src/types/contest.ts` 가 백엔드 DTO 를 옮긴 것이다. 아래 표는 기록으로만 남긴다.
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-83 | 리더보드·내 작품에 **작품 주인 닉네임**이 없다 | `ArtworkSummary` 는 `ownerEmail` 만 준다 (`origin/backend/dev` `artwork/dto/ArtworkSummary.java`) | 갤러리 카드·순위 줄에 이메일 앞부분(`luna@…` → `luna`)을 적고 있다 (`lib/contest-view` `ownerLabel`). 닉네임을 바꾼 사람이 엉뚱한 이름으로 보인다 — `ownerNickname` 을 같이 내려 주면 바로 바꾼다 | 협의 전 |
 
 FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15P21A405-548**(AI 평가·리더보드) · **S15P21A405-598**(그린 점 → 곡 매칭) 에서 진행 중이다.
 프론트는 아래 모양으로 목(`src/app/bff/contests/*`, `src/mocks/contest.ts`)을 만들어 화면을 먼저 붙였다. **경로·필드는 전부 제안**이며 백엔드 설계에 맞춰 바꿀 수 있다 — 바뀌면 프론트에 알려 주면 라우트만 갈아 끼운다. 타입은 `frontend/src/types/contest.ts`.
@@ -622,3 +631,23 @@ FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15
 | A-73 | **내 탑승 조회** `GET /api/realtime/ride/me` → `{captainEmail, musicId, layer, playback, positionMs, panel}` (탑승 응답과 같은 모양) 또는 없음 | 없다. 프론트는 저장소의 인솔자로 **다시 탑승**해야만 상태를 얻는다 | A-72 가 되면 재연결 뒤 "지금 내가 타고 있나" 를 물을 길이 필요하다. 새 탭·저장 유실도 이걸로 복원된다 | 협의 전 |
 | A-74 | 재탑승이 **새 좌석**으로 계산된다 | 재접속 시 이전 탑승이 지워진 뒤 새로 타므로 `RIDE_FULL` 경합에 걸릴 수 있고, 인솔자에게 `RIDE_RIDER_LEFT` → `RIDE_RIDER_JOINED` 가 연달아 가 인원수가 깜빡인다 | 유예 기간(A-72)이 있으면 둘 다 사라진다. 없다면 재탑승을 좌석 유지로 처리해 달라 | 협의 전 |
 | A-75 | 재탑승 시 재생 위치 | 탑승 응답의 `positionMs` 로 이어 튼다 — 이건 지금도 된다 | — | 확인만 (백엔드 할 일 없음) |
+| A-82 | **`RIDE_ENDED` 의 `CAPTAIN_LEFT` 가 "잠깐 끊김" 과 "정말 떠남" 을 구분하지 못한다** | 인솔자 소켓이 닫히면 서버가 곧 선단을 해체하고 동승자 전원에게 `CAPTAIN_LEFT` 를 보낸다. 새로고침·네트워크 끊김도 같은 사유로 온다 | 프론트는 이 사유를 받아도 **바로 내리지 않고 45초 동안 같은 인솔자에게 재탑승을 시도**한다 (`lib/realtime/ride-resume`). 정말 떠난 경우 동승자가 45초를 기다린 뒤에야 내려진다. 유예 기간(A-72)이 생기면 잠깐 끊김에는 이 알림 자체가 안 나가야 하고, 정말 떠났을 때만 와야 한다. 그때까지는 `CAPTAIN_DISCONNECTED`(복귀 가능) 같은 임시 사유를 따로 주면 프론트가 기다릴지 바로 내릴지 정확히 정할 수 있다 | 협의 전 |
+
+---
+
+## 취향 분석 — 프론트 연동 결과 (S15P21A405-630, 2026-09-23)
+
+백엔드 취향 분석 API(S15P21A405-512, MR !426)를 마이페이지에 붙였다. 계약은 `origin/backend/dev` 의
+`taste/controller/TasteAnalysisController.java` · `taste/dto/TasteAnalysisResponse.java` ·
+`common/TasteErrorCode.java` 를 **읽어서** 옮겼다 (`src/types/taste.ts`).
+
+**백엔드가 할 일은 아래 A-77 하나뿐이다.** 나머지는 기록이다.
+
+| # | 항목 | 확인된 사실 | 프론트 조치 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-76 | `GET·POST /api/taste-analysis` | 경로 하나에 메서드 둘. 조회·생성 응답이 같은 모양(`TasteAnalysisResponse`)이다. 둘 다 `Authentication` 기준이라 **본인 것만** 나온다 | `/bff/taste-analysis` 라우트가 호출자 토큰으로 중계. 생성 응답을 그대로 캐시에 넣어 다시 조회하지 않는다 | 반영됨 |
+| A-77 | **남의 취향은 조회할 수 없다** | 두 엔드포인트 다 대상이 토큰 주체다. `email` 파라미터가 없다 | 남의 프로필(USER-04, "마이페이지와 레이아웃 동일")에는 이 칸을 세우지 못한다. **남의 프로필에도 보여 줄 계획이면** `GET /api/taste-analysis?email=` 같은 조회가 필요하다 — 다만 취향은 사생활에 가까워 공개 여부부터 정해야 한다 | 협의 전 |
+| A-78 | 오류 코드 4종 | `TASTE_INSUFFICIENT_SAMPLE`(422) `TASTE_DAILY_LIMIT`(429) `TASTE_ANALYSIS_IN_PROGRESS`(409) `TASTE_REFERENCE_UNAVAILABLE`(503) | `ImplementedErrorCode` 에 추가. BFF 가 상태 코드로 뭉치지 않고 그대로 올린다 — 넷 다 사용자가 할 일이 다르다 | 반영됨 |
+| A-79 | `state` 6종 · `generation.status` 5종 | `EMPTY` `DISTRIBUTION_ONLY` `READY` `FRESH` `STALE` `IN_PROGRESS` / `NOT_REQUESTED` `INELIGIBLE` `IN_PROGRESS` `GENERATED` `FALLBACK` | `lib/taste-view.ts` 가 화면이 묻는 것(무엇을 띄우나·버튼을 눌러도 되나·뭐라고 적나)으로 바꾼다. 조합 판정은 `tests/taste-view.test.cjs` 가 묶는다 | 반영됨 |
+| A-80 | `IN_PROGRESS` 를 끝나는 것을 알 길이 없다 | 응답에 `generation.nextAvailableAt`(lease 만료)만 있고 완료 알림은 없다 | 프론트가 3초 간격으로 다시 묻는다(`use-taste-analysis-query`). **소켓 이벤트가 생기면 폴링을 걷어낸다** — 지금은 생성 중일 때만 돌아서 부담이 크지 않다 | 협의 전 (제안) |
+| A-81 | `report.aiGenerated` 가 조회에서는 늘 `true` | `TasteAnalysisQueryService.attachLatestReport` 가 상수 `true` 로 채운다. 생성 응답의 `FALLBACK` 분기만 규칙 기반임을 알 수 있다 | 화면은 `aiGenerated === false` 일 때만 "간단한 요약으로 대신했어요" 를 띄운다 — **새로고침하면 그 사실이 사라진다.** 저장된 리포트가 대체 문장인지 같이 내려 주면 정확해진다 | 협의 전 |

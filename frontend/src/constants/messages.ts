@@ -82,9 +82,29 @@ export const RIDE_REJECTED = {
   RIDE_FULL: "따라가는 인원이 가득 찼어요",
   RIDE_NOT_CAPTAIN: "따라가는 중에는 할 수 없어요. 먼저 내려 주세요",
   RIDE_STALE: "상태가 바뀌었어요. 화면을 새로 고친 뒤 다시 시도해 주세요",
-  PRESENCE_ERROR: "연결이 불안정해요. 잠시 후 다시 시도해 주세요",
+  /**
+   * 내 presence 가 없다는 뜻이다 — 인솔자 쪽 문제가 아니다 (S15P21A405-555). 자동 복구(소켓
+   * 재연결)를 거치고도 남은 경우라 "불안정" 보다 끊겼다고 말하는 편이 맞다.
+   *
+   * **내 소켓이 끊긴 경우에만 쓴다** (S15P21A405-628). 붙어 있는데 422 면
+   * {@link RIDE_CAPTAIN_UNREACHABLE} 다 — `use-ride-mutation` 의 `onError` 가 고른다.
+   */
+  PRESENCE_ERROR: "실시간 연결이 끊겼어요. 잠시 후 다시 시도해 주세요",
   UNKNOWN: "따라가기를 시작하지 못했어요",
 } as const;
+
+/**
+ * **소켓은 멀쩡한데 422 가 온 경우** (S15P21A405-628).
+ *
+ * 백엔드는 `PRESENCE_ERROR` 하나로 두 가지를 말한다 — 내 presence 가 없거나, 상대가 탈 수
+ * 있는 상태가 아니거나. 앞엣것은 프론트가 직접 확인할 수 있으므로(`isConnected`), 그게
+ * 아니라면 남은 것은 상대·서버 쪽이다.
+ *
+ * **"연결이 불안정해요" 를 그대로 쓰면 안 된다.** 내 인터넷을 의심하게 만들어서, 실제로
+ * 서버가 거절한 건을 찾는 데 시간을 쓰게 한다 — 이 문구 때문에 한 번 겪었다. 폰에서는
+ * 콘솔을 못 보므로 화면 문구가 유일한 단서다.
+ */
+export const RIDE_CAPTAIN_UNREACHABLE = "지금은 이 사람을 따라갈 수 없어요. 잠시 후 다시 시도해 주세요";
 
 /** 인솔자가 사라져 따라가기가 끝났다 (§4.3). 조용히 끊으면 왜 멈췄는지 알 수 없다 */
 export const RIDE_ENDED_BY_CAPTAIN = (who: string) => `${who} 님이 떠나 따라가기가 끝났어요`;
@@ -106,6 +126,11 @@ export const RIDE_DISBAND_REJECTED = {
 
 /** 곡 좋아요 요청이 실패했다 (S15P21A405-611). 낙관적으로 켠 하트는 되돌린다 */
 export const LIKE_FAILED = "좋아요를 반영하지 못했어요. 잠시 후 다시 시도해 주세요";
+
+/** 연결이 흔들려 따라가기를 다시 잇는 중이다 (S15P21A405-615). 첫 재시도 때 한 번만 띄운다 */
+export const RIDE_RESUMING = "연결이 불안정해요. 따라가기를 다시 잇는 중이에요";
+/** 다시 잇기를 다 해 봤지만 안 됐다 — 이제야 내린다 */
+export const RIDE_RESUME_FAILED = (who: string) => `${who} 님과 다시 연결하지 못해 따라가기를 마쳤어요`;
 
 /**
  * 반응이 거부됐을 때 (SOCIAL-02·04, S15P21A405-607, 백엔드 `RealtimeErrorCode`).

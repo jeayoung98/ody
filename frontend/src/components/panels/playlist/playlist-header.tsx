@@ -29,7 +29,7 @@ export default function PlaylistHeader({ playlist }: { playlist: PlaylistDetail 
       </div>
       <div className="flex gap-2">
         <Button variant="primary" className="flex-1" onClick={() => playPlaylist()} disabled={playlist.items.length === 0}>
-          <PlayIcon size={13} /> 순차 재생
+          <PlayIcon size={15} /> 순차 재생
         </Button>
         {/* 지금 상태의 **반대**를 목표로 보낸다 — 서버가 뒤집지 않는다 (S15P21A405-492) */}
         <Button active={playlist.isLiked} onClick={() => like.mutate({ playlistId: playlist.id, liked: !playlist.isLiked })} disabled={like.isPending}>

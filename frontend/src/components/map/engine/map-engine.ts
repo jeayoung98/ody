@@ -330,6 +330,12 @@ export class MapEngine {
    * 전환이 끝날 때마다 {@link continueHomeRoute} 가 다음 겹을 출발시킨다.
    */
   private homeRoute: { musicId: number; dives: LayerBox[] } | null = null;
+  /** "내 위치로 가기" 로 옮겨 가는 중인가 — 누른 순간부터 도착까지. 화면이 이걸 보고 패널을 접었다 편다 (S15P21A405-670) */
+  private homeTraveling = false;
+
+  isHomeTraveling() {
+    return this.homeTraveling;
+  }
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -2726,11 +2732,17 @@ export class MapEngine {
       if (route.riseTo < this.layer) {
         // 갈리는 겹까지 **한 번에** 떠오른다 — 중간 겹을 하나씩 밟지 않는다. 좌상단 겹 표시는 도착 겹으로 짧아진다
         this.ascendTo(route.riseTo, HOME_BIG);
-        if (this.anim) return "moved";
+        if (this.anim) {
+          this.homeTraveling = true;
+          return "moved";
+        }
         this.homeRoute = null;
       } else {
         this.continueHomeRoute();
-        if (this.anim) return "moved";
+        if (this.anim) {
+          this.homeTraveling = true;
+          return "moved";
+        }
         this.homeRoute = null;
       }
     }
@@ -2756,6 +2768,9 @@ export class MapEngine {
     const scale = this.fitCam(target, ns, h.musicId).s * FOCUS.zoomMul;
     const f = this.freeRect();
     this.touched = true;
+    // 도착 처리(패널 다시 펴기)는 두 단계 길과 같은 자리에서 — 남은 사각형 없는 길을 걸어 둔다
+    this.homeRoute = { musicId: h.musicId, dives: [] };
+    this.homeTraveling = true;
     this.morph(
       target,
       { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
@@ -2776,10 +2791,15 @@ export class MapEngine {
     if (!r) return;
     this.homeRoute = null;
     const i = this.index.get(r.musicId);
-    if (i == null) return;
+    if (i == null) {
+      this.homeTraveling = false;
+      return;
+    }
     if (!r.dives.length) {
       this.settleHome(i);
       this.centerOn(r.musicId, FOCUS.zoomMul);
+      // 도착 — 화면은 이 순간 패널을 다시 편다
+      this.homeTraveling = false;
       return;
     }
     const target = this.layer + r.dives.length;
@@ -2801,6 +2821,8 @@ export class MapEngine {
     this.meFlight = null;
     this.touched = true;
     this.morph(target, { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale }, ns, HOME_BIG, 1);
+    // 파고들기가 끝나면 한 번 더 들어와 도착 처리를 한다
+    this.homeRoute = { musicId: r.musicId, dives: [] };
   }
 
   /**
@@ -3646,6 +3668,7 @@ export class MapEngine {
       ghostMusicId: this.ghost?.musicId ?? null,
       playingElsewhere: this.playingElsewhere(),
       canGoHome: this.canGoHome(),
+      homeTraveling: this.homeTraveling,
     };
     const changed = (Object.keys(snap) as (keyof EngineSnapshot)[]).some((k) => {
       const a = snap[k];

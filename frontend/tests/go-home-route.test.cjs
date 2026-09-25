@@ -62,14 +62,19 @@ test("오른쪽 갈래에서는 내 곡이 좌표상 안에 있어도 '다른 �
 
 test("내 위치로 가기: 최상단까지 떠올랐다가 왼쪽으로 다시 파고든다", () => {
   const { e, t } = scenario();
+  assert.equal(e.isHomeTraveling(), false);
   assert.equal(e.goHome(), "moved");
   assert.ok(e.anim, "전환이 시작됐다");
   assert.equal(e.anim.layer, 0, "먼저 최상단으로 떠오른다");
+  assert.equal(e.isHomeTraveling(), true, "누른 순간부터 옮겨 가는 중 — 화면은 이걸 보고 패널을 접는다");
   let now = settle(e, t);
   assert.equal(e.layer, 1, "떠오른 뒤 바로 다시 파고들어 2겹이다");
   assert.deepEqual(e.boxes, [LEFT], "왼쪽 갈래로");
+  // settle 한 번이 두 전환을 다 끝낼 만큼 길다 — 아직 전환이 남았을 때만 "가는 중" 이어야 한다
+  assert.equal(e.isHomeTraveling(), e.anim != null, "파고드는 동안은 가는 중, 끝났으면 아니다");
   now = settle(e, now);
   assert.equal(e.anim, null);
+  assert.equal(e.isHomeTraveling(), false, "도착 — 패널이 다시 펴질 순간");
   assert.equal(e.playingElsewhere(), false, "이제 내 자리다");
   assert.equal(e.myId, MINE);
 });

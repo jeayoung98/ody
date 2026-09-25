@@ -32,6 +32,22 @@ declare global {
 const CLIENT_ID = GOOGLE_CLIENT_ID;
 
 /**
+ * **위 로그인 버튼과 키를 맞춘다** (S15P21A405-652).
+ *
+ * 구글이 그려 주는 최대 높이는 `size: "large"` 의 **40px** 이고 그 이상은 못 받는다.
+ * 이메일 로그인 버튼은 47.25px 이라(`email-login-form` 의 `py-3` 24 + 줄높이 23.25, 실측 47.3)
+ * 나란히 두면 아래 것만 낮아 보인다. 모자란 7px 을 **확대로 메운다.**
+ *
+ * 가로도 같이 커지므로 구글에는 **나눈 폭**을 넘긴다 — 키우고 나면 카드 폭에 맞아떨어진다.
+ *
+ * 로그인 버튼 쪽 글자 크기나 여백을 바꾸면 **여기도 같이 바꾼다.** 두 값이 따로 놀면 다시
+ * 높이가 어긋난다.
+ */
+const MATCH_HEIGHT = 47.25;
+const GSI_HEIGHT = 40;
+const SCALE = MATCH_HEIGHT / GSI_HEIGHT;
+
+/**
  * 구글 로그인 (AUTH-01/02).
  * 구글이 브라우저에서 idToken 을 발급하고, 그걸 백엔드 `POST /api/auth/login/google` 이 검증한다.
  * 버튼은 구글이 직접 렌더한다 — 직접 만든 버튼으로는 idToken 을 받을 수 없다.
@@ -72,7 +88,8 @@ export default function GoogleLoginButton() {
     // 제 폭이 곧 버튼 폭이다. 거기서 재면 한 번 그려진 뒤로는 그 값에 갇힌다
     const box = room.current ?? slot.current;
     const available = box.clientWidth || box.getBoundingClientRect().width;
-    const width = Math.round(Math.min(400, Math.max(200, available)));
+    // 확대할 만큼 **나눠서** 넘긴다 (S15P21A405-652) — 키우고 나면 이 자리에 딱 맞는다
+    const width = Math.round(Math.min(400, Math.max(200, available / SCALE)));
     lastWidth.current = width;
 
     window.google.accounts.id.renderButton(slot.current, {
@@ -136,8 +153,13 @@ export default function GoogleLoginButton() {
         보였다. iframe 을 꼭 감싸는 상자(`w-fit`)를 알약으로 깎아 **그 모서리를 잘라낸다.**
         버튼 안쪽은 구글 것이라 못 건드리지만, 바깥 모양은 우리가 정할 수 있다.
       */}
-      <div ref={room} className="w-full">
-        <div ref={slot} className="mx-auto w-fit overflow-hidden rounded-pill" />
+      <div ref={room} className="w-full" style={{ height: MATCH_HEIGHT }}>
+        <div
+          ref={slot}
+          className="mx-auto w-fit overflow-hidden rounded-pill"
+          /* 위에서부터 키운다 — 바깥 상자가 이미 키운 높이만큼 자리를 잡아 뒀다 */
+          style={{ transform: `scale(${SCALE})`, transformOrigin: "top center" }}
+        />
       </div>
       {isError && <p className="mt-2 text-center text-[14.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
     </>

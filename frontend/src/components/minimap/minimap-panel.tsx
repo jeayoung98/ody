@@ -48,7 +48,10 @@ export default function MinimapPanel() {
        * 아니라 **도움말 버튼까지** 잡는다 — 그것도 이 aside 의 직계이고 같은 유리를 쓴다.
        * 그래서 살리려던 도움말이 폰에서 같이 사라져 있었다 (실측: display none).
        */
-      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:top-hud-t max-tablet:right-[68px] max-tablet:bottom-auto max-tablet:left-auto max-tablet:h-touch max-tablet:w-0 max-tablet:translate-x-0 max-tablet:[&>div.glass-liquid]:hidden max-tablet:[&_.glass-handle-host]:hidden ${open ? "" : "translate-x-[calc(-100%_+_10px)]"}`}
+      className={`absolute bottom-hud-b left-[18px] z-20 w-instrument transition-transform duration-300 ease-out max-tablet:top-hud-t max-tablet:right-[68px] max-tablet:bottom-auto max-tablet:left-auto max-tablet:h-touch max-tablet:w-0 max-tablet:translate-x-0 max-tablet:[&>div.glass-liquid]:hidden max-tablet:[&_.glass-handle-host]:hidden ${
+        // 접으면 여백(18)까지 다 밀어 넣는다 (S15P21A405-664) — 우측 패널과 같은 규칙. 손잡이·도움말은 몸통 밖이라 남는다
+        open ? "" : "translate-x-[calc(-100%_-_18px)]"
+      }`}
     >
       <CollapseHandle
         side="right"

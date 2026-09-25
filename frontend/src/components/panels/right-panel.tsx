@@ -142,7 +142,12 @@ export default function RightPanel() {
           가로 이동은 0 으로 되돌린다. 안 그러면 데스크톱 값(`calc(100% - 10px)`)이 남아
           시트가 오른쪽으로도 밀린다.
         */
-        collapsed ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0" : ""
+        /*
+          **이제 다 밀어 넣는다** (S15P21A405-664). 10px 남기던 몸통이 화면에서 부스러기로 보였다 — "여기
+          뭐가 있었다" 는 손잡이가 말한다(커지고 포인트색이 됐다). 여백(18)까지 더 밀어야 몸통이 화면 밖이다.
+          `main-screen.tsx` 의 접힘 가림 폭(`PEEK_OCCLUSION`)이 손잡이 폭만 남긴다 — 같이 고친다.
+        */
+        collapsed ? "translate-x-[calc(100%_+_18px)] max-tablet:translate-x-0" : ""
       } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
       /*
         **폰에서는 시트가 바닥까지 찬다** (S15P21A405-593). `Box` 는 내용만큼만 높아지는

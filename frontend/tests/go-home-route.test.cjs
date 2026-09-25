@@ -94,3 +94,47 @@ test("겹을 옮긴 뒤 같은 곡으로 setMy 가 다시 와도 재생 때 경�
   assert.equal(e.home.musicId, OTHER);
   assert.deepEqual(e.home.boxes, [LEFT], "지금 경로(왼쪽)로 새로 적힌다");
 });
+
+/** 3→1→3 처럼 **한 번에** 오르내린다 — 중간 겹을 하나씩 밟지 않는다 (S15P21A405-670) */
+test("두 겹 깊이의 자리로 돌아갈 때 떠오르기 한 번, 파고들기 한 번이다", () => {
+  const LEFT2 = { layer: 1, xMin: -3, xMax: 3, yMin: -3, yMax: 3 };
+  const e = new MapEngine();
+  e.setSize(1280, 800);
+  e.setLayerSongs(0, songs);
+  let t = performance.now();
+  e.frame(t);
+  drill(e, LEFT);
+  t = settle(e, t);
+  drill(e, LEFT2);
+  t = settle(e, t);
+  assert.equal(e.layer, 2);
+  e.travelTo(MINE);
+  t = settle(e, t);
+  assert.deepEqual(e.home.boxes, [LEFT, LEFT2]);
+  e.ascendTo(0);
+  t = settle(e, t);
+  drill(e, RIGHT);
+  t = settle(e, t);
+  assert.equal(e.layer, 1);
+
+  // 전환이 몇 번, 어느 겹으로 시작되는지 센다 — settle 한 번에 두 전환이 다 끝나므로 상태로는 못 잰다
+  const starts = [];
+  const morph = e.morph.bind(e);
+  e.morph = (layer, cam, subset, big, ...rest) => {
+    starts.push({ layer, big });
+    return morph(layer, cam, subset, big, ...rest);
+  };
+  assert.equal(e.goHome(), "moved");
+  assert.equal(e.anim.layer, 0, "한 번에 최상단으로");
+  t = settle(e, t);
+  t = settle(e, t);
+  assert.equal(e.anim, null);
+  assert.deepEqual(starts, [
+    { layer: 0, big: "내 위치 찾아가는 중" },
+    { layer: 2, big: "내 위치 찾아가는 중" },
+  ], "떠오르기 한 번(→0), 파고들기 한 번(→2) — 중간 1겹은 밟지 않고 자막은 한 줄");
+  assert.equal(e.layer, 2);
+  assert.deepEqual(e.boxes, [LEFT, LEFT2]);
+  assert.deepEqual(e.stack.map((f) => f.layer), [0, 1], "휠로 한 겹씩 떠오를 프레임은 쌓여 있다");
+  assert.equal(e.playingElsewhere(), false);
+});

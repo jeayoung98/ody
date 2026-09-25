@@ -29,6 +29,9 @@ const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.ev
 let warnedNaN = false;
 import { homeRoute, insideBoxes, sharedDepth } from "./my-place";
 
+/** "내 위치로 가기" 전환 자막 — 떠오를 때도 파고들 때도 같은 한 줄 (S15P21A405-670). 겹 이름은 좌상단 표시가 말한다 */
+const HOME_BIG = "내 위치 찾아가는 중";
+
 const sameBoxes = (a: readonly LayerBox[], b: readonly LayerBox[]) =>
   a.length === b.length && a.every((x, i) => x.layer === b[i].layer && x.xMin === b[i].xMin && x.xMax === b[i].xMax && x.yMin === b[i].yMin && x.yMax === b[i].yMax);
 /** 화면 좌표 단위벡터. 길이가 0이면 방향이 없다는 뜻이라 null */
@@ -2042,7 +2045,7 @@ export class MapEngine {
    *
    * 한 칸 떠오르기(`ascend`)도 이 길을 쓴다. 목표가 바로 위 겹일 뿐이다.
    */
-  ascendTo(target: number) {
+  ascendTo(target: number, big?: string) {
     if (this.anim || this.pending || !this.stack.length || this.follow) return;
     if (target < 0 || target >= this.layer) return;
     let p = this.stack.pop()!;
@@ -2078,7 +2081,7 @@ export class MapEngine {
             cx: this.songs[mi].pc[dx] - (f.cx - this.W / 2) / s,
             cy: this.songs[mi].pc[dy] + (f.cy - this.H / 2) / s,
           };
-    this.morph(p.layer, c, p.subset, `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, -1, p.entryS);
+    this.morph(p.layer, c, p.subset, big ?? `${LAYER_NAMES[p.layer]}으로 떠오르는 중`, -1, p.entryS);
   }
 
   // ------------------------------------------------------------------ input
@@ -2647,31 +2650,6 @@ export class MapEngine {
     this.meFlight = null;
   }
 
-  /**
-   * 디버그 (S15P21A405-670) — 콘솔용. 지금 겹·보는 경로·재생 경로·갈래 판정·돌아갈 길을 한눈에.
-   * `window.__ODY_ENGINE__.debugHome()` (개발 빌드만, `engine-registry`).
-   */
-  debugHome() {
-    const id = this.playingId ?? this.myId;
-    const i = id != null ? this.index.get(id) : undefined;
-    return {
-      layer: this.layer,
-      viewBoxes: this.boxes,
-      home: this.home,
-      playingId: this.playingId,
-      myId: this.myId,
-      known: i != null,
-      isAlive: id != null && this.isAlive(id),
-      inBranch: this.inBranch(id),
-      playingElsewhere: this.playingElsewhere(),
-      route: this.home ? homeRoute(this.boxes, this.home.boxes) : null,
-      anim: this.anim ? { layer: this.anim.layer, big: this.anim.big } : null,
-      pending: !!this.pending,
-      stack: this.stack.map((f) => f.layer),
-      homeRoute: this.homeRoute,
-    };
-  }
-
   /** 돌아갈 자리가 있는가 (재생한 적이 있는가) */
   canGoHome() {
     return this.home != null && this.index.has(this.home.musicId);
@@ -2728,7 +2706,6 @@ export class MapEngine {
     this.camTarget = null;
     const target = h.boxes.length;
     const route = homeRoute(this.boxes, h.boxes);
-    if (process.env.NODE_ENV !== "production") console.info("[goHome]", { layer: this.layer, viewBoxes: this.boxes, home: h, route, pending: !!this.pending, stack: this.stack.map((f) => f.layer) });
 
     // **같은 갈래의 같은 겹**이면 카메라만 — 곡 집합을 다시 받을 이유가 없다. 같은 겹이어도 다른 갈래면 아래 길이다
     if (route.riseTo === this.layer && route.dives.length === 0) {
@@ -2747,7 +2724,8 @@ export class MapEngine {
       this.pinned = { id: h.musicId, layer: target };
       this.homeRoute = { musicId: h.musicId, dives: [...route.dives] };
       if (route.riseTo < this.layer) {
-        this.ascendTo(route.riseTo);
+        // 갈리는 겹까지 **한 번에** 떠오른다 — 중간 겹을 하나씩 밟지 않는다. 좌상단 겹 표시는 도착 겹으로 짧아진다
+        this.ascendTo(route.riseTo, HOME_BIG);
         if (this.anim) return "moved";
         this.homeRoute = null;
       } else {
@@ -2782,50 +2760,47 @@ export class MapEngine {
       target,
       { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale },
       ns,
-      `내 위치로 — ${LAYER_NAMES[target]}${ro(LAYER_NAMES[target])} 돌아가는 중`,
+      HOME_BIG,
       target > this.layer ? 1 : -1,
     );
     return "moved";
   }
 
   /**
-   * "내 위치로 가기" 의 다음 겹을 출발시킨다 (S15P21A405-670). 떠오르기·파고들기 전환이 끝날 때마다 불린다.
-   * 남은 사각형이 없으면 도착이다 — 그 곡을 끼워 넣고 가운데 둔다.
+   * "내 위치로 가기" 의 둘째 단계 (S15P21A405-670) — 떠오르기가 끝나면 남은 사각형을 **한 번의 전환으로** 파고든다.
+   * 3→1→3 이지 3→2→1→2→3 이 아니다: 겹마다 멈추면 지도가 아니라 엘리베이터처럼 읽힌다. 중간 겹의 스택 프레임은
+   * 쌓아 둔다 — 나중에 휠로 떠오를 때 한 겹씩 돌아올 수 있어야 한다. 남은 사각형이 없으면 도착이다.
    */
   private continueHomeRoute() {
     const r = this.homeRoute;
     if (!r) return;
+    this.homeRoute = null;
     const i = this.index.get(r.musicId);
-    if (i == null) {
-      this.homeRoute = null;
-      return;
-    }
+    if (i == null) return;
     if (!r.dives.length) {
-      this.homeRoute = null;
       this.settleHome(i);
       this.centerOn(r.musicId, FOCUS.zoomMul);
       return;
     }
-    const box = r.dives.shift()!;
-    const nl = this.layer + 1;
-    // 파고들기와 같은 방식으로 스택을 쌓는다 — 나중에 휠로 떠오를 때 이 겹으로 돌아올 수 있게
-    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
-    this.boxes = [...this.boxes, box];
-    const ns = this.maskForBoxes(this.boxes, nl);
-    ns[i] = 1;
-    const last = r.dives.length === 0;
-    let cam = this.fitCam(nl, ns, r.musicId);
-    if (last) {
-      const song = this.songs[i];
-      const scale = cam.s * FOCUS.zoomMul;
-      const f = this.freeRect();
-      cam = { s: scale, cx: song.pc[nl * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[nl * 2 + 1] + (f.cy - this.H / 2) / scale };
-      this.centerAfterMorph = r.musicId;
-      this.myId = r.musicId;
-      this.meFlight = null;
+    const target = this.layer + r.dives.length;
+    for (let l = this.layer; l < target; l++) {
+      const boxesAt = [...this.boxes, ...r.dives.slice(0, l - this.layer)];
+      const sub = l === this.layer ? this.subset.slice() : this.maskForBoxes(boxesAt, l);
+      if (l !== this.layer) sub[i] = 1;
+      const cam = l === this.layer ? { ...this.cam } : this.fitCam(l, sub, r.musicId);
+      this.stack.push({ layer: l, cam, subset: sub, entryS: l === this.layer ? this.entryS : cam.s });
     }
+    this.boxes = [...this.boxes, ...r.dives];
+    const ns = this.maskForBoxes(this.boxes, target);
+    ns[i] = 1;
+    const song = this.songs[i];
+    const scale = this.fitCam(target, ns, r.musicId).s * FOCUS.zoomMul;
+    const f = this.freeRect();
+    this.centerAfterMorph = r.musicId;
+    this.myId = r.musicId;
+    this.meFlight = null;
     this.touched = true;
-    this.morph(nl, cam, ns, `내 위치로 — ${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중`, 1);
+    this.morph(target, { s: scale, cx: song.pc[target * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[target * 2 + 1] + (f.cy - this.H / 2) / scale }, ns, HOME_BIG, 1);
   }
 
   /**

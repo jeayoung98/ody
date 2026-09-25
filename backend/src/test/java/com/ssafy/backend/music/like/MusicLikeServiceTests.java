@@ -67,7 +67,7 @@ class MusicLikeServiceTests {
 
         LikedMusicResponse response = service.findAll("me@example.com");
 
-        assertThat(response.content()).extracting(LikedMusicItem::musicId).containsExactly(2L, 1L);
+        assertThat(response.content()).extracting(item -> item.music().id()).containsExactly(2L, 1L);
     }
 
     private static MusicLikeRow row(long id, String time) {

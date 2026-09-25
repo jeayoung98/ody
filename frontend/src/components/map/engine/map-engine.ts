@@ -27,7 +27,7 @@ const approxNameWidth = (s: string) => {
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
-import { firstMismatch, homeRoute, insideBoxes } from "./my-place";
+import { homeRoute, insideBoxes, sharedDepth } from "./my-place";
 
 const sameBoxes = (a: readonly LayerBox[], b: readonly LayerBox[]) =>
   a.length === b.length && a.every((x, i) => x.layer === b[i].layer && x.xMin === b[i].xMin && x.xMax === b[i].xMax && x.yMin === b[i].yMin && x.yMax === b[i].yMax);
@@ -1537,10 +1537,11 @@ export class MapEngine {
      * **갈래가 갈린 겹에서 잰다** (S15P21A405-670). 그 곡이 처음으로 사각형 밖으로 나간 겹이 곧 갈림길이고,
      * 그 겹을 떠날 때의 카메라 중심(스택 프레임)에서 그 곡까지가 "저쪽" 이다. 프레임이 없으면(같은 겹) 아래 폴백.
      */
-    const split = firstMismatch(pc, this.boxes, this.layer);
-    const frame = split != null ? this.stack.find((f) => f.layer === split) : undefined;
-    if (frame) {
-      const d = unit(pc[split! * 2] - frame.cam.cx, -(pc[split! * 2 + 1] - frame.cam.cy));
+    const h = this.home;
+    const split = h && h.musicId === id ? sharedDepth(this.boxes, h.boxes) : null;
+    const frame = split != null && split < this.layer ? this.stack.find((f) => f.layer === split) : undefined;
+    if (frame && split != null) {
+      const d = unit(pc[split * 2] - frame.cam.cx, -(pc[split * 2 + 1] - frame.cam.cy));
       if (d) return d;
     }
     for (let k = this.stack.length - 1; k >= 0; k--) {
@@ -2545,7 +2546,15 @@ export class MapEngine {
   private inBranch(id: number | null, layer = this.layer, boxes: readonly LayerBox[] = this.boxes): boolean {
     if (id == null) return false;
     const i = this.index.get(id);
-    return i != null && insideBoxes(this.songs[i].pc, boxes, layer);
+    if (i == null || !insideBoxes(this.songs[i].pc, boxes, layer)) return false;
+    /**
+     * **내 곡은 재생한 그 갈래에만 있다.** 좌표만 보면 다른 쪽으로 파고든 사각형이 넓어 내 곡을 품는 일이 흔한데,
+     * 그러면 왼쪽에서 튼 곡이 오른쪽 갈래에 "둥" 하고 나타난다. 지도에서 보는 것처럼, 내 자리는 재생 때 걸어온
+     * 경로(`home.boxes`) 위에만 있고 다른 경로에서는 그 갈래로 돌아가야 보인다. 재생 기록이 없는 곡은 좌표만 본다.
+     */
+    const h = this.home;
+    if (h && h.musicId === id) return sharedDepth(boxes.slice(0, layer), h.boxes) === layer;
+    return true;
   }
 
   /**
@@ -2684,9 +2693,10 @@ export class MapEngine {
     this.ghost = null;
     this.camTarget = null;
     const target = h.boxes.length;
+    const route = homeRoute(this.boxes, h.boxes);
 
-    // 같은 겹이면 카메라만 — 곡 집합을 다시 받을 이유가 없다
-    if (target === this.layer) {
+    // **같은 갈래의 같은 겹**이면 카메라만 — 곡 집합을 다시 받을 이유가 없다. 같은 겹이어도 다른 갈래면 아래 길이다
+    if (route.riseTo === this.layer && route.dives.length === 0) {
       this.settleHome(i);
       this.centerOn(h.musicId, FOCUS.zoomMul);
       return "moved";
@@ -2698,7 +2708,6 @@ export class MapEngine {
      * 않는다 — 한 겹 위에서 두 곡이 같이 보이면 한 겹만 오르내리는 것이 지도 문법이다.
      * 떠오를 수 없는 상태(대기 중인 파고들기 등)면 아래 예전 길(직행 전환)로 떨어진다.
      */
-    const route = homeRoute(this.boxes, h.boxes);
     if (route.riseTo < this.layer || route.dives.length) {
       this.pinned = { id: h.musicId, layer: target };
       this.homeRoute = { musicId: h.musicId, dives: [...route.dives] };

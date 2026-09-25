@@ -41,3 +41,9 @@ test("돌아가는 길은 갈리는 겹까지만 떠오르고 거기서부터 �
   assert.deepEqual(homeRoute(home.slice(0, 1), home), { riseTo: 1, dives: home.slice(1) }, "위 겹에 있으면 떠오르지 않고 파고들기만");
   assert.deepEqual(homeRoute(home, home.slice(0, 1)), { riseTo: 1, dives: [] }, "아래 겹에 있으면 떠오르기만");
 });
+
+test("같은 겹이라도 다른 갈래면 갈리는 겹까지 떠올랐다 내려간다 — 왼쪽에서 틀고 오른쪽으로 파고든 경우", () => {
+  const left = [box(0, -1, 0, -1, 1)];
+  const right = [box(0, 0, 1, -1, 1)];
+  assert.deepEqual(homeRoute(right, left), { riseTo: 0, dives: left }, "최상단까지 떠올랐다 왼쪽으로 파고든다");
+});

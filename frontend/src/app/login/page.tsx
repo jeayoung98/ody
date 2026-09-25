@@ -38,7 +38,7 @@ export default function LoginPage() {
           화면에서 없애는 것이 기획·법무 쪽 판단이다. 대신 **한 줄로 줄여** 자리를 덜 먹게 한다 —
           읽히라고 두는 줄이 아니라 있어야 해서 두는 줄이다.
         */}
-        <p className="mt-2.5 text-center text-[9px] leading-[1.5] text-ink-4">
+        <p className="mt-2.5 text-center text-[11px] leading-[1.5] text-ink-4 max-[428px]:text-[9.2px]">
           로그인하면 이용약관과 개인정보 처리방침에 동의하는 것으로 간주됩니다.
         </p>
       </AuthCard>

@@ -1,10 +1,13 @@
 "use client";
 
-import { RIDING_MAP_LOCKED } from "@/constants";
+import { useQueryClient } from "@tanstack/react-query";
+import { HOME_LOOKUP_FAILED, HOME_NO_COORDS, RIDING_MAP_LOCKED } from "@/constants";
 
 import { LocateIcon } from "@/components/common/icons";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useBackToMap } from "@/hooks/use-back-to-map";
+import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query";
+import { musicToMapPoint } from "@/lib/map-point";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
@@ -26,26 +29,52 @@ export default function LocateButton() {
    * 누르는 순간 지도 탭으로 옮겨 간다. "내 위치로 가기" 는 곧 지도로 가겠다는 뜻이다.
    */
   const backToMap = useBackToMap();
+  const queryClient = useQueryClient();
 
   /**
    * 지도를 지금 듣는 곡으로 옮기고 **우측 패널도 그 곡으로 맞춘다** (S15P21A405-328).
    * 데려다 놓기만 하고 패널이 아까 보던 곡이면 어디로 갔는지가 화면에 안 남는다.
    * 거부된 경우(따라가기)는 지도가 안 움직였으므로 패널도 그대로 둔다.
    * 임시 뷰는 스토어의 `goHome` 이 닫고 가므로 여기서 막지 않는다 (S15P21A405-445).
+   *
+   * **지도가 그 곡의 좌표를 모르면 곡 상세에서 받아 넣고 다시 간다** (S15P21A405-670). 겹 상주 집합은
+   * 서버가 고른 top-k 라 랭킹·검색·플리에서 튼 곡은 지도에 없는 경우가 흔하고, 새로고침으로 되살린
+   * 자리도 마찬가지다 — 예전에는 그때 버튼이 말없이 꺼져 있었다. 좌표가 아예 없는 곡이면 토스트로 말한다.
    */
-  const handleClick = () => {
+  const handleClick = async () => {
     const showToast = useToastStore.getState().show;
-    const r = useMapStore.getState().goHome();
+    let r = useMapStore.getState().goHome();
+    if (r === "unknown") r = await goHomeWithCoords(showToast);
     track("map_locate_used", { outcome: r });
     backToMap();
     if (r === "follow") showToast(RIDING_MAP_LOCKED);
-    else if (r !== "none") {
+    else if (r === "none") showToast(HOME_LOOKUP_FAILED);
+    else if (r !== "unknown") {
       // 겹을 건너 찾아가는 중이면 도착했을 때 연다 (`use-home-travel-panel`). 지금 겹 안이면 바로 (S15P21A405-670)
       if (getMapEngine()?.isHomeTraveling()) return;
       const musicId = usePlayerStore.getState().currentMusicId;
       if (musicId != null) usePanelStore.getState().openSong(musicId);
     }
   };
+
+  /** 곡 상세의 `location` 으로 좌표를 편입하고 다시 간다. 못 구하면 토스트를 띄우고 `"unknown"` 그대로 */
+  async function goHomeWithCoords(showToast: (m: string) => void) {
+    const musicId = useMapStore.getState().home?.musicId;
+    const engine = getMapEngine();
+    if (musicId == null || !engine) return "none" as const;
+    try {
+      const point = musicToMapPoint(await queryClient.fetchQuery(musicDetailQueryOptions(musicId)));
+      if (!point) {
+        showToast(HOME_NO_COORDS);
+        return "unknown" as const;
+      }
+      engine.adopt([point]);
+    } catch {
+      showToast(HOME_LOOKUP_FAILED);
+      return "unknown" as const;
+    }
+    return useMapStore.getState().goHome();
+  }
 
   return (
     <button

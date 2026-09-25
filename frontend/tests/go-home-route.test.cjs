@@ -143,3 +143,22 @@ test("두 겹 깊이의 자리로 돌아갈 때 떠오르기 한 번, 파고들�
   assert.deepEqual(e.stack.map((f) => f.layer), [0, 1], "휠로 한 겹씩 떠오를 프레임은 쌓여 있다");
   assert.equal(e.playingElsewhere(), false);
 });
+
+test("지도가 좌표를 모르는 곡이어도 버튼은 살아 있고, 좌표를 넣어 주면 간다", () => {
+  const e = new MapEngine();
+  e.setSize(1280, 800);
+  e.setLayerSongs(0, songs);
+  let t = performance.now();
+  e.frame(t);
+  // 랭킹·검색·플리에서 튼 곡 — 지도 상주 집합에 없다 (새로고침 복원도 같은 모양이다)
+  const STRANGER = 9999;
+  e.travelTo(STRANGER);
+  assert.deepEqual(e.home, { musicId: STRANGER, boxes: [] }, "자리는 적힌다");
+  assert.equal(e.canGoHome(), true, "예전엔 여기서 false 라 버튼이 말없이 꺼졌다 (S15P21A405-670)");
+  assert.equal(e.goHome(), "unknown", "좌표를 모르니 부른 쪽이 구해 오라고 한다");
+  e.adopt([pt(STRANGER, 2.1, -0.7)]);
+  assert.equal(e.goHome(), "moved");
+  t = settle(e, t);
+  assert.equal(e.myId, STRANGER);
+  assert.equal(e.playingElsewhere(), false, "좌표가 들어오면 내 자리다");
+});

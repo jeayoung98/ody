@@ -7,26 +7,6 @@ export const LAYER_COUNT = 8;
 export const LAYER_SONG_COUNT = 1000;
 
 /**
- * 1겹(전 우주) 상주 집합을 브라우저(IndexedDB)에 저장해 두는 자리 (S15P21A405-680).
- *
- * 폰 조건(CPU×4·LTE 10Mbps)에서 재방문 첫 곡 2.6초 중 65% 가 이 1,576KB 를 다시 받는 시간이었다 — 모두에게 같은
- * 전 우주 집합인데 새로고침마다 받았다. 저장본이 있으면 그걸로 먼저 그리고, 새 데이터는 첫 화면 뒤에 받아 저장만 한다.
- *
- * - `version` — **저장하는 곡 모양(`MapPoint`)이 바뀌면 올린다.** 옛 모양 저장본은 안 쓰고 새로 받는다
- * - `maxAgeMs` — 이보다 오래된 저장본은 안 쓴다. 데이터 파트가 표본을 주 단위로 다시 만든다
- * - `refreshDelayMs` — 첫 화면 뒤 이만큼 기다렸다가 새로 받아 저장한다. 첫 화면과 망·CPU 를 나눠 쓰지 않게
- */
-export const MAP_SONGS_STORE = {
-  db: "ody",
-  dbVersion: 1,
-  store: "map-songs",
-  key: "level1",
-  version: 1,
-  maxAgeMs: 7 * 24 * 60 * 60 * 1000,
-  refreshDelayMs: 5000,
-} as const;
-
-/**
  * `bff/map/songs` 응답의 gzip 수준 (S15P21A405-680). 1겹 응답(약 1.6MB) 모양의 데이터로 재 보니
  * 3 은 479KB · 17ms, 기본값 6 은 449KB · 44ms 였다. 30KB(LTE 로 약 24ms)를 더 보내고 서버 CPU 를 절반 넘게 아낀다 —
  * 배포 서버는 백엔드·DB 와 CPU 를 나눠 쓴다.

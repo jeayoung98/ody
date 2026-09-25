@@ -28,6 +28,36 @@ test("gzip 을 못 받으면 원본 JSON 을 그대로 보낸다", async () => {
   assert.deepEqual(await res.json(), { success: true, data, error: null });
 });
 
+test("태그를 주면 ETag 와 no-cache 를 달아 브라우저가 매번 바뀌었는지 묻게 한다", async () => {
+  const res = await okLiveGzip(req("gzip"), data, "/api/music/major?level=1", "abc");
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("etag"), 'W/"abc"');
+  assert.equal(res.headers.get("cache-control"), "private, no-cache");
+});
+
+test("브라우저가 들고 있는 태그와 같으면 본문 없이 304 — 목록을 다시 보내지 않는다", async () => {
+  const same = new Request("http://localhost/bff/map/songs?level=1", { headers: { "accept-encoding": "gzip", "if-none-match": 'W/"abc"' } });
+  const res = await okLiveGzip(same, data, "/api/music/major?level=1", "abc");
+  assert.equal(res.status, 304);
+  assert.equal((await res.arrayBuffer()).byteLength, 0);
+  assert.equal(res.headers.get("etag"), 'W/"abc"');
+  assert.equal(res.headers.get(LIVE_HEADERS.source), "live");
+});
+
+test("태그가 다르면 새 목록을 보낸다 — 바뀐 목록을 놓치지 않는다", async () => {
+  const stale = new Request("http://localhost/bff/map/songs?level=1", { headers: { "accept-encoding": "gzip", "if-none-match": 'W/"old"' } });
+  const res = await okLiveGzip(stale, data, "/api/music/major?level=1", "abc");
+  assert.equal(res.status, 200);
+  assert.equal(res.headers.get("etag"), 'W/"abc"');
+  assert.deepEqual(JSON.parse(gunzipSync(Buffer.from(await res.arrayBuffer())).toString("utf8")).data, data);
+});
+
+test("태그가 없으면 캐시 헤더를 달지 않는다", async () => {
+  const res = await okLiveGzip(req("gzip"), data, "/api/music/major?level=1");
+  assert.equal(res.headers.get("etag"), null);
+  assert.equal(res.headers.get("cache-control"), null);
+});
+
 test("압축 여부와 상관없이 실데이터 표시를 단다 — 브라우저 통로가 이걸 보고 콘솔에 찍는다", async () => {
   for (const encoding of ["gzip", null]) {
     const res = await okLiveGzip(req(encoding), data, "/api/music/major?level=2&pc1min=0");

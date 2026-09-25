@@ -1,6 +1,7 @@
 import { LAYER_SONG_COUNT } from "@/constants";
 import { failLive, ok } from "@/lib/api-response";
 import { backendGet, BackendError, isBackendEnabled, toResidentPoint, type BackendMapPoint } from "@/lib/backend";
+import { contentTag } from "@/lib/content-tag";
 import { okLiveGzip } from "@/lib/gzip-json";
 import { allSongs } from "@/mocks/songs";
 import type { MapPoint } from "@/types";
@@ -32,8 +33,13 @@ export async function GET(req: Request) {
     const upstream = `/api/music/major?${qs || "level=1"}`;
     try {
       const res = await backendGet<BackendMajorResponse>(upstream);
-      // 1겹은 1,576KB 라 압축해서 보낸다 (S15P21A405-680). 파고든 겹(약 270KB)도 같은 길을 탄다
-      return await okLiveGzip(req, res.content.map(toResidentPoint), upstream);
+      const points = res.content.map(toResidentPoint);
+      /*
+       * 1겹은 1,576KB 라 압축해서 보내고, 목록이 안 바뀌었으면 본문 없이 304 로 답한다 (S15P21A405-680).
+       * 백엔드는 매번 부른다 — 호출자 토큰 검사가 그대로 백엔드에서 일어나고, 바뀐 목록을 놓치지 않는다.
+       * 파고든 겹(약 270KB)도 같은 길을 탄다
+       */
+      return await okLiveGzip(req, points, upstream, contentTag(points));
     } catch (e) {
       const err = e as BackendError;
       return failLive("INTERNAL_ERROR", err.message, err.status || 502, upstream);

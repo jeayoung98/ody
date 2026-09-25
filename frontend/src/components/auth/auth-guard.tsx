@@ -2,6 +2,7 @@
 
 import { useRouter } from "next/navigation";
 import { useEffect, useSyncExternalStore, type ReactNode } from "react";
+import Logo from "@/components/common/logo";
 import { ROUTES, STORAGE_KEYS } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useForcePublic } from "@/hooks/use-force-public";
@@ -38,10 +39,11 @@ function useHasToken() {
   );
 }
 
+/** 로그인 판정 동안의 로딩 화면 — 좌상단과 같은 로켓 마크가 숨쉰다 (S15P21A405-651) */
 function Splash() {
   return (
     <main className="stage-bg fixed inset-0 flex items-center justify-center">
-      <span className="grad-bg h-[26px] w-[26px] animate-pulse-dot rounded-[10px]" />
+      <Logo size={56} radius={20} className="animate-pulse-dot shadow-[0_0_36px_-6px_rgba(92,157,255,.8)]" />
     </main>
   );
 }

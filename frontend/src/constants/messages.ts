@@ -203,3 +203,10 @@ export const CHANGED = {
  */
 export const HOME_NO_COORDS = "이 곡은 지도에 자리가 없어서 갈 수 없어요";
 export const HOME_LOOKUP_FAILED = "곡의 자리를 못 불러왔어요. 다시 눌러 주세요";
+
+/**
+ * 낙관적으로 먼저 바꾼 화면을 **되돌렸다** (S15P21A405-675). 누르는 순간 바뀐 것이 도로 돌아가므로
+ * 말없이 두면 "내가 잘못 눌렀나" 가 된다. 곡 좋아요(`LIKE_FAILED`)와 같은 결의 문구다.
+ */
+export const FOLLOW_FAILED = "팔로우를 반영하지 못했어요. 잠시 후 다시 시도해 주세요";
+export const CHANGE_FAILED = "반영하지 못했어요. 잠시 후 다시 시도해 주세요";

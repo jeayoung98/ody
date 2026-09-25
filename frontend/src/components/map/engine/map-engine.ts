@@ -27,6 +27,8 @@ const approxNameWidth = (s: string) => {
 const sameIds = (a: number[], b: number[]) => a.length === b.length && a.every((v, i) => v === b[i]);
 const sameMask = (a: Uint8Array, b: Uint8Array) => a.length === b.length && a.every((v, i) => v === b[i]);
 let warnedNaN = false;
+import { firstMismatch, homeRoute, insideBoxes } from "./my-place";
+
 const sameBoxes = (a: readonly LayerBox[], b: readonly LayerBox[]) =>
   a.length === b.length && a.every((x, i) => x.layer === b[i].layer && x.xMin === b[i].xMin && x.xMax === b[i].xMax && x.yMin === b[i].yMin && x.yMax === b[i].yMax);
 /** 화면 좌표 단위벡터. 길이가 0이면 방향이 없다는 뜻이라 null */
@@ -320,6 +322,11 @@ export class MapEngine {
   private centerHoldId: number | null = null;
   /** 겹 전환 중에 "내 위치로 가기" 를 누르면 전환이 끝난 뒤 처리한다 */
   private pendingHome = false;
+  /**
+   * "내 위치로 가기" 의 남은 길 (S15P21A405-670). 갈리는 겹까지 떠오른 뒤 재생 때 사각형을 따라 한 겹씩 파고든다 —
+   * 전환이 끝날 때마다 {@link continueHomeRoute} 가 다음 겹을 출발시킨다.
+   */
+  private homeRoute: { musicId: number; dives: LayerBox[] } | null = null;
 
   selectedId: number | null = null;
   hoverId: number | null = null;
@@ -1493,7 +1500,8 @@ export class MapEngine {
     const id = this.playingId ?? this.myId;
     // 고리 안 곡에 앉아 있으면 화면 안이다 — 상주하지 않는 이웃이라도 "다른 데 있다" 화살표로 갈리지 않는다
     if (this.probe && !this.probe.exitingAt && this.overlaySlot(id)) return null;
-    const elsewhere = !this.isAlive(id);
+    // 갈래 안이면 자리가 있다 — 서버 목록에 빠졌어도 `keepMine` 이 끼워 넣어 두었다 (S15P21A405-670)
+    const elsewhere = !this.inBranch(id);
     let dir: { x: number; y: number } | null;
     if (elsewhere) {
       dir = this.awayDir(id);
@@ -1525,6 +1533,16 @@ export class MapEngine {
     const i = this.index.get(id);
     if (i == null) return null;
     const pc = this.songs[i].pc;
+    /**
+     * **갈래가 갈린 겹에서 잰다** (S15P21A405-670). 그 곡이 처음으로 사각형 밖으로 나간 겹이 곧 갈림길이고,
+     * 그 겹을 떠날 때의 카메라 중심(스택 프레임)에서 그 곡까지가 "저쪽" 이다. 프레임이 없으면(같은 겹) 아래 폴백.
+     */
+    const split = firstMismatch(pc, this.boxes, this.layer);
+    const frame = split != null ? this.stack.find((f) => f.layer === split) : undefined;
+    if (frame) {
+      const d = unit(pc[split! * 2] - frame.cam.cx, -(pc[split! * 2 + 1] - frame.cam.cy));
+      if (d) return d;
+    }
     for (let k = this.stack.length - 1; k >= 0; k--) {
       const f = this.stack[k];
       if (!f.subset[i]) continue;
@@ -1951,6 +1969,7 @@ export class MapEngine {
     const ns = new Uint8Array(this.N);
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
     this.keepPinned(ns, layer);
+    this.keepMine(ns, layer);
     return ns;
   }
 
@@ -2044,7 +2063,9 @@ export class MapEngine {
      * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.
      */
     const mi0 = this.myId != null ? this.index.get(this.myId) : undefined;
-    const mi = mi0 != null && p.subset[mi0] ? mi0 : undefined;
+    // 갈래 안이면 가운데 둔다 — 서버 목록에 빠져 있었어도 그 겹에 있는 곡이다 (S15P21A405-670)
+    const mi = mi0 != null && this.inBranch(this.myId, p.layer, this.boxes) ? mi0 : undefined;
+    if (mi != null && !p.subset[mi]) p.subset[mi] = 1;
     const f = this.freeRect();
     // 내 자리가 있으면 그 곡을 가운데 두고 떠오른다. 없으면 두고 온 카메라 그대로
     const c: MapCamera =
@@ -2484,6 +2505,14 @@ export class MapEngine {
       return;
     }
     this.meHop = null;
+    // 갈래 안인데 서버 목록에 없는 곡이면 끼워 넣고 간다 — 자리가 있는 곡을 "없다" 고 두지 않는다 (S15P21A405-670)
+    if (!this.isAlive(id) && this.inBranch(id)) {
+      const i = this.index.get(id)!;
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      this.rebuildAliveIdx();
+      this.project();
+    }
     if (!this.isAlive(id)) {
       this.travelToId = null;
       return;
@@ -2509,9 +2538,30 @@ export class MapEngine {
     if (!this.follow && !this.constellationActive()) this.focus(id);
   }
 
-  /** 재생 중인 곡이 이 겹 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08) */
+  /**
+   * 그 곡이 **이 겹의 갈래 안**에 있는가 (S15P21A405-670). 서버 top-k 목록(`isAlive`)이 아니라 파고든 사각형으로 본다 —
+   * 최상단은 모든 곡의 겹인데도 top-k 에 빠지면 "다른 갈래" 로 읽히던 것이 이것이다. 좌표를 모르는 곡은 판단할 수 없어 거짓.
+   */
+  private inBranch(id: number | null, layer = this.layer, boxes: readonly LayerBox[] = this.boxes): boolean {
+    if (id == null) return false;
+    const i = this.index.get(id);
+    return i != null && insideBoxes(this.songs[i].pc, boxes, layer);
+  }
+
+  /**
+   * 갈래 안인데 서버 목록에 빠진 내 곡을 **이 겹에 끼워 넣는다** — 자리는 있는데 별이 없으면 표식만 허공에 뜬다.
+   * `pinned` 와 같은 장치지만 내 곡은 겹마다 다시 판단하므로 못 박지 않고 마스크에만 넣는다.
+   */
+  private keepMine(mask: Uint8Array, layer: number, boxes: readonly LayerBox[] = this.boxes) {
+    const id = this.playingId ?? this.myId;
+    if (id == null || !this.inBranch(id, layer, boxes)) return;
+    const i = this.index.get(id);
+    if (i != null && !this.songs[i].ghostOnly) mask[i] = 1;
+  }
+
+  /** 재생 중인 곡이 이 겹의 갈래 밖인가 — 내 표식에 "다른 갈래에서 재생 중"을 붙일지 (MAP-08 · 670) */
   playingElsewhere() {
-    return this.playingId != null && !this.isAlive(this.playingId);
+    return this.playingId != null && !this.inBranch(this.playingId);
   }
 
   // ------------------------------------------------------------------ 내 위치로 가기
@@ -2642,6 +2692,27 @@ export class MapEngine {
       return "moved";
     }
 
+    /**
+     * **지도처럼 간다** (S15P21A405-670). 지금 경로와 재생 때 경로가 마지막으로 같았던 겹까지만 떠오른 뒤
+     * (`ascendTo`), 재생 때 사각형을 따라 한 겹씩 다시 파고든다 (`continueHomeRoute`). 우주까지 다 올라가지
+     * 않는다 — 한 겹 위에서 두 곡이 같이 보이면 한 겹만 오르내리는 것이 지도 문법이다.
+     * 떠오를 수 없는 상태(대기 중인 파고들기 등)면 아래 예전 길(직행 전환)로 떨어진다.
+     */
+    const route = homeRoute(this.boxes, h.boxes);
+    if (route.riseTo < this.layer || route.dives.length) {
+      this.pinned = { id: h.musicId, layer: target };
+      this.homeRoute = { musicId: h.musicId, dives: [...route.dives] };
+      if (route.riseTo < this.layer) {
+        this.ascendTo(route.riseTo);
+        if (this.anim) return "moved";
+        this.homeRoute = null;
+      } else {
+        this.continueHomeRoute();
+        if (this.anim) return "moved";
+        this.homeRoute = null;
+      }
+    }
+
     const ns = this.maskForBoxes(h.boxes, target);
     // 서버 top-k 에서 빠졌더라도 돌아갈 자리는 보여야 한다 — 응답이 와도 빠지지 않게 못 박는다
     this.pinned = { id: h.musicId, layer: target };
@@ -2671,6 +2742,46 @@ export class MapEngine {
       target > this.layer ? 1 : -1,
     );
     return "moved";
+  }
+
+  /**
+   * "내 위치로 가기" 의 다음 겹을 출발시킨다 (S15P21A405-670). 떠오르기·파고들기 전환이 끝날 때마다 불린다.
+   * 남은 사각형이 없으면 도착이다 — 그 곡을 끼워 넣고 가운데 둔다.
+   */
+  private continueHomeRoute() {
+    const r = this.homeRoute;
+    if (!r) return;
+    const i = this.index.get(r.musicId);
+    if (i == null) {
+      this.homeRoute = null;
+      return;
+    }
+    if (!r.dives.length) {
+      this.homeRoute = null;
+      this.settleHome(i);
+      this.centerOn(r.musicId, FOCUS.zoomMul);
+      return;
+    }
+    const box = r.dives.shift()!;
+    const nl = this.layer + 1;
+    // 파고들기와 같은 방식으로 스택을 쌓는다 — 나중에 휠로 떠오를 때 이 겹으로 돌아올 수 있게
+    this.stack.push({ layer: this.layer, cam: { ...this.cam }, subset: this.subset.slice(), entryS: this.entryS });
+    this.boxes = [...this.boxes, box];
+    const ns = this.maskForBoxes(this.boxes, nl);
+    ns[i] = 1;
+    const last = r.dives.length === 0;
+    let cam = this.fitCam(nl, ns, r.musicId);
+    if (last) {
+      const song = this.songs[i];
+      const scale = cam.s * FOCUS.zoomMul;
+      const f = this.freeRect();
+      cam = { s: scale, cx: song.pc[nl * 2] - (f.cx - this.W / 2) / scale, cy: song.pc[nl * 2 + 1] + (f.cy - this.H / 2) / scale };
+      this.centerAfterMorph = r.musicId;
+      this.myId = r.musicId;
+      this.meFlight = null;
+    }
+    this.touched = true;
+    this.morph(nl, cam, ns, `내 위치로 — ${LAYER_NAMES[nl]}${ro(LAYER_NAMES[nl])} 파고드는 중`, 1);
   }
 
   /**
@@ -3071,6 +3182,8 @@ export class MapEngine {
           this.centerAfterMorph = null;
           this.centerOn(id, FOCUS.zoomMul);
         }
+        // 내 위치로 가는 길이 남았으면 다음 겹으로 (S15P21A405-670)
+        if (this.homeRoute) this.continueHomeRoute();
         // 전환 중에 눌린 "내 위치로 가기" 를 이제 처리한다
         if (this.pendingHome) {
           this.pendingHome = false;

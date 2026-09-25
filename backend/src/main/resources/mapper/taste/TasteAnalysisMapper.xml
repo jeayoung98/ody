@@ -17,6 +17,15 @@
         LIMIT 1
     </select>
 
+    <!-- FALLBACK 도 조회에서 보여 주려고 가장 최근 실패를 따로 읽는다 (S15P21A405-647). -->
+    <select id="findLatestFailed" resultType="com.ssafy.backend.taste.mapper.TasteAnalysisRow">
+        SELECT <include refid="columns"/>
+        FROM taste_analysis
+        WHERE email = #{email} AND status = 'FAILED'
+        ORDER BY completed_at DESC
+        LIMIT 1
+    </select>
+
     <select id="findByDate" resultType="com.ssafy.backend.taste.mapper.TasteAnalysisRow">
         SELECT <include refid="columns"/>
         FROM taste_analysis
@@ -54,7 +63,18 @@
             requested_at = EXCLUDED.requested_at,
             lease_expires_at = EXCLUDED.lease_expires_at,
             completed_at = NULL,
-            failure_code = NULL
+            failure_code = NULL,
+            -- 이전 실패 시도의 대체 리포트를 남기면 lease 만료로 끝난 시도가 옛 문장을 보인다
+            liked_set_hash = NULL,
+            valid_music_count = NULL,
+            report_level = NULL,
+            analysis_version = NULL,
+            model = NULL,
+            axis_stats = NULL,
+            findings = NULL,
+            summary = NULL,
+            narratives = NULL,
+            gms_response_id = NULL
         WHERE taste_analysis.status = 'FAILED'
            OR (taste_analysis.status = 'PENDING'
                AND taste_analysis.lease_expires_at &lt;= EXCLUDED.requested_at)
@@ -87,7 +107,16 @@
         SET status = 'FAILED',
             completed_at = #{completedAt},
             lease_expires_at = NULL,
-            failure_code = #{failureCode}
+            failure_code = #{failureCode},
+            -- 대체 리포트도 저장해 조회가 같은 문장을 내린다 (S15P21A405-647). model 은 비워 둔다
+            liked_set_hash = #{likedSetHash},
+            valid_music_count = #{validMusicCount},
+            report_level = #{reportLevel},
+            analysis_version = #{analysisVersion},
+            axis_stats = CAST(#{axisStats} AS jsonb),
+            findings = CAST(#{findings} AS jsonb),
+            summary = #{summary},
+            narratives = CAST(#{narratives} AS jsonb)
         WHERE email = #{email}
           AND analysis_date = #{analysisDate}
           AND status = 'PENDING'

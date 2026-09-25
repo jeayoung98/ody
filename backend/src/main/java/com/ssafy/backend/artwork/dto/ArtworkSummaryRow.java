@@ -18,6 +18,8 @@ public class ArtworkSummaryRow {
 	private long id;
 	private String title;
 	private String email;
+	/** user 행이 없으면 null (S15P21A405-645). */
+	private String ownerNickname;
 	private String status;
 	private Integer score;
 	private String aiComment;

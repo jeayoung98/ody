@@ -39,8 +39,10 @@
 		score, ai_comment, model, attempt_cnt, fail_reason, like_cnt, is_anchor AS anchor, closed, evaluated_at, created_at
 	</sql>
 
+	<!-- 상세 응답용으로 주인 닉네임을 같이 읽는다 (S15P21A405-645). 탈퇴 등으로 user 행이 없으면 null. -->
 	<select id="findById" resultType="com.ssafy.backend.artwork.dto.ArtworkRow">
-		SELECT <include refid="artworkColumns"/>
+		SELECT <include refid="artworkColumns"/>,
+			(SELECT u.nickname FROM "user" u WHERE u.email = artwork.email) AS owner_nickname
 		FROM artwork
 		WHERE id = #{artworkId}
 	</select>
@@ -181,6 +183,7 @@
 		a.like_cnt      AS like_cnt,
 		a.created_at    AS created_at,
 		a.closed        AS closed,
+		(SELECT u.nickname FROM "user" u WHERE u.email = a.email) AS owner_nickname,
 		(SELECT count(*) FROM artwork_point p WHERE p.artwork_id = a.id) AS music_cnt
 	</sql>
 

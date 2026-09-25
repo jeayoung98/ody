@@ -93,7 +93,8 @@ class TasteAnalysisLifecycleTests {
         TasteAnalysisRow previous = successRow("old-hash", LocalDate.of(2026, 9, 20));
         when(mapper.findLatestSuccess(EMAIL)).thenReturn(previous);
         when(mapper.claim(eq(EMAIL), any(), any(), any())).thenReturn(1);
-        when(mapper.markFailed(eq(EMAIL), any(), any(), any(), eq("GMS_REQUEST_FAILED"))).thenReturn(1);
+        when(mapper.markFailed(eq(EMAIL), any(), any(), any(), eq("GMS_REQUEST_FAILED"),
+                anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString())).thenReturn(1);
         when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt()))
                 .thenThrow(new GmsTasteClient.GmsTasteException("GMS_REQUEST_FAILED"));
 
@@ -112,7 +113,8 @@ class TasteAnalysisLifecycleTests {
         when(queryService.snapshot(EMAIL)).thenReturn(snapshot(10));
         when(mapper.claim(eq(EMAIL), eq(LocalDate.of(2026, 9, 22)), any(), any())).thenReturn(1);
         when(mapper.markFailed(
-                eq(EMAIL), eq(LocalDate.of(2026, 9, 22)), any(), any(), eq("GMS_REQUEST_FAILED")))
+                eq(EMAIL), eq(LocalDate.of(2026, 9, 22)), any(), any(), eq("GMS_REQUEST_FAILED"),
+                anyString(), anyInt(), anyString(), anyString(), anyString(), anyString(), anyString(), anyString()))
                 .thenReturn(1);
         when(gmsClient.generate(eq("INITIAL"), anyList(), anyInt()))
                 .thenThrow(new GmsTasteClient.GmsTasteException("GMS_REQUEST_FAILED"));

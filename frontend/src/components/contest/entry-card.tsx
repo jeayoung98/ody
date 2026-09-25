@@ -22,7 +22,8 @@ interface EntryCardProps {
 
 /**
  * 갤러리 카드 — 썸네일 · 이름 · 만든 사람 · AI 한 줄 평 · 좋아요 · 가져오기 (S15P21A405-640).
- * 좋아요가 곧 표다 (S15P21A405-616): 회차당 남의 작품 `voteLimit`개, 내 작품 금지. 백엔드가 닉네임을 안 줘서 주인은 이메일 앞부분이다.
+ * 좋아요가 곧 표다 (S15P21A405-616): 회차당 남의 작품 `voteLimit`개, 내 작품 금지.
+ * 주인은 닉네임으로 적는다 (S15P21A405-645 에서 백엔드가 `ownerNickname` 을 주기 시작했다).
  */
 export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
   const toast = useToastStore((s) => s.show);
@@ -53,7 +54,7 @@ export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
         {isMine ? <Tag tone="teal">내 출품</Tag> : entry.rank != null ? <Tag title="순위">{entry.rank}위</Tag> : null}
       </div>
       <p className="truncate text-[13px] text-ink-3">
-        @{ownerLabel(entry.ownerEmail)} · {entry.musicCnt}곡 · {formatTimeAgo(entry.createdAt)}
+        @{ownerLabel(entry.ownerEmail, entry.ownerNickname)} · {entry.musicCnt}곡 · {formatTimeAgo(entry.createdAt)}
       </p>
       {entry.aiComment && <p className="line-clamp-2 text-xs leading-relaxed text-ink-3">“{entry.aiComment}”</p>}
       <div className="flex items-center justify-between gap-2">

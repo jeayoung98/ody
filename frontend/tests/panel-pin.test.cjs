@@ -20,7 +20,7 @@ test("주변 사람을 펼쳐 둬도 지도에서 별을 누르면 곡 상세로
 
   assert.equal(panel().activePanel, "song", "다른 패널과 같게 돈다");
   assert.equal(panel().musicId, 42);
-  assert.equal(panel().back, null, "지도에서 바로 연 상세에는 돌아갈 자리가 없다 — 여기도 예외가 아니다");
+  assert.deepEqual(panel().history, [], "지도에서 바로 연 상세에는 돌아갈 자리가 없다 — 여기도 예외가 아니다");
 });
 
 test("접어 둔 주변 사람에서도 마찬가지다 — 단에 따라 갈리지 않는다", () => {
@@ -31,7 +31,7 @@ test("접어 둔 주변 사람에서도 마찬가지다 — 단에 따라 갈리
   panel().openSongFromMap(42);
   assert.equal(panel().activePanel, "song");
   assert.equal(panel().musicId, 42);
-  assert.equal(panel().back, null);
+  assert.deepEqual(panel().history, []);
 });
 
 test("주변 사람을 닫았을 때도 같다", () => {
@@ -41,7 +41,7 @@ test("주변 사람을 닫았을 때도 같다", () => {
 
   assert.equal(panel().activePanel, "song");
   assert.equal(panel().musicId, 42);
-  assert.equal(panel().back, null);
+  assert.deepEqual(panel().history, []);
 });
 
 test("다른 패널에서도 지도 클릭은 상세로 간다", () => {
@@ -64,9 +64,9 @@ test("지도를 끌면 주변 사람도 다른 패널처럼 내려온다", () =>
 test("목록에서 들어간 상세는 돌아갈 자리를 그대로 기억한다 — 이건 안 건드렸다", () => {
   panel().openJourney();
   panel().openSongFromList(3);
-  assert.deepEqual(panel().back, { panel: "journey" });
+  assert.deepEqual(panel().history, [{ panel: "journey" }]);
 
   panel().goBack();
   assert.equal(panel().activePanel, "journey");
-  assert.equal(panel().back, null);
+  assert.deepEqual(panel().history, []);
 });

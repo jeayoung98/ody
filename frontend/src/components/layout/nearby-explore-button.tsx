@@ -73,7 +73,7 @@ export default function NearbyExploreButton() {
       onClick={handleClick}
       data-tutorial="nearby"
     >
-      <CoronaIcon size={16} />
+      <CoronaIcon size={17} />
     </RailButton>
   );
 }

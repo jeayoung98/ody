@@ -1,5 +1,6 @@
 "use client";
 
+import { useDrill } from "@/hooks/use-drill";
 import Avatar from "@/components/common/avatar";
 import Button from "@/components/common/button";
 import Note from "@/components/common/note";
@@ -7,7 +8,6 @@ import { useFollowMutation, useUnfollowMutation } from "@/hooks/mutations/use-fo
 import { useRideMutation } from "@/hooks/mutations/use-ride-mutation";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useFollowStore } from "@/stores/use-follow-store";
-import { usePanelStore } from "@/stores/use-panel-store";
 import type { UserProfile } from "@/types";
 
 interface FeedHeaderProps {
@@ -27,7 +27,7 @@ interface FeedHeaderProps {
 function StatInline({ label, value, onClick }: { label: string; value: number | string; onClick?: () => void }) {
   const body = (
     <>
-      {label} <b className="num text-sm normal-case tracking-normal text-ink">{value}</b>
+      {label} <b className="num text-md normal-case tracking-normal text-ink">{value}</b>
     </>
   );
   if (!onClick) return <span className="lbl">{body}</span>;
@@ -47,7 +47,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
   const ride = useRideMutation();
   const follow = useFollowMutation();
   const unfollow = useUnfollowMutation();
-  const openSong = usePanelStore((s) => s.openSong);
+  // 탭 화면에서는 지도로 돌아가서 연다 (S15P21A405-666)
+  const drill = useDrill();
   const startActivity = useStartActivity();
 
   /** 지금 이 사람의 우주선에 **타고 있는가** (지금 이 순간의 일) */
@@ -78,7 +79,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
    */
   const handleRide = () =>
     startActivity("follow", profile.email, () =>
-      ride.mutate({ email: profile.email, nickname: profile.nickname, imageUrl: profile.imageUrl }),
+      // 지금 듣는 곡이 곧 그 사람이 선 자리다 — 넘기면 표식이 응답을 안 기다린다 (S15P21A405-642)
+      ride.mutate({ email: profile.email, nickname: profile.nickname, imageUrl: profile.imageUrl, musicId: profile.nowPlaying?.id ?? null }),
     );
 
   return (
@@ -87,11 +89,11 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
         <Avatar src={profile.imageUrl} name={profile.nickname} size={56} online={online} />
         <div className="min-w-0 flex-1">
           <p className="truncate font-display text-xl font-semibold">{profile.nickname ?? profile.name ?? "익명"}</p>
-          <p className="mt-[3px] text-[11.5px] text-ink-2">
+          <p className="mt-[3px] text-[13.5px] text-ink-2">
             {online ? "접속 중" : "오프라인"} · {profile.daysSinceJoined}일째 탐험중
           </p>
           {profile.nowPlaying && (
-            <button type="button" onClick={() => openSong(profile.nowPlaying!.id)} className="mt-0.5 block max-w-full truncate text-xs text-teal hover:underline">
+            <button type="button" onClick={() => drill({ panel: "song", musicId: profile.nowPlaying!.id })} className="mt-0.5 block max-w-full truncate text-xs text-teal hover:underline">
               ♪ {profile.nowPlaying.title} — {profile.nowPlaying.artist ?? ""}
             </button>
           )}

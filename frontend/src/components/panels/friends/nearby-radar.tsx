@@ -242,7 +242,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           className="animate-breathe grid place-items-center rounded-pill p-[3px] shadow-[0_0_18px_-2px_rgba(79,227,206,.8)] ring-2 ring-teal/80"
           style={{ ["--breathe-hi" as string]: 1.12, animationDuration: "1.9s" }}
         >
-          <HelmetAvatar email={me?.email ?? "me"} imageUrl={me?.imageUrl} musicId={myMusicId} size={44} />
+          <HelmetAvatar email={me?.email ?? "me"} imageUrl={me?.imageUrl} musicId={myMusicId} size={RADAR.sizeMax} />
         </span>
       </span>
 
@@ -255,7 +255,7 @@ export default function NearbyRadar({ people }: { people: NearbyPerson[] }) {
           <button
             key={p.email}
             type="button"
-            onClick={() => openProfile(p.email, { panel: "friends" })}
+            onClick={() => openProfile(p.email, { drill: true })}
             title={`${p.nickname ?? "이름 없음"}${p.meetingCount > 0 ? ` · ${p.meetingCount}번 마주침` : ""}`}
             className={`absolute grid place-items-center rounded-pill transition-opacity hover:opacity-80 ${breathes ? "animate-breathe" : ""}`}
             style={{

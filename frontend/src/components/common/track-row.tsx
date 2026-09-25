@@ -36,7 +36,7 @@ export default function TrackRow({ title, artist, index, duration, meta, right, 
         active ? "border-teal/30 bg-teal/[.08]" : "border-transparent"
       } ${onClick ? "cursor-pointer hover:border-line hover:bg-white/[.055]" : ""}`}
     >
-      {index != null && <span className="num w-4 shrink-0 text-right text-[10px] text-ink-4">{index}</span>}
+      {index != null && <span className="num w-4 shrink-0 text-right text-[12.5px] text-ink-4">{index}</span>}
       {dotColor && <span className="h-[7px] w-[7px] shrink-0 rounded-pill" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm leading-[1.3]">{title}</p>
@@ -46,9 +46,9 @@ export default function TrackRow({ title, artist, index, duration, meta, right, 
         </p>
       </div>
       {right != null ? (
-        <span className="num shrink-0 text-right text-[10px] leading-[1.45] text-ink-3">{right}</span>
+        <span className="num shrink-0 text-right text-[12.5px] leading-[1.45] text-ink-3">{right}</span>
       ) : duration != null ? (
-        <span className="num shrink-0 text-[10px] text-ink-3">{formatDuration(duration)}</span>
+        <span className="num shrink-0 text-[12.5px] text-ink-3">{formatDuration(duration)}</span>
       ) : null}
       {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>

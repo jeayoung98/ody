@@ -2,6 +2,7 @@
 
 import Button from "@/components/common/button";
 import { PlayIcon } from "@/components/common/icons";
+import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { formatDuration } from "@/lib/format";
 import { useJourneyStore } from "@/stores/use-journey-store";
@@ -20,6 +21,7 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
   const detachContext = usePlayerStore((s) => s.detachContext);
   const clearConstellation = useMapStore((s) => s.clearConstellation);
   const startActivity = useStartActivity();
+  const openComposer = useOpenJourneyComposer();
 
   if (!route) return null;
 
@@ -40,11 +42,16 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
    * 누르는 순간 `openContext` 가 그 맥락을 보고 지운 경로를 다시 만들어 되살렸다.
    *
    * **소리는 끊지 않는다** — 듣던 곡은 계속 들리고, 이제 그 곡 하나로만 남는다.
+   *
+   * **지운 자리에 빈 패널을 남기지 않는다** (S15P21A405-661). 경로를 지웠다는 것은 다시 만들겠다는 뜻이라
+   * 패널을 닫고 확장 검색창을 연다 — 지점을 고치는 유일한 통로다 (JOURNEY-01). 출발은 그 훅의 규칙대로
+   * 지금 듣는 곡으로 채워지고 차례는 도착이다; 비우려면 ✕.
    */
   const handleClear = () => {
     reset();
     clearConstellation();
     detachContext();
+    openComposer();
   };
 
   return (
@@ -57,7 +64,7 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
           경로 지우기
         </Button>
         <Button size="sm" variant="primary" onClick={handlePlay}>
-          <PlayIcon size={12} /> 순차 재생
+          <PlayIcon size={14} /> 순차 재생
         </Button>
       </div>
     </div>

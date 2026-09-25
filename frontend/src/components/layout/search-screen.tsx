@@ -47,7 +47,7 @@ export default function SearchScreen() {
         <div className="glass-liquid flex h-11 min-w-0 flex-1 items-center gap-[9px] rounded-pill! pr-3 pl-[15px]">
           <SearchIcon className="shrink-0 opacity-50" />
           {chip && (
-            <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[11.5px] whitespace-nowrap text-ink-2">
+            <span className="flex shrink-0 items-center gap-1 rounded-pill bg-white/[.08] py-0.5 pr-1 pl-2 text-[13.5px] whitespace-nowrap text-ink-2">
               {CHIP_LABEL[chip.kind]}: {chip.value}
               <button
                 type="button"
@@ -55,13 +55,13 @@ export default function SearchScreen() {
                 onClick={removeChip}
                 className="cursor-pointer rounded-pill p-0.5 text-ink-3 transition-colors hover:text-ink"
               >
-                <CloseIcon size={10} />
+                <CloseIcon size={12} />
               </button>
             </span>
           )}
           <input
             ref={inputRef}
-            className="min-w-0 flex-1 bg-transparent text-[14px] outline-none placeholder:text-ink-3"
+            className="min-w-0 flex-1 bg-transparent text-[16px] outline-none placeholder:text-ink-3"
             placeholder={chip ? (chip.kind === "artist" ? "제목 검색..." : "아티스트 검색...") : "음악 · 아티스트 검색"}
             autoComplete="off"
             spellCheck={false}
@@ -79,7 +79,7 @@ export default function SearchScreen() {
         <button
           type="button"
           onClick={leave}
-          className="h-touch shrink-0 px-1 text-[13px] text-ink-2 transition-colors hover:text-ink"
+          className="h-touch shrink-0 px-1 text-[15px] text-ink-2 transition-colors hover:text-ink"
         >
           닫기
         </button>
@@ -107,7 +107,7 @@ export default function SearchScreen() {
           />
         )}
         {!chip && !input.trim() && (
-          <p className="pt-10 text-center text-[12.5px] leading-[1.7] text-ink-3">
+          <p className="pt-10 text-center text-[14.5px] leading-[1.7] text-ink-3">
             곡 제목이나 아티스트를 입력해 보세요
             <br />
             고른 곡은 지도에서 찾아 줍니다

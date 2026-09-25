@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, QUERY_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
 import { api } from "@/lib/api";
 
 /**
@@ -12,6 +13,7 @@ import { api } from "@/lib/api";
  */
 export function useUpdateProfileImageMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (file: File) => {
       const form = new FormData();
@@ -19,6 +21,7 @@ export function useUpdateProfileImageMutation() {
       return api<{ imageUrl: string }>(API_ENDPOINTS.user.image, { method: "PATCH", body: form });
     },
     onSuccess: () => {
+      showToast(CHANGED.profileImageChanged);
       qc.invalidateQueries({ queryKey: QUERY_KEYS.auth.me });
       qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all });
     },

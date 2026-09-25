@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useRef } from "react";
 import { CloseIcon } from "@/components/common/icons";
 import { useMusicLabel } from "@/hooks/use-music-label";
 
@@ -24,6 +25,15 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
   const { title, artist } = useMusicLabel(musicId);
   const isStart = role === "start";
   const editing = active && keyword.length > 0;
+  const inputRef = useRef<HTMLInputElement>(null);
+  /**
+   * **빈 칸이 차례가 되면 커서를 갖다 둔다** (S15P21A405-661). 출발점 ✕ 를 누르면 차례가 출발로 오는데
+   * (`setStart(null)`), 눈에 보이는 점만 바뀌고 커서는 없어서 바로 검색어를 칠 수 없었다.
+   * 채워진 칸이 차례가 될 때는 안 건드린다 — 지도에서 별을 눌러 채운 직후 키보드가 올라오면 안 된다(폰).
+   */
+  useEffect(() => {
+    if (active && musicId == null) inputRef.current?.focus();
+  }, [active, musicId]);
   const dot = isStart
     ? active
       ? "bg-teal shadow-[0_0_9px_#4fe3ce]"
@@ -37,7 +47,8 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
       <span className={`h-[7px] w-[7px] shrink-0 rounded-pill transition-all duration-fast ${dot}`} />
       <span className="min-w-0 flex-1">
         <input
-          className={`w-full bg-transparent text-[14px] outline-none ${musicId != null ? "placeholder:text-ink" : "placeholder:text-ink-4"}`}
+          ref={inputRef}
+          className={`w-full bg-transparent text-[16px] outline-none ${musicId != null ? "placeholder:text-ink" : "placeholder:text-ink-4"}`}
           placeholder={musicId != null ? title : `${isStart ? "출발" : "도착"} 지점 검색`}
           value={active ? keyword : musicId != null ? title : ""}
           onFocus={onFocusSlot}
@@ -46,7 +57,7 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
           autoComplete="off"
         />
       </span>
-      {musicId != null && !editing && <span className="shrink-0 truncate text-[11.5px] text-ink-3">{artist}</span>}
+      {musicId != null && !editing && <span className="shrink-0 truncate text-[13.5px] text-ink-3">{artist}</span>}
       {musicId != null && !editing && (
         <button
           type="button"
@@ -54,7 +65,7 @@ export default function JourneyComposerSlot({ role, musicId, active, keyword, on
           aria-label={`${isStart ? "출발" : "도착"} 비우기`}
           className="shrink-0 text-ink-4 transition-colors hover:text-ink"
         >
-          <CloseIcon size={12} />
+          <CloseIcon size={14} />
         </button>
       )}
     </label>

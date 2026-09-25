@@ -1,14 +1,16 @@
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
-import type { ContestEntry, ContestSort } from "@/types";
+import type { ContestLeaderboard } from "@/types";
 
-/** 갤러리·순위 목록. 정렬은 서버가 한다 — `final` 이 곧 순위다 */
-export function useContestEntriesQuery(contestId: number | null, sort: ContestSort) {
+/**
+ * 리더보드 (S15P21A405-640) — 갤러리·순위가 같은 목록을 쓴다. 서버 정렬은 순위순 하나고 갤러리 정렬은 화면이 한다
+ * (`lib/contest-view` `sortEntries`). 채점된(`SCORED`) 작품만 온다.
+ */
+export function useContestEntriesQuery() {
   return useQuery({
-    queryKey: QUERY_KEYS.contest.entries(contestId ?? -1, sort),
-    queryFn: () => api<ContestEntry[]>(API_ENDPOINTS.contest.entries(contestId!, sort)),
-    enabled: contestId != null,
+    queryKey: QUERY_KEYS.contest.entries,
+    queryFn: () => api<ContestLeaderboard>(API_ENDPOINTS.contest.entries),
     staleTime: 30 * 1000,
   });
 }

@@ -5,27 +5,29 @@ import EmptyState from "@/components/common/empty-state";
 import ErrorMessage from "@/components/common/error-message";
 import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
-import Tag from "@/components/common/tag";
 import TrackRow from "@/components/common/track-row";
 import { useSaveContestEntryMutation } from "@/hooks/mutations/use-save-contest-entry-mutation";
 import { useContestEntriesQuery } from "@/hooks/queries/use-contest-entries-query";
+import { useMeQuery } from "@/hooks/queries/use-me-query";
+import { ownerLabel, roundPhase } from "@/lib/contest-view";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
 
 /**
- * 순위 — `sort=final` 목록 그대로. 최종 = AI×0.5 + (표 ÷ 1위 표 × 100)×0.5, 동점은 AI 우선.
- * AI 기준 미만은 목록 끝에 순위 없이 "제외" 로 남는다. 발표 전이라 표가 바뀌면 순위도 바뀐다.
+ * 순위 — 리더보드 그대로 (S15P21A405-616 · 640). 순위 점수 = 좋아요 + AI ÷ 100 × K (K 회차별, 기본 5).
+ * 동점은 AI 점수 → 먼저 낸 순. 발표 시각·최종 고정은 백엔드 범위 밖이라 접수 중에는 계속 바뀐다.
  */
 export default function RankingTab({ contest }: { contest: Contest }) {
-  const { data, isPending, isError } = useContestEntriesQuery(contest.id, "final");
+  const { data, isPending, isError } = useContestEntriesQuery();
+  const { data: me } = useMeQuery();
   const toast = useToastStore((s) => s.show);
   const save = useSaveContestEntryMutation();
 
   const handleSave = (e: ContestEntry) => {
-    if (e.savedByMe) return toast(`「${e.title}」은 이미 내 플레이리스트에 있어요`);
+    if (!me) return toast("로그인하면 내 플레이리스트로 가져올 수 있어요");
     save.mutate(
-      { contestId: contest.id, entryId: e.id },
+      { playlistName: e.title, musicIds: e.tracks.map((t) => t.musicId) },
       { onSuccess: () => toast(`「${e.title}」 곡 ${e.tracks.length}개를 내 플레이리스트로 복사했어요`), onError: (err) => toast(err.message) },
     );
   };
@@ -33,43 +35,42 @@ export default function RankingTab({ contest }: { contest: Contest }) {
   return (
     <div className="flex flex-col gap-3">
       <Note>
-        최종 = <b>AI × 0.5</b> + <b>(내 표 ÷ 1위 표 × 100) × 0.5</b>. 동점은 AI 우선. AI {contest.rules.aiGate}점 미만은 갤러리에는 남지만 순위에서 빠져요.
-        {contest.status === "OPEN" && " 발표 전이라 실시간으로 바뀌어요."}
+        순위 점수 = <b>좋아요 수</b> + <b>AI 점수 ÷ 100 × K</b> (K 는 회차별, 기본 5 — AI 만점이 좋아요 5개와 같아요). 동점은 AI 점수 → 먼저 낸 순.
+        {roundPhase(contest) === "OPEN" && " 접수 중이라 실시간으로 바뀌어요."}
       </Note>
       {isPending && <SkeletonRows count={5} thumb="square" />}
       {isError && <ErrorMessage />}
-      {data && data.length === 0 && <EmptyState message="아직 순위가 없어요." />}
+      {data && data.items.length === 0 && <EmptyState message="아직 순위가 없어요." />}
       {data && (
         <div className="-mx-1.5 flex flex-col gap-0.5">
-          {data.map((e) => (
-            <div key={e.id} className="flex items-center gap-1.5">
-              <ConstellationThumb tracks={e.tracks} closed={e.closed} size={40} dim={!e.eligible} className="ml-1" />
-              <div className="min-w-0 flex-1">
-                <TrackRow
-                  index={e.rank ?? undefined}
-                  title={e.title}
-                  artist={`@${e.ownerNickname ?? "-"}${e.isMine ? " · 나" : ""}`}
-                  active={e.isMine}
-                  right={
-                    e.eligible ? (
+          {data.items.map((e) => {
+            const isMine = me != null && e.ownerEmail === me.email;
+            return (
+              <div key={e.artworkId} className="flex items-center gap-1.5">
+                <ConstellationThumb tracks={e.tracks} closed={e.closed} size={40} className="ml-1" />
+                <div className="min-w-0 flex-1">
+                  <TrackRow
+                    index={e.rank ?? undefined}
+                    title={e.title}
+                    artist={`@${ownerLabel(e.ownerEmail, e.ownerNickname)}${isMine ? " · 나" : ""}`}
+                    active={isMine}
+                    right={
                       <>
-                        AI {e.aiScore} · {e.voteCount}표
+                        AI {e.score ?? "–"} · ♥ {e.likeCnt}
                         <br />
-                        <b className="text-ink">{e.finalScore?.toFixed(1)}</b>
+                        <b className="text-ink">{e.rankScore?.toFixed(1) ?? "–"}</b>
                       </>
-                    ) : (
-                      <Tag tone="warn" title={`AI ${e.aiScore ?? "-"}점`}>제외</Tag>
-                    )
-                  }
-                  actions={
-                    <Button size="sm" variant="ghost" title={e.savedByMe ? "내 플리에 있음" : "내 플리로 가져오기"} disabled={save.isPending} onClick={() => handleSave(e)}>
-                      {e.savedByMe ? "✓" : "＋ 플리"}
-                    </Button>
-                  }
-                />
+                    }
+                    actions={
+                      <Button size="sm" variant="ghost" title="내 플리로 가져오기" disabled={save.isPending || e.tracks.length === 0} onClick={() => handleSave(e)}>
+                        ＋ 플리
+                      </Button>
+                    }
+                  />
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
     </div>

@@ -133,7 +133,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     // 한 걸음 나와 있었으면(이 곡이 중심이 아니면) 먼저 고리를 이 곡으로 옮긴다
     if (!isOnHere) enterNearby(centerMusicId, true);
     useTutorialStore.getState().complete("nearby");
-    openNeighborSong(id, centerMusicId);
+    openNeighborSong(id);
     selectMusic(id);
   };
 
@@ -179,7 +179,7 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
           **목록을 듣는 버튼**임을 말한다 — 껍데기는 앱의 그 동그란 재생 버튼 그대로다.
         */}
         <TransportButton label={`${NEARBY_COUNT}곡 순차 재생`} primary disabled={items.length === 0} onClick={handlePlayAll}>
-          <ListPlayIcon size={15} />
+          <ListPlayIcon size={16} />
         </TransportButton>
       </div>
       {/*

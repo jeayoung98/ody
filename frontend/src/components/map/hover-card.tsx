@@ -154,8 +154,8 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
         className="h-[54px] w-[54px] shrink-0 rounded-box-xs border border-line bg-cover bg-center max-tablet:h-10 max-tablet:w-10"
       />
       <span className="min-w-0 flex-1">
-        <p className="truncate text-[12.5px] font-semibold text-ink">{song.title}</p>
-        <p className="truncate text-[10.5px] text-ink-2">
+        <p className="truncate text-[14.5px] font-semibold text-ink">{song.title}</p>
+        <p className="truncate text-[13px] text-ink-2">
           {song.artist ?? "-"}
           {/*
             **재생 불가는 폰에서도 보여야 한다** (S15P21A405-417). 이 표시는 원래 재생수 줄에
@@ -182,7 +182,7 @@ export default function HoverCard({ engine, song, on, onDetail }: HoverCardProps
       {onDetail && (
         <span
           aria-hidden
-          className="shrink-0 rounded-pill border border-teal/40 bg-teal/15 px-2 py-1 text-[11.5px] font-semibold whitespace-nowrap text-teal"
+          className="shrink-0 rounded-pill border border-teal/40 bg-teal/15 px-2 py-1 text-[13.5px] font-semibold whitespace-nowrap text-teal"
         >
           상세 ›
         </span>

@@ -71,6 +71,7 @@ export default function ContestModal() {
             <>
               <ContestHeader contest={contest} />
               <UnderlineTabs items={CONTEST_TABS} value={tab} onChange={setTab} />
+              {/* 그리기 탭은 남은 높이를 받아 제 안에서 배치한다 (S15P21A405-665) — Box 본문은 flex 세로라 `flex-1` 이 먹는다 */}
               {tab === "sketch" && <SketchTab contest={contest} />}
               {tab === "gallery" && <GalleryTab contest={contest} />}
               {tab === "ranking" && <RankingTab contest={contest} />}

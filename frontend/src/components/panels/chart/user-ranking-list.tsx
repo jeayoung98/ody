@@ -20,7 +20,7 @@ export default function UserRankingList({ items, unit }: UserRankingListProps) {
   return (
     <>
       {items.map((u) => (
-        <UserRow key={u.email} prefix={u.rank} nickname={u.nickname} imageUrl={u.imageUrl} right={`${formatCount(u.score)} ${unit}`} onClick={() => openProfile(u.email)} />
+        <UserRow key={u.email} prefix={u.rank} nickname={u.nickname} imageUrl={u.imageUrl} right={`${formatCount(u.score)} ${unit}`} onClick={() => openProfile(u.email, { drill: true })} />
       ))}
     </>
   );

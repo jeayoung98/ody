@@ -42,7 +42,7 @@ export default function TestGuide({ onStart }: { onStart: () => void }) {
         <div className="relative mx-auto w-full max-w-[640px] flex flex-col gap-3">
           <span className="lbl text-azure">A405 · SSAFY 빅데이터 특화 프로젝트</span>
           <h1 className="m-0 font-display text-[clamp(1.6rem,5vw,2.1rem)] leading-[1.25] font-bold text-balance">ODY 사용자 테스트 가이드</h1>
-          <p className="m-0 max-w-[52ch] text-[13.5px] leading-[1.7] text-ink-2">
+          <p className="m-0 max-w-[52ch] text-[15.5px] leading-[1.7] text-ink-2">
             곡을 <b className="font-medium text-ink">소리가 닮은 정도</b>로 배치한 별자리 지도, ODY를 테스트해주셔서 감사합니다. 시작 전에 아래 내용만
             가볍게 읽어주세요.
           </p>
@@ -51,8 +51,8 @@ export default function TestGuide({ onStart }: { onStart: () => void }) {
 
       <main className="mx-auto flex w-full max-w-[640px] flex-col gap-3 px-6 pb-10">
         <section className="glass flex flex-col gap-2 rounded-box p-5">
-          <h2 className="m-0 font-display text-[15px] font-semibold">지금 화면에 대해 알아두면 좋을 것</h2>
-          <p className="m-0 text-[13px] leading-[1.7] text-ink-2">
+          <h2 className="m-0 font-display text-[17px] font-semibold">지금 화면에 대해 알아두면 좋을 것</h2>
+          <p className="m-0 text-[15px] leading-[1.7] text-ink-2">
             지금 버전은 <b className="font-medium text-ink">이번 테스트에 필요한 기능만</b> 켜져 있고, 그 범위 안에서는 정상적으로 동작합니다. 눌리지
             않거나 비어 있는 메뉴가 있어도 오류가 아니라 의도적으로 꺼둔 것이니 신경 쓰지 않으셔도 됩니다.
           </p>
@@ -60,7 +60,7 @@ export default function TestGuide({ onStart }: { onStart: () => void }) {
 
         <section className="glass flex flex-col gap-2 rounded-box p-5">
           <span className="lbl self-start rounded-pill border border-teal/35 bg-teal/[.12] px-2.5 py-1 text-teal">왜 하는 테스트인가</span>
-          <p className="m-0 text-[13px] leading-[1.7] text-ink-2">
+          <p className="m-0 text-[15px] leading-[1.7] text-ink-2">
             ODY는 곡을 <b className="font-medium text-ink">음향 특성 기반 유사도</b>로 지도 위에 배치합니다. 이번 테스트의 목적은 그{" "}
             <b className="font-medium text-ink">음악 데이터를 정제</b>하는 것입니다 — 계산상 &ldquo;닮았다&rdquo;고 나온 곡들이 실제로 들었을 때도 닮게
             느껴지는지, 사람 귀로 확인하는 단계입니다.
@@ -70,19 +70,19 @@ export default function TestGuide({ onStart }: { onStart: () => void }) {
         <section className="glass flex flex-col gap-3 rounded-box border-warn/35! p-5">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="lbl rounded-pill border border-warn/40 bg-warn/[.12] px-2.5 py-1 text-warn">필수</span>
-            <h2 className="m-0 font-display text-[15px] font-semibold">이것만은 꼭 — 설문 2개</h2>
+            <h2 className="m-0 font-display text-[17px] font-semibold">이것만은 꼭 — 설문 2개</h2>
           </div>
-          <p className="m-0 text-[13px] leading-[1.7] text-ink-2">
+          <p className="m-0 text-[15px] leading-[1.7] text-ink-2">
             테스트 중 아래 설문이 뜨면 <b className="font-medium text-ink">가장 먼저, 반드시</b> 응답해주세요. 이번 테스트에서 제일 중요한 부분입니다.
           </p>
           {SURVEYS.map((s) => (
             <div key={s.code} className="flex flex-col gap-1.5 border-t border-line pt-3.5">
               <div className="flex items-baseline gap-2.5">
-                <span className="num text-[10.5px] tracking-[0.06em] text-violet">{s.code}</span>
-                <h3 className="m-0 font-display text-[13.5px] font-semibold">{s.title}</h3>
+                <span className="num text-[13px] tracking-[0.06em] text-violet">{s.code}</span>
+                <h3 className="m-0 font-display text-[15.5px] font-semibold">{s.title}</h3>
               </div>
-              <p className="m-0 text-[13px] leading-[1.7] text-ink-2">{s.body}</p>
-              <ul className="m-0 flex list-disc flex-col gap-1 pl-[1.15em] text-[13px] leading-[1.7] text-ink-2">
+              <p className="m-0 text-[15px] leading-[1.7] text-ink-2">{s.body}</p>
+              <ul className="m-0 flex list-disc flex-col gap-1 pl-[1.15em] text-[15px] leading-[1.7] text-ink-2">
                 {s.asks.map((a) => (
                   <li key={a}>{a}</li>
                 ))}
@@ -94,17 +94,17 @@ export default function TestGuide({ onStart }: { onStart: () => void }) {
         <section className="glass flex flex-col gap-2 rounded-box p-5">
           <div className="flex flex-wrap items-center gap-2.5">
             <span className="lbl rounded-pill border border-line-2 bg-white/[.05] px-2.5 py-1 text-ink-2">선택</span>
-            <h2 className="m-0 font-display text-[15px] font-semibold">사용성 피드백</h2>
+            <h2 className="m-0 font-display text-[17px] font-semibold">사용성 피드백</h2>
           </div>
-          <p className="m-0 text-[13px] leading-[1.7] text-ink-2">
+          <p className="m-0 text-[15px] leading-[1.7] text-ink-2">
             화면이 헷갈리거나 더 나았으면 하는 부분이 있다면 알려주시면 좋지만, <b className="font-medium text-ink">필수는 아닙니다.</b> 있으시면{" "}
             <b className="font-medium text-ink">A405팀 누구에게나</b> 개인 DM으로 편하게 보내주세요.
           </p>
         </section>
 
         <section className="rounded-box border border-dashed border-line-2 bg-white/[.03] p-5">
-          <h2 className="m-0 mb-2.5 font-display text-[14px] font-semibold">정리하면</h2>
-          <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-[1.3em] text-[13px] leading-[1.7] text-ink-2">
+          <h2 className="m-0 mb-2.5 font-display text-[16px] font-semibold">정리하면</h2>
+          <ol className="m-0 flex list-decimal flex-col gap-1.5 pl-[1.3em] text-[15px] leading-[1.7] text-ink-2">
             <li>지금 켜진 기능만 사용 — 나머지는 의도적으로 꺼둔 것</li>
             <li>
               <b className="font-medium text-ink">여정 / 주변 탐색 설문</b> — 뜨면 무조건 응답
@@ -116,7 +116,7 @@ export default function TestGuide({ onStart }: { onStart: () => void }) {
         <Button variant="primary" className="mt-1 justify-center py-3!" onClick={onStart}>
           읽었어요 · 시작하기
         </Button>
-        <p className="m-0 text-center text-[11px] text-ink-4">다음 화면에서 지도 사용법을 짧게 안내해드려요.</p>
+        <p className="m-0 text-center text-[13px] text-ink-4">다음 화면에서 지도 사용법을 짧게 안내해드려요.</p>
       </main>
     </div>
   );

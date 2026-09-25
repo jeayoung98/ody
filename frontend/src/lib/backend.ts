@@ -142,9 +142,12 @@ async function backendFetch<T>(path: string, init?: RequestInit, opts?: { allowN
   return body.data as T;
 }
 
-/** 배포 백엔드 GET 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다 */
-export function backendGet<T>(path: string, init?: RequestInit): Promise<T> {
-  return backendFetch<T>(path, init);
+/**
+ * 배포 백엔드 GET 호출. 호출자 자격이 필요하면 `init.headers` 에 {@link callerAuth} 를 얹는다.
+ * `allowNullData` 는 "없음" 을 `data: null` 로 답하는 조회용이다 — 열린 회차가 없는 `/api/artwork/round/current` (S15P21A405-640)
+ */
+export function backendGet<T>(path: string, init?: RequestInit, opts?: { allowNullData?: boolean }): Promise<T> {
+  return backendFetch<T>(path, init, opts);
 }
 
 /**

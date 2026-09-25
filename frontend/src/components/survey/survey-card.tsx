@@ -87,8 +87,8 @@ function SurveySongRow({
 
   return (
     <div className="flex flex-col gap-1.5">
-      {/* `lbl` 유틸(9.5px 모노 대문자 + 자간)은 여기서 안 쓴다 — 한글이 읽히지 않는다 */}
-      <span className={`text-[12.5px] leading-none font-semibold ${highlight ? "text-violet" : "text-ink-3"}`}>{label}</span>
+      {/* `lbl` 유틸(11px 모노 대문자 + 자간)은 여기서 안 쓴다 — 한글이 읽히지 않는다 */}
+      <span className={`text-[14.5px] leading-none font-semibold ${highlight ? "text-violet" : "text-ink-3"}`}>{label}</span>
       <div className="flex items-center gap-3">
         <span
           aria-hidden
@@ -100,19 +100,19 @@ function SurveySongRow({
             className={
               highlight
                 ? "font-display text-[18px] leading-tight font-semibold break-keep text-ink"
-                : "text-[15px] leading-tight break-keep text-ink-2"
+                : "text-[17px] leading-tight break-keep text-ink-2"
             }
           >
             {song.title}
           </p>
-          <p className={`mt-1 truncate text-[13px] ${highlight ? "text-ink-2" : "text-ink-3"}`}>{song.artist ?? "Unknown"}</p>
+          <p className={`mt-1 truncate text-[15px] ${highlight ? "text-ink-2" : "text-ink-3"}`}>{song.artist ?? "Unknown"}</p>
         </div>
         <button
           type="button"
           onClick={() => preview(song.musicId)}
           disabled={unplayable}
           aria-label={`${song.title} 다시 듣기`}
-          className="flex shrink-0 items-center gap-1 rounded-pill border border-line px-2.5 py-1.5 text-[11.5px] text-ink-2 transition hover:border-violet hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-2"
+          className="flex shrink-0 items-center gap-1 rounded-pill border border-line px-2.5 py-1.5 text-[13.5px] text-ink-2 transition hover:border-violet hover:text-ink disabled:cursor-default disabled:opacity-40 disabled:hover:border-line disabled:hover:text-ink-2"
         >
           <ReplayIcon sounding={sounding} />
           {unplayable ? "재생 불가" : sounding ? "재생 중" : "다시 듣기"}
@@ -232,7 +232,7 @@ export default function SurveyCard() {
               </div>
               <div className="mt-1 flex items-center justify-between gap-2">
                 {/* 이유 없는 부정은 서버가 거부한다 — 고르기 전에는 제출을 막는다 */}
-                <span className="text-[12.5px] text-ink-3">이유를 하나 골라주세요</span>
+                <span className="text-[14.5px] text-ink-3">이유를 하나 골라주세요</span>
                 <Button variant="primary" size="md" disabled={state.reason == null || submission != null} onClick={() => send(false, state.reason)}>
                   제출
                 </Button>

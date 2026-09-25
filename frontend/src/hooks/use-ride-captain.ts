@@ -1,7 +1,9 @@
 "use client";
 
 import { useEffect } from "react";
-import { currentPositionMs, publishPanel, publishPlayback } from "@/lib/realtime/ride";
+import { currentPositionMs, publishPanel, publishPlayback, publishView } from "@/lib/realtime/ride";
+import { rideViewOf, sameRideView } from "@/lib/realtime/ride-view";
+import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 
@@ -48,6 +50,23 @@ export function useRideCaptain(): void {
       last = next;
       if (next == null) publishPanel(false);
       else publishPanel(true, next);
+    });
+  }, []);
+
+  /**
+   * 지도를 보는 모양 — 여정·플리 별자리·주변 탐색·기본 (BACKEND-NOTES §8, S15P21A405-653).
+   *
+   * 스토어의 세 값(`viewMode`·`constellationSource`·`nearbyCenterMusicId`)이 한 화면을 정하므로 그 셋을
+   * 한 값으로 접어(`rideViewOf`) **바뀌었을 때만** 보낸다. 별자리 목록만 걸리고 뷰가 꺼진 상태는
+   * 기본이다 — 라이더 화면에는 아무것도 안 떠 있다.
+   */
+  useEffect(() => {
+    let last = rideViewOf(useMapStore.getState());
+    return useMapStore.subscribe((s) => {
+      const next = rideViewOf(s);
+      if (sameRideView(next, last)) return;
+      last = next;
+      publishView(next);
     });
   }, []);
 }

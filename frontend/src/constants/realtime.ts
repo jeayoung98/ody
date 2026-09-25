@@ -6,19 +6,28 @@
  */
 
 /**
- * 소켓 오리진. 비면 지금 페이지에서 유추한다 — `http`→`ws`, `https`→`wss`.
+ * 배포 백엔드의 소켓 주소. `lib/backend.ts` 의 `BACKEND_ORIGIN` 기본값과 **같은 곳을 가리킨다** —
+ * 그쪽을 옮기면 여기도 같이 옮긴다. 거기는 서버 전용 모듈이라 가져다 쓸 수가 없어서 값을 두 번 적는다.
+ */
+const DEPLOYED_WS_ORIGIN = "wss://j15a405.p.ssafy.io";
+
+/**
+ * 소켓 오리진. 비면 **배포 백엔드**로 간다 (S15P21A405-638).
  *
- * 배포는 페이지와 백엔드가 같은 오리진이라 유추가 맞는다. **로컬은 다르다** — Next 가 3000,
- * 백엔드가 8080 이라 유추하면 3000 으로 붙어 연결이 안 된다. 그래서 로컬은 `.env.local` 에
- * `NEXT_PUBLIC_WS_ORIGIN=ws://localhost:8080` 을 넣어야 한다.
+ * 예전에는 비면 지금 페이지 주소에서 유추했다 (`http`→`ws`). 배포본은 페이지와 백엔드가 같은
+ * 오리진이라 그게 맞았는데, **로컬은 Next 가 3000 이라 `ws://localhost:3000` 이 되고 거긴
+ * STOMP 가 없다.** 그래서 `.env.local` 에 값을 넣은 사람만 실시간이 돌고, 안 넣은 사람은
+ * **자기도 남도 지도에 안 보이는** 상태로 개발했다 — presence 가 등록이 안 되니 따라가기도
+ * 422 로 떨어졌다. 실측으로 팀원 한 명이 접속해 있는데 서버 접속자가 15분간 0명이었다.
  *
- * 서버에서는 `location` 이 없으므로 빈 문자열이다. 소켓은 브라우저에서만 열리니 상관없다.
+ * 기본값을 백엔드로 두면 로컬·LAN·배포 어디서든 맞는다. 배포본에서는 이 주소가 곧 자기
+ * 자신이라 달라지는 것이 없다.
+ *
+ * `NEXT_PUBLIC_WS_ORIGIN` 은 **덮어쓰는 용도로 남긴다** — 로컬 백엔드(8080)를 보고 개발할 때
+ * `ws://localhost:8080` 을 넣는다.
  */
 export function wsOrigin(): string {
-  const configured = process.env.NEXT_PUBLIC_WS_ORIGIN;
-  if (configured) return configured;
-  if (typeof location === "undefined") return "";
-  return location.origin.replace(/^http/, "ws");
+  return process.env.NEXT_PUBLIC_WS_ORIGIN || DEPLOYED_WS_ORIGIN;
 }
 
 export const REALTIME = {
@@ -38,6 +47,8 @@ export const REALTIME = {
      */
     ridePlayback: "/app/ride/playback",
     ridePanel: "/app/ride/panel",
+    /** 인솔자가 지도를 보는 모양(기본·여정·플리·주변 탐색) — BACKEND-NOTES §8 (S15P21A405-591 · 653) */
+    rideView: "/app/ride/view",
   },
 
   /**
@@ -45,6 +56,12 @@ export const REALTIME = {
    * **마지막 위치는 반드시 나간다** — 안 그러면 동승자가 끌다 만 자리에 멈춘다.
    */
   rideSeekThrottleMs: 500,
+  /**
+   * `RIDE_TRACK` 을 받고 곡 상세(제목)를 **이만큼까지 기다린 뒤** 넘어간다 (S15P21A405-656). 상세 없이 넘어가면
+   * 플레이어바가 "Track 3242" 를 보이다 제목으로 바뀐다. 대개 캐시나 한 번의 조회라 수십~수백 ms 다.
+   * 넘기면 제목 없이 진행한다 — 곡을 안 트는 것보다 낫다
+   */
+  rideTrackTitleWaitMs: 1500,
   /** 한 인솔자를 따라갈 수 있는 최대 인원 (2차 명세 §10). 넘으면 `RIDE_FULL` 이다 */
   maxRiders: 20,
   /**
@@ -127,17 +144,35 @@ export const RADAR = {
    *
    * **겹침이 여기서 갈린다.** 최악은 거리가 전부 같아 열 명이 안쪽 고리에 나란히 서는 경우다.
    * 그때 이웃 간격은 `2·r·sin(π/10)` 이고, 이 값이 헬멧 지름보다 커야 한다 —
-   * `sizeMax` 44 를 넘기려면 반지름이 75px 이상이어야 해서 `0.50` 이 하한이다. 0.52 로 두어
+   * `sizeMax` 50 을 넘기려면 반지름이 81px 이상이어야 해서 `0.54` 가 하한이다. 0.58 로 두어
    * 4px 쯤 여유를 남긴다. 처음에 0.34 로 뒀다가 실제로 27px 간격이 나와 겹쳤다.
+   * (헬멧을 34~44 에서 38~50 으로 키우며 0.52 → 0.58 로 올렸다, S15P21A405-633)
    */
-  ringMin: 0.52,
+  ringMin: 0.58,
   /**
-   * 가장 먼 사람의 자리. `1 - sizeMax/(2·size/2)` = 0.853 을 넘으면 테두리에서 잘린다.
+   * 가장 먼 사람의 자리. `1 - sizeMax/(2·size/2)` = 0.833 을 넘으면 테두리에서 잘린다.
    */
-  ringMax: 0.84,
-  /** 헬멧 지름(px). 마주친 횟수가 0이거나 모두 같으면 전부 최소값이다 */
-  sizeMin: 34,
-  sizeMax: 44,
+  ringMax: 0.82,
+  /**
+   * 헬멧 지름(px). 마주친 횟수가 0이거나 모두 같으면 전부 최소값이다.
+   * 34~44 는 패널에서 작게 보여 38~50 으로 키웠다 (S15P21A405-633). 가운데 내 헬멧(`nearby-radar`)도 50 이다
+   */
+  sizeMin: 38,
+  sizeMax: 50,
   /** 최대 만남 횟수의 이 비율을 넘는 사람만 숨쉰다 */
   breatheFrom: 0.6,
+} as const;
+
+/**
+ * 따라가기 다시 잇기 (S15P21A405-615). 연결이 흔들려도 **내리지 않고** 다시 탑승을 시도한다 —
+ * 내리는 것은 마지막 수단이다.
+ */
+export const RIDE_RESUME = {
+  /**
+   * 재시도 간격(ms). 합이 45초쯤이다 — presence TTL 과 같은 창이라, 인솔자가 새로고침 중이면
+   * 이 안에 돌아온다. 그 뒤에도 안 되면 정말 없는 것으로 본다.
+   */
+  backoffMs: [3_000, 5_000, 8_000, 12_000, 17_000],
+  /** 기다려도 달라지지 않는 거부 사유 — 이건 바로 내린다. 나머지(연결·인솔자 자리 비움·상태 어긋남·네트워크)는 다시 해 본다 */
+  finalCodes: ["RIDE_SELF", "RIDE_CHAIN_FORBIDDEN", "RIDE_NOT_CAPTAIN", "RIDE_FULL"],
 } as const;

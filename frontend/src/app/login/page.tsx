@@ -9,14 +9,14 @@ import { ROUTES } from "@/constants";
 export default function LoginPage() {
   return (
     <GuestGate>
-      <AuthCard
-        title="다시 만나서 반가워요"
-        sub={
-          <>
-            로그인하면 <b className="font-semibold text-ink">내 좌표</b>와 저장한 <b className="font-semibold text-ink">여정</b>이 그대로 이어집니다.
-          </>
-        }
-      >
+      {/*
+        **설명 문구를 걷었다** (S15P21A405-655). 제목 아래 부제와 카드 맨 아래 두 줄
+        (이용약관 동의 고지 · 프로토타입 안내)을 뺀다 — 로그인하러 온 사람이 읽을 일이 없고,
+        카드만 길어져서 이메일 칸과 버튼으로 가는 시선을 흐렸다.
+
+        동의 고지를 뺀 것은 기획 판단이다. 되살려야 하면 여기에 다시 넣는다.
+      */}
+      <AuthCard title="다시 만나서 반가워요">
         <EmailLoginForm />
 
         <div className="my-5 flex items-center gap-3">
@@ -27,16 +27,19 @@ export default function LoginPage() {
 
         <GoogleLoginButton />
 
-        <p className="mt-6 border-t border-line pt-5 text-center text-[12px] text-ink-2">
+        <p className="mt-6 border-t border-line pt-5 text-center text-[14px] text-ink-2">
           계정이 없으신가요?{" "}
           <Link href={ROUTES.signup} className="font-semibold text-ink underline decoration-line-2 underline-offset-2 hover:decoration-ink">
             ODY 가입하기
           </Link>
         </p>
-        <p className="mt-3 text-center text-[10.5px] leading-[1.7] text-ink-4">
+        {/*
+          **동의 고지는 남긴다** (S15P21A405-655). 이건 안내가 아니라 동의를 받았다는 근거라
+          화면에서 없애는 것이 기획·법무 쪽 판단이다. 대신 **한 줄로 줄여** 자리를 덜 먹게 한다 —
+          읽히라고 두는 줄이 아니라 있어야 해서 두는 줄이다.
+        */}
+        <p className="mt-2.5 text-center text-[11px] leading-[1.5] text-ink-4 max-[428px]:text-[9.2px]">
           로그인하면 이용약관과 개인정보 처리방침에 동의하는 것으로 간주됩니다.
-          <br />
-          SSAFY 특화 프로젝트 프로토타입 · 실제 음원 재생은 지원하지 않습니다.
         </p>
       </AuthCard>
     </GuestGate>

@@ -1,5 +1,6 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, QUERY_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
 import { api } from "@/lib/api";
 
 /**
@@ -13,10 +14,12 @@ import { api } from "@/lib/api";
  */
 export function useUpdateNicknameMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (nickname: string) =>
       api<{ nickname: string }>(API_ENDPOINTS.user.nickname, { method: "PATCH", body: JSON.stringify({ nickname }) }),
-    onSuccess: () => {
+    onSuccess: (data) => {
+      showToast(CHANGED.nicknameChanged(data.nickname));
       qc.invalidateQueries({ queryKey: QUERY_KEYS.auth.me });
       qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all });
     },

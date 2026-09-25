@@ -1,23 +1,26 @@
 <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" width="64" height="64">
-  <!-- ODY 파비콘 — 지도 위 사람 표식과 같은 우주복 헬멧. 바이저는 보라(design-tokens violet #a67cff) -->
+  <!--
+    ODY 파비콘 — 지도의 우주선(draw-friends.ts drawShip)과 같은 로켓. 좌표는 R=40 기준 캔버스 값을
+    그대로 옮긴 것이고(코 -50, 꼬리 70, 창 중심 0), 참고 이미지처럼 40도 기울여 담았다.
+    색은 서비스 팔레트: 몸통 ink(#e9f1ff) 두 톤, 창 테 ink4(#3a4761), 유리 violet(#a67cff),
+    지느러미 teal(#4fe3ce), 꼬리 밴드 violet(#a67cff) — 밴드는 S15P21A405-641 에서 ink4 에서 바뀌었다.
+  -->
   <defs>
-    <radialGradient id="visor" cx="40%" cy="35%" r="70%">
-      <stop offset="0" stop-color="#d9c6ff"/>
-      <stop offset="0.45" stop-color="#a67cff"/>
-      <stop offset="1" stop-color="#4b2a9e"/>
-    </radialGradient>
-    <linearGradient id="shell" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#e6effc"/>
-      <stop offset="1" stop-color="#9fb3d6"/>
-    </linearGradient>
+    <path id="body" d="M 0 -50 C 26 -50 42 -20 42 6 C 42 32 30 54 18 60 L -18 60 C -30 54 -42 32 -42 6 C -42 -20 -26 -50 0 -50 Z"/>
+    <clipPath id="bodyClip"><use href="#body"/></clipPath>
   </defs>
-  <!-- 좌우 통신 포드 -->
-  <rect x="2" y="24" width="8" height="16" rx="3.5" fill="#c4d6f5"/>
-  <rect x="54" y="24" width="8" height="16" rx="3.5" fill="#c4d6f5"/>
-  <!-- 헬멧 껍질 -->
-  <circle cx="32" cy="32" r="27" fill="url(#shell)" stroke="#f3f7ff" stroke-width="2"/>
-  <!-- 바이저 -->
-  <circle cx="32" cy="33" r="19" fill="url(#visor)" stroke="#2a1a55" stroke-width="1.5"/>
-  <!-- 바이저 반사광 -->
-  <path d="M19 27a15 13 0 0 1 16-9" fill="none" stroke="#ffffff" stroke-opacity="0.75" stroke-width="2.4" stroke-linecap="round"/>
+  <g transform="translate(32 32) rotate(40) scale(0.36) translate(0 -10)">
+    <!-- 지느러미 -->
+    <path d="M -30 22 C -50 34 -58 50 -56 62 C -50 64 -36 60 -26 56 Z" fill="#4fe3ce"/>
+    <path d="M 30 22 C 50 34 58 50 56 62 C 50 64 36 60 26 56 Z" fill="#4fe3ce"/>
+    <!-- 몸통 두 톤 -->
+    <use href="#body" fill="#e9f1ff"/>
+    <rect x="0" y="-56" width="60" height="130" fill="#cfd9f7" clip-path="url(#bodyClip)"/>
+    <!-- 꼬리 밴드 -->
+    <path d="M -18 60 L 18 60 C 18 66 10 70 0 70 C -10 70 -18 66 -18 60 Z" fill="#a67cff"/>
+    <!-- 창 -->
+    <circle cx="0" cy="0" r="33.6" fill="#3a4761"/>
+    <circle cx="0" cy="0" r="28.8" fill="#a67cff"/>
+    <circle cx="-9" cy="-9" r="6.4" fill="#ffffff" fill-opacity="0.35"/>
+  </g>
 </svg>

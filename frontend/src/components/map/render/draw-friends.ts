@@ -1,3 +1,4 @@
+import { FRIEND_MARKER } from "@/constants";
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
 import type { MapEngine } from "../engine/map-engine";
@@ -68,69 +69,108 @@ export function drawHelmet(g: CanvasRenderingContext2D, px: number, py: number, 
 /**
  * 동승자가 있으면 헬멧이 우주선이 된다 (기수는 진행 방향).
  *
- * **곡선만으로 그린다** (S15P21A405-624). 예전에는 뾰족한 코와 직선 지느러미의 삼각 로켓이었는데 차갑고
- * 각져서 서비스 분위기와 안 맞았다. 달걀 몸통 · 둥근 지느러미 · 둥근 분사구 · 타원 불꽃으로
- * 바꿨다. 좌표계(코가 -y, `ang` 만큼 회전)와 크기 기준 `R`, 장르색 `rgb` 는 그대로다 — 부르는
- * 두 곳(인솔자·나)과 그 위에 얹는 바이저(`R * 0.66`) 자리가 안 바뀌어야 한다.
- * 파비콘(S15P21A405-623 후속)이 이 모양을 그대로 옮긴다.
+ * **평면 아이콘식 로켓** (S15P21A405-624). 둥근 코에서 꼬리로 좁아지는 물방울 몸통(두 톤),
+ * 큰 창, 뒤로 뻗은 둥근 지느러미 두 개, 꼬리 밴드, **꼬리 불꽃**. 색은 서비스 팔레트:
+ * 몸통 ink, 창 테 ink4, 유리 violet, 지느러미 teal, 꼬리 밴드 violet, 불꽃 teal.
+ *
+ * **불꽃을 되살렸다** (요청, 2026-09-25). 624 에서 뺀 적이 있는데, 그때 뺀 것은 **뾰족한 삼각
+ * 로켓에 달린 각진 불꽃**이라 차가워 보였기 때문이다. 지금 몸통은 둥근 물방울이라 같은 이유가
+ * 그대로 적용되지 않는다 — 모서리 없는 물방울 두 겹으로 그리고, 꼬리 밴드 밑에서 시작해
+ * 배와 이어지게 둔다. 배가 서 있는 동안에도 흔들려서 "가고 있다" 가 읽힌다.
+ *
+ * **파비콘(`src/app/icon.svg`)에는 안 넣는다.** 그쪽은 16px 로도 읽혀야 하는 정지 그림이라
+ * 꼬리에 뭘 더하면 뭉갠다. 몸통·지느러미·밴드까지만 같게 둔다.
+ *
+ * **지느러미는 누구 것이든 teal 이다** (S15P21A405-641). 예전에는 그 사람의 장르색을 따랐는데,
+ * 실데이터는 장르가 붙은 곡이 1% 뿐이라(`constants/map.ts` 의 `NO_GENRE_ID`) 거의 모든 배가
+ * 같은 무장르색이었다 — 구분이 되지도 않으면서 인자만 하나 더 받고 있었다. 장르색이 실제로
+ * 갈리는 자리는 헬멧(동승자 없는 사람)이고 그쪽은 그대로다.
+ *
+ * **창이 원점이다.** 부르는 쪽이 그 위에 `drawVisor(…, R * 0.72)` 로 사진을 얹으므로 창 중심이
+ * `(px, py)` 여야 한다. 그래서 몸통은 원점보다 아래로 더 길다(코 -1.25R, 꼬리 1.75R).
+ * 파비콘(`src/app/icon.svg`)이 이 좌표를 그대로 옮긴다 — 둘을 같이 고친다.
  */
-export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, rgb: readonly [number, number, number], ang: number, t: number, riders: number, thrust: number) {
+export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number) {
   g.save();
   g.translate(px, py);
   g.rotate(ang);
 
-  // 불꽃 — 뾰족한 삼각형 대신 **타원**. 동승자·추진이 많을수록 길어지고 살짝 흔들린다
-  const boost = (1 + Math.min(riders, 6) * 0.2) * (1 + thrust * 1.8);
-  const fl = R * (1.35 + Math.sin(t * 9 + px) * 0.16) * boost;
-  const fy = R * 1.08;
-  const gr = g.createLinearGradient(0, fy, 0, fy + fl);
-  gr.addColorStop(0, rgba(rgb, 0.95));
-  gr.addColorStop(0.45, rgba(rgb, 0.4));
-  gr.addColorStop(1, rgba(rgb, 0));
-  g.fillStyle = gr;
-  g.beginPath();
-  g.ellipse(0, fy + fl / 2, R * 0.42, fl / 2, 0, 0, 6.284);
-  g.fill();
-  // 불꽃 속심 — 더 밝고 짧은 타원 하나가 안에 겹친다
-  g.fillStyle = "rgba(255,255,255,.55)";
-  g.beginPath();
-  g.ellipse(0, fy + fl * 0.28, R * 0.2, fl * 0.28, 0, 0, 6.284);
-  g.fill();
+  /**
+   * 꼬리 불꽃. **제일 먼저 그린다** — 몸통·지느러미 뒤로 깔려야 꼬리에서 뿜는 것으로 보인다.
+   * 나중에 그리면 밴드 위를 덮어 배에 얹힌 딱지가 된다.
+   *
+   * 흔들림에 `px` 를 섞는 이유: 선단에 배가 여럿일 때 같은 위상으로 뛰면 한 몸처럼 보인다.
+   * 자리마다 위상이 달라야 각자 나아가는 것으로 읽힌다.
+   */
+  const flicker = 0.78 + 0.22 * Math.sin(t * 8.5 + px * 0.6);
+  const plume = (len: number, halfW: number, alpha: number) => {
+    g.fillStyle = rgba(TEAL, alpha);
+    g.beginPath();
+    g.moveTo(-halfW, R * 1.66);
+    // 모서리 없는 물방울 — 624 가 뺀 "각진 불꽃" 과 갈라지는 지점이다
+    g.bezierCurveTo(-halfW, R * 1.66 + len * 0.55, -halfW * 0.5, R * 1.66 + len, 0, R * 1.66 + len);
+    g.bezierCurveTo(halfW * 0.5, R * 1.66 + len, halfW, R * 1.66 + len * 0.55, halfW, R * 1.66);
+    g.closePath();
+    g.fill();
+  };
+  plume(R * 1.25 * flicker, R * 0.42, 0.38);
+  plume(R * 0.72 * flicker, R * 0.22, 0.85);
 
-  // 지느러미 — 양옆에 반쯤 묻힌 **둥근 알**. 몸통보다 먼저 그려 몸통이 안쪽을 덮는다
-  g.fillStyle = rgba(rgb, 0.85);
-  g.strokeStyle = "rgba(216,233,255,.7)";
-  g.lineWidth = 1.3;
+  // 지느러미 — 뒤로 뻗은 둥근 날. 몸통 뒤에 깔린다
+  g.fillStyle = rgba(TEAL, 1);
   for (const sx of [-1, 1]) {
     g.beginPath();
-    g.ellipse(sx * R * 1.0, R * 0.78, R * 0.46, R * 0.52, 0, 0, 6.284);
+    g.moveTo(sx * R * 0.75, R * 0.55);
+    g.bezierCurveTo(sx * R * 1.25, R * 0.85, sx * R * 1.45, R * 1.25, sx * R * 1.4, R * 1.55);
+    g.bezierCurveTo(sx * R * 1.25, R * 1.6, sx * R * 0.9, R * 1.5, sx * R * 0.65, R * 1.4);
+    g.closePath();
     g.fill();
-    g.stroke();
   }
 
-  // 몸통 — 위가 살짝 좁은 달걀. 직선이 없다
-  g.fillStyle = "rgba(16,24,44,.92)";
-  g.strokeStyle = "rgba(216,233,255,.85)";
-  g.lineWidth = 1.5;
+  // 몸통 — 둥근 코, 꼬리로 갈수록 좁아지는 물방울
+  const body = () => {
+    g.beginPath();
+    g.moveTo(0, -R * 1.25);
+    g.bezierCurveTo(R * 0.65, -R * 1.25, R * 1.05, -R * 0.5, R * 1.05, R * 0.15);
+    g.bezierCurveTo(R * 1.05, R * 0.8, R * 0.75, R * 1.35, R * 0.45, R * 1.5);
+    g.lineTo(-R * 0.45, R * 1.5);
+    g.bezierCurveTo(-R * 0.75, R * 1.35, -R * 1.05, R * 0.8, -R * 1.05, R * 0.15);
+    g.bezierCurveTo(-R * 1.05, -R * 0.5, -R * 0.65, -R * 1.25, 0, -R * 1.25);
+    g.closePath();
+  };
+  body();
+  g.fillStyle = "#e9f1ff";
+  g.fill();
+  // 오른쪽 절반 음영 — 평면 아이콘의 두 톤
+  g.save();
+  body();
+  g.clip();
+  g.fillStyle = "#cfd9f7";
+  g.fillRect(0, -R * 1.3, R * 1.2, R * 3);
+  g.restore();
+
+  // 꼬리 밴드(분사구). 창 테와 같은 ink4 였는데 몸통 밑에서 어둠에 묻혔다 — violet 으로 띄운다 (S15P21A405-641)
+  g.fillStyle = "#a67cff";
   g.beginPath();
-  g.moveTo(0, -R * 1.45);
-  g.bezierCurveTo(R * 1.1, -R * 1.45, R * 1.18, R * 0.3, R * 0.66, R * 1.02);
-  g.quadraticCurveTo(0, R * 1.28, -R * 0.66, R * 1.02);
-  g.bezierCurveTo(-R * 1.18, R * 0.3, -R * 1.1, -R * 1.45, 0, -R * 1.45);
+  g.moveTo(-R * 0.45, R * 1.5);
+  g.lineTo(R * 0.45, R * 1.5);
+  g.bezierCurveTo(R * 0.45, R * 1.65, R * 0.25, R * 1.75, 0, R * 1.75);
+  g.bezierCurveTo(-R * 0.25, R * 1.75, -R * 0.45, R * 1.65, -R * 0.45, R * 1.5);
   g.closePath();
   g.fill();
-  g.stroke();
 
-  // 분사구 — 꼬리에 붙은 둥근 알약
-  g.fillStyle = rgba(rgb, 0.7);
+  // 창 — 얇은 어두운 테와 보라 유리. 사진이 있으면 부르는 쪽이 유리 위에 덮는다 (R * 0.72)
+  g.fillStyle = "#3a4761";
   g.beginPath();
-  g.roundRect(-R * 0.36, R * 0.98, R * 0.72, R * 0.28, R * 0.14);
+  g.arc(0, 0, R * 0.84, 0, 6.284);
   g.fill();
-
-  // 코 반사광 — 둥근 표면임을 말해 주는 작은 점 하나
-  g.fillStyle = "rgba(255,255,255,.55)";
+  g.fillStyle = "#a67cff";
   g.beginPath();
-  g.ellipse(-R * 0.3, -R * 1.02, R * 0.13, R * 0.2, -0.5, 0, 6.284);
+  g.arc(0, 0, R * 0.72, 0, 6.284);
+  g.fill();
+  g.fillStyle = "rgba(255,255,255,.35)";
+  g.beginPath();
+  g.arc(-R * 0.22, -R * 0.22, R * 0.16, 0, 6.284);
   g.fill();
   g.restore();
 }
@@ -139,8 +179,14 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
 export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
-  const rr = R * 0.5;
-  const step = R * 1.62;
+  /**
+   * 동승자 프로필 크기·간격 (S15P21A405-642). 0.5·1.62 였다 — 내 우주선(R=13) 기준 반지름이
+   * 6.5px 라, 누가 몇 명 달렸는지는 보여도 **누구인지**는 안 보였다. 얼굴이 읽히는 크기로 올린다.
+   * 간격도 같이 벌린다 — 반지름만 키우면 지름이 간격을 채워 붙어 보인다.
+   * 0.58·1.78 → 0.68·1.92 (요청, 2026-09-25). 얼굴이 더 읽히게 한 번 더 올렸다.
+   */
+  const rr = R * 0.68;
+  const step = R * 1.92;
   const shown = Math.min(5, riders + 1);
   const extra = riders + 1 - shown;
   const at = (i: number): [number, number] => {
@@ -173,7 +219,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
       g.lineWidth = 1.6;
       g.stroke();
       g.fillStyle = "rgba(79,227,206,.95)";
-      g.font = `600 8.5px ${FONTS.mono}`;
+      g.font = `600 10px ${FONTS.mono}`;
       g.textAlign = "center";
       g.textBaseline = "middle";
       g.fillText("나", qx, qy + rr * 2.6);
@@ -262,14 +308,19 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
 
   g.textAlign = "center";
   g.textBaseline = "middle";
-  // 인솔자는 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는 우주선이 가려지지 않는다 (S15P21A405-625)
-  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader));
+  /**
+   * 그리는 순서 = 깊이 순서. **먼(작은) 표식부터, 가까운(큰) 표식이 위에** (S15P21A405-632) —
+   * 크기는 서 있는 별의 깊이를 따르는데(614) 순서가 이를 모르면 뒤쪽 작은 헬멧이 앞쪽 큰 헬멧을
+   * 덮어 원근이 뒤집힌다. 인솔자는 그 위 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는
+   * 우주선이 가려지지 않는다 (S15P21A405-625).
+   */
+  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader) || a.scale - b.scale);
   for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
     // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
-    const R = (isLeader ? 15 : 12.5) * fr.scale;
+    const R = (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;
@@ -281,9 +332,12 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     }
     if (ship) {
       const ang = fr.heading + Math.PI / 2;
-      if (isLeader) drawQueue(g, px, py, R, ang, t, u.riderCount);
-      drawShip(g, px, py, R, rgb, ang, t, riders, isLeader && e.follow?.mv ? 0.6 : 0);
-      drawVisor(g, px, py, R * 0.66, u);
+      // 배는 헬멧보다 크다 (S15P21A405-642). 접속 점·닉네임 자리는 헬멧 기준 `R` 을 그대로 쓴다
+      const SR = R * FRIEND_MARKER.shipScale;
+      if (isLeader) drawQueue(g, px, py, SR, ang, t, u.riderCount);
+      drawShip(g, px, py, SR, ang, t);
+      // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
+      drawVisor(g, px, py, SR * 0.72, u);
     } else {
       drawHelmet(g, px, py, R, rgb, isLeader);
       drawVisor(g, px, py, R, u);
@@ -310,7 +364,7 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       const bx = px - R * (ship ? 0.95 : 0.82);
       const by = py - R * (ship ? 0.95 : 0.82);
       const label = `+${more}`;
-      g.font = `600 9px ${FONTS.body}`;
+      g.font = `600 11px ${FONTS.body}`;
       // 자릿수가 늘면 알약이 옆으로 늘어난다. 동그라미로 두면 세 자리에서 글자가 삐져나온다
       const w = Math.max(15, g.measureText(label).width + 9);
       const h = 13;
@@ -325,9 +379,14 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       g.fillText(label, bx, by + 0.5);
     }
 
+    /**
+     * 닉네임은 **별 제목 줄보다 아래**에 둔다 (S15P21A405-618). 사람이 선 별에는 커버 제목
+     * (`py + 14~23 + 9`)이나 선택 링 제목(`py + rr + 15.5`)이 같은 자리에 오는데, 예전 `+9` 는
+     * 그 줄과 겹쳐 둘 다 읽히지 않았다. 헬멧 지름 하나만큼 더 내려 제목 줄 밑으로 보낸다.
+     */
     g.fillStyle = "rgba(233,241,255,.62)";
-    g.font = `500 9.5px ${FONTS.body}`;
-    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 9);
+    g.font = `500 ${FRIEND_MARKER.namePx}px ${FONTS.body}`;
+    g.fillText(u.nickname ?? "", px, py + R * (ship ? 2.2 : 1.75) + 22);
   }
   g.globalAlpha = 1;
 }

@@ -56,7 +56,12 @@ export default function SongPcChart({ rows }: { rows: PcRow[] }) {
     const on = (i: number, side: "left" | "right") => (side === "right" ? data[i].sd >= 0 : data[i].sd < 0);
     /** 이 곡의 쪽은 또렷하고 크게, 반대쪽은 작고 흐리게 */
     const tickColor = (side: "left" | "right") => (ctx: { index: number }) => (on(ctx.index, side) ? PALETTE.ink2 : PALETTE.ink4);
-    const tickFont = (side: "left" | "right") => (ctx: { index: number }) => ({ family: FONTS.body, size: on(ctx.index, side) ? 11 : 9.5 });
+    /**
+     * 11 / 9.5 였다 (S15P21A405-649). **캔버스라 631·637 의 글자 키우기가 안 닿았다** —
+     * 화면의 DOM 글자가 다 커진 뒤로 이 그림만 유난히 작아 보였다. 쏠린 쪽과 반대쪽의
+     * 크기 차이는 그대로 둔다 — 그게 "이 곡이 선 쪽" 을 말하는 장치다.
+     */
+    const tickFont = (side: "left" | "right") => (ctx: { index: number }) => ({ family: FONTS.body, size: on(ctx.index, side) ? 13 : 11.5 });
 
     const chart = new Chart(canvas, {
       type: "bar",
@@ -83,7 +88,7 @@ export default function SongPcChart({ rows }: { rows: PcRow[] }) {
             border: { display: false },
             // 0 선만 또렷하게 — 막대가 어디서 출발하는지가 이 그림의 기준이다
             grid: { color: (ctx) => (ctx.tick.value === 0 ? "rgba(255,255,255,.2)" : "rgba(255,255,255,.05)"), tickLength: 0 },
-            ticks: { stepSize: FULL_SD, color: PALETTE.ink4, font: { family: FONTS.mono, size: 9 }, padding: 3, callback: (v) => `${v}σ` },
+            ticks: { stepSize: FULL_SD, color: PALETTE.ink4, font: { family: FONTS.mono, size: 11 }, padding: 3, callback: (v) => `${v}σ` },
           },
           // 왼쪽 눈금 = 음수 쪽 말
           y: {
@@ -112,8 +117,8 @@ export default function SongPcChart({ rows }: { rows: PcRow[] }) {
             backgroundColor: "rgba(10,14,26,.92)",
             borderColor: "rgba(255,255,255,.13)",
             borderWidth: 1,
-            titleFont: { family: FONTS.body, size: 10.5 },
-            bodyFont: { family: FONTS.mono, size: 10 },
+            titleFont: { family: FONTS.body, size: 12.5 },
+            bodyFont: { family: FONTS.mono, size: 12 },
             padding: 8,
             callbacks: {
               title: (items) => {

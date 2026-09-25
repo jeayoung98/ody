@@ -2,15 +2,16 @@
 
 import { ArriveIcon, DepartIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
-import { PLAYBACK_BLOCKED } from "@/constants";
+import { RIDING_JOURNEY_BLOCKED, PLAYBACK_BLOCKED } from "@/constants";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import type { MusicDetail } from "@/types";
 
 /** 세그먼트 한 칸 — 둘이 한 덩어리라 `Button` 을 쓰지 않는다 (테두리가 두 겹이 된다) */
 const HALF =
-  "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[14px] transition-colors duration-fast not-disabled:hover:bg-white/[.07] disabled:cursor-not-allowed disabled:opacity-40";
+  "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[16px] transition-colors duration-fast not-disabled:hover:bg-white/[.07] disabled:cursor-not-allowed disabled:opacity-40";
 
 /**
  * 이 곡을 여정의 **출발점 / 도착점**으로 지정 (JOURNEY-01).
@@ -29,6 +30,12 @@ const HALF =
 export default function SongActions({ music }: { music: MusicDetail }) {
   const setStart = useJourneyStore((s) => s.setStart);
   const setEnd = useJourneyStore((s) => s.setEnd);
+  /**
+   * **여정 입구는 여기에도 있다** (S15P21A405-660). 레일·동작 줄만 잠그면 이 둘이 남는다 —
+   * 따라가는 동안에도 곡 상세는 열려 있기 때문이다(인솔자가 보는 곡). 누르면 `openComposer` 가
+   * 토스트로 막지만 그 **전에 출발·도착이 이미 스토어에 들어간다.** 아예 못 누르게 둔다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
   const openComposer = useOpenJourneyComposer();
   /** 왜 못 트는지 (SONG-04) — 판단은 `usePlayability` 한 곳에서 온다 */
   const { blocked } = usePlayability(music.id);
@@ -44,8 +51,9 @@ export default function SongActions({ music }: { music: MusicDetail }) {
       <div className="flex overflow-hidden rounded-box-sm border border-line bg-white/[.04]">
         <button
           type="button"
-          aria-label={dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 출발점으로 지정"}
-          disabled={dead}
+          aria-label={riding ? RIDING_JOURNEY_BLOCKED : dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 출발점으로 지정"}
+          title={riding ? RIDING_JOURNEY_BLOCKED : undefined}
+          disabled={dead || riding}
           className={HALF}
           onClick={() => {
             setStart(music.id);
@@ -57,8 +65,9 @@ export default function SongActions({ music }: { music: MusicDetail }) {
         <span aria-hidden className="w-px shrink-0 bg-line" />
         <button
           type="button"
-          aria-label={dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 도착점으로 지정"}
-          disabled={dead}
+          aria-label={riding ? RIDING_JOURNEY_BLOCKED : dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 도착점으로 지정"}
+          title={riding ? RIDING_JOURNEY_BLOCKED : undefined}
+          disabled={dead || riding}
           className={HALF}
           onClick={() => {
             setEnd(music.id);

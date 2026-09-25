@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends, drawQueue, drawShip } from "./draw-friends";
@@ -6,11 +6,13 @@ import { drawFriends, drawQueue, drawShip } from "./draw-friends";
 /**
  * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
  * 남의 우주선(12.5~15)과 같은 눈높이로 둔다 — 내 것만 크면 축척이 어긋나 보인다.
+ *
+ * **배율은 남의 배와 같은 것을 쓴다** (S15P21A405-642). 하나만 올리면 그 "같은 눈높이" 가
+ * 그대로 깨진다 — 배가 커지는 규칙은 `FRIEND_MARKER.shipScale` 한 곳에만 둔다.
  */
-const ME_SHIP_R = 13;
+const ME_SHIP_R = 13 * FRIEND_MARKER.shipScale;
 /** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
-const TEAL_RGB: readonly [number, number, number] = [79, 227, 206];
-import { coverFor, dustStars, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type SkyStar } from "./sprites";
+import { coverFor, dustStars, farFieldTile, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type FarFieldTile, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
 import { byCoverPriority, cellOf, gridFor, spreadOrder } from "./cover-spread";
 
@@ -125,9 +127,24 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
       const bg = stars[k];
       const px = ((((bg.u - ox) % 1) + 1) % 1) * (W + 64) - 32;
       const py = ((((bg.v - oy) % 1) + 1) % 1) * (H + 64) - 32;
-      const d = (1.3 + Math.pow(bg.m, 1.5) * 4.2) * sizeK;
+      const d = bg.d0 * sizeK;
       g.globalAlpha = (0.06 + bg.lum * 0.19) * (0.55 + 0.45 * Math.sin(t * (0.35 + (bg.i % 17) / 14) + bg.i)) * aK;
       g.drawImage(spr[bg.spr], px - d / 2, py - d / 2, d, d);
+    }
+  };
+  /**
+   * 구워 둔 별밭 한 장을 화면에 **감아 붙인다**. 타일이 별밭의 한 주기(W+64 × H+64)라
+   * 어긋난 만큼 밀어 2×2 로 깔면 이음매가 없다. 밝기는 여기서 한 번만 곱한다.
+   */
+  const tiled = (ox: number, oy: number, aK: number, tile: FarFieldTile) => {
+    if (aK <= 0) return;
+    g.globalAlpha = aK;
+    const sx = -((((ox % 1) + 1) % 1)) * tile.w;
+    const sy = -((((oy % 1) + 1) % 1)) * tile.h;
+    for (let i = 0; i < 2; i++) {
+      for (let j = 0; j < 2; j++) {
+        g.drawImage(tile.canvas, sx + i * tile.w - 32, sy + j * tile.h - 32, tile.w, tile.h);
+      }
     }
   };
   // 가장 먼 별밭은 카메라와 무관하다 — 아무리 밀어도 제자리인 것이 오히려 "아주 멀다"로 읽힌다
@@ -147,8 +164,13 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
     const camV = -(e.cam.cy * e.cam.s) / (H + 64);
     const par = LAYER_DEPTH.parallax;
     const A = LAYER_DEPTH.farFieldAlpha;
-    field(camU * par.mid + t * 0.0026 + 0.37, camV * par.mid - t * 0.0009 + 0.61, 0.92, dim * A * farK);
-    field(camU * par.far + t * 0.0013 + 0.71, camV * par.far - t * 0.0004 + 0.23, 0.8, dim * A * 0.82 * farK, sky, Math.round(sky.length * 0.7));
+    /**
+     * 시차 중간·원경 두 겹은 **구워 둔 타일을 감아 붙인다** (S15P21A405-499). 별마다 그리면
+     * 1,870 draw 인데 타일이면 8 blit 이다. 타일이 별밭 한 주기라 시차는 그대로고, 잃는 것은
+     * 이 두 겹의 반짝임뿐이다 — 자세한 저울질은 `farFieldTile` 주석에 있다.
+     */
+    tiled(camU * par.mid + t * 0.0026 + 0.37, camV * par.mid - t * 0.0009 + 0.61, dim * A * farK, farFieldTile("mid", W, H, 0.92, sky, sky.length));
+    tiled(camU * par.far + t * 0.0013 + 0.71, camV * par.far - t * 0.0004 + 0.23, dim * A * 0.82 * farK, farFieldTile("far", W, H, 0.8, sky, Math.round(sky.length * 0.7)));
     // 가장 가까운 별먼지 — 상주 별과 거의 같은 평면에서, 같은 크기대로 섞인다
     field(camU * par.near + 0.14, camV * par.near + 0.42, 1.4, dim * LAYER_DEPTH.dustAlpha * farK, dustStars());
   }
@@ -171,7 +193,9 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const A = out ? e.alphaOut : e.alpha;
   const W = e.W;
   const H = e.H;
-  const R = clamp(0.55 * e.cam.s, 60, Math.max(W, H) * 0.8);
+  // 기준 반지름. 0.55·60 이던 것을 0.75·80 으로 — 화면에서 구름이 자잘하게 흩어져 보였다 (S15P21A405-643).
+  // 퍼프 수·알파는 그대로다: lighter 합성이라 그것까지 올리면 겹치는 자리가 하얗게 뜬다
+  const R = clamp(0.75 * e.cam.s, 80, Math.max(W, H) * 0.8);
   g.globalCompositeOperation = "lighter";
   // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
   const step = Math.max(1, Math.floor(e.N / 22));
@@ -437,8 +461,15 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   g.globalAlpha = e.coverAlpha;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `500 9.5px ${FONTS.body}`;
-  for (const i of picked) {
+  g.font = `500 ${MAP_TITLE_PX.cover}px ${FONTS.body}`;
+  /**
+   * **먼 것부터, 가까운 것을 맨 위에** (S15P21A405-632). 크기는 깊이를 따르는데(614) 그리는
+   * 순서는 `picked`(우선순위) 순이라, 뒤쪽의 작은 커버가 앞쪽의 큰 커버를 덮어 원근이 뒤집혀
+   * 보였다. 화가 알고리즘대로 깊이 배율 오름차순으로 그린다 — `picked` 자체는 안 건드린다,
+   * 그 순서는 다음 프레임의 자리 유지에 쓰인다.
+   */
+  const paintOrder = [...picked].sort((a, b) => e.depthScale(a) - e.depthScale(b));
+  for (const i of paintOrder) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
     // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)
@@ -462,7 +493,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     g.lineWidth = 1;
     g.stroke();
     g.fillStyle = "rgba(233,241,255,.58)";
-    g.fillText(fitText(g, it.s.title, 88), it.px, it.py + S / 2 + 9);
+    g.fillText(fitText(g, it.s.title, 104), it.px, it.py + S / 2 + 10);
   }
   g.globalAlpha = 1;
 }
@@ -551,7 +582,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
    */
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 11px ${FONTS.body}`;
+  g.font = `600 12px ${FONTS.body}`;
   const H = 17;
   const gap = CONSTELLATION.labelGapPx;
   // 별 자리를 먼저 채워 둔다 — 남의 제목이 별을 덮으면 그 별이 안 보인다
@@ -718,23 +749,25 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
-    g.font = `500 10.5px ${FONTS.body}`;
-    const title = fitText(g, s.title, 110);
+    g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
+    const title = fitText(g, s.title, 126);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, x - tw / 2 - 6, y + 13, tw + 12, 17, 5);
+    roundRect(g, x - tw / 2 - 6, y + 13, tw + 12, 19, 5);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, x, y + 21.5);
+    g.fillText(title, x, y + 22.5);
     if (sub) {
-      g.font = `500 8.5px ${FONTS.mono}`;
+      // 10px 이었다 (S15P21A405-649). 제목만 커지고 이 줄은 그대로라 `#3 · 가수` 가 안 읽혔다.
+      // 베이스라인도 같이 내린다 — 글자가 커지면 제목 상자(y+13 부터 19) 에 머리가 닿는다
+      g.font = `500 12px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
-      g.fillText(sub, x, y + 34);
+      g.fillText(sub, x, y + 36);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
       g.globalAlpha = a * pulse;
-      g.font = `600 10px ${FONTS.body}`;
+      g.font = `600 11.5px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
       const label = "주변 보기 ›";
       const lw = g.measureText(label).width;
@@ -799,14 +832,14 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.lineWidth = 1;
   g.stroke();
   g.globalCompositeOperation = "source-over";
-  g.font = `600 12.5px ${FONTS.body}`;
+  g.font = `600 13.5px ${FONTS.body}`;
   const tw = g.measureText(song.title).width;
   g.fillStyle = MAP_COLORS.labelBg;
   roundRect(g, tx - tw / 2 - 7, ty + rr + 6, tw + 14, 19, 6);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
   g.fillText(song.title, tx, ty + rr + 15.5);
-  g.font = `500 9.5px ${FONTS.mono}`;
+  g.font = `500 11px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
   g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + 30);
 
@@ -895,7 +928,7 @@ function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number;
   // 라벨 — 화살촉 반대쪽에 붙여 겹치지 않게
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 9.5px ${FONTS.mono}`;
+  g.font = `600 11px ${FONTS.mono}`;
   g.fillStyle = c.core;
   g.fillText("나", x - dir.x * 13, y - dir.y * 13);
   g.restore();
@@ -946,7 +979,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
-    drawShip(g, px, py, ME_SHIP_R, TEAL_RGB, ang, e.time, e.myRiders, 0);
+    drawShip(g, px, py, ME_SHIP_R, ang, e.time);
     drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
     g.globalCompositeOperation = "source-over";
   } else {
@@ -956,7 +989,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   g.fillStyle = "rgba(79,227,206,.95)";
-  g.font = `600 10px ${FONTS.mono}`;
+  g.font = `600 11.5px ${FONTS.mono}`;
   // 고리 위에서는 별 아래에 제목·순위 라벨이 붙어 있으니 '나' 는 위로 올린다
   g.fillText("나", px, onRing ? py - 22 : py + 24);
 }
@@ -1037,10 +1070,10 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.textAlign = "center";
   g.textBaseline = "middle";
   const label = "이 영역에 없는 곡";
-  g.font = `600 9px ${FONTS.mono}`;
+  g.font = `600 11px ${FONTS.mono}`;
   const labelW = g.measureText(label).width;
-  g.font = `500 10.5px ${FONTS.body}`;
-  const title = fitText(g, s.title, 130);
+  g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
+  const title = fitText(g, s.title, 150);
   const tw = Math.max(labelW, g.measureText(title).width);
   const ly = labelDir > 0 ? cy + rr + 5 : cy - rr - 41;
   const lx = clamp(cx, f.x0 + tw / 2 + 12, f.x1 - tw / 2 - 12);
@@ -1049,7 +1082,7 @@ function drawGhost(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fill();
   g.fillStyle = "rgba(233,241,255,.82)";
   g.fillText(title, lx, ly + 9);
-  g.font = `600 9px ${FONTS.mono}`;
+  g.font = `600 11px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.8)";
   g.fillText(label, lx, ly + 25);
 }
@@ -1121,7 +1154,7 @@ function drawPressure(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fillStyle = color;
   g.textAlign = "center";
   g.textBaseline = "middle";
-  g.font = `600 13px ${FONTS.body}`;
+  g.font = `600 14px ${FONTS.body}`;
   g.fillText(label, f.cx, y);
   const bw = 160;
   g.fillStyle = "rgba(255,255,255,.12)";

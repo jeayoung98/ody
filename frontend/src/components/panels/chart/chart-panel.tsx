@@ -7,9 +7,10 @@ import ErrorMessage from "@/components/common/error-message";
 import Note from "@/components/common/note";
 import SectionTitle from "@/components/common/section-title";
 import SkeletonRows from "@/components/common/skeleton-rows";
-import Tabs from "@/components/common/tabs";
+import UnderlineTabs from "@/components/common/underline-tabs";
 import { CHART_PENDING, CHART_TYPES, type ChartType } from "@/constants";
 import { useWeeklyRankingQuery } from "@/hooks/queries/use-weekly-ranking-query";
+import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import UserRankingList from "./user-ranking-list";
 
@@ -34,8 +35,9 @@ export default function ChartPanel() {
   const range = data ? `${md(data.weekStart)} ~ ${md(new Date(new Date(data.weekEnd).getTime() - 86_400_000).toISOString())}` : null;
 
   return (
-    <Box title="차트" actions={<PanelCloseButton />}>
-      <Tabs items={TAB_ITEMS} value={type} onChange={setType} />
+    <Box lead={<PanelBackButton />} title="차트" actions={<PanelCloseButton />}>
+      {/* 곡 상세·마이페이지와 같은 밑줄 탭 (S15P21A405-663) */}
+      <UnderlineTabs items={TAB_ITEMS} value={type} onChange={setType} />
       <SectionTitle aside={!pending && range ? range : undefined}>{current.label}</SectionTitle>
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {pending ? (

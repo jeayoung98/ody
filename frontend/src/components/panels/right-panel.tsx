@@ -6,6 +6,7 @@ import { useDismissOnOutside } from "@/hooks/use-dismiss-on-outside";
 import { usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePanelSwipe } from "@/hooks/use-panel-swipe";
+import { useContestStore } from "@/stores/use-contest-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import ChartPanel from "./chart/chart-panel";
 import FeedPanel from "./feed/feed-panel";
@@ -47,7 +48,9 @@ export default function RightPanel() {
   const activePanel = usePanelStore((s) => s.activePanel);
   const snap = usePanelStore((s) => s.snap);
   /** 데스크톱은 1(접힘)·3(펼침) 두 자리만 쓴다 — 여는 자리인 2 도 거기서는 펼친 것이다 */
-  const collapsed = snap === 1;
+  /** 이벤트 모달이 떠 있는 동안은 접힌다 (S15P21A405-665) — 닫으면 원래 단으로 돌아온다. 스토어는 안 건드린다 */
+  const contestOpen = useContestStore((s) => s.open);
+  const collapsed = snap === 1 || contestOpen;
   const raiseSnap = usePanelStore((s) => s.raiseSnap);
   const lowerSnap = usePanelStore((s) => s.lowerSnap);
   const panelEnabled = usePanelEnabled();
@@ -142,7 +145,12 @@ export default function RightPanel() {
           가로 이동은 0 으로 되돌린다. 안 그러면 데스크톱 값(`calc(100% - 10px)`)이 남아
           시트가 오른쪽으로도 밀린다.
         */
-        collapsed ? "translate-x-[calc(100%_-_10px)] max-tablet:translate-x-0" : ""
+        /*
+          **이제 다 밀어 넣는다** (S15P21A405-664). 10px 남기던 몸통이 화면에서 부스러기로 보였다 — "여기
+          뭐가 있었다" 는 손잡이가 말한다(커지고 포인트색이 됐다). 여백(18)까지 더 밀어야 몸통이 화면 밖이다.
+          `main-screen.tsx` 의 접힘 가림 폭(`PEEK_OCCLUSION`)이 손잡이 폭만 남긴다 — 같이 고친다.
+        */
+        collapsed ? "translate-x-[calc(100%_+_18px)] max-tablet:translate-x-0" : ""
       } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
       /*
         **폰에서는 시트가 바닥까지 찬다** (S15P21A405-593). `Box` 는 내용만큼만 높아지는

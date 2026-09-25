@@ -78,11 +78,24 @@ export const QUERY_KEYS = {
     weekly: ["chart", "weekly"] as const,
   },
 
-  /** 별자리 콘테스트 (S15P21A405-602). 표·출품이 회차 정보와 목록 양쪽에 걸려 `all` 로 함께 무효화한다 */
+  /**
+   * 음악 취향 분석 (S15P21A405-630). **인자가 없다** — 백엔드가 토큰으로 사람을 정하므로
+   * 이 키가 가리키는 것은 언제나 "내 것" 하나다.
+   */
+  taste: {
+    analysis: ["taste", "analysis"] as const,
+  },
+
+  /**
+   * 별자리 콘테스트 (S15P21A405-602 · 640). 좋아요·출품이 회차(남은 표)·리더보드·내 작품 셋에 걸려
+   * `all` 로 함께 무효화한다. 회차 인자가 없다 — 백엔드가 열린 회차 하나만 다룬다
+   */
   contest: {
     all: ["contest"] as const,
     current: ["contest", "current"] as const,
-    entries: (contestId: number, sort: string) => ["contest", "entries", contestId, sort] as const,
+    entries: ["contest", "entries"] as const,
+    mine: ["contest", "mine"] as const,
+    templates: ["contest", "templates"] as const,
   },
   /**
    * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준

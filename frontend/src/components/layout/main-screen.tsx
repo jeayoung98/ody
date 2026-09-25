@@ -21,6 +21,8 @@ import GhostBanner from "@/components/map/ghost-banner";
 import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
 import { useRealtime } from "@/hooks/use-realtime";
+import { useHomeTravelPanel } from "@/hooks/use-home-travel-panel";
+import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
@@ -38,14 +40,15 @@ import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
  * 남아, 접었을 때 엔진이 19px 을 과하게 비우고 있었다. 세 군데에 같은 숫자를 손으로 적어 두면
  * 또 어긋난다.
  *
- * 접힘: 화면에 남는 몸통(여백 18 + 덜 민 10 = 28) + 핸들(17) = 45.
- *   `right-panel.tsx` 의 `translate-x-[calc(100%_-_10px)]` 와 `collapse-handle.tsx` 의 `W` 에서 온다.
+ * 접힘: 손잡이 폭(`collapse-handle.tsx` 의 `W`)만. 몸통은 화면 밖이다 (S15P21A405-664).
  * 펼침: 패널폭 + 여백(18) + 틈(16).
  */
 const PANEL_EDGE = 18;
-/** 접었을 때 화면 끝에 일부러 남기는 몸통 — `right-panel.tsx` 의 `calc(100% - 10px)` 의 10 */
-const PEEK_BODY = 10;
-const PEEK_OCCLUSION = PANEL_EDGE + PEEK_BODY + HANDLE_W;
+/**
+ * 접었을 때 화면 끝에 남는 것은 **손잡이뿐**이다 (S15P21A405-664). 예전에는 몸통 10px 을 일부러 남겼는데
+ * (`calc(100% - 10px)`) 부스러기로 보여 다 밀어 넣었다 — `right-panel.tsx` 의 `calc(100% + 18px)`.
+ */
+const PEEK_OCCLUSION = HANDLE_W;
 const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
 interface MainScreenProps {
@@ -71,6 +74,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 화면 전체에 소켓 하나만 있어야 해서 지도가 아니라 여기서 연다 — 지도는 언마운트될 수 있다.
    */
   useRealtime();
+  usePanelFollowsTrack();
+  useHomeTravelPanel();
   const panelEnabled = usePanelEnabled();
   const panelOpen = activePanel != null && panelEnabled[activePanel];
   /**
@@ -138,8 +143,9 @@ export default function MainScreen({ overlay }: MainScreenProps) {
       <MinimapPanel />
       <BottomBar />
       {overlay}
-      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다 */}
-      <PlayHint />
+      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다.
+          **지금은 스위치로 내려 둔 상태다** (S15P21A405-636) — `FEATURES.playHint` 참고 */}
+      {features.playHint && <PlayHint />}
       {/* 이벤트(별자리 콘테스트) — 우측 패널이 아니라 화면 대부분을 덮는 모달 (S15P21A405-602). body 에 포털로 그린다 */}
       {features.contest && <ContestModal />}
       <Toast />

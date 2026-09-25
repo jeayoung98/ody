@@ -2,7 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
 import { isBot } from "@/lib/bots/roster";
 import { isFollowingBot, useBotStore } from "@/stores/use-bot-store";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, CHANGED, QUERY_KEYS } from "@/constants";
+import { useToastStore } from "@/stores/use-toast-store";
 import type { FollowResponse } from "@/types";
 
 /**
@@ -23,11 +24,15 @@ import type { FollowResponse } from "@/types";
  */
 export function useFollowMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (followeeEmail: string) =>
       // 봇은 서버에 없는 계정이라 구독 관계를 보낼 곳이 없다. 이 브라우저에만 남는다 (S15P21A405-536)
       isBot(followeeEmail) ? followBotLocally(followeeEmail, true) : api<FollowResponse>(API_ENDPOINTS.user.followInsert, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all }),
+    onSuccess: () => {
+      showToast(CHANGED.followed);
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all });
+    },
   });
 }
 
@@ -46,9 +51,13 @@ function followBotLocally(email: string, want: boolean): Promise<FollowResponse>
 /** 구독 해제. **팔로우 중이 아니어도 200** 이라 화면이 상태를 먼저 확인할 필요가 없다 */
 export function useUnfollowMutation() {
   const qc = useQueryClient();
+  const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (followeeEmail: string) =>
       isBot(followeeEmail) ? followBotLocally(followeeEmail, false) : api<FollowResponse>(API_ENDPOINTS.user.followDelete, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all }),
+    onSuccess: () => {
+      showToast(CHANGED.unfollowed);
+      qc.invalidateQueries({ queryKey: QUERY_KEYS.user.all });
+    },
   });
 }

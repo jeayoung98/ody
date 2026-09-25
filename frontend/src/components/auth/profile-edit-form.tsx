@@ -18,12 +18,16 @@ import NicknameCheckField from "./nickname-check-field";
  * 내 정보가 올 때까지 기다렸다가 그리는 이유: 입력칸의 첫 값이 지금 값이어야 하는데,
  * `useState` 초기값은 첫 렌더 때 한 번만 읽힌다. 안쪽 컴포넌트를 `key` 로 다시 만들어
  * 값이 도착한 시점에 초기화한다.
+ *
+ * **끝났을 때 어디로 갈지는 부르는 쪽이 정한다** (S15P21A405-672). `/profile` 페이지로
+ * 들어왔으면 지도로 돌려보내야 하지만, 팝업(`profile-edit-dialog`)으로 열렸으면 팝업만
+ * 닫아야 한다 — 거기서 라우팅을 하면 지도와 플레이어가 통째로 다시 서고 듣던 곡이 끊긴다.
  */
-export default function ProfileEditForm() {
+export default function ProfileEditForm({ onDone }: { onDone?: () => void }) {
   const { data: me, isPending } = useMeQuery();
   if (isPending) return <EditSkeleton />;
-  if (!me) return <p className="text-center text-[12px] text-bad">내 정보를 불러오지 못했어요.</p>;
-  return <Fields key={me.email} me={me} />;
+  if (!me) return <p className="text-center text-[14px] text-bad">내 정보를 불러오지 못했어요.</p>;
+  return <Fields key={me.email} me={me} onDone={onDone} />;
 }
 
 /** 내 정보가 올 때까지의 자리 (S15P21A405-503) — 사진 · 닉네임 칸 · 버튼 한 쌍 */
@@ -51,8 +55,10 @@ function EditSkeleton() {
   );
 }
 
-function Fields({ me }: { me: User }) {
+function Fields({ me, onDone }: { me: User; onDone?: () => void }) {
   const router = useRouter();
+  /** 팝업이면 닫기만, 페이지면 지도로 — 기본값이 예전 동작이다 */
+  const done = onDone ?? (() => router.replace(ROUTES.home));
   const saveNickname = useUpdateNicknameMutation();
   const saveImage = useUpdateProfileImageMutation();
 
@@ -74,7 +80,7 @@ function Fields({ me }: { me: User }) {
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     // 아무것도 안 바꿨으면 그냥 돌아간다 — 빈 요청을 보내면 백엔드가 400 으로 답한다
-    if (!dirty) return router.replace(ROUTES.home);
+    if (!dirty) return done();
     if (nicknameChanged && !nicknameOk) return;
 
     try {
@@ -82,7 +88,7 @@ function Fields({ me }: { me: User }) {
       // 닉네임이 중복이라 막혔는데 사진만 바뀌어 있으면 무엇이 저장됐는지 알 수 없다
       if (nicknameChanged) await saveNickname.mutateAsync(nickname.trim());
       if (file) await saveImage.mutateAsync(file);
-      router.replace(ROUTES.home);
+      done();
     } catch {
       // 오류 문구는 아래에서 보여준다
     }
@@ -92,7 +98,7 @@ function Fields({ me }: { me: User }) {
     <form onSubmit={submit} noValidate className="flex flex-col gap-4">
       <div className="flex flex-col items-center gap-2">
         <Avatar src={preview ?? me.imageUrl} name={nickname || me.name} size={64} />
-        <button type="button" onClick={() => pickFile.current?.click()} className="text-[11.5px] text-ink-2 underline underline-offset-2 hover:text-ink-1">
+        <button type="button" onClick={() => pickFile.current?.click()} className="text-[13.5px] text-ink-2 underline underline-offset-2 hover:text-ink-1">
           사진 바꾸기
         </button>
         <input
@@ -102,25 +108,25 @@ function Fields({ me }: { me: User }) {
           className="hidden"
           onChange={(e) => setFile(e.target.files?.[0] ?? null)}
         />
-        <p className="text-[11px] text-ink-3">{file ? `${file.name} — 저장하면 올라가요` : "5MB 까지, 이미지 파일만 올릴 수 있어요"}</p>
+        <p className="text-[13px] text-ink-3">{file ? `${file.name} — 저장하면 올라가요` : "5MB 까지, 이미지 파일만 올릴 수 있어요"}</p>
       </div>
 
       <NicknameCheckField value={nickname} onChange={setNickname} onStatus={useCallback((v: boolean) => setNicknameOk(v), [])} current={me.nickname} />
 
-      {error && <p className="text-[11.5px] text-bad">{error.message}</p>}
+      {error && <p className="text-[13.5px] text-bad">{error.message}</p>}
 
       <div className="flex gap-2">
         <button
           type="button"
-          onClick={() => router.replace(ROUTES.home)}
-          className="flex-1 rounded-pill border border-line py-3 text-[13px] text-ink-2 transition-colors hover:border-line-2"
+          onClick={done}
+          className="flex-1 rounded-pill border border-line py-3 text-[15px] text-ink-2 transition-colors hover:border-line-2"
         >
           취소
         </button>
         <button
           type="submit"
           disabled={pending || (nicknameChanged && !nicknameOk)}
-          className="grad-bg flex-[1.4] rounded-pill py-3 text-[13.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
+          className="grad-bg flex-[1.4] rounded-pill py-3 text-[15.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
         >
           {pending ? "저장 중…" : dirty ? "저장하기" : "그대로 두기"}
         </button>

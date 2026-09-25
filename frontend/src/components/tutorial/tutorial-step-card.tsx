@@ -47,11 +47,11 @@ export default function TutorialStepCard({ index, total, title, description, onC
           <CloseIcon />
         </IconButton>
       </div>
-      <h3 className="m-0 font-display text-[16.5px] font-semibold text-balance">{title}</h3>
-      <p className="m-0 text-[12.5px] leading-[1.62] text-ink-2">{description}</p>
+      <h3 className="m-0 font-display text-[17.5px] font-semibold text-balance">{title}</h3>
+      <p className="m-0 text-[14.5px] leading-[1.62] text-ink-2">{description}</p>
       <div className="mt-0.5 flex items-center gap-2">
         {/* 건너뛰기는 눈에 띄지 않게 */}
-        <button type="button" onClick={onSkip} className="text-[11px] text-ink-4 opacity-60 hover:text-ink hover:opacity-100">
+        <button type="button" onClick={onSkip} className="text-[13px] text-ink-4 opacity-60 hover:text-ink hover:opacity-100">
           건너뛰기
         </button>
         <span className="flex-1" />

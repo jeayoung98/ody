@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef } from "react";
 import { GOOGLE_CLIENT_ID, ROUTES } from "@/constants";
 import { useGoogleLoginMutation } from "@/hooks/mutations/use-google-login-mutation";
+import GoogleGlyph from "./google-glyph";
 
 /**
  * Google Identity Services 중 우리가 쓰는 부분만 선언한다 (@types 패키지를 새로 넣지 않는다).
@@ -39,8 +40,7 @@ const CLIENT_ID = GOOGLE_CLIENT_ID;
  * 나란히 두면 아래 것만 낮아 보인다.
  *
  * **확대하지 않는다.** 처음에 `scale` 로 키웠더니 **글씨까지 같이 커졌다** — 맞춰야 하는 건
- * 상자 높이지 글자가 아니다. 대신 상자를 그 높이로 세우고 버튼을 가운데 놓는다. 상자 바탕이
- * 구글 버튼과 같은 흰색이라 남는 7px 은 이어져 보인다.
+ * 상자 높이지 글자가 아니다. 지금은 보이는 버튼을 우리가 그리므로 이 높이를 그대로 쓴다.
  *
  * 로그인 버튼 쪽 글자 크기나 여백을 바꾸면 **여기도 같이 바꾼다.** 두 값이 따로 놀면 다시
  * 높이가 어긋난다.
@@ -56,7 +56,7 @@ const MATCH_HEIGHT = 47.25;
 export default function GoogleLoginButton() {
   const router = useRouter();
   const { mutate, isError, error } = useGoogleLoginMutation();
-  /** 구글이 버튼을 그리는 자리. 버튼을 꼭 감싸고 알약으로 깎여 있다 (S15P21A405-652) */
+  /** 구글이 진짜 버튼을 그리는 자리. 투명하게 덮여 있다 (S15P21A405-652) */
   const slot = useRef<HTMLDivElement>(null);
   /** 폭을 재는 자리 — 카드 폭 전체를 차지한다. 그 값을 구글에 넘긴다 (S15P21A405-575) */
   const room = useRef<HTMLDivElement>(null);
@@ -84,8 +84,7 @@ export default function GoogleLoginButton() {
      *
      * 구글이 받는 상한이 400 이고 너무 좁으면 글자가 잘리므로 **200~400 으로 가둔다.**
      */
-    // 폭은 **바깥 상자**에서 잰다 (S15P21A405-652) — `slot` 은 이제 버튼을 꼭 감싸는 상자라
-    // 제 폭이 곧 버튼 폭이다. 거기서 재면 한 번 그려진 뒤로는 그 값에 갇힌다
+    // 폭은 **바깥 상자**에서 잰다 (S15P21A405-652). `slot` 은 덮개라 제 폭이 곧 버튼 폭이다
     const box = room.current ?? slot.current;
     const available = box.clientWidth || box.getBoundingClientRect().width;
     const width = Math.round(Math.min(400, Math.max(200, available)));
@@ -93,11 +92,7 @@ export default function GoogleLoginButton() {
 
     window.google.accounts.id.renderButton(slot.current, {
       type: "standard",
-      /**
-       * **흰 버튼이 원래 디자인이다** (S15P21A405-652). S15P21A405-644 에서 `filled_black` 으로
-       * 바꿨던 것을 되돌린다 — 문제는 버튼 색이 아니라 **알약 밖으로 비어져 나온 흰 모서리**였고,
-       * 그건 아래 `rounded-pill` 로 잘라낸다.
-       */
+      // 눈에 안 보이므로 테마는 무엇이든 상관없다. 덮개가 어긋났을 때 알아보기 쉬우라고 흰 것을 둔다
       theme: "outline",
       size: "large",
       shape: "pill",
@@ -116,8 +111,7 @@ export default function GoogleLoginButton() {
    * 그때마다 구글 스크립트를 다시 태우면 버튼이 깜빡인다.
    */
   useEffect(() => {
-    // **바깥 상자를 본다** (S15P21A405-652). `slot` 은 버튼을 꼭 감싸므로 제 폭이 안 변한다 —
-    // 거기 달면 화면이 좁아져도 안 알아차린다
+    // **바깥 상자를 본다** (S15P21A405-652). `slot` 은 덮개라 제 폭이 안 변해서 화면 변화를 못 잡는다
     const el = room.current;
     if (!el) return;
     const ro = new ResizeObserver(() => {
@@ -142,27 +136,29 @@ export default function GoogleLoginButton() {
     <>
       <Script src="https://accounts.google.com/gsi/client" strategy="afterInteractive" onReady={renderGoogleButton} />
       {/*
-        두 겹이다 (S15P21A405-652).
+        **보이는 버튼은 우리가 그리고, 구글 버튼은 투명하게 위에 덮는다** (S15P21A405-652).
 
-        바깥은 **폭을 재는 자리**다. `w-full` 이라야 잰 값이 카드 폭과 같고, 그 값을 구글에
-        넘겨야 좁은 화면에서 버튼이 카드 밖으로 안 넘친다 (S15P21A405-575).
+        구글이 그려 주는 버튼으로는 셋을 동시에 만족시킬 수 없었다 — 흰 바탕 · 로그인 버튼과
+        같은 높이 · 테두리 없음. `outline` 은 흰 바탕에 **테두리가 한 세트**라, 우리 상자를
+        더 높게 잡으면 그 테두리가 안쪽에 한 겹 더 그려진 링으로 보인다. 높이를 맞추려고
+        확대하면 글씨까지 커진다. 채운 테마는 테두리가 없는 대신 흰색이 아니다.
 
-        안쪽은 **구글이 그리는 자리**다. 구글은 알약 버튼을 **사각 iframe** 안에 그리는데 그
-        iframe 배경이 흰색이라, 알약 밖 네 모서리에 흰색이 남아 어두운 카드 위에서 흰 판처럼
-        보였다. iframe 을 꼭 감싸는 상자(`w-fit`)를 알약으로 깎아 **그 모서리를 잘라낸다.**
-        버튼 안쪽은 구글 것이라 못 건드리지만, 바깥 모양은 우리가 정할 수 있다.
+        그래서 모양은 우리가 만들고, **누르는 것은 여전히 구글 버튼**이다. idToken 은 구글이
+        그린 버튼에서만 나오므로 그건 없앨 수 없다 — 대신 `opacity-0` 으로 덮어 둔다.
+
+        **깨질 수 있는 구조다.** 구글이 버튼 마크업을 바꾸면 덮개가 어긋날 수 있고, 브랜딩
+        가이드도 "구글이 그린 버튼을 쓰라" 고 한다. 그 값을 알고 고른 선택이다.
       */}
-      <div ref={room} className="w-full">
-        {/*
-          상자를 로그인 버튼 높이로 세우고 구글 버튼(40px)을 가운데 놓는다. 바탕이 구글 버튼과
-          같은 흰색이라 위아래로 남는 7px 이 이어져 보이고, 모서리는 여기서 알약으로 잘린다.
-        */}
+      <div ref={room} className="relative w-full" style={{ height: MATCH_HEIGHT }}>
         <div
-          className="mx-auto flex w-fit items-center justify-center overflow-hidden rounded-pill bg-white"
-          style={{ height: MATCH_HEIGHT }}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 flex items-center justify-center gap-2.5 rounded-pill bg-white"
         >
-          <div ref={slot} />
+          <GoogleGlyph size={18} />
+          <span className="text-[15px] font-medium text-[#1f1f1f]">Google 계정으로 계속하기</span>
         </div>
+        {/* 진짜 버튼. 가운데 정렬해 두면 40px 짜리가 이 상자를 거의 다 덮는다 */}
+        <div ref={slot} className="absolute inset-0 flex items-center justify-center opacity-0" />
       </div>
       {isError && <p className="mt-2 text-center text-[14.5px] leading-[1.62] text-ink-2">{(error as Error).message}</p>}
     </>

@@ -6,12 +6,12 @@ import { API_ENDPOINTS, NO_GENRE_ID, QUERY_KEYS, REALTIME, RIDE_ENDED_BY_DISBAND
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { useRideMutation, type RideTarget } from "@/hooks/mutations/use-ride-mutation";
-import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query";
 import { api } from "@/lib/api";
 import { musicToMapPoint } from "@/lib/map-point";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
 import { readStorage } from "@/lib/storage";
 import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
+import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { cancelResume, resumeRide } from "@/lib/realtime/ride-resume";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -71,7 +71,8 @@ export function useRideSession(): void {
        * 제목 없이 진행한다. 기다리는 사이 더 새 곡이 오면 먼저 것은 버린다 — 옛 곡을 뒤늦게 틀면 안 된다.
        */
       const seq = ++trackSeq;
-      const detail = qc.fetchQuery(musicDetailQueryOptions(p.musicId)).catch(() => undefined);
+      // 제목과 함께 **좌표도 갖춘다** (S15P21A405-674) — 상주 집합 밖의 곡이면 우주선이 날아갈 자리가 없었다
+      const detail = ensureSongPoint(qc, p.musicId);
       const deadline = new Promise<void>((resolve) => setTimeout(resolve, REALTIME.rideTrackTitleWaitMs));
       void Promise.race([detail, deadline]).then(() => {
         if (seq !== trackSeq) return;

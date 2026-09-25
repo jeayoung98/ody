@@ -144,6 +144,8 @@ export default function MapView({ occlusion }: MapViewProps) {
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
   const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
   const leaderViewingMusicId = useFollowStore((s) => s.leaderViewingMusicId);
+  // 인솔자 곡 좌표가 뒤늦게 편입되면 다시 건다 — 첫 시도는 `startFollow` 가 `index.has` 에서 빠져나갔다 (S15P21A405-674)
+  const leaderPointRevision = useFollowStore((s) => s.pointRevision);
   /**
    * 나를 따라오는 인원 (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
    * 엔진은 스토어를 모르므로 여기서 넣어 준다.
@@ -382,7 +384,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       },
       true,
     );
-  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, layer]);
+  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, leaderPointRevision, layer]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {

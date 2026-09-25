@@ -10,6 +10,7 @@ import { botLiveOf, useBotStore } from "@/stores/use-bot-store";
 import { joinAndWait } from "@/hooks/use-presence-join";
 import { endRide, playFrom } from "@/lib/realtime/ride";
 import { canRideOptimistically } from "@/lib/realtime/ride-optimistic";
+import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { isConnected } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -55,8 +56,9 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
        * 던지고 바로 REST 를 불러서, 서버가 join 을 처리하기 전에 요청이 닿으면 그대로 422 였다.
        */
       await joinAndWait();
+      let r: RideResponse;
       try {
-        return await mount(target.email);
+        r = await mount(target.email);
       } catch (e) {
         if (!(e instanceof ApiError) || e.code !== "PRESENCE_ERROR") throw e;
         /**
@@ -66,8 +68,15 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
          * 소켓을 다시 연다. 이 두 번째 기다림이 그 새 연결의 join 응답을 받아 낸다.
          */
         await joinAndWait();
-        return await mount(target.email);
+        r = await mount(target.email);
       }
+      /**
+       * 인솔자 곡의 좌표를 **응답을 넘기기 전에** 갖춘다 (S15P21A405-674). `onSuccess` 의 `rideToLayer`·`setMyMusicId`
+       * 는 그 곡이 지도에 있어야 움직인다 — 없으면 겹도 못 옮기고 우주선도 안 떴다. 상세는 대개 캐시라 즉시고,
+       * 못 구하면 예전처럼 간다
+       */
+      await ensureSongPoint(qc, r.musicId);
+      return r;
     },
 
     /**
@@ -99,6 +108,19 @@ export function useRideMutation({ silent = false }: { silent?: boolean } = {}) {
       if (target.musicId != null) {
         map.setMyMusicId(target.musicId);
         getMapEngine()?.rideTo(target.musicId);
+        /**
+         * 인솔자 곡이 지도에 없으면 우주선이 안 뜬다 — `map-view` 의 `startFollow` 가 `index.has` 에서 빠져나간다.
+         * 좌표를 편입하고 효과를 한 번 더 돌린다 (S15P21A405-674). 그 사이 사람이 바뀌었으면 건드리지 않는다
+         */
+        const musicId = target.musicId;
+        if (!getMapEngine()?.pointOf(musicId)) {
+          void ensureSongPoint(qc, musicId).then((ok) => {
+            const ride = useFollowStore.getState();
+            if (!ok || ride.leaderEmail !== target.email) return;
+            useMapStore.getState().setMyMusicId(musicId);
+            ride.markPointAdopted();
+          });
+        }
       }
       return before;
     },

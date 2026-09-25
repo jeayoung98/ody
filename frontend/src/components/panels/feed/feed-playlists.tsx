@@ -1,5 +1,6 @@
 "use client";
 
+import { useDrill } from "@/hooks/use-drill";
 import EmptyState from "@/components/common/empty-state";
 import IconButton from "@/components/common/icon-button";
 import { CloseIcon } from "@/components/common/icons";
@@ -8,7 +9,6 @@ import SkeletonRows from "@/components/common/skeleton-rows";
 import { useDeletePlaylistMutation } from "@/hooks/mutations/use-delete-playlist-mutation";
 import { useLikedPlaylistsQuery } from "@/hooks/queries/use-liked-playlists-query";
 import { useMyPlaylistsQuery } from "@/hooks/queries/use-my-playlists-query";
-import { usePanelStore } from "@/stores/use-panel-store";
 import CreatePlaylistForm from "../playlist/create-playlist-form";
 
 interface FeedPlaylistsProps {
@@ -48,7 +48,8 @@ export default function FeedPlaylists({ email, isMe, kind }: FeedPlaylistsProps)
   // 둘 다 같은 캐시 자리를 쓰는 훅이라 함께 부른다 — 탭을 오가도 다시 받지 않는다
   const mine = useMyPlaylistsQuery(target);
   const liked = useLikedPlaylistsQuery(target);
-  const drill = usePanelStore((s) => s.drill);
+  // 탭 화면에서는 지도로 돌아가서 연다 (S15P21A405-666)
+  const drill = useDrill();
   const remove = useDeletePlaylistMutation();
 
   const query = made ? mine : liked;

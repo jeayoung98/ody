@@ -86,6 +86,7 @@ export function useRideSession(): void {
     function applyTrack(p: RideTrackPayload) {
       const ride = useFollowStore.getState();
       ride.setLeaderMusicId(p.musicId);
+      ride.setLeaderLayer(p.layer);
       /**
        * **겹도 같이 따라간다** (S15P21A405-560). 알림이 `layer` 를 주는데 버리고 있었다 —
        * 인솔자가 파고들면 나만 제자리에 남고, 그 겹에 없는 곡을 가리켜 우주선까지 사라졌다.

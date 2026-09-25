@@ -523,7 +523,14 @@ export class MapEngine {
 
   /** 첫 진입 — 레이어 0(전 우주)의 상주 집합 */
   setSongs(songs: MapPoint[]) {
-    this.allocate(songs, 0);
+    /**
+     * **첫 데이터보다 먼저 편입된 곡은 살린다** (S15P21A405-676). 새로고침 뒤 소켓 재탑승이 지도 데이터보다 먼저
+     * 끝나면 `ensureSongPoint` 가 인솔자 곡을 빈 엔진에 편입하는데, 여기서 통째로 갈아끼우면 그 곡이 사라져
+     * 우주선이 영영 안 걸렸다. 첫 진입 전의 `songs` 는 그렇게 편입된 것뿐이다.
+     */
+    const ids = new Set(songs.map((s) => s.musicId));
+    const carry = this.inited ? [] : this.songs.filter((s) => !ids.has(s.musicId));
+    this.allocate(carry.length ? [...songs, ...carry] : songs, 0);
     this.subset = this.residentMask();
     this.alpha.set(this.subset);
     this.stack = [];

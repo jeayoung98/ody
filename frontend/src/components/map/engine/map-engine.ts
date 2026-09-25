@@ -6,6 +6,7 @@ import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
 import { nearestLayerWith } from "./reveal-layer";
+import { riseLandingScale } from "./rise-scale";
 import { wheelIntent } from "./ride-zoom";
 import { acceptsAnchor } from "./stale-anchor";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
@@ -2070,7 +2071,13 @@ export class MapEngine {
      * 최대 확대 상태의 좁은 구역에 착지하고**, 그 구역이 비어 있으면 화면에 별이 하나도 없다.
      * 진입 배율은 그 겹이 화면에 맞춰지던 배율이므로 여기로 오면 별이 화면을 채운다.
      */
-    const s = p.entryS;
+    /**
+     * **0겹만 진입 배율로는 부족하다** (S15P21A405-673). 0겹의 `entryS` 는 반지름 맞춤이라
+     * 정사각 상자를 가로로 긴 화면에 넣어 좌우가 통째로 빈다 — 469 가 첫 화면에서 실측한
+     * 그 화면(가로 30%·세로 62%)이다. 첫 화면만 덮는 배율로 고쳤던 걸 떠오르는 길에도 준다.
+     * 자세한 이유는 {@link riseLandingScale}.
+     */
+    const s = riseLandingScale(p.layer, p.entryS, this.fitBox(dx, dy, p.subset).sCover);
     /**
      * 내 곡을 가운데 두는 건 **그 곡이 이 겹에 상주할 때만** 이다.
      * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.

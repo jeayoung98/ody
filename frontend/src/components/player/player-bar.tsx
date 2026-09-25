@@ -28,6 +28,11 @@ import { track } from "@/lib/analytics/client";
  *   내 위치 ·  ⏮ ▶ ⏭  · 플리에 추가
  *
  * 가로 한 줄이던 것을 세웠다 — 폭이 376 으로 고정된 뒤로 제목이 늘 잘렸다.
+ *
+ * **모서리는 `glass-liquid` 기본값(`--radius-box` 18px)을 그대로 쓴다** (S15P21A405-668).
+ * 예전에는 `rounded-[22px]!` 로 덮었는데, 바로 위에 **같은 폭(376px)으로 우측 패널이 서 있어서**
+ * 4px 차이가 그대로 눈에 띄었다. 좌하단 계기판·호버 카드·토스트도 전부 18px 이라 아랫줄에서
+ * 이것만 혼자 달랐다.
  * 배경에는 듣는 곡의 커버가 연하게 깔린다 (`player-backdrop.tsx`).
  * 우선순위: 여정 or 플리 > 개인 곡 상세. (여정과 플리는 동시에 켜질 수 없음)
  */
@@ -130,7 +135,7 @@ export default function PlayerBar() {
      * 진행바를 빼는 것이 이 중 유일하게 잃는 것이다 — 바텀시트(S15P21A405-416)를 올리면
      * 그 안에서 전체 플레이어를 보여 주는 것이 다음 자리다.
      */
-    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible rounded-[22px]! px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-x-0 max-tablet:border-b-0 max-tablet:px-3 max-tablet:py-2">
+    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-x-0 max-tablet:border-b-0 max-tablet:px-3 max-tablet:py-2">
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">

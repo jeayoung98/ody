@@ -136,6 +136,16 @@ export function mergePeople(
 }
 
 /**
+ * 지도 위 한 사람의 동승 인원을 **미리** 고친다 (S15P21A405-677). 하차를 누르는 순간 인솔자의 `riderCount` 가
+ * 서버 알림보다 먼저 줄어야 우주선이 바로 헬멧으로 돌아간다 — 안 그러면 인원 알림이 올 때까지(길면 다음 겹 조회까지)
+ * 내가 내렸는데도 그 사람이 우주선인 채로 남는다. 서버 값이 오면 그걸로 덮인다.
+ */
+let riderCountAdjust: ((email: string, delta: number) => void) | null = null;
+export function adjustRiderCount(email: string, delta: number): void {
+  riderCountAdjust?.(email, delta);
+}
+
+/**
  * 지금 화면 범위를 보낸다.
  *
  * 컴포넌트 밖에 둔다 — 스토어와 엔진에서 직접 읽으므로 렌더 상태가 필요 없고, 타임아웃에서
@@ -175,6 +185,17 @@ export function useViewportSubscription(enabled: boolean): void {
   const mode = useRef<ViewportSnapshot["mode"] | null>(null);
   /** 옮겨 받은 화면(`RIDE_VIEWPORT*`)의 마지막 번호. **인솔자의 번호라 내 것과 섞지 않는다** */
   const ridingSeq = useRef(0);
+  /** 지금 화면에 그리는 그 사람의 인원을 기준으로 더하고 뺀다 — `riderCounts` 에 없으면 기준 목록 값이다 */
+  const peopleRef = useRef<Map<string, NearbyUser>>(new Map());
+  useEffect(() => {
+    riderCountAdjust = (email, delta) => {
+      const base = peopleRef.current.get(email)?.riderCount ?? 0;
+      setRiderCounts((prev) => new Map(prev).set(email, Math.max(0, base + delta)));
+    };
+    return () => {
+      riderCountAdjust = null;
+    };
+  }, []);
 
   // 겹이 바뀌면 다시 보낸다. **join 다음이다** — 순서가 바뀌면 내 표식이 이전 겹에 남는다 (§3.2).
   // `prefetchBoxes` 만으로는 보내지 않는다. layer·boxes 가 실제로 바뀐 뒤다
@@ -321,6 +342,9 @@ export function useViewportSubscription(enabled: boolean): void {
 
   /** 지도에 실제로 그릴 사람들 = 겹 조회(기준) + 소켓 델타(얹은 것) */
   const people = useMemo(() => mergePeople(layerUsers?.groups, overlay, riderCounts), [layerUsers, overlay, riderCounts]);
+  useEffect(() => {
+    peopleRef.current = people;
+  }, [people]);
 
   /**
    * 엔진에 넘긴다. 레이어를 함께 줘야 겹이 바뀌는 순간 이전 겹의 사람이 남지 않는다.

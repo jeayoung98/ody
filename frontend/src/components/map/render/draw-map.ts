@@ -10,7 +10,8 @@ import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-fr
  * **배율은 남의 배와 같은 것을 쓴다** (S15P21A405-642). 하나만 올리면 그 "같은 눈높이" 가
  * 그대로 깨진다 — 배가 커지는 규칙은 `FRIEND_MARKER.shipScale` 한 곳에만 둔다.
  */
-const ME_SHIP_R = 13 * FRIEND_MARKER.shipScale;
+// 인솔자 우주선(`draw-friends`)과 같은 크기 — 누가 나를 따라오든 내가 따라가든 우주선은 한 크기다 (S15P21A405-677)
+const ME_SHIP_R = FRIEND_MARKER.leaderRadiusPx * FRIEND_MARKER.shipScale;
 /** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
 import { coverFor, dustStars, farFieldTile, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type FarFieldTile, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";

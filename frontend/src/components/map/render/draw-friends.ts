@@ -331,8 +331,12 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
-    // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
-    const R = (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
+    /**
+     * 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614).
+     * **우주선은 예외다** (S15P21A405-677). 가까운 별에 서면 우주선과 매달린 헬멧이 커지고 먼 별에 서면 작아져서,
+     * 따라가는 내내 크기가 오락가락했다. 우주선은 헬멧이 아니라 탈것이라 한 크기로 두고, 내 우주선(`draw-map`)과도 같다.
+     */
+    const R = ship ? FRIEND_MARKER.leaderRadiusPx : (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;

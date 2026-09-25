@@ -4,7 +4,7 @@ import { REALTIME } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { getPlayer } from "@/components/player/player-registry";
 import { sendJoinNow } from "@/hooks/use-presence-join";
-import { pushViewport } from "@/hooks/use-viewport-subscription";
+import { adjustRiderCount, pushViewport } from "@/hooks/use-viewport-subscription";
 import { subscribePlayback } from "@/lib/playback-events";
 import { send } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -120,14 +120,21 @@ export function cancelPendingSeek(): void {
  */
 export function leaveRideLocally(): void {
   cancelPendingSeek();
+  const leader = useFollowStore.getState().leaderEmail;
   useFollowStore.getState().stop();
   getMapEngine()?.stopFollow();
+  // 인솔자 표식의 동승 인원도 먼저 하나 뺀다 — 혼자 타고 있었으면 우주선이 바로 헬멧이 된다 (S15P21A405-677)
+  if (leader) adjustRiderCount(leader, -1);
 }
 
 export function endRide(at: { musicId: number | null; layer: number }): void {
   leaveRideLocally();
   // 자리를 모르는 길이 하나 있다 — 이미 끝나 있어 `RIDE_NOT_RIDING` 이 온 경우다. 그때는 안 옮긴다
-  if (at.musicId != null) useMapStore.getState().setMyMusicId(at.musicId);
+  if (at.musicId != null) {
+    useMapStore.getState().setMyMusicId(at.musicId);
+    // 듣던 곡이 곧 내 자리다 — 표식·돌아갈 자리·가운데 고정을 그 곡에 못 박는다 (S15P21A405-677)
+    getMapEngine()?.settleAfterRide(at.musicId);
+  }
   /**
    * 겹 맞추기. **내려가는 쪽도 된다** (S15P21A405-560) — 엔진에 겹을 직접 지정하는 입구가
    * 생겼다. 예전에는 떠오르는 쪽만 할 수 있어서, 인솔자가 더 깊이 내려간 상태로 내리면

@@ -4,7 +4,7 @@ import { CONTEST_RANK_TAG } from "@/constants";
 import Tag from "@/components/common/tag";
 import { useContestEntriesQuery } from "@/hooks/queries/use-contest-entries-query";
 import { useFeatures } from "@/hooks/use-features";
-import { contestRankOf } from "@/lib/contest-sky";
+import { contestRankOf } from "@/lib/contest-top";
 import { useContestStore } from "@/stores/use-contest-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 

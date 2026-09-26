@@ -27,21 +27,12 @@ import type { MapPoint, PlaylistDetail } from "@/types";
  * (`view-mode-crumb` 의 택도 같은 기준으로 선다).
  */
 export function usePlayPlaylist(playlist: PlaylistDetail): (startIndex?: number) => void {
-  const start = usePlaylistStarter();
-  return useCallback((startIndex = 0) => start(playlist, startIndex), [playlist, start]);
-}
-
-/**
- * {@link usePlayPlaylist} 의 몸통 — 플리를 **부를 때** 받는다 (S15P21A405-684). 지도의 이벤트 작품처럼 누르는 순간에야
- * 플리를 조회하는 자리가 같은 길을 쓰려고 뺐다. 두 벌로 두면 별자리를 켜는 규칙이 한쪽만 고쳐진다.
- */
-export function usePlaylistStarter(): (playlist: PlaylistDetail, startIndex?: number) => void {
   const playQueue = usePlayerStore((s) => s.playQueue);
   const showConstellation = useMapStore((s) => s.showConstellation);
   const startActivity = useStartActivity();
 
   return useCallback(
-    (playlist: PlaylistDetail, startIndex = 0) => {
+    (startIndex = 0) => {
       const ids = playlist.items.map((it) => it.musicId);
       if (!ids.length) return;
       // 좌표도 함께 넘긴다 (S15P21A405-214) — 이 겹 상주 집합 밖의 곡은 좌표가 있어야 별자리에 그려진다.
@@ -54,6 +45,6 @@ export function usePlaylistStarter(): (playlist: PlaylistDetail, startIndex?: nu
         playQueue(context, ids, startIndex);
       });
     },
-    [playQueue, showConstellation, startActivity],
+    [playlist, playQueue, showConstellation, startActivity],
   );
 }

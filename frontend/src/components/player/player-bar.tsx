@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { RIDING_LOCKED } from "@/constants";
 import { NextIcon, PauseIcon, PlayIcon, PlaylistAddIcon, PrevIcon } from "@/components/common/icons";
-import AddToPlaylistMenu from "@/components/panels/playlist/add-to-playlist-menu";
+import AddToPlaylistDialog from "@/components/panels/playlist/add-to-playlist-dialog";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useFeatures } from "@/hooks/use-features";
@@ -184,12 +184,8 @@ export default function PlayerBar() {
         )}
       </div>
 
-      {/* 메뉴는 원래 아래로 펼쳐지는 상자다 — 여기는 화면 맨 아래라 **위로** 띄운다 */}
-      {features.playlist && menuOpen && currentMusicId != null && (
-        <div className="absolute inset-x-0 bottom-full mb-2 [&>div]:static! [&>div]:mt-0!">
-          <AddToPlaylistMenu musicId={currentMusicId} onDone={() => setMenuOpen(false)} />
-        </div>
-      )}
+      {/* 화면 가운데 팝업 (S15P21A405-686) — 위로 펼치던 목록은 곡 상세 패널과 겹쳤다 */}
+      {features.playlist && menuOpen && currentMusicId != null && <AddToPlaylistDialog musicId={currentMusicId} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

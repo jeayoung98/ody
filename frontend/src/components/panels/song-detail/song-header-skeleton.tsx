@@ -23,17 +23,20 @@ export default function SongHeaderSkeleton({ title, artist }: SongHeaderSkeleton
   return (
     <>
       <div className="flex items-center gap-2.5">
-        <div className="flex min-w-0 flex-1 flex-col gap-2">
+        {/*
+          글자 크기·줄 높이·간격·그림자는 **`song-header` 와 똑같다** (S15P21A405-697). 예전에는 여기가 `text-xl`·`text-xs` 이고
+          실제 제목 줄은 `text-3xl`·`text-sm` 이라, 응답이 오는 순간 제목이 커지며 아래가 밀렸다. 막대도 그 줄 높이(25px×1.2 · 14px×1.5)로 잡는다.
+        */}
+        <div className="mr-1 flex min-w-0 flex-1 flex-col gap-0.5">
           {title ? (
             <>
-              {/* 글자 크기·색은 `song-header` 와 맞춘다 — 값이 와도 제자리에 있어야 안 튄다 */}
-              <p className="truncate font-display text-xl leading-tight font-semibold text-ink drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]">{title}</p>
-              <p className="truncate text-xs text-ink-2 drop-shadow-[0_1px_5px_rgba(4,6,13,.9)]">{artist ?? "Unknown"}</p>
+              <p className="truncate font-display text-3xl leading-[1.2] font-semibold text-ink drop-shadow-[0_2px_8px_rgba(4,6,13,.85)]">{title}</p>
+              <p className="truncate text-sm text-ink-2 drop-shadow-[0_1px_6px_rgba(4,6,13,.9)]">{artist ?? "Unknown"}</p>
             </>
           ) : (
             <>
-              <Skeleton w="62%" h={22} rounded="box" />
-              <Skeleton w="38%" h={11} />
+              <Skeleton w="62%" h={30} rounded="box" />
+              <Skeleton w="38%" h={21} />
             </>
           )}
         </div>

@@ -51,6 +51,8 @@ export const SKETCH_STEPS = [
   { key: "review", label: "곡 확인" },
   { key: "submit", label: "이름 짓고 출품" },
   { key: "scoring", label: "AI 채점" },
+  /** 채점이 끝나면 저절로 넘어온다 (S15P21A405-702) — 채점 중과 결과를 한 화면에 섞지 않는다 */
+  { key: "done", label: "완성" },
 ] as const;
 export type SketchStep = (typeof SKETCH_STEPS)[number]["key"];
 
@@ -62,3 +64,22 @@ export const CONTEST_TOP = 5;
 
 /** 플레이어바 태그 문구 */
 export const CONTEST_RANK_TAG = (rank: number) => `🏆 이벤트 ${rank}위`;
+
+/** 별자리 그림 한 변(px) — 채점이 끝난 내 작품 카드(S15P21A405-701)·출품 단계 미리보기(702). 카드 폭(max-w-lg) 안에서 모양이 읽히는 크기 */
+export const CONTEST_ARTWORK_THUMB_PX = 200;
+
+/** 채점 단계의 내 작품 카드 별자리 그림 한 변(px) (S15P21A405-702) — 채점 결과가 이 화면의 주인공이라 출품 미리보기보다 크게 */
+export const MY_ARTWORK_THUMB_PX = 280;
+
+/**
+ * 순위 탑 3 시상대 (S15P21A405-702). 가운데 1위가 가장 크고 좌우에 2·3위 — 그림 크기로 순위가 먼저 읽힌다.
+ * 순서는 화면 왼쪽부터다(2 · 1 · 3).
+ */
+export const PODIUM = { order: [1, 0, 2], thumbPx: [168, 128, 116] } as const;
+
+/**
+ * 작품을 내 플리로 두 번 가져오려 할 때 (S15P21A405-702). 백엔드가 플리 이름을 사람마다 겹치지 않게 막아서(409
+ * `PLAYLIST_NAME_DUPLICATED`) 같은 작품을 또 가져오면 여기로 떨어진다. 다만 **이름으로만** 가른다 — 작품과 상관없는 같은
+ * 이름의 플리가 있어도, 가져온 뒤 이름을 바꿨어도 틀린다. 작품 기준 판정은 백엔드 요청(BACKEND-NOTES A-92)
+ */
+export const CONTEST_SAVE_DUPLICATED = "이미 같은 이름의 플리가 있어요 · 이미 가져온 별자리일 수 있어요";

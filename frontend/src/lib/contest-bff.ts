@@ -1,6 +1,6 @@
 import { failLive } from "@/lib/api-response";
 import type { BackendError } from "@/lib/backend";
-import type { ApiErrorCode, Contest, ContestEntry, ContestMatch, ContestTrack } from "@/types";
+import type { ApiErrorCode, Contest, ContestArtworkShape, ContestEntry, ContestMatch, ContestTrack } from "@/types";
 
 /**
  * 콘테스트 BFF 라우트 공통 (S15P21A405-640) — 백엔드 `artwork` 응답을 화면 타입으로 옮기고, 오류 코드를 고른다.
@@ -62,6 +62,16 @@ export const toRound = (r: BackendArtworkRound): Contest => ({
 });
 
 export const toTrack = (p: BackendArtworkTrack): ContestTrack => ({ musicId: p.musicId, title: p.title ?? null, artist: p.artist ?? null, x: p.x, y: p.y });
+
+/** `GET /api/artwork/detail` 에서 그림에 쓰는 것만 (S15P21A405-701). 나머지(곡 상세·점수)는 목록이 이미 준다 */
+export interface BackendArtworkDetail {
+  artworkId: number;
+  closed: boolean;
+  /** 좌표 + 곡 이름, 출품 순서. 곡이 지워져도 원소는 남는다 */
+  tracks: BackendArtworkTrack[] | null;
+}
+
+export const toShape = (d: BackendArtworkDetail): ContestArtworkShape => ({ artworkId: d.artworkId, closed: d.closed, tracks: (d.tracks ?? []).map(toTrack) });
 
 export const toEntry = (s: BackendArtworkSummary): ContestEntry => ({
   artworkId: s.artworkId,

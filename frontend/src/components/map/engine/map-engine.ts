@@ -1,10 +1,11 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HOP_LINK, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
+import { approxTextWidth, separateLabels, type LabelBox } from "./probe-layout";
 import { nearestLayerWith } from "./reveal-layer";
 import { riseLandingScale } from "./rise-scale";
 import { wheelIntent } from "./ride-zoom";
@@ -1091,12 +1092,51 @@ export class MapEngine {
   private ringSlot(r: ProbeRing, id: number) {
     const rank = r.ids.indexOf(id);
     if (rank < 0) return null;
+    // 지금 고리는 라벨이 안 겹치게 민 자리를 쓴다 (S15P21A405-697). 물러난 고리는 라벨이 없어 원래 자리대로 오므라든다
+    if (!r.demotedAt) {
+      const laid = this.laidOutRing(r).get(id);
+      if (laid) return laid;
+    }
+    return this.polarSlot(r, rank, this.ringR() * this.ringScale(r));
+  }
+
+  /** 각도만으로 정한 고리 자리 — 두 겹 고리(짝수 순위 안쪽), 곡마다 조금씩 비튼다 */
+  private polarSlot(r: ProbeRing, rank: number, R: number) {
+    const id = r.ids[rank];
     const n = Math.max(1, r.ids.length);
-    const R = this.ringR() * this.ringScale(r);
     const ring = rank % 2 === 0 ? PROBE.innerRing : 1;
     const jitter = (((id * 2654435761) >>> 0) % 1000) / 1000 - 0.5;
     const ang = -Math.PI / 2 + (rank / n) * Math.PI * 2 + jitter * 0.25;
     return { x: Math.cos(ang) * R * ring, y: Math.sin(ang) * R * ring };
+  }
+
+  /** 라벨을 민 고리 자리 캐시 — 고리·곡·반지름이 같으면 다시 안 민다 (매 프레임 부르는 자리다) */
+  private ringLayout: { key: string; pos: Map<number, { x: number; y: number }> } | null = null;
+
+  /**
+   * **라벨이 서로 가리지 않게 고리 자리를 민다** (S15P21A405-697). 제목·가수는 자르지 않고 다 보이게 두고,
+   * 라벨 묶음(제목 상자 · `#순위 · 가수` 줄 · "주변 보기 ›" 자리)끼리 `PROBE_LABEL.minGapPx` 만큼 떨어뜨린다.
+   * 가운데 곡과 그 라벨은 고정이다. 1 배 기준으로 민다 — 확대하면 자리는 배율만큼, 글씨는 그보다 덜 커져 계속 안 겹친다.
+   */
+  private laidOutRing(r: ProbeRing): Map<number, { x: number; y: number }> {
+    const R = this.ringR();
+    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}`;
+    if (this.ringLayout?.key === key) return this.ringLayout.pos;
+    const L = PROBE_LABEL;
+    const titleOf = (id: number) => this.pointOf(id)?.title ?? "";
+    const artistOf = (id: number) => this.pointOf(id)?.artist ?? "";
+    const boxes: LabelBox[] = r.ids.map((id, rank) => {
+      const at = this.polarSlot(r, rank, R);
+      const w = Math.max(approxTextWidth(titleOf(id), L.titlePx) + 12, approxTextWidth(`#${rank + 1} · ${artistOf(id)}`, L.subPx, true));
+      return { id, x: at.x, y: at.y, w, top: -10, bottom: HOP_LINK.dy + HOP_LINK.h / 2 };
+    });
+    // 가운데 곡: 링부터 안내 줄 아래까지. 폭은 제목과 안내 줄 중 넓은 쪽
+    const cw = Math.max(approxTextWidth(titleOf(r.centerId), L.centerTitlePx) + 14, approxTextWidth(`NEARBY · 유사도 상위 ${r.ids.length}곡 · ${LAYER_NAMES[this.layer]}`, L.centerSubPx, true));
+    boxes.push({ id: r.centerId, x: 0, y: 0, w: cw, top: -L.centerRingR - 4, bottom: L.centerRingR + L.centerSubY + 8, fixed: true });
+    const pos = separateLabels(boxes, L.minGapPx);
+    pos.delete(r.centerId);
+    this.ringLayout = { key, pos };
+    return pos;
   }
 
   /**
@@ -1508,7 +1548,18 @@ export class MapEngine {
    * 내 표식의 화면 좌표 — **읽기만 한다** (S15P21A405-694). 반응 이모지가 여기서 떠오른다.
    * `meScreen` 은 비행·고리 이동 상태를 정리하면서 읽으므로 그리기 밖에서 부르면 연출이 끊긴다.
    */
+  /**
+   * 따라가는 동안 내 헬멧(인솔자 우주선 뒤 "나" 칸)이 이 프레임에 그려진 화면 자리 (S15P21A405-698).
+   * `draw-friends` 가 그리면서 적는다 — 인솔자가 화면 밖이라 안 그렸으면 null.
+   */
+  rideMeScreen: { x: number; y: number } | null = null;
+
+  /**
+   * 내 반응 이모지가 떠오를 화면 자리. **따라가는 동안에는 내 헬멧 자리다** (S15P21A405-698) — 그때 나는 지도 위
+   * 표식이 아니라 인솔자 줄의 헬멧으로 그려지는데, 표식 자리(`me`)를 쓰면 엉뚱한 곳에서 떠올랐다.
+   */
   mePos(): { x: number; y: number } | null {
+    if (this.follow) return this.rideMeScreen;
     if (this.myId == null) return null;
     const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
     return { x: px, y: py };

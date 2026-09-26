@@ -5,13 +5,14 @@ import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
-import { usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
+import { useBrandBottom, usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
 import Brand from "./brand";
+import TopScrim from "./top-scrim";
 import MapActions from "./map-actions";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
@@ -26,7 +27,7 @@ import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
-import { RIGHT_PANEL_W } from "@/constants/design-tokens";
+import { RIGHT_PANEL_W, SHEET_RADIUS_PX, SHEET_SNAP_PX } from "@/constants/design-tokens";
 import PlayHint from "@/components/discovery/play-hint";
 import ContestModal from "@/components/contest/contest-modal";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
@@ -62,7 +63,10 @@ interface MainScreenProps {
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
-  const panelCollapsed = usePanelStore((s) => s.snap) === 1;
+  const snap = usePanelStore((s) => s.snap);
+  const sheetStop = usePanelStore((s) => s.sheetStop);
+  const sheetPeek = usePanelStore((s) => s.sheetPeek);
+  const panelCollapsed = snap === 1;
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   /**
    * 감춘 기능의 패널은 열려 있어도 화면에 없다 (S15P21A405-333). 여기서도 같은 판정을 써야
@@ -103,14 +107,18 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   /**
    * 폰에서 아래로 쌓이는 순서: **네비 줄 → 재생바 → 패널**. 앞의 둘은 한 상자로 읽힌다.
    *
-   * `-1px` 은 재생바와 탭바가 쓰는 것과 **같은 겹침**이다 — 안 겹치면 1px 짜리 틈으로 지도가
-   * 새어 나와 화면이 갈라져 보인다 (실측으로 잡았다).
+   * 재생바는 네비 뒤로 모서리 반경(`--radius-sheet`)만큼 내려가 있다 (S15P21A405-703, `bottom-bar.tsx`).
+   * 잰 `playerH` 에 그 겹친 몫이 들어 있어서 뺀다 — 안 빼면 시트가 30px 떠서 걸린다.
+   *
+   * **시트는 이 선 아래까지 내려간다** (S15P21A405-703). 재생바·네비가 유리라 그 뒤로 내용이 비쳐야
+   * 해서다 — 시트에서는 이 값이 "내용이 가려지는 높이" 로 읽힌다(단 높이 계산·목록 끝 여백, `globals.css`).
+   * 탭 화면(`panel-screen`)도 화면 바닥까지 내려가 재생바(z-21) 뒤에 깔린다 — 아래 `absolute` 설명 참고.
    *
    * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
    * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
    * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
    */
-  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - 1px)`;
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - var(--radius-sheet))`;
   /**
    * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
    * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.
@@ -119,14 +127,38 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   useEffect(() => {
     document.documentElement.style.setProperty("--nav-bottom", navBottom);
   }, [navBottom]);
-  const occludedBottom = narrow ? tabBarH + playerH : HUD_OCCLUSION.bottom;
+  /**
+   * 재생바는 네비 뒤로 모서리 반경만큼 내려가 있다 — 잰 높이에 그 몫이 겹쳐 들어 있어 뺀다 (S15P21A405-703).
+   *
+   * **폰에서 시트가 떠 있으면 그 높이도 가린 것으로 친다** (S15P21A405-703). 별을 누르면 시트가 2 단으로
+   * 올라오는데, 가운데 맞춤이 시트를 모르면 누른 별이 시트 뒤에 깔린다. 엔진은 가운데 고정 중이면
+   * 가림폭이 바뀔 때 그 별을 새 가운데로 따라가고(`centerLock`), 손으로 밀면 고정이 풀리므로
+   * 드래그로 1 단에 내려앉을 때 지도가 손 밑에서 미끄러지지 않는다.
+   */
+  // 단 높이를 내용이 정한 시트는 그 값을 쓴다 — 1 단 `use-sheet-peek`, 2·3 단 `use-sheet-stop`
+  const measured = snap === 1 ? sheetPeek : sheetStop;
+  const sheetH = narrow && panelOpen ? (measured ?? SHEET_SNAP_PX[snap]) : 0;
+  const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX + sheetH : HUD_OCCLUSION.bottom;
+  /**
+   * 폰의 윗변은 **레이어 설명 아래끝**이다 (S15P21A405-703). 누른 별이 설명 아래 ~ 시트 윗끝 사이
+   * 가운데로 온다. 데스크톱은 윗줄만 비키면 된다 — 브랜드가 좌상단 모서리에 작게 있고 옆이 비어 있다.
+   */
+  const brandBottom = useBrandBottom(HUD_OCCLUSION.top);
+  const occludedTop = narrow ? brandBottom : HUD_OCCLUSION.top;
   const occlusion = useMemo<Occlusion>(
-    () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
-    [occludedRight, occludedBottom],
+    () => ({ top: occludedTop, right: occludedRight, bottom: occludedBottom, left: 0 }),
+    [occludedTop, occludedRight, occludedBottom],
   );
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-void text-ink">
+    /*
+      **`fixed` 가 아니라 `absolute` 다** (S15P21A405-703). `fixed` 는 z 가 없어도 늘 제 쌓임 맥락을 만들어서,
+      안에 든 재생바(z-21)가 바깥의 탭 화면(`panel-screen`) 위로 못 나왔다 — 안에서 z 를 아무리 올려도
+      판째로 아래에 깔렸다. `absolute` 는 z 가 없으면 맥락을 안 만들어, 안의 z 가 화면 전체 순서에 그대로
+      선다: **네비(23) > 재생바(21) > 탭 화면(20) > 지도**. html·body 가 화면 높이에 `overflow: hidden` 이라
+      자리는 `fixed` 와 같다. 토스트(30)·확인 팝업(70)도 이제 네비 위로 올라온다.
+    */
+    <div className="absolute inset-0 overflow-hidden bg-void text-ink">
       <MapView occlusion={occlusion} />
       {/*
         축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다.
@@ -134,6 +166,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
         잘렸다. 축 뜻은 겹 전환 자막과 곡 상세의 소리 특징에서 계속 보인다
       */}
       {!narrow && <MapAxisLabels occlusion={occlusion} />}
+      {/* 폰 윗줄 흰 아이콘 뒤의 옅은 그늘 (S15P21A405-703) — 폰에서만 보인다 */}
+      <TopScrim />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창은 스스로 접혔다 펴진다 — 펴질 때 우측 패널을 닫는다 (S15P21A405-440) */}

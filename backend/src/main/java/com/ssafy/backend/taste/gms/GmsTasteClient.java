@@ -41,7 +41,7 @@ public class GmsTasteClient {
             type 이 CONSISTENT_BIAS 면 그쪽으로 꾸준히, BIAS 면 그쪽으로 기울었지만 폭도 함께,
             DIVERSE 면 양 끝을 폭넓게 듣는다는 뜻입니다.
 
-            sampleSize 가 30 미만이거나 reportLevel 이 INITIAL 이면 단정하지 말고 잠정적으로 쓰세요.
+            표본이 적다는 안내는 화면이 배지로 따로 합니다. 문장에 "잠정", "아직" 같은 단서를 붙이지 마세요.
             narratives 는 findingId 와 정확히 대응해야 합니다.
             """;
 

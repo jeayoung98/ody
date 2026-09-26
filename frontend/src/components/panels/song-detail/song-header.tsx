@@ -8,12 +8,10 @@ import TransportButton from "@/components/common/transport-button";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useLikeMusicMutation } from "@/hooks/mutations/use-like-music-mutation";
 import { useFeatures } from "@/hooks/use-features";
-import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { useSongPlayToggle } from "@/hooks/use-song-play-toggle";
 import { formatCount, formatDuration } from "@/lib/format";
-import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicDetail } from "@/types";
-import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
+import AddToPlaylistDialog from "../playlist/add-to-playlist-dialog";
 
 /**
  * 곡 상세 상단 — 제목·아티스트·앨범 + 행동 버튼 + 칩(장르 색 · 무드 · 연도 · 길이 · 재생수 · 재생불가).
@@ -25,32 +23,11 @@ import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
  * **이 곡 하나에 대한 행동은 제목 줄에 모은다** — 재생, 플리에 추가. 아래 행동 줄은 여정
  * (두 곡을 잇는 일)만 남는다 (`song-actions`). 버튼은 하단 플레이어바의 그것과 **같은
  * 물건**이고(`TransportButton`), 재생만 `primary` 로 두어 무엇이 주인지 드러낸다.
- *
- * 플리 메뉴는 이 블록 아래로 펼쳐진다 — 그래서 뿌리가 `relative` 다.
  */
 export default function SongHeader({ music }: { music: MusicDetail }) {
   const features = useFeatures();
   const [menuOpen, setMenuOpen] = useState(false);
-  /**
-   * **목록을 열면 시트를 끝까지 올린다** (S15P21A405-547).
-   *
-   * 이 목록은 아래로 펼쳐지는데(`absolute top-full`), 1·2 단에서는 펼칠 자리가 시트 밖이라
-   * **재생바(z-21)와 탭바(z-23) 밑으로 들어가 아랫부분이 잘렸다** (실측: 2 단에서 메뉴가
-   * 711~782 에 떠서 시트가 끝나는 678 아래로 나갔다). 시트는 z-20 이라 그 둘을 못 이긴다.
-   *
-   * 재생바 쪽 같은 목록이 멀쩡한 이유는 거기서는 **위로** 펼치기 때문이다
-   * (`player-bar.tsx` 의 `bottom-full`). 여기서 위로 뒤집으면 1·2 단에서는 시트 위쪽
-   * 바깥으로 나가 같은 문제가 반대로 생긴다 — 238px 안에 184px 짜리 목록이 설 자리가 없다.
-   *
-   * 그래서 자리를 만든다. 플리를 고르려면 어차피 목록을 봐야 한다.
-   */
-  const narrow = useIsNarrow();
-  const setSnap = usePanelStore((s) => s.setSnap);
-  const toggleMenu = () => {
-    const next = !menuOpen;
-    setMenuOpen(next);
-    if (next && narrow) setSnap(3);
-  };
+  // 플리 목록은 화면 가운데 팝업이다 (S15P21A405-686) — 시트를 올려 펼칠 자리를 만들던 일(S15P21A405-547)이 필요 없어졌다
   const { blocked, isThisPlaying, toggle } = useSongPlayToggle(music.id);
   const like = useLikeMusicMutation();
   /**
@@ -86,7 +63,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
         </TransportButton>
         {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333). 설문 모드를 끄면 돌아온다 (387) */}
         {features.playlist && (
-          <TransportButton label={dead ? "재생할 수 없는 곡은 담을 수 없어요" : "플레이리스트에 추가"} size="md" bright disabled={dead} onClick={toggleMenu}>
+          <TransportButton label={dead ? "재생할 수 없는 곡은 담을 수 없어요" : "플레이리스트에 추가"} size="md" bright disabled={dead} onClick={() => setMenuOpen(true)}>
             <PlaylistAddIcon size={18} />
           </TransportButton>
         )}
@@ -138,7 +115,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
           </Tag>
         )}
       </div>
-      {features.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
+      {features.playlist && menuOpen && <AddToPlaylistDialog musicId={music.id} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

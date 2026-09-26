@@ -205,14 +205,14 @@
       var(--color-void-2);
   }
   /*
-   * 지도 위에 떠 있는 **작은 칩**은 넓은 화면과 같은 반투명으로 둔다 (S15P21A405-703).
-   * 위 규칙은 화면을 덮는 패널·바 때문에 생긴 것이라, 글자 한 줄짜리 칩까지 막으면 별자리 뷰
-   * 칩만 폰에서 딴 물건처럼 떴다. 값은 위 `@layer components` 의 `.glass` 와 같다 — 같이 고친다.
+   * 지도 위에 떠 있는 **작은 칩**은 막지 않고 유리로 둔다 (S15P21A405-703). 위 규칙은 화면을 덮는
+   * 패널·바 때문에 생긴 것이라, 글자 한 줄짜리 칩까지 막으면 별자리 뷰 칩만 폰에서 딴 물건처럼
+   * 떴다. 떠 있는 버튼들(`glass-liquid`)과 같은 무늬(sheen)에 반투명 밑칠이다.
    */
-  .glass[data-glass-web] {
-    background:
-      linear-gradient(var(--color-glass), var(--color-glass)),
-      rgb(9 13 24 / 0.5);
+  .glass[data-glass-clear] {
+    background: var(--glass-sheen), rgb(6 9 17 / 0.35);
+    -webkit-backdrop-filter: blur(18px) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    backdrop-filter: blur(18px) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
   }
 }
 
@@ -538,11 +538,16 @@
    * 받는데(데스크톱 접기) 한 속성에 둘을 섞으면 서로 덮어쓴다. 별도 속성이라 겹치지 않고,
    * `transition-[translate]` 도 그대로 먹는다.
    */
+  /*
+   * 시트는 재생바·네비 **뒤까지** 내려간다 (S15P21A405-703) — 둘이 반투명 유리라 그 뒤로 시트가
+   * 비쳐야 한다. 그래서 걸리는 높이(s1·s2)에 가려지는 높이(`--nav-bottom`)를 더해 내린다.
+   * 안 더하면 1 단이 통째로 재생바 뒤에 숨는다.
+   */
   [data-sheet][data-snap="1"] {
-    translate: 0 calc(100% - var(--spacing-sheet-s1));
+    translate: 0 calc(100% - var(--spacing-sheet-s1) - var(--nav-bottom));
   }
   [data-sheet][data-snap="2"] {
-    translate: 0 calc(100% - var(--spacing-sheet-s2));
+    translate: 0 calc(100% - var(--spacing-sheet-s2) - var(--nav-bottom));
   }
   [data-sheet][data-snap="3"] {
     translate: 0 0;
@@ -552,7 +557,11 @@
    * `Box` 는 네 모서리를 다 깎으므로, 그 둥근 구석 사이로 지도가 비친다 — 바닥에 깔린 판인데
    * 떠 있는 카드처럼 보이고 끝선이 지저분해진다. 위쪽 둥근 모서리는 그대로 둔다 (바텀시트의 표식이다).
    */
-  [data-sheet] > section {
+  [data-sheet] > section,
+  [data-panel-screen] {
+    /* 위 모서리는 폰의 아래에서 올라오는 판들과 같은 30px (S15P21A405-703) */
+    border-start-start-radius: var(--radius-sheet);
+    border-start-end-radius: var(--radius-sheet);
     border-end-start-radius: 0;
     border-end-end-radius: 0;
   }
@@ -643,5 +652,25 @@
    */
   [data-sheet]:not([data-snap="3"]) .scroll-quiet {
     overflow-y: hidden;
+  }
+
+  /*
+   * **목록 끝에 재생바·네비만큼 여백** (S15P21A405-703). 시트와 탭 화면이 두 바 뒤까지 내려가서,
+   * 여백이 없으면 마지막 줄이 바 뒤에 깔려 끝까지 굴려도 안 올라온다.
+   *
+   * 여백은 **가장 안쪽 스크롤 상자에만** 붙인다. 주변 사람처럼 본문 안에 목록 스크롤이 또 있는
+   * 화면에서 바깥에도 붙이면 목록이 그만큼 짧아져 바 위에서 끊긴다.
+   * 패딩이 아니라 빈 칸을 덧붙이는 이유: 스크롤 상자마다 제 아래 패딩이 따로 있어 덮으면 잃는다.
+   *
+   * 아래에 붙박이 줄(`Box` 의 footer — 여정 요약)이 있는 판은 그 줄을 대신 바 위로 올린다.
+   */
+  :is([data-sheet] > section, [data-panel-screen] > section):not(:has(> footer)) .scroll-quiet:not(:has(.scroll-quiet))::after {
+    content: "";
+    display: block;
+    flex: none;
+    height: var(--nav-bottom);
+  }
+  :is([data-sheet], [data-panel-screen]) > section > footer {
+    margin-bottom: var(--nav-bottom);
   }
 }

@@ -52,12 +52,12 @@ export default function BottomTabs() {
        * 화면 끝과 바 사이에 뜬 지도 조각이 남아 어정쩡했다 — 앱들이 쓰는 대로 바닥에 깐다.
        * 안전영역(홈 인디케이터)만큼 아래에 패딩을 준다.
        *
-       * **테두리를 걷고 뒤가 비치게 한다** (S15P21A405-703). 폰에서는 `--glass-tint` 가 불투명한
-       * 남색으로 바뀌는데(`globals.css`), 이 바만 그 값을 반투명으로 되돌린다 — 유리 너머로 지도가
-       * 흐리게 보인다. 윗선은 테두리와 안쪽 하이라이트 두 줄이 같이 그리고 있어 둘 다 끈다.
+       * **유리가 아니라 거의 검정인 판이다** (S15P21A405-703, 사용자 결정). 테두리도 없다.
+       * 윗모서리는 30px — 패널·시트 윗모서리와 같은 값(`--radius-sheet`). 바로 위 재생바는 각졌고,
+       * 이 모서리 밑으로 비는 자리는 재생바가 그만큼 뒤로 내려와 메운다(`bottom-bar.tsx`).
        * 이 바는 폰에서만 보이므로 넓은 화면에는 영향이 없다.
        */
-      className="glass-bar fixed inset-x-0 bottom-0 z-[23] hidden rounded-none border-0! pb-[env(safe-area-inset-bottom,0px)] shadow-none! [--glass-blur:18px] [--glass-tint:rgb(6_9_17/0.45)] max-tablet:block"
+      className="fixed inset-x-0 bottom-0 z-[23] hidden rounded-t-sheet bg-tabbar pb-[env(safe-area-inset-bottom,0px)] max-tablet:block"
     >
       <nav aria-label="네비" className="flex h-tabbar items-center justify-around px-gutter-sm">
         {tabs

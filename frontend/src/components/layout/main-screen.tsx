@@ -26,7 +26,7 @@ import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
-import { RIGHT_PANEL_W } from "@/constants/design-tokens";
+import { RIGHT_PANEL_W, SHEET_RADIUS_PX } from "@/constants/design-tokens";
 import PlayHint from "@/components/discovery/play-hint";
 import ContestModal from "@/components/contest/contest-modal";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
@@ -103,14 +103,18 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   /**
    * 폰에서 아래로 쌓이는 순서: **네비 줄 → 재생바 → 패널**. 앞의 둘은 한 상자로 읽힌다.
    *
-   * `-1px` 은 재생바와 탭바가 쓰는 것과 **같은 겹침**이다 — 안 겹치면 1px 짜리 틈으로 지도가
-   * 새어 나와 화면이 갈라져 보인다 (실측으로 잡았다).
+   * 재생바는 네비 뒤로 모서리 반경(`--radius-sheet`)만큼 내려가 있다 (S15P21A405-703, `bottom-bar.tsx`).
+   * 잰 `playerH` 에 그 겹친 몫이 들어 있어서 뺀다 — 안 빼면 시트가 30px 떠서 걸린다.
+   *
+   * **시트와 탭 화면은 이 선 아래까지 내려간다** (S15P21A405-703). 재생바·네비가 유리라 그 뒤로
+   * 내용이 비쳐야 해서다. 그래서 이 값은 이제 "패널이 끝나는 선" 이 아니라 **내용이 가려지는
+   * 높이**로 읽힌다 — 시트의 단 높이 계산과 목록 끝 여백(`globals.css`)이 쓴다.
    *
    * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
    * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
    * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
    */
-  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - 1px)`;
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - var(--radius-sheet))`;
   /**
    * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
    * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.
@@ -119,7 +123,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   useEffect(() => {
     document.documentElement.style.setProperty("--nav-bottom", navBottom);
   }, [navBottom]);
-  const occludedBottom = narrow ? tabBarH + playerH : HUD_OCCLUSION.bottom;
+  // 재생바는 네비 뒤로 모서리 반경만큼 내려가 있다 — 잰 높이에 그 몫이 겹쳐 들어 있어 뺀다 (S15P21A405-703)
+  const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],

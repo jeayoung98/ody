@@ -28,7 +28,8 @@ export default function PlayerBackdrop({ musicId }: { musicId: number | null }) 
   }, [musicId]);
 
   return (
-    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit]">
+    // 폰에서는 걷는다 (S15P21A405-703) — 재생바가 반투명 유리라 뒤가 비쳐야 한다. 커버가 깔리면 도로 막힌다
+    <div aria-hidden className="pointer-events-none absolute inset-0 overflow-hidden rounded-[inherit] max-tablet:hidden">
       {/* 104px 원본을 크게 늘리므로 블러로 계단을 지운다. 살짝 키워 블러 가장자리를 밖으로 밀어낸다 */}
       <div ref={ref} className="absolute inset-0 scale-110 bg-cover bg-center opacity-50 blur-[8px]" />
       <div className="absolute inset-0 bg-gradient-to-t from-void/90 via-void/65 to-void/30" />

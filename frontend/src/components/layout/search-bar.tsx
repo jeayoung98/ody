@@ -87,7 +87,7 @@ export default function SearchBar() {
        * (2026-09-25 크롬에서 확인: 300ms 중간 프레임이 실제로 사잇값이었다). 모르는 브라우저는
        * 그냥 튈 뿐이라 기능이 깨지지는 않는다.
        */
-      className={`absolute top-hud-t z-[22] [interpolate-size:allow-keywords] transition-[width] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-[calc(var(--spacing-gutter-sm)+34px)] max-tablet:translate-x-0 ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-fit max-tablet:w-8"}`}
+      className={`absolute top-hud-t z-[22] [interpolate-size:allow-keywords] transition-[width] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-gutter-sm max-tablet:translate-x-0 ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-fit max-tablet:w-8"}`}
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div
@@ -95,7 +95,7 @@ export default function SearchBar() {
         // `pl-[15px] pr-[26px]` 이었다 (S15P21A405-649). 고정폭 안에서 오른쪽을 더 줘 균형을 맞추던
         // 값인데, 폭이 내용을 따라가면 그냥 한쪽으로 치우친 여백이 된다 — 좌우를 같게 둔다
         // **폰에서는 유리를 벗긴다** (S15P21A405-703). 윗줄을 32px 로 낮추면서 검색·주변 탐색·여정을
-        // 로고(26)와 같은 크기의 흰 아이콘으로 띄웠다. 폰은 누르면 `/search` 로 넘어가 펼칠 일이 없지만
+        // 로고(26)와 같은 크기의 흰 아이콘으로 띄웠다. 로고를 감춘 뒤로는 검색이 왼쪽 끝에 선다. 폰은 누르면 `/search` 로 넘어가 펼칠 일이 없지만
         // 펼친 상자는 그래도 유리를 둔다
         className={`glass-liquid flex h-11 items-center gap-[9px] overflow-hidden rounded-pill! px-[15px] ${expanded ? "" : "cursor-pointer hover:border-line-2 max-tablet:h-8 max-tablet:justify-center max-tablet:px-0 max-tablet:glass-off"}`}
         onMouseDown={(e) => {

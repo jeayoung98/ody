@@ -146,3 +146,9 @@ export const TOUCH_TARGET_MIN = 44;
  * 지도 엔진이 패널에 가려지는 폭을 재려고 JS 에서 이 값을 쓴다 (S15P21A405-479).
  */
 export const RIGHT_PANEL_W = 376;
+
+/**
+ * 폰에서 아래에서 올라오는 판의 윗모서리(px). `tokens.css` 의 `--radius-sheet` 와 같은 값 — **함께 고친다.**
+ * 재생바가 네비 줄 뒤로 이만큼 내려가 있어서(`bottom-bar.tsx`) 지도 가림폭에서 JS 로 빼야 한다 (S15P21A405-703).
+ */
+export const SHEET_RADIUS_PX = 30;

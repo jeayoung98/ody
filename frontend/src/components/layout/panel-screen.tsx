@@ -25,6 +25,11 @@ import type { PanelType } from "@/constants";
  *
  * 아래는 재생바 위에서 끝난다 (`--nav-bottom`) — 듣던 곡은 어느 탭에서도 계속 보인다.
  * 탭바(z-23)는 그 아래에 그대로 떠 있다.
+ *
+ * **이제 바텀시트처럼 선다** (S15P21A405-703, 사용자 결정). 위의 설명(불투명·화면 통째)을 뒤집었다 —
+ * 곡 상세 시트와 같은 자리(윗줄 아래)에서 시작해 윗모서리 30px, 반투명 유리로 뒤의 지도가 흐리게
+ * 비친다. 지도 탭과 같은 판이 올라온 것으로 읽혀야 한다는 판단이다. 아래는 재생바·네비 뒤까지
+ * 내려가고, 목록 끝 여백은 `globals.css` 가 붙인다. 모서리도 거기서 건다(`[data-panel-screen]`).
  */
 export default function PanelScreen({ panel, children }: { panel: PanelType; children: ReactNode }) {
   const router = useRouter();
@@ -49,7 +54,9 @@ export default function PanelScreen({ panel, children }: { panel: PanelType; chi
   if (!enabled) return null;
 
   return (
-    <main className="fixed inset-x-0 top-0 bottom-[var(--nav-bottom)] z-[22] flex flex-col bg-void pt-hud-t [&>section]:min-h-0 [&>section]:flex-1 [&>section]:rounded-none! [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none [&>section]:backdrop-filter-none">
+    <main
+      data-panel-screen
+      className="glass-bar fixed inset-x-0 top-[calc(var(--spacing-hud-t)+40px)] bottom-0 z-[22] flex flex-col overflow-hidden border-0! shadow-none! [--glass-blur:18px] [--glass-tint:rgb(6_9_17/0.6)] [&>section]:min-h-0 [&>section]:flex-1 [&>section]:rounded-none! [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none [&>section]:backdrop-filter-none">
       {children}
     </main>
   );

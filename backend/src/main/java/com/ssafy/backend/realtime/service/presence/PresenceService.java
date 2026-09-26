@@ -44,7 +44,14 @@ public class PresenceService {
 	private final RideService rideService; // 나가는 사람의 따라가기 정리
 	private final RiderMoveService riderMoveService; // 인솔자가 층을 옮기면 따라오는 사람도 옮김
 
-	@Value("${realtime.presence.ttl-ms:45000}")
+	/**
+	 * 접속 정보가 살아 있는 시간. 값은 application-realtime.yml 이 정하고, 여기 적힌 것은
+	 * 그 파일이 없을 때 쓰는 대비값이다.
+	 *
+	 * 대비값도 120초여야 한다. 백그라운드 탭의 heartbeat 가 실측 53~61초 간격이라
+	 * 45초로 두면 탭을 다른 곳에 두기만 해도 접속이 만료된다 (S15P21A405-589).
+	 */
+	@Value("${realtime.presence.ttl-ms:120000}")
 	private long ttlMs;
 
 	/**

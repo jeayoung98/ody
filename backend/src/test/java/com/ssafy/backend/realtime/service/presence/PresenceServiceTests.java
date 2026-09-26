@@ -3,6 +3,7 @@ package com.ssafy.backend.realtime.service.presence;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.lenient;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -18,6 +19,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -117,6 +119,25 @@ class PresenceServiceTests {
 		service.connect(EMAIL, 3L);
 
 		verify(rideService).onUserGone(EMAIL);
+	}
+
+	/**
+	 * 지우는 것이 먼저고 따라가기 정리가 나중이다. 순서가 뒤집히면 인솔자가 재연결할 때마다
+	 * 해체가 접속 정보를 살아 있는 것으로 보고, 남들 화면에 인원수 0 알림을 쓸데없이 뿌린다.
+	 * 지금은 지운 뒤라 그 알림이 스스로 멈춘다 (S15P21A405-678).
+	 */
+	@Test
+	@DisplayName("이전 위치를 지운 뒤에 따라가기를 끊는다")
+	void clearsPositionBeforeCleaningUpRide() {
+		when(presenceRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(20L, 2, 3, 4, 7L));
+
+		service.connect(EMAIL, 8L);
+
+		InOrder order = inOrder(presenceRepository, rideService);
+		order.verify(presenceRepository).applyLeave(EMAIL, 7L);
+		order.verify(rideService).onUserGone(EMAIL);
+		order.verify(presenceRepository).connect(EMAIL, 8L, 45_000L);
 	}
 
 	@Test

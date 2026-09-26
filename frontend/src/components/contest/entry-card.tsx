@@ -2,9 +2,9 @@
 
 import Button from "@/components/common/button";
 import Tag from "@/components/common/tag";
-import { useLikeContestEntryMutation } from "@/hooks/mutations/use-like-contest-entry-mutation";
+import { useContestLike } from "@/hooks/use-contest-like";
 import { useSaveContestEntryMutation } from "@/hooks/mutations/use-save-contest-entry-mutation";
-import { ownerLabel, roundPhase } from "@/lib/contest-view";
+import { ownerLabel } from "@/lib/contest-view";
 import { formatTimeAgo } from "@/lib/format";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
@@ -27,16 +27,9 @@ interface EntryCardProps {
  */
 export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
   const toast = useToastStore((s) => s.show);
-  const like = useLikeContestEntryMutation();
+  const like = useContestLike(contest, meEmail);
   const save = useSaveContestEntryMutation();
   const isMine = meEmail != null && entry.ownerEmail === meEmail;
-  const open = roundPhase(contest) === "OPEN";
-
-  const handleLike = () => {
-    if (!meEmail) return toast("로그인하면 좋아요를 줄 수 있어요");
-    if (!entry.likedByMe && contest.myVotesLeft === 0) return toast("좋아요를 모두 썼어요. 다른 별자리의 좋아요를 거두면 다시 줄 수 있어요");
-    like.mutate({ artworkId: entry.artworkId, liked: !entry.likedByMe }, { onError: (e) => toast(e.message) });
-  };
 
   const handleSave = () => {
     if (!meEmail) return toast("로그인하면 내 플레이리스트로 가져올 수 있어요");
@@ -66,9 +59,9 @@ export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
         <Button
           size="sm"
           active={entry.likedByMe}
-          disabled={isMine || !open || like.isPending}
+          disabled={!like.canLike(entry) || like.pending}
           title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : entry.likedByMe ? "좋아요 거두기" : "좋아요"}
-          onClick={handleLike}
+          onClick={() => like.toggle(entry)}
         >
           {entry.likedByMe ? "♥" : "♡"} <span className="num">{entry.likeCnt}</span>
         </Button>

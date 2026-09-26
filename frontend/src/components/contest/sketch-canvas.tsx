@@ -15,6 +15,8 @@ interface SketchCanvasProps {
   onRemove: (index: number) => void;
   /** 곡 목록에서 가리키고 있는 순번(0부터). 그 별에 고리를 두른다 (S15P21A405-693) */
   highlight?: number | null;
+  /** 눌러도 점이 안 붙는다 — 곡 확인 단계의 미리보기 (S15P21A405-702). 점을 고치려면 그리기로 돌아간다 */
+  readOnly?: boolean;
 }
 
 /** 결과 별자리를 그리는 여백 비율 — 번호를 얹을 때도 같은 값을 써야 별 위에 선다 */
@@ -32,7 +34,7 @@ const BACKDROP: { x: number; y: number; r: number }[] = Array.from({ length: 70 
  * 빈 곳을 누르면 점이 붙고, 찍힌 점을 다시 누르면 빠진다. 정사각형이고 폭은 부모를 따른다.
  * 좌표는 0~1 로만 다룬다 — 화면 크기와 무관하게 서버에 같은 모양이 간다.
  */
-export default function SketchCanvas({ points, closed, result, onAdd, onRemove, highlight = null }: SketchCanvasProps) {
+export default function SketchCanvas({ points, closed, result, onAdd, onRemove, highlight = null, readOnly = false }: SketchCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState(0);
 
@@ -111,6 +113,7 @@ export default function SketchCanvas({ points, closed, result, onAdd, onRemove, 
 
   const handleClick = useCallback(
     (e: MouseEvent<HTMLCanvasElement>) => {
+      if (readOnly) return;
       const r = e.currentTarget.getBoundingClientRect();
       const x = (e.clientX - r.left) / r.width;
       const y = (e.clientY - r.top) / r.height;
@@ -119,7 +122,7 @@ export default function SketchCanvas({ points, closed, result, onAdd, onRemove, 
       if (hit >= 0) onRemove(hit);
       else onAdd({ x: Math.min(1, Math.max(0, x)), y: Math.min(1, Math.max(0, y)) });
     },
-    [points, onAdd, onRemove],
+    [points, onAdd, onRemove, readOnly],
   );
 
   return (
@@ -127,7 +130,7 @@ export default function SketchCanvas({ points, closed, result, onAdd, onRemove, 
       ref={ref}
       onClick={handleClick}
       aria-label="별자리 그리기 캔버스"
-      className="aspect-square w-full cursor-crosshair rounded-box-sm border border-line bg-[radial-gradient(ellipse_at_50%_45%,rgb(22_28_52)_0%,var(--color-void)_72%)]"
+      className={`aspect-square w-full ${readOnly ? "cursor-default" : "cursor-crosshair"} rounded-box-sm border border-line bg-[radial-gradient(ellipse_at_50%_45%,rgb(22_28_52)_0%,var(--color-void)_72%)]`}
     />
   );
 }

@@ -8,21 +8,26 @@ import SkeletonRows from "@/components/common/skeleton-rows";
 import TrackRow from "@/components/common/track-row";
 import { useSaveContestEntryMutation } from "@/hooks/mutations/use-save-contest-entry-mutation";
 import { useContestEntriesQuery } from "@/hooks/queries/use-contest-entries-query";
+import { useContestLike } from "@/hooks/use-contest-like";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { ownerLabel, roundPhase } from "@/lib/contest-view";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
+import RankingPodium from "./ranking-podium";
 
 /**
  * 순위 — 리더보드 그대로 (S15P21A405-616 · 640). 순위 점수 = 좋아요 + AI ÷ 100 × K (K 회차별, 기본 5).
  * 동점은 AI 점수 → 먼저 낸 순. 발표 시각·최종 고정은 백엔드 범위 밖이라 접수 중에는 계속 바뀐다.
+ *
+ * **1~3위는 시상대로, 4위부터 목록으로** (S15P21A405-702). 좋아요는 둘 다에서 바로 준다(`useContestLike`).
  */
 export default function RankingTab({ contest }: { contest: Contest }) {
   const { data, isPending, isError } = useContestEntriesQuery();
   const { data: me } = useMeQuery();
   const toast = useToastStore((s) => s.show);
   const save = useSaveContestEntryMutation();
+  const like = useContestLike(contest, me?.email ?? null);
 
   const handleSave = (e: ContestEntry) => {
     if (!me) return toast("로그인하면 내 플레이리스트로 가져올 수 있어요");
@@ -41,9 +46,12 @@ export default function RankingTab({ contest }: { contest: Contest }) {
       {isPending && <SkeletonRows count={5} thumb="square" />}
       {isError && <ErrorMessage />}
       {data && data.items.length === 0 && <EmptyState message="아직 순위가 없어요." />}
-      {data && (
+      {data && data.items.length > 0 && (
+        <RankingPodium top={data.items.slice(0, 3)} meEmail={me?.email ?? null} onLike={like.toggle} canLike={like.canLike} likePending={like.pending} />
+      )}
+      {data && data.items.length > 3 && (
         <div className="-mx-1.5 flex flex-col gap-0.5">
-          {data.items.map((e) => {
+          {data.items.slice(3).map((e) => {
             const isMine = me != null && e.ownerEmail === me.email;
             return (
               <div key={e.artworkId} className="flex items-center gap-1.5">
@@ -62,9 +70,14 @@ export default function RankingTab({ contest }: { contest: Contest }) {
                       </>
                     }
                     actions={
-                      <Button size="sm" variant="ghost" title="내 플리로 가져오기" disabled={save.isPending || e.tracks.length === 0} onClick={() => handleSave(e)}>
-                        ＋ 플리
-                      </Button>
+                      <>
+                        <Button size="sm" variant="ghost" active={e.likedByMe} disabled={!like.canLike(e) || like.pending} title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : e.likedByMe ? "좋아요 거두기" : "좋아요"} onClick={() => like.toggle(e)}>
+                          {e.likedByMe ? "♥" : "♡"}
+                        </Button>
+                        <Button size="sm" variant="ghost" title="내 플리로 가져오기" disabled={save.isPending || e.tracks.length === 0} onClick={() => handleSave(e)}>
+                          ＋ 플리
+                        </Button>
+                      </>
                     }
                   />
                 </div>

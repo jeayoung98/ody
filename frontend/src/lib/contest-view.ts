@@ -1,5 +1,5 @@
 import type { SketchStep } from "@/constants/contest";
-import type { Contest, ContestEntry, ContestMatch, ContestSort, MatchQuality } from "@/types";
+import type { Contest, ContestEntry, ContestSort, MatchQuality } from "@/types";
 
 /**
  * 콘테스트 응답을 화면이 묻는 것으로 (S15P21A405-640). 순수 함수만 — `tests/contest-view.test.cjs` 가 묶는다.
@@ -72,14 +72,17 @@ export function myEntry(mine: readonly ContestEntry[] | undefined): ContestEntry
   return mine?.[0] ?? null;
 }
 
+/** 뒤로 가는 곳 — **그리기 단계 안에서만** (S15P21A405-702). 첫 단계와 채점은 돌아갈 곳이 없다 */
+export function backStep(step: SketchStep): SketchStep | null {
+  return step === "review" ? "draw" : step === "submit" ? "review" : null;
+}
+
 /**
- * 그리기 탭이 지금 몇 단계인가 (S15P21A405-693).
- *
- * - 새로 그리는 중: 곡을 아직 못 찾았으면 `draw`, 찾았으면 `review`, 이름을 적기 시작했으면 `submit`
- * - 내 작품을 보는 중: 채점 전이면 `scoring`, 끝났으면 `null`(모든 단계 완료)
+ * 실제로 보여 줄 단계 (S15P21A405-702). 저장된 단계가 지금 상태와 안 맞으면 그리기로 돌린다 —
+ * 곡 확인·이름 단계인데 찾은 곡이 없거나(점을 고쳐 버려졌다), 채점 단계인데 낸 작품이 없을 때(지워졌다·로그아웃).
  */
-export function sketchStep(state: { viewingMine: boolean; mine: ContestEntry | null; match: ContestMatch | null; title: string }): SketchStep | null {
-  if (state.viewingMine && state.mine) return state.mine.status === "SCORED" ? null : "scoring";
-  if (!state.match) return "draw";
-  return state.title.trim() ? "submit" : "review";
+export function visibleStep(step: SketchStep, state: { hasMine: boolean; hasMatch: boolean }): SketchStep {
+  if (step === "scoring" && !state.hasMine) return "draw";
+  if ((step === "review" || step === "submit") && !state.hasMatch) return "draw";
+  return step;
 }

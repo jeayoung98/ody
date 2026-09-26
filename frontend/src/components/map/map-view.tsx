@@ -10,7 +10,6 @@ import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-l
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useBots } from "@/hooks/use-bots";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
@@ -118,11 +117,6 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
    */
   useViewportSubscription(features.social);
-  /**
-   * 데모 봇을 굴리는 유일한 시계 (S15P21A405-536). 지도 화면에만 둔다 — 두 군데서 돌면
-   * 같은 봇이 화면마다 다른 곡을 듣게 된다.
-   */
-  useBots(features.social);
   /**
    * 재생 선언을 보내는 유일한 자리 (S15P21A405-569). 지도 화면에만 둔다 —
    * 두 군데서 걸면 곡마다 두 번 선언한다.

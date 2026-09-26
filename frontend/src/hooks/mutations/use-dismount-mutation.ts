@@ -1,7 +1,6 @@
 import { useMutation } from "@tanstack/react-query";
 import { API_ENDPOINTS, RIDE_REJECTED } from "@/constants";
 import { api, ApiError } from "@/lib/api";
-import { isBot } from "@/lib/bots/roster";
 import { endRide, leaveRideLocally } from "@/lib/realtime/ride";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -42,16 +41,6 @@ export function useDismountMutation() {
  */
 export async function dismountRide(): Promise<void> {
   const wasRiding = useFollowStore.getState().leaderEmail != null;
-  /**
-   * 봇에서 내리는 길 (S15P21A405-536). 서버는 내가 탄 적도 모르므로 `DELETE` 를 보내면
-   * `RIDE_NOT_RIDING` 만 돌아온다. 자리는 지금 있는 곳 그대로다 — 봇을 따라다니는 동안
-   * `use-bots` 가 내 위치를 계속 옮겨 뒀다.
-   */
-  if (isBot(useFollowStore.getState().leaderEmail)) {
-    const map = useMapStore.getState();
-    endRide({ musicId: map.myMusicId, layer: map.layer });
-    return;
-  }
   leaveRideLocally();
   try {
     endRide(await api<DismountResponse>(API_ENDPOINTS.realtime.ride, { method: "DELETE" }));

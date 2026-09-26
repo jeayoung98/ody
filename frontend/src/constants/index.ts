@@ -17,5 +17,5 @@ export * from "./activity";
 export * from "./search";
 export * from "./report";
 export * from "./realtime";
-export * from "./bots";
 export * from "./contest";
+export * from "./profile";

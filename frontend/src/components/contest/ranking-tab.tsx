@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Button from "@/components/common/button";
 import EmptyState from "@/components/common/empty-state";
 import ErrorMessage from "@/components/common/error-message";
@@ -15,6 +16,7 @@ import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
 import RankingPodium from "./ranking-podium";
+import SaveToPlaylistButton from "./save-to-playlist-button";
 
 /**
  * 순위 — 리더보드 그대로 (S15P21A405-616 · 640). 순위 점수 = 좋아요 + AI ÷ 100 × K (K 회차별, 기본 5).
@@ -29,13 +31,29 @@ export default function RankingTab({ contest }: { contest: Contest }) {
   const save = useSaveContestEntryMutation();
   const like = useContestLike(contest, me?.email ?? null);
 
+  /**
+   * 이번에 내 플리로 넣은 작품 (S15P21A405-702). 넣은 뒤에는 버튼을 꺼 둔다 — 두 번 누르면 같은 플리가 둘 생긴다.
+   * 시상대와 목록이 같은 표를 본다. 창을 닫았다 열면 비는데, 그때 다시 넣는 것은 막지 않는다(서버가 중복을 모른다).
+   */
+  const [saved, setSaved] = useState<ReadonlySet<number>>(() => new Set());
+  const [savingId, setSavingId] = useState<number | null>(null);
   const handleSave = (e: ContestEntry) => {
     if (!me) return toast("로그인하면 내 플레이리스트로 가져올 수 있어요");
+    if (saved.has(e.artworkId)) return;
+    setSavingId(e.artworkId);
     save.mutate(
       { playlistName: e.title, musicIds: e.tracks.map((t) => t.musicId) },
-      { onSuccess: () => toast(`「${e.title}」 곡 ${e.tracks.length}개를 내 플레이리스트로 복사했어요`), onError: (err) => toast(err.message) },
+      {
+        onSuccess: () => {
+          setSaved((prev) => new Set(prev).add(e.artworkId));
+          toast(`「${e.title}」 곡 ${e.tracks.length}개를 내 플레이리스트에 넣었어요`);
+        },
+        onError: (err) => toast(err.message),
+        onSettled: () => setSavingId(null),
+      },
     );
   };
+  const saveButton = (e: ContestEntry) => <SaveToPlaylistButton saved={saved.has(e.artworkId)} pending={savingId === e.artworkId} empty={e.tracks.length === 0} onClick={() => handleSave(e)} />;
 
   return (
     <div className="flex flex-col gap-3">
@@ -47,7 +65,7 @@ export default function RankingTab({ contest }: { contest: Contest }) {
       {isError && <ErrorMessage />}
       {data && data.items.length === 0 && <EmptyState message="아직 순위가 없어요." />}
       {data && data.items.length > 0 && (
-        <RankingPodium top={data.items.slice(0, 3)} meEmail={me?.email ?? null} onLike={like.toggle} canLike={like.canLike} likePending={like.pending} />
+        <RankingPodium top={data.items.slice(0, 3)} meEmail={me?.email ?? null} onLike={like.toggle} canLike={like.canLike} likePending={like.pending} saveButton={saveButton} />
       )}
       {data && data.items.length > 3 && (
         <div className="-mx-1.5 flex flex-col gap-0.5">
@@ -74,9 +92,7 @@ export default function RankingTab({ contest }: { contest: Contest }) {
                         <Button size="sm" variant="ghost" active={e.likedByMe} disabled={!like.canLike(e) || like.pending} title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : e.likedByMe ? "좋아요 거두기" : "좋아요"} onClick={() => like.toggle(e)}>
                           {e.likedByMe ? "♥" : "♡"}
                         </Button>
-                        <Button size="sm" variant="ghost" title="내 플리로 가져오기" disabled={save.isPending || e.tracks.length === 0} onClick={() => handleSave(e)}>
-                          ＋ 플리
-                        </Button>
+                        {saveButton(e)}
                       </>
                     }
                   />

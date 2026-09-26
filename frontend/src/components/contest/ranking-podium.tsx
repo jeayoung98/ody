@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import Button from "@/components/common/button";
 import { PODIUM } from "@/constants";
 import { ownerLabel } from "@/lib/contest-view";
@@ -13,13 +14,15 @@ interface RankingPodiumProps {
   onLike: (e: ContestEntry) => void;
   canLike: (e: ContestEntry) => boolean;
   likePending: boolean;
+  /** 내 플리로 가져오기 버튼 — 넣었는지 여부는 순위 탭이 목록과 함께 들고 있다 */
+  saveButton: (e: ContestEntry) => ReactNode;
 }
 
 /**
  * 순위 1~3위 시상대 (S15P21A405-702). 가운데가 1위, 좌우가 2·3위이고 그림 크기로 순위가 먼저 읽힌다.
  * 한 줄 목록일 때는 상위권이 4위와 똑같이 생겨 눈에 안 띄었다. 좋아요는 여기서 바로 준다.
  */
-export default function RankingPodium({ top, meEmail, onLike, canLike, likePending }: RankingPodiumProps) {
+export default function RankingPodium({ top, meEmail, onLike, canLike, likePending, saveButton }: RankingPodiumProps) {
   const slots = PODIUM.order.map((i) => ({ entry: top[i] ?? null, place: i }));
   return (
     <div className="grid grid-cols-3 items-end gap-3">
@@ -42,15 +45,18 @@ export default function RankingPodium({ top, meEmail, onLike, canLike, likePendi
             <p className="num text-xs text-ink-3">
               AI {entry.score ?? "–"} · 순위 점수 <b className="text-ink">{entry.rankScore?.toFixed(1) ?? "–"}</b>
             </p>
-            <Button
-              size="sm"
-              active={entry.likedByMe}
-              disabled={!canLike(entry) || likePending}
-              title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : entry.likedByMe ? "좋아요 거두기" : "좋아요"}
-              onClick={() => onLike(entry)}
-            >
-              {entry.likedByMe ? "♥" : "♡"} <span className="num">{entry.likeCnt}</span>
-            </Button>
+            <div className="flex items-center gap-1.5">
+              <Button
+                size="sm"
+                active={entry.likedByMe}
+                disabled={!canLike(entry) || likePending}
+                title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : entry.likedByMe ? "좋아요 거두기" : "좋아요"}
+                onClick={() => onLike(entry)}
+              >
+                {entry.likedByMe ? "♥" : "♡"} <span className="num">{entry.likeCnt}</span>
+              </Button>
+              {saveButton(entry)}
+            </div>
           </article>
         );
       })}

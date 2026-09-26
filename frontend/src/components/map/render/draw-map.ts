@@ -969,6 +969,8 @@ function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number;
  * 글씨로 사정을 설명하지 않는다. 제자리 표식(링 + 다이아)과 눈으로 바로 갈라져야 한다.
  */
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
+  // 동승자 헬멧 자리는 이 프레임에 그린 것만 믿는다 — 안 그리고 나가는 길에서도 옛 자리가 남지 않게 먼저 비운다 (S15P21A405-699)
+  e.myQueueScreen.clear();
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
   // 화면 밖이면 자리 대신 가장자리 화살표를 그린다
@@ -1008,7 +1010,7 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
   if (e.myRiders > 0) {
     const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
     // 나는 조종석에 있다 — 줄에는 따라오는 사람만 선다 (S15P21A405-676)
-    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, { me: null, riders: e.myRiderUsers, count: e.myRiders });
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, { me: null, riders: e.myRiderUsers, count: e.myRiders }, e.myQueueScreen);
     drawShip(g, px, py, ME_SHIP_R, ang, e.time);
     // 창 크기는 남의 우주선(`draw-friends`)과 같은 비율 — 내 얼굴이 유리 안에 든다
     drawVisor(g, px, py, ME_SHIP_R * 0.72, meAvatar(e));

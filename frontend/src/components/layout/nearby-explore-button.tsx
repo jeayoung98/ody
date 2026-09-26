@@ -19,7 +19,8 @@ import RailButton from "./rail-button";
  * 켜기/닫기 **토글만** 한다. 주변 탐색 중 다른 이웃으로 건너가는 것(항해)은 선택한 별 곁에 붙는
  * "주변 보기 ›" 링크가 맡는다 (S15P21A405-288) — 한 버튼이 두 뜻을 갖지 않게
  */
-export default function NearbyExploreButton() {
+/** `bare` — 폰 윗줄처럼 알약 없이 흰 아이콘으로 띄울 때 (`rail-button` 참고, S15P21A405-703) */
+export default function NearbyExploreButton({ bare = false }: { bare?: boolean }) {
   const viewMode = useMapStore((s) => s.viewMode);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
@@ -72,6 +73,7 @@ export default function NearbyExploreButton() {
       title={riding ? "따라가는 중에는 지도를 움직일 수 없어요" : disabled ? "곡을 먼저 고르세요" : active ? "주변 탐색 닫기" : "주변 탐색"}
       onClick={handleClick}
       data-tutorial="nearby"
+      bare={bare}
     >
       <CoronaIcon size={17} />
     </RailButton>

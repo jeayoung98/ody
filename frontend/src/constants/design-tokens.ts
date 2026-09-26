@@ -146,3 +146,22 @@ export const TOUCH_TARGET_MIN = 44;
  * 지도 엔진이 패널에 가려지는 폭을 재려고 JS 에서 이 값을 쓴다 (S15P21A405-479).
  */
 export const RIGHT_PANEL_W = 376;
+
+/**
+ * 폰에서 아래에서 올라오는 판의 윗모서리(px). `tokens.css` 의 `--radius-sheet` 와 같은 값 — **함께 고친다.**
+ * 재생바가 네비 줄 뒤로 이만큼 내려가 있어서(`bottom-bar.tsx`) 지도 가림폭에서 JS 로 빼야 한다 (S15P21A405-703).
+ */
+export const SHEET_RADIUS_PX = 30;
+
+/**
+ * 폰 바텀시트가 1·2 단에서 재생바 위로 걸리는 높이(px). `tokens.css` 의 `--spacing-sheet-s1`·`-s2` 와
+ * 같은 값 — **함께 고친다.** 지도 엔진이 시트 위에 남은 지도의 가운데를 잡으려고 쓴다 (S15P21A405-703).
+ * 3 단은 지도가 거의 다 덮이므로 2 단 값을 그대로 쓴다 — 올렸다 내릴 때 가운데가 출렁이지 않게.
+ */
+export const SHEET_SNAP_PX = { 1: 102, 2: 238, 3: 238 } as const;
+
+/**
+ * 머리글 없이 1 단으로 걸리는 시트(곡 상세·프로필)의 **본문 위 여백**(px). `tokens.css` 의
+ * `--spacing-sheet-peek-top` 과 같은 값 — **함께 고친다.** 손잡이 막대(14px)를 비켜 글이 선다 (S15P21A405-703).
+ */
+export const SHEET_PEEK_TOP_PX = 20;

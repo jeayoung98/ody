@@ -3,6 +3,7 @@
 import Logo from "@/components/common/logo";
 import LayerStepper from "./layer-stepper";
 import LayerSummary from "./layer-summary";
+import LeadChip from "./lead-chip";
 import ViewModeCrumb from "./view-mode-crumb";
 
 /**
@@ -13,14 +14,19 @@ import ViewModeCrumb from "./view-mode-crumb";
  */
 export default function Brand() {
   return (
-    <div className="pointer-events-none absolute top-hud-t left-[18px] z-20 flex flex-col gap-[14px] max-tablet:left-gutter-sm" data-hud>
+    <div className="pointer-events-none absolute top-hud-t left-[18px] z-20 flex flex-col gap-[14px] max-tablet:left-gutter-sm" data-hud data-brand>
       {/*
         `self-start` 는 좁은 화면에서만 건다 (S15P21A405-417). 이 줄은 `flex-col` 의 자식이라
         **아래 레이어 자취만큼 가로로 늘어난다** — 워드마크를 감춰 보이는 건 마크 26px 뿐인데
         상자는 128px 이었다. 상자가 커지면 지도 엔진이 `[data-hud]` 를 재서 그만큼 넓게 비운다
         (`map-view.tsx` 의 `setObstacles`). 데스크톱에 걸면 그쪽 상자도 420→149 로 바뀌므로 안 건다.
       */}
-      <div className="pointer-events-auto flex items-center gap-2.5 max-tablet:self-start">
+      {/*
+        폰 윗줄은 32px 한 줄이다 (S15P21A405-703) — 검색·주변 탐색·여정과 같은 높이라 가운데선이 맞는다.
+        **폰에서는 로고를 감춘다** (사용자 결정). `hidden` 이 아니라 `invisible` 인 이유: 이 줄이 빠지면
+        아래 레이어 자취가 윗줄로 올라와 검색 아이콘과 겹친다 — 자리(32px)는 남기고 모양만 지운다.
+      */}
+      <div className="pointer-events-auto flex items-center gap-2.5 max-tablet:invisible max-tablet:h-8 max-tablet:self-start">
         <Logo size={26} radius={22} className="shadow-[0_0_22px_-4px_rgba(92,157,255,.75)]" />
         {/*
           좁은 화면에서는 워드마크를 접는다 (S15P21A405-417). 375px 한 줄에 브랜드(128) ·
@@ -36,6 +42,8 @@ export default function Brand() {
         <LayerStepper />
         <LayerSummary />
       </div>
+      {/* 폰에서 내가 태우고 있을 때 인원 한 줄 — 레이어 설명 바로 아래 (S15P21A405-703) */}
+      <LeadChip />
       <ViewModeCrumb />
     </div>
   );

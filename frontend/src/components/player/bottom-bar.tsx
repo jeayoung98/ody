@@ -27,8 +27,13 @@ export default function BottomBar() {
          * **둘 사이에 선을 긋지 않는다.** 유리가 불투명해진 뒤로는 가르는 줄이 한 판을 둘로
          * 쪼개 보이게만 했다. `-1px` 로 살짝 겹쳐 두면 틈도 선도 없이 이어진다.
          * 안전영역은 탭바가 제 패딩으로 이미 먹었다.
+         *
+         * **이제 네비 뒤로 30px 내려간다** (S15P21A405-703). 네비 줄 윗모서리가 둥글어져서, 재생바가
+         * 네비 위에서 끝나면 그 둥근 홈으로 지도가 비쳐 판이 떠 보였다. 모서리 반경만큼 네비(z-23)
+         * 뒤로 밀어 넣으면 홈에는 재생바 유리가 보인다. 늘어난 만큼 아래 여백도 늘린다(`player-bar`).
+         * 높이를 재는 쪽은 그만큼을 빼야 한다 — `main-screen.tsx` 의 `--nav-bottom` 과 지도 가림폭.
          */
-        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-0 max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px)-1px)] max-tablet:left-0 max-tablet:w-auto"
+        className="absolute right-[18px] bottom-hud-b z-[21] flex w-right-panel items-stretch max-tablet:right-0 max-tablet:bottom-[calc(var(--spacing-tabbar)+env(safe-area-inset-bottom,0px)-var(--radius-sheet))] max-tablet:left-0 max-tablet:w-auto"
       >
         <PlayerBar />
       </footer>

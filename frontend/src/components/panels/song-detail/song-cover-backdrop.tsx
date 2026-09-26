@@ -90,6 +90,8 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
     */
     <div
       aria-hidden
+      // 폰 시트 1·2 단에서 이 위에 어두운 막을 깐다 — `globals.css` 가 이 이름으로 찾는다 (S15P21A405-703)
+      data-cover-backdrop
       className="pointer-events-none absolute inset-x-0 top-0 aspect-square [-webkit-mask-image:linear-gradient(to_bottom,#000_62%,transparent)] [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]"
     >
       {/* 1. 커버 */}
@@ -99,7 +101,8 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
       {/* 3. 헤더 글자 자리 */}
       <div className="absolute inset-x-0 top-0 h-[72px] bg-gradient-to-b from-void/80 via-void/40 via-55% to-transparent" />
       {/* 4. 덮개 */}
-      <div ref={plateRef} className="absolute inset-0 bg-void-3 opacity-0" />
+      {/* 폰에서는 덮개도 반투명이다 — 시트가 유리라 여기만 막히면 굴렸을 때 검은 판이 된다 (S15P21A405-703) */}
+      <div ref={plateRef} className="absolute inset-0 bg-void-3 opacity-0 max-tablet:bg-void-3/55" />
     </div>
   );
 }

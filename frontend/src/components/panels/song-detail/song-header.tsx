@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { CalendarIcon, ClockIcon, HeartIcon, PauseIcon, PlaylistAddIcon, PlayIcon } from "@/components/common/icons";
 import MarqueeText from "@/components/common/marquee-text";
 import Tag from "@/components/common/tag";
@@ -8,6 +8,7 @@ import TransportButton from "@/components/common/transport-button";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useLikeMusicMutation } from "@/hooks/mutations/use-like-music-mutation";
 import { useFeatures } from "@/hooks/use-features";
+import { useSheetPeek } from "@/hooks/use-sheet-peek";
 import { useSongPlayToggle } from "@/hooks/use-song-play-toggle";
 import { formatCount, formatDuration } from "@/lib/format";
 import type { MusicDetail } from "@/types";
@@ -30,6 +31,9 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
   // 플리 목록은 화면 가운데 팝업이다 (S15P21A405-686) — 시트를 올려 펼칠 자리를 만들던 일(S15P21A405-547)이 필요 없어졌다
   const { blocked, isThisPlaying, toggle } = useSongPlayToggle(music.id);
   const like = useLikeMusicMutation();
+  /** 폰 시트 1 단이 이 줄(제목·가수·＋·▶) 아래에서 멈춘다 — 머리글은 접힌다 (S15P21A405-703) */
+  const titleRowRef = useRef<HTMLDivElement>(null);
+  useSheetPeek(titleRowRef, "bottom");
   /**
    * **찾아봤는데 음원이 없는 곡** (S15P21A405-384). 다시 눌러도 답이 같으므로 재생도 플리 추가도
    * 아예 잠근다 — 흐리기만 하고 눌리게 두면 "될 것 같은데 안 되는" 버튼이 된다.
@@ -38,7 +42,7 @@ export default function SongHeader({ music }: { music: MusicDetail }) {
   const dead = blocked === PLAYBACK_BLOCKED.noVideo;
   return (
     <div className="relative flex flex-col gap-2">
-      <div className="flex items-center gap-1.5">
+      <div ref={titleRowRef} className="flex items-center gap-1.5">
         {/* 긴 제목은 잘리지 않고 옆으로 흐른다 */}
         <div className="mr-1 flex min-w-0 flex-1 flex-col gap-0.5">
           <MarqueeText

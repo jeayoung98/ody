@@ -766,14 +766,18 @@ export default function MapView({ occlusion }: MapViewProps) {
        *
        * **주변 탐색·여정에서도 같다.** 주변 탐색만 예외였는데 (S15P21A405-288, 카드가 고리
        * 라벨을 덮는다는 이유) 덮을 카드가 없어졌으므로 그 예외도 같이 없앤다.
+       *
+       * **2 단으로 연다** (S15P21A405-703, 사용자 결정). 1 단은 제목 줄뿐이라 눌러 놓고 다시 올려야
+       * 했다. 1 단은 이제 **지도를 움직일 때** 내려앉는 자리다(`collapse`). 누른 별은 시트 위에 남은
+       * 지도의 가운데로 온다 — 가림폭에 시트 높이가 들어간다(`main-screen`).
        */
-      openSongFromMap(s.musicId, narrow ? 1 : undefined);
+      openSongFromMap(s.musicId);
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, narrow, openSongFromMap, playSong, selectMusic],
+    [engine, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(

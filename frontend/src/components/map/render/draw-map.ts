@@ -747,34 +747,37 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
    * 이웃을 누르는 것만으로는 건너가지 않으므로(선택·재생만), 건너가는 길이 시선이 있는 자리에 글씨로 보여야 한다.
    * 떠다니는 버튼을 얹는 대신 이미 있는 라벨 묶음 안에 넣는다. 히트 영역은 엔진에 적어 두고 클릭은 map-view 가 받는다
    */
+  /** 라벨 글씨 배율 — 확대의 일부만 따라간다 (S15P21A405-688) */
+  const sc = e.probeLabelScale();
   const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
-    // 크기·간격은 `PROBE_LABEL` 한 곳이다 (S15P21A405-688). 확대가 글씨를 키우지 않으므로 기본을 키웠다
+    // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
     const L = PROBE_LABEL;
-    g.font = `500 ${L.titlePx}px ${FONTS.body}`;
-    const title = fitText(g, s.title, L.titleMaxW);
+    g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
+    const title = fitText(g, s.title, L.titleMaxW * sc);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, x - tw / 2 - 7, y + L.boxTop, tw + 14, L.boxH, 6);
+    roundRect(g, x - tw / 2 - 6 * sc, y + L.boxTop * sc, tw + 12 * sc, L.boxH * sc, 5 * sc);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, x, y + L.boxTop + L.boxH / 2);
+    g.fillText(title, x, y + (L.boxTop + L.boxH / 2) * sc);
     if (sub) {
       // 제목 상자와 가수 줄 사이를 띄운다 — 붙어 있으면 한 덩어리로 읽힌다 (S15P21A405-649 · 688)
-      g.font = `500 ${L.subPx}px ${FONTS.mono}`;
-      g.fillStyle = "rgba(147,164,196,.72)";
-      g.fillText(sub, x, y + L.subY);
+      g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
+      g.fillStyle = "rgba(147,164,196,.7)";
+      g.fillText(sub, x, y + L.subY * sc);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
       g.globalAlpha = a * pulse;
-      g.font = `600 11.5px ${FONTS.body}`;
+      g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
       const label = "주변 보기 ›";
       const lw = g.measureText(label).width;
-      g.fillText(label, x, y + HOP_LINK.dy);
-      e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: y + HOP_LINK.dy - HOP_LINK.h / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h };
+      const ly = y + HOP_LINK.dy * sc;
+      g.fillText(label, x, ly);
+      e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: ly - (HOP_LINK.h * sc) / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h * sc };
     }
   };
   // 라벨은 지금 고리에만 — 옅은 고리까지 글자를 달면 읽히지 않고 어지럽기만 하다.
@@ -835,16 +838,16 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.stroke();
   g.globalCompositeOperation = "source-over";
   const L = PROBE_LABEL;
-  g.font = `600 ${L.centerTitlePx}px ${FONTS.body}`;
+  g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
   const tw = g.measureText(song.title).width;
   g.fillStyle = MAP_COLORS.labelBg;
-  roundRect(g, tx - tw / 2 - 8, ty + rr + L.centerGap, tw + 16, L.centerBoxH, 6);
+  roundRect(g, tx - tw / 2 - 7 * sc, ty + rr + L.centerGap * sc, tw + 14 * sc, L.centerBoxH * sc, 6 * sc);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
-  g.fillText(song.title, tx, ty + rr + L.centerGap + L.centerBoxH / 2);
-  g.font = `500 ${L.centerSubPx}px ${FONTS.mono}`;
+  g.fillText(song.title, tx, ty + rr + (L.centerGap + L.centerBoxH / 2) * sc);
+  g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + L.centerSubY);
+  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + L.centerSubY * sc);
 
   // 선택한 곡의 라벨 — 모든 라벨 위에. 지금 고리의 이웃이거나 이전 고리의 중심이다
   const sel = e.selectedId;

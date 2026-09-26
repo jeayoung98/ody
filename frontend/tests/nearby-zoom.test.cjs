@@ -42,3 +42,15 @@ test("고리에 없는 지도 별은 움직이지 않는다 — 배경은 그대
 test("1 배 아래로는 좁히지 않는다 — 바닥에 닿는 입력은 뷰를 나가는 뜻이다", () => {
   assert.deepEqual(engine(0.6).probePos(2), { x: 600, y: 400 });
 });
+
+const { PROBE_LABEL } = require("../src/constants/map.ts");
+
+test("글씨는 확대의 일부만 커진다 — 1 배면 그대로, 2 배면 zoomGain 만큼", () => {
+  assert.equal(engine(1).probeLabelScale(), 1);
+  assert.equal(engine(2).probeLabelScale(), 1 + PROBE_LABEL.zoomGain);
+  assert.ok(engine(2).probeLabelScale() < 2, "자리만큼 커지면 캔버스 통째 확대와 같아진다");
+});
+
+test("글씨 배율은 상한에서 멈춘다", () => {
+  assert.equal(engine(100).probeLabelScale(), PROBE_LABEL.maxScale);
+});

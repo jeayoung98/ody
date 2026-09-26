@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -1140,6 +1140,12 @@ export class MapEngine {
   ringK(r: ProbeRing, now = performance.now()) {
     if (r.leavingAt) return 1 - easeInOut(Math.min(1, (now - r.leavingAt) / PROBE.exitMs));
     return easeInOut(Math.min(1, (now - r.t0) / PROBE.enterMs));
+  }
+
+  /** 주변 탐색 라벨 글씨 배율 — 확대의 일부만 따라간다 (`PROBE_LABEL.zoomGain`, S15P21A405-688) */
+  probeLabelScale(): number {
+    const z = this.probeZoomFrame()?.z ?? 1;
+    return Math.min(PROBE_LABEL.maxScale, 1 + (z - 1) * PROBE_LABEL.zoomGain);
   }
 
   /**

@@ -14,12 +14,19 @@ import type { ReactNode } from "react";
  * 안에 넣으면 버튼 높이만큼 알약이 커지고, 무엇이 눌리는 것인지 한눈에 갈리지 않는다.
  * ⓘ 설명은 뺐다. 모두 내리기는 누르면 확인을 한 번 받으므로 미리 적어 둘 말이 없다.
  */
-export default function RideChip({ dot, children, action }: { dot: "teal" | "violet"; children: ReactNode; action: ReactNode }) {
+/** 점 색 — 태우는 쪽 teal, 타는 쪽 violet, 인솔자와 끊겨 다시 잇는 중이면 warn (S15P21A405-700) */
+const DOT = {
+  teal: "bg-teal shadow-[0_0_10px_#4fe3ce]",
+  violet: "bg-violet shadow-[0_0_10px_#a67cff]",
+  warn: "bg-warn shadow-[0_0_10px_#ffc46b]",
+} as const;
+
+export default function RideChip({ dot, children, action }: { dot: keyof typeof DOT; children: ReactNode; action: ReactNode }) {
   return (
     <div className="pointer-events-auto hidden w-fit max-w-[calc(100dvw-2*var(--spacing-gutter-sm))] items-center gap-1.5 max-tablet:flex">
       <div className="glass-liquid flex min-w-0 items-center gap-2 rounded-pill! py-[5px] px-3 [--glass-tint:rgb(6_9_17/0.45)]">
         <span
-          className={`animate-pulse-dot h-1.5 w-1.5 shrink-0 rounded-pill ${dot === "teal" ? "bg-teal shadow-[0_0_10px_#4fe3ce]" : "bg-violet shadow-[0_0_10px_#a67cff]"}`}
+          className={`animate-pulse-dot h-1.5 w-1.5 shrink-0 rounded-pill ${DOT[dot]}`}
         />
         <span className="min-w-0 truncate text-[13.5px] leading-6">{children}</span>
       </div>

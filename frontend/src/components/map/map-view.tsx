@@ -10,9 +10,7 @@ import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-l
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useContestSky } from "@/hooks/use-contest-sky";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
-import { usePlayContestShape } from "@/hooks/use-play-contest-shape";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
@@ -119,9 +117,6 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
    */
   useViewportSubscription(features.social);
-  /** 이벤트 탑 작품을 최상단 겹에 띄운다 (S15P21A405-684). 그리기·클릭은 엔진이 한다 */
-  useContestSky(features.contest, engine);
-  const playContestShape = usePlayContestShape();
   /**
    * 재생 선언을 보내는 유일한 자리 (S15P21A405-569). 지도 화면에만 둔다 —
    * 두 군데서 걸면 곡마다 두 번 선언한다.
@@ -704,7 +699,7 @@ export default function MapView({ occlusion }: MapViewProps) {
         if (inNearby) engine.setHover(song?.musicId ?? null);
         scheduleHide();
       }
-      setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my) || !!engine.hitContestSky(mx, my));
+      setHover(!!hit || !!hitF || !!engine.hitHopLink(mx, my));
     },
     [engine, cancelHide, scheduleHide, cancelHold, pinchNow, zoomBy, notifyMapLocked],
   );
@@ -842,12 +837,6 @@ export default function MapView({ occlusion }: MapViewProps) {
         openSongFromMap(gid);
         return;
       }
-      // 이벤트 탑 작품의 태그·선을 누르면 그 플리를 튼다 (S15P21A405-684). 태그는 늘 이기고, 선은 별 위면 별이 이긴다
-      const sky = engine.hitContestSky(mx, my, false) ?? (engine.hitTest(mx, my) ? null : engine.hitContestSky(mx, my));
-      if (sky) {
-        playContestShape(sky);
-        return;
-      }
       const hit = engine.hitTest(mx, my);
       /**
        * 별에 정확히 안 있어도 **카드가 떠 있으면 그 곡이다** (S15P21A405-280). 별에서 벗어난 뒤
@@ -902,7 +891,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       }
       pressSong(song);
     },
-    [engine, cancelHold, narrow, openFeed, openSongFromMap, playContestShape, pressSong, selectMusic],
+    [engine, cancelHold, narrow, openFeed, openSongFromMap, pressSong, selectMusic],
   );
   /**
    * **마우스에만 뜻이 있다** (S15P21A405-415). 커서가 지도 밖으로 나가면 드래그도 호버도 끝이다.

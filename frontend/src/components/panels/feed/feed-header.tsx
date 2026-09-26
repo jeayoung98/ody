@@ -1,11 +1,13 @@
 "use client";
 
+import { useRef } from "react";
 import { useDrill } from "@/hooks/use-drill";
 import Avatar from "@/components/common/avatar";
 import Button from "@/components/common/button";
 import Note from "@/components/common/note";
 import { useFollowMutation, useUnfollowMutation } from "@/hooks/mutations/use-follow-mutation";
 import { useRideMutation } from "@/hooks/mutations/use-ride-mutation";
+import { useSheetStop } from "@/hooks/use-sheet-stop";
 import { useStartActivity } from "@/hooks/use-start-activity";
 import { useFollowStore } from "@/stores/use-follow-store";
 import type { UserProfile } from "@/types";
@@ -50,6 +52,9 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
   // 탭 화면에서는 지도로 돌아가서 연다 (S15P21A405-666)
   const drill = useDrill();
   const startActivity = useStartActivity();
+  /** 폰 시트 2 단이 이 버튼 줄 아래에서 멈춘다 (S15P21A405-703) — 내 프로필엔 버튼이 없어 기본 높이다 */
+  const actionsRef = useRef<HTMLDivElement>(null);
+  useSheetStop(actionsRef);
 
   /** 지금 이 사람의 우주선에 **타고 있는가** (지금 이 순간의 일) */
   const isRiding = leaderEmail === profile.email;
@@ -108,7 +113,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
       </div>
 
       {!isMe && (
-        <div className="flex flex-col gap-1.5">
+        /* 폰에서는 둘을 나란히 둔다 (S15P21A405-703) — 세로로 쌓으면 2 단 시트에 둘 다 걸리지 않았다 */
+        <div ref={actionsRef} className="flex flex-col gap-1.5 max-tablet:grid max-tablet:grid-cols-2 max-tablet:gap-2">
           {/* 구독과 탑승은 다른 일이다 — 구독은 오래 남는 관계, 탑승은 지금 이 순간 따라다니는 것 */}
           <Button variant={isFollowing ? "secondary" : "primary"} onClick={handleFollow} disabled={pending}>
             {isFollowing ? "팔로잉" : "팔로우"}
@@ -116,7 +122,11 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
           <Button variant="secondary" onClick={handleRide} disabled={!canRide || ride.isPending}>
             {isRiding ? "🚀 탑승 중" : "🚀 따라가기"}
           </Button>
-          {!online && <Note>오프라인이라 따라갈 수 없습니다.</Note>}
+          {!online && (
+            <div className="max-tablet:col-span-2">
+              <Note>오프라인이라 따라갈 수 없습니다.</Note>
+            </div>
+          )}
         </div>
       )}
     </div>

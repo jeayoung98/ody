@@ -187,6 +187,13 @@ interface PanelState {
   /** 드래그로 단을 직접 정한다 (S15P21A405-416) */
   setSnap: (snap: SheetSnap) => void;
   /**
+   * 폰 시트의 2 단 높이를 **내용이 정할 때** 그 값(px). `null` 이면 기본값(`--spacing-sheet-s2`)이다.
+   * 프로필이 팔로우·따라가기 버튼 아래에서 멈추려고 쓴다 (S15P21A405-703, `use-sheet-stop`).
+   * 지도 가림폭이 이 값을 읽어 누른 사람을 시트 위 가운데로 둔다 (`main-screen`).
+   */
+  sheetStop: number | null;
+  setSheetStop: (px: number | null) => void;
+  /**
    * 자리를 비켜 준다 (S15P21A405-404). 지도를 움직이는 동안 불린다.
    * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
    */
@@ -203,6 +210,7 @@ export const usePanelStore = create<PanelState>()(
       history: [],
       feedFollows: null,
       snap: OPEN_SNAP,
+      sheetStop: null,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
       followSong: (musicId) => set((s) => (s.activePanel === "song" && s.musicId !== musicId ? { musicId } : {}), false, "followSong"),
@@ -301,6 +309,7 @@ export const usePanelStore = create<PanelState>()(
       },
 
       setSnap: (snap) => set((s) => (s.snap === snap ? {} : { snap }), false, "setSnap"),
+      setSheetStop: (px) => set((s) => (s.sheetStop === px ? {} : { sheetStop: px }), false, "setSheetStop"),
 
       /**
        * 드래그 중에 매 프레임 불릴 수 있다. **바뀔 때만 set 한다** — 같은 값을 계속 넣으면

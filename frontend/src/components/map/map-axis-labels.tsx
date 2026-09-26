@@ -63,21 +63,9 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
       <span className={`${cl} top-1/2 -translate-y-1/2 text-right`} style={{ right: occlusion.right + 18 }}>
         {x[1]} ▶
       </span>
-      {/*
-        위아래는 검색창·플레이어바를 피해 안쪽으로 물린다.
-        **폰에서는 아래를 재생바 위로 올린다** (S15P21A405-695). 84px 고정이면 탭바와 재생바가 그 자리를
-        덮어 라벨이 통째로 가려졌다 — 재생바 높이는 재생 상태에 따라 바뀌므로 잰 값(`--nav-bottom`)을 쓴다.
-        긴 라벨은 폰에서 26vw 를 넘으면 "…" 로 잘렸다. **넓히지 않고 두 줄까지 줄바꿈한다** — 위 라벨을 넓히면
-        좌상단 겹 제목 설명과 닿는다(폭 408px 에서 가장 긴 라벨이 설명 첫 줄 끝과 3px 겹쳤다).
-      */}
-      <span className={`${cl} top-[72px] left-1/2 -translate-x-1/2 text-center max-tablet:line-clamp-2 max-tablet:whitespace-normal`}>
-        ▲ {y[1]}
-      </span>
-      <span
-        className={`${cl} bottom-[84px] left-1/2 -translate-x-1/2 text-center max-tablet:bottom-[calc(var(--nav-bottom)+var(--spacing-hud-sm))] max-tablet:line-clamp-2 max-tablet:whitespace-normal`}
-      >
-        {y[0]} ▼
-      </span>
+      {/* 위아래는 검색창·플레이어바를 피해 안쪽으로 물린다 */}
+      <span className={`${cl} top-[72px] left-1/2 -translate-x-1/2 text-center`}>▲ {y[1]}</span>
+      <span className={`${cl} bottom-[84px] left-1/2 -translate-x-1/2 text-center`}>{y[0]} ▼</span>
     </>
   );
 }

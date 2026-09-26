@@ -26,6 +26,13 @@ public class GmsTasteOutputValidator {
     private static final List<String> DIRECTION_REVERSALS =
             List.of("덜 ", "반대로", "아닌 ", "적게 ", "보다");
 
+    /**
+     * 표본이 적다는 안내는 문장이 아니라 화면 배지({@code report.level})가 한다 [S15P21A405-634].
+     * 문장에도 들어가면 배지와 겹쳐 두 번 말하게 되고, 요약이 "나를 설명하는 한 문장"이 아니라 면책 문구가 된다.
+     * 지시문으로 막아도 모델이 스스로 붙일 수 있어 여기서도 거른다. 걸리면 템플릿 문장으로 대체된다.
+     */
+    private static final List<String> TENTATIVE_WORDS = List.of("잠정");
+
     public void validate(GmsTasteOutput output, List<TasteFinding> findings) {
         if (output == null || output.summary() == null || output.summary().isBlank()
                 || output.summary().length() > 160 || output.narratives() == null
@@ -66,6 +73,7 @@ public class GmsTasteOutputValidator {
     private static boolean isUngrounded(String text) {
         return UNSUPPORTED_INFERENCES.stream().anyMatch(text::contains)
                 || DIRECTION_REVERSALS.stream().anyMatch(text::contains)
+                || TENTATIVE_WORDS.stream().anyMatch(text::contains)
                 || text.chars().anyMatch(Character::isDigit)
                 || !isPoliteEnding(text);
     }

@@ -15,6 +15,7 @@ import org.junit.jupiter.api.Test;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.ssafy.backend.taste.analysis.TasteFinding;
+import com.ssafy.backend.taste.service.TasteAnalysisGenerationService;
 import com.sun.net.httpserver.HttpServer;
 
 class GmsTasteClientTests {
@@ -62,6 +63,9 @@ class GmsTasteClientTests {
         assertThat(authorization.get()).isEqualTo("Bearer secret");
         assertThat(requestBody.get())
                 .contains("\"store\":false", "\"type\":\"json_schema\"", "pc1-high")
+                // 스키마가 JsonNode 게터로 펼쳐져 나가면 GMS 가 400 을 낸다 (S15P21A405-648)
+                .contains("\"additionalProperties\":false", "\"required\":[\"summary\",\"narratives\"]")
+                .doesNotContain("\"nodeType\"")
                 .contains("sampleSize")
                 .doesNotContain("email", "musicId", "title");
     }
@@ -93,6 +97,21 @@ class GmsTasteClientTests {
                 .satisfies(error -> assertThat(((GmsTasteClient.GmsTasteException) error).code())
                         .isEqualTo("GMS_REQUEST_FAILED"));
         assertThat(requests).hasValue(1);
+    }
+
+    /** 실패 로그에 GMS 의 상태와 오류 본문이 남아야 원인을 가른다 (S15P21A405-648). */
+    @Test
+    void httpError_causeCarriesStatusAndBodyForLogging() throws Exception {
+        startServer(exchange -> {
+            byte[] body = "{\"error\":{\"message\":\"Invalid schema for response_format\"}}"
+                    .getBytes(StandardCharsets.UTF_8);
+            exchange.sendResponseHeaders(400, body.length);
+            exchange.getResponseBody().write(body);
+        });
+
+        assertThatThrownBy(() -> client(1000).generate("STANDARD", List.of(finding()), 40))
+                .satisfies(error -> assertThat(TasteAnalysisGenerationService.causeOf(error))
+                        .contains("400", "Invalid schema for response_format"));
     }
 
     @Test

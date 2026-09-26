@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
-import type { ContestTab } from "@/constants";
+import type { ContestTab, SketchStep } from "@/constants";
 import type { ContestMatch, ContestSort, SketchPoint } from "@/types";
 
 /** 빈 목록은 늘 같은 참조 — 셀렉터가 매번 새 배열을 만들지 않게 */
@@ -25,6 +25,11 @@ interface ContestState {
   closed: boolean;
   match: ContestMatch | null;
   title: string;
+  /**
+   * 그리기 탭에서 지금 보고 있는 단계 (S15P21A405-702). 한 화면에 한 단계만 보이고, 다음·뒤로로 옮긴다.
+   * 스토어에 두는 이유는 팝업을 닫았다 열어도 하던 단계로 돌아와야 해서다 — 그린 점·찾은 곡도 여기 있다.
+   */
+  step: SketchStep;
 
   toggleOpen: () => void;
   /** 그 탭으로 연다 — 플레이어바 이벤트 태그가 갤러리로 부른다 (S15P21A405-684) */
@@ -39,6 +44,7 @@ interface ContestState {
   toggleClosed: () => void;
   setMatch: (match: ContestMatch | null) => void;
   setTitle: (title: string) => void;
+  setStep: (step: SketchStep) => void;
 }
 
 /** 점이 바뀌었다 — 이전 답은 무효 */
@@ -54,6 +60,7 @@ export const useContestStore = create<ContestState>()(
       closed: false,
       match: null,
       title: "",
+      step: "draw",
 
       toggleOpen: () => set((s) => ({ open: !s.open }), false, "toggleOpen"),
       openAt: (tab) => set({ open: true, tab }, false, "openAt"),
@@ -67,6 +74,7 @@ export const useContestStore = create<ContestState>()(
       toggleClosed: () => set((s) => ({ closed: !s.closed, ...invalidate }), false, "toggleClosed"),
       setMatch: (match) => set({ match }, false, "setMatch"),
       setTitle: (title) => set({ title }, false, "setTitle"),
+      setStep: (step) => set({ step }, false, "setStep"),
     }),
     { name: "contest-store" },
   ),

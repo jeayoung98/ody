@@ -61,7 +61,7 @@ export default function RightPanel() {
    * 폰에서 **지도를 누르면 한 단 내려온다** (S15P21A405-532, 416, 547).
    *
    * 처음에는 어느 단이든 바로 닫았는데, 그러면 **펼쳐 놓고 지도를 한 번 보려는 동작이 매번
-   * 닫기가 된다.** 그래서 2·3 단은 1 단으로 내려오고, 이미 1 단이면 그때 닫는다 (`lowerSnap`).
+   * 닫기가 된다.** 그래서 한 단씩 내려오고(3 → 2 → 1, S15P21A405-703), 이미 1 단이면 그때 닫는다 (`lowerSnap`).
    *
    * **세는 자리는 지도뿐이다** (`[data-map]`). 시트 밖 전부를 세던 때는 탭바와 재생바 버튼까지
    * 같이 삼켜서 **하단 UI 가 통째로 안 눌렸다** — 시트는 거의 항상 열려 있으므로 사실상
@@ -71,7 +71,7 @@ export default function RightPanel() {
    *
    * | | 빈 공간 | 별·사람 |
    * | --- | --- | --- |
-   * | 3 단 | 1 단으로 | 1 단으로 — **고르지 않는다** |
+   * | 3 단 | 2 단으로 | 2 단으로 — **고르지 않는다** |
    * | 1·2 단 | 내려감·닫힘 | 그대로 흘려보낸다 → 그 대상 상세가 2 단으로 열린다 |
    *
    * 3 단은 화면을 거의 덮은 상태라 그 뒤가 눌리면 안 된다 — 무엇을 눌렀든 내려오는 것이
@@ -151,7 +151,7 @@ export default function RightPanel() {
           `main-screen.tsx` 의 접힘 가림 폭(`PEEK_OCCLUSION`)이 손잡이 폭만 남긴다 — 같이 고친다.
         */
         collapsed ? "translate-x-[calc(100%_+_18px)] max-tablet:translate-x-0" : ""
-      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
+      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+40px)] max-tablet:bottom-0 max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
       /*
         **폰에서는 시트가 바닥까지 찬다** (S15P21A405-593). `Box` 는 내용만큼만 높아지는
         상자라, 짧은 화면(프로필·재생 불가 곡 상세·여정 목록이 비었을 때)에서는 **패널이

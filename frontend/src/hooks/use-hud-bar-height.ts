@@ -41,9 +41,36 @@ export function usePlayerBarHeight() {
 }
 
 /**
- * 폰 맨 아래 고정 탭바의 높이 — `--spacing-tabbar`(56) + 안전영역.
+ * 폰 맨 아래 고정 탭바의 높이 — `--spacing-tabbar`(72) + 안전영역.
  * 데스크톱에서는 같은 요소가 우상단 알약이라 44 가 나오지만, 그쪽 가림폭은 이 값을 안 쓴다.
  */
 export function useTabBarHeight() {
-  return useBarHeight("[data-tabbar]", 56);
+  return useBarHeight("[data-tabbar]", 72);
+}
+
+/**
+ * 좌상단 브랜드 묶음(레이어 자취 · 설명 · 뷰 칩 · 태우는 중 칩)의 **아래끝**(화면 위에서 px).
+ *
+ * 폰에서 지도 가림폭의 윗변으로 쓴다 (S15P21A405-703). 누른 별이 **레이어 설명 아래 ~ 시트 윗끝**
+ * 사이의 가운데로 와야 하는데, 윗변을 상수(`HUD_OCCLUSION.top` 58)로 두면 윗줄 바로 밑이 기준이라
+ * 별이 설명 쪽으로 치우쳐 섰다. 묶음은 칩이 붙고 떨어지며 높이가 바뀌므로 잰다. 위치는 윗줄에
+ * 고정이라 높이만 바뀌어도 아래끝을 다시 읽으면 된다.
+ */
+export function useBrandBottom(fallback: number) {
+  const [bottom, setBottom] = useState(fallback);
+
+  useEffect(() => {
+    const el = document.querySelector("[data-brand]");
+    if (!el) return;
+    const read = () => {
+      const b = Math.round(el.getBoundingClientRect().bottom);
+      if (b > 0) setBottom(b);
+    };
+    read();
+    const ro = new ResizeObserver(read);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  return bottom;
 }

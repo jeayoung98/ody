@@ -14,6 +14,9 @@ import { useFollowStore } from "@/stores/use-follow-store";
  *
  * **따라가는 동안 열려 있는 유일한 조작이다** (2차 명세 §6). 나갈 수 없는 상태는 그 자체로
  * 결함이라, 지도·재생·패널이 전부 잠긴 중에도 이 버튼만 산다.
+ *
+ * **폰에서는 그리지 않는다** (S15P21A405-703). 따라가는 쪽(`layout/ride-bar.tsx`)과 태우는 쪽
+ * (`layout/lead-chip.tsx`) 모두 레이어 설명 아래 한 줄이 맡는다 — 두 줄짜리 알약이 윗줄 밑을 가로막았다.
  */
 export default function FollowBanner() {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
@@ -46,7 +49,7 @@ export default function FollowBanner() {
         onConfirm: () => disband.mutate(),
       });
     return (
-      <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 max-tablet:z-[19] flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
+      <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 max-tablet:hidden flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
         <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-teal shadow-[0_0_12px_#4fe3ce]" />
         <div className="text-sm">
           🚀 <b className="num font-semibold">{followerCount}</b>명이 따라오는 중
@@ -66,10 +69,11 @@ export default function FollowBanner() {
 
   const who = leaderNickname ?? leaderEmail;
   return (
-    <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 max-tablet:z-[19] flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
+    <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 max-tablet:hidden flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
       {/*
         **끊겨서 다시 잇는 중이면 그렇게 말한다** (S15P21A405-700). 인솔자가 창을 닫으면 우주선은 곧 사라지는데
         다시 타 보는 약 45초 동안 "탑승 중" 이 남아 화면과 말이 어긋났다. 점 색도 경고로 바꾼다. 하차는 그대로 된다.
+        폰은 이 배너 대신 `ride-bar` 알약이 같은 상태를 말한다.
       */}
       {reconnecting ? (
         <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-warn shadow-[0_0_12px_#ffc46b]" />

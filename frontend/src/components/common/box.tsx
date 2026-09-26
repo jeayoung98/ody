@@ -39,15 +39,21 @@ export default function Box({ title, lead, actions, footer, children, className 
         <header
           /* 본문보다 위다 (z-20 > z-10). 헤더에서 내려오는 옵션 메뉴가 본문 뒤로 숨지 않아야
              한다 (S15P21A405-524) — 둘 다 z-10 이면 DOM 이 뒤인 본문이 위로 올라온다 */
-          className={`relative z-20 flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-3 ${bg ? "" : "border-b border-line"}`}
+          className={`relative z-20 flex shrink-0 items-center gap-2.5 px-[15px] pt-3.5 pb-3 max-tablet:px-gutter-sm ${bg ? "" : "border-b border-line"}`}
         >
-          {lead && <div className="-ml-1 flex shrink-0 items-center">{lead}</div>}
+          {/*
+            폰에서는 아이콘의 **보이는 끝**을 좌우 여백선(20)에 맞춘다 (S15P21A405-703). 28px 버튼 안에 16px
+            아이콘이 들고 그림도 칸 안쪽에 그려져서, 그대로 두면 ← 와 ✕ 가 본문 글줄보다 9~10px 안쪽에
+            서 떠 보였다. 그 거리만큼 바깥으로 당긴다 (← 10.6px · ✕ 9.3px 계산값).
+          */}
+          {lead && <div className="-ml-1 flex shrink-0 items-center max-tablet:-ml-2.5">{lead}</div>}
           <h2 className="flex-1 truncate font-display text-lg font-semibold tracking-[0.01em]">{title}</h2>
-          {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
+          {actions && <div className="flex shrink-0 items-center gap-1 max-tablet:-mr-[9px]">{actions}</div>}
         </header>
       )}
-      <div ref={bodyRef} className={`scroll-quiet relative z-10 min-h-0 flex-1 overflow-y-auto ${flush ? "" : "flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px]"}`}>{children}</div>
-      {footer && <footer className="relative z-10 shrink-0 border-t border-line px-[15px] py-3">{footer}</footer>}
+      {/* `data-sheet-body` — 폰 시트 1 단 높이를 이 윗끝에서 잰다 (`use-sheet-peek`, S15P21A405-703) */}
+      <div ref={bodyRef} data-sheet-body={flush ? undefined : ""} className={`scroll-quiet relative z-10 min-h-0 flex-1 overflow-y-auto ${flush ? "" : "flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px] max-tablet:px-gutter-sm"}`}>{children}</div>
+      {footer && <footer className="relative z-10 shrink-0 border-t border-line px-[15px] py-3 max-tablet:px-gutter-sm">{footer}</footer>}
     </section>
   );
 }

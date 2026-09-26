@@ -99,6 +99,7 @@ export const QUERY_KEYS = {
     current: ["contest", "current"] as const,
     entries: ["contest", "entries"] as const,
     mine: ["contest", "mine"] as const,
+    detail: (artworkId: number) => ["contest", "detail", artworkId] as const,
     templates: ["contest", "templates"] as const,
   },
   /**

@@ -1,5 +1,6 @@
 "use client";
 
+import { RIDE_RECONNECTING } from "@/constants";
 import { useDismountMutation } from "@/hooks/mutations/use-dismount-mutation";
 import { useFeatures } from "@/hooks/use-features";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -19,18 +20,21 @@ import RideChip, { RIDE_CHIP_ACTION } from "./ride-chip";
  * 파일의 `RIDING_LOCKED` 가 말한다. 막힌 순간에 듣는 편이 늘 떠 있는 안내보다 잘 읽힌다.
  *
  * **하차는 알약 밖 오른쪽 버튼이다.** 따라가는 동안 열려 있는 유일한 조작이라 한 번에 닿아야 한다.
+ *
+ * **인솔자와 끊겨 다시 잇는 중이면 그렇게 말한다** (S15P21A405-700) — 데스크톱 배너(`follow-banner`)와 같은 상태·문구다.
  */
 export default function RideBar() {
   const features = useFeatures();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const leaderNickname = useFollowStore((s) => s.leaderNickname);
+  const reconnecting = useFollowStore((s) => s.reconnecting);
   const dismount = useDismountMutation();
 
   if (!features.social || leaderEmail == null) return null;
 
   return (
     <RideChip
-      dot="violet"
+      dot={reconnecting ? "warn" : "violet"}
       action={
         <button
           type="button"
@@ -43,7 +47,13 @@ export default function RideBar() {
         </button>
       }
     >
-      🚀 <b className="font-semibold">{leaderNickname ?? leaderEmail}</b>의 우주선 탑승 중
+      {reconnecting ? (
+        RIDE_RECONNECTING.title(leaderNickname ?? leaderEmail)
+      ) : (
+        <>
+          🚀 <b className="font-semibold">{leaderNickname ?? leaderEmail}</b>의 우주선 탑승 중
+        </>
+      )}
     </RideChip>
   );
 }

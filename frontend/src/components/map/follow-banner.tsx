@@ -1,5 +1,6 @@
 "use client";
 
+import { RIDE_RECONNECTING } from "@/constants";
 import { useDisbandMutation } from "@/hooks/mutations/use-disband-mutation";
 import { useDismountMutation } from "@/hooks/mutations/use-dismount-mutation";
 import { useConfirmStore } from "@/stores/use-confirm-store";
@@ -21,6 +22,7 @@ export default function FollowBanner() {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
   const leaderNickname = useFollowStore((s) => s.leaderNickname);
   const followerCount = useFollowStore((s) => s.followerCount);
+  const reconnecting = useFollowStore((s) => s.reconnecting);
   const dismount = useDismountMutation();
   const disband = useDisbandMutation();
   const ask = useConfirmStore((s) => s.ask);
@@ -65,18 +67,34 @@ export default function FollowBanner() {
     );
   }
 
+  const who = leaderNickname ?? leaderEmail;
   return (
     <div className="glass-liquid animate-tin pointer-events-auto absolute top-[72px] left-1/2 z-30 max-tablet:hidden flex -translate-x-1/2 items-center gap-3 rounded-pill! py-[9px] pr-2.5 pl-3.5">
-      <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-violet shadow-[0_0_12px_#a67cff]" />
+      {/*
+        **끊겨서 다시 잇는 중이면 그렇게 말한다** (S15P21A405-700). 인솔자가 창을 닫으면 우주선은 곧 사라지는데
+        다시 타 보는 약 45초 동안 "탑승 중" 이 남아 화면과 말이 어긋났다. 점 색도 경고로 바꾼다. 하차는 그대로 된다.
+        폰은 이 배너 대신 `ride-bar` 알약이 같은 상태를 말한다.
+      */}
+      {reconnecting ? (
+        <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-warn shadow-[0_0_12px_#ffc46b]" />
+      ) : (
+        <span className="animate-pulse-dot h-2 w-2 shrink-0 rounded-pill bg-violet shadow-[0_0_12px_#a67cff]" />
+      )}
       <div>
         <div className="text-sm">
-          🚀 <b className="font-semibold">{leaderNickname ?? leaderEmail}</b>의 우주선 탑승 중
+          {reconnecting ? (
+            RIDE_RECONNECTING.title(who)
+          ) : (
+            <>
+              🚀 <b className="font-semibold">{who}</b>의 우주선 탑승 중
+            </>
+          )}
         </div>
         {/*
           **동승 인원은 여기 안 쓴다** (2차 명세 §14). 이 배너는 **따라가는 쪽**이 보는 것이라
           인솔자의 동승 인원과 관계가 없다.
         */}
-        <div className="num text-[12px] tracking-[0.05em] text-ink-3">지도 조작 잠김 · 하차하면 이 자리에서 이어갑니다</div>
+        <div className="num text-[12px] tracking-[0.05em] text-ink-3">{reconnecting ? RIDE_RECONNECTING.sub : "지도 조작 잠김 · 하차하면 이 자리에서 이어갑니다"}</div>
       </div>
       <button
         type="button"

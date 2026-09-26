@@ -1,18 +1,16 @@
 "use client";
 
-import { useState } from "react";
 import Button from "@/components/common/button";
 import EmptyState from "@/components/common/empty-state";
 import ErrorMessage from "@/components/common/error-message";
 import Note from "@/components/common/note";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import TrackRow from "@/components/common/track-row";
-import { useSaveContestEntryMutation } from "@/hooks/mutations/use-save-contest-entry-mutation";
 import { useContestEntriesQuery } from "@/hooks/queries/use-contest-entries-query";
 import { useContestLike } from "@/hooks/use-contest-like";
+import { useSaveContestToPlaylist } from "@/hooks/use-save-contest-to-playlist";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { ownerLabel, roundPhase } from "@/lib/contest-view";
-import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
 import RankingPodium from "./ranking-podium";
@@ -27,33 +25,11 @@ import SaveToPlaylistButton from "./save-to-playlist-button";
 export default function RankingTab({ contest }: { contest: Contest }) {
   const { data, isPending, isError } = useContestEntriesQuery();
   const { data: me } = useMeQuery();
-  const toast = useToastStore((s) => s.show);
-  const save = useSaveContestEntryMutation();
   const like = useContestLike(contest, me?.email ?? null);
 
-  /**
-   * 이번에 내 플리로 넣은 작품 (S15P21A405-702). 넣은 뒤에는 버튼을 꺼 둔다 — 두 번 누르면 같은 플리가 둘 생긴다.
-   * 시상대와 목록이 같은 표를 본다. 창을 닫았다 열면 비는데, 그때 다시 넣는 것은 막지 않는다(서버가 중복을 모른다).
-   */
-  const [saved, setSaved] = useState<ReadonlySet<number>>(() => new Set());
-  const [savingId, setSavingId] = useState<number | null>(null);
-  const handleSave = (e: ContestEntry) => {
-    if (!me) return toast("로그인하면 내 플레이리스트로 가져올 수 있어요");
-    if (saved.has(e.artworkId)) return;
-    setSavingId(e.artworkId);
-    save.mutate(
-      { playlistName: e.title, musicIds: e.tracks.map((t) => t.musicId) },
-      {
-        onSuccess: () => {
-          setSaved((prev) => new Set(prev).add(e.artworkId));
-          toast(`「${e.title}」 곡 ${e.tracks.length}개를 내 플레이리스트에 넣었어요`);
-        },
-        onError: (err) => toast(err.message),
-        onSettled: () => setSavingId(null),
-      },
-    );
-  };
-  const saveButton = (e: ContestEntry) => <SaveToPlaylistButton saved={saved.has(e.artworkId)} pending={savingId === e.artworkId} empty={e.tracks.length === 0} onClick={() => handleSave(e)} />;
+  // 가져오기 규칙(넣으면 끄기 · 이미 있으면 알리기)은 갤러리와 같은 훅이다 (S15P21A405-702)
+  const saver = useSaveContestToPlaylist(!!me);
+  const saveButton = (e: ContestEntry) => <SaveToPlaylistButton saved={saver.isSaved(e.artworkId)} pending={saver.savingId === e.artworkId} empty={e.tracks.length === 0} onClick={() => saver.save(e)} />;
 
   return (
     <div className="flex flex-col gap-3">

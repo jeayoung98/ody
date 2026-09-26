@@ -76,3 +76,10 @@ export const MY_ARTWORK_THUMB_PX = 280;
  * 순서는 화면 왼쪽부터다(2 · 1 · 3).
  */
 export const PODIUM = { order: [1, 0, 2], thumbPx: [168, 128, 116] } as const;
+
+/**
+ * 작품을 내 플리로 두 번 가져오려 할 때 (S15P21A405-702). 백엔드가 플리 이름을 사람마다 겹치지 않게 막아서(409
+ * `PLAYLIST_NAME_DUPLICATED`) 같은 작품을 또 가져오면 여기로 떨어진다. 다만 **이름으로만** 가른다 — 작품과 상관없는 같은
+ * 이름의 플리가 있어도, 가져온 뒤 이름을 바꿨어도 틀린다. 작품 기준 판정은 백엔드 요청(BACKEND-NOTES A-92)
+ */
+export const CONTEST_SAVE_DUPLICATED = "이미 같은 이름의 플리가 있어요 · 이미 가져온 별자리일 수 있어요";

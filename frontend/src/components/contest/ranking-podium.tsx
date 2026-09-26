@@ -1,11 +1,11 @@
 "use client";
 
 import type { ReactNode } from "react";
-import Button from "@/components/common/button";
 import { PODIUM } from "@/constants";
 import { ownerLabel } from "@/lib/contest-view";
 import type { ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
+import LikeHeart from "./like-heart";
 
 interface RankingPodiumProps {
   /** 순위순 상위 3개 (모자라면 있는 만큼) */
@@ -46,15 +46,12 @@ export default function RankingPodium({ top, meEmail, onLike, canLike, likePendi
               AI {entry.score ?? "–"} · 순위 점수 <b className="text-ink">{entry.rankScore?.toFixed(1) ?? "–"}</b>
             </p>
             <div className="flex items-center gap-1.5">
-              <Button
-                size="sm"
-                active={entry.likedByMe}
+              <LikeHeart
+                entry={entry}
                 disabled={!canLike(entry) || likePending}
                 title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : entry.likedByMe ? "좋아요 거두기" : "좋아요"}
                 onClick={() => onLike(entry)}
-              >
-                {entry.likedByMe ? "♥" : "♡"} <span className="num">{entry.likeCnt}</span>
-              </Button>
+              />
               {saveButton(entry)}
             </div>
           </article>

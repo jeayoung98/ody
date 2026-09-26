@@ -1,14 +1,13 @@
 "use client";
 
-import { useState } from "react";
 import Tag from "@/components/common/tag";
 import { useContestLike } from "@/hooks/use-contest-like";
-import { useSaveContestEntryMutation } from "@/hooks/mutations/use-save-contest-entry-mutation";
+import { useSaveContestToPlaylist } from "@/hooks/use-save-contest-to-playlist";
 import { ownerLabel } from "@/lib/contest-view";
 import { formatTimeAgo } from "@/lib/format";
-import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest, ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
+import LikeHeart from "./like-heart";
 import SaveToPlaylistButton from "./save-to-playlist-button";
 
 /** 썸네일 한 변. 카드 최소 폭 210 - 안쪽 여백 16 (`gallery-tab` 의 minmax 와 맞춘다) */
@@ -28,27 +27,11 @@ interface EntryCardProps {
  * 주인은 닉네임으로 적는다 (S15P21A405-645 에서 백엔드가 `ownerNickname` 을 주기 시작했다).
  */
 export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
-  const toast = useToastStore((s) => s.show);
   const like = useContestLike(contest, meEmail);
-  const save = useSaveContestEntryMutation();
   const isMine = meEmail != null && entry.ownerEmail === meEmail;
 
-  /** 이 카드를 내 플리로 넣었다 — 버튼을 꺼 둔다 (S15P21A405-702, 순위 탭과 같다). 두 번 누르면 같은 플리가 둘 생긴다 */
-  const [saved, setSaved] = useState(false);
-  const handleSave = () => {
-    if (!meEmail) return toast("로그인하면 내 플레이리스트로 가져올 수 있어요");
-    if (saved) return;
-    save.mutate(
-      { playlistName: entry.title, musicIds: entry.tracks.map((t) => t.musicId) },
-      {
-        onSuccess: () => {
-          setSaved(true);
-          toast(`「${entry.title}」 곡 ${entry.tracks.length}개를 내 플레이리스트에 넣었어요 · 순서 그대로`);
-        },
-        onError: (e) => toast(e.message),
-      },
-    );
-  };
+  // 가져오기 규칙(넣으면 끄기 · 이미 있으면 알리기)은 순위 탭과 같은 훅이다 (S15P21A405-702)
+  const saver = useSaveContestToPlaylist(meEmail != null);
 
   return (
     <article className={`flex flex-col gap-2 rounded-box-sm border p-2 ${isMine ? "border-teal/40 bg-teal/[.05]" : "border-line bg-white/[.03]"}`}>
@@ -69,18 +52,13 @@ export default function EntryCard({ entry, contest, meEmail }: EntryCardProps) {
           {entry.rankScore != null && <span className="text-ink-3"> · 순위 점수 {entry.rankScore.toFixed(1)}</span>}
         </span>
         <div className="flex items-center gap-1">
-          {/* 좋아요는 테두리 없이 하트와 숫자만 붙여서 — 상자에 넣으면 버튼이 카드 안에 또 카드처럼 보였다 (702) */}
-          <button
-            type="button"
+          <LikeHeart
+            entry={entry}
             disabled={!like.canLike(entry) || like.pending}
             title={isMine ? "내 작품에는 좋아요를 줄 수 없어요" : entry.likedByMe ? "좋아요 거두기" : "좋아요"}
             onClick={() => like.toggle(entry)}
-            className={`flex items-center gap-0.5 px-1 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-45 ${entry.likedByMe ? "text-bad" : "text-ink-2 hover:text-ink"}`}
-          >
-            <span aria-hidden>{entry.likedByMe ? "♥" : "♡"}</span>
-            <span className="num text-xs">{entry.likeCnt}</span>
-          </button>
-          <SaveToPlaylistButton saved={saved} pending={save.isPending} empty={entry.tracks.length === 0} onClick={handleSave} />
+          />
+          <SaveToPlaylistButton saved={saver.isSaved(entry.artworkId)} pending={saver.savingId === entry.artworkId} empty={entry.tracks.length === 0} onClick={() => saver.save(entry)} />
         </div>
       </div>
     </article>

@@ -128,8 +128,12 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   return (
     <div className="fixed inset-0 overflow-hidden bg-void text-ink">
       <MapView occlusion={occlusion} />
-      {/* 축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다 */}
-      <MapAxisLabels occlusion={occlusion} />
+      {/*
+        축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다.
+        **폰에서는 그리지 않는다** (S15P21A405-695, 사용자 결정). 아래 라벨은 탭바·재생바에 덮이고 긴 라벨은
+        잘렸다. 축 뜻은 겹 전환 자막과 곡 상세의 소리 특징에서 계속 보인다
+      */}
+      {!narrow && <MapAxisLabels occlusion={occlusion} />}
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창은 스스로 접혔다 펴진다 — 펴질 때 우측 패널을 닫는다 (S15P21A405-440) */}

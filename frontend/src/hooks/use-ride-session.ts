@@ -224,6 +224,8 @@ export function useRideSession(): void {
         return;
       }
       const target: RideTarget = { email: s.leaderEmail, nickname: s.leaderNickname, imageUrl: s.leaderImageUrl };
+      // 인솔자가 사라진 것은 확실하다 — 첫 재탑승 결과를 기다리지 않고 배너부터 바꾼다 (S15P21A405-700)
+      s.setReconnecting(true);
       resumeRide(target, remount, (code) => giveUp(target, code));
     });
 

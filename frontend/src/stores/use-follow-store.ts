@@ -67,6 +67,12 @@ interface FollowState {
    * 사람이 필요하다. 수와 목록이 어긋날 수 있다(새로고침 뒤엔 목록이 비어 있다): 모자란 만큼은 빈 헬멧으로 그린다.
    */
   riders: RideRider[];
+  /**
+   * **인솔자와 끊겨 다시 잇는 중이다** (S15P21A405-700). 인솔자가 떠나면(`RIDE_ENDED · CAPTAIN_LEFT`) 서버는 선단을 풀지만
+   * 우리는 새로고침일 수 있어 약 45초 동안 다시 타 본다(S15P21A405-615). 그동안 우주선은 지도에서 사라지므로 배너가
+   * "탑승 중" 이라고 말하면 틀린다 — 이 값을 보고 "연결이 끊겼어요 · 다시 연결 중" 으로 바꾼다.
+   */
+  reconnecting: boolean;
 
   start: (input: {
     email: string;
@@ -90,6 +96,7 @@ interface FollowState {
   removeRider: (email: string) => void;
   setRiderImage: (email: string, imageUrl: string | null) => void;
   setRiders: (riders: RideRider[]) => void;
+  setReconnecting: (reconnecting: boolean) => void;
 }
 
 export const useFollowStore = create<FollowState>()(
@@ -105,6 +112,7 @@ export const useFollowStore = create<FollowState>()(
       snapshotSeq: 0,
       pointRevision: 0,
       riders: [],
+      reconnecting: false,
 
       start: ({ email, nickname, imageUrl, musicId, snapshotSeq, layer = null }) => {
         writeStorage(STORAGE_KEYS.rideLeader, { email, nickname, imageUrl }, "session");
@@ -138,6 +146,7 @@ export const useFollowStore = create<FollowState>()(
             snapshotSeq: 0,
             followerCount: 0,
             riders: [],
+            reconnecting: false,
           },
           false,
           "stop",
@@ -150,6 +159,7 @@ export const useFollowStore = create<FollowState>()(
       removeRider: (email) => set((s) => ({ riders: s.riders.filter((r) => r.email !== email) }), false, "removeRider"),
       setRiderImage: (email, imageUrl) => set((s) => ({ riders: s.riders.map((r) => (r.email === email ? { ...r, imageUrl } : r)) }), false, "setRiderImage"),
       setRiders: (riders) => set({ riders }, false, "setRiders"),
+      setReconnecting: (reconnecting) => set((s) => (s.reconnecting === reconnecting ? s : { reconnecting }), false, "setReconnecting"),
     }),
     { name: "follow-store" },
   ),

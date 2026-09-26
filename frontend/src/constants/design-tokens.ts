@@ -73,6 +73,10 @@ export const MAP_COLORS = {
   stationCurrent: PALETTE.teal,
   labelBg: "rgba(6,10,19,.82)",
   core: "#f2f7ff",
+  /** 이벤트 탑 작품 별자리 (S15P21A405-684). 금색(`--color-warn`) — 재생용 별자리(청록~보라)와 갈린다 */
+  contestLine: "rgba(255,196,107,.55)",
+  contestDot: PALETTE.warn,
+  contestTagText: "#1a1206",
 } as const;
 
 /** 배경 성운 워시 — 화면 비율 좌표(u,v), 반지름 비율, 색 */

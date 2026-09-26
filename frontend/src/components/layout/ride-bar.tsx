@@ -8,19 +8,22 @@ import { useFeatures } from "@/hooks/use-features";
 import { useFollowStore } from "@/stores/use-follow-store";
 
 /**
- * 폰에서 **따라가는 동안 윗줄 전체**가 이 줄이 된다 (SOCIAL-08, S15P21A405-703, 사용자 결정).
+ * 폰에서 **따라가는 동안 윗줄 자리**를 이 상자가 쓴다 (SOCIAL-08, S15P21A405-703, 사용자 결정).
  *
- *   ● 🚀 준서의 우주선 탑승 중 ⓘ ··············· [하차]
+ *   ┌──────────────────────────────────┐
+ *   │ ● 🚀 준서의 우주선 탑승 중 ⓘ  [하차] │   ← 윗줄 가운데
+ *   └──────────────────────────────────┘
  *
  * 데스크톱의 상단 가운데 배너(`map/follow-banner.tsx`)를 폰에 그대로 두니 두 줄짜리 알약이 윗줄 바로
  * 밑을 가로막았다. 따라가는 동안에는 검색·주변 탐색·여정이 **어차피 잠겨 있으므로**(지도는 인솔자 것)
  * 그 자리를 비우고 이 한 줄로 채운다 — 감추는 쪽은 `globals.css` 의 `[data-ride-bar]` 규칙이다.
  * "지도 조작 잠김 · 하차하면 이 자리에서 이어갑니다" 는 ⓘ 를 눌러야 편다.
  *
- * **하차는 줄 끝이다.** 따라가는 동안 열려 있는 유일한 조작이라 한 번에 닿아야 한다 — ⓘ 안에 넣으면
- * 두 번 눌러야 나간다. 윗줄의 오른쪽 끝은 원래 동작 버튼 자리라 "여기서 뭔가를 한다" 로 읽힌다.
+ * **하차는 상자 끝이다.** 따라가는 동안 열려 있는 유일한 조작이라 한 번에 닿아야 한다 — ⓘ 안에 넣으면
+ * 두 번 눌러야 나간다.
  *
- * 유리를 두르지 않는다. 윗줄의 다른 아이콘처럼 그늘(`top-scrim`) 위에 흰 글자로 뜬다.
+ * **가운데 유리 상자다** (사용자 결정). 처음엔 윗줄 폭을 다 쓰는 머리글처럼 흰 글자만 띄웠는데,
+ * 지도 위에 글이 흘러 있는 것처럼 보여 "지금 상태" 라는 표시로 안 읽혔다. 설명도 상자 아래 가운데로 편다.
  */
 export default function RideBar() {
   const features = useFeatures();
@@ -38,11 +41,11 @@ export default function RideBar() {
       ref={boxRef}
       data-hud
       data-ride-bar
-      className="absolute inset-x-gutter-sm top-hud-t z-[22] hidden flex-col gap-1.5 max-tablet:flex"
+      className="absolute top-hud-t left-1/2 z-[22] hidden w-max max-w-[calc(100dvw-2*var(--spacing-gutter-sm))] -translate-x-1/2 flex-col items-center gap-1.5 max-tablet:flex"
     >
-      <div className="flex h-8 items-center gap-2">
+      <div className="glass-liquid flex max-w-full min-w-0 items-center gap-2 rounded-box-sm! py-1 pr-1 pl-3 [--glass-tint:rgb(6_9_17/0.45)]">
         <span className="animate-pulse-dot h-1.5 w-1.5 shrink-0 rounded-pill bg-violet shadow-[0_0_10px_#a67cff]" />
-        <span className="min-w-0 truncate text-[14.5px] text-ink drop-shadow-[0_1px_3px_rgb(0_0_0/0.7)]">
+        <span className="min-w-0 truncate text-[14px] text-ink">
           🚀 <b className="font-semibold">{leaderNickname ?? leaderEmail}</b>의 우주선 탑승 중
         </span>
         <button
@@ -50,7 +53,7 @@ export default function RideBar() {
           aria-label={open ? "설명 닫기" : "설명 보기"}
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className={`-ml-1 grid h-7 w-7 shrink-0 place-items-center rounded-pill drop-shadow-[0_1px_3px_rgb(0_0_0/0.7)] transition-colors ${open ? "text-ink" : "text-ink-2"}`}
+          className={`-ml-1 grid h-7 w-7 shrink-0 place-items-center rounded-pill transition-colors ${open ? "text-ink" : "text-ink-3"}`}
         >
           <InfoIcon size={16} />
         </button>
@@ -58,13 +61,13 @@ export default function RideBar() {
           type="button"
           onClick={() => dismount.mutate()}
           disabled={dismount.isPending}
-          className="ml-auto shrink-0 rounded-pill border border-bad/30 bg-bad/[.14] px-3.5 py-1.5 text-[13px] text-[#ffb3bd] transition-colors hover:bg-bad/25 disabled:opacity-50"
+          className="shrink-0 rounded-[9px] border border-bad/30 bg-bad/[.14] px-3 py-1.5 text-[13px] text-[#ffb3bd] transition-colors hover:bg-bad/25 disabled:opacity-50"
         >
           하차
         </button>
       </div>
       {open && (
-        <p className="glass-liquid animate-tin w-fit rounded-box-sm! px-3 py-2 text-[12.5px] leading-[1.45] text-ink-2 [--glass-tint:rgb(6_9_17/0.7)]">
+        <p className="glass-liquid animate-tin w-fit max-w-full rounded-box-sm! px-3 py-2 text-[12.5px] leading-[1.45] text-ink-2 [--glass-tint:rgb(6_9_17/0.7)]">
           지도 조작 잠김 · 하차하면 이 자리에서 이어갑니다
         </p>
       )}

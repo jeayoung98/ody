@@ -1572,8 +1572,16 @@ export class MapEngine {
    */
   friendScreenPos(email: string): { x: number; y: number } | null {
     const f = this.visFriends.find((v) => v.user.email === email || v.stacked.some((u) => u.email === email));
-    return f ? { x: f.px, y: f.py } : null;
+    if (f) return { x: f.px, y: f.py };
+    // 지도 표식이 없는 사람 — 내 동승자면 내 우주선 뒤 그 사람 헬멧 자리다 (S15P21A405-699)
+    return this.myQueueScreen.get(email) ?? null;
   }
+
+  /**
+   * 내가 인솔자일 때 우주선 뒤 동승자 헬멧이 이 프레임에 그려진 화면 자리, 이메일별 (S15P21A405-699).
+   * 동승자는 지도에 표식이 없어서 그 사람의 반응을 띄울 자리가 여기뿐이다. `draw-map` 의 `drawMe` 가 매 프레임 비우고 채운다.
+   */
+  myQueueScreen = new Map<string, { x: number; y: number }>();
 
   /** 지도에 떠 있는 사람의 닉네임. 겹쳐 선 사람도 찾는다. 뷰 밖이거나 닉네임이 없으면 null */
   friendNickname(email: string): string | null {
@@ -1582,7 +1590,8 @@ export class MapEngine {
       const hit = v.stacked.find((u) => u.email === email);
       if (hit) return hit.nickname;
     }
-    return null;
+    // 내 동승자 — 지도에는 없고 우주선 뒤에만 있다 (S15P21A405-699)
+    return this.myRiderUsers.find((u) => u.email === email)?.nickname ?? null;
   }
 
   meScreen(now = performance.now()): { px: number; py: number; from: { px: number; py: number } | null; onRing: boolean } {

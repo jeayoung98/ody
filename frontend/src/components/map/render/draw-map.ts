@@ -1174,23 +1174,7 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   forgetStale(e.time);
   // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
   e.hopLink = null;
-  /**
-   * **주변 탐색의 확대는 여기 한 곳이다** (S15P21A405-593).
-   *
-   * 고리 반지름만 키우던 때는 중심 별도 제목도 배경도 그대로라 살만 길어졌다 — 확대가 아니라
-   * "줄이 늘어난 것" 으로 보였다. 화면을 통째로 키우면 배경 별밭·별 크기·글씨·선이 같은
-   * 비율로 커진다. 그리는 좌표는 아무 데도 안 고쳐도 된다.
-   *
-   * 되돌리는 쪽은 {@link MapEngine.unview} 하나다 — 클릭 판정이 보는 `visible`·`hopLink` 는
-   * 확대 전 자리에 그대로 남으므로, 눌린 점만 되돌리면 그리기와 클릭이 안 어긋난다.
-   */
-  const view = e.probeView();
-  if (view) {
-    g.save();
-    g.translate(view.cx, view.cy);
-    g.scale(view.z, view.z);
-    g.translate(-view.cx, -view.cy);
-  }
+  // 주변 탐색 확대는 캔버스를 키우지 않는다 — 고리 별 자리만 벌어진다 (`MapEngine.probePos`, S15P21A405-688)
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
   drawBackground(g, e, depthOf(e));
   if (e.anim) {
@@ -1216,5 +1200,4 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawProbe(g, e);
   drawHold(g, e);
   drawPressure(g, e);
-  if (view) g.restore();
 }

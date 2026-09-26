@@ -1018,9 +1018,9 @@ export class MapEngine {
    * **살만 길어져서** "확대가 아니라 줄이 늘어난 것" 으로 보였다 — 이 뷰는 카메라가 아니라
    * 화면 크기에서 반지름을 뽑아 세운 배치라(`freeRect`) 확대할 카메라가 없었기 때문이다.
    *
-   * 그래서 **배치는 그대로 두고 화면을 통째로 키운다** ({@link probeView}). 캔버스 변환 한 번이라
-   * 배경·별·글씨·선이 같은 비율로 커진다. 배치 좌표(`probePos`)는 확대 전 자리 그대로이고,
-   * 클릭은 {@link unview} 가 눌린 자리를 확대 전으로 되돌려 맞춘다.
+   * 그래서 한동안 화면을 통째로 키웠는데(캔버스 변환), 그러면 글씨·별·배경까지 같이 커져서
+   * 여정(별자리) 확대와 느낌이 달랐다 (S15P21A405-688). 이제 **여정처럼 자리만 벌린다** — 고리 별들이
+   * 지금 고리의 중심 별을 붙잡은 채 바깥으로 퍼지고, 글씨·별 크기·배경은 그대로다 ({@link probeZoomFrame}).
    */
   probeZoom(factor: number): number {
     const p = this.probe;
@@ -1030,31 +1030,18 @@ export class MapEngine {
   }
 
   /**
-   * 주변 탐색을 들여다보는 **화면 확대**와 그 중심 (S15P21A405-593). 확대 중이 아니면 null.
+   * 확대 배율과 그 중심 (S15P21A405-593 · 688). 확대 중이 아니면 null.
    *
-   * 중심은 지금 고리의 중심 별이다 — 키워도 보고 있던 별이 제자리에 남는다.
-   * **1 배 아래로는 안 내려간다.** 줄이면 배경 별밭 바깥의 빈 자리가 드러나는데, 어차피
-   * 바닥(`PROBE.minZoom`)에 닿는 입력은 뷰를 나가는 뜻이다 (`map-view` 의 휠 처리).
+   * 중심은 지금 고리의 중심 별이다 — 벌려도 보고 있던 별이 제자리에 남는다.
+   * **1 배 아래로는 안 내려간다.** 바닥(`PROBE.minZoom`)에 닿는 입력은 뷰를 나가는 뜻이다 (`map-view` 의 휠 처리).
    */
-  probeView(): { cx: number; cy: number; z: number } | null {
+  private probeZoomFrame(): { cx: number; cy: number; z: number } | null {
     const p = this.probe;
     if (!p || p.exitingAt || p.zoom <= 1) return null;
     const cur = this.currentRing();
-    const c = cur ? this.probePos(cur.centerId) : null;
+    const c = cur ? this.probeBasePos(cur.centerId) : null;
     const f = this.freeRect();
     return { cx: c?.x ?? f.cx, cy: c?.y ?? f.cy, z: p.zoom };
-  }
-
-  /**
-   * 눌린 화면 좌표 → **확대 전 좌표** (S15P21A405-593).
-   *
-   * 확대는 캔버스 변환으로만 걸리므로 `visible`·`hopLink` 같은 판정용 좌표는 확대 전 자리에
-   * 그대로 남는다. 들어오는 점만 되돌리면 그리기와 클릭이 어긋나지 않는다.
-   */
-  private unview(mx: number, my: number): [number, number] {
-    const v = this.probeView();
-    if (!v) return [mx, my];
-    return [v.cx + (mx - v.cx) / v.z, v.cy + (my - v.cy) / v.z];
   }
 
   /** 주변 탐색 중 드래그 — 오버레이 전체를 민다. 고리 하나 반지름 안에서만 (다 밀어내면 빈 화면이 된다) */
@@ -1063,8 +1050,8 @@ export class MapEngine {
     if (!p || p.exitingAt) return;
     const f = this.freeRect();
     const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
-    // 손가락이 민 것은 **확대된 화면의 px** 이다 — 배치는 확대 전 공간이므로 배율로 나눠 단위를
-    // 맞춘다. 안 그러면 키워 놓을수록 같은 손짓이 몇 배로 밀린다
+    // 손가락이 민 것은 **벌어진 화면의 px** 이다 — 밀기는 벌리기 전 공간에 쌓이고 확대가 그걸 다시 벌리므로
+    // 배율로 나눠 단위를 맞춘다. 안 그러면 벌려 놓을수록 같은 손짓이 몇 배로 밀린다
     const z = Math.max(1, p.zoom);
     p.pan.x = Math.min(lim, Math.max(-lim, p.pan.x + dx / z));
     p.pan.y = Math.min(lim, Math.max(-lim, p.pan.y + dy / z));
@@ -1155,8 +1142,19 @@ export class MapEngine {
     return easeInOut(Math.min(1, (now - r.t0) / PROBE.enterMs));
   }
 
-  /** 프로브 곡의 화면 위치 — 실제 위치와 연출 배치 위치를 그 고리의 진행도로 보간 */
+  /**
+   * 프로브 곡의 화면 위치. **고리 별은 확대만큼 벌어진다** (S15P21A405-688) — 중심 별을 붙잡고 자리만 퍼지므로
+   * 글씨·별은 원래 크기로 그 자리에 그려지고, 클릭 판정도 그린 자리를 그대로 본다.
+   */
   probePos(id: number): { x: number; y: number } | null {
+    const b = this.probeBasePos(id);
+    const z = this.probeZoomFrame();
+    if (!b || !z || !this.overlaySlot(id)) return b;
+    return { x: z.cx + (b.x - z.cx) * z.z, y: z.cy + (b.y - z.cy) * z.z };
+  }
+
+  /** 벌리기 전 자리 — 실제 위치와 연출 배치 위치를 그 고리의 진행도로 보간 */
+  private probeBasePos(id: number): { x: number; y: number } | null {
     const p = this.probe;
     if (!p) return null;
     const i = this.index.get(id);
@@ -1166,7 +1164,7 @@ export class MapEngine {
     if (!sl) return real;
     const f = this.freeRect();
     const off = this.probeOffset();
-    // 배치는 **확대 전 자리**다 (S15P21A405-593). 확대는 캔버스 변환이 통째로 건다 (`probeView`)
+    // 배치는 **벌리기 전 자리**다. 확대는 `probePos` 가 중심 별 기준으로 건다 (S15P21A405-688)
     const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
     // 밀려나는 고리의 곡도 제자리로 돌아가지 않고 **그 자리에서 옅어진다** — 돌아가면 화면을 가로질러 튄다
     if (p.exitingAt) {
@@ -1432,7 +1430,6 @@ export class MapEngine {
 
   /** 고스트별 클릭 판정 — 맞으면 그 곡 ID */
   hitGhost(mx: number, my: number): number | null {
-    [mx, my] = this.unview(mx, my);
     const p = this.ghostPos();
     if (!p || !this.ghost) return null;
     return (p.x - mx) ** 2 + (p.y - my) ** 2 < GHOST.hitRadius ** 2 ? this.ghost.musicId : null;
@@ -2263,7 +2260,6 @@ export class MapEngine {
 
   /** 라벨 링크 위인가 — 히트 영역은 그리는 쪽이 적어 둔 것이다 */
   hitHopLink(mx: number, my: number): { id: number } | null {
-    [mx, my] = this.unview(mx, my);
     const l = this.hopLink;
     if (!l) return null;
     return mx >= l.x && mx <= l.x + l.w && my >= l.y && my <= l.y + l.h ? { id: l.id } : null;
@@ -2361,7 +2357,6 @@ export class MapEngine {
   }
 
   hitTest(mx: number, my: number): VisibleStar | null {
-    [mx, my] = this.unview(mx, my);
     let best: VisibleStar | null = null;
     let bd = 1e9;
     // 오버레이(별자리·주변 탐색)가 떠 있으면 그 안의 곡만 잡힌다 — 어둡게 덮인 뒷별이 호버·클릭에
@@ -2384,7 +2379,6 @@ export class MapEngine {
 
   /** 가장 가까운 표식. 갈라진 표식은 서로 닿을 만큼 가까워서 첫 것을 집으면 옆 사람이 눌린다 (S15P21A405-618) */
   hitFriend(mx: number, my: number): VisibleFriend | null {
-    [mx, my] = this.unview(mx, my);
     let best: VisibleFriend | null = null;
     let bd = FRIEND_MARKER.hitPx * FRIEND_MARKER.hitPx;
     for (const fr of this.visFriends) {
@@ -3723,7 +3717,7 @@ export class MapEngine {
         // 프로브 곡은 연출 위치로 히트테스트 (격자 대표곡이어도 위치를 덮어쓴다)
         const k = this.visible.findIndex((v) => v.i === i);
         if (k >= 0) this.visible.splice(k, 1);
-        // 확대는 캔버스 변환이 건다 (S15P21A405-593) — 집는 범위는 확대 전 자리 기준이다 (`unview`)
+        // `probePos` 가 이미 벌어진 자리다 (S15P21A405-688) — 그린 자리 그대로 집는다
         this.visible.push({ i, px: pp.x, py: pp.y, r: 16 });
         continue;
       }

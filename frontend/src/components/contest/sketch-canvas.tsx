@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState, type MouseEvent } from "react";
 import { SKETCH_HIT_PX } from "@/constants";
-import { PALETTE } from "@/constants/design-tokens";
-import { drawConstellation } from "@/lib/constellation-draw";
+import { FONTS, PALETTE } from "@/constants/design-tokens";
+import { constellationLayout, drawConstellation } from "@/lib/constellation-draw";
 import type { ContestTrack, SketchPoint } from "@/types";
 
 interface SketchCanvasProps {
@@ -13,7 +13,12 @@ interface SketchCanvasProps {
   result: ContestTrack[] | null;
   onAdd: (p: SketchPoint) => void;
   onRemove: (index: number) => void;
+  /** 곡 목록에서 가리키고 있는 순번(0부터). 그 별에 고리를 두른다 (S15P21A405-693) */
+  highlight?: number | null;
 }
+
+/** 결과 별자리를 그리는 여백 비율 — 번호를 얹을 때도 같은 값을 써야 별 위에 선다 */
+const RESULT_PAD = 0.12;
 
 /** 배경에 뿌려 두는 장식 별 — 빈 캔버스가 "그리는 곳" 으로 읽히게. 좌표는 고정 */
 const BACKDROP: { x: number; y: number; r: number }[] = Array.from({ length: 70 }, (_, i) => {
@@ -27,7 +32,7 @@ const BACKDROP: { x: number; y: number; r: number }[] = Array.from({ length: 70 
  * 빈 곳을 누르면 점이 붙고, 찍힌 점을 다시 누르면 빠진다. 정사각형이고 폭은 부모를 따른다.
  * 좌표는 0~1 로만 다룬다 — 화면 크기와 무관하게 서버에 같은 모양이 간다.
  */
-export default function SketchCanvas({ points, closed, result, onAdd, onRemove }: SketchCanvasProps) {
+export default function SketchCanvas({ points, closed, result, onAdd, onRemove, highlight = null }: SketchCanvasProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [size, setSize] = useState(0);
 
@@ -80,8 +85,29 @@ export default function SketchCanvas({ points, closed, result, onAdd, onRemove }
         ctx.stroke();
       }
     }
-    if (result) drawConstellation(ctx, result, closed, size, size, { starR: 3.2, lineWidth: 1.5, pad: 0.12 });
-  }, [points, closed, result, size]);
+    if (result) drawConstellation(ctx, result, closed, size, size, { starR: 3.2, lineWidth: 1.5, pad: RESULT_PAD });
+
+    /**
+     * **순번을 별 옆에 적는다** (S15P21A405-693). 오른쪽 곡 목록의 번호와 같다 — 점 하나가 곡 하나라는 것이
+     * 번호로 이어진다. 결과가 있으면 찾은 별에, 없으면 그린 점에 붙인다.
+     */
+    const at = result ? constellationLayout(result, size, size, RESULT_PAD) : P;
+    ctx.font = `600 10.5px ${FONTS.body}`;
+    ctx.textAlign = "left";
+    ctx.textBaseline = "middle";
+    at.forEach(([x, y], i) => {
+      const on = highlight === i;
+      ctx.fillStyle = on ? PALETTE.teal : "rgba(201,211,255,.62)";
+      ctx.fillText(String(i + 1), x + 6, y - 7);
+      if (on) {
+        ctx.strokeStyle = PALETTE.teal;
+        ctx.lineWidth = 1.6;
+        ctx.beginPath();
+        ctx.arc(x, y, 9, 0, Math.PI * 2);
+        ctx.stroke();
+      }
+    });
+  }, [points, closed, result, size, highlight]);
 
   const handleClick = useCallback(
     (e: MouseEvent<HTMLCanvasElement>) => {

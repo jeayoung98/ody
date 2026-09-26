@@ -1,4 +1,5 @@
-import type { Contest, ContestEntry, ContestSort, MatchQuality } from "@/types";
+import type { SketchStep } from "@/constants/contest";
+import type { Contest, ContestEntry, ContestMatch, ContestSort, MatchQuality } from "@/types";
 
 /**
  * 콘테스트 응답을 화면이 묻는 것으로 (S15P21A405-640). 순수 함수만 — `tests/contest-view.test.cjs` 가 묶는다.
@@ -69,4 +70,16 @@ export function awaitingScore(mine: readonly ContestEntry[] | undefined): boolea
 /** 내 작품은 회차당 하나다 (재출품은 교체). 목록에서 그 하나를 꺼낸다 */
 export function myEntry(mine: readonly ContestEntry[] | undefined): ContestEntry | null {
   return mine?.[0] ?? null;
+}
+
+/**
+ * 그리기 탭이 지금 몇 단계인가 (S15P21A405-693).
+ *
+ * - 새로 그리는 중: 곡을 아직 못 찾았으면 `draw`, 찾았으면 `review`, 이름을 적기 시작했으면 `submit`
+ * - 내 작품을 보는 중: 채점 전이면 `scoring`, 끝났으면 `null`(모든 단계 완료)
+ */
+export function sketchStep(state: { viewingMine: boolean; mine: ContestEntry | null; match: ContestMatch | null; title: string }): SketchStep | null {
+  if (state.viewingMine && state.mine) return state.mine.status === "SCORED" ? null : "scoring";
+  if (!state.match) return "draw";
+  return state.title.trim() ? "submit" : "review";
 }

@@ -10,6 +10,8 @@ interface TemplatePickerProps {
   loggedIn: boolean;
   /** 이번 회차 테마 — 목록 첫 줄에 적는다 */
   theme: string;
+  /** 추천 모양으로 곡을 골랐다 — 그리기 탭이 곡 확인 단계로 넘어간다 (S15P21A405-702) */
+  onPicked?: () => void;
 }
 
 /**
@@ -19,7 +21,7 @@ interface TemplatePickerProps {
  * 버튼이 아니라 셀렉트인 이유: 모양이 셋(앉은·스케치·엎드린)이고 이름을 보고 골라야 한다. 매번 고르는 것이라 값은 비워 둔다.
  * 템플릿 API 가 로그인 필수라 로그인 전에는 잠근다.
  */
-export default function TemplatePicker({ loggedIn, theme }: TemplatePickerProps) {
+export default function TemplatePicker({ loggedIn, theme, onPicked }: TemplatePickerProps) {
   const { data: templates } = useContestTemplatesQuery(loggedIn);
   const setMatch = useContestStore((s) => s.setMatch);
   const clear = useContestStore((s) => s.clear);
@@ -32,6 +34,7 @@ export default function TemplatePicker({ loggedIn, theme }: TemplatePickerProps)
         // 그리던 점은 치운다 — 추천 결과는 그 점의 답이 아니다. `clear` 가 match 도 비우니 그 뒤에 넣는다
         clear();
         setMatch(m);
+        onPicked?.();
         toast(`AI 가 ${t.label} 모양으로 ${m.tracks.length}곡을 골랐어요 · 플레이리스트 「${m.template?.playlistName ?? t.label}」`);
       },
       onError: (e) => toast(e.message),

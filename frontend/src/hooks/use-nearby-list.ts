@@ -3,17 +3,15 @@
 import { useMemo } from "react";
 import { LAYER_USERS } from "@/constants";
 import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
-import { botAsNearbyPerson } from "@/lib/bots/adapt";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { layerPointOf } from "@/lib/layer-point";
 import { distanceBetween, distanceFrom, nearestFirst, radiusFromNeighbors, withinRadius, type Point } from "@/lib/nearby-from-layer";
-import { useBotStore } from "@/stores/use-bot-store";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type { LayerUsersSnapshot, NearbyPerson } from "@/types";
 
 /**
- * 주변 사람 패널이 실제로 그리는 목록 — **출처가 셋이다** (S15P21A405-536 · 541 · 582).
+ * 주변 사람 패널이 실제로 그리는 목록 — **출처가 둘이다** (S15P21A405-541 · 582).
  *
  * 1. `POST /api/realtime/nearby` — 서버 목록. **기준이 내 층 전체다** (5차 명세). 만남 횟수가
  *    들어 있고 가까운 순으로 상한까지 서버가 잘라 준다. 다만 **소켓·presence·재생 선언이 다
@@ -21,7 +19,6 @@ import type { LayerUsersSnapshot, NearbyPerson } from "@/types";
  * 2. `GET /api/realtime/layers/{layer}/users` — 그냥 REST 폴링이라 소켓이 죽어 있어도 온다.
  *    지도에 이미 이 사람들이 찍히고 있는데 패널만 비어 있으면, 같은 사람을 두 화면이 다르게
  *    말하는 셈이 된다.
- * 3. 데모 봇 — 아무도 없을 때 따라가기를 시연할 상대.
  *
  * **순서가 곧 우선순위다.** 같은 사람이 여러 출처에 있으면 앞엣것이 이긴다.
  *
@@ -30,7 +27,6 @@ import type { LayerUsersSnapshot, NearbyPerson } from "@/types";
  * 그 값이 낡는다 — 좌표가 있으니 매번 다시 재는 편이 싸고 정확하다.
  */
 export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: boolean): NearbyPerson[] {
-  const bots = useBotStore((s) => s.bots);
   const layer = useMapStore((s) => s.layer);
   const myMusicId = useMapStore((s) => s.myMusicId);
   /**
@@ -59,14 +55,6 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
     const merged = [...(fromServer ?? [])];
     const seen = new Set(merged.map((p) => p.email));
 
-    for (const bot of bots) {
-      if (bot.episode.layer !== layer || seen.has(bot.email)) continue;
-      const as = botAsNearbyPerson(bot, layer);
-      if (!as) continue;
-      merged.push(as);
-      seen.add(as.email);
-    }
-
     for (const p of fromLayer(layerUsers, seen)) merged.push(p);
 
     /**
@@ -80,7 +68,7 @@ export function useNearbyList(fromServer: NearbyPerson[] | undefined, enabled: b
     const me = layerPointOf(anchorMusicId, layer);
     const placed = merged.map((p) => ({ ...p, distance: distanceFrom(me, pointOfPerson(p, layer)) }));
     return nearestFirst(withinRadius(placed, nearRadius(layer, me)), LAYER_USERS.maxInPanel);
-  }, [enabled, fromServer, bots, layer, anchorMusicId, layerUsers]);
+  }, [enabled, fromServer, layer, anchorMusicId, layerUsers]);
 }
 
 /**

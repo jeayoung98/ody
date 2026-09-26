@@ -101,7 +101,8 @@ export default function FeedHeader({ profile, isMe, onOpenFollows }: FeedHeaderP
       </div>
 
       <div className="flex flex-wrap gap-3.5">
-        <StatInline label="팔로워" value={profile.followerCount.toLocaleString()} onClick={() => onOpenFollows("follower")} />
+        {/* 상시 접속 계정은 팔로워 수를 보정해서 보여 주므로 목록은 열지 않는다 — 열면 수와 인원이 어긋난다 (S15P21A405-683) */}
+        <StatInline label="팔로워" value={profile.followerCount.toLocaleString()} onClick={profile.isBot ? undefined : () => onOpenFollows("follower")} />
         <StatInline label="팔로잉" value={profile.followingCount.toLocaleString()} onClick={() => onOpenFollows("following")} />
         {!isMe && <StatInline label="만남" value={`${profile.meetingCount ?? 0}회`} />}
       </div>

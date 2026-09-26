@@ -34,11 +34,6 @@ export const STORAGE_KEYS = {
    */
   playHintSeen: "ody:hint-play-seen",
   /**
-   * 내가 구독한 데모 봇 목록 (S15P21A405-536). 봇 계정은 서버에 없어서 구독 관계를 보낼 곳이
-   * 없다 — 이 브라우저에만 남는다.
-   */
-  botFollowing: "ody:bot-following",
-  /**
    * 새로고침 너머로 들고 가는 쿼리 캐시 (S15P21A405-504). 내 정보·프로필·내 플리 등
    * **지난 값을 먼저 보여 줘도 되는 것**만 들어간다. 넣고 빼는 쪽은 [`query-persist`](../lib/query-persist.ts).
    */

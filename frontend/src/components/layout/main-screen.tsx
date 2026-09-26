@@ -65,6 +65,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
   const snap = usePanelStore((s) => s.snap);
   const sheetStop = usePanelStore((s) => s.sheetStop);
+  const sheetPeek = usePanelStore((s) => s.sheetPeek);
   const panelCollapsed = snap === 1;
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   /**
@@ -134,8 +135,9 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    * 가림폭이 바뀔 때 그 별을 새 가운데로 따라가고(`centerLock`), 손으로 밀면 고정이 풀리므로
    * 드래그로 1 단에 내려앉을 때 지도가 손 밑에서 미끄러지지 않는다.
    */
-  // 프로필처럼 2 단 높이를 내용이 정한 시트는 그 값을 쓴다 (`use-sheet-stop`). 1 단은 늘 같다
-  const sheetH = narrow && panelOpen ? (snap !== 1 && sheetStop != null ? sheetStop : SHEET_SNAP_PX[snap]) : 0;
+  // 단 높이를 내용이 정한 시트는 그 값을 쓴다 — 1 단 `use-sheet-peek`, 2·3 단 `use-sheet-stop`
+  const measured = snap === 1 ? sheetPeek : sheetStop;
+  const sheetH = narrow && panelOpen ? (measured ?? SHEET_SNAP_PX[snap]) : 0;
   const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX + sheetH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),

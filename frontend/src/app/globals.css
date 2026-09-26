@@ -586,6 +586,45 @@
     translate: 0 calc(100% - var(--sheet-stop) - var(--nav-bottom));
   }
   /*
+   * **1 단은 머리글 없이 걸린다 — 내용이 정한 판만** (S15P21A405-703). 곡 상세는 제목·가수·＋·▶ 줄까지,
+   * 프로필은 팔로워·팔로잉 줄 위까지다. 재서 `--sheet-peek` 을 심는 쪽은 `use-sheet-peek` 이다.
+   *
+   * 머리글은 `display: none` 이 아니라 **높이를 접는다.** 단이 바뀌는 동안 시트가 미끄러지는데,
+   * 머리글이 한 번에 빠지면 그 순간 본문이 44px 튀어 오른다. 접는 동안은 넘친 것을 자른다 —
+   * 평소에는 안 자른다(머리글에서 내려오는 메뉴가 있다).
+   */
+  [data-sheet][data-snap="1"][data-peek] {
+    translate: 0 calc(100% - var(--sheet-peek) - var(--nav-bottom));
+  }
+  [data-sheet][data-peek] > section > header {
+    max-height: 80px;
+    transition:
+      max-height var(--duration-normal) ease,
+      padding var(--duration-normal) ease,
+      opacity var(--duration-fast) ease;
+  }
+  [data-sheet][data-snap="1"][data-peek] > section > header {
+    max-height: 0;
+    padding-block: 0;
+    border-bottom-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  [data-sheet][data-snap="1"][data-peek] [data-sheet-body] {
+    padding-top: var(--spacing-sheet-peek-top);
+  }
+
+  /*
+   * **시트도 유리다** (S15P21A405-703, 사용자 결정). 폰의 `--glass-tint` 는 불투명한 남색인데
+   * (이 블록 맨 위), 시트만 반투명으로 되돌려 뒤의 지도가 흐리게 비친다. 탭 화면과 같은 값이다
+   * (`panel-screen.tsx`). 곡 상세의 바닥판도 같이 비친다 (`song-detail-panel.tsx`).
+   */
+  [data-sheet] {
+    --glass-tint: rgb(6 9 17 / 0.6);
+    --glass-blur: 18px;
+  }
+  /*
    * **아래 두 구석은 각지게** (S15P21A405-593). 시트는 화면 아래(재생바 위)에 붙어 끝나는데
    * `Box` 는 네 모서리를 다 깎으므로, 그 둥근 구석 사이로 지도가 비친다 — 바닥에 깔린 판인데
    * 떠 있는 카드처럼 보이고 끝선이 지저분해진다. 위쪽 둥근 모서리는 그대로 둔다 (바텀시트의 표식이다).

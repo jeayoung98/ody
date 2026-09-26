@@ -136,11 +136,11 @@ export default function SongDetailPanel() {
         제목·가수가 그 자리로 따라 올라온다. 인라인 `height` 라 CSS 쪽은 `!important` 로 덮는다.
       */}
       <div aria-hidden data-cover-window style={{ height: COVER_WINDOW }} />
-      {/* 폰 좌우 여백은 20 — `Box` 본문과 같은 값 (S15P21A405-703) */}
-      <div className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px] max-tablet:px-gutter-sm">
-        {/* 시트 바닥 — 윗머리는 커버가 비치도록 투명에서 시작한다 */}
-        <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
-        <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />
+      {/* 폰 좌우 여백은 20 — `Box` 본문과 같은 값. `data-sheet-body` 는 1 단 높이를 재는 기준 (S15P21A405-703) */}
+      <div data-sheet-body className="relative flex flex-col gap-3.5 px-[15px] pt-3.5 pb-[18px] max-tablet:px-gutter-sm">
+        {/* 시트 바닥 — 윗머리는 커버가 비치도록 투명에서 시작한다. 폰에서는 반투명이라 뒤의 지도가 비친다 (S15P21A405-703) */}
+        <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3 max-tablet:to-void-3/55" />
+        <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3 max-tablet:bg-void-3/55" />
 
         {isError ? (
           <ErrorMessage />

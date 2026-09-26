@@ -200,7 +200,9 @@
    * 덮어 버리면 다음 별을 못 찾는다 (`use-panel-store.ts` 의 `SheetSnap`).
    */
   --spacing-sheet-s1: 102px;
-  --spacing-sheet-s2: 238px; /* 둘 다 `constants/design-tokens.ts` 의 SHEET_SNAP_PX 와 같은 값 — 함께 고친다 */
+  --spacing-sheet-s2: 238px;
+  /* 머리글 없이 걸리는 1 단의 본문 위 여백 (S15P21A405-703). `SHEET_PEEK_TOP_PX` 와 같은 값 */
+  --spacing-sheet-peek-top: 20px; /* 둘 다 `constants/design-tokens.ts` 의 SHEET_SNAP_PX 와 같은 값 — 함께 고친다 */
 
   /* ---------- 안전 영역 (S15P21A405-420) ---------- */
   /*

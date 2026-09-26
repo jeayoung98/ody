@@ -194,6 +194,12 @@ interface PanelState {
   sheetStop: number | null;
   setSheetStop: (px: number | null) => void;
   /**
+   * 폰 시트의 **1 단 높이를 내용이 정할 때** 그 값(px). `null` 이면 기본값(`--spacing-sheet-s1`)이다.
+   * 곡 상세·프로필이 머리글을 접고 제목 줄 · 통계 줄 위까지만 걸리려고 쓴다 (S15P21A405-703, `use-sheet-peek`).
+   */
+  sheetPeek: number | null;
+  setSheetPeek: (px: number | null) => void;
+  /**
    * 자리를 비켜 준다 (S15P21A405-404). 지도를 움직이는 동안 불린다.
    * **닫는 게 아니다** — 별자리·주변 탐색은 살아 있고 패널만 화면 밖으로 미끄러진다.
    */
@@ -211,6 +217,7 @@ export const usePanelStore = create<PanelState>()(
       feedFollows: null,
       snap: OPEN_SNAP,
       sheetStop: null,
+      sheetPeek: null,
 
       openSong: (musicId) => set(open("song", { musicId }), false, "openSong"),
       followSong: (musicId) => set((s) => (s.activePanel === "song" && s.musicId !== musicId ? { musicId } : {}), false, "followSong"),
@@ -310,6 +317,7 @@ export const usePanelStore = create<PanelState>()(
 
       setSnap: (snap) => set((s) => (s.snap === snap ? {} : { snap }), false, "setSnap"),
       setSheetStop: (px) => set((s) => (s.sheetStop === px ? {} : { sheetStop: px }), false, "setSheetStop"),
+      setSheetPeek: (px) => set((s) => (s.sheetPeek === px ? {} : { sheetPeek: px }), false, "setSheetPeek"),
 
       /**
        * 드래그 중에 매 프레임 불릴 수 있다. **바뀔 때만 set 한다** — 같은 값을 계속 넣으면

@@ -159,3 +159,9 @@ export const SHEET_RADIUS_PX = 30;
  * 3 단은 지도가 거의 다 덮이므로 2 단 값을 그대로 쓴다 — 올렸다 내릴 때 가운데가 출렁이지 않게.
  */
 export const SHEET_SNAP_PX = { 1: 102, 2: 238, 3: 238 } as const;
+
+/**
+ * 머리글 없이 1 단으로 걸리는 시트(곡 상세·프로필)의 **본문 위 여백**(px). `tokens.css` 의
+ * `--spacing-sheet-peek-top` 과 같은 값 — **함께 고친다.** 손잡이 막대(14px)를 비켜 글이 선다 (S15P21A405-703).
+ */
+export const SHEET_PEEK_TOP_PX = 20;

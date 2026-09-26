@@ -3,6 +3,7 @@
 import Logo from "@/components/common/logo";
 import LayerStepper from "./layer-stepper";
 import LayerSummary from "./layer-summary";
+import LeadChip from "./lead-chip";
 import ViewModeCrumb from "./view-mode-crumb";
 
 /**
@@ -41,6 +42,8 @@ export default function Brand() {
         <LayerStepper />
         <LayerSummary />
       </div>
+      {/* 폰에서 내가 태우고 있을 때 인원 한 줄 — 레이어 설명 바로 아래 (S15P21A405-703) */}
+      <LeadChip />
       <ViewModeCrumb />
     </div>
   );

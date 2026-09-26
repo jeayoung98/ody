@@ -35,6 +35,8 @@ export default function MyArtworkCard({ entry, theme }: { entry: ContestEntry; t
       )}
       {entry.status === "SCORED" && (
         <>
+          {/* 화면에서 숫자 점수는 이것 하나다 — 출품 전 모양 일치도는 말로만 적는다 (S15P21A405-693) */}
+          <span className="lbl">AI 심사 점수</span>
           <div className="flex items-baseline gap-1.5">
             <span className="num grad-text text-[38px] leading-none font-semibold">{entry.score}</span>
             <span className="lbl">/ 100</span>

@@ -61,3 +61,30 @@ test("AI 추천 적합도는 그린 별자리와 같은 0~100·등급 척도로 
   assert.deepEqual(templateScore(0.5), { score: 50, quality: "LOW" });
   assert.deepEqual(templateScore(3), { score: 0, quality: "LOW" }, "반폭 넘게 어긋나면 0 으로 누른다");
 });
+
+// ── 그리기 탭 단계 (S15P21A405-693) ───────────────────────────────────────────
+{
+  const { sketchStep } = require("../src/lib/contest-view.ts");
+  const entry = (status) => ({ artworkId: 1, rank: null, title: "고양이", ownerEmail: null, ownerNickname: null, status, score: status === "SCORED" ? 83 : null, aiComment: null, failReason: null, likeCnt: 0, likedByMe: false, musicCnt: 5, createdAt: "2026-09-26T00:00:00Z", rankScore: null, closed: true, tracks: [], playlistId: null });
+  const match = { score: 90, quality: "HIGH", tracks: [] };
+
+  test("곡을 아직 못 찾았으면 그리기 단계다", () => {
+    assert.equal(sketchStep({ viewingMine: false, mine: null, match: null, title: "" }), "draw");
+  });
+
+  test("곡을 찾았으면 곡 확인, 이름을 적기 시작하면 출품 단계다", () => {
+    assert.equal(sketchStep({ viewingMine: false, mine: null, match, title: "" }), "review");
+    assert.equal(sketchStep({ viewingMine: false, mine: null, match, title: "  " }), "review");
+    assert.equal(sketchStep({ viewingMine: false, mine: null, match, title: "창가" }), "submit");
+  });
+
+  test("내 작품을 보는 중이면 채점 전은 채점 단계, 채점 뒤는 모두 끝(null)이다", () => {
+    assert.equal(sketchStep({ viewingMine: true, mine: entry("PENDING"), match: null, title: "" }), "scoring");
+    assert.equal(sketchStep({ viewingMine: true, mine: entry("FAILED"), match: null, title: "" }), "scoring");
+    assert.equal(sketchStep({ viewingMine: true, mine: entry("SCORED"), match: null, title: "" }), null);
+  });
+
+  test("낸 작품이 있어도 새로 그리는 중이면 이전 작품 상태와 상관없이 그리기부터다", () => {
+    assert.equal(sketchStep({ viewingMine: false, mine: entry("SCORED"), match: null, title: "" }), "draw");
+  });
+}

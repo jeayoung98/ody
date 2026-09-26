@@ -189,8 +189,11 @@ export function meAvatar(e: MapEngine): NearbyUser {
 /**
  * 우주선 뒤 줄을 그린다. **"나" 칸을 그렸으면 그 화면 자리를 돌려준다** (S15P21A405-698) — 따라가는 동안 내 반응
  * 이모지가 거기서 떠올라야 하는데, 칸 자리는 흔들림까지 들어간 이 계산에서만 나온다. 안 그렸으면 null.
+ *
+ * `slotsOut` 을 주면 **동승자마다** 헬멧 머리 자리를 이메일로 적는다 (S15P21A405-699) — 인솔자 화면에서 동승자의
+ * 반응을 띄울 자리다. 다섯 명을 넘어 `+N` 으로 접힌 사람은 그 동그라미 자리를 받는다.
  */
-export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, queue: QueueInput): { x: number; y: number } | null {
+export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, queue: QueueInput, slotsOut?: Map<string, { x: number; y: number }>): { x: number; y: number } | null {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
   /**
@@ -229,6 +232,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
     const rgb: readonly [number, number, number] = mine ? TEAL : genreRgb(user.genreId);
     drawHelmet(g, qx, qy, rr, rgb, mine);
     drawVisor(g, qx, qy, rr, user);
+    if (!mine) slotsOut?.set(user.email, { x: qx, y: qy - rr });
     if (mine) {
       minePos = { x: qx, y: qy - rr };
       g.beginPath();
@@ -245,6 +249,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
   }
   if (extra > 0) {
     const [qx, qy] = at(shown);
+    if (slotsOut) for (let i = shown; i < slots.length; i++) if (!slots[i].mine) slotsOut.set(slots[i].user.email, { x: qx, y: qy - rr * 1.28 });
     g.beginPath();
     g.arc(qx, qy, rr * 1.28, 0, 6.284);
     g.fillStyle = "rgba(14,21,38,.9)";

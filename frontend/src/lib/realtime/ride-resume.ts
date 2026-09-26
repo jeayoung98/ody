@@ -3,7 +3,7 @@
 import { RIDE_RESUME, RIDE_RESUMING, STORAGE_KEYS } from "@/constants";
 import { ApiError } from "@/lib/api";
 import { readStorage } from "@/lib/storage";
-import { isRiding } from "@/stores/use-follow-store";
+import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { RideTarget } from "@/hooks/mutations/use-ride-mutation";
 
@@ -25,6 +25,7 @@ export function cancelResume(): void {
   if (timer) clearTimeout(timer);
   timer = null;
   attempt = 0;
+  useFollowStore.getState().setReconnecting(false);
 }
 
 export function resumeRide(target: RideTarget, mount: (t: RideTarget) => Promise<unknown>, giveUp: (code: string) => void): void {
@@ -33,12 +34,15 @@ export function resumeRide(target: RideTarget, mount: (t: RideTarget) => Promise
   mount(target).then(
     () => {
       attempt = 0;
+      // 다시 탔다 — 배너를 "탑승 중" 으로 되돌린다 (S15P21A405-700)
+      useFollowStore.getState().setReconnecting(false);
     },
     (e: unknown) => {
       const code = e instanceof ApiError ? e.code : "UNKNOWN";
       // 서버가 아직 나를 태우고 있다 — 다시 탈 게 없다. 들고 있던 상태 그대로 간다
       if (code === "RIDE_ALREADY_RIDING") {
         attempt = 0;
+        useFollowStore.getState().setReconnecting(false);
         return;
       }
       if ((RIDE_RESUME.finalCodes as readonly string[]).includes(code) || attempt >= RIDE_RESUME.backoffMs.length) {
@@ -47,6 +51,11 @@ export function resumeRide(target: RideTarget, mount: (t: RideTarget) => Promise
         return;
       }
       if (attempt === 0) useToastStore.getState().show(RIDE_RESUMING);
+      /**
+       * 한 번 실패했으면 끊긴 것이다 — 배너가 그렇게 말하게 한다 (S15P21A405-700). 인솔자가 떠난 알림으로 들어온
+       * 길은 부르는 쪽이 이미 켰고, 소켓이 다시 열려 들어온 길은 여기서 처음 켜진다.
+       */
+      useFollowStore.getState().setReconnecting(true);
       const wait = RIDE_RESUME.backoffMs[attempt++];
       timer = setTimeout(() => {
         timer = null;

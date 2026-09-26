@@ -25,3 +25,10 @@ test("수는 아는데 사람을 모르면(새로고침 뒤·사진 조회 전) 
   assert.deepEqual(slots.map((s) => s.user.email), ["a@ody.kr", "rider-1", "rider-2"]);
   assert.equal(queueSlots({ me: null, riders: [], count: 0 }).length, 0, "아무도 없으면 줄도 없다");
 });
+
+test("명단이 수보다 길면 수만큼만 — 최근에 탄 사람부터 (S15P21A405-707)", () => {
+  // 인솔자 소켓이 다시 열리면 서버가 선단을 조용히 풀어, 다시 안 탄 사람(old)이 명단에 남는다
+  const slots = queueSlots({ me: null, riders: [user("old@ody.kr"), user("new@ody.kr")], count: 1 });
+  assert.deepEqual(slots.map((s) => s.user.email), ["new@ody.kr"], "예전엔 '1명' 인데 헬멧이 둘이었다");
+  assert.equal(queueSlots({ me: null, riders: [user("a@ody.kr")], count: 0 }).length, 0, "수가 0 이면 줄도 없다");
+});

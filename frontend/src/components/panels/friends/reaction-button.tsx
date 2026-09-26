@@ -5,6 +5,8 @@ import { SmileIcon } from "@/components/common/icons";
 import { REACTION_REJECTED, type ReactionKey } from "@/constants";
 import { useSendReactionMutation } from "@/hooks/mutations/use-send-reaction-mutation";
 import { ApiError } from "@/lib/api";
+import { reactionRecipients } from "@/lib/realtime/reaction-recipients";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useReactionStore } from "@/stores/use-reaction-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { NearbyPerson } from "@/types";
@@ -19,18 +21,24 @@ import ReactionPicker from "./reaction-picker";
  * **패널에 뜬 사람 전원에게 보낸다** (S15P21A405-607). 명세(FEATURES 18)는 반응이 "내 위로 떠서"
  * 주변에 보이는 것이라 특정 한 명에게 보내는 쪽지가 아니다. 백엔드는 받는 사람 한 명씩 받으므로
  * 여기서 펼쳐 보낸다. 재전송 제한(SOCIAL-04)은 서버 429 다.
+ *
+ * **선단도 받는다** (S15P21A405-699). 따라가는 사람은 주변 목록에 없어서, 따라가기 중에는 인솔자와 동승자가
+ * 서로 반응을 못 주고받았다. 받는 사람은 `reactionRecipients` 가 정한다.
  */
 export default function ReactionButton({ people }: { people: NearbyPerson[] }) {
   const [open, setOpen] = useState(false);
   const push = useReactionStore((s) => s.push);
   const showToast = useToastStore((s) => s.show);
   const send = useSendReactionMutation();
+  const leaderEmail = useFollowStore((s) => s.leaderEmail);
+  const riders = useFollowStore((s) => s.riders);
 
   const handlePick = async (key: ReactionKey) => {
     setOpen(false);
     push({ reactionKey: key, mine: true, fromEmail: null });
-    if (people.length === 0) return;
-    const results = await Promise.allSettled(people.map((p) => send.mutateAsync({ toEmail: p.email, reactionKey: key })));
+    const to = reactionRecipients(people, leaderEmail, riders);
+    if (to.length === 0) return;
+    const results = await Promise.allSettled(to.map((toEmail) => send.mutateAsync({ toEmail, reactionKey: key })));
     // 한 명에게라도 갔으면 조용히 넘긴다. 전부 거부됐을 때만 첫 사유를 말한다
     if (results.some((r) => r.status === "fulfilled")) return;
     const first = results[0] as PromiseRejectedResult;

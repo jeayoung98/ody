@@ -224,6 +224,8 @@ export function useRideSession(): void {
         return;
       }
       const target: RideTarget = { email: s.leaderEmail, nickname: s.leaderNickname, imageUrl: s.leaderImageUrl };
+      // 인솔자가 사라진 것은 확실하다 — 첫 재탑승 결과를 기다리지 않고 배너부터 바꾼다 (S15P21A405-700)
+      s.setReconnecting(true);
       resumeRide(target, remount, (code) => giveUp(target, code));
     });
 
@@ -304,6 +306,14 @@ export function useRideSession(): void {
       onConnectionChange((up) => {
         if (!up) return;
         const s = useFollowStore.getState();
+        /**
+         * **내 선단은 서버에서 이미 풀렸다** (S15P21A405-707). 백엔드는 소켓이 새로 열릴 때마다 `onUserGone` 으로 그 사람의
+         * 선단을 해체하는데(`PresenceService.connect`) 인솔자에게는 알리지 않는다. 비우지 않으면 배너가 옛 인원을 말하고
+         * 다시 안 탄 사람의 헬멧이 남는다. 다시 타는 사람은 `RIDE_RIDER_JOINED` 로 다시 채워진다 — 이 콜백은 구독 직후
+         * 같은 틱에 돌아서 그 알림보다 먼저다.
+         */
+        s.setFollowerCount(0);
+        s.setRiders([]);
         const target: RideTarget | null = s.leaderEmail
           ? { email: s.leaderEmail, nickname: s.leaderNickname, imageUrl: s.leaderImageUrl }
           : readStorage<RideTarget>(STORAGE_KEYS.rideLeader);

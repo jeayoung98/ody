@@ -32,7 +32,9 @@ import com.ssafy.backend.taste.mapper.TasteAnalysisRow;
 
 import io.micrometer.core.instrument.MeterRegistry;
 import io.micrometer.core.instrument.Timer;
+import lombok.extern.slf4j.Slf4j;
 
+@Slf4j
 @Service
 public class TasteAnalysisGenerationService {
 
@@ -130,6 +132,8 @@ public class TasteAnalysisGenerationService {
             String failureCode = error instanceof GmsTasteClient.GmsTasteException gms
                     ? gms.code() : "GMS_OUTPUT_REJECTED";
             meterRegistry.counter("ody.taste.gms.failures", "code", failureCode).increment();
+            // 코드만 남기면 원인을 못 가른다 — 648 은 400 본문 한 줄이면 바로 보였다. 요청 본문(키)은 남기지 않는다
+            log.warn("[Taste] GMS 생성 실패 → FALLBACK code={} cause={}", failureCode, causeOf(error));
             OffsetDateTime completedAt = OffsetDateTime.ofInstant(clock.instant(), zoneId);
             TasteFallbackRenderer.RenderedReport fallback =
                     fallbackRenderer.render(current.reportEligibility().level(), findings);
@@ -149,6 +153,16 @@ public class TasteAnalysisGenerationService {
                     new TasteAnalysisResponse.Generation(
                             "FALLBACK", false, false, true, failureCode, null));
         }
+    }
+
+    /** 가장 안쪽 원인. HTTP 오류면 Spring 이 상태와 응답 본문을 메시지에 담는다. 너무 길면 자른다. */
+    public static String causeOf(Throwable error) {
+        Throwable root = error;
+        while (root.getCause() != null && root.getCause() != root) {
+            root = root.getCause();
+        }
+        String message = root.getClass().getSimpleName() + ": " + root.getMessage();
+        return message.length() > 500 ? message.substring(0, 500) + "…" : message;
     }
 
     private boolean isCurrentSnapshot(String email, String requestedHash) {

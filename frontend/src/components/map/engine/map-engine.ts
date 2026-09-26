@@ -1548,7 +1548,18 @@ export class MapEngine {
    * 내 표식의 화면 좌표 — **읽기만 한다** (S15P21A405-694). 반응 이모지가 여기서 떠오른다.
    * `meScreen` 은 비행·고리 이동 상태를 정리하면서 읽으므로 그리기 밖에서 부르면 연출이 끊긴다.
    */
+  /**
+   * 따라가는 동안 내 헬멧(인솔자 우주선 뒤 "나" 칸)이 이 프레임에 그려진 화면 자리 (S15P21A405-698).
+   * `draw-friends` 가 그리면서 적는다 — 인솔자가 화면 밖이라 안 그렸으면 null.
+   */
+  rideMeScreen: { x: number; y: number } | null = null;
+
+  /**
+   * 내 반응 이모지가 떠오를 화면 자리. **따라가는 동안에는 내 헬멧 자리다** (S15P21A405-698) — 그때 나는 지도 위
+   * 표식이 아니라 인솔자 줄의 헬멧으로 그려지는데, 표식 자리(`me`)를 쓰면 엉뚱한 곳에서 떠올랐다.
+   */
   mePos(): { x: number; y: number } | null {
+    if (this.follow) return this.rideMeScreen;
     if (this.myId == null) return null;
     const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
     return { x: px, y: py };

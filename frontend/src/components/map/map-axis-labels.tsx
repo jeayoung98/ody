@@ -49,7 +49,7 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
   }, []);
 
   const ax = LAYER_AXES[layer];
-  // 뜻이 없는 축(PC4 · PC12)은 이름을 지어내지 않는다 — 나침반이 쓰는 말과 같게 적는다
+  // 라벨이 빈 축은 이름을 지어내지 않는다 — 나침반이 쓰는 말과 같게 적는다
   const x = ax.x[0] ? ax.x : (["미세한 차이", "미세한 차이"] as const);
   const y = ax.y[0] ? ax.y : (["미세한 차이", "미세한 차이"] as const);
 

@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { RIDING_LOCKED } from "@/constants";
 import { NextIcon, PauseIcon, PlayIcon, PlaylistAddIcon, PrevIcon } from "@/components/common/icons";
-import AddToPlaylistMenu from "@/components/panels/playlist/add-to-playlist-menu";
+import AddToPlaylistDialog from "@/components/panels/playlist/add-to-playlist-dialog";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useFeatures } from "@/hooks/use-features";
@@ -16,6 +16,7 @@ import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import LocateButton from "./locate-button";
 import PlayerBackdrop from "./player-backdrop";
+import ContestRankTag from "./contest-rank-tag";
 import PlayerProgress from "./player-progress";
 import TransportButton from "@/components/common/transport-button";
 import { track } from "@/lib/analytics/client";
@@ -147,6 +148,8 @@ export default function PlayerBar() {
         {/* 가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다 */}
         <p className={`mt-0.5 truncate text-[14.5px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
+      {/* 이벤트 탑 작품 플리면 순위 태그 — 제목 버튼 안에 넣으면 버튼 속 버튼이라 밖에 둔다 (S15P21A405-684) */}
+      <ContestRankTag />
 
       {/*
         좁은 화면에서는 **아랫줄로 떨어진다** (S15P21A405-417). 부모가 `flex-wrap` 이라
@@ -181,12 +184,8 @@ export default function PlayerBar() {
         )}
       </div>
 
-      {/* 메뉴는 원래 아래로 펼쳐지는 상자다 — 여기는 화면 맨 아래라 **위로** 띄운다 */}
-      {features.playlist && menuOpen && currentMusicId != null && (
-        <div className="absolute inset-x-0 bottom-full mb-2 [&>div]:static! [&>div]:mt-0!">
-          <AddToPlaylistMenu musicId={currentMusicId} onDone={() => setMenuOpen(false)} />
-        </div>
-      )}
+      {/* 화면 가운데 팝업 (S15P21A405-686) — 위로 펼치던 목록은 곡 상세 패널과 겹쳤다 */}
+      {features.playlist && menuOpen && currentMusicId != null && <AddToPlaylistDialog musicId={currentMusicId} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

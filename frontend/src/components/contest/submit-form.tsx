@@ -16,6 +16,8 @@ interface SubmitFormProps {
   /** 이미 낸 내 작품. 있으면 다시 내는 것이고 **이전 것이 지워진다** */
   my: ContestEntry | null;
   loggedIn: boolean;
+  /** 출품이 받아들여졌다 — 그리기 탭이 내 작품 화면으로 넘어간다 (S15P21A405-693) */
+  onSubmitted?: () => void;
 }
 
 /**
@@ -23,7 +25,7 @@ interface SubmitFormProps {
  * AI 점수는 여기서 안 보인다 — 출품 뒤 서버가 매기고 `MyArtworkCard` 가 받아 보인다.
  * 재출품은 **교체**다: 서버가 이전 작품을 지우고 점수·좋아요를 초기화한다 (§6-3) — 누르기 전에 말해 준다.
  */
-export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormProps) {
+export default function SubmitForm({ contest, match, my, loggedIn, onSubmitted }: SubmitFormProps) {
   const title = useContestStore((s) => s.title);
   const setTitle = useContestStore((s) => s.setTitle);
   const closed = useContestStore((s) => s.closed);
@@ -45,6 +47,7 @@ export default function SubmitForm({ contest, match, my, loggedIn }: SubmitFormP
           toast(`「${trimmed}」 출품 완료 · AI 채점이 끝나면 알려 드려요`);
           clear();
           setTitle("");
+          onSubmitted?.();
         },
         onError: (e) => toast(e.message),
       },

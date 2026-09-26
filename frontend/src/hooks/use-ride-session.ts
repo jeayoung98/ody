@@ -10,7 +10,7 @@ import { api } from "@/lib/api";
 import { musicToMapPoint } from "@/lib/map-point";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
 import { readStorage } from "@/lib/storage";
-import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
+import { correctDrift, endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
 import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { cancelResume, resumeRide } from "@/lib/realtime/ride-resume";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -67,6 +67,12 @@ export function useRideSession(): void {
     const stopTrack = onType<RideTrackPayload>(["RIDE_TRACK"], (p) => {
       if (!useFollowStore.getState().leaderEmail) return;
       /**
+       * **받은 순간을 기준으로 삼는다** (S15P21A405-682). 인솔자는 `serverTs` 에 0초부터 틀었다 — 도착 지연과
+       * 아래 제목 대기만큼 늦게 트는 것을 `playFrom` 이 메운다. 예전에는 트는 순간 0초부터라 그만큼 뒤처졌다.
+       */
+      const receivedAt = Date.now();
+      const startMs = positionNow(0, "PLAYING", p.serverTs);
+      /**
        * **제목을 받은 뒤 넘어간다** (S15P21A405-656). 바로 넘기면 플레이어바가 상세가 올 때까지 "Track 3242" 를
        * 보인다. 상세는 캐시(`staleTime: Infinity`)에 있으면 즉시, 없으면 한 번의 조회다. 상한을 넘기거나 실패하면
        * 제목 없이 진행한다. 기다리는 사이 더 새 곡이 오면 먼저 것은 버린다 — 옛 곡을 뒤늦게 틀면 안 된다.
@@ -79,11 +85,11 @@ export function useRideSession(): void {
         if (seq !== trackSeq) return;
         const ride = useFollowStore.getState();
         if (!ride.leaderEmail) return;
-        applyTrack(p);
+        applyTrack(p, startMs, receivedAt);
       });
     });
 
-    function applyTrack(p: RideTrackPayload) {
+    function applyTrack(p: RideTrackPayload, startMs: number, receivedAt: number) {
       const ride = useFollowStore.getState();
       ride.setLeaderMusicId(p.musicId);
       ride.setLeaderLayer(p.layer);
@@ -97,7 +103,7 @@ export function useRideSession(): void {
       useMapStore.getState().setMyMusicId(p.musicId);
       // 우주선이 이전 곡에서 새 곡으로 날아온다. 재생은 아래에서 따로 건다
       getMapEngine()?.rideTo(p.musicId);
-      if (p.playable) playFrom(p.musicId, 0, true);
+      if (p.playable) playFrom(p.musicId, startMs, true, receivedAt);
       else usePlayerStore.getState().pause();
     }
 
@@ -258,7 +264,11 @@ export function useRideSession(): void {
       if (process.env.NODE_ENV !== "production") console.warn("[ride] 동승 중에 막힌 조작이 나갔다 — UI 잠금이 빠졌다", p);
     });
 
+    /** 어긋남 확인 (S15P21A405-682). 따라가는 중이 아니면 `correctDrift` 가 바로 돌아간다 */
+    const driftTimer = setInterval(correctDrift, REALTIME.rideDriftCheckMs);
+
     return () => {
+      clearInterval(driftTimer);
       stopTrack();
       stopPlayback();
       stopPanel();

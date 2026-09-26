@@ -5,6 +5,11 @@ import type { User } from "./user";
 /** 피드(마이페이지/상대 프로필) 상단 + 대시보드 응답 */
 export interface UserProfile extends User {
   isOnline: boolean;
+  /**
+   * 서버가 돌리는 상시 접속 계정인가 (S15P21A405-683). 화면에 구분 표시는 하지 않는다 — 팔로워 수를 보정하고
+   * 팔로워 목록을 막는 데만 쓴다. ERD에 없음 — 백엔드 확인 필요 (`user.is_bot`). 없으면 false.
+   */
+  isBot: boolean;
   followerCount: number;
   followingCount: number;
   /** 가입 후 며칠째인지 */

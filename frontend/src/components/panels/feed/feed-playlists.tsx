@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { useDrill } from "@/hooks/use-drill";
 import EmptyState from "@/components/common/empty-state";
 import IconButton from "@/components/common/icon-button";
@@ -9,7 +10,8 @@ import SkeletonRows from "@/components/common/skeleton-rows";
 import { useDeletePlaylistMutation } from "@/hooks/mutations/use-delete-playlist-mutation";
 import { useLikedPlaylistsQuery } from "@/hooks/queries/use-liked-playlists-query";
 import { useMyPlaylistsQuery } from "@/hooks/queries/use-my-playlists-query";
-import CreatePlaylistForm from "../playlist/create-playlist-form";
+import Button from "@/components/common/button";
+import CreatePlaylistDialog from "../playlist/create-playlist-dialog";
 
 interface FeedPlaylistsProps {
   /** 목록 주인. `isMe` 면 안 본다 — 그때는 토큰 주체로 부르는 편이 다른 화면과 캐시를 함께 쓴다 */
@@ -51,14 +53,21 @@ export default function FeedPlaylists({ email, isMe, kind }: FeedPlaylistsProps)
   // 탭 화면에서는 지도로 돌아가서 연다 (S15P21A405-666)
   const drill = useDrill();
   const remove = useDeletePlaylistMutation();
+  // 새 플리 만들기는 화면 가운데 팝업이다 (S15P21A405-686) — 목록 위에 늘 펼쳐 둔 폼이었다
+  const [creating, setCreating] = useState(false);
 
   const query = made ? mine : liked;
   const rows = query.data ?? [];
-  const empty = made ? (isMe ? "아직 만든 플레이리스트가 없어요. 위에서 하나 만들어 보세요." : "아직 만든 플레이리스트가 없어요.") : "아직 좋아요한 플레이리스트가 없어요.";
+  const empty = made ? (isMe ? "아직 만든 플레이리스트가 없어요. 위 버튼으로 하나 만들어 보세요." : "아직 만든 플레이리스트가 없어요.") : "아직 좋아요한 플레이리스트가 없어요.";
 
   return (
     <div className="flex flex-col gap-2">
-      {isMe && made && <CreatePlaylistForm />}
+      {isMe && made && (
+        <Button size="sm" className="self-start" onClick={() => setCreating(true)}>
+          ＋ 새 플레이리스트
+        </Button>
+      )}
+      {creating && <CreatePlaylistDialog onClose={() => setCreating(false)} />}
       <div className="-mx-1.5 flex flex-col gap-0.5">
         {query.isPending && <SkeletonRows count={4} />}
         {!query.isPending && rows.length === 0 && <EmptyState message={empty} />}

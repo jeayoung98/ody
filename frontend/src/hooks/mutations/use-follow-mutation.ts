@@ -1,9 +1,7 @@
 import { useMutation, useQueryClient, type QueryClient } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { isBot } from "@/lib/bots/roster";
 import { withFollow, withFollowInList } from "@/lib/optimistic";
 import { snapshotQueries } from "@/lib/query-snapshot";
-import { isFollowingBot, useBotStore } from "@/stores/use-bot-store";
 import { API_ENDPOINTS, CHANGED, FOLLOW_FAILED, QUERY_KEYS } from "@/constants";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { FollowListResponse, FollowResponse, User, UserProfile } from "@/types";
@@ -33,8 +31,7 @@ export function useFollowMutation() {
   const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (followeeEmail: string) =>
-      // 봇은 서버에 없는 계정이라 구독 관계를 보낼 곳이 없다. 이 브라우저에만 남는다 (S15P21A405-536)
-      isBot(followeeEmail) ? followBotLocally(followeeEmail, true) : api<FollowResponse>(API_ENDPOINTS.user.followInsert, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
+      api<FollowResponse>(API_ENDPOINTS.user.followInsert, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
     onMutate: (followeeEmail) => applyFollow(qc, followeeEmail, true),
     onSuccess: () => {
       showToast(CHANGED.followed);
@@ -57,25 +54,13 @@ async function applyFollow(qc: QueryClient, email: string, follow: boolean) {
   return restore;
 }
 
-/**
- * 봇 구독을 로컬에서 켜고 끈다 (S15P21A405-536).
- *
- * 서버 응답과 같은 모양을 돌려주므로 부르는 쪽은 봇인지 아닌지 몰라도 된다. `toggleFollow` 는
- * 말 그대로 토글이라 **지금 상태가 목표와 같으면 건드리지 않는다** — 안 그러면 이미 팔로우
- * 중인데 팔로우를 또 누를 때(연타·재시도) 도리어 해제된다.
- */
-function followBotLocally(email: string, want: boolean): Promise<FollowResponse> {
-  if (isFollowingBot(email) !== want) useBotStore.getState().toggleFollow(email);
-  return Promise.resolve({ followeeFollowerCnt: 0 } as FollowResponse);
-}
-
 /** 구독 해제. **팔로우 중이 아니어도 200** 이라 화면이 상태를 먼저 확인할 필요가 없다 */
 export function useUnfollowMutation() {
   const qc = useQueryClient();
   const showToast = useToastStore((s) => s.show);
   return useMutation({
     mutationFn: (followeeEmail: string) =>
-      isBot(followeeEmail) ? followBotLocally(followeeEmail, false) : api<FollowResponse>(API_ENDPOINTS.user.followDelete, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
+      api<FollowResponse>(API_ENDPOINTS.user.followDelete, { method: "POST", body: JSON.stringify({ followeeEmail }) }),
     onMutate: (followeeEmail) => applyFollow(qc, followeeEmail, false),
     onSuccess: () => {
       showToast(CHANGED.unfollowed);

@@ -203,6 +203,13 @@ export const ClockIcon = ({ size = 13, ...p }: P) => (
     <path d="M12 7.4V12l3.2 2" />
   </svg>
 );
+/** 다시 받기 — 둥근 화살표. 실시간 탑 버스기사 새로고침 (S15P21A405-681) */
+export const RefreshIcon = ({ size = 14, ...p }: P) => (
+  <svg {...base(size, p)}>
+    <path d="M19.6 12a7.6 7.6 0 1 1-2.2-5.4" />
+    <path d="M19.8 4.4v4.2h-4.2" />
+  </svg>
+);
 /** 발매년도 — 달력 */
 export const CalendarIcon = ({ size = 13, ...p }: P) => (
   <svg {...base(size, p)}>

@@ -426,6 +426,21 @@
 .animate-tin {
   animation: tin 0.3s var(--ease-spring);
 }
+/* 겹 진입 타이틀 카드 (S15P21A405-690) — 2.2s = LAYER_TITLE.showMs. 떠오르고, 머물고, 흩어진다 */
+@keyframes layer-title {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  16% { opacity: 1; transform: none; }
+  72% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+.animate-layer-title {
+  animation: layer-title 2.2s var(--ease-spring) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-layer-title {
+    animation: none;
+  }
+}
 @keyframes tring {
   0% { transform: scale(0.95); opacity: 0.85; }
   70% { transform: scale(1.07); opacity: 0; }

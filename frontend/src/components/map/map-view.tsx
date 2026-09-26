@@ -10,7 +10,6 @@ import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-l
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useBots } from "@/hooks/use-bots";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
@@ -30,7 +29,9 @@ import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
 import { rideLayerTarget } from "./engine/ride-layer";
 import { MapEngine } from "./engine/map-engine";
+import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
+import LayerTitleCard from "./layer-title-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { shouldFollowPlayback } from "./selection-follow";
@@ -118,11 +119,6 @@ export default function MapView({ occlusion }: MapViewProps) {
    * 엔진에 넣는 것도 훅이 한다(`setFriends`·`setCrowd`)므로 여기서는 켜기만 한다.
    */
   useViewportSubscription(features.social);
-  /**
-   * 데모 봇을 굴리는 유일한 시계 (S15P21A405-536). 지도 화면에만 둔다 — 두 군데서 돌면
-   * 같은 봇이 화면마다 다른 곡을 듣게 된다.
-   */
-  useBots(features.social);
   /**
    * 재생 선언을 보내는 유일한 자리 (S15P21A405-569). 지도 화면에만 둔다 —
    * 두 군데서 걸면 곡마다 두 번 선언한다.
@@ -518,7 +514,8 @@ export default function MapView({ occlusion }: MapViewProps) {
        * 예전에는 확대가 아무 일도 안 했다. 이 뷰는 카메라가 아니라 화면 크기에서 반지름을
        * 뽑아 세운 배치라 확대할 카메라가 없었기 때문이다. 고리 반지름만 키워 봤더니 중심 별도
        * 제목도 배경도 그대로인 채 **살만 길어져서** "확대가 아니라 줄이 늘어난 것" 이 됐다 —
-       * 지금은 캔버스를 통째로 키운다 (`probeView`, `draw-map`).
+       * 캔버스를 통째로 키우던 때(S15P21A405-593)는 글씨·별까지 커져 여정 확대와 달랐다 — 지금은 여정처럼
+       * 고리 별 자리만 중심 별 기준으로 벌리고 글씨·별 크기는 그대로다 (`probePos`, S15P21A405-688).
        *
        * 축소는 그대로 **나가기**다 — 키운 것을 되돌리는 뜻으로만 쓰면 이 뷰를 빠져나가는
        * 길이 사라진다. 휠 한 칸의 비율을 그대로 배율로 쓴다.
@@ -958,6 +955,9 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
+      {/* 반응 이모지는 지도에만 뜬다 (S15P21A405-694) — 패널을 닫아 둬도 받은 반응이 보여야 한다 */}
+      {features.social && <FloatingReactions />}
+      <LayerTitleCard />
       {/*
         **마우스 전용이다** (S15P21A405-593). 손가락에는 호버가 없고, 폰에서는 별을 누르면
         곡 상세가 바로 1 단으로 열린다 — 카드를 거칠 일이 없어졌다. 예전에는 폰에서도 이

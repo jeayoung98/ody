@@ -27,6 +27,8 @@ interface ContestState {
   title: string;
 
   toggleOpen: () => void;
+  /** 그 탭으로 연다 — 플레이어바 이벤트 태그가 갤러리로 부른다 (S15P21A405-684) */
+  openAt: (tab: ContestTab) => void;
   close: () => void;
   setTab: (tab: ContestTab) => void;
   setSort: (sort: ContestSort) => void;
@@ -54,6 +56,7 @@ export const useContestStore = create<ContestState>()(
       title: "",
 
       toggleOpen: () => set((s) => ({ open: !s.open }), false, "toggleOpen"),
+      openAt: (tab) => set({ open: true, tab }, false, "openAt"),
       close: () => set({ open: false }, false, "close"),
       setTab: (tab) => set({ tab }, false, "setTab"),
       setSort: (sort) => set({ sort }, false, "setSort"),

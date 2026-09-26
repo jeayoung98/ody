@@ -1,5 +1,5 @@
-import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
-import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
+import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { FONTS, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
 
@@ -85,6 +85,23 @@ function touch(id: number, t: number) {
  * 지금 겹의 깊이 0~1. 전환 중에는 두 겹 사이 소수로 건너간다 —
  * 끝나는 순간 배경이 툭 바뀌면 그것부터 눈에 띈다.
  */
+/**
+ * 지금 겹의 배경 색 (S15P21A405-690). 전환 중에는 두 겹 색 사이 — 배경 깊이(`depthOf`)와 같은 잣대라 어둡기와 색이 함께 건너간다.
+ */
+export function layerTint(layerF: number): [number, number, number] {
+  const n = LAYER_TINTS.length;
+  const l = Math.min(n - 1, Math.max(0, layerF));
+  const a = LAYER_TINTS[Math.floor(l)];
+  const b = LAYER_TINTS[Math.min(n - 1, Math.floor(l) + 1)];
+  const k = l - Math.floor(l);
+  return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * k)) as [number, number, number];
+}
+
+/** 워시 원래 색에 겹 색을 섞는다 */
+function tinted(c: readonly [number, number, number], tint: readonly [number, number, number]): [number, number, number] {
+  return [0, 1, 2].map((i) => Math.round(c[i] + (tint[i] - c[i]) * LAYER_TINT_MIX)) as [number, number, number];
+}
+
 function depthOf(e: MapEngine) {
   const l = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
   return l / (LAYER_COUNT - 1);
@@ -104,6 +121,8 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   const nebulaK = 1 - depth * LAYER_DEPTH.maxNebulaFade;
   g.globalCompositeOperation = "lighter";
   const big = Math.max(W, H);
+  // 겹마다 다른 색으로 물든다 (S15P21A405-690)
+  const tint = layerTint(e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer);
   const ox = Math.sin(t * 0.015) * 44;
   const oy = Math.cos(t * 0.011) * 34;
   for (const w of NEBULA_WASH) {
@@ -111,9 +130,10 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
     const py = w.v * H + oy;
     const rr = w.r * big * 0.62;
     const gr = g.createRadialGradient(px, py, 0, px, py, rr);
-    gr.addColorStop(0, rgba(w.c, 0.105 * nebulaK));
-    gr.addColorStop(0.42, rgba(w.c, 0.04 * nebulaK));
-    gr.addColorStop(1, rgba(w.c, 0));
+    const c = tinted(w.c, tint);
+    gr.addColorStop(0, rgba(c, 0.105 * nebulaK));
+    gr.addColorStop(0.42, rgba(c, 0.04 * nebulaK));
+    gr.addColorStop(1, rgba(c, 0));
     g.fillStyle = gr;
     g.beginPath();
     g.arc(px, py, rr, 0, Math.PI * 2);
@@ -747,33 +767,37 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
    * 이웃을 누르는 것만으로는 건너가지 않으므로(선택·재생만), 건너가는 길이 시선이 있는 자리에 글씨로 보여야 한다.
    * 떠다니는 버튼을 얹는 대신 이미 있는 라벨 묶음 안에 넣는다. 히트 영역은 엔진에 적어 두고 클릭은 map-view 가 받는다
    */
+  /** 라벨 글씨 배율 — 확대의 일부만 따라간다 (S15P21A405-688) */
+  const sc = e.probeLabelScale();
   const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
-    g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
-    const title = fitText(g, s.title, 126);
+    // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
+    const L = PROBE_LABEL;
+    g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
+    const title = fitText(g, s.title, L.titleMaxW * sc);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, x - tw / 2 - 6, y + 13, tw + 12, 19, 5);
+    roundRect(g, x - tw / 2 - 6 * sc, y + L.boxTop * sc, tw + 12 * sc, L.boxH * sc, 5 * sc);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, x, y + 22.5);
+    g.fillText(title, x, y + (L.boxTop + L.boxH / 2) * sc);
     if (sub) {
-      // 10px 이었다 (S15P21A405-649). 제목만 커지고 이 줄은 그대로라 `#3 · 가수` 가 안 읽혔다.
-      // 베이스라인도 같이 내린다 — 글자가 커지면 제목 상자(y+13 부터 19) 에 머리가 닿는다
-      g.font = `500 12px ${FONTS.mono}`;
+      // 제목 상자와 가수 줄 사이를 띄운다 — 붙어 있으면 한 덩어리로 읽힌다 (S15P21A405-649 · 688)
+      g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
-      g.fillText(sub, x, y + 36);
+      g.fillText(sub, x, y + L.subY * sc);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
       g.globalAlpha = a * pulse;
-      g.font = `600 11.5px ${FONTS.body}`;
+      g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
       const label = "주변 보기 ›";
       const lw = g.measureText(label).width;
-      g.fillText(label, x, y + HOP_LINK.dy);
-      e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: y + HOP_LINK.dy - HOP_LINK.h / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h };
+      const ly = y + HOP_LINK.dy * sc;
+      g.fillText(label, x, ly);
+      e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: ly - (HOP_LINK.h * sc) / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h * sc };
     }
   };
   // 라벨은 지금 고리에만 — 옅은 고리까지 글자를 달면 읽히지 않고 어지럽기만 하다.
@@ -833,16 +857,17 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.lineWidth = 1;
   g.stroke();
   g.globalCompositeOperation = "source-over";
-  g.font = `600 13.5px ${FONTS.body}`;
+  const L = PROBE_LABEL;
+  g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
   const tw = g.measureText(song.title).width;
   g.fillStyle = MAP_COLORS.labelBg;
-  roundRect(g, tx - tw / 2 - 7, ty + rr + 6, tw + 14, 19, 6);
+  roundRect(g, tx - tw / 2 - 7 * sc, ty + rr + L.centerGap * sc, tw + 14 * sc, L.centerBoxH * sc, 6 * sc);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
-  g.fillText(song.title, tx, ty + rr + 15.5);
-  g.font = `500 11px ${FONTS.mono}`;
+  g.fillText(song.title, tx, ty + rr + (L.centerGap + L.centerBoxH / 2) * sc);
+  g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + 30);
+  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + L.centerSubY * sc);
 
   // 선택한 곡의 라벨 — 모든 라벨 위에. 지금 고리의 이웃이거나 이전 고리의 중심이다
   const sel = e.selectedId;
@@ -1174,23 +1199,7 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   forgetStale(e.time);
   // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
   e.hopLink = null;
-  /**
-   * **주변 탐색의 확대는 여기 한 곳이다** (S15P21A405-593).
-   *
-   * 고리 반지름만 키우던 때는 중심 별도 제목도 배경도 그대로라 살만 길어졌다 — 확대가 아니라
-   * "줄이 늘어난 것" 으로 보였다. 화면을 통째로 키우면 배경 별밭·별 크기·글씨·선이 같은
-   * 비율로 커진다. 그리는 좌표는 아무 데도 안 고쳐도 된다.
-   *
-   * 되돌리는 쪽은 {@link MapEngine.unview} 하나다 — 클릭 판정이 보는 `visible`·`hopLink` 는
-   * 확대 전 자리에 그대로 남으므로, 눌린 점만 되돌리면 그리기와 클릭이 안 어긋난다.
-   */
-  const view = e.probeView();
-  if (view) {
-    g.save();
-    g.translate(view.cx, view.cy);
-    g.scale(view.z, view.z);
-    g.translate(-view.cx, -view.cy);
-  }
+  // 주변 탐색 확대는 캔버스를 키우지 않는다 — 고리 별 자리만 벌어진다 (`MapEngine.probePos`, S15P21A405-688)
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
   drawBackground(g, e, depthOf(e));
   if (e.anim) {
@@ -1216,5 +1225,4 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawProbe(g, e);
   drawHold(g, e);
   drawPressure(g, e);
-  if (view) g.restore();
 }

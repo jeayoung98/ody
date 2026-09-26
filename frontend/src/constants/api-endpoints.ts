@@ -235,6 +235,8 @@ export const API_ENDPOINTS = {
      * 종류별 경로(`/bff/charts/{type}`) 목은 걷어냈다 — 백엔드가 셋을 한 번에 주기 때문이다.
      */
     weekly: "/bff/charts/weekly",
+    /** 실시간 탑 버스기사 — **실연동** (S15P21A405-681). 배포 백엔드 `GET /api/realtime/ride/ranking` */
+    topDriver: "/bff/charts/top-driver",
   },
 
   /**

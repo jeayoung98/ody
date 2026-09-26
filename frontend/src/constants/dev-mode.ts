@@ -15,7 +15,10 @@
  *
  * ```text
  * ?dev=1   설문을 끄고, 이 브라우저의 분석 전송을 멈춘다
- * ?dev=0   셋 다 되돌린다
+ * ?dev=0   테스터 상태로 — 설문을 켜고, 분석은 다시 보낸다
+ *
+ * 설문 모드 기본이 꺼짐이 되면서(S15P21A405-696) `?dev=0` 은 값을 **지우는** 게 아니라 설문을 **켠다** —
+ * 지우면 기본값(꺼짐)으로 떨어져 테스터에게 설문이 안 뜬다. 분석 쪽은 기본이 켜짐이라 지우면 된다.
  * ```
  *
  * 폰에서 한 번만 치면 이후로는 파라미터 없이 들어가도 유지된다.
@@ -80,7 +83,7 @@ var K="${STORAGE_KEYS.surveyMode}",A="${STORAGE_KEYS.analyticsMode}",u=new URL(l
 var d=u.searchParams.get("${DEV_MODE_PARAM}");
 if(d!==null){
 var on=d!=="0";
-[K,A].forEach(function(k){if(on){localStorage.setItem(k,"false");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
+[K,A].forEach(function(k){if(on){localStorage.setItem(k,"false");}else if(k===K){localStorage.setItem(k,"true");}else{localStorage.removeItem(k);}sessionStorage.removeItem(k);});
 u.searchParams.delete("${DEV_MODE_PARAM}");
 history.replaceState(null,"",u.pathname+u.search+u.hash);
 }

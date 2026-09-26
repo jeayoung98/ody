@@ -11,7 +11,8 @@
  * 실데이터인 줄 알고 목을 보는 일이 없어야 한다.
  */
 import { NextResponse } from "next/server";
-import { NO_GENRE_ID } from "@/constants";
+import { BOT_FOLLOWER_BONUS, NO_GENRE_ID } from "@/constants";
+import { seedOf } from "@/lib/avatar-seed";
 import { PC_DIMS, type MapPoint } from "@/types";
 import type { Music, PlaylistSummary, User, UserProfile } from "@/types";
 import { failLive, LIVE_HEADERS } from "./api-response";
@@ -493,6 +494,11 @@ export interface BackendUserDetail {
    * optional 인 이유는 이 필드가 없던 배포를 만날 수 있어서다 — 그때는 `false` 로 떨어진다.
    */
   isOnline?: boolean;
+  /**
+   * 서버가 돌리는 상시 접속 계정인가 (S15P21A405-683). ERD에 없음 — 백엔드 확인 필요 (`user.is_bot`).
+   * 아직 안 내려주는 배포에서는 false 로 떨어진다.
+   */
+  isBot?: boolean;
 }
 
 export function toUser(u: BackendUserDetail): User {
@@ -510,6 +516,15 @@ export function toUser(u: BackendUserDetail): User {
 }
 
 const DAY_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * 상시 접속 계정의 팔로워 수에 더할 값 (S15P21A405-683). 이메일로 정해지므로 새로 불러도 같은 수다 —
+ * 조회할 때마다 바뀌면 팔로우를 누른 뒤 다시 읽는 순간 숫자가 튄다.
+ */
+export function botFollowerBonus(email: string): number {
+  const { min, max } = BOT_FOLLOWER_BONUS;
+  return min + Math.floor(seedOf(email)[0] * (max - min + 1));
+}
 
 /**
  * 백엔드 사용자 상세 → 마이페이지·프로필이 쓰는 {@link UserProfile}.
@@ -533,7 +548,8 @@ export function toUserProfile(u: BackendUserDetail): UserProfile {
      * 쪽이, 아무도 없는데 불이 들어오는 쪽보다 낫다 — 따라가기 버튼이 그 값으로 열린다.
      */
     isOnline: u.isOnline ?? false,
-    followerCount: u.followerCnt,
+    isBot: u.isBot ?? false,
+    followerCount: u.followerCnt + (u.isBot ? botFollowerBonus(u.email) : 0),
     followingCount: u.followingCnt,
     // "N일째 탐험중" — 가입 당일이 1일째다
     daysSinceJoined: Number.isFinite(joined) ? Math.max(1, Math.floor((Date.now() - joined) / DAY_MS) + 1) : 1,

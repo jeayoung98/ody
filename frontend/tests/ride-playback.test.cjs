@@ -8,7 +8,8 @@
 const { test } = require("node:test");
 const assert = require("node:assert/strict");
 
-const { positionNow } = require("../src/lib/realtime/ride.ts");
+const { anchorPositionAt, driftTarget, positionNow } = require("../src/lib/realtime/ride.ts");
+const { REALTIME } = require("../src/constants/realtime.ts");
 
 test("멈춰 있으면 경과를 더하지 않는다 — 정지 중에 위치가 흐르면 안 된다", () => {
   const tenSecondsAgo = Date.now() - 10_000;
@@ -34,4 +35,42 @@ test("기기 시계가 미래로 틀어져 있어도 음수가 되지 않는다"
 
 test("음수 위치는 0 으로 막는다 — seekTo 에 음수를 넣으면 플레이어가 멈춘다", () => {
   assert.equal(positionNow(-1, "PAUSED", Date.now()), 0);
+});
+
+// ── 어긋남 되돌리기 (S15P21A405-682) ─────────────────────────────────────────
+
+test("기준에서 흐른 만큼 더한다 — 내 시계끼리만 뺀다", () => {
+  const a = { musicId: 1, positionMs: 3_000, playing: true, localAt: 100_000 };
+  assert.equal(anchorPositionAt(a, 107_000), 10_000);
+});
+
+test("멈춘 기준은 흐르지 않는다", () => {
+  const a = { musicId: 1, positionMs: 3_000, playing: false, localAt: 100_000 };
+  assert.equal(anchorPositionAt(a, 107_000), 3_000);
+});
+
+test("받은 시각보다 앞선 now 로는 되감지 않는다", () => {
+  const a = { musicId: 1, positionMs: 3_000, playing: true, localAt: 100_000 };
+  assert.equal(anchorPositionAt(a, 99_000), 3_000);
+});
+
+test("허용 범위 안이면 옮기지 않는다 — 버퍼링마다 소리가 튀면 안 된다", () => {
+  const tol = REALTIME.rideDriftToleranceMs;
+  assert.equal(driftTarget(60_000, 60_000 + tol, 200_000), null);
+  assert.equal(driftTarget(60_000 + tol, 60_000, 200_000), null);
+});
+
+test("늦었거나 앞섰으면 기대 위치로 옮긴다", () => {
+  const tol = REALTIME.rideDriftToleranceMs;
+  assert.equal(driftTarget(50_000, 50_000 + tol + 1, 200_000), 50_000 + tol + 1);
+  assert.equal(driftTarget(90_000, 80_000, 200_000), 80_000);
+});
+
+test("기대 위치가 곡 끝 근처면 옮기지 않는다 — 서버 곡 길이와 영상 길이가 다를 수 있다", () => {
+  assert.equal(driftTarget(150_000, 199_500, 200_000), null);
+  assert.equal(driftTarget(150_000, 260_000, 200_000), null);
+});
+
+test("영상 길이를 모르면(0) 끝 확인 없이 어긋남만 본다", () => {
+  assert.equal(driftTarget(10_000, 30_000, 0), 30_000);
 });

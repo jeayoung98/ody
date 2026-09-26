@@ -596,6 +596,8 @@ BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리�
 | # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
 | --- | --- | --- | --- | --- |
 | A-83 | 리더보드·내 작품에 **작품 주인 닉네임**이 없다 | `ArtworkSummary` 는 `ownerEmail` 만 준다 (`origin/backend/dev` `artwork/dto/ArtworkSummary.java`) | 갤러리 카드·순위 줄에 이메일 앞부분(`luna@…` → `luna`)을 적고 있다 (`lib/contest-view` `ownerLabel`). 닉네임을 바꾼 사람이 엉뚱한 이름으로 보인다 — `ownerNickname` 을 같이 내려 주면 바로 바꾼다 | 협의 전 |
+| A-91 | 리더보드 `ArtworkSummary` 에 **`playlistId`** 가 없다 (S15P21A405-684) | `artwork.playlist_id` 와 `ArtworkRow.playlistId` 에는 있는데 `ArtworkSummary` 레코드에 빠져 있다 (`origin/backend/dev` `artwork/dto/ArtworkSummary.java`). 프론트는 `playlistId?` 로 받아 없으면 null 로 둔다 (`lib/contest-bff` `toEntry`) | 플레이어바의 "이벤트 N위" 태그가 플리 번호로 탑 5 를 맞추므로 안 뜬다. (지도에 탑 5 를 띄우던 것은 S15P21A405-687 에서 걷어냈다) | 협의 전 |
+| A-92 | 곡 상세 `GET /api/music/detail` 이 **처음 여는 곡에서 2~3초** 걸린다 (S15P21A405-691) | `origin/backend/jenkins` `MusicService.getDetail` 이 응답 전에 이웃 계산(`nearbyService.neighborsOf`)과 영상 ID 외부 조회(`videoIdEnricher.resolve`, 주석상 최악 5초)를 차례로 끝낸다. 2026-09-26 브라우저 실측(로그인, 새 곡): 상세 처음 2.2~2.8초 → 두 번째 40~55ms. `POST /api/music/videoid` 처음 2.2~2.8초, 영상 ID 를 받아 둔 뒤 상세 0.9~1.4초, `GET /api/music/nearby` 처음 1.0~1.5초 | 프론트는 영상 ID 를 **따로** `POST /api/music/videoid` 로 받는다(`/bff/music/[id]/video-id`). 그래서 처음 여는 곡은 상세와 그 조회가 같은 곡의 외부 조회를 동시에 두 번 건다. 요청: (1) 상세에서 영상 ID 외부 조회를 빼거나 기다리지 않게 (2) 이웃 계산 첫 호출 1초 안팎의 원인 확인. 프론트는 응답 전에 아는 것(행동 줄·소리 차트)부터 그리게 바꿨다 — 칩·주변곡은 여전히 응답을 기다린다 | 협의 전 |
 
 FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15P21A405-548**(AI 평가·리더보드) · **S15P21A405-598**(그린 점 → 곡 매칭) 에서 진행 중이다.
 프론트는 아래 모양으로 목(`src/app/bff/contests/*`, `src/mocks/contest.ts`)을 만들어 화면을 먼저 붙였다. **경로·필드는 전부 제안**이며 백엔드 설계에 맞춰 바꿀 수 있다 — 바뀌면 프론트에 알려 주면 라우트만 갈아 끼운다. 타입은 `frontend/src/types/contest.ts`.
@@ -683,3 +685,19 @@ FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15
 | --- | --- | --- | --- | --- |
 | A-85 | `RIDE_RIDER_JOINED` 에 `imageUrl` 이 없다 | 3차 계약 §2 페이로드는 `email` `nickname` `riderCount` 뿐이다 (`types/realtime.ts` `RideRiderJoinedPayload`) | 동승자 헬멧에 사진을 넣으려고 프론트가 사람마다 `GET /api/user/detail?email=` 을 한 번 더 부른다 (`use-ride-session`). 실어 주면 요청 하나가 준다 — 급하지 않다 | 협의 전 (우회 중) |
 | A-86 | 동승자는 **같은 선단의 다른 동승자를 모른다** | 뷰포트·주변 사람 목록은 요청자를 빼고(2차 명세 §4.2), 인솔자의 `riderCount` 는 동승자에게 오지 않아 `map-view` 가 0 으로 둔다. 선단 목록을 주는 API 도 없다 | 따라가는 사람 화면에는 우주선 뒤에 **나 혼자**만 매달린다 — 셋이 같이 타도 서로 안 보인다. 탑승 응답(`POST /api/realtime/ride`)에 동승자 목록을 싣거나 `RIDE_RIDER_JOINED/LEFT` 를 동승자에게도 보내 주면 프론트가 그린다 (`queueSlots` 가 이미 목록·수를 받는다) | 협의 전 |
+
+## 상시 접속 계정 (S15P21A405-683, 2026-09-26)
+
+프론트 데모 봇(S15P21A405-536)은 브라우저마다 따로 시뮬레이션해서, 같은 봇을 두 사람이 따라가도 서로 다른 곡이 들렸다.
+그래서 걷어냈고, "user" 테이블의 상시 접속 계정을 서버가 돌리는 쪽으로 옮긴다. 화면에서는 일반 사용자와 똑같이 보인다.
+origin/backend/dev(8ed83c47) 기준으로 위치·접속은 Redis presence 에만 있고, 전부 클라이언트 소켓·heartbeat·재생 API 호출이 전제라
+**서버가 그 역할을 대신해야** 한다. 기능 명세(FEATURES.md)에 없는 기능이라 기획 확인이 필요하다.
+
+| # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
+| --- | --- | --- | --- | --- |
+| A-87 | `UserDetailResponse.isBot` | 없다. 프론트는 `isBot?: boolean` 으로 받아 없으면 false 로 둔다 (`lib/backend.ts` `toUserProfile`). 다른 응답(`ViewportUser`·`NearbyPerson`·`RideRankingItem`)에는 싣지 않는다 | 상시 접속 계정의 팔로워 수 보정(실제 수 + 계정별 800~1500)과 팔로워 목록 막기가 동작하지 않는다. 팔로워 집계(`countFollowers`)는 지금 그대로 둔다 | 협의 전 |
+| A-88 | 상시 접속 계정을 서버가 돌리기 | `"user".is_bot` 컬럼, presence 생성·TTL(120s) 갱신 또는 만료 정리 제외, 서버 발급 epoch, 플레이리스트 순서대로 `music.duration` 마다 다음 곡(`MusicPlayService.play` 와 같은 경로 — `PositionChanged`·`RIDE_TRACK`·`savePlayback(PLAYING, 0, now)`), 재시작 뒤 자동 복구, 여러 대면 스케줄러 중복 실행 방지. 재생 기록·발견·만남·재생수는 남아도 된다 | 지도에 상시 접속 계정이 안 보이고, 따라가기 할 상대가 없다. 데모 봇을 걷어냈으므로 **그 사이 지도는 실제 사용자만 보인다** | 협의 전 |
+| A-89 | 일반 사용자처럼 보이기 | `email` 이 `RideRankingItem`·`RideRiderJoinedPayload` 에 그대로 나간다. `@ody.bot` 은 데모 봇이 쓰던 도메인이다 | 이메일·닉네임·사진이 티 나면 구분 표시를 안 한 의미가 없다. `nickname`·`image_url` 채움, `is_public`·`tutorial_completed` true, `last_active_at` 갱신 | 협의 전 |
+| A-90 | 상시 접속 계정을 따라갈 때 지도 화면 | 이 계정은 viewport 를 열지 않으므로 `RideViewportService.sendCurrentScreen` 이 아무것도 안 보낸다 (meta 없으면 return) | 따라가는 사람 지도가 빌 수 있다 (코드만 읽은 추측 — 화면은 확인 못 함). 계정 자리 중심의 기본 화면을 만들어 줄지 결정 필요 | 협의 전 |
+
+재생 동기화는 백엔드 추가 작업이 없다. 따라가는 쪽이 `RIDE_TRACK.serverTs` 와 재생 스냅샷을 기준으로 스스로 맞춘다 (S15P21A405-682).

@@ -2,7 +2,7 @@
  * 반응하기 기본 이모지 세트 (SOCIAL-02).
  *
  * `key` 는 서버로 그대로 나간다 — 백엔드 `ReactionRequest.reactionKey` 가 `^[a-z_]{1,32}$` 만
- * 받는다. 목록은 프론트가 소유하고, 받는 쪽이 모르는 키는 ✨ 로 그린다 (`nearby-radar`).
+ * 받는다. 목록은 프론트가 소유하고, 받는 쪽이 모르는 키는 ✨ 로 그린다 (`floating-reaction-item`).
  */
 export const REACTIONS = [
   { key: "rocket", emoji: "🚀", label: "출발" },

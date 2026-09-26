@@ -78,6 +78,8 @@ export const QUERY_KEYS = {
   chart: {
     /** 세 랭킹이 한 응답이라 키도 하나다 (S15P21A405-604) */
     weekly: ["chart", "weekly"] as const,
+    /** 실시간 탑 버스기사 (S15P21A405-681). 주간 셋과 따로 받는다 — 신선도가 다르다 */
+    topDriver: ["chart", "topDriver"] as const,
   },
 
   /**

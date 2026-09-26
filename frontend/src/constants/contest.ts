@@ -62,3 +62,6 @@ export const CONTEST_TOP = 5;
 
 /** 플레이어바 태그 문구 */
 export const CONTEST_RANK_TAG = (rank: number) => `🏆 이벤트 ${rank}위`;
+
+/** 채점이 끝난 내 작품 카드의 별자리 그림 한 변(px) (S15P21A405-701) — 카드 폭(max-w-lg) 안에서 모양이 읽히는 크기 */
+export const MY_ARTWORK_THUMB_PX = 200;

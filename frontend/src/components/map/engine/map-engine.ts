@@ -782,6 +782,11 @@ export class MapEngine {
     this.bbox = Number.isFinite(x0) ? { x0, x1, y0, y1 } : { x0: -1, x1: 1, y0: -1, y1: 1 };
   }
 
+  /** 지금 겹 상주 별들이 차지하는 월드 범위 — 미니맵이 이 상자를 통째로 담는다 (S15P21A405-685) */
+  worldBox(): Readonly<{ x0: number; x1: number; y0: number; y1: number }> {
+    return this.bbox;
+  }
+
   /**
    * 카메라를 별 무리 근처에 붙잡아 둔다 — 한 방향으로 무한히 밀어서 별이 전부
    * 화면에서 사라지는 걸 막는다. 화면 반쪽의 PAN_LIMIT.slack 만큼까지만 더 나간다.

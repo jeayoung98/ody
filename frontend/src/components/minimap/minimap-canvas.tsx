@@ -2,11 +2,10 @@
 
 import { useEffect, useRef } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { LAYER_NAMES } from "@/constants";
+import { LAYER_NAMES, MINIMAP } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
+import { fromMini, minimapFit, toMini } from "@/lib/minimap-fit";
 import { useMapStore } from "@/stores/use-map-store";
-
-const MSPAN = 6; // 미니맵이 담는 월드 폭 (z-score 단위, 중심 ±3)
 
 /** #miniWrap — 이 레이어 상주 곡을 점으로, 뷰포트 사각형과 내 위치를 얹는다. 클릭하면 그 지점으로 이동 */
 export default function MinimapCanvas() {
@@ -37,22 +36,12 @@ export default function MinimapCanvas() {
       g.fillStyle = "#050810";
       g.fillRect(0, 0, w, h);
       if (!e || !e.N) return;
-      // 상주 집합의 중심을 미니맵 중앙에
+      // 이 겹 상주 별 전체 범위를 미니맵에 통째로 담는다 (S15P21A405-685)
       const dx = e.layer * 2;
       const dy = e.layer * 2 + 1;
-      let mx = 0;
-      let my = 0;
-      let n = 0;
-      for (let i = 0; i < e.N; i++) {
-        if (!e.subset[i]) continue;
-        mx += e.songs[i].pc[dx];
-        my += e.songs[i].pc[dy];
-        n++;
-      }
-      mx /= n || 1;
-      my /= n || 1;
-      const X = (x: number) => ((x - mx) / MSPAN + 0.5) * w;
-      const Y = (y: number) => (0.5 - (y - my) / MSPAN) * h;
+      const fit = minimapFit(e.worldBox(), w, h, MINIMAP.padPx);
+      const X = (x: number) => toMini(fit, x, 0).x;
+      const Y = (y: number) => toMini(fit, 0, y).y;
       g.globalCompositeOperation = "lighter";
       const step = e.N > 3000 ? 2 : 1;
       for (let i = 0; i < e.N; i += step) {
@@ -119,20 +108,9 @@ export default function MinimapCanvas() {
         const eng = getMapEngine();
         if (!eng || !eng.N) return;
         const r = e.currentTarget.getBoundingClientRect();
-        const dx = eng.layer * 2;
-        const dy = eng.layer * 2 + 1;
-        let mx = 0;
-        let my = 0;
-        let n = 0;
-        for (let i = 0; i < eng.N; i++) {
-          if (!eng.subset[i]) continue;
-          mx += eng.songs[i].pc[dx];
-          my += eng.songs[i].pc[dy];
-          n++;
-        }
-        mx /= n || 1;
-        my /= n || 1;
-        eng.setCameraCenter(mx + ((e.clientX - r.left) / r.width - 0.5) * MSPAN, my - ((e.clientY - r.top) / r.height - 0.5) * MSPAN);
+        // 그리기와 같은 변환을 되돌린다 — 다르면 누른 자리가 아닌 곳으로 간다
+        const at = fromMini(minimapFit(eng.worldBox(), r.width, r.height, MINIMAP.padPx), e.clientX - r.left, e.clientY - r.top);
+        eng.setCameraCenter(at.x, at.y);
       }}
     >
       <canvas ref={ref} className="block h-full w-full" />

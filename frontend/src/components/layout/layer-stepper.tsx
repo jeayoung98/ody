@@ -60,7 +60,8 @@ export default function LayerStepper() {
   };
 
   return (
-    <div className="pointer-events-auto flex w-fit max-w-[min(34vw,420px)] items-center" onMouseLeave={() => setHover(null)}>
+    // 폰에서는 첫 칸 여백(px-2)만큼 당겨 글자가 화면 여백(20)에 딱 서게 한다 (S15P21A405-703) — 안 당기면 28px 에서 시작해 떠 보였다
+    <div className="pointer-events-auto flex w-fit max-w-[min(34vw,420px)] items-center max-tablet:-ml-2" onMouseLeave={() => setHover(null)}>
       {Array.from({ length: last + 1 }, (_, i) => {
         const on = i === layer;
         const next = i === layer + 1;

@@ -12,6 +12,7 @@ import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
 import Brand from "./brand";
+import TopScrim from "./top-scrim";
 import MapActions from "./map-actions";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
@@ -139,6 +140,8 @@ export default function MainScreen({ overlay }: MainScreenProps) {
         잘렸다. 축 뜻은 겹 전환 자막과 곡 상세의 소리 특징에서 계속 보인다
       */}
       {!narrow && <MapAxisLabels occlusion={occlusion} />}
+      {/* 폰 윗줄 흰 아이콘 뒤의 옅은 그늘 (S15P21A405-703) — 폰에서만 보인다 */}
+      <TopScrim />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
           검색창은 스스로 접혔다 펴진다 — 펴질 때 우측 패널을 닫는다 (S15P21A405-440) */}

@@ -53,7 +53,9 @@ export default function MapActions() {
         **오른쪽 끝에 붙고, 알약 없이 흰 아이콘만 뜬다** (S15P21A405-703). 도움말을 폰에서 숨기면서
         그 자리(68px)를 비켜 설 이유가 없어졌다. 높이는 로고·검색과 같은 32px 라 윗줄 가운데선이 맞는다.
       */
-      className="absolute top-hud-t right-gutter-sm z-[22] hidden h-8 items-center gap-3 max-tablet:flex"
+      // 검색을 펴면 감춘다 (`data-map-actions`, `globals.css`) — 검색창이 이 자리까지 늘어난다 (S15P21A405-703)
+      data-map-actions
+      className="absolute top-hud-t right-gutter-sm z-[22] hidden h-8 items-center gap-3 transition-opacity duration-300 max-tablet:flex"
     >
       <NearbyExploreButton bare />
       {panelEnabled.journey && (

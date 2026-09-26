@@ -143,7 +143,7 @@ export default function FeedPanel({ self = false }: FeedPanelProps) {
                 프로필·탭이 위로 사라졌다. 이 칸이 남은 높이를 받아 제 안에서만 넘친다 (`chart-panel` 과 같다).
                 본문 좌우·아래 여백을 이 칸이 대신 갖는다 — 스크롤 상자가 가장자리를 자르지 않게.
               */}
-              <div className="scroll-quiet -mx-[15px] -mb-[18px] flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-[15px] pb-[18px]">
+              <div className="scroll-quiet -mx-[15px] -mb-[18px] flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-[15px] pb-[18px] max-tablet:-mx-gutter-sm max-tablet:px-gutter-sm">
               {/* **취향은 내 페이지에만** (S15P21A405-630). 백엔드가 토큰으로 사람을 정해서 남의 취향은 물어볼 수가 없다 —
                   USER-04 의 "레이아웃 동일" 을 어기는 게 아니라 API 가 낼 수 없는 화면이다 */}
               {tab === "taste" && isMe && me && <FeedTasteReport />}

@@ -146,9 +146,11 @@ export default function PlayerBar() {
      * **폰에서는 모서리 없는 반투명 유리다** (S15P21A405-703). 둥글기는 아래 네비 줄이 갖는다(30px).
      * 폰의 `--glass-tint` 는 불투명한 남색이라(`globals.css`) 이 판만 반투명으로 되돌리고, 커버
      * 배경(`player-backdrop`)도 걷는다 — 뒤로 펼쳐진 시트나 별이 비쳐야 한다. 테두리는 걷는다.
-     * 위아래 여백은 8 → 12 로 조금 키웠다. 아래에는 네비 뒤로 내려간 30px 이 더 붙는다(`bottom-bar.tsx`).
+     * 위아래 여백은 8 → 16 으로 키웠다. 아래에는 네비 뒤로 내려간 30px 이 더 붙는다(`bottom-bar.tsx`).
+     * 좌우는 폰 공통 여백(`--spacing-gutter-sm` 20)이다. 윗변에만 약한 그림자를 깐다 — 유리 판이
+     * 뒤의 시트·지도와 붙어 경계가 흐려지지 않게. 안쪽 하이라이트 줄은 그림자가 덮어 없어진다.
      */
-    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-0 max-tablet:shadow-none max-tablet:px-4 max-tablet:pt-3 max-tablet:pb-[calc(0.75rem+var(--radius-sheet))] max-tablet:[--glass-blur:18px] max-tablet:[--glass-tint:rgb(6_9_17/0.45)]">
+    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-0 max-tablet:px-gutter-sm max-tablet:pt-4 max-tablet:pb-[calc(1rem+var(--radius-sheet))] max-tablet:shadow-[0_-8px_20px_-10px_rgb(0_0_0/0.45)] max-tablet:[--glass-blur:18px] max-tablet:[--glass-tint:rgb(6_9_17/0.45)]">
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">

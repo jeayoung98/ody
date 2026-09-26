@@ -209,6 +209,32 @@
    * 패널·바 때문에 생긴 것이라, 글자 한 줄짜리 칩까지 막으면 별자리 뷰 칩만 폰에서 딴 물건처럼
    * 떴다. 떠 있는 버튼들(`glass-liquid`)과 같은 무늬(sheen)에 반투명 밑칠이다.
    */
+  /*
+   * **검색은 폰에서도 넓은 화면과 같은 유리다** (S15P21A405-703, 사용자 결정). 펼친 검색창과 그 아래
+   * 드롭다운이 지도 위에 떠 있는 작은 조각이라 막을 이유가 없다. 값은 `tokens.css` 의
+   * `--glass-tint` 와 위 `@layer components` 의 `.glass` 그대로다 — 같이 고친다.
+   */
+  [data-search-web] {
+    --glass-tint: rgb(6 9 17 / 0.1);
+  }
+  [data-search-web] .glass {
+    background:
+      linear-gradient(var(--color-glass), var(--color-glass)),
+      rgb(9 13 24 / 0.5);
+  }
+  /*
+   * 탭 화면(주변 사람·랭킹·마이페이지)은 화면 통째 반투명 유리다 (S15P21A405-703). 그 너머로 지도의
+   * 윗줄(검색 돋보기·레이어 자취·윗줄 그늘)이 흐리게 비쳐 보이면 페이지 위에 딴 것이 떠 있는 것처럼
+   * 읽힌다 — 탭 화면이 떠 있는 동안에는 감춘다. 지도로 돌아오면 그대로 돌아온다.
+   */
+  :root:has([data-panel-screen]) :is([data-search-web], [data-brand], [data-top-scrim]) {
+    visibility: hidden;
+  }
+  /* 검색을 펴면 오른쪽 끝까지 늘어나 그 자리의 주변 탐색·여정을 덮는다 — 비쳐 보이지 않게 감춘다 */
+  :root:has([data-search-open]) [data-map-actions] {
+    opacity: 0;
+    pointer-events: none;
+  }
   .glass[data-glass-clear] {
     background: var(--glass-sheen), rgb(6 9 17 / 0.35);
     -webkit-backdrop-filter: blur(18px) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
@@ -557,8 +583,7 @@
    * `Box` 는 네 모서리를 다 깎으므로, 그 둥근 구석 사이로 지도가 비친다 — 바닥에 깔린 판인데
    * 떠 있는 카드처럼 보이고 끝선이 지저분해진다. 위쪽 둥근 모서리는 그대로 둔다 (바텀시트의 표식이다).
    */
-  [data-sheet] > section,
-  [data-panel-screen] {
+  [data-sheet] > section {
     /* 위 모서리는 폰의 아래에서 올라오는 판들과 같은 30px (S15P21A405-703) */
     border-start-start-radius: var(--radius-sheet);
     border-start-end-radius: var(--radius-sheet);

@@ -41,9 +41,9 @@ export function usePlayerBarHeight() {
 }
 
 /**
- * 폰 맨 아래 고정 탭바의 높이 — `--spacing-tabbar`(64) + 안전영역.
+ * 폰 맨 아래 고정 탭바의 높이 — `--spacing-tabbar`(72) + 안전영역.
  * 데스크톱에서는 같은 요소가 우상단 알약이라 44 가 나오지만, 그쪽 가림폭은 이 값을 안 쓴다.
  */
 export function useTabBarHeight() {
-  return useBarHeight("[data-tabbar]", 64);
+  return useBarHeight("[data-tabbar]", 72);
 }

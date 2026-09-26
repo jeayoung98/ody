@@ -13,7 +13,7 @@ import ViewModeCrumb from "./view-mode-crumb";
  */
 export default function Brand() {
   return (
-    <div className="pointer-events-none absolute top-hud-t left-[18px] z-20 flex flex-col gap-[14px] max-tablet:left-gutter-sm" data-hud>
+    <div className="pointer-events-none absolute top-hud-t left-[18px] z-20 flex flex-col gap-[14px] max-tablet:left-gutter-sm" data-hud data-brand>
       {/*
         `self-start` 는 좁은 화면에서만 건다 (S15P21A405-417). 이 줄은 `flex-col` 의 자식이라
         **아래 레이어 자취만큼 가로로 늘어난다** — 워드마크를 감춰 보이는 건 마크 26px 뿐인데

@@ -58,7 +58,7 @@ export default function ChartPanel() {
         이 칸이 남은 높이를 받아 제 안에서만 넘치므로 바깥 본문은 굴러갈 일이 없다.
         본문 좌우·아래 여백(15·18)을 이 칸이 대신 갖는다 — 스크롤 상자가 가장자리를 자르지 않게.
       */}
-      <div className="scroll-quiet -mx-[15px] -mb-[18px] flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-[15px] pb-[18px]">
+      <div className="scroll-quiet -mx-[15px] -mb-[18px] flex min-h-0 flex-1 flex-col gap-3.5 overflow-y-auto px-[15px] pb-[18px] max-tablet:-mx-gutter-sm max-tablet:px-gutter-sm">
         <div className="-mx-1.5 flex flex-col gap-0.5">
           {isPending ? (
             <SkeletonRows count={5} thumb="circle" sub={false} />

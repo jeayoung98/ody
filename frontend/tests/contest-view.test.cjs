@@ -79,8 +79,18 @@ test("AI 추천 적합도는 그린 별자리와 같은 0~100·등급 척도로 
     assert.equal(visibleStep("review", { hasMine: false, hasMatch: true }), "review");
   });
 
-  test("낸 작품이 없는데 채점 단계면 그리기로 보여 준다", () => {
+  test("낸 작품이 없는데 채점·완성 단계면 그리기로 보여 준다", () => {
     assert.equal(visibleStep("scoring", { hasMine: false, hasMatch: false }), "draw");
-    assert.equal(visibleStep("scoring", { hasMine: true, hasMatch: false }), "scoring");
+    assert.equal(visibleStep("done", { hasMine: false, hasMatch: false }), "draw");
+  });
+
+  test("채점이 끝나면 완성으로 저절로 넘어가고, 아직이면 채점에 머문다", () => {
+    assert.equal(visibleStep("scoring", { hasMine: true, hasMatch: false, mineScored: true }), "done");
+    assert.equal(visibleStep("scoring", { hasMine: true, hasMatch: false, mineScored: false }), "scoring");
+    assert.equal(visibleStep("done", { hasMine: true, hasMatch: false, mineScored: false }), "scoring", "재출품해서 다시 채점 중이면 채점으로");
+  });
+
+  test("완성에서도 뒤로는 없다", () => {
+    assert.equal(backStep("done"), null);
   });
 }

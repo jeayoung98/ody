@@ -25,7 +25,7 @@ export function useContestSubmit({ contest, match, my, loggedIn, onSubmitted }: 
 
   const open = roundPhase(contest) === "OPEN";
   const trimmed = title.trim().slice(0, SKETCH_RULES.titleMax);
-  /** 막힌 까닭. 버튼은 끄지 않고 누르면 이 말을 한다 — 꺼진 버튼은 왜 안 되는지 말해 주지 않는다 */
+  /** 막힌 까닭. 버튼은 꺼지고 눌러 보면 이 말을 한다 (`GuardedButton`) */
   const blocked = !match ? "먼저 별을 찾아 주세요" : !loggedIn ? "로그인하면 출품할 수 있어요" : !open ? "접수가 끝났어요" : !trimmed ? "별자리 이름을 지어 주세요" : null;
 
   const submit = useCallback(() => {
@@ -45,5 +45,5 @@ export function useContestSubmit({ contest, match, my, loggedIn, onSubmitted }: 
     });
   }, [blocked, match, trimmed, closed, mutation, toast, clear, setTitle, onSubmitted]);
 
-  return { submit, pending: mutation.isPending, label: my ? "다시 출품하기" : "출품하기" };
+  return { submit, blocked, pending: mutation.isPending, label: my ? "다시 출품하기" : "출품하기" };
 }

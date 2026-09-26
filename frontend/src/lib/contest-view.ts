@@ -81,8 +81,12 @@ export function backStep(step: SketchStep): SketchStep | null {
  * 실제로 보여 줄 단계 (S15P21A405-702). 저장된 단계가 지금 상태와 안 맞으면 그리기로 돌린다 —
  * 곡 확인·이름 단계인데 찾은 곡이 없거나(점을 고쳐 버려졌다), 채점 단계인데 낸 작품이 없을 때(지워졌다·로그아웃).
  */
-export function visibleStep(step: SketchStep, state: { hasMine: boolean; hasMatch: boolean }): SketchStep {
-  if (step === "scoring" && !state.hasMine) return "draw";
+export function visibleStep(step: SketchStep, state: { hasMine: boolean; hasMatch: boolean; mineScored?: boolean }): SketchStep {
+  // 채점과 완성은 내 작품 상태가 가른다 — 채점이 끝나면 완성으로 저절로 넘어간다
+  if (step === "scoring" || step === "done") {
+    if (!state.hasMine) return "draw";
+    return state.mineScored ? "done" : "scoring";
+  }
   if ((step === "review" || step === "submit") && !state.hasMatch) return "draw";
   return step;
 }

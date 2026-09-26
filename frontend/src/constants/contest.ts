@@ -51,6 +51,8 @@ export const SKETCH_STEPS = [
   { key: "review", label: "곡 확인" },
   { key: "submit", label: "이름 짓고 출품" },
   { key: "scoring", label: "AI 채점" },
+  /** 채점이 끝나면 저절로 넘어온다 (S15P21A405-702) — 채점 중과 결과를 한 화면에 섞지 않는다 */
+  { key: "done", label: "완성" },
 ] as const;
 export type SketchStep = (typeof SKETCH_STEPS)[number]["key"];
 

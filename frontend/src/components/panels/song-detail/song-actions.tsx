@@ -7,7 +7,6 @@ import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
-import type { MusicDetail } from "@/types";
 
 /** 세그먼트 한 칸 — 둘이 한 덩어리라 `Button` 을 쓰지 않는다 (테두리가 두 겹이 된다) */
 const HALF =
@@ -26,8 +25,11 @@ const HALF =
  * **재생·플리는 여기 없다.** 이 곡 하나에 대한 행동은 제목 줄로 모았다 (`song-header`).
  * 여기는 두 곡을 잇는 일만 남는다. 못 트는 곡 안내(`Note`)는 여기 남는다 — 여정에도 걸리는
  * 사정이라 행동 줄 가까이 있어야 한다.
+ *
+ * **곡 ID 하나만 받는다** (S15P21A405-691). 상세 응답을 기다리지 않고 패널을 여는 즉시 그리려는
+ * 것이다 — 처음 여는 곡은 응답이 2~3초 걸리는데, 이 줄은 그 응답에서 쓰는 값이 없다.
  */
-export default function SongActions({ music }: { music: MusicDetail }) {
+export default function SongActions({ musicId }: { musicId: number }) {
   const setStart = useJourneyStore((s) => s.setStart);
   const setEnd = useJourneyStore((s) => s.setEnd);
   /**
@@ -38,7 +40,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
   const riding = useFollowStore((s) => s.leaderEmail != null);
   const openComposer = useOpenJourneyComposer();
   /** 왜 못 트는지 (SONG-04) — 판단은 `usePlayability` 한 곳에서 온다 */
-  const { blocked } = usePlayability(music.id);
+  const { blocked } = usePlayability(musicId);
   /**
    * 찾아봤는데 음원이 없는 곡은 **여정 지점으로도 못 쓴다** (S15P21A405-384). 아무도 못 듣는
    * 곡을 경로의 끝에 두면 그 여정은 시작이나 끝이 조용하다. 흐리게 두되 눌리지는 않는다.
@@ -56,7 +58,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
           disabled={dead || riding}
           className={HALF}
           onClick={() => {
-            setStart(music.id);
+            setStart(musicId);
             openComposer("end");
           }}
         >
@@ -70,7 +72,7 @@ export default function SongActions({ music }: { music: MusicDetail }) {
           disabled={dead || riding}
           className={HALF}
           onClick={() => {
-            setEnd(music.id);
+            setEnd(musicId);
             openComposer("start");
           }}
         >

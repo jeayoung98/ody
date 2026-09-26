@@ -27,7 +27,7 @@ import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
 import { HANDLE_W } from "@/components/common/collapse-handle";
-import { RIGHT_PANEL_W, SHEET_RADIUS_PX } from "@/constants/design-tokens";
+import { RIGHT_PANEL_W, SHEET_RADIUS_PX, SHEET_SNAP_PX } from "@/constants/design-tokens";
 import PlayHint from "@/components/discovery/play-hint";
 import ContestModal from "@/components/contest/contest-modal";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
@@ -63,7 +63,8 @@ interface MainScreenProps {
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
-  const panelCollapsed = usePanelStore((s) => s.snap) === 1;
+  const snap = usePanelStore((s) => s.snap);
+  const panelCollapsed = snap === 1;
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   /**
    * 감춘 기능의 패널은 열려 있어도 화면에 없다 (S15P21A405-333). 여기서도 같은 판정을 써야
@@ -124,8 +125,16 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   useEffect(() => {
     document.documentElement.style.setProperty("--nav-bottom", navBottom);
   }, [navBottom]);
-  // 재생바는 네비 뒤로 모서리 반경만큼 내려가 있다 — 잰 높이에 그 몫이 겹쳐 들어 있어 뺀다 (S15P21A405-703)
-  const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX : HUD_OCCLUSION.bottom;
+  /**
+   * 재생바는 네비 뒤로 모서리 반경만큼 내려가 있다 — 잰 높이에 그 몫이 겹쳐 들어 있어 뺀다 (S15P21A405-703).
+   *
+   * **폰에서 시트가 떠 있으면 그 높이도 가린 것으로 친다** (S15P21A405-703). 별을 누르면 시트가 2 단으로
+   * 올라오는데, 가운데 맞춤이 시트를 모르면 누른 별이 시트 뒤에 깔린다. 엔진은 가운데 고정 중이면
+   * 가림폭이 바뀔 때 그 별을 새 가운데로 따라가고(`centerLock`), 손으로 밀면 고정이 풀리므로
+   * 드래그로 1 단에 내려앉을 때 지도가 손 밑에서 미끄러지지 않는다.
+   */
+  const sheetH = narrow && panelOpen ? SHEET_SNAP_PX[snap] : 0;
+  const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX + sheetH : HUD_OCCLUSION.bottom;
   const occlusion = useMemo<Occlusion>(
     () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
     [occludedRight, occludedBottom],

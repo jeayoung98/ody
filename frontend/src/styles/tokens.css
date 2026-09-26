@@ -200,7 +200,7 @@
    * 덮어 버리면 다음 별을 못 찾는다 (`use-panel-store.ts` 의 `SheetSnap`).
    */
   --spacing-sheet-s1: 102px;
-  --spacing-sheet-s2: 238px;
+  --spacing-sheet-s2: 238px; /* 둘 다 `constants/design-tokens.ts` 의 SHEET_SNAP_PX 와 같은 값 — 함께 고친다 */
 
   /* ---------- 안전 영역 (S15P21A405-420) ---------- */
   /*

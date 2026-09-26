@@ -152,3 +152,10 @@ export const RIGHT_PANEL_W = 376;
  * 재생바가 네비 줄 뒤로 이만큼 내려가 있어서(`bottom-bar.tsx`) 지도 가림폭에서 JS 로 빼야 한다 (S15P21A405-703).
  */
 export const SHEET_RADIUS_PX = 30;
+
+/**
+ * 폰 바텀시트가 1·2 단에서 재생바 위로 걸리는 높이(px). `tokens.css` 의 `--spacing-sheet-s1`·`-s2` 와
+ * 같은 값 — **함께 고친다.** 지도 엔진이 시트 위에 남은 지도의 가운데를 잡으려고 쓴다 (S15P21A405-703).
+ * 3 단은 지도가 거의 다 덮이므로 2 단 값을 그대로 쓴다 — 올렸다 내릴 때 가운데가 출렁이지 않게.
+ */
+export const SHEET_SNAP_PX = { 1: 102, 2: 238, 3: 238 } as const;

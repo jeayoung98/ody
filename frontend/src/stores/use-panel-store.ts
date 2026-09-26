@@ -290,9 +290,14 @@ export const usePanelStore = create<PanelState>()(
 
       raiseSnap: () => set((s) => ({ snap: (s.snap === 3 ? 1 : s.snap + 1) as SheetSnap }), false, "raiseSnap"),
 
+      /**
+       * **한 단씩 내려온다** (S15P21A405-703, 사용자 결정). 3 단에서 지도를 누르면 1 단까지 곧장
+       * 떨어져서, 펼쳐 둔 것을 잠깐 치우려다 제목 줄만 남았다. 3 → 2 → 1 → 닫힘이다.
+       */
       lowerSnap: () => {
-        if (get().snap === 1) return void get().close();
-        set({ snap: 1 }, false, "lowerSnap");
+        const snap = get().snap;
+        if (snap === 1) return void get().close();
+        set({ snap: (snap - 1) as SheetSnap }, false, "lowerSnap");
       },
 
       setSnap: (snap) => set((s) => (s.snap === snap ? {} : { snap }), false, "setSnap"),

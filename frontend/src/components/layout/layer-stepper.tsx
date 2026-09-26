@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronRightIcon } from "@/components/common/icons";
 import { LAYER_COUNT, LAYER_NAMES } from "@/constants";
 import { ro } from "@/lib/korean";
@@ -52,6 +52,17 @@ export default function LayerStepper() {
    */
   const size = (i: number) => (i < layer ? "text-sm" : "text-lg");
 
+  /**
+   * **폰에서는 옆으로 민다** (S15P21A405-703). 7·8 겹까지 파고들면 자취가 화면 폭을 넘어 오른쪽이
+   * 잘렸다. 줄을 가로 스크롤로 두고 막대는 숨긴다(`.rail`). 겹이 바뀌면 **끝으로 굴려** 지금 겹과
+   * 다음 겹이 늘 보이게 한다 — 앞쪽 지나온 길은 밀어서 본다. 넓은 화면은 넘치지 않아 굴러갈 것이 없다.
+   */
+  const trailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = trailRef.current;
+    if (el && el.scrollWidth > el.clientWidth) el.scrollTo({ left: el.scrollWidth, behavior: "smooth" });
+  }, [layer, last]);
+
   /** 이 칸의 글자 색. 겨누는 중이면 돌아갈 길만 밝고 나머지는 물러난다 */
   const tone = (i: number) => {
     if (i === layer + 1) return "text-teal/70";
@@ -61,14 +72,18 @@ export default function LayerStepper() {
 
   return (
     // 폰에서는 첫 칸 여백(px-2)만큼 당겨 글자가 화면 여백(20)에 딱 서게 한다 (S15P21A405-703) — 안 당기면 28px 에서 시작해 떠 보였다
-    <div className="pointer-events-auto flex w-fit max-w-[min(34vw,420px)] items-center max-tablet:-ml-2" onMouseLeave={() => setHover(null)}>
+    <div
+      ref={trailRef}
+      className="rail pointer-events-auto flex w-fit max-w-[min(34vw,420px)] items-center max-tablet:-ml-2 max-tablet:max-w-[calc(100dvw-2*var(--spacing-gutter-sm)+8px)] max-tablet:overflow-x-auto"
+      onMouseLeave={() => setHover(null)}
+    >
       {Array.from({ length: last + 1 }, (_, i) => {
         const on = i === layer;
         const next = i === layer + 1;
         // 위로는 어디든(되돌아갈 프레임이 있을 때), 아래로는 게이트가 열린 다음 한 칸만
         const enabled = !locked && (next ? gateOpen : i < layer && canRise);
         return (
-          <div key={i} className="flex items-center">
+          <div key={i} className="flex shrink-0 items-center">
             {i > 0 && <ChevronRightIcon size={17} className="shrink-0 text-ink-4/60" />}
             <button
               type="button"

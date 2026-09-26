@@ -15,13 +15,14 @@ import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import SongActions from "./song-actions";
 import SongCoverBackdrop from "./song-cover-backdrop";
-import SongDetailSkeleton from "./song-detail-skeleton";
 import SongElsewhereNote from "./song-elsewhere-note";
 import SongHeader from "./song-header";
+import SongHeaderSkeleton from "./song-header-skeleton";
 import SongNearbyList from "./song-nearby-list";
 import SongPcList from "./song-pc-list";
 import SongRelatedPlaylists from "./song-related-playlists";
 import SongReportButton from "./song-report-button";
+import SongSectionSkeleton from "./song-section-skeleton";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 
 /**
@@ -52,11 +53,18 @@ const SHEET_FADE = 200;
  *
  * 제목·행동 줄 아래는 **한 장으로 이어 붙인다** (S15P21A405-477): 주변곡 → 관련 플리 → 소리.
  * 탭이었다가 걷어낸 이유는 아래 렌더 부분에 적어 뒀다.
+ *
+ * **응답을 기다리지 않고 아는 것부터 그린다** (S15P21A405-691). 처음 여는 곡은 상세 응답이 2~3초
+ * 걸린다 — 백엔드가 응답 전에 영상 ID 를 외부에서 받아 오고 주변곡을 계산하기 때문이다(두 번째부터는
+ * 50ms 안팎). 그 동안 패널 전체를 스켈레톤으로 덮으면 이미 아는 것까지 가린다.
+ * - 행동 줄: 곡 ID 만 쓴다 → 바로
+ * - 소리 차트: 지도 상주 집합의 주성분 16개와 응답의 값이 같다 → 지도에 있는 곡이면 바로
+ * - 제목 칩·주변곡·관련 플리: 응답에만 있다 → 그 칸만 스켈레톤
  */
 export default function SongDetailPanel() {
   const musicId = usePanelStore((s) => s.musicId);
   const features = useFeatures();
-  const { data, isPending, isError } = useMusicDetailQuery(musicId);
+  const { data, isError } = useMusicDetailQuery(musicId);
   // 이 겹에 없는 곡이면 고스트별로 띄운 상태다 — 이동 안내를 함께 보여준다 (MAP-12)
   const elsewhere = useMapStore((s) => s.selectedMusicId === musicId && s.ghostMusicId === musicId);
   const bodyRef = useRef<HTMLDivElement>(null);
@@ -81,6 +89,13 @@ export default function SongDetailPanel() {
    */
   const known = musicId != null ? getMapEngine()?.pointOf(musicId) : null;
   const dead = blocked === PLAYBACK_BLOCKED.noVideo;
+  /**
+   * 소리 차트에 줄 주성분. **지도 값을 먼저 쓰고, 응답이 와도 그대로 둔다** — 둘 다 백엔드
+   * `location` 을 같은 함수(`toPcArray`)로 옮긴 것이라 값이 같고, 응답 쪽으로 갈아타면 배열이
+   * 바뀌어 차트가 막대를 처음부터 다시 키운다. 지도에 없는 곡만 응답을 기다린다.
+   */
+  const knownPc = known?.pc;
+  const pc = (knownPc ? knownPc.map((value, axis) => ({ axis, value })) : null) ?? data?.principalComponents ?? null;
 
   // 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) — 못 여는 플리 목록을 보여 주지 않는다
   const hasPlaylists = features.playlist;
@@ -126,51 +141,54 @@ export default function SongDetailPanel() {
         <div aria-hidden style={{ height: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 top-0 -z-10 bg-gradient-to-b from-transparent to-void-3" />
         <div aria-hidden style={{ top: SHEET_FADE }} className="pointer-events-none absolute inset-x-0 bottom-0 -z-10 bg-void-3" />
 
-        {isPending && <SongDetailSkeleton title={known?.title} artist={known?.artist} />}
-        {isError && <ErrorMessage />}
-        {data && (
-          <>
-            <SongHeader music={data} />
-            {elsewhere && <SongElsewhereNote musicId={data.id} />}
-            <SongActions music={data} />
-            {/*
-              정보 표(발매 국가·작곡가·곡 길이·장르·누적 재생 …)는 걷어냈다 (S15P21A405-384).
-              올 값은 넷뿐이었고 그중 셋은 제목 아래 칩이 이미 말한다. BPM 은 칩에도 없어
-              이 화면에서 사라진 유일한 값이다.
-            */}
-            {/*
-              **탭을 걷고 한 장으로 폈다** (S15P21A405-477). 유저 테스트 동안 플리가 꺼져 있어
-              탭이 둘뿐이었는데, 두 개짜리 탭바는 한 줄을 상시로 쓰면서 절반을 클릭 뒤에 숨긴다.
-              특히 `소리`(축 차트)는 **주변곡이 왜 주변곡인지 설명하는 근거**라 탭 뒤에 있으면
-              대부분 한 번도 안 열어 보고 "닮았나요" 에 답하게 된다.
+        {isError ? (
+          <ErrorMessage />
+        ) : (
+          musicId != null && (
+            // 응답 전에는 높이를 꽉 채워 둔다 — 짧게 깔면 값이 올 때 패널이 훌쩍 늘어나 화면이 튄다
+            <div className={`flex flex-col gap-3.5 ${data ? "" : "min-h-[calc(100dvh-212px)]"}`}>
+              {data ? <SongHeader music={data} /> : <SongHeaderSkeleton title={known?.title} artist={known?.artist} />}
+              {elsewhere && <SongElsewhereNote musicId={musicId} />}
+              <SongActions musicId={musicId} />
+              {/*
+                정보 표(발매 국가·작곡가·곡 길이·장르·누적 재생 …)는 걷어냈다 (S15P21A405-384).
+                올 값은 넷뿐이었고 그중 셋은 제목 아래 칩이 이미 말한다. BPM 은 칩에도 없어
+                이 화면에서 사라진 유일한 값이다.
+              */}
+              {/*
+                **탭을 걷고 한 장으로 폈다** (S15P21A405-477). 유저 테스트 동안 플리가 꺼져 있어
+                탭이 둘뿐이었는데, 두 개짜리 탭바는 한 줄을 상시로 쓰면서 절반을 클릭 뒤에 숨긴다.
+                특히 `소리`(축 차트)는 **주변곡이 왜 주변곡인지 설명하는 근거**라 탭 뒤에 있으면
+                대부분 한 번도 안 열어 보고 "닮았나요" 에 답하게 된다.
 
-              순서가 곧 우선순위다: 주변곡 → 플리 → 소리. 차트는 위 다섯만 펴 두고 접혀 있어서
-              (`song-pc-list`) 한 장으로 합쳐도 늘어나는 높이가 크지 않다.
+                순서가 곧 우선순위다: 주변곡 → 플리 → 소리. 차트는 위 다섯만 펴 두고 접혀 있어서
+                (`song-pc-list`) 한 장으로 합쳐도 늘어나는 높이가 크지 않다.
 
-              섹션이 셋을 넘거나 한 곡에서 주변곡 ↔ 소리를 오가는 사용이 실제로 보이면 그때
-              탭으로 돌린다 — 이 구조에서 되돌리기는 쉽다.
+                섹션이 셋을 넘거나 한 곡에서 주변곡 ↔ 소리를 오가는 사용이 실제로 보이면 그때
+                탭으로 돌린다 — 이 구조에서 되돌리기는 쉽다.
 
-              **담긴 플리가 없으면 그 칸은 통째로 빠진다** — 탭이던 시절에는 빈 탭을 눌러 본
-              사람에게 "여기서 만들라" 고 권할 자리가 있었지만, 한 장이 된 지금은 그 권유가
-              주변곡과 소리 사이를 늘 갈라놓는다. 새 플리 만들기는 제목 줄의 플리 버튼
-              (`add-to-playlist-dialog`) 에 그대로 있다.
-            */}
-            {!dead && (
-              // 여정 버튼 줄과는 한 칸 더 띄운다 — 위는 "이 곡으로 할 일", 아래는 "이 곡에 관한 것"이다.
-              // 섹션 사이는 구분선 앞뒤로 20px 씩 — 탭을 걷은 뒤로는 이 빈칸이 탭바 노릇을 한다
-              <div className="flex flex-col gap-5 pt-2">
-                <SongNearbyList items={data.nearby} centerMusicId={data.id} />
-                {hasPlaylists && data.relatedPlaylists.length > 0 && (
-                  <>
-                    <Divider />
-                    <SongRelatedPlaylists items={data.relatedPlaylists} />
-                  </>
-                )}
-                <Divider />
-                <SongPcList items={data.principalComponents} />
-              </div>
-            )}
-          </>
+                **담긴 플리가 없으면 그 칸은 통째로 빠진다** — 탭이던 시절에는 빈 탭을 눌러 본
+                사람에게 "여기서 만들라" 고 권할 자리가 있었지만, 한 장이 된 지금은 그 권유가
+                주변곡과 소리 사이를 늘 갈라놓는다. 새 플리 만들기는 제목 줄의 플리 버튼
+                (`add-to-playlist-dialog`) 에 그대로 있다.
+              */}
+              {!dead && (
+                // 여정 버튼 줄과는 한 칸 더 띄운다 — 위는 "이 곡으로 할 일", 아래는 "이 곡에 관한 것"이다.
+                // 섹션 사이는 구분선 앞뒤로 20px 씩 — 탭을 걷은 뒤로는 이 빈칸이 탭바 노릇을 한다
+                <div className="flex flex-col gap-5 pt-2">
+                  {data ? <SongNearbyList items={data.nearby} centerMusicId={data.id} /> : <SongSectionSkeleton cards />}
+                  {hasPlaylists && data && data.relatedPlaylists.length > 0 && (
+                    <>
+                      <Divider />
+                      <SongRelatedPlaylists items={data.relatedPlaylists} />
+                    </>
+                  )}
+                  <Divider />
+                  {pc ? <SongPcList items={pc} /> : <SongSectionSkeleton />}
+                </div>
+              )}
+            </div>
+          )
         )}
       </div>
     </Box>

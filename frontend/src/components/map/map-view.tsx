@@ -30,6 +30,7 @@ import { registerMapEngine } from "./engine/engine-registry";
 import { rideLayerTarget } from "./engine/ride-layer";
 import { MapEngine } from "./engine/map-engine";
 import HoverCard from "./hover-card";
+import LayerTitleCard from "./layer-title-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { shouldFollowPlayback } from "./selection-follow";
@@ -953,6 +954,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
+      <LayerTitleCard />
       {/*
         **마우스 전용이다** (S15P21A405-593). 손가락에는 호버가 없고, 폰에서는 별을 누르면
         곡 상세가 바로 1 단으로 열린다 — 카드를 거칠 일이 없어졌다. 예전에는 폰에서도 이

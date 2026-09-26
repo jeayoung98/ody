@@ -740,7 +740,7 @@
   }
 
   /*
-   * **목록 끝에 재생바·네비만큼 여백** (S15P21A405-703). 시트와 탭 화면이 두 바 뒤까지 내려가서,
+   * **목록 끝에 재생바·네비만큼 여백** (S15P21A405-703). 시트가 두 바 뒤까지 내려가서,
    * 여백이 없으면 마지막 줄이 바 뒤에 깔려 끝까지 굴려도 안 올라온다.
    *
    * 여백은 **가장 안쪽 스크롤 상자에만** 붙인다. 주변 사람처럼 본문 안에 목록 스크롤이 또 있는
@@ -749,13 +749,13 @@
    *
    * 아래에 붙박이 줄(`Box` 의 footer — 여정 요약)이 있는 판은 그 줄을 대신 바 위로 올린다.
    */
-  :is([data-sheet] > section, [data-panel-screen] > section):not(:has(> footer)) .scroll-quiet:not(:has(.scroll-quiet))::after {
+  [data-sheet] > section:not(:has(> footer)) .scroll-quiet:not(:has(.scroll-quiet))::after {
     content: "";
     display: block;
     flex: none;
     height: var(--nav-bottom);
   }
-  :is([data-sheet], [data-panel-screen]) > section > footer {
+  [data-sheet] > section > footer {
     margin-bottom: var(--nav-bottom);
   }
 }

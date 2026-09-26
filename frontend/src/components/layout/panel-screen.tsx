@@ -30,7 +30,15 @@ import type { PanelType } from "@/constants";
  * 지도가 흐리게 비친다. 한때 곡 상세 시트처럼 윗줄 아래에서 띄워 봤다가, 탭 화면은 지도 위 판이
  * 아니라 페이지라서 다시 꼭대기부터 채웠다. 유리 너머로 윗줄(검색·레이어 자취)이 비치지 않게
  * 그쪽은 `globals.css` 가 감춘다. 머리글은 지도 패널보다 위아래를 넉넉히 준다 — 페이지 제목 자리다.
- * 아래는 재생바·네비 뒤까지 내려가고, 목록 끝 여백은 `globals.css` 가 붙인다.
+ *
+ * **아래는 재생바 윗끝에서 끝난다** (`--nav-bottom`). 재생바는 어느 탭에서도 늘 떠 있어야 한다. 한때
+ * 시트처럼 재생바·네비 뒤까지 내렸더니 재생바가 통째로 가려졌다 — 재생바는 `main-screen` 의
+ * `fixed inset-0` 판 **안**에 있고, `fixed` 는 늘 제 쌓임 맥락을 만들어서, 안에서 z 를 아무리 올려도
+ * 바깥의 이 화면(z-22) 위로 못 나온다. 네비(z-23)는 그 판 밖이라 위에 선다.
+ *
+ * **머리글 높이를 68px 로 못 박는다.** 탭 화면에서는 ← · ✕ 가 빠지는데(돌아갈 곳도 닫을 곳도 없다)
+ * 마이페이지에만 메뉴 버튼(28px)이 남아서, 탭을 오갈 때 머리글 높이가 탭마다 달라 제목 줄이 들썩였다.
+ * 위 24 + 28 + 아래 16 = 68.
  */
 export default function PanelScreen({ panel, children }: { panel: PanelType; children: ReactNode }) {
   const router = useRouter();
@@ -57,7 +65,7 @@ export default function PanelScreen({ panel, children }: { panel: PanelType; chi
   return (
     <main
       data-panel-screen
-      className="glass-bar fixed inset-x-0 top-0 bottom-0 z-[22] flex flex-col overflow-hidden rounded-none border-0! pt-[env(safe-area-inset-top,0px)] shadow-none! [&>section>header]:pt-6 [&>section>header]:pb-4 [--glass-blur:18px] [--glass-tint:rgb(6_9_17/0.6)] [&>section]:min-h-0 [&>section]:flex-1 [&>section]:rounded-none! [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none [&>section]:backdrop-filter-none">
+      className="glass-bar fixed inset-x-0 top-0 bottom-[var(--nav-bottom)] z-[22] flex flex-col overflow-hidden rounded-none border-0! pt-[env(safe-area-inset-top,0px)] shadow-none! [&>section>header]:h-[68px] [&>section>header]:pt-6 [&>section>header]:pb-4 [--glass-blur:18px] [--glass-tint:rgb(6_9_17/0.6)] [&>section]:min-h-0 [&>section]:flex-1 [&>section]:rounded-none! [&>section]:border-0 [&>section]:bg-transparent [&>section]:shadow-none [&>section]:backdrop-filter-none">
       {children}
     </main>
   );

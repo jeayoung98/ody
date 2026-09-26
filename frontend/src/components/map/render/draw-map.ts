@@ -775,15 +775,15 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
     const L = PROBE_LABEL;
     g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
-    const title = fitText(g, s.title, L.titleMaxW * sc);
-    const tw = g.measureText(title).width;
+    // 제목은 자르지 않는다 — 길면 길게 다 보이고, 겹치지 않게 별 자리를 엔진이 민다 (S15P21A405-697)
+    const tw = g.measureText(s.title).width;
     g.fillStyle = MAP_COLORS.labelBg;
     roundRect(g, x - tw / 2 - 6 * sc, y + L.boxTop * sc, tw + 12 * sc, L.boxH * sc, 5 * sc);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, x, y + (L.boxTop + L.boxH / 2) * sc);
+    g.fillText(s.title, x, y + (L.boxTop + L.boxH / 2) * sc);
     if (sub) {
-      // 제목 상자와 가수 줄 사이를 띄운다 — 붙어 있으면 한 덩어리로 읽힌다 (S15P21A405-649 · 688)
+      // 제목 상자와 가수 줄 사이를 띄운다 — 붙어 있으면 한 덩어리로 읽힌다 (S15P21A405-649 · 688 · 697)
       g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
       g.fillText(sub, x, y + L.subY * sc);
@@ -858,16 +858,18 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.stroke();
   g.globalCompositeOperation = "source-over";
   const L = PROBE_LABEL;
+  // 라벨은 뛰는 링(rr)이 아니라 고정 반지름에 단다 — 링을 따라가면 제목·안내 줄이 출렁인다 (S15P21A405-697)
+  const lr = L.centerRingR;
   g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
   const tw = g.measureText(song.title).width;
   g.fillStyle = MAP_COLORS.labelBg;
-  roundRect(g, tx - tw / 2 - 7 * sc, ty + rr + L.centerGap * sc, tw + 14 * sc, L.centerBoxH * sc, 6 * sc);
+  roundRect(g, tx - tw / 2 - 7 * sc, ty + lr + L.centerGap * sc, tw + 14 * sc, L.centerBoxH * sc, 6 * sc);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
-  g.fillText(song.title, tx, ty + rr + (L.centerGap + L.centerBoxH / 2) * sc);
+  g.fillText(song.title, tx, ty + lr + (L.centerGap + L.centerBoxH / 2) * sc);
   g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + L.centerSubY * sc);
+  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + lr + L.centerSubY * sc);
 
   // 선택한 곡의 라벨 — 모든 라벨 위에. 지금 고리의 이웃이거나 이전 고리의 중심이다
   const sel = e.selectedId;

@@ -87,9 +87,11 @@ test("?dev=0 이면 분석이 다시 켜진다 — 껐다면 되돌릴 수도 �
   assert.equal(r.local.has(ANALYTICS), false);
 });
 
-test("?dev=0 은 둘 다 되돌린다 — 테스터가 보는 상태로", () => {
+test("?dev=0 은 테스터가 보는 상태로 — 설문을 켜고 분석은 다시 보낸다 (S15P21A405-696)", () => {
   const r = run({ url: "https://ody.test/?dev=0", local: { [KEY]: "false", [ANALYTICS]: "false" } });
-  assert.equal(r.local.size, 0);
+  // 설문 기본이 꺼짐이라 지우면 설문이 안 뜬다 — 켜서 넣는다
+  assert.equal(r.local.get(KEY), "true");
+  assert.equal(r.local.has(ANALYTICS), false);
 });
 
 test("파라미터를 주소에서 지운다 — 링크를 다시 보낼 때 딸려가지 않게", () => {
@@ -104,7 +106,7 @@ test("파라미터 없이 다시 들어와도 유지된다 — 폰에서 한 번
   assert.equal(r.url, null, "주소를 안 건드린다");
 });
 
-test("손댄 적 없으면 아무 일도 안 한다 — 테스터가 보는 기본값", () => {
+test("손댄 적 없으면 아무 일도 안 한다 — 기본값(설문 꺼짐) 그대로", () => {
   const r = run({ url: "https://ody.test/" });
   assert.equal(r.local.size, 0);
   assert.equal(r.url, null);

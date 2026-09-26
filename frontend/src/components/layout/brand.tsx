@@ -4,6 +4,7 @@ import Logo from "@/components/common/logo";
 import LayerStepper from "./layer-stepper";
 import LayerSummary from "./layer-summary";
 import LeadChip from "./lead-chip";
+import RideBar from "./ride-bar";
 import ViewModeCrumb from "./view-mode-crumb";
 
 /**
@@ -42,8 +43,9 @@ export default function Brand() {
         <LayerStepper />
         <LayerSummary />
       </div>
-      {/* 폰에서 내가 태우고 있을 때 인원 한 줄 — 레이어 설명 바로 아래 (S15P21A405-703) */}
+      {/* 폰에서 따라가기 한 줄 — 레이어 설명 바로 아래. 태울 때와 탈 때가 같은 알약이다 (S15P21A405-703 · 705) */}
       <LeadChip />
+      <RideBar />
       <ViewModeCrumb />
     </div>
   );

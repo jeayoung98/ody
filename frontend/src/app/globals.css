@@ -238,14 +238,7 @@
    * 윗줄(검색 돋보기·레이어 자취·윗줄 그늘)이 흐리게 비쳐 보이면 페이지 위에 딴 것이 떠 있는 것처럼
    * 읽힌다 — 탭 화면이 떠 있는 동안에는 감춘다. 지도로 돌아오면 그대로 돌아온다.
    */
-  :root:has([data-panel-screen]) :is([data-search-web], [data-brand], [data-top-scrim], [data-ride-bar]) {
-    visibility: hidden;
-  }
-  /*
-   * 따라가는 동안에는 윗줄을 탑승 줄이 쓴다 (S15P21A405-703, `ride-bar.tsx`). 검색·주변 탐색·여정은
-   * 그동안 어차피 잠겨 있어(지도는 인솔자 것) 자리만 차지하므로 감춘다. 내리면 돌아온다.
-   */
-  :root:has([data-ride-bar]) :is([data-search-web], [data-map-actions]) {
+  :root:has([data-panel-screen]) :is([data-search-web], [data-brand], [data-top-scrim]) {
     visibility: hidden;
   }
   /* 검색을 펴면 오른쪽 끝까지 늘어나 그 자리의 주변 탐색·여정을 덮는다 — 비쳐 보이지 않게 감춘다 */

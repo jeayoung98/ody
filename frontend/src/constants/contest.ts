@@ -33,8 +33,26 @@ export const CONTEST_SORTS = [
   { key: "ai", label: "AI 점수순" },
 ] as const satisfies ReadonlyArray<{ key: ContestSort; label: string }>;
 
-/** 모양 일치도 등급 — 서버 enum 을 사람 말로. `LOW` 는 실패가 아니라 경고다 */
-export const MATCH_QUALITY_LABEL: Record<MatchQuality, string> = { HIGH: "높음", MEDIUM: "보통", LOW: "낮음" };
+/**
+ * 모양 일치도 — 서버 enum 을 **숫자 없이** 사람 말로 (S15P21A405-693). `LOW` 는 실패가 아니라 경고다.
+ *
+ * 예전에는 `닮음 높음 · 92`·`정확도 · 100` 처럼 숫자를 같이 적었는데, 출품 뒤 AI 점수도 100점 만점이라
+ * 둘이 같은 점수로 읽혔다. 화면의 숫자 점수는 AI 점수 하나만 남기고, 이건 말로만 적는다.
+ */
+export const MATCH_QUALITY_LABEL: Record<MatchQuality, string> = {
+  HIGH: "그린 모양과 잘 맞아요",
+  MEDIUM: "그린 모양과 대체로 비슷해요",
+  LOW: "그린 모양과 꽤 달라요",
+};
+
+/** 그리기 탭 진행 단계 (S15P21A405-693). 순서가 곧 화면의 단계 표시 순서다 */
+export const SKETCH_STEPS = [
+  { key: "draw", label: "그리기" },
+  { key: "review", label: "곡 확인" },
+  { key: "submit", label: "이름 짓고 출품" },
+  { key: "scoring", label: "AI 채점" },
+] as const;
+export type SketchStep = (typeof SKETCH_STEPS)[number]["key"];
 
 /** 스케치 캔버스 — 점을 다시 눌러 빼는 판정 반경(px) */
 export const SKETCH_HIT_PX = 12;

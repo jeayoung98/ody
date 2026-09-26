@@ -18,9 +18,12 @@ interface DrawOptions {
  *
  * 색은 지도 별자리 선과 같은 계열이다 (`MAP_COLORS.routeStops` — 청록·파랑·보라).
  */
-export function drawConstellation(ctx: CanvasRenderingContext2D, tracks: ContestTrack[], closed: boolean, w: number, h: number, opt: DrawOptions = {}) {
-  const { dim = false, starR = 2.6, lineWidth = 1.3, pad = 0.14 } = opt;
-  if (!tracks.length) return;
+/**
+ * 배치 좌표 → 캔버스 좌표. {@link drawConstellation} 과 **같은 자리**다 — 그림 위에 번호를 얹는 쪽(스케치 캔버스)이
+ * 따로 계산하면 번호가 별에서 어긋난다 (S15P21A405-693).
+ */
+export function constellationLayout(tracks: readonly ContestTrack[], w: number, h: number, pad = 0.14): (readonly [number, number])[] {
+  if (!tracks.length) return [];
   const xs = tracks.map((t) => t.x);
   const ys = tracks.map((t) => t.y);
   const minX = Math.min(...xs);
@@ -31,7 +34,13 @@ export function drawConstellation(ctx: CanvasRenderingContext2D, tracks: Contest
   const cx = (minX + maxX) / 2;
   const cy = (minY + maxY) / 2;
   const k = (Math.min(w, h) * (1 - pad * 2)) / span;
-  const P = tracks.map((t) => [w / 2 + (t.x - cx) * k, h / 2 - (t.y - cy) * k] as const);
+  return tracks.map((t) => [w / 2 + (t.x - cx) * k, h / 2 - (t.y - cy) * k] as const);
+}
+
+export function drawConstellation(ctx: CanvasRenderingContext2D, tracks: ContestTrack[], closed: boolean, w: number, h: number, opt: DrawOptions = {}) {
+  const { dim = false, starR = 2.6, lineWidth = 1.3, pad = 0.14 } = opt;
+  if (!tracks.length) return;
+  const P = constellationLayout(tracks, w, h, pad);
 
   const line = dim ? "rgba(88,106,139,.6)" : "rgba(92,157,255,.7)";
   const star = dim ? PALETTE.ink3 : PALETTE.ink;

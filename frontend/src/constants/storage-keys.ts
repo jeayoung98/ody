@@ -20,7 +20,7 @@ export const STORAGE_KEYS = {
   /** 테스트 안내 화면을 봤는가 (S15P21A405-343). 한 번 보면 다시 띄우지 않는다 */
   testGuideSeen: "ody:test-guide-seen",
   /**
-   * 설문 모드 스위치 (S15P21A405-383). 없거나 `true` 면 설문 모드(기본), `false` 면 개발 모드.
+   * 설문 모드 스위치 (S15P21A405-383 · 696). `true` 면 설문 모드, 없거나 `false` 면 개발 모드(기본).
    * 읽는 쪽은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나다.
    */
   surveyMode: "ody:survey-mode",

@@ -27,16 +27,16 @@ afterEach(() => {
   delete process.env.NEXT_PUBLIC_TEST_TOOLS;
 });
 
-test("값이 없으면 설문 모드다 — 테스터가 손대지 않은 상태", () => {
-  assert.equal(loadFresh().surveyModeEnabled(), true);
+test("값이 없으면 꺼져 있다 — 기본은 개발 버전이다 (S15P21A405-696)", () => {
+  assert.equal(loadFresh().surveyModeEnabled(), false);
 });
 
-test('"false" 면 꺼지고 "true" 로 되돌아온다', () => {
+test('"true" 면 켜지고 "false" 로 다시 꺼진다', () => {
   const { surveyModeEnabled } = loadFresh();
-  values.set(KEY, "false");
-  assert.equal(surveyModeEnabled(), false);
   values.set(KEY, "true");
   assert.equal(surveyModeEnabled(), true);
+  values.set(KEY, "false");
+  assert.equal(surveyModeEnabled(), false);
 });
 
 test("빌드 스위치가 이긴다 — TEST_TOOLS=0 이면 로컬 값으로 못 켠다", () => {
@@ -46,23 +46,23 @@ test("빌드 스위치가 이긴다 — TEST_TOOLS=0 이면 로컬 값으로 못
   assert.equal(surveyModeEnabled(), false);
 });
 
-test("망가진 값·막힌 저장소는 기본값으로 떨어진다 — 시크릿 모드에서도 설문이 돈다", () => {
+test("망가진 값·막힌 저장소는 기본값(꺼짐)으로 떨어진다", () => {
   const { surveyModeEnabled } = loadFresh();
   values.set(KEY, "부서진 값");
-  assert.equal(surveyModeEnabled(), true);
+  assert.equal(surveyModeEnabled(), false);
   window.localStorage.getItem = () => {
     throw new Error("blocked");
   };
   window.sessionStorage.getItem = () => {
     throw new Error("blocked");
   };
-  assert.equal(surveyModeEnabled(), true);
+  assert.equal(surveyModeEnabled(), false);
 });
 
-test("서버 스냅샷은 빌드 기본값이다 — 하이드레이션 첫 렌더가 서버와 같아야 한다", () => {
-  // 서버에는 window 가 없다. 그 상태에서 읽는 값이 useSyncExternalStore 의 getServerSnapshot 과 같아야
+test("서버에서는 꺼져 있다 — 하이드레이션 첫 렌더가 서버와 같아야 한다", () => {
+  // 서버에는 window 가 없다. 그 상태에서 읽는 값이 useSyncExternalStore 의 getServerSnapshot(false) 과 같아야
   // 첫 클라이언트 렌더가 서버 HTML 과 일치한다.
   delete global.window;
-  assert.equal(loadFresh().surveyModeEnabled(), true);
+  assert.equal(loadFresh().surveyModeEnabled(), false);
   assert.equal(loadFresh("0").surveyModeEnabled(), false);
 });

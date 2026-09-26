@@ -29,6 +29,7 @@ import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
 import { rideLayerTarget } from "./engine/ride-layer";
 import { MapEngine } from "./engine/map-engine";
+import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
 import LayerTitleCard from "./layer-title-card";
 import LayerToast from "./layer-toast";
@@ -954,6 +955,8 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
+      {/* 반응 이모지는 지도에만 뜬다 (S15P21A405-694) — 패널을 닫아 둬도 받은 반응이 보여야 한다 */}
+      {features.social && <FloatingReactions />}
       <LayerTitleCard />
       {/*
         **마우스 전용이다** (S15P21A405-593). 손가락에는 호버가 없고, 폰에서는 별을 누르면

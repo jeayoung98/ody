@@ -1504,6 +1504,36 @@ export class MapEngine {
    * 엉뚱한 곳에 뜬다. 고리 안 이동(meHop) 중이면 출발한 화면 자리에서 지금 자리로 곡선 없이 미끄러진다.
    * 그 밖에는 월드 좌표(me)를 그대로 화면으로 옮긴다
    */
+  /**
+   * 내 표식의 화면 좌표 — **읽기만 한다** (S15P21A405-694). 반응 이모지가 여기서 떠오른다.
+   * `meScreen` 은 비행·고리 이동 상태를 정리하면서 읽으므로 그리기 밖에서 부르면 연출이 끊긴다.
+   */
+  mePos(): { x: number; y: number } | null {
+    if (this.myId == null) return null;
+    const { px, py } = this.worldToScreen(this.me.x, this.me.y, this.cam, this.parOf(this.playingId ?? this.myId));
+    return { x: px, y: py };
+  }
+
+  /**
+   * 지도에 떠 있는 사람의 화면 좌표 (S15P21A405-694). 내 뷰 안에 없으면 null — 남의 반응은 그때만 보인다.
+   * 겹쳐 서서 대표 뒤에 숨은 사람(`stacked`)이면 **대표 자리**를 준다. 같은 곡을 듣는 사람끼리 붙는 게
+   * 이 지도의 원리라 겹침이 흔하고, 숨었다고 반응까지 버리면 가장 가까운 사람의 반응이 안 보인다.
+   */
+  friendScreenPos(email: string): { x: number; y: number } | null {
+    const f = this.visFriends.find((v) => v.user.email === email || v.stacked.some((u) => u.email === email));
+    return f ? { x: f.px, y: f.py } : null;
+  }
+
+  /** 지도에 떠 있는 사람의 닉네임. 겹쳐 선 사람도 찾는다. 뷰 밖이거나 닉네임이 없으면 null */
+  friendNickname(email: string): string | null {
+    for (const v of this.visFriends) {
+      if (v.user.email === email) return v.user.nickname;
+      const hit = v.stacked.find((u) => u.email === email);
+      if (hit) return hit.nickname;
+    }
+    return null;
+  }
+
   meScreen(now = performance.now()): { px: number; py: number; from: { px: number; py: number } | null; onRing: boolean } {
     if (this.myId != null && this.probe && !this.probe.exitingAt) {
       const at = this.probePos(this.myId);

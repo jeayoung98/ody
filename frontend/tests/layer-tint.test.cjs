@@ -32,3 +32,22 @@ test("범위 밖 겹은 끝 색으로 막는다", () => {
   assert.deepEqual(layerTint(-1), [...LAYER_TINTS[0]]);
   assert.deepEqual(layerTint(99), [...LAYER_TINTS[LAYER_COUNT - 1]]);
 });
+
+/** RGB → 색상각(0~360) */
+function hue([r, g, b]) {
+  const mx = Math.max(r, g, b);
+  const mn = Math.min(r, g, b);
+  const d = mx - mn;
+  if (d === 0) return 0;
+  const h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+  return (h * 60 + 360) % 360;
+}
+
+test("이웃한 겹은 색상이 크게 다르다 — 우주 파랑 다음 은하단 보라처럼 비슷하면 옮긴 줄 모른다", () => {
+  for (let l = 1; l < LAYER_COUNT; l++) {
+    const a = hue(LAYER_TINTS[l - 1]);
+    const b = hue(LAYER_TINTS[l]);
+    const gap = Math.min(Math.abs(a - b), 360 - Math.abs(a - b));
+    assert.ok(gap >= 60, `${l - 1}→${l} 겹 색상 차 ${gap.toFixed(0)}°`);
+  }
+});

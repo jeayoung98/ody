@@ -6,6 +6,13 @@ export const LAYER_COUNT = 8;
 /** 한 겹에 상주하는 곡 수. 겹을 옮겨도 이 규모는 그대로다 (백엔드가 겹마다 이만큼 내려준다는 전제) */
 export const LAYER_SONG_COUNT = 1000;
 
+/**
+ * `bff/map/songs` 응답의 gzip 수준 (S15P21A405-680). 실제 1겹 응답(5,745곡 · 1,613,489바이트)으로 재 보니
+ * 3 은 561KB · 20ms, 기본값 6 은 535KB · 47ms 였다 (시간은 개발 PC). 26KB(LTE 10Mbps 로 약 22ms)를 더 보내고
+ * 서버 CPU 를 절반 넘게 아낀다 — 배포 서버는 백엔드·DB 와 CPU 를 나눠 쓴다.
+ */
+export const MAP_SONGS_GZIP_LEVEL = 3;
+
 /** 장르 이름. 인덱스 = genreId, 색은 GENRE_COLORS 의 같은 인덱스 */
 export const GENRE_NAMES = ["앰비언트", "일렉트로닉", "클래식", "재즈", "힙합", "R&B·소울", "팝", "록", "메탈", "포크·컨트리", "무장르"] as const;
 

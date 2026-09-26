@@ -113,7 +113,7 @@ export default function MainScreen({ overlay }: MainScreenProps) {
    *
    * **시트는 이 선 아래까지 내려간다** (S15P21A405-703). 재생바·네비가 유리라 그 뒤로 내용이 비쳐야
    * 해서다 — 시트에서는 이 값이 "내용이 가려지는 높이" 로 읽힌다(단 높이 계산·목록 끝 여백, `globals.css`).
-   * 탭 화면(`panel-screen`)은 이 선에서 끝난다 — 재생바와 같은 쌓임 맥락이 아니라 내려가면 재생바를 덮는다.
+   * 탭 화면(`panel-screen`)도 화면 바닥까지 내려가 재생바(z-21) 뒤에 깔린다 — 아래 `absolute` 설명 참고.
    *
    * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
    * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
@@ -152,7 +152,14 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   );
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-void text-ink">
+    /*
+      **`fixed` 가 아니라 `absolute` 다** (S15P21A405-703). `fixed` 는 z 가 없어도 늘 제 쌓임 맥락을 만들어서,
+      안에 든 재생바(z-21)가 바깥의 탭 화면(`panel-screen`) 위로 못 나왔다 — 안에서 z 를 아무리 올려도
+      판째로 아래에 깔렸다. `absolute` 는 z 가 없으면 맥락을 안 만들어, 안의 z 가 화면 전체 순서에 그대로
+      선다: **네비(23) > 재생바(21) > 탭 화면(20) > 지도**. html·body 가 화면 높이에 `overflow: hidden` 이라
+      자리는 `fixed` 와 같다. 토스트(30)·확인 팝업(70)도 이제 네비 위로 올라온다.
+    */
+    <div className="absolute inset-0 overflow-hidden bg-void text-ink">
       <MapView occlusion={occlusion} />
       {/*
         축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다.

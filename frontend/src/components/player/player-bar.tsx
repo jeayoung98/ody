@@ -145,8 +145,11 @@ export default function PlayerBar() {
           {!idle && blocked && <span className="ml-2 text-[12.5px] font-normal text-warn">{blocked.badge}</span>}
         </p>
         {/* 고를 곡이 없을 때의 안내는 좁은 화면에서 뺀다 — 한 줄에 제목과 같이 들어가면 둘 다 잘린다 */}
-        {/* 가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다 */}
-        <p className={`mt-0.5 truncate text-[14.5px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
+        {/*
+          가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다.
+          ink-3 이었다 — 배경에 앨범 커버가 비치면서(S15P21A405-704) 밝은 커버 위에서 짙은 회청색이 묻혔다. 한 칸 밝힌다
+        */}
+        <p className={`mt-0.5 truncate text-[14.5px] text-ink-2 [text-shadow:0_1px_3px_rgba(2,4,10,.7)] ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
       {/* 이벤트 탑 작품 플리면 순위 태그 — 제목 버튼 안에 넣으면 버튼 속 버튼이라 밖에 둔다 (S15P21A405-684) */}
       <ContestRankTag />

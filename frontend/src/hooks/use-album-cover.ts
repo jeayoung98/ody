@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, type RefObject } from "react";
+import { useEffect, useRef, type RefObject } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { coverFor } from "@/components/map/render/sprites";
 import { NO_GENRE_ID } from "@/constants";
@@ -25,8 +25,14 @@ import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
  *
  * @param musicId null 이면 배경을 비운다 (플레이어바가 아무것도 안 트는 동안)
  * @param size 굽는 크기(px). 원본이 500px 라 그보다 키워 봐야 소용없다
+ * @param onPaint 칠할 때마다 그 캔버스를 받는다 — 플레이어바가 커버 밝기를 재서 덮개 농도를 맞춘다 (S15P21A405-704)
  */
-export function useAlbumCover(ref: RefObject<HTMLElement | null>, musicId: number | null, size: number): void {
+export function useAlbumCover(ref: RefObject<HTMLElement | null>, musicId: number | null, size: number, onPaint?: (canvas: HTMLCanvasElement) => void): void {
+  // 콜백이 렌더마다 새 함수여도 칠하기를 다시 돌리지 않는다 — 가장 최근 것만 부른다
+  const onPaintRef = useRef(onPaint);
+  useEffect(() => {
+    onPaintRef.current = onPaint;
+  });
   const fromMap = musicId != null ? (getMapEngine()?.pointOf(musicId)?.albumMbid ?? null) : null;
   const fromDetail = useMusicDetailQuery(musicId).data?.albumMbid ?? null;
   const albumMbid = fromMap ?? fromDetail;
@@ -42,6 +48,7 @@ export function useAlbumCover(ref: RefObject<HTMLElement | null>, musicId: numbe
     const paint = () => {
       const canvas = coverFor({ musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, albumMbid, playable: true }, size);
       el.style.backgroundImage = `url(${canvas.toDataURL()})`;
+      onPaintRef.current?.(canvas);
     };
     paint();
     /**

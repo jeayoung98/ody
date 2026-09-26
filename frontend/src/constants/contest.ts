@@ -66,6 +66,9 @@ export const CONTEST_RANK_TAG = (rank: number) => `🏆 이벤트 ${rank}위`;
 /** 별자리 그림 한 변(px) — 채점이 끝난 내 작품 카드(S15P21A405-701)·출품 단계 미리보기(702). 카드 폭(max-w-lg) 안에서 모양이 읽히는 크기 */
 export const CONTEST_ARTWORK_THUMB_PX = 200;
 
+/** 채점 단계의 내 작품 카드 별자리 그림 한 변(px) (S15P21A405-702) — 채점 결과가 이 화면의 주인공이라 출품 미리보기보다 크게 */
+export const MY_ARTWORK_THUMB_PX = 280;
+
 /**
  * 순위 탑 3 시상대 (S15P21A405-702). 가운데 1위가 가장 크고 좌우에 2·3위 — 그림 크기로 순위가 먼저 읽힌다.
  * 순서는 화면 왼쪽부터다(2 · 1 · 3).

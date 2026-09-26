@@ -23,7 +23,7 @@ export default function ContestHeader({ contest }: { contest: Contest }) {
           <span className="lbl">좋아요 {contest.voteLimit}표</span>
         </div>
         <h3 className="font-display text-[22px] leading-tight font-semibold">
-          이번 테마는 <span className="grad-text">{contest.theme}</span>
+          이번 테마는 <span className="grad-text font-extrabold">{contest.theme}</span>
         </h3>
       </div>
       <p className="text-xs text-ink-3">

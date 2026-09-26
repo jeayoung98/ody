@@ -7,7 +7,7 @@ import Tag from "@/components/common/tag";
 import { useRetryContestEntryMutation } from "@/hooks/mutations/use-retry-contest-entry-mutation";
 import { useContestArtworkQuery } from "@/hooks/queries/use-contest-artwork-query";
 import { useToastStore } from "@/stores/use-toast-store";
-import { CONTEST_ARTWORK_THUMB_PX } from "@/constants";
+import { MY_ARTWORK_THUMB_PX } from "@/constants";
 import type { ContestEntry } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
 
@@ -44,7 +44,7 @@ export default function MyArtworkCard({ entry, theme }: { entry: ContestEntry; t
       {entry.status === "SCORED" && (
         <>
           {shape && shape.tracks.length > 1 && (
-            <ConstellationThumb tracks={shape.tracks} closed={shape.closed} size={CONTEST_ARTWORK_THUMB_PX} className="mx-auto my-1 border border-line" />
+            <ConstellationThumb tracks={shape.tracks} closed={shape.closed} size={MY_ARTWORK_THUMB_PX} className="mx-auto my-1 border border-line" />
           )}
           {/* 화면에서 숫자 점수는 이것 하나다 — 출품 전 모양 일치도는 말로만 적는다 (S15P21A405-693) */}
           <span className="lbl">AI 심사 점수</span>

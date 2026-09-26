@@ -176,20 +176,19 @@ export default function SketchTab({ contest }: { contest: Contest }) {
       </Button>
     );
   } else if (current === "scoring" && my) {
-    body = <MyWorkView entry={my} contest={contest} onDrawNew={() => setStep("draw")} />;
-    help = my.status === "PENDING" ? "AI 가 별자리를 살펴보는 중이에요. 끝나면 이 화면에 바로 점수와 한 줄 평이 떠요." : "채점이 끝났어요. 갤러리와 순위에서 다른 별자리와 함께 볼 수 있어요.";
+    // 안내는 판 아래가 아니라 카드 바로 밑에 카드 폭에 맞춰 붙인다 (S15P21A405-702)
+    const note = my.status === "PENDING" ? "AI 가 별자리를 살펴보는 중이에요. 끝나면 이 화면에 바로 점수와 한 줄 평이 떠요." : "채점이 끝났어요. 갤러리와 순위에서 다른 별자리와 함께 볼 수 있어요.";
+    body = <MyWorkView entry={my} contest={contest} onDrawNew={() => setStep("draw")} note={note} />;
   }
 
   return (
     <div className="grid min-h-0 flex-1 grid-cols-[170px_minmax(0,1fr)] gap-6">
       <aside className="flex flex-col gap-5 border-r border-line pr-4">
-        <Button size="sm" variant="ghost" className="self-start" disabled={!back} onClick={() => back && setStep(back)}>
-          <ChevronLeftIcon /> 뒤로
-        </Button>
         <SketchSteps current={current === "scoring" && my?.status === "SCORED" ? null : current} />
       </aside>
       <section className="flex min-h-0 flex-col gap-3">
-        <div className="min-h-0 flex-1">{body}</div>
+        {/* 채점 단계는 카드(그림 280px + 점수 + 한 줄 평)가 판보다 길 수 있어 넘치면 안에서 스크롤한다 */}
+        <div className="scroll-quiet min-h-0 flex-1 overflow-y-auto">{body}</div>
         {help && <p className="text-sm leading-relaxed text-ink-2">{help}</p>}
         <div className="flex min-h-9 items-center justify-between gap-3">
           {/* 이전 작품은 한 줄로만 — 채점 화면이 아니면 지금 그림의 점수처럼 보이면 안 된다 */}
@@ -200,7 +199,15 @@ export default function SketchTab({ contest }: { contest: Contest }) {
               </>
             )}
           </span>
-          {action}
+          {/* 뒤로는 다음 바로 왼쪽 — 두 버튼이 한 자리에 모여 있어야 손이 오간다. 돌아갈 곳이 없으면 안 보인다 */}
+          <div className="flex shrink-0 items-center gap-2">
+            {back && (
+              <Button size="sm" variant="ghost" onClick={() => setStep(back)}>
+                <ChevronLeftIcon /> 뒤로
+              </Button>
+            )}
+            {action}
+          </div>
         </div>
       </section>
     </div>

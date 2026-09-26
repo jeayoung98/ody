@@ -1,5 +1,5 @@
 import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
-import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
+import { FONTS, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
 
@@ -85,6 +85,23 @@ function touch(id: number, t: number) {
  * 지금 겹의 깊이 0~1. 전환 중에는 두 겹 사이 소수로 건너간다 —
  * 끝나는 순간 배경이 툭 바뀌면 그것부터 눈에 띈다.
  */
+/**
+ * 지금 겹의 배경 색 (S15P21A405-690). 전환 중에는 두 겹 색 사이 — 배경 깊이(`depthOf`)와 같은 잣대라 어둡기와 색이 함께 건너간다.
+ */
+export function layerTint(layerF: number): [number, number, number] {
+  const n = LAYER_TINTS.length;
+  const l = Math.min(n - 1, Math.max(0, layerF));
+  const a = LAYER_TINTS[Math.floor(l)];
+  const b = LAYER_TINTS[Math.min(n - 1, Math.floor(l) + 1)];
+  const k = l - Math.floor(l);
+  return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * k)) as [number, number, number];
+}
+
+/** 워시 원래 색에 겹 색을 섞는다 */
+function tinted(c: readonly [number, number, number], tint: readonly [number, number, number]): [number, number, number] {
+  return [0, 1, 2].map((i) => Math.round(c[i] + (tint[i] - c[i]) * LAYER_TINT_MIX)) as [number, number, number];
+}
+
 function depthOf(e: MapEngine) {
   const l = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
   return l / (LAYER_COUNT - 1);
@@ -104,6 +121,8 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   const nebulaK = 1 - depth * LAYER_DEPTH.maxNebulaFade;
   g.globalCompositeOperation = "lighter";
   const big = Math.max(W, H);
+  // 겹마다 다른 색으로 물든다 (S15P21A405-690)
+  const tint = layerTint(e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer);
   const ox = Math.sin(t * 0.015) * 44;
   const oy = Math.cos(t * 0.011) * 34;
   for (const w of NEBULA_WASH) {
@@ -111,9 +130,10 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
     const py = w.v * H + oy;
     const rr = w.r * big * 0.62;
     const gr = g.createRadialGradient(px, py, 0, px, py, rr);
-    gr.addColorStop(0, rgba(w.c, 0.105 * nebulaK));
-    gr.addColorStop(0.42, rgba(w.c, 0.04 * nebulaK));
-    gr.addColorStop(1, rgba(w.c, 0));
+    const c = tinted(w.c, tint);
+    gr.addColorStop(0, rgba(c, 0.105 * nebulaK));
+    gr.addColorStop(0.42, rgba(c, 0.04 * nebulaK));
+    gr.addColorStop(1, rgba(c, 0));
     g.fillStyle = gr;
     g.beginPath();
     g.arc(px, py, rr, 0, Math.PI * 2);

@@ -14,8 +14,8 @@ import { useFollowStore } from "@/stores/use-follow-store";
  * **따라가는 동안 열려 있는 유일한 조작이다** (2차 명세 §6). 나갈 수 없는 상태는 그 자체로
  * 결함이라, 지도·재생·패널이 전부 잠긴 중에도 이 버튼만 산다.
  *
- * **폰에서는 그리지 않는다** (S15P21A405-703). 따라가는 쪽은 윗줄(`layout/ride-bar.tsx`), 태우는 쪽은
- * 레이어 설명 아래 한 줄(`layout/lead-chip.tsx`)이 맡는다 — 두 줄짜리 알약이 윗줄 밑을 가로막았다.
+ * **폰에서는 그리지 않는다** (S15P21A405-703). 따라가는 쪽(`layout/ride-bar.tsx`)과 태우는 쪽
+ * (`layout/lead-chip.tsx`) 모두 레이어 설명 아래 한 줄이 맡는다 — 두 줄짜리 알약이 윗줄 밑을 가로막았다.
  */
 export default function FollowBanner() {
   const leaderEmail = useFollowStore((s) => s.leaderEmail);

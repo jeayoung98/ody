@@ -2,8 +2,10 @@
 
 import { useRef, useState } from "react";
 import { CloseIcon, SearchIcon } from "@/components/common/icons";
+import { RIDING_MAP_LOCKED } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import { CHIP_LABEL, useMusicSearch } from "@/hooks/use-music-search";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import type { MusicSearchResult } from "@/types";
 import SearchResultList from "./search-result-list";
@@ -23,6 +25,12 @@ export default function SearchBar() {
   const [expanded, setExpanded] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
   const closePanel = usePanelStore((s) => s.close);
+  /**
+   * **폰에서 따라가는 동안에는 잠긴다** (S15P21A405-705, SOCIAL-08). 옆의 주변 탐색·여정과 같은 급이다 —
+   * 곡을 골라 지도를 옮기는 조작이라 인솔자 지도 위에서는 쓸 수 없다. 감추지 않고 흐리게 남긴다.
+   * 넓은 화면은 건드리지 않는다: 잠금은 `max-tablet:` 안에서만 걸린다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
   const { input, setInput, chip, inputRef, condition, results, query, reset, select, promote, removeChip, analytics } =
     useMusicSearch({ visible: open, source: "map_search" });
   const { isSuccess, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
@@ -91,7 +99,8 @@ export default function SearchBar() {
        * (2026-09-25 크롬에서 확인: 300ms 중간 프레임이 실제로 사잇값이었다). 모르는 브라우저는
        * 그냥 튈 뿐이라 기능이 깨지지는 않는다.
        */
-      className={`absolute top-hud-t z-[22] [interpolate-size:allow-keywords] transition-[width] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-gutter-sm max-tablet:translate-x-0 ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-fit max-tablet:w-8"}`}
+      title={riding ? RIDING_MAP_LOCKED : undefined}
+      className={`absolute top-hud-t z-[22] [interpolate-size:allow-keywords] transition-[width,opacity] duration-300 ease-out left-1/2 -translate-x-1/2 max-tablet:left-gutter-sm max-tablet:translate-x-0 ${riding && !expanded ? "max-tablet:pointer-events-none max-tablet:opacity-40" : ""} ${expanded ? "w-[min(420px,34vw)] max-tablet:w-[calc(100dvw-2*var(--spacing-gutter-sm))] max-tablet:left-gutter-sm" : "w-fit max-tablet:w-8"}`}
     >
       {/* 접혀 있을 때는 상자 전체가 버튼이다 — 어디를 눌러도 펴진다 */}
       <div

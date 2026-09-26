@@ -12,7 +12,6 @@ import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
 import Brand from "./brand";
-import RideBar from "./ride-bar";
 import TopScrim from "./top-scrim";
 import MapActions from "./map-actions";
 import Rail from "./rail";
@@ -174,8 +173,6 @@ export default function MainScreen({ overlay }: MainScreenProps) {
           검색창은 스스로 접혔다 펴진다 — 펴질 때 우측 패널을 닫는다 (S15P21A405-440) */}
       {composerOpen ? <JourneyComposer /> : <SearchBar />}
       {features.social && <FollowBanner />}
-      {/* 폰에서 따라가는 동안 윗줄을 통째로 쓴다 — 데스크톱은 위 배너가 맡는다 (S15P21A405-703) */}
-      <RideBar />
       <GhostBanner />
       <Rail />
       {/* 지도 탭에서만 나오는 동작(주변 탐색·여정) — 폰 전용 (S15P21A405-417) */}

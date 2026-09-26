@@ -122,7 +122,10 @@ def select_270(df, bundle_dir):
     if missing:
         raise ValueError("270 목록의 특징이 입력에 없다: {}".format(missing[:5]))
     passthrough = [c for c in df.columns if c not in set(FEATURE_NAMES)]
-    return df.select(*[F.col(c) for c in passthrough], *[F.col(n) for n in names])
+    # 이름에 점이 있다(`tonal.key_key`, `lowlevel.gfcc.mean.0`). 백틱 없이 넘기면 중첩 필드로 읽혀
+    # UNRESOLVED_COLUMN 이 난다 — --from-raw 첫 클러스터 실행(2026-09-23, S15P21A405-600)에서 실패했다.
+    return df.select(*[F.col("`{}`".format(c)) for c in passthrough],
+                     *[F.col("`{}`".format(n)) for n in names])
 
 
 def run(spark, input_path, output_path, bundle_dir, from_raw=False, sample=None):

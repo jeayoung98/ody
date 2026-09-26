@@ -55,7 +55,8 @@ export default function HelpButton() {
         aria-label="도움말"
         title="도움말"
         onClick={() => { track("help_opened"); setAnalyticsContext({ help_open: true }); setOpen(true); }}
-        className="glass-liquid absolute -right-[52px] bottom-0 z-[22] grid h-11 w-11 place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink"
+        // 폰에서는 안 보인다 (S15P21A405-703, 사용자 결정) — 윗줄 오른쪽 끝은 주변 탐색·여정이 차지한다
+        className="glass-liquid absolute -right-[52px] bottom-0 z-[22] grid h-11 w-11 place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink max-tablet:hidden"
       >
         <HelpIcon />
       </button>

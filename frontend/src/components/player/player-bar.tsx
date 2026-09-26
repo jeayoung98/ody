@@ -135,8 +135,14 @@ export default function PlayerBar() {
      *
      * 진행바를 빼는 것이 이 중 유일하게 잃는 것이다 — 바텀시트(S15P21A405-416)를 올리면
      * 그 안에서 전체 플레이어를 보여 주는 것이 다음 자리다.
+     *
+     * **폰에서는 이 판의 윗모서리가 아래 한 판(재생바 + 네비)의 윗모서리다** (S15P21A405-703).
+     * 네비 줄과 붙어 한 판으로 읽히므로 40px 둥글기는 네비가 아니라 여기 건다 — 네비에 걸면
+     * 바로 위에 재생바가 얹혀 있어 두 판 사이에 둥근 홈이 파이고 지도가 샌다. 테두리는 걷는다.
+     * 모서리가 40px 이라 좌우 여백을 넓혀(12 → 24) 제목과 버튼이 둥근 곳에 안 닿게 한다.
+     * 위아래 여백은 8 → 12 로 조금 키웠다.
      */
-    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-x-0 max-tablet:border-b-0 max-tablet:px-3 max-tablet:py-2">
+    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-[40px_40px_0_0]! max-tablet:border-0 max-tablet:px-6 max-tablet:py-3">
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">

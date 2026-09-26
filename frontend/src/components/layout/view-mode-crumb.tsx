@@ -76,6 +76,8 @@ export default function ViewModeCrumb() {
   return (
     <div className="pointer-events-auto flex flex-wrap items-center gap-1">
       <span
+        // 폰에서도 넓은 화면과 같은 반투명 유리 — `globals.css` 가 이 이름으로 찾는다 (S15P21A405-703)
+        data-glass-web
         className={`glass group inline-flex items-center gap-1.5 rounded-pill! px-2.5 py-[5px] text-[13.5px] transition-colors duration-fast ${tone} ${
           press ? "cursor-pointer hover:border-line-2 hover:text-ink" : ""
         }`}

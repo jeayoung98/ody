@@ -204,6 +204,16 @@
       linear-gradient(var(--color-glass), var(--color-glass)),
       var(--color-void-2);
   }
+  /*
+   * 지도 위에 떠 있는 **작은 칩**은 넓은 화면과 같은 반투명으로 둔다 (S15P21A405-703).
+   * 위 규칙은 화면을 덮는 패널·바 때문에 생긴 것이라, 글자 한 줄짜리 칩까지 막으면 별자리 뷰
+   * 칩만 폰에서 딴 물건처럼 떴다. 값은 위 `@layer components` 의 `.glass` 와 같다 — 같이 고친다.
+   */
+  .glass[data-glass-web] {
+    background:
+      linear-gradient(var(--color-glass), var(--color-glass)),
+      rgb(9 13 24 / 0.5);
+  }
 }
 
 @utility lbl {
@@ -577,6 +587,22 @@
    */
   [data-sheet]:not([data-snap="3"]) [data-cover-window] {
     height: 0 !important;
+  }
+  /*
+   * 커버 창을 접으면 **글자가 커버 바로 위에 앉는다** (S15P21A405-703). 3 단에서는 글자가 커버
+   * 아래에 있어 상관없었는데, 1·2 단에서는 흰 제목·가수가 밝은 커버 위에 얹혀 안 읽혔다.
+   * 커버를 치우지 않고 어두운 막만 덮는다 — 무슨 곡인지 색의 기미는 남는다. 3 단으로 펴면 걷힌다.
+   */
+  [data-sheet] [data-cover-backdrop]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--color-void-2) 78%, transparent);
+    opacity: 0;
+    transition: opacity var(--duration-normal) ease;
+  }
+  [data-sheet]:not([data-snap="3"]) [data-cover-backdrop]::after {
+    opacity: 1;
   }
 
   /*

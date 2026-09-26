@@ -133,7 +133,16 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
       <span className="num w-10 shrink-0 text-[13.5px] text-ink-4 tabular-nums">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
       {/* 좁은 화면에서는 파형을 8px 로 눕힌다 — 자리는 거의 안 먹으면서 어디까지 왔는지는 보인다 */}
       <div className="relative h-8 min-w-0 flex-1 max-tablet:h-2">
-        <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
+        {/*
+          **폰에서는 파형 대신 곧은 선이다** (S15P21A405-703). 8px 로 눕힌 파형은 흔들리는 바가
+          너무 작아 떨리는 잡티로 읽혔다. 선의 찬 길이가 곧 진행이다 — 조작은 위 input 이 그대로 받는다.
+        */}
+        <div className="h-full max-tablet:hidden">
+          <WaveformBars musicId={musicId} ratio={ratio} playing={isPlaying && seekable && scrub == null} live={canPlay} />
+        </div>
+        <div aria-hidden className={`absolute inset-x-0 top-1/2 hidden h-[3px] -translate-y-1/2 overflow-hidden rounded-pill bg-white/[.16] max-tablet:block ${canPlay ? "" : "opacity-45"}`}>
+          <div className="h-full rounded-pill bg-teal" style={{ width: `${Math.round(ratio * 1000) / 10}%` }} />
+        </div>
         <input
           data-analytics-manual
           type="range"

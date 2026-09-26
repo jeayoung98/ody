@@ -151,7 +151,7 @@ export default function RightPanel() {
           `main-screen.tsx` 의 접힘 가림 폭(`PEEK_OCCLUSION`)이 손잡이 폭만 남긴다 — 같이 고친다.
         */
         collapsed ? "translate-x-[calc(100%_+_18px)] max-tablet:translate-x-0" : ""
-      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+52px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
+      } max-tablet:inset-x-0 max-tablet:top-[calc(var(--spacing-hud-t)+40px)] max-tablet:bottom-[var(--nav-bottom)] max-tablet:w-auto max-tablet:max-h-none max-tablet:[&>section]:flex-1`}
       /*
         **폰에서는 시트가 바닥까지 찬다** (S15P21A405-593). `Box` 는 내용만큼만 높아지는
         상자라, 짧은 화면(프로필·재생 불가 곡 상세·여정 목록이 비었을 때)에서는 **패널이

@@ -135,6 +135,8 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
     */
     <div
       aria-hidden
+      // 폰 시트 1·2 단에서 이 위에 어두운 막을 깐다 — `globals.css` 가 이 이름으로 찾는다 (S15P21A405-703)
+      data-cover-backdrop
       className="pointer-events-none absolute inset-x-0 top-0 aspect-square [-webkit-mask-image:linear-gradient(to_bottom,#000_62%,transparent)] [mask-image:linear-gradient(to_bottom,#000_62%,transparent)]"
     >
       {/* 1. 커버 */}

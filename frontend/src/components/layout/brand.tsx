@@ -20,7 +20,8 @@ export default function Brand() {
         상자는 128px 이었다. 상자가 커지면 지도 엔진이 `[data-hud]` 를 재서 그만큼 넓게 비운다
         (`map-view.tsx` 의 `setObstacles`). 데스크톱에 걸면 그쪽 상자도 420→149 로 바뀌므로 안 건다.
       */}
-      <div className="pointer-events-auto flex items-center gap-2.5 max-tablet:self-start">
+      {/* 폰 윗줄은 32px 한 줄이다 (S15P21A405-703) — 검색·주변 탐색·여정과 같은 높이라 가운데선이 맞는다 */}
+      <div className="pointer-events-auto flex items-center gap-2.5 max-tablet:h-8 max-tablet:self-start">
         <Logo size={26} radius={22} className="shadow-[0_0_22px_-4px_rgba(92,157,255,.75)]" />
         {/*
           좁은 화면에서는 워드마크를 접는다 (S15P21A405-417). 375px 한 줄에 브랜드(128) ·

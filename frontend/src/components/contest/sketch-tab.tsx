@@ -13,6 +13,7 @@ import { useContestStore } from "@/stores/use-contest-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { Contest } from "@/types";
 import ConstellationThumb from "./constellation-thumb";
+import DrawNewButton from "./draw-new-button";
 import MatchResult from "./match-result";
 import MyWorkView from "./my-work-view";
 import SketchCanvas from "./sketch-canvas";
@@ -95,6 +96,8 @@ export default function SketchTab({ contest }: { contest: Contest }) {
   let body: ReactNode = null;
   let help: ReactNode = null;
   let action: ReactNode = null;
+  /** 버튼 줄 왼쪽에 둘 것. 채점 단계는 AI 한 줄 평, 그 밖은 현재 출품작 한 줄 */
+  let footNote: ReactNode = null;
   if (current === "draw") {
     body = (
       <div className="relative mx-auto h-full max-h-full aspect-square">
@@ -178,7 +181,10 @@ export default function SketchTab({ contest }: { contest: Contest }) {
   } else if (current === "scoring" && my) {
     // 안내는 판 아래가 아니라 카드 바로 밑에 카드 폭에 맞춰 붙인다 (S15P21A405-702)
     const note = my.status === "PENDING" ? "AI 가 별자리를 살펴보는 중이에요. 끝나면 이 화면에 바로 점수와 한 줄 평이 떠요." : "채점이 끝났어요. 갤러리와 순위에서 다른 별자리와 함께 볼 수 있어요.";
-    body = <MyWorkView entry={my} contest={contest} onDrawNew={() => setStep("draw")} note={note} />;
+    body = <MyWorkView entry={my} contest={contest} note={note} />;
+    // 버튼 줄: 왼쪽은 AI 한 줄 평, 오른쪽 아래는 작게 새로 그리기 — 다른 단계의 설명·다음 버튼과 같은 자리다
+    footNote = my.status === "SCORED" && my.aiComment ? <span className="text-ink-2">AI 심사 · “{my.aiComment}”</span> : null;
+    if (open) action = <DrawNewButton entry={my} onConfirm={() => setStep("draw")} />;
   }
 
   return (
@@ -192,12 +198,14 @@ export default function SketchTab({ contest }: { contest: Contest }) {
         {help && <p className="text-sm leading-relaxed text-ink-2">{help}</p>}
         <div className="flex min-h-9 items-center justify-between gap-3">
           {/* 이전 작품은 한 줄로만 — 채점 화면이 아니면 지금 그림의 점수처럼 보이면 안 된다 */}
-          <span className="min-w-0 truncate text-xs text-ink-3">
-            {my && current !== "scoring" && (
-              <>
-                현재 출품작 「{my.title}」{my.status === "SCORED" && my.score != null ? ` · AI ${my.score}점` : my.status === "PENDING" ? " · 채점 중" : ""} — 새로 내면 교체돼요
-              </>
-            )}
+          <span className={`min-w-0 text-ink-3 ${current === "scoring" ? "text-sm leading-relaxed" : "truncate text-xs"}`}>
+            {current === "scoring"
+              ? footNote
+              : my && (
+                  <>
+                    현재 출품작 「{my.title}」{my.status === "SCORED" && my.score != null ? ` · AI ${my.score}점` : my.status === "PENDING" ? " · 채점 중" : ""} — 새로 내면 교체돼요
+                  </>
+                )}
           </span>
           {/* 뒤로는 다음 바로 왼쪽 — 두 버튼이 한 자리에 모여 있어야 손이 오간다. 돌아갈 곳이 없으면 안 보인다 */}
           <div className="flex shrink-0 items-center gap-2">

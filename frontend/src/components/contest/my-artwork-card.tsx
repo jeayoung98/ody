@@ -18,7 +18,8 @@ const STATUS_LABEL = { PENDING: "채점 중", SCORED: "채점 완료", FAILED: "
  * 뒤에서 채점한다 (§6-2). `PENDING` 이면 `use-contest-mine-query` 가 폴링하고, 이 카드는 그 결과만 보여 준다.
  * `FAILED` 는 점수가 `null` 이다 — 0점으로 보이면 "못생겼다" 가 된다. 3회까지 다시 평가받을 수 있다.
  */
-export default function MyArtworkCard({ entry, theme }: { entry: ContestEntry; theme: string }) {
+/** `showComment` 가 false 면 AI 한 줄 평을 카드에서 뺀다 — 그리기 탭은 그걸 아래 버튼 줄 왼쪽에 둔다 (S15P21A405-702) */
+export default function MyArtworkCard({ entry, theme, showComment = true }: { entry: ContestEntry; theme: string; showComment?: boolean }) {
   const toast = useToastStore((s) => s.show);
   const retry = useRetryContestEntryMutation();
   const pending = entry.status === "PENDING";
@@ -56,7 +57,7 @@ export default function MyArtworkCard({ entry, theme }: { entry: ContestEntry; t
           <span className="h-1 overflow-hidden rounded-pill bg-white/[.08]">
             <i className="grad-bg block h-full rounded-pill" style={{ width: `${Math.max(3, entry.score ?? 0)}%` }} />
           </span>
-          {entry.aiComment && <p className="text-sm leading-relaxed">{entry.aiComment}</p>}
+          {showComment && entry.aiComment && <p className="text-sm leading-relaxed">{entry.aiComment}</p>}
           <p className="text-xs text-ink-3">갤러리와 순위에 올라갔어요. 다시 출품하면 이 점수와 좋아요는 사라져요.</p>
         </>
       )}

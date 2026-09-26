@@ -131,7 +131,8 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
         글자라 32px 에서는 12px 로도 빠듯했고, 13.5px 이면 끝자리가 잘린다.
         폰에서는 11px · 32px 칸이다 (S15P21A405-703, 사용자 결정) — 한 줄짜리 재생바에서 시간이 선보다 눈에 띄었다.
       */}
-      <span className="num w-10 shrink-0 text-[13.5px] text-ink-4 tabular-nums max-tablet:w-8 max-tablet:text-[11px]">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
+      {/* ink-4 였다 — 배경에 앨범 커버가 비치면서(S15P21A405-704) 밝은 커버 위에서 안 보였다. 한 칸 밝히고 그림자를 준다 */}
+      <span className="num w-10 shrink-0 text-[13.5px] text-ink-3 tabular-nums [text-shadow:0_1px_3px_rgba(2,4,10,.7)] max-tablet:w-8 max-tablet:text-[11px]">{shownDuration > 0 ? formatDuration(Math.round(value)) : "--:--"}</span>
       {/* 좁은 화면에서는 파형을 8px 로 눕힌다 — 자리는 거의 안 먹으면서 어디까지 왔는지는 보인다 */}
       <div className="relative h-8 min-w-0 flex-1 max-tablet:h-2">
         {/*
@@ -167,7 +168,7 @@ export default function PlayerProgress({ musicId, durationSec, canPlay = false }
           className="absolute inset-0 h-full w-full cursor-pointer appearance-none bg-transparent opacity-0 outline-none disabled:cursor-default"
         />
       </div>
-      <span className="num w-10 shrink-0 text-right text-[13.5px] text-ink-4 tabular-nums max-tablet:w-8 max-tablet:text-[11px]">{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
+      <span className="num w-10 shrink-0 text-right text-[13.5px] text-ink-3 tabular-nums [text-shadow:0_1px_3px_rgba(2,4,10,.7)] max-tablet:w-8 max-tablet:text-[11px]">{shownDuration > 0 ? formatDuration(Math.round(shownDuration)) : "--:--"}</span>
     </div>
   );
 }

@@ -1,10 +1,7 @@
 "use client";
 
 import { useEffect, useRef, type RefObject } from "react";
-import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { coverFor } from "@/components/map/render/sprites";
-import { NO_GENRE_ID } from "@/constants";
-import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
+import { useAlbumCover } from "@/hooks/use-album-cover";
 
 /** 커버가 마지막으로 사라지는 구간(px). 남은 커버가 이만큼일 때부터 패널색으로 덮기 시작한다 */
 const FADE = 72;
@@ -59,50 +56,8 @@ interface SongCoverBackdropProps {
 export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: SongCoverBackdropProps) {
   const coverRef = useRef<HTMLDivElement>(null);
   const plateRef = useRef<HTMLDivElement>(null);
-  /**
-   * **지도가 이미 들고 있으면 그 값을 쓴다** (S15P21A405-527). 별을 누른 순간 상주 집합에
-   * `albumMbid` 가 있으므로, 상세 응답을 기다리면 이미 받아 둔 그림을 두고 화면만 비운다.
-   * 상세 쿼리는 지도에 없는 곡(고스트·검색 결과)의 폴백이다 — 패널이 어차피 부르는 쿼리라
-   * 요청이 새로 나가지도 않는다.
-   */
-  const fromMap = getMapEngine()?.pointOf(musicId)?.albumMbid ?? null;
-  const fromDetail = useMusicDetailQuery(musicId).data?.albumMbid ?? null;
-  const albumMbid = fromMap ?? fromDetail;
-
-  /**
-   * 캔버스는 브라우저에만 있다. 상태로 들고 있으면 서버 렌더와 값이 달라 하이드레이션이 깨지고,
-   * effect 안 setState 는 lint 가 막는다. 그래서 **DOM 에 직접 칠한다.**
-   *
-   * `genreId` 는 지금 쓰이지 않는다 — `starColorIdx` 가 실데이터에 장르가 거의 없어서 `musicId`
-   * 해시로 색을 뽑는다 (`star-look.ts` 의 `STAR_LOOK.randomColor`). 그 스위치가 내려가면
-   * 여기에도 진짜 `genreId` 를 넘겨야 지도와 색이 맞는다.
-   */
-  useEffect(() => {
-    const el = coverRef.current;
-    if (!el) return;
-    let raf = 0;
-    const paint = () => {
-      const canvas = coverFor(
-        { musicId, genreId: NO_GENRE_ID, pc: [], weight: 1, title: "", artist: null, youtubeUrl: null, albumMbid, playable: true },
-        BACKDROP_PX,
-      );
-      el.style.backgroundImage = `url(${canvas.toDataURL()})`;
-    };
-    paint();
-    /**
-     * 진짜 커버는 **받은 뒤에** 캔버스가 된다. 지도는 rAF 로 계속 다시 그려서 저절로 바뀌지만
-     * 여기는 한 번 칠하고 끝이라, 도착했는지 잠깐 되물어 본다. 이미 있으면 첫 칠에서 끝난다.
-     */
-    let tries = 0;
-    const poll = () => {
-      raf = 0;
-      if (!albumMbid || tries++ > 40) return;
-      paint();
-      raf = window.setTimeout(poll, 150) as unknown as number;
-    };
-    raf = window.setTimeout(poll, 150) as unknown as number;
-    return () => clearTimeout(raf);
-  }, [musicId, albumMbid]);
+  // 커버 칠하기는 플레이어바 배경과 같이 쓴다 (S15P21A405-704) — 지도 값 → 상세 응답 순으로 진짜 커버를 찾는다
+  useAlbumCover(coverRef, musicId, BACKDROP_PX);
 
   /** 덮개 투명도도 같은 이유로 DOM 에 직접 쓴다 — 스크롤마다 리렌더할 일이 아니다 */
   useEffect(() => {

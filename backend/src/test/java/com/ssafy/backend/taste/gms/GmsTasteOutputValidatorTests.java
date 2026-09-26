@@ -85,6 +85,21 @@ class GmsTasteOutputValidatorTests {
                 .isInstanceOf(IllegalArgumentException.class);
     }
 
+    /**
+     * 표본이 적다는 안내는 화면 배지가 한다. 문장에도 들어가면 두 번 말하게 된다 [S15P21A405-634].
+     * 2026-09-23 실호출(INITIAL 12곡)이 "몰아치는 음악을 선호하는 경향이 잠정적으로 보여요" 를 냈다.
+     */
+    @Test
+    void rejectsTentativeWordingBecauseTheScreenShowsABadge() {
+        GmsTasteOutput output = new GmsTasteOutput(
+                "resp", "여백 있는 음악을 선호하는 경향이 잠정적으로 보여요.",
+                List.of(new GmsTasteOutput.Narrative("allowed", "여백 있는 쪽에 모여 있어요.")));
+
+        assertThatThrownBy(() -> validator.validate(output, List.of(finding())))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("not grounded");
+    }
+
     @Test
     void rejectsFormalEnding() {
         GmsTasteOutput output = new GmsTasteOutput(

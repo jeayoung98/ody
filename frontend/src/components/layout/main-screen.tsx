@@ -5,7 +5,7 @@ import { HUD_OCCLUSION } from "@/constants";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
-import { usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
+import { useBrandBottom, usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
@@ -140,9 +140,15 @@ export default function MainScreen({ overlay }: MainScreenProps) {
   const measured = snap === 1 ? sheetPeek : sheetStop;
   const sheetH = narrow && panelOpen ? (measured ?? SHEET_SNAP_PX[snap]) : 0;
   const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX + sheetH : HUD_OCCLUSION.bottom;
+  /**
+   * 폰의 윗변은 **레이어 설명 아래끝**이다 (S15P21A405-703). 누른 별이 설명 아래 ~ 시트 윗끝 사이
+   * 가운데로 온다. 데스크톱은 윗줄만 비키면 된다 — 브랜드가 좌상단 모서리에 작게 있고 옆이 비어 있다.
+   */
+  const brandBottom = useBrandBottom(HUD_OCCLUSION.top);
+  const occludedTop = narrow ? brandBottom : HUD_OCCLUSION.top;
   const occlusion = useMemo<Occlusion>(
-    () => ({ top: HUD_OCCLUSION.top, right: occludedRight, bottom: occludedBottom, left: 0 }),
-    [occludedRight, occludedBottom],
+    () => ({ top: occludedTop, right: occludedRight, bottom: occludedBottom, left: 0 }),
+    [occludedTop, occludedRight, occludedBottom],
   );
 
   return (

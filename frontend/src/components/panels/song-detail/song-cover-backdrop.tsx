@@ -146,7 +146,8 @@ export default function SongCoverBackdrop({ musicId, scrollerRef, reveal }: Song
       {/* 3. 헤더 글자 자리 */}
       <div className="absolute inset-x-0 top-0 h-[72px] bg-gradient-to-b from-void/80 via-void/40 via-55% to-transparent" />
       {/* 4. 덮개 */}
-      <div ref={plateRef} className="absolute inset-0 bg-void-3 opacity-0" />
+      {/* 폰에서는 덮개도 반투명이다 — 시트가 유리라 여기만 막히면 굴렸을 때 검은 판이 된다 (S15P21A405-703) */}
+      <div ref={plateRef} className="absolute inset-0 bg-void-3 opacity-0 max-tablet:bg-void-3/55" />
     </div>
   );
 }

@@ -596,6 +596,7 @@ BACKEND-NOTES §5 에 전달 내용이 있다. 프론트가 붙이면서 정리�
 | # | 항목 | 확인된 사실 | 없으면 무엇이 안 되나 | 상태 |
 | --- | --- | --- | --- | --- |
 | A-83 | 리더보드·내 작품에 **작품 주인 닉네임**이 없다 | `ArtworkSummary` 는 `ownerEmail` 만 준다 (`origin/backend/dev` `artwork/dto/ArtworkSummary.java`) | 갤러리 카드·순위 줄에 이메일 앞부분(`luna@…` → `luna`)을 적고 있다 (`lib/contest-view` `ownerLabel`). 닉네임을 바꾼 사람이 엉뚱한 이름으로 보인다 — `ownerNickname` 을 같이 내려 주면 바로 바꾼다 | 협의 전 |
+| A-91 | 리더보드 `ArtworkSummary` 에 **`playlistId`** 가 없다 (S15P21A405-684) | `artwork.playlist_id` 와 `ArtworkRow.playlistId` 에는 있는데 `ArtworkSummary` 레코드에 빠져 있다 (`origin/backend/dev` `artwork/dto/ArtworkSummary.java`). 프론트는 `playlistId?` 로 받아 없으면 null 로 둔다 (`lib/contest-bff` `toEntry`) | 최상단 겹에 띄운 이벤트 탑 5 작품을 눌러도 플리를 못 튼다("아직 틀 수 없어요" 토스트). 플레이어바의 "이벤트 N위" 태그도 플리 번호로 맞추므로 안 뜬다. 출품 뒤 원본 플리를 고치면 튼 곡과 지도 모양이 달라질 수 있다 — 출품한 플리를 잠글지도 정해 주세요 | 협의 전 |
 
 FEATURES 변경 제안 #36 (CONTEST-01~05, 미확정). 백엔드 설계는 **S15P21A405-548**(AI 평가·리더보드) · **S15P21A405-598**(그린 점 → 곡 매칭) 에서 진행 중이다.
 프론트는 아래 모양으로 목(`src/app/bff/contests/*`, `src/mocks/contest.ts`)을 만들어 화면을 먼저 붙였다. **경로·필드는 전부 제안**이며 백엔드 설계에 맞춰 바꿀 수 있다 — 바뀌면 프론트에 알려 주면 라우트만 갈아 끼운다. 타입은 `frontend/src/types/contest.ts`.

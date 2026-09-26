@@ -110,6 +110,11 @@ export interface ContestEntry {
   closed: boolean;
   /** 별자리 좌표 + 곡 이름, 출품 순서 (백엔드 `points`). 내 작품 목록은 빈 배열 */
   tracks: ContestTrack[];
+  /**
+   * 출품한 플레이리스트 (S15P21A405-684). `artwork.playlist_id` 에는 있는데 **리더보드 응답에 아직 없다** —
+   * 백엔드 확인 필요 (BACKEND-NOTES A-91). 없으면 `null` 이고, 지도에서 눌러도 틀지 못한다.
+   */
+  playlistId: Id | null;
 }
 
 export interface ContestLeaderboard {

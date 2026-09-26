@@ -16,6 +16,7 @@ import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import LocateButton from "./locate-button";
 import PlayerBackdrop from "./player-backdrop";
+import ContestRankTag from "./contest-rank-tag";
 import PlayerProgress from "./player-progress";
 import TransportButton from "@/components/common/transport-button";
 import { track } from "@/lib/analytics/client";
@@ -147,6 +148,8 @@ export default function PlayerBar() {
         {/* 가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다 */}
         <p className={`mt-0.5 truncate text-[14.5px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
+      {/* 이벤트 탑 작품 플리면 순위 태그 — 제목 버튼 안에 넣으면 버튼 속 버튼이라 밖에 둔다 (S15P21A405-684) */}
+      <ContestRankTag />
 
       {/*
         좁은 화면에서는 **아랫줄로 떨어진다** (S15P21A405-417). 부모가 `flex-wrap` 이라

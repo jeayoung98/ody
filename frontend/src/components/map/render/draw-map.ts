@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, CONTEST_SKY, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
@@ -506,6 +506,65 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
  * 재생 진행을 투명도로 보인다: 지금 듣는 곡만 또렷하고, 이미 지나온 곡은 옅게,
  * 아직 안 들은 곡은 더 옅게. 지금 듣는 곡 위에는 내 위치 다이아몬드가 놓인다.
  */
+/**
+ * 이벤트 탑 작품 별자리 (S15P21A405-684). 곡의 **실제 자리**를 순서대로 잇고, 맨 위 점 위에 순위 태그를 단다.
+ *
+ * 상주 집합에 있는 곡은 그 별의 깊이 시차(`parOf`)를 같이 써야 선 끝이 별에 붙는다. 없는 곡은 기준 평면이다.
+ * 그린 자리는 `skyHits` 에 적는다 — 클릭 판정이 그것만 본다.
+ */
+function drawContestSky(g: CanvasRenderingContext2D, e: MapEngine) {
+  e.skyHits = [];
+  if (!e.contestSkyVisible()) return;
+  g.save();
+  g.font = `600 ${CONTEST_SKY.tagFontPx}px ${FONTS.body}`;
+  g.textBaseline = "middle";
+  for (const shape of e.contestSky) {
+    const pts = shape.pts.map((p) => {
+      const s = e.worldToScreen(p.x, p.y, e.cam, e.parOf(p.musicId));
+      return { x: s.px, y: s.py };
+    });
+    if (pts.some((p) => !Number.isFinite(p.x) || !Number.isFinite(p.y))) continue;
+
+    // 선
+    g.globalCompositeOperation = "lighter";
+    g.globalAlpha = 1;
+    g.strokeStyle = MAP_COLORS.contestLine;
+    g.lineWidth = CONTEST_SKY.lineWidthPx;
+    g.lineJoin = "round";
+    g.lineCap = "round";
+    g.beginPath();
+    pts.forEach((p, i) => (i === 0 ? g.moveTo(p.x, p.y) : g.lineTo(p.x, p.y)));
+    if (shape.closed) g.closePath();
+    g.stroke();
+
+    // 점
+    g.globalCompositeOperation = "source-over";
+    g.fillStyle = MAP_COLORS.contestDot;
+    for (const p of pts) {
+      g.beginPath();
+      g.arc(p.x, p.y, CONTEST_SKY.dotRadiusPx, 0, 6.284);
+      g.fill();
+    }
+
+    // 순위 태그 — 맨 위 점 위에
+    const top = pts.reduce((a, b) => (b.y < a.y ? b : a));
+    const label = fitText(g, `🏆 ${shape.rank}위 · ${shape.title}`, CONTEST_SKY.tagMaxWidthPx - CONTEST_SKY.tagPadXPx * 2);
+    const w = g.measureText(label).width + CONTEST_SKY.tagPadXPx * 2;
+    const h = CONTEST_SKY.tagHeightPx;
+    const x0 = top.x - w / 2;
+    const y0 = top.y - CONTEST_SKY.tagGapPx - h;
+    g.fillStyle = MAP_COLORS.contestDot;
+    roundRect(g, x0, y0, w, h, h / 2);
+    g.fill();
+    g.fillStyle = MAP_COLORS.contestTagText;
+    g.textAlign = "center";
+    g.fillText(label, top.x, y0 + h / 2 + 0.5);
+
+    e.skyHits.push({ shape, pts, tag: { x0, y0, x1: x0 + w, y1: y0 + h } });
+  }
+  g.restore();
+}
+
 function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMusicId: number | null) {
   const c = e.constellation;
   if (!c) return;
@@ -1200,6 +1259,7 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawNebula(g, e);
   drawStars(g, e);
   drawCovers(g, e);
+  drawContestSky(g, e);
 
   // 지도 위 요소(사람·선택·고스트·내 위치·호버)는 전부 오버레이보다 **뒤**에 —
   // 별자리·주변 탐색이 켜지면 다 같이 어두워진다

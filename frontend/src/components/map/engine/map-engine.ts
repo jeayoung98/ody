@@ -1,6 +1,7 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, CONTEST_SKY, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
+import { distSqToSegment, type SkyShape } from "@/lib/contest-sky";
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
 import { shouldRestartFollow } from "./follow-restart";
@@ -374,6 +375,13 @@ export class MapEngine {
   constellation: { ids: number[]; layout: ConstellationPoint[]; box: { x0: number; x1: number; y0: number; y1: number }; t0: number; exitingAt: number | null } | null = null;
   /** 이 겹에 없는 곡을 "범위 밖에 있다"고 치고 띄우는 유령 별 (MAP-12). 검색에서만 만든다 */
   ghost: { musicId: number; t0: number } | null = null;
+  /** 이벤트 탑 작품 별자리 (S15P21A405-684). 좌표는 최상단 겹의 월드 좌표다 */
+  contestSky: readonly SkyShape[] = [];
+  /**
+   * 이 프레임에 그린 작품의 화면 자리 — 그리기가 적고 클릭이 읽는다 (`hopLink` 와 같은 방식).
+   * 안 그린 작품은 누를 수도 없어야 해서 그리기 쪽이 채운다.
+   */
+  skyHits: { shape: SkyShape; pts: { x: number; y: number }[]; tag: { x0: number; y0: number; x1: number; y1: number } | null }[] = [];
 
   friends: NearbyUser[] = [];
   private friendsLayer = -1;
@@ -1589,6 +1597,39 @@ export class MapEngine {
   /** 별자리가 화면을 차지하고 있는가 (해제 애니메이션 중이면 false) */
   constellationActive() {
     return !!this.constellation && !this.constellation.exitingAt;
+  }
+
+  setContestSky(shapes: readonly SkyShape[]) {
+    this.contestSky = shapes;
+  }
+
+  /**
+   * 이벤트 작품을 그릴 때인가 (S15P21A405-684). **최상단 겹의 기본 뷰에서만** — 다른 겹은 축이 달라 모양이
+   * 흩어지고, 겹을 옮기는 중이나 별자리·주변 탐색이 켜진 동안은 그쪽이 화면의 주인이다.
+   */
+  contestSkyVisible() {
+    return this.contestSky.length > 0 && this.layer === CONTEST_SKY.layer && !this.anim && !this.constellation && !this.probe;
+  }
+
+  /** 누른 자리의 이벤트 작품 — 순위 태그나(`lines` 면) 선·점 근처면 그 작품 */
+  hitContestSky(mx: number, my: number, lines = true): SkyShape | null {
+    if (!this.contestSkyVisible()) return null;
+    const r2 = CONTEST_SKY.hitPx ** 2;
+    for (const h of this.skyHits) {
+      const t = h.tag;
+      if (t && mx >= t.x0 && mx <= t.x1 && my >= t.y0 && my <= t.y1) return h.shape;
+    }
+    if (!lines) return null;
+    for (const h of this.skyHits) {
+      const p = h.pts;
+      const n = h.shape.closed ? p.length : p.length - 1;
+      for (let i = 0; i < n; i++) {
+        const a = p[i];
+        const b = p[(i + 1) % p.length];
+        if (distSqToSegment(mx, my, a.x, a.y, b.x, b.y) <= r2) return h.shape;
+      }
+    }
+    return null;
   }
 
   /**

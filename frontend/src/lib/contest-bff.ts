@@ -42,6 +42,8 @@ export interface BackendArtworkSummary {
   rankScore: number | null;
   closed: boolean;
   points: BackendArtworkTrack[] | null;
+  /** 리더보드 응답에 아직 없다 — 백엔드 확인 필요 (BACKEND-NOTES A-91, S15P21A405-684) */
+  playlistId?: number | null;
 }
 
 export interface BackendDrawResponse {
@@ -78,6 +80,7 @@ export const toEntry = (s: BackendArtworkSummary): ContestEntry => ({
   rankScore: s.rankScore ?? null,
   closed: s.closed,
   tracks: (s.points ?? []).map(toTrack),
+  playlistId: s.playlistId ?? null,
 });
 
 export const toMatch = (d: BackendDrawResponse): ContestMatch => ({ score: d.score, quality: d.quality, tracks: d.points.map(toTrack) });

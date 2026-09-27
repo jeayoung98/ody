@@ -11,7 +11,7 @@ import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import type { JourneyRoute } from "@/types";
 
-/** 경로 위 정거장 곡 목록 (곡 컴포넌트 · 장르 표시). 1루트 최대 30곡 */
+/** 경로 위 정거장 곡 목록 (곡 컴포넌트 · 장르 표시). 1루트 최대 20곡 (`JOURNEY_MAX_SONGS`) */
 export default function JourneyStopList({ route }: { route: JourneyRoute | null }) {
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
   const playQueue = usePlayerStore((s) => s.playQueue);

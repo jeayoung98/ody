@@ -166,8 +166,14 @@ export function axisLine(layer: number) {
 /** 주변 탐색 시 보여주는 가까운 곡 수 */
 export const NEARBY_COUNT = 10;
 
-/** 여정 1루트당 최대 곡 수 */
-export const JOURNEY_MAX_SONGS = 30;
+/**
+ * 여정 1루트당 최대 곡 수 — 경로 목록 머리에 "정거장 N · 최대 20" 으로 보인다 (S15P21A405-720).
+ *
+ * 백엔드가 실제로 내는 상한이다: 산출 정거장 18 + 출발·도착 = 20곡(`backend/dev` `AxisJourneyPathFinder.MAX_STATIONS`,
+ * S15P21A405-286). 예전 값 30 은 명세(JOURNEY-01 "최대 30개")와 백엔드의 방어선(`JourneyService.MAX_PATH_SIZE`)
+ * 숫자라 실제로는 나올 수 없었다. 백엔드에서 받아 오지 않고 적어 둔 값이다 — 백엔드 상한이 바뀌면 같이 고친다.
+ */
+export const JOURNEY_MAX_SONGS = 20;
 
 /**
  * 별자리 배치 요청에 실을 수 있는 곡 수 (`POST /api/constellations/layout`).

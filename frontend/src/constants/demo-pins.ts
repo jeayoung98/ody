@@ -29,6 +29,7 @@ export const DEMO_SONGS: readonly DemoSong[] = [
   { title: "Plier", artist: "Wizzo" },
   { title: "Hollywood Action" },
   { title: "REDRED", artist: ["코르티스", "CORTIS"] },
+  { title: "ELEVEN", artist: ["아이브", "IVE"] },
 ];
 
 export const DEMO_PIN = {

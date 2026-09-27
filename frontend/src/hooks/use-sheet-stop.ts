@@ -43,10 +43,12 @@ export function useSheetStop(ref: RefObject<HTMLElement | null>) {
      * **머리글도 지켜본다** (S15P21A405-714). 1 단은 머리글 높이를 접는다(`globals.css`). 1 단으로 열린 시트(여정,
      * S15P21A405-712)는 머리글이 접힌 채로 재서, 2 단으로 올리면 머리글만큼 짧게 멈췄다 — 360 × 780 에서 175px 로
      * 멈춰 재생 줄이 플레이어 바 밑에 반쯤 깔렸다(실측, 다시 재면 208px). 머리글이 펴져 요소가 내려가도 요소 크기는
-     * 그대로라 요소만 봐서는 다시 재지 않는다. 머리글 높이가 바뀔 때마다 다시 잰다
+     * 그대로라 요소만 봐서는 다시 재지 않는다. 머리글 높이가 바뀔 때마다 다시 잰다.
+     * **테두리 상자로 본다** — 머리글은 위아래 여백도 같이 펴지는데, 기본(내용 상자)으로 보면 여백이 펴지는 동안은
+     * 알림이 안 와 12px 모자란 196px 에서 멈췄다(실측)
      */
     const header = sheet.querySelector<HTMLElement>(":scope > section > header");
-    if (header) ro.observe(header);
+    if (header) ro.observe(header, { box: "border-box" });
     return () => {
       ro.disconnect();
       sheet.style.removeProperty("--sheet-stop");

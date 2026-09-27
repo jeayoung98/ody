@@ -361,7 +361,8 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       g.stroke();
     }
     if (ship) {
-      const ang = fr.heading + Math.PI / 2;
+      // 기수는 돌려서 바꾼다 — 출발할 때 새 방향으로 한 번에 튀지 않게 (S15P21A405-709)
+      const ang = e.shipTurn.step(u.email, fr.heading + Math.PI / 2, t * 1000);
       // 배는 헬멧보다 크다 (S15P21A405-642). 접속 점·닉네임 자리는 헬멧 기준 `R` 을 그대로 쓴다
       const SR = R * FRIEND_MARKER.shipScale;
       // 인솔자의 `riderCount` 에는 나도 들어 있다(오면). 나 말고 몇 명인지만 빈 헬멧으로 — 지금은 안 와서 0 이다 (A-86)

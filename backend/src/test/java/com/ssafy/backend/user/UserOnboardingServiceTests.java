@@ -7,6 +7,7 @@ import org.junit.jupiter.api.Test;
 
 import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.follow.service.FollowService;
+import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.presence.OfflineOnlyStatusService;
 import com.ssafy.backend.user.mapper.UserMapper;
 import com.ssafy.backend.user.service.UserService;
@@ -19,7 +20,8 @@ class UserOnboardingServiceTests {
 
 	private final UserMapper userMapper = mock(UserMapper.class);
 	private final AuthMapper authMapper = mock(AuthMapper.class);
-	private final UserService userService = new UserService(userMapper, authMapper, mock(FollowService.class), new OfflineOnlyStatusService());
+	private final UserService userService = new UserService(userMapper, authMapper, mock(FollowService.class), new OfflineOnlyStatusService(),
+			mock(MusicDetailReader.class));
 
 	@Test
 	void completeTutorial_delegatesToMapperWithTokenSubjectEmail() {

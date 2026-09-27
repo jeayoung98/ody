@@ -162,25 +162,32 @@ public class NearbyService {
 	 *
 	 * <p>조회는 순서를 보장하지 않으므로 <b>선정 순서로 재조립</b>한다. 조회 결과 순서에 기대면
 	 * 정렬 보장(FR-008)이 조용히 깨진다.
+	 *
+	 * <p>{@code findSummariesByIds} 가 아니라 {@code findDetailsByIds} 를 쓴다 — {@code albumMbid} 가
+	 * {@code MusicSummary} 에 없어서다(S15P21A405-711). 두 조회는 같은 SQL 이라 비용은 그대로다.
 	 */
 	private List<NeighborTrack> toNeighbors(List<TrackCandidate> picked) {
 		if (picked.isEmpty()) {
 			return List.of();
 		}
-		Map<Long, MusicSummary> byId = new LinkedHashMap<>();
-		for (MusicSummary s : detailReader.findSummariesByIds(picked.stream().map(TrackCandidate::id).toList())) {
-			byId.put(s.id(), s);
+		Map<Long, MusicDetail> byId = new LinkedHashMap<>();
+		for (MusicDetail d : detailReader.findDetailsByIds(picked.stream().map(TrackCandidate::id).toList())) {
+			byId.put(d.id(), d);
 		}
 		return picked.stream()
 				.map(c -> {
-					MusicSummary summary = byId.get(c.id());
-					if (summary == null) {
+					MusicDetail detail = byId.get(c.id());
+					if (detail == null) {
 						// 부분 결과를 성공으로 내지 않는다(FR-014).
 						throw new IllegalStateException("선정된 곡의 상세를 찾지 못했다: id=" + c.id());
 					}
-					return new NeighborTrack(summary, c.dist());
+					return new NeighborTrack(toSummary(detail), detail.albumMbid(), c.dist());
 				})
 				.toList();
+	}
+
+	private static MusicSummary toSummary(MusicDetail d) {
+		return new MusicSummary(d.id(), d.title(), d.artist(), d.album(), d.youtubeUrl(), d.videoId(), d.location());
 	}
 
 	/** 마지막(가장 먼) 이웃이 원거리 임계값을 넘으면 참. <b>이웃이 없으면 참이다.</b> */

@@ -75,7 +75,7 @@ class MusicDetailControllerTests {
 	private static NeighborTrack neighbor(long id, String youtubeUrl, double distance) {
 		return new NeighborTrack(
 				new MusicSummary(id, "Through the Night", "IU", "Palette", youtubeUrl, null, loc()),
-				distance);
+				"album-" + id, distance);
 	}
 
 	@Test
@@ -98,10 +98,11 @@ class MusicDetailControllerTests {
 				.andExpect(jsonPath("$.data.releaseYear").value(2024))
 				.andExpect(jsonPath("$.data.location.pc1").value(-0.4213))
 				.andExpect(jsonPath("$.data.playCnt").value(1428))
-				// neighbors: MusicSummary 필드 flat + distance
+				// neighbors: MusicSummary 필드 flat + albumMbid + distance
 				.andExpect(jsonPath("$.data.neighbors[0].id").value(10877))
 				.andExpect(jsonPath("$.data.neighbors[0].artist").value("IU"))
 				.andExpect(jsonPath("$.data.neighbors[0].location.pc16").value(-0.123))
+				.andExpect(jsonPath("$.data.neighbors[0].albumMbid").value("album-10877"))
 				.andExpect(jsonPath("$.data.neighbors[0].distance").value(0.0412))
 				.andExpect(jsonPath("$.data.neighbors[1].id").value(10999));
 	}

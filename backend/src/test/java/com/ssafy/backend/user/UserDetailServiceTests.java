@@ -5,12 +5,16 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.when;
 
 import java.time.OffsetDateTime;
+import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import com.ssafy.backend.auth.mapper.AuthMapper;
 import com.ssafy.backend.follow.service.FollowService;
+import com.ssafy.backend.music.detail.MusicDetailReader;
+import com.ssafy.backend.music.dto.Location;
+import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.presence.OfflineOnlyStatusService;
 import com.ssafy.backend.presence.OnlineStatusService;
@@ -30,6 +34,14 @@ class UserDetailServiceTests {
 	/** 접속 여부를 보지 않는 시험은 이걸 쓴다. 늘 접속 안 함으로 답한다. */
 	private final OnlineStatusService online = new OfflineOnlyStatusService();
 
+	/** 마지막 재생곡을 보지 않는 시험은 기록이 없는 셈이다 — mapper mock 이 null 을 주므로 조회되지 않는다. */
+	private final MusicDetailReader musicReader = Mockito.mock(MusicDetailReader.class);
+
+	private static MusicDetail music(long id) {
+		return new MusicDetail(id, "mbid-" + id, "Love wins all", "IU", 128.4, 275, "The Winning", "album-" + id,
+				2024, "https://youtu.be/x", null, new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 0, 0);
+	}
+
 	private static UserProfileRow row(boolean isPublic) {
 		UserProfileRow row = new UserProfileRow();
 		row.setEmail("you@gmail.com");
@@ -47,7 +59,7 @@ class UserDetailServiceTests {
 	void getDetail_otherPublicUser_returnsDetailWithIsMeFalse() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -65,7 +77,7 @@ class UserDetailServiceTests {
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(onlineStatusService.isOnline("you@gmail.com")).thenReturn(true);
 		UserService service = new UserService(
-				mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), onlineStatusService);
+				mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), onlineStatusService, musicReader);
 
 		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").isOnline()).isTrue();
 	}
@@ -76,7 +88,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		UserService service = new UserService(
-				mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+				mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").isOnline()).isFalse();
 	}
@@ -89,7 +101,7 @@ class UserDetailServiceTests {
 		when(followService.countFollowers("you@gmail.com")).thenReturn(12);
 		when(followService.countFollowings("you@gmail.com")).thenReturn(8);
 		when(followService.isFollowing("me@gmail.com", "you@gmail.com")).thenReturn(true);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), followService, online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), followService, online, musicReader);
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -103,7 +115,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		FollowService followService = Mockito.mock(FollowService.class);
 		when(mapper.findProfileByEmail("me@gmail.com")).thenReturn(row(true));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), followService, online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), followService, online, musicReader);
 
 		UserDetailResponse result = service.getDetail("me@gmail.com", "me@gmail.com");
 
@@ -116,7 +128,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(42);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -128,7 +140,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(0);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").playedMusicCnt()).isZero();
 	}
@@ -137,13 +149,52 @@ class UserDetailServiceTests {
 	void getDetail_privateOtherUser_doesNotCountPlayHistory() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		assertThatThrownBy(() -> service.getDetail("you@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class);
 
 		Mockito.verify(mapper, Mockito.never()).countDistinctPlayedMusic("you@gmail.com");
 		Mockito.verify(mapper, Mockito.never()).countDiscoveredMusic("you@gmail.com");
+		Mockito.verify(mapper, Mockito.never()).findLastPlayedMusicId("you@gmail.com");
+	}
+
+	/** 프로필에 마지막으로 들은 곡을 띄운다 (S15P21A405-713). */
+	@Test
+	void getDetail_returnsLastPlayedMusic() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.findLastPlayedMusicId("you@gmail.com")).thenReturn(10234L);
+		when(musicReader.findDetail(10234L)).thenReturn(Optional.of(music(10234L)));
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
+
+		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
+
+		assertThat(result.lastMusic().id()).isEqualTo(10234L);
+		assertThat(result.lastMusic().albumMbid()).isEqualTo("album-10234");
+	}
+
+	@Test
+	void getDetail_noPlayHistory_returnsNullLastMusic() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.findLastPlayedMusicId("you@gmail.com")).thenReturn(null);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
+
+		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").lastMusic()).isNull();
+		Mockito.verify(musicReader, Mockito.never()).findDetail(Mockito.anyLong());
+	}
+
+	/** play_history 에는 FK 가 없어 지워진 곡을 가리킬 수 있다. 그때도 상세는 뜨고 곡만 비운다. */
+	@Test
+	void getDetail_lastPlayedMusicGone_returnsNullLastMusic() {
+		UserMapper mapper = Mockito.mock(UserMapper.class);
+		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
+		when(mapper.findLastPlayedMusicId("you@gmail.com")).thenReturn(999L);
+		when(musicReader.findDetail(999L)).thenReturn(Optional.empty());
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
+
+		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").lastMusic()).isNull();
 	}
 
 	@Test
@@ -152,7 +203,7 @@ class UserDetailServiceTests {
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(mapper.countDistinctPlayedMusic("you@gmail.com")).thenReturn(42);
 		when(mapper.countDiscoveredMusic("you@gmail.com")).thenReturn(7);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "me@gmail.com");
 
@@ -166,7 +217,7 @@ class UserDetailServiceTests {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(true));
 		when(mapper.countDiscoveredMusic("you@gmail.com")).thenReturn(0);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		assertThat(service.getDetail("you@gmail.com", "me@gmail.com").discoveredMusicCnt()).isZero();
 	}
@@ -175,7 +226,7 @@ class UserDetailServiceTests {
 	void getDetail_selfPrivateUser_returnsDetailWithIsMeTrue() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		UserDetailResponse result = service.getDetail("you@gmail.com", "you@gmail.com");
 
@@ -187,7 +238,7 @@ class UserDetailServiceTests {
 	void getDetail_otherPrivateUser_throwsUserPrivate() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("you@gmail.com")).thenReturn(row(false));
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		assertThatThrownBy(() -> service.getDetail("you@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class)
@@ -199,7 +250,7 @@ class UserDetailServiceTests {
 	void getDetail_notFound_throwsUserNotFound() {
 		UserMapper mapper = Mockito.mock(UserMapper.class);
 		when(mapper.findProfileByEmail("nobody@gmail.com")).thenReturn(null);
-		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online);
+		UserService service = new UserService(mapper, Mockito.mock(AuthMapper.class), Mockito.mock(FollowService.class), online, musicReader);
 
 		assertThatThrownBy(() -> service.getDetail("nobody@gmail.com", "me@gmail.com"))
 				.isInstanceOf(CustomException.class)

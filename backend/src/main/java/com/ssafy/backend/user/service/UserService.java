@@ -8,6 +8,8 @@ import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.follow.service.FollowService;
+import com.ssafy.backend.music.detail.MusicDetailReader;
+import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.presence.OnlineStatusService;
 import com.ssafy.backend.user.NicknamePolicy;
 import com.ssafy.backend.user.dto.NicknameUpdateRequest;
@@ -30,6 +32,7 @@ public class UserService {
 	private final AuthMapper authMapper;
 	private final FollowService followService;
 	private final OnlineStatusService onlineStatusService; // 접속 여부는 소켓이 안다
+	private final MusicDetailReader musicDetailReader;
 
 	/**
 	 * 사용자 상세 조회 (정본 §2.1). 본인 조회도 이 API(email == 토큰 주체 → isMe:true).
@@ -53,6 +56,7 @@ public class UserService {
 		// 비공개 판정 뒤에 센다 — 볼 수 없는 사용자의 기록은 읽지 않는다 (S15P21A405-430).
 		int playedMusicCnt = userMapper.countDistinctPlayedMusic(targetEmail);
 		int discoveredMusicCnt = userMapper.countDiscoveredMusic(targetEmail);
+		MusicDetail lastMusic = lastMusic(targetEmail);
 
 		int followerCnt = followService.countFollowers(targetEmail);
 		int followingCnt = followService.countFollowings(targetEmail);
@@ -75,7 +79,20 @@ public class UserService {
 				isMe,
 				playedMusicCnt,
 				discoveredMusicCnt,
-				isOnline);
+				isOnline,
+				lastMusic);
+	}
+
+	/**
+	 * 마지막으로 재생한 곡 (S15P21A405-713). 기록이 없거나, 기록은 있는데 그 곡이 music 에서 빠졌으면 null 이다 —
+	 * play_history 에 FK 가 없어 지워진 곡을 가리킬 수 있다. 그때 상세 조회 전체를 실패시키지 않는다.
+	 */
+	private MusicDetail lastMusic(String email) {
+		Long musicId = userMapper.findLastPlayedMusicId(email);
+		if (musicId == null) {
+			return null;
+		}
+		return musicDetailReader.findDetail(musicId).orElse(null);
 	}
 
 	/**

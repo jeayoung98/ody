@@ -5,6 +5,7 @@ import java.util.List;
 import java.util.Map;
 
 import org.springframework.validation.annotation.Validated;
+import org.springframework.security.core.Authentication;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -23,10 +24,11 @@ import com.ssafy.backend.music.dto.VideoIdBatchRequest;
 import com.ssafy.backend.music.dto.VideoIdBatchResponse;
 import com.ssafy.backend.music.service.MusicService;
 import com.ssafy.backend.music.service.NearbyService;
+import com.ssafy.backend.music.search.MusicSearchCondition;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Max;
 import jakarta.validation.constraints.Min;
-import jakarta.validation.constraints.NotBlank;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
 import com.ssafy.backend.music.dto.NearbyResponse;
 
@@ -53,12 +55,13 @@ public class MusicController {
 	 *
 	 * 범위 파라미터 표기는 {@link #rangeParam} 한 곳에서만 만든다. FE1 통보가 오면 거기만 바꾼다.
 	 */
-	@Operation(summary = "레이어 상주 집합 조회", description = "level=1은 파라미터 없이, level>=2는 이전 겹들의 사각 범위를 모두 받아 대표곡 집합을 조회한다.")
+	@Operation(summary = "레이어 상주 집합 조회", description = "level=1은 범위 없이, level>=2는 이전 겹들의 사각 범위를 모두 받는다. size는 1~10000곡의 반환 상한이다.")
 	@GetMapping("/major")
 	public ApiResponse<MajorResponse> major(
-			@RequestParam(defaultValue = "1") @Min(1) int level,
+			@RequestParam(defaultValue = "1") @Min(1) @Max(8) int level,
+			@RequestParam(required = false) @Min(1) @Max(10000) Integer size,
 			@RequestParam Map<String, String> params) {
-		return ApiResponse.success(musicService.getMajor(level, accumulatedBoxes(level, params)));
+		return ApiResponse.success(musicService.getMajor(level, accumulatedBoxes(level, params), size));
 	}
 
 	/**
@@ -105,23 +108,31 @@ public class MusicController {
 	}
 
 	/**
-	 * 노래 검색 (정본 §3.1). query 부분일치, page 0-based. 결과 없음은 빈 content + 200.
+	 * 음악 검색 (정본 §3.1). query 통합 검색 또는 artist(+music) 앞일치 필터, page 0-based.
 	 */
-	@Operation(summary = "노래 검색", description = "query 부분일치로 노래를 검색한다. page는 0-based이며, 결과가 없으면 빈 content와 200을 반환한다.")
+	@Operation(summary = "음악 검색", description = "query 통합 검색 또는 artist(+music) 앞일치 조건으로 음악을 검색한다. page는 0-based다.")
 	@GetMapping("/search")
 	public ApiResponse<PageResponse<MusicSummary>> search(
-			@RequestParam @NotBlank String query,
+			@RequestParam(required = false) String query,
+			@RequestParam(required = false) String music,
+			@RequestParam(required = false) String artist,
 			@RequestParam @Min(0) int page) {
-		return ApiResponse.success(musicService.search(query, page));
+		return ApiResponse.success(musicService.search(new MusicSearchCondition(query, music, artist), page));
 	}
 
 	/**
 	 * 노래 상세 조회 (정본 §3.2). id로 상세 + 최근접 10곡(neighbors). 없는 곡 → 404 MUSIC_NOT_FOUND.
 	 */
-	@Operation(summary = "노래 상세 조회", description = "id로 노래 상세와 최근접 10곡(neighbors)을 함께 조회한다. 없는 곡이면 404 MUSIC_NOT_FOUND.")
+	@Operation(summary = "노래 상세 조회", description = "id로 노래 상세와 최근접 10곡(neighbors)을 함께 조회한다. 로그인 시 liked 로 좋아요 여부를 함께 준다. 없는 곡이면 404 MUSIC_NOT_FOUND.")
 	@GetMapping("/detail")
-	public ApiResponse<MusicDetailResponse> detail(@RequestParam @Min(1) long id) {
-		return ApiResponse.success(musicService.getDetail(id));
+	public ApiResponse<MusicDetailResponse> detail(
+			@RequestParam @Min(1) long id, Authentication authentication) {
+		return ApiResponse.success(musicService.getDetail(id, emailOrNull(authentication)));
+	}
+
+	/** 인증은 선택이다. 비로그인도 그대로 상세를 본다 — 좋아요 상태만 false 가 된다. */
+	private static String emailOrNull(Authentication authentication) {
+		return authentication == null ? null : authentication.getName();
 	}
 
 	/**

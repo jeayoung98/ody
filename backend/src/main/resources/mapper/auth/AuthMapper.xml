@@ -23,7 +23,9 @@
 		UPDATE "user"
 		SET last_active_at = now(),
 		    updated_at = now(),
-		    image_url = COALESCE(#{imageUrl}, image_url)
+		    <!-- 기존 값이 있으면 그대로 둔다. 사용자가 프로필 사진을 바꾸면 이후 구글 로그인이
+		         그 사진을 다시 구글 사진으로 되돌리면 안 된다 [S15P21A405-426]. -->
+		    image_url = COALESCE(image_url, #{imageUrl})
 		WHERE email = #{email}
 	</update>
 

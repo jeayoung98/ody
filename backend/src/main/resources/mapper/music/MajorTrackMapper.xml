@@ -27,26 +27,22 @@
 	</sql>
 
 	<!--
-		map_sample 에는 pc 16축이 없어 music 조인이 필요하다(MapPoint.pc 계약).
+		map_sample 에는 pc 16축도 album_mbid 도 없어 music 조인이 필요하다(MapPoint.pc·albumMbid 계약).
 		조인 없는 0.4 ms 는 이 조인만큼 깎인다 — 실 DB 재측정 대상(T016 지시).
 		장르는 조인하지 않는다: 29종 멜론 코드를 FE 10종으로 접는 매핑이 아직 없다.
 	-->
-	<!--
-		LIMIT 을 걸지 않는다. map_sample 의 1레이어는 이미 화면 크기로 미리 계산된 정적 집합이고
-		실측 1,094칸이다. 여기에 1000 을 걸면 첫 화면 별 94개가 잘린다.
-		계약도 '1000 이 규모 기준, 정확한 수는 강제하지 않는다 — 1레이어 실측 1,094칸도 허용된다' 이다(D18).
-	-->
 	<select id="findLayerOneSample" resultType="com.ssafy.backend.music.dto.MapPointRow">
-		SELECT s.music_id, s.title, s.artist, m.youtube_url,
+		SELECT s.music_id, s.title, s.artist, m.album_mbid,
 		<include refid="locationColumns"/>
 		FROM map_sample s
 		JOIN music m ON m.id = s.music_id
 		WHERE s.layer = 1
-		AND m.video_id IS DISTINCT FROM 'none'
+		AND NOT m.is_unplayable
+		LIMIT #{limit}
 	</select>
 
 	<select id="findInAccumulatedBoxes" resultType="com.ssafy.backend.music.dto.MapPointRow">
-		SELECT m.id AS music_id, m.title, m.artist, m.youtube_url,
+		SELECT m.id AS music_id, m.title, m.artist, m.album_mbid,
 		<include refid="locationColumns"/>
 		FROM music m
 		<where>
@@ -62,7 +58,7 @@
 					</otherwise>
 				</choose>
 			</foreach>
-			AND m.video_id IS DISTINCT FROM 'none'
+			AND NOT m.is_unplayable
 		</where>
 		LIMIT #{limit}
 	</select>

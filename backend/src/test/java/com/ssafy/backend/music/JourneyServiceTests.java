@@ -71,8 +71,8 @@ class JourneyServiceTests {
 	}
 
 	private static MusicDetail song(long id, String mbid, Integer duration) {
-		return new MusicDetail(id, mbid, "title-" + id, "artist-" + id, 128.4, duration, "album",
-				List.of("K-Pop"), "https://youtu.be/" + id, null, loc(id * 0.001), 1428, 3);
+		return new MusicDetail(id, mbid, "title-" + id, "artist-" + id, 128.4, duration, "album", "alb-" + id, 2001,
+				"https://youtu.be/" + id, null, loc(id * 0.001), 1428, 3);
 	}
 
 	/** 중간 정거장 n개를 mbid "s0".."s(n-1)" 로 만든다. duration 은 전부 100초. */
@@ -190,8 +190,8 @@ class JourneyServiceTests {
 		when(detailReader.findDetail(START_ID)).thenReturn(Optional.of(song(START_ID, START_MBID, 275)));
 		when(detailReader.findDetail(END_ID)).thenReturn(Optional.of(song(END_ID, END_MBID, 205)));
 		when(pathFinder.find(any(MusicDetail.class), any(MusicDetail.class))).thenReturn(enginePath(List.of(1000L)));
-		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al",
-				List.of("K-Pop"), null, null, loc(0.5), 1, 0);
+		MusicDetail notPlayable = new MusicDetail(1000L, "s0", "t", "a", 128.4, 100, "al", "alb-1000", 2002,
+				null, null, loc(0.5), 1, 0);
 		when(trackReader.findDetailsByIds(anyList())).thenReturn(List.of(notPlayable));
 
 		JourneyResponse res = service.getJourney(START_ID, END_ID);

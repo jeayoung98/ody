@@ -2,7 +2,10 @@ package com.ssafy.backend.music.videoid;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -10,6 +13,8 @@ import static org.mockito.Mockito.when;
 import java.util.Optional;
 
 import org.junit.jupiter.api.Test;
+
+import io.micrometer.core.instrument.simple.SimpleMeterRegistry;
 
 /**
  * videoId 실시간 조회·저장 단위 테스트 (S15P21A405-312, 프로토타입).
@@ -19,11 +24,19 @@ class VideoIdEnricherTests {
 
 	private final VideoIdLookupPort lookupPort = mock(VideoIdLookupPort.class);
 	private final VideoIdWriterPort writerPort = mock(VideoIdWriterPort.class);
-	private final VideoIdEnricher enricher = new VideoIdEnricher(lookupPort, writerPort);
+	private final SimpleMeterRegistry meterRegistry = new SimpleMeterRegistry();
+	private final VideoIdEnricher enricher = new VideoIdEnricher(lookupPort, writerPort, meterRegistry);
+
+	/** outcome 태그별 기록 횟수. 0 이면 그 경로에서 지표가 안 남은 것이다. */
+	private long recorded(String outcome) {
+		return meterRegistry.find("ody.videoid.resolve").tag("outcome", outcome).timer() == null
+				? 0
+				: meterRegistry.find("ody.videoid.resolve").tag("outcome", outcome).timer().count();
+	}
 
 	@Test
 	void resolve_returnsExisting_withoutCallingLookupOrWriter() {
-		String result = enricher.resolve(1L, "a", "t", "existing1234");
+		String result = enricher.resolve(1L, "a", "t", "al", "existing1234", 200);
 
 		assertEquals("existing1234", result);
 		verifyNoInteractions(lookupPort, writerPort);
@@ -31,9 +44,9 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_looksUpAndSaves_whenMissing() {
-		when(lookupPort.lookup("a", "t")).thenReturn(Optional.of("xyz12345678"));
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of("xyz12345678"));
 
-		String result = enricher.resolve(1L, "a", "t", null);
+		String result = enricher.resolve(1L, "a", "t", "al", null, 200);
 
 		assertEquals("xyz12345678", result);
 		verify(writerPort).save(1L, "xyz12345678");
@@ -41,11 +54,111 @@ class VideoIdEnricherTests {
 
 	@Test
 	void resolve_returnsNull_andDoesNotSave_whenLookupFindsNothing() {
-		when(lookupPort.lookup("a", "t")).thenReturn(Optional.empty());
+		when(lookupPort.lookup("a", "t", "al", null)).thenReturn(Optional.empty());
 
-		String result = enricher.resolve(1L, "a", "t", null);
+		String result = enricher.resolve(1L, "a", "t", "al", null, null);
 
 		assertNull(result);
 		verifyNoInteractions(writerPort);
+	}
+
+	/**
+	 * S15P21A405-454 — 재생 불가 판정은 video_id 가 아니라 is_unplayable 에 남긴다.
+	 * 예전에는 외부 API 가 video_id 자리에 "none" 을 넣어 줘 그대로 저장됐다.
+	 */
+	@Test
+	void resolve_marksUnplayable_andDoesNotWriteVideoId_whenLookupSaysUnplayable() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
+		when(writerPort.markUnplayable(1L)).thenReturn(true);
+
+		String result = enricher.resolve(1L, "a", "t", "al", null, 200);
+
+		assertEquals(VideoIds.UNPLAYABLE, result);
+		verify(writerPort).markUnplayable(1L);
+		verify(writerPort, never()).save(anyLong(), anyString());
+	}
+
+	/**
+	 * S15P21A405-568 — 동시에 들어온 다른 요청이 videoId 를 찾아 저장했으면 확정은 건너뛴다.
+	 *
+	 * <p>이 응답 한 번은 재생 불가로 나가지만 videoId 를 덮어쓰지는 않는다. 다음 조회가
+	 * 저장된 값을 읽어 스스로 바로잡는다 — 되돌릴 수 없는 삭제 대상으로 굳는 것보다 낫다.
+	 */
+	@Test
+	void resolve_doesNotWriteVideoId_whenMarkingUnplayableWasSkipped() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of(VideoIds.UNPLAYABLE));
+		when(writerPort.markUnplayable(1L)).thenReturn(false);
+
+		enricher.resolve(1L, "a", "t", "al", null, 200);
+
+		verify(writerPort).markUnplayable(1L);
+		verify(writerPort, never()).save(anyLong(), anyString());
+	}
+
+	/** 판정이 끝난 곡은 다시 묻지 않는다 — "없음" 과 "아직 모름" 을 가르는 이유가 이것이다. */
+	@Test
+	void resolve_returnsUnplayable_withoutLookup_whenAlreadyJudged() {
+		String result = enricher.resolve(1L, "a", "t", "al", VideoIds.UNPLAYABLE, 200);
+
+		assertEquals(VideoIds.UNPLAYABLE, result);
+		verifyNoInteractions(lookupPort, writerPort);
+	}
+
+	/** 앨범을 모르는 곡이 많다. 지어내지 않고 null 그대로 넘긴다 — 생략 여부는 클라이언트가 정한다. */
+	@Test
+	void resolve_passesNullAlbum_whenUnknown() {
+		when(lookupPort.lookup("a", "t", null, 200)).thenReturn(Optional.of("xyz12345678"));
+
+		enricher.resolve(1L, "a", "t", null, null, 200);
+
+		verify(lookupPort).lookup("a", "t", null, 200);
+	}
+
+	/** S15P21A405-401 — duration 을 모르면 null 로 그대로 lookupPort 에 넘긴다(생략하지 않는다). */
+	@Test
+	void resolve_passesNullDuration_whenUnknown() {
+		when(lookupPort.lookup("a", "t", "al", null)).thenReturn(Optional.of("xyz12345678"));
+
+		enricher.resolve(1L, "a", "t", "al", null, null);
+
+		verify(lookupPort).lookup("a", "t", "al", null);
+	}
+
+	/**
+	 * S15P21A405-572 — 상세가 느릴 때 좌표 조회인지 이 외부 호출인지 가르려면 구간이 지표로 남아야 한다.
+	 * cached 만 DB 값으로 끝난 요청이라, cached 아닌 비율이 곧 외부 호출 비율이다.
+	 */
+	@Test
+	void resolve_recordsOutcome_separatingCachedFromExternalCall() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of("xyz12345678"));
+
+		enricher.resolve(1L, "a", "t", "al", "existing1234", 200);
+		enricher.resolve(2L, "a", "t", "al", null, 200);
+
+		assertEquals(1, recorded("cached"));
+		assertEquals(1, recorded("found"));
+	}
+
+	/** 외부 API 가 실패하거나 타임아웃이면 lookup 이 빈 값을 준다. 그 경로야말로 지표가 필요하다. */
+	@Test
+	void resolve_recordsOutcome_whenExternalCallFindsNothing() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.empty());
+
+		assertNull(enricher.resolve(1L, "a", "t", "al", null, 200));
+
+		assertEquals(1, recorded("miss"));
+		assertEquals(0, recorded("cached"));
+	}
+
+	/** 판정 저장이 터져도 구간 기록은 남는다 — 예외 경로에서 지표가 비면 계측이 무의미하다. */
+	@Test
+	void resolve_recordsOutcome_evenWhenWriterThrows() {
+		when(lookupPort.lookup("a", "t", "al", 200)).thenReturn(Optional.of("xyz12345678"));
+		org.mockito.Mockito.doThrow(new RuntimeException("db down")).when(writerPort).save(1L, "xyz12345678");
+
+		org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+				() -> enricher.resolve(1L, "a", "t", "al", null, 200));
+
+		assertEquals(1, recorded("found"));
 	}
 }

@@ -15,6 +15,18 @@ Blue는 `127.0.0.1:8081`, Green은 `127.0.0.1:8082`에 bind한다. `backend/depl
 사용하고 image/network/env를 preflight한다. Nginx 전환이나 최종 health가 실패하면 이전 upstream을
 복원한다.
 
+## Spring profile
+
+컨테이너의 active profile은 두 곳에서 정해진다. `/etc/ody/backend.env`가 있으면 그 파일이 db
+profile을 켜고, `backend/deploy.sh`는 `docker run`에 `SPRING_PROFILES_INCLUDE=realtime`을 더한다.
+`SPRING_PROFILES_ACTIVE`를 덮어쓰지 않고 `INCLUDE`로 더하는 이유는 DB rollout 분기와 realtime을
+서로 독립적으로 두기 위해서다.
+
+realtime profile이 없으면 `/ws` 소켓은 열리지만 `/app/presence/*`를 받는 쪽이 없고
+`/api/realtime/*`과 `/api/music/play`가 404가 된다. 실시간 관련 controller/service가 모두
+`@Profile("realtime")`이기 때문이다. 배포 후 `GET /api/v3/api-docs`에 해당 경로가 있는지로
+확인한다 (S15P21A405-495).
+
 수동 rollback은 app-node의 공식 checkout에서 존재하는 직전 immutable image tag를 확인한 뒤 실행한다.
 
 ```bash

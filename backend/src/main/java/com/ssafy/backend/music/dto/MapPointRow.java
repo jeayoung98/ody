@@ -18,7 +18,8 @@ public class MapPointRow {
 	private Long musicId;
 	private String title;
 	private String artist;
-	private String youtubeUrl;
+	/** music.album_mbid — 앨범 커버를 여는 열쇠. 없으면 null (S15P21A405-520). */
+	private String albumMbid;
 
 	private double pc1;
 	private double pc2;

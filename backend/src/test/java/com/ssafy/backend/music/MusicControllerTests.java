@@ -62,6 +62,9 @@ class MusicControllerTests {
 
 
 
+	/** 앨범(release) MBID. FE 가 이 값으로 Cover Art Archive 를 두드린다(S15P21A405-520). */
+	private static final String ALBUM_MBID = "0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9";
+
 	/** D18: 응답 원소는 MapPoint 다. 1레이어는 범위 파라미터 없이 호출한다(FR-004). */
 	private static final double[] PCS = { 0.11, -0.22, 0.33, -0.44, 0.55, -0.66, 0.77, -0.88,
 			0.99, -1.10, 1.21, -1.32, 1.43, -1.54, 1.65, -1.76 };
@@ -71,12 +74,12 @@ class MusicControllerTests {
 		for (double v : PCS) {
 			pc.add(v);
 		}
-		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, null, false);
+		return new MapPoint(musicId, pc, 0, 0, "Love wins all", "IU", null, ALBUM_MBID, false);
 	}
 
 	@Test
 	void major_level1_returnsSuccessEnvelope() throws Exception {
-		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(point(10234L))));
+		when(musicService.getMajor(anyInt(), any(), any())).thenReturn(new MajorResponse(List.of(point(10234L))));
 
 		mockMvc.perform(get("/api/music/major").param("level", "1"))
 				.andExpect(status().isOk())
@@ -85,27 +88,32 @@ class MusicControllerTests {
 				.andExpect(jsonPath("$.data.content[0].musicId").value(10234))
 				.andExpect(jsonPath("$.data.content[0].title").value("Love wins all"))
 				.andExpect(jsonPath("$.data.content[0].genreId").value(0))
+				.andExpect(jsonPath("$.data.content[0].youtubeUrl").doesNotExist())
+				.andExpect(jsonPath("$.data.content[0].albumMbid").value(ALBUM_MBID))
 				.andExpect(jsonPath("$.data.content[0].playable").value(false));
+
+		verify(musicService).getMajor(eq(1), eq(List.of()), eq(null));
 	}
 
 	/** A2 (FR-007): pc 는 정확히 16개이고 곡 기준선 좌표와 값이 같다. */
 	@Test
 	void major_successItem_carriesPc16AndBaselineCoordinates() throws Exception {
-		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(point(10234L))));
+		when(musicService.getMajor(anyInt(), any(), any())).thenReturn(new MajorResponse(List.of(point(10234L))));
 
 		ResultActions result = mockMvc.perform(get("/api/music/major").param("level", "1"))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.content[0].pc.length()").value(16));
 
 		for (int i = 0; i < PCS.length; i++) {
-			result.andExpect(jsonPath("$.data.content[0].pc[" + i + "]").value(PCS[i]));
+			result.andExpect(jsonPath("$.data.content[0].pc[" + i + "]")
+					.value(Math.round(PCS[i] * 1000.0) / 1000.0));
 		}
 	}
 
 	/** D18: 상세 필드는 담지 않는다 — /music/detail 담당이다. ghostOnly 도 서버가 보내지 않는다. */
 	@Test
 	void major_itemOmitsDetailFields() throws Exception {
-		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of(point(55L))));
+		when(musicService.getMajor(anyInt(), any(), any())).thenReturn(new MajorResponse(List.of(point(55L))));
 
 		mockMvc.perform(get("/api/music/major").param("level", "1"))
 				.andExpect(status().isOk())
@@ -118,17 +126,39 @@ class MusicControllerTests {
 	/** D19: level>=2 는 이전 겹들의 사각 범위를 전부 받는다. 레이어 n 은 pc(2n-1)·pc(2n) 축이다. */
 	@Test
 	void major_level2_parsesAccumulatedRangeIntoLayerBox() throws Exception {
-		when(musicService.getMajor(anyInt(), any())).thenReturn(new MajorResponse(List.of()));
+		when(musicService.getMajor(anyInt(), any(), any())).thenReturn(new MajorResponse(List.of()));
 
 		mockMvc.perform(get("/api/music/major")
 				.param("level", "2")
+				.param("size", "3000")
 				.param("pc1min", "-1.5").param("pc1max", "0.5")
 				.param("pc2min", "-0.25").param("pc2max", "2.0"))
 				.andExpect(status().isOk());
 
 		ArgumentCaptor<List<LayerBox>> boxes = ArgumentCaptor.forClass(List.class);
-		verify(musicService).getMajor(eq(2), boxes.capture());
+		verify(musicService).getMajor(eq(2), boxes.capture(), eq(3000));
 		assertEquals(List.of(new LayerBox(1, -1.5, -0.25, 0.5, 2.0)), boxes.getValue());
+	}
+
+	@Test
+	void major_nonPositiveSize_returnsInvalidInput() throws Exception {
+		mockMvc.perform(get("/api/music/major").param("level", "1").param("size", "0"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+	}
+
+	@Test
+	void major_sizeAboveMeasurementLimit_returnsInvalidInput() throws Exception {
+		mockMvc.perform(get("/api/music/major").param("level", "1").param("size", "10001"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+	}
+
+	@Test
+	void major_levelAbovePcDimensions_returnsInvalidInput() throws Exception {
+		mockMvc.perform(get("/api/music/major").param("level", "9"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	/** level>=2 에서 범위가 빠지면 400. 값 자체의 오류 규칙(min>max 등)은 B1 미정이라 다루지 않는다. */

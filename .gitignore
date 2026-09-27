@@ -70,3 +70,5 @@ data/output/*
 data/videoid/cache.sqlite*
 data/specs/*/*.visual-check.*
 *.npy
+### Uploaded profile images (local dev) ###
+backend/profileImages/

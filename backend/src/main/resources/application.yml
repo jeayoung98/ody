@@ -16,6 +16,13 @@ management:
       percentiles-histogram:
         http.server.requests: true
         ody.journey.engine: true
+        # 20명 선단으로 주변곡 탭을 열 때 p99 와 커넥션 풀 대기를 재려면 분포가 있어야 한다.
+        ody.nearby.candidates: true
+        hikaricp.connections.acquire: true
+      # 스크랩 한 번으로 p99 를 바로 읽으려면 분위수도 같이 내보내야 한다.
+      percentiles:
+        ody.nearby.candidates: 0.5, 0.95, 0.99
+        hikaricp.connections.acquire: 0.5, 0.95, 0.99
 
 # 좌표계 버전에 귀속된 후처리 임계값 (FR-024).
 # 값의 유일한 출처는 data/serving/<bundle>/postprocess_rules.json 이다 — 여기 적은 값은 그 사본이고,
@@ -25,6 +32,36 @@ ody:
   videoid:
     # 개인 EC2 배포 videoid_api.py (S15P21A405-312, 프로토타입). 실제 주소로 덮어써야 한다.
     base-url: ${VIDEOID_API_BASE_URL}
+  profile-image:
+    # 업로드 파일이 실제로 쌓이는 디렉터리. 배포에서는 호스트 디렉터리를 컨테이너에 같은 경로로
+    # 마운트한다(backend/deploy.sh). Blue-Green 두 슬롯이 같은 디렉터리를 본다.
+    dir: ${PROFILE_IMAGE_DIR}
+    # 저장된 파일의 공개 주소 접두. DB image_url 에 이 값 + / + 파일명이 절대 URL 로 들어간다.
+    # nginx 가 직접 서빙하게 되면 이 값만 바꾸면 된다 (S15P21A405-426).
+    base-url: ${PROFILE_IMAGE_BASE_URL}
+  artwork:
+    # 별자리 작품 AI 평가 [S15P21A405-563]. 키·주소는 배포 호스트의 env 에서 온다.
+    # 기본값을 두는 것은 의도다 — env 한 줄이 빠졌다고 서버 전체가 못 뜨면 안 된다.
+    # 키가 비면 그 작품만 FAILED 로 남는다(GmsEvaluationClient 가 시작할 때 WARN 한 번).
+    gms:
+      base-url: ${GMS_BASE_URL:https://gms.ssafy.io/gmsapi/api.openai.com}
+      api-key: ${GMS_API_KEY:}
+      # gpt-4o-mini 는 어떤 프롬프트로도 그림 5종이 30점 동점이었다(specs/009 plan.md "변별력 진단").
+      # 이미지 토큰도 mini 가 7배(3,175 vs 427)라 토큰 기준이면 4o 가 더 싸다.
+      model: ${GMS_MODEL:gpt-4o}
+      # low 면 이미지 토큰이 줄어든다. 별자리는 흑백 점·선이라 해상도를 낮춰도 형태 판단에 손해가 적다.
+      image-detail: ${GMS_IMAGE_DETAIL:low}
+      timeout-connect-ms: ${GMS_TIMEOUT_CONNECT_MS:3000}
+      # 실측 0.85s 기준. 이미지가 커지면 다시 잰다.
+      timeout-read-ms: ${GMS_TIMEOUT_READ_MS:10000}
+    evaluation:
+      interval-ms: 5000
+      # 한 주기에 집는 작품 수. 배치 전체가 한 트랜잭션이라 이 값이 커넥션 점유 상한을 정한다.
+      batch-size: 3
+      # 작품당 재시도 상한. 사용자당 GMS 호출 수를 묶는 값이기도 하다.
+      max-attempts: 3
+    render:
+      size: 512
   serving:
     bundle: v2.1-pca16
     tau-dup: 1.6624            # 미만은 같은 녹음으로 접는다
@@ -33,6 +70,18 @@ ody:
     length-min-s: 30
     length-max-s: 1200
     far-endpoint-dist: 10.7    # 끝점 거리가 넘으면 먼 여정 (D3, 004)
+  taste:
+    analysis-version: ${TASTE_ANALYSIS_VERSION:taste-v1}
+    reference-resource: ${TASTE_REFERENCE_RESOURCE:classpath:taste/taste-reference-v1.json}
+    zone: ${TASTE_ANALYSIS_ZONE:Asia/Seoul}
+    gms:
+      base-url: ${GMS_BASE_URL:https://gms.ssafy.io/gmsapi/api.openai.com/v1}
+      # 운영은 GMS_API_KEY 로 주입돼 있다. 예전 이름(GMS_KEY)도 받아 둔다 [S15P21A405-512]
+      key: ${GMS_API_KEY:${GMS_KEY:}}
+      # 운영 GMS_MODEL 이 gpt-4o 다. 2026-09-23 실호출 검증도 gpt-4o 기준 [S15P21A405-512]
+      model: ${GMS_MODEL:gpt-4o}
+      connect-timeout-ms: ${GMS_CONNECT_TIMEOUT_MS:2000}
+      read-timeout-ms: ${GMS_READ_TIMEOUT_MS:25000}
 
 spring:
   datasource:
@@ -62,6 +111,11 @@ spring:
             client-id: ${GOOGLE_CLIENT_ID}
             client-secret: ${GOOGLE_CLIENT_SECRET}
             scope: email, profile
+  servlet:
+    # 업로드는 프로필 이미지뿐이다. ProfileImageStorage.MAX_BYTES 와 같은 값을 유지한다 [S15P21A405-426].
+    multipart:
+      max-file-size: 5MB
+      max-request-size: 6MB
 
 mybatis:
   mapper-locations: classpath:mapper/**/*.xml
@@ -118,6 +172,9 @@ ody:
     # 테스트는 컨텍스트 로딩만 하고 실제로 호출하지 않는다 — 값은 플레이스홀더가
     # 풀리기만 하면 된다(S15P21A405-317).
     base-url: http://localhost:8001
+  profile-image:
+    dir: ${java.io.tmpdir}/ody-profile-images-test
+    base-url: http://localhost:8080/api/user/images
 
 app:
   cors:

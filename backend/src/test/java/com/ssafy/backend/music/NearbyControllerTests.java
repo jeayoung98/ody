@@ -64,9 +64,9 @@ class NearbyControllerTests {
 		return new NearbyResponse(
 				new NearbyCenter(1000000L, "Manifesto", "CCCP", loc()),
 				List.of(new NeighborTrack(
-						new MusicSummary(1024529L, "The Last Dj", "Tom Petty", null, List.of(),
+						new MusicSummary(1024529L, "The Last Dj", "Tom Petty", null,
 								"https://y/x", null, loc()),
-						2.4643)),
+						"b2c1f7e0", 2.4643)),
 				false);
 	}
 
@@ -82,6 +82,8 @@ class NearbyControllerTests {
 				.andExpect(jsonPath("$.data.center.id").value(1000000))
 				.andExpect(jsonPath("$.data.center.location.pc16").value(16.0))
 				.andExpect(jsonPath("$.data.neighbors[0].id").value(1024529))
+				// 주변곡 커버를 여는 열쇠 (S15P21A405-711)
+				.andExpect(jsonPath("$.data.neighbors[0].albumMbid").value("b2c1f7e0"))
 				.andExpect(jsonPath("$.data.neighbors[0].distance").value(2.4643))
 				.andExpect(jsonPath("$.data.lowSimilarity").value(false));
 	}

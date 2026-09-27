@@ -12,7 +12,7 @@
 | 세션 주체 | 토큰 subject(email). **payload에 email 금지** — 사용자 표현은 `{nickname, imageUrl}` |
 | 좌표 언어 | 클라이언트 → 서버: **원시 pc값**. 서버 → 클라이언트: 정규화 좌표 `x, y ∈ [0,1]` 또는 셀 번호. 정규화·셀 변환은 서버만 |
 | 봉투 (S→C) | `{ "type": string, "seq": long, "ts": epochMillis, "payload": object }` — `seq`는 **세션 단위** 단조 증가. 스냅샷의 `seq` 이하 델타는 클라이언트가 버린다 |
-| 오류 (S→C) | `/user/queue/errors` ← `PRESENCE_ERROR {code, message}` |
+| 오류 (S→C) | `/user/queue/errors` ← `PRESENCE_ERROR {code, message, requestSeq?}` |
 | 구독 대상 (C) | `/user/queue/presence` (스냅샷·델타 전부), `/user/queue/errors` |
 
 - 브로드캐스트 토픽은 **없다.** 모든 S→C는 개인 큐다(서버가 수신자를 구독 인덱스로 결정 — bounds·모드 검사를 서버가 강제하기 위함).
@@ -22,11 +22,11 @@
 
 | destination | payload | 관련 FR | 비고 |
 | --- | --- | --- | --- |
-| `/app/presence/join` | `{ "layer": int, "musicId": long }` | FR-006, R-13 | **배치·복원** — 마지막 재생곡을 보낸다. 서버가 그 곡 좌표로 노출. `play_history` INSERT·만남 **없음**(재생이 아님). 서버는 `play_history` 최신 1건과 대조(불일치면 서버 값). 기록 없으면 비노출 유지 |
+| `/app/presence/join` | `{ "requestSeq": long, "layer": int, "musicId": long }` | FR-006, R-13 | 최초 입장은 요청 곡을 사용한다. 이미 현재 곡이 있으면 서버의 현재 곡을 유지하고 레이어만 옮긴다. 성공 ACK를 받은 뒤 새 곡 `/music/play`을 호출한다 |
 | `/app/presence/heartbeat` | — (빈 body) | FR-022 | 15s 주기. `presence:expiry` 갱신만 |
 | `/app/presence/leave` | — | FR-020 | 즉시 전체 정리. onClose와 같은 경로 |
 | `/app/presence/viewport` | `ViewportRequest` (§1.1) | FR-050~056 | debounce 250ms 후 전송. `layer` 변경 = 레이어 이동 |
-| `/app/presence/resync` | — | FR-004 | 재연결 후 현재 viewport·nearby 상태 기준 스냅샷 재발급 |
+| `/app/presence/resync` | — | FR-004 | 자동 복원하지 않고 `PRESENCE_STALE`로 재연결 안내 |
 | `/app/nearby/open` | — | FR-070~072 | 스냅샷 + 구독 등록 한 번에 |
 | `/app/nearby/close` | — | FR-077 | 저장된 목록으로 해제 |
 
@@ -54,12 +54,24 @@
 
 | type | payload | 관련 FR | 발생 |
 | --- | --- | --- | --- |
-| `VIEWPORT_SNAPSHOT` | §2.1 | FR-051, 055, 060 | viewport 수신·resync |
+| `PRESENCE_JOINED` | `{ requestSeq, layer, musicId }` | FR-006 | join이 Redis에 적용된 뒤 |
+| `VIEWPORT_SNAPSHOT` | §2.1 | FR-051, 055, 060 | viewport 수신 |
 | `VIEWPORT_ENTER` / `VIEWPORT_MOVE` / `VIEWPORT_LEAVE` | §2.2 | FR-057, 058 | INDIVIDUAL 구독자에게만 |
 | `VIEWPORT_CELL_COUNTS` | `{ layer, resolution, cells[{cellX, cellY, count}] }` | FR-061 | CLUSTERED 사용자에게 주기(초기 5s) |
-| `NEARBY_SNAPSHOT` | §2.3 | FR-070, 071 | nearby/open·앵커 변경·resync |
+| `NEARBY_SNAPSHOT` | §2.3 | FR-070, 071 | nearby/open·앵커 변경 |
 | `NEARBY_ENTER` / `NEARBY_MOVE` / `NEARBY_LEAVE` | §2.4 | FR-074 | 패널 열린 동안만 |
-| `PRESENCE_ERROR` | `{ code, message }` | FR-042 | `/user/queue/errors` |
+| `PRESENCE_ERROR` | `{ code, message, requestSeq? }` | FR-042 | `/user/queue/errors`. join 오류는 requestSeq 포함 |
+
+### 2.0 `PRESENCE_JOINED`
+
+```json
+{ "type": "PRESENCE_JOINED", "seq": 1001, "ts": 1725690000000,
+  "payload": { "requestSeq": 7, "layer": 3, "musicId": 10877 } }
+```
+
+- `musicId`는 서버가 실제로 적용한 곡이다. 레이어 이동 요청의 `musicId`와 다를 수 있다.
+- 프론트는 `requestSeq`가 현재 대기 중인 join과 같을 때만 다음 단계로 진행한다.
+- 레이어와 곡을 함께 바꿀 때는 ACK 뒤에 `POST /music/play`을 호출한다.
 
 ### 2.1 `VIEWPORT_SNAPSHOT`
 
@@ -135,13 +147,15 @@
 | `PRESENCE_NO_ANCHOR` | 재생 선언 전 `nearby/open` |
 | `PRESENCE_LOCATION_NULL` | `location` NULL 곡 (WS join 복원 경로에서 발견 시) |
 | `PRESENCE_LAYER_INVALID` | 배정표에 없는 layer |
+| `PRESENCE_JOIN_INVALID` | requestSeq·layer·musicId가 비었거나 1보다 작음 |
 | `PRESENCE_VIEWPORT_INVALID` | `min ≥ max`, bounds 비어있음 |
 | `PRESENCE_STALE` | 곡 변경이 Sweep 정리와 경쟁해 중단됨 (재시도 권장) |
+| `PRESENCE_NOT_CONNECTED` | 현재 소켓 세션이나 presence를 찾을 수 없음 |
 
 ## 4. 복구 규칙
 
-1. **재연결**: CONNECT부터. 서버는 `sessionEpoch` 증가, 이전 세션 정리는 epoch 비교로 새 상태를 지우지 않는다. 클라이언트는 `join` → (필요 시) `viewport` · `nearby/open` 또는 `resync`.
-2. **seq gap**: 스냅샷 `seq` 이하 델타 폐기. gap을 감지해도 재요청은 **필요 없다** — presence 델타는 "해당 사용자의 전체 상태"이고 다음 viewport/heartbeat 주기에 자연 치유된다. 명시적 재동기화는 `resync`.
+1. **재연결**: CONNECT부터. 서버는 `sessionEpoch`를 올리고 이전 세션 요청과 정리가 새 상태를 바꾸지 못하게 한다. 클라이언트는 개인 큐 구독 후 `join` → `PRESENCE_JOINED` 확인 → `viewport` → 필요 시 `nearby/open` 순서로 다시 보낸다.
+2. **seq gap**: 복구가 필요하면 새로 연결한 뒤 위 순서로 상태를 다시 보낸다. `/app/presence/resync`는 과거 화면을 복원하지 않는다.
 3. **debounce**: viewport는 250ms debounce 후 전송. 매 프레임 전송 금지.
 
 ## 5. 기존 `contracts/websocket/`와의 차이 (교체 근거)
@@ -159,6 +173,6 @@
 - [ ] `ViewportRequest.bounds` 구조 확인 (Notion 남은 협의 #3)
 - [ ] `resolution` 필드 추가 수용 여부
 - [ ] `nickname` NULL 대체 표시 정책
-- [x] `/app/presence/join` payload `{layer, musicId}` — Q1 확정(2026-09-10)
-- [ ] join `musicId`를 서버가 `play_history`와 대조하는 방어 — FE2 확인
+- [x] `/app/presence/join` payload `{requestSeq, layer, musicId}`와 `PRESENCE_JOINED` ACK — 2026-09-18 확정
+- [ ] 프론트가 레이어 이동 시 ACK를 기다린 뒤 새 곡 `/music/play`을 호출하도록 반영
 - [ ] FE1 · FE2 리뷰 완료 (미완 — 합의 전 payload 확정 금지)

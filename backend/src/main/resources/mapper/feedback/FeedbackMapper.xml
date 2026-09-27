@@ -21,4 +21,31 @@
 		RETURNING id
 	</select>
 
+	<!-- 사람 = user_email 또는 anonymous_id 가 같으면 같은 사람. 비교 대상이 NULL 이면 아무와도 같지 않다. -->
+	<sql id="samePerson">
+		(user_email = #{userEmail} OR anonymous_id = CAST(#{anonymousId} AS uuid))
+	</sql>
+
+	<!-- 같은 문항 = (mode, anchor, prev, music). 같은 세션은 답 바꾸기(upsert)라 제외. [S15P21A405-346] -->
+	<select id="findAnsweredId" resultType="java.lang.Long">
+		SELECT id FROM explore_feedback
+		WHERE verdict IS NOT NULL
+		  AND session_id &lt;&gt; CAST(#{sessionId} AS uuid)
+		  AND mode = #{mode}
+		  AND anchor_music_id = #{anchorMusicId}
+		  AND music_id = #{musicId}
+		  AND prev_music_id IS NOT DISTINCT FROM #{prevMusicId}
+		  AND <include refid="samePerson"/>
+		ORDER BY id
+		LIMIT 1
+	</select>
+
+	<select id="findAnswered" resultType="com.ssafy.backend.feedback.dto.AnsweredRow">
+		SELECT mode, anchor_music_id, prev_music_id, music_id, verdict
+		FROM explore_feedback
+		WHERE verdict IS NOT NULL
+		  AND <include refid="samePerson"/>
+		ORDER BY id
+	</select>
+
 </mapper>

@@ -1,5 +1,6 @@
 package com.ssafy.backend.playlist;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -10,6 +11,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import java.time.OffsetDateTime;
 import java.util.List;
 
 import org.junit.jupiter.api.Test;
@@ -27,14 +29,16 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.common.CustomException;
-import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.PlaylistErrorCode;
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.playlist.controller.PlaylistController;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
+import com.ssafy.backend.playlist.dto.LikedPlaylistSummary;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
+import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
+import com.ssafy.backend.playlist.dto.PlaylistLikeResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicDeleteResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicReorderResponse;
@@ -69,6 +73,51 @@ class PlaylistControllerTests {
 	}
 
 	@Test
+	void searchLiked_returnsContentWithOwnerInfo() throws Exception {
+		when(playlistService.searchLiked(eq("me@gmail.com"), eq("me@gmail.com")))
+				.thenReturn(List.of(new LikedPlaylistSummary(
+						42, "새벽 드라이브", 18, 4, "owner@gmail.com", "철수형",
+						OffsetDateTime.parse("2026-09-07T13:41:02+09:00"))));
+
+		mockMvc.perform(get("/api/playlist/liked")
+						.param("email", "me@gmail.com")
+						.principal(principal("me@gmail.com")))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data.content[0].playlistId").value(42))
+				.andExpect(jsonPath("$.data.content[0].likeCnt").value(4))
+				.andExpect(jsonPath("$.data.content[0].ownerEmail").value("owner@gmail.com"))
+				.andExpect(jsonPath("$.data.content[0].ownerNickname").value("철수형"))
+				.andExpect(jsonPath("$.data.content[0].likedAt").exists());
+	}
+
+	@Test
+	void changeLike_delegatesTokenSubjectAndReturnsNewCount() throws Exception {
+		when(playlistService.changeLike(any(PlaylistLikeRequest.class), eq("me@gmail.com")))
+				.thenReturn(new PlaylistLikeResponse(7, true, 4));
+
+		mockMvc.perform(post("/api/playlist/like")
+						.principal(principal("me@gmail.com"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"playlistId\":7,\"liked\":true}"))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.success").value(true))
+				.andExpect(jsonPath("$.data.liked").value(true))
+				.andExpect(jsonPath("$.data.likeCnt").value(4));
+
+		verify(playlistService).changeLike(any(PlaylistLikeRequest.class), eq("me@gmail.com"));
+	}
+
+	@Test
+	void changeLike_missingLiked_returns400InvalidInput() throws Exception {
+		mockMvc.perform(post("/api/playlist/like")
+						.principal(principal("me@gmail.com"))
+						.contentType(MediaType.APPLICATION_JSON)
+						.content("{\"playlistId\":7}"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
+	}
+
+	@Test
 	void search_success_returnsContentArray() throws Exception {
 		when(playlistService.search(eq("owner@gmail.com"), eq("me@gmail.com")))
 				.thenReturn(List.of(new PlaylistSummary(42, "새벽 드라이브", 18, null)));
@@ -80,26 +129,28 @@ class PlaylistControllerTests {
 	}
 
 	@Test
-	void detail_forbidden_returns403() throws Exception {
+	void detail_notFound_returns404() throws Exception {
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
-				.thenThrow(new CustomException(GlobalErrorCode.FORBIDDEN));
+				.thenThrow(new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND));
 
 		mockMvc.perform(get("/api/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
-				.andExpect(status().isForbidden())
-				.andExpect(jsonPath("$.error.code").value("FORBIDDEN"));
+				.andExpect(status().isNotFound())
+				.andExpect(jsonPath("$.error.code").value("PLAYLIST_NOT_FOUND"));
 	}
 
 	@Test
 	void detail_success_returnsMusics() throws Exception {
 		Location loc = new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);
-		MusicDetail track = new MusicDetail(1L, "mbid", "제목", "가수", 120.0, 200, "앨범",
-				List.of("K-Pop"), "https://youtu.be/x", null, loc, 10, 1);
+		MusicDetail track = new MusicDetail(1L, "mbid", "제목", "가수", 120.0, 200, "앨범", "album-mbid", 2005,
+				"https://youtu.be/x", null, loc, 10, 1);
 		when(playlistService.getDetail(eq(42L), eq("me@gmail.com")))
-				.thenReturn(new PlaylistDetailResponse(42, "드라이브", 1, 200, List.of(track)));
+				.thenReturn(new PlaylistDetailResponse(42, "드라이브", 1, 200, 9, true, List.of(track)));
 
 		mockMvc.perform(get("/api/playlist/detail").param("playlistId", "42").principal(principal("me@gmail.com")))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.musicCnt").value(1))
+				.andExpect(jsonPath("$.data.likeCnt").value(9))
+				.andExpect(jsonPath("$.data.isLiked").value(true))
 				.andExpect(jsonPath("$.data.musics[0].id").value(1));
 	}
 

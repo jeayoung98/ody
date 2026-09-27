@@ -9,6 +9,7 @@ import java.util.Optional;
 import java.util.Set;
 
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.GlobalErrorCode;
@@ -17,8 +18,11 @@ import com.ssafy.backend.common.PlaylistErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.MusicDetail;
+import com.ssafy.backend.playlist.dto.LikedPlaylistSummary;
 import com.ssafy.backend.playlist.dto.PlaylistCreateResponse;
 import com.ssafy.backend.playlist.dto.PlaylistDetailResponse;
+import com.ssafy.backend.playlist.dto.PlaylistLikeRequest;
+import com.ssafy.backend.playlist.dto.PlaylistLikeResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicDeleteResponse;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertItem;
 import com.ssafy.backend.playlist.dto.PlaylistMusicInsertResponse;
@@ -70,18 +74,54 @@ public class PlaylistService {
 	}
 
 	/**
-	 * 플레이리스트 상세 조회 (정본 §4.2). 소유자만 접근 가능(§0.7).
+	 * 좋아요한 플레이리스트 목록 조회 (S15P21A405-447). 본인 목록도 이 API(email 에 본인 email).
+	 * 공개 범위 기준은 /playlist/search 와 같다 — 비공개 사용자의 목록은 본인만 볼 수 있다.
+	 *
+	 * 남이 만든 플레이리스트가 섞이는 목록이라 소유자 정보를 함께 내려준다.
+	 */
+	public List<LikedPlaylistSummary> searchLiked(String targetEmail, String requesterEmail) {
+		UserProfileRow user = userMapper.findProfileByEmail(targetEmail);
+		if (user == null) {
+			throw new CustomException(UserErrorCode.USER_NOT_FOUND);
+		}
+		if (!user.isPublic() && !targetEmail.equals(requesterEmail)) {
+			throw new CustomException(UserErrorCode.USER_PRIVATE);
+		}
+
+		List<LikedPlaylistSummary> summaries = playlistMapper.findLikedSummariesByEmail(targetEmail).stream()
+				.map(row -> new LikedPlaylistSummary(
+						row.getId(),
+						row.getName(),
+						row.getMusicCnt(),
+						row.getLikeCnt(),
+						row.getOwnerEmail(),
+						row.getOwnerNickname(),
+						row.getLikedAt()))
+				.toList();
+		log.info("[Playlist] 좋아요한 목록 조회 완료 targetEmail={} count={}", targetEmail, summaries.size());
+		return summaries;
+	}
+
+	/**
+	 * 플레이리스트 상세 조회 (정본 §4.2). 로그인한 누구나 조회 가능 — 소유자 공개 여부와 무관 (S15P21A405-603).
 	 * 곡 정보 조회는 music 어댑터 필요 — 빈 플레이리스트는 어댑터 없어도 동작한다.
 	 */
 	public PlaylistDetailResponse getDetail(long playlistId, String requesterEmail) {
-		PlaylistRow playlist = requireOwnedPlaylist(playlistId, requesterEmail);
+		PlaylistRow playlist = playlistMapper.findById(playlistId);
+		if (playlist == null) {
+			throw new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND);
+		}
 		List<Long> musicIds = playlistMapper.findMusicIdsInOrder(playlistId);
 
 		List<MusicDetail> musics = musicIds.isEmpty() ? List.of() : loadMusicDetails(musicIds);
 		int totalDuration = musics.stream().mapToInt(m -> m.duration() == null ? 0 : m.duration()).sum();
 
-		log.info("[Playlist] 상세 조회 완료 playlistId={} musicCnt={}", playlistId, musics.size());
-		return new PlaylistDetailResponse(playlist.getId(), playlist.getName(), musics.size(), totalDuration, musics);
+		int likeCnt = playlistMapper.findLikeCnt(playlistId);
+		boolean isLiked = playlistMapper.existsLike(playlistId, requesterEmail);
+
+		log.info("[Playlist] 상세 조회 완료 playlistId={} musicCnt={} likeCnt={}", playlistId, musics.size(), likeCnt);
+		return new PlaylistDetailResponse(
+				playlist.getId(), playlist.getName(), musics.size(), totalDuration, likeCnt, isLiked, musics);
 	}
 
 	/**
@@ -189,6 +229,44 @@ public class PlaylistService {
 		requireOwnedPlaylist(playlistId, requesterEmail);
 		playlistMapper.deleteById(playlistId);
 		log.info("[Playlist] 삭제 완료 playlistId={}", playlistId);
+	}
+
+	/**
+	 * 플레이리스트 좋아요 변경 (S15P21A405-442). 남의 플레이리스트에도 누를 수 있으므로 소유자 검사는 없다.
+	 *
+	 * liked 는 토글이 아니라 목표 상태다. 이미 그 상태면 like_cnt 를 건드리지 않고 현재 값을 그대로 돌려준다
+	 * — 연타나 재전송으로 숫자가 부풀지 않게 하려는 것이고, 그래서 이 API 는 몇 번 불러도 결과가 같다.
+	 *
+	 * like_cnt 는 playlist_like 기록의 집계 사본이라 기록이 실제로 바뀐 경우에만 함께 바꾼다.
+	 * 둘이 어긋나면 화면 숫자가 틀리므로 한 트랜잭션으로 묶는다.
+	 */
+	@Transactional
+	public PlaylistLikeResponse changeLike(PlaylistLikeRequest request, String requesterEmail) {
+		if (request == null || request.playlistId() == null || request.liked() == null) {
+			throw new CustomException(GlobalErrorCode.INVALID_INPUT);
+		}
+
+		long playlistId = request.playlistId();
+		boolean liked = request.liked();
+
+		if (playlistMapper.findById(playlistId) == null) {
+			throw new CustomException(PlaylistErrorCode.PLAYLIST_NOT_FOUND);
+		}
+
+		// 동시에 두 번 눌려도 기록 테이블의 PK 와 ON CONFLICT 가 한 번만 통과시킨다.
+		// 그 "실제로 바뀌었는지"(changed)가 like_cnt 를 움직일지 판단하는 유일한 근거다.
+		int changed = liked
+				? playlistMapper.insertLike(playlistId, requesterEmail)
+				: playlistMapper.deleteLike(playlistId, requesterEmail);
+
+		if (changed > 0) {
+			playlistMapper.addLikeCnt(playlistId, liked ? 1 : -1);
+		}
+
+		int likeCnt = playlistMapper.findLikeCnt(playlistId);
+		log.info("[Playlist] 좋아요 변경 완료 playlistId={} liked={} changed={} likeCnt={}",
+				playlistId, liked, changed > 0, likeCnt);
+		return new PlaylistLikeResponse(playlistId, liked, likeCnt);
 	}
 
 	private PlaylistRow requireOwnedPlaylist(long playlistId, String requesterEmail) {

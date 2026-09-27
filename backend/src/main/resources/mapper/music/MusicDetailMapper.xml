@@ -28,8 +28,8 @@
 	</sql>
 
 	<select id="findById" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt, m.video_id,
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album, m.album_mbid, m.release_year,
+		       m.play_cnt, m.youtube_cnt, m.video_id, m.is_unplayable AS unplayable,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.id = #{id}
@@ -37,21 +37,6 @@
 
 	<select id="findLocationText" resultType="string">
 		SELECT location::text FROM music WHERE id = #{id}
-	</select>
-
-	<!--
-		여정 정거장 조립용. mbid 는 UNIQUE 라 인덱스를 탄다.
-		곡당 왕복은 3초 예산을 넘기므로(SC-002) 반드시 한 번에 읽는다. 최대 20건이다.
-	-->
-	<select id="findByMbids" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt, m.video_id,
-		<include refid="locationColumns"/>
-		FROM music m
-		WHERE m.mbid IN
-		<foreach item="mbid" collection="mbidList" open="(" separator="," close=")">
-			#{mbid}
-		</foreach>
 	</select>
 
 	<!--
@@ -79,24 +64,13 @@
 		mbid 는 무인덱스라(S15P21A405-313) 정거장·플리 조립은 PK id 로 조회한다.
 	-->
 	<select id="findByIds" resultType="com.ssafy.backend.music.dto.MusicDetailRow">
-		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album,
-		       m.play_cnt, m.youtube_cnt, m.video_id,
+		SELECT m.id, m.mbid, m.title, m.artist, m.bpm, m.duration, m.album, m.album_mbid, m.release_year,
+		       m.play_cnt, m.youtube_cnt, m.video_id, m.is_unplayable AS unplayable,
 		<include refid="locationColumns"/>
 		FROM music m
 		WHERE m.id IN
 		<foreach item="id" collection="idList" open="(" separator="," close=")">
 			#{id}
 		</foreach>
-	</select>
-
-	<select id="findGenresByMusicIds" resultType="com.ssafy.backend.music.dto.MusicGenreRow">
-		SELECT mg.music_id, g.name
-		FROM music_genre mg
-		JOIN genre g ON g.id = mg.genre_id
-		WHERE mg.music_id IN
-		<foreach item="musicId" collection="musicIdList" open="(" separator="," close=")">
-			#{musicId}
-		</foreach>
-		ORDER BY mg.music_id, g.name
 	</select>
 </mapper>

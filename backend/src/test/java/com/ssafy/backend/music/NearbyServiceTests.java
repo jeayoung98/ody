@@ -23,7 +23,6 @@ import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
-import com.ssafy.backend.music.dto.MusicSummary;
 import com.ssafy.backend.music.dto.NearbyResponse;
 import com.ssafy.backend.music.retrieval.NearestTrackReader;
 import com.ssafy.backend.music.retrieval.ServingRules;
@@ -55,26 +54,28 @@ class NearbyServiceTests {
 
 	private static MusicDetail detail(long id) {
 		return new MusicDetail(id, "mbid-" + id, "Query", "QueryArtist", 120.0, 200,
-				"Album", List.of(), "https://y/x", null, loc(), 0, 0);
+				"Album", "album-mbid", 2004, "https://y/x", null, loc(), 0, 0);
 	}
 
 	private static TrackCandidate cand(long id, double dist) {
 		return new TrackCandidate(id, "mbid-" + id, "T" + id, "Artist" + id, 200, new float[16], dist);
 	}
 
-	private static MusicSummary summary(long id) {
-		return new MusicSummary(id, "T" + id, "Artist" + id, null, List.of(), "https://y/" + id, null, loc());
+	/** 이웃 상세. 3 은 앨범 MBID 가 없는 곡이다. */
+	private static MusicDetail neighbor(long id) {
+		return new MusicDetail(id, "mbid-" + id, "T" + id, "Artist" + id, 120.0, 200,
+				null, id == 3 ? null : "album-" + id, 2004, "https://y/" + id, null, loc(), 0, 0);
 	}
 
 	private void given(long centerId, List<TrackCandidate> candidates) {
 		when(detailReader.findDetail(centerId)).thenReturn(Optional.of(detail(centerId)));
 		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(200)))
 				.thenReturn(candidates);
-		when(detailReader.findSummariesByIds(anyList()))
+		when(detailReader.findDetailsByIds(anyList()))
 				.thenAnswer(inv -> {
 					List<Long> ids = inv.getArgument(0);
 					return ids.stream()
-							.map(NearbyServiceTests::summary)
+							.map(NearbyServiceTests::neighbor)
 							.toList();
 				});
 	}
@@ -90,6 +91,17 @@ class NearbyServiceTests {
 		assertThat(res.center().location()).isNotNull();
 		assertThat(res.neighbors()).extracting(n -> n.music().id()).containsExactly(2L, 3L);
 		assertThat(res.neighbors()).extracting(n -> n.distance()).isSorted();
+	}
+
+	@Test
+	@DisplayName("이웃마다 앨범 MBID 를 싣고, 없는 곡은 null 이다 (S15P21A405-711)")
+	void neighborsCarryAlbumMbid() {
+		given(1, List.of(cand(2, 3.0), cand(3, 3.5)));
+
+		NearbyResponse res = service.findNearby(1);
+
+		assertThat(res.neighbors()).extracting(n -> n.albumMbid()).containsExactly("album-2", null);
+		assertThat(res.neighbors()).extracting(n -> n.music().title()).containsExactly("T2", "T3");
 	}
 
 	@Test
@@ -155,7 +167,7 @@ class NearbyServiceTests {
 		service.findNearby(1);
 
 		verify(detailReader).findDetail(1L);
-		verify(detailReader).findSummariesByIds(anyList());
+		verify(detailReader).findDetailsByIds(anyList());
 		verify(nearestReader).findNearest(org.mockito.ArgumentMatchers.any(), eq(200));
 		org.mockito.Mockito.verifyNoMoreInteractions(detailReader, nearestReader);
 	}
@@ -166,7 +178,7 @@ class NearbyServiceTests {
 		when(detailReader.findDetail(1)).thenReturn(Optional.of(detail(1)));
 		when(nearestReader.findNearest(org.mockito.ArgumentMatchers.any(), eq(200)))
 				.thenReturn(List.of(cand(2, 3.0), cand(3, 3.5)));
-		when(detailReader.findSummariesByIds(anyList())).thenReturn(List.of(summary(2)));
+		when(detailReader.findDetailsByIds(anyList())).thenReturn(List.of(neighbor(2)));
 
 		assertThatThrownBy(() -> service.findNearby(1))
 				.isInstanceOf(IllegalStateException.class);

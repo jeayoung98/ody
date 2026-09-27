@@ -1,41 +1,47 @@
-# Research: 음악 검색 (2026-09-09 master 재베이스라인)
+# Research: 음악·아티스트 조건 검색
 
-## R1. 검색 대상 저장소
+**Date**: 2026-09-17. 저장소 코드 조사 결과이며 운영 DB 실측 결과가 아니다.
 
-- **Decision**: 텍스트 검색은 **Postgres + MyBatis**로 구현(어댑터=MyBatis 매퍼).
-- **Rationale**: master에 postgres 드라이버·jdbc·mybatis-starter·datasource(application-db.yml) 통합됨. Neo4j는 Journey(그래프 경로)용으로 추정, 텍스트 검색엔 부적합. Redis는 캐시/실시간용.
-- **Blocker (B-D)**: 곡 데이터가 실제로 Postgres에 있는지(Neo4j 가능성), `title/artist/youtubeCnt` 컬럼·`pc1~pc16` 저장 형태는 BE4 스키마 확정 후. 그전엔 매퍼 SQL 확정 불가.
+## R1. 검색 경로
 
-## R2. 테스트 인프라 — @WebMvcTest vs master @MapperScan ⚠️
+- Decision: 기존 findPage를 유지하고 findFilteredPage 하나 추가.
+- Rationale: MusicSearchMapper.xml에 이미 통합 검색의 4단계 관련성·2초 timeout·videoId 제외가 구현되어 있다. 기존 SQL을 일반화할 이유가 없다.
+- Alternatives: 모든 모드를 OR/CASE 한 쿼리로 통합하면 기존 실행계획도 바뀐다. 검색 결과 사후 필터링은 페이지 밖 정답을 누락한다.
 
-- **Problem**: `BackendApplication`에 `@MapperScan("...mapper")`. `@WebMvcTest` 슬라이스엔 SqlSessionFactory가 없어 매퍼 빈 생성 실패 → 컨텍스트 로드 실패(어제 이전 후 11개 테스트 red). master 자체 테스트는 `@WebMvcTest`를 안 씀(HelloControllerTests = 순수 유닛).
-- **Decision**: 내 컨트롤러 테스트를 **standalone MockMvc**로 전환(`MockMvcBuilders.standaloneSetup(new MusicController(mockService)).setControllerAdvice(new GlobalExceptionHandler())`). Spring 컨텍스트 미로드 → @MapperScan 지뢰 회피, master 패턴과 정합.
-- **Caveat**: standalone은 `@Validated` @RequestParam 검증(@NotBlank/@Min)을 기본 트리거 안 할 수 있음. 검증(E1/E2)이 standalone에서 안 걸리면 → 해당 검증은 유닛/명시 매핑으로 보완하고, **프로젝트 전역 @WebMvcTest 지원은 BE-infra 과제로 플래그**(아래).
-- **Alternatives**: (a) 메인 `@MapperScan`을 별도 @Configuration으로 분리해 슬라이스에서 제외 → 근본 해결·전 팀 이득이나 **BE1/BE4 소유 파일, 합의 필요**(권고: 팀 이슈로 제기). (b) @WebMvcTest에 mock SqlSessionFactory 주입 → 해킹성, 기각.
-- **권고**: 이 기능은 standalone MockMvc로 자립 검증, 동시에 (a)를 BE-infra 이슈로 올려 전역 @WebMvcTest 복구.
+## R2. 조건 전달
 
-## R3. 검증 예외 → 400 매핑 ⚠️
+- Decision: query/music/artist를 가진 불변 record 하나에서 trim·허용 조합 검증. SQL lowercase와 LIKE escape는 기존 adapter 책임.
+- Rationale: controller→service→reader에서 세 문자열의 의미와 검증을 중복하지 않는다.
+- Alternatives: 모드 enum·전략 객체·별도 서비스는 불필요. API에 mode를 추가하면 조건과 중복 상태가 생긴다.
 
-- **Problem**: master `GlobalExceptionHandler`는 `CustomException`과 generic `Exception`만 처리. 검증 예외(HandlerMethodValidationException 등)가 generic으로 떨어져 **500 INTERNAL_SERVER_ERROR** 반환 → spec FR-008(검증→400 INVALID_INPUT) 위반.
-- **Decision(권고)**: 공통 `GlobalExceptionHandler`에 검증 예외 핸들러 추가 → 400 `GlobalErrorCode.INVALID_INPUT`. 이는 전 엔드포인트가 겪는 갭이라 공통에서 고치는 게 근본(ponytail: 루트 원인·공유 함수).
-- **경계(헌법 X)**: 해당 파일은 BE1 소유 → **BE1 합의 후 반영**(B-Common). 합의 전 임시로 music 스코프 @RestControllerAdvice를 둘 수 있으나 중복이라 비권장.
+## R3. 테이블과 인덱스
 
-## R4. 에러코드·공통 응답
+- Decision: music.title/artist와 기존 함수 인덱스 재사용. 초기 DDL 없음.
+- Rationale: 명세는 아티스트 ID·별칭·후보 목록을 요구하지 않는다. XML에 lower(title) text_pattern_ops와 coalesce(lower(artist), '') text_pattern_ops 정의가 기록되어 있다.
+- Alternatives: artist 테이블 정규화, pg_trgm, 캐시, 복합 인덱스 선도입은 현재 요구에 불필요.
+- Evidence limit: 실제 배포 DB의 인덱스 상태는 미확인. 인덱스가 있어도 두 조건의 선택도·정렬·OFFSET에 따라 느려질 수 있다. WHERE 표현식의 구조를 기존 인덱스와 맞추고 plan을 확인한다. 공백까지 글자 단위로 같아야 하는 것은 아니다.
 
-- **Decision**: master `common` 채택. `ApiResponse.success/fail`, `ErrorResponse(code,message)`, `GlobalErrorCode.INVALID_INPUT`(400)/`INTERNAL_SERVER_ERROR`(500).
-- **[충돌]**: api-spec 정본 §0.5는 `VALIDATION_ERROR`/`INTERNAL_ERROR`. master와 코드명 불일치 → 정본 갱신 대상(스펙 FR-008에 기록). 어느 쪽이 옳은지 팀 확정, 임의 단정 안 함(헌법 IX).
+## R4. 성능 보호
 
-## R5. substring 인덱스 (B-D 후)
+- Decision: 단계별 ID LIMIT, size+1, 장르 일괄 조회, timeout=2와 prepareThreshold=0 유지.
+- Rationale: 기존 adapter, mapper 및 application-db.yml에 이미 적용된 보호 장치다.
+- Alternatives: COUNT, 전체 후보 점수 정렬, generic plan 설정 변경은 제외.
+- Verification: quickstart의 같은 데이터·부하 전후 비교로 판정한다. EXPLAIN 추정만으로 300ms 달성을 주장하지 않는다.
 
-- **Decision(조건부)**: Postgres면 `title`·`artist`에 `pg_trgm` GIN 인덱스로 `ILIKE %q%` 가속.
-- **Rationale**: 양끝 wildcard는 B-tree 불가. substring 확정(전문검색 아님)이라 tsvector 미도입.
-- **Blocker**: 실제 DB·스키마 B-D 확정 후 DDL/실행계획.
+## R5. UI의 중간 상태
 
-## R6. 성능 예산
+- Decision: 음악 칩만 있고 아티스트 입력이 없으면 요청하지 않고 입력 안내. 아티스트 칩만 있으면 아티스트 검색 실행.
+- Rationale: 세 경로만 필요하므로 음악 단독 API를 추가하지 않는다. 두 번째 조건을 입력하기 전 통합 결과를 필터 결과처럼 보여주지 않는다.
+- Clarification of handoff: 칩 제거 시 남은 입력만 통합 검색으로 사용한다. 남은 입력이 없으면 빈 검색 상태다. 이전 전달 문서의 Radiohead 복원 예시는 이 규칙과 충돌하여 정정한다.
 
-- **Decision(제안)**: p95 < 300ms, 팀 확인. §6 "유사곡 1초"는 좌표 검색용이라 전용 안 함. B-D 후 벤치.
+## R6. 기존 테스트와 인증
 
-## 미해결
-- **B-A**: Core 인증(401 코드·토큰 subject) 미구현.
-- **B-D**: 검색 저장소·스키마·youtubeCnt·pg_trgm.
-- **B-Common**: 공통 핸들러 검증→400 매핑(BE1 합의) + 전역 @WebMvcTest 지원(BE-infra).
+- Decision: 현재 @WebMvcTest/Mockito 기반 검색 테스트를 확장한다. 과거 standalone MockMvc·스키마 미확정 설명은 폐기한다.
+- Rationale: MusicSearchControllerTests는 이미 슬라이스 테스트다. SQL의 실제 정렬/누락은 mock으로 증명되지 않으므로 전용 PostgreSQL 검증도 필요하다.
+- Limitation: SecurityConfig가 임시 permitAll 상태이고 기존 슬라이스는 필터를 끈다. 401은 Core 정책 복구 후 실환경에서 검증한다. 이 계획은 공통 보안 변경을 포함하지 않는다.
+
+## R7. FE 계약
+
+- Decision: query 단독 또는 artist(+music), page 필수. 같은 endpoint와 PageResponse 유지.
+- Rationale: 현재 BE는 query/page이며 로컬 FE는 q/배열 목 API다. 현재 체크아웃의 FE에 한정된 관찰이고 배포 FE 상태를 단정하지 않는다.
+- Alternatives: q 별칭 지원이나 새 endpoint 추가 대신 FE의 직렬화 함수를 계약에 맞춘다.

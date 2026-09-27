@@ -1,108 +1,199 @@
 ---
-
-description: "Task list: 음악 검색 (2026-09-09 master 재베이스라인)"
+description: "Task list: 음악·아티스트 조건 검색 고도화"
 ---
 
-# Tasks: 음악 검색
+# Tasks: 음악·아티스트 조건 검색
 
-**Input**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/music-search.md](contracts/music-search.md)
+**Input**: [plan.md](plan.md), [spec.md](spec.md), [research.md](research.md), [data-model.md](data-model.md), [contracts/music-search.md](contracts/music-search.md), [quickstart.md](quickstart.md)
 
-**Tests**: 포함(standalone MockMvc + 유닛). 통합/실데이터는 블로커 대기.
+**Tests**: 명세와 계획이 회귀·계약·SQL 정확성·성능 검증을 요구하므로 테스트 태스크를 포함한다. 각 스토리의 테스트를 먼저 추가하고 실패를 확인한 뒤 구현한다.
 
-**Organization**: 이미 완료(이전·재배선) → 🟢 green 작업 → 🔴 블로커 대기.
+**Scope**: 이 브랜치는 Backend와 공통 명세를 구현한다. Frontend 소스 변경은 [frontend-handoff.md](frontend-handoff.md)를 기준으로 별도 Frontend Jira 이슈·브랜치에서 수행한다.
 
-**경로**: `backend/src/main/java/com/ssafy/backend/`, 테스트 `backend/src/test/...`
+## Phase 1: Setup — 기준선 확보
 
----
+**Purpose**: 변경 전 동작과 DB 전제를 기록해 회귀·성능 비교 기준을 만든다.
 
-# ✅ 완료 (merge 380714b)
+- [X] T001 기존 통합 검색 테스트를 실행하고 커밋·명령·통과/실패를 `specs/002-music-search/validation-results.md`에 기록한다 (`backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`, `MusicSearchServiceTests.java`, `MusicSearchReaderAdapterTests.java` 기준).
+- [ ] T002 [P] 검증 DB의 `music_title_lower`·`music_artist_lower` 정의와 `pg_index.indisvalid`, 데이터 버전·행 수를 확인해 `specs/002-music-search/validation-results.md`에 기록한다; 운영 DB에는 쓰기 작업을 하지 않는다.
+- [ ] T003 [P] 기존 통합 검색의 대표 입력별 p95·오류율·timeout을 [quickstart.md](quickstart.md) 조건으로 측정해 `specs/002-music-search/validation-results.md`에 변경 전 기준선으로 기록한다.
 
-- [X] T001 music 피처 `src/` → `backend/src/` 이전, 죽은 루트 src 제거
-- [X] T002 `build.gradle` 머지(validation + master deps), 커밋
-- [X] T003 [US1] MusicController `ApiResponse.ok` → `ApiResponse.success` 재배선 (master 공통 레이어)
-- [X] T004 [US1] 서비스 유닛 테스트 통과 유지 in `backend/src/test/java/com/ssafy/backend/music/MusicSearchServiceTests.java` (mock port, 6개 green)
-
----
-
-# 🟢 지금 실행 가능 — master 위에서 green 만들기
-
-## Phase 1: 공통 검증 매핑 (Foundational, R3)
-
-- [X] T005 공통 `GlobalExceptionHandler`에 검증 예외 → 400 `INVALID_INPUT` 매핑 추가 in `backend/src/main/java/com/ssafy/backend/common/GlobalExceptionHandler.java` (`MethodArgumentNotValidException`, `HandlerMethodValidationException`, `ConstraintViolationException`, `MethodArgumentTypeMismatchException`, `MissingServletRequestParameterException` → `ApiResponse.fail(GlobalErrorCode.INVALID_INPUT)`). **⚠️ BE1 소유 파일 — MR에서 BE1 리뷰 요청**. 전 엔드포인트 이득(근본 수정).
-
-## Phase 2: User Story 1·2 — 컨트롤러 테스트 (R2)
-
-**Goal**: master @MapperScan 지뢰 회피하고 검색 컨트롤러 계약 검증.
-
-- [X] T006 [US1] 컨트롤러 테스트 방식 결정 in `backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`. **실측 정정**: standalone MockMvc는 `@Validated` @RequestParam 제약검증(@NotBlank/@Min)을 트리거 안 함(3건 실패) → **`@WebMvcTest(MusicController.class)` 유지 + `@MockitoBean MusicService`·`@MockitoBean TestMapper`**로 전환. testMapper mock으로 master @MapperScan 지뢰 회피(BE-infra 소스 무수정), 실제 MVC 검증·공통 GlobalExceptionHandler 동작 검증. A1·A5·A6·E3.
-- [X] T007 [US2] 검증·오류 assertion 정정(같은 파일): E1 query 공백/누락 → 400 `INVALID_INPUT`, E2 page=-1/비정수 → 400 `INVALID_INPUT`, E5 port 예외 → 500 `INTERNAL_SERVER_ERROR`. (어제의 VALIDATION_ERROR/INTERNAL_ERROR 문자열 교체) — depends T005·T006
-- [X] T008 기존 `MusicControllerTests`(major, 스캐폴딩)도 동일하게 standalone MockMvc + 에러코드 정정 in `backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java` (major는 여전히 UnsupportedOperationException이므로 성공 케이스는 mock, 검증 케이스만 확인)
-
-## Phase 3: 검증
-
-- [X] T009 `cd backend && ./gradlew test` **green 확인** (music 관련 전부 통과, 컨텍스트 로드 실패 0). 실패 시 T005~T008 조정.
+**Checkpoint**: 기능 회귀와 SC-005를 판정할 기준이 남아 있다. DB 접근이 없으면 T002·T003을 미실행으로 명시하고 로컬 구현은 계속할 수 있지만 기능 완료로 판정하지 않는다.
 
 ---
 
-# 🔴 블로커 대기 (착수 불가)
+## Phase 2: Foundational — 공통 검색 조건
 
-## B-A: Core 인증 (BE1)
-- [ ] T101 [US1] `GlobalErrorCode`에 401 코드 추가(Core 인증 계약 확정 후 명칭 결정) in `backend/src/main/java/com/ssafy/backend/common/GlobalErrorCode.java`
-- [ ] T102 [US1] `/music/search`에 Core 인증 경계 적용(Bearer·토큰 subject) — Core 모듈 도착 후
-- [ ] T103 [US2] E4 인증 테스트: 토큰 없음/위조/만료 → 401
+**Purpose**: 세 검색 경로가 공유하는 허용 조합·공백 처리 규칙을 한곳에 둔다.
 
-## B-D: 저장소·데이터·MyBatis 어댑터 (BE4)
-- [ ] T201 검색 대상 저장소 확정(Postgres vs Neo4j) 및 곡 스키마(`title`/`artist`/`youtube_cnt`/`pc1~pc16`) 확인 — BE4
-- [ ] T202 [US1] `MusicSearchReader` MyBatis 어댑터 구현 in `backend/src/main/java/com/ssafy/backend/music/search/MusicSearchMapper.java` (+ XML/애노테이션 SQL): `title ILIKE %q% OR artist ILIKE %q%`, `youtube_cnt DESC, id ASC`, offset page*10 limit 10, count — @MapperScan 범위 배치
-- [ ] T203 substring 인덱스: Postgres면 `title`·`artist` `pg_trgm` GIN — 실행계획 확인 후
-- [ ] T204 [US1] 실데이터 통합 테스트(H2/testcontainers): A2 좌표 baseline 일치, A4 실제 다중 페이지 — depends T202
-- [ ] T205 성능 벤치 p95<300ms(제안) — depends T202·T203
+- [X] T004 `backend/src/test/java/com/ssafy/backend/music/search/MusicSearchConditionTests.java`에 `query` 단독, `artist` 단독, `music+artist` 허용과 전부 누락·공백·`music` 단독·`query` 혼합 거절 테스트를 작성하고 구현 전 실패를 확인한다.
+- [X] T005 `backend/src/main/java/com/ssafy/backend/music/search/MusicSearchCondition.java`에 nullable `query`·`music`·`artist`를 받는 record를 추가하고 trim·허용 조합 검증을 구현해 위반 시 `GlobalErrorCode.INVALID_INPUT`을 발생시킨다.
 
-## B-Common: 전역 테스트 인프라 (BE-infra)
-- [X] T301 메인 `@MapperScan`을 `config/MyBatisConfig` 로 분리 (S15P21A405-232) — 평범한 `@Configuration` 은 `@WebMvcTest` 슬라이스가 스캔하지 않는다. 슬라이스 10개에서 매퍼 `@MockitoBean` 4개씩 제거하고 171개 통과 확인. 새 매퍼를 `<도메인>.mapper` 에 추가해도 이제 슬라이스가 깨지지 않는다.
+**Checkpoint**: 컨트롤러·서비스·어댑터가 동일한 조건 의미를 사용할 수 있다.
+
+---
+
+## Phase 3: User Story 1 — 기존 통합 검색 보존 (Priority: P1) 🎯 MVP
+
+**Goal**: `query` 요청의 매칭·정렬·페이지 응답과 SQL 실행 경로를 변경 전과 동일하게 유지한다.
+
+**Independent Test**: `query=Love&page=0` 요청이 기존 `findPage`를 한 번 사용하고 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 순서와 기존 응답 구조를 반환한다.
+
+### Tests for User Story 1
+
+- [X] T006 [P] [US1] `backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`에 기존 `query+page` 성공·빈 결과·페이지 응답 계약 회귀 테스트를 새 선택 파라미터 시그니처에 맞춰 작성하고 실패를 확인한다.
+- [X] T007 [P] [US1] `backend/src/test/java/com/ssafy/backend/music/MusicSearchReaderAdapterTests.java`에 통합 조건이 기존 `MusicSearchMapper.findPage`만 호출하고 `size+1`·`long offset`·`hasNext`·장르 일괄 조립을 유지하는 회귀 테스트를 작성하고 실패를 확인한다.
+
+### Implementation for User Story 1
+
+- [X] T008 [US1] `backend/src/main/java/com/ssafy/backend/music/controller/MusicController.java`의 검색 엔드포인트가 선택적 `query`·`music`·`artist`와 필수 `page`를 받아 `MusicSearchCondition`을 생성하도록 바꾸고 OpenAPI 설명을 앞일치·허용 조합에 맞춘다.
+- [X] T009 [US1] `backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`와 `backend/src/main/java/com/ssafy/backend/music/search/MusicSearchReader.java`가 `MusicSearchCondition`을 전달하도록 시그니처를 갱신하고 페이지 크기 10 및 기존 응답 구조를 유지한다.
+- [X] T010 [US1] `backend/src/main/java/com/ssafy/backend/music/search/MusicSearchReaderAdapter.java`에서 `query` 조건은 기존 `MusicSearchMapper.findPage`와 기존 lowercase·LIKE 이스케이프·응답 조립 경로를 그대로 사용하게 연결한다.
+- [X] T011 [US1] `backend/src/main/java/com/ssafy/backend/music/service/MusicService.java`의 검색 완료 로그에서 검색어 원문을 제거하고 검색 모드·page·반환 개수만 기록한다.
+- [X] T012 [US1] `backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`, `MusicSearchServiceTests.java`, `MusicSearchReaderAdapterTests.java`의 US1 테스트를 실행해 기존 query 경로 회귀가 없는지 확인한다.
+
+**Checkpoint**: 신규 필터가 아직 없어도 기존 통합 검색이 독립적으로 동작한다.
+
+---
+
+## Phase 4: User Story 2 — 아티스트의 음악 보기 (Priority: P1)
+
+**Goal**: `artist` 조건만으로 해당 문자열과 완전히 일치하거나 그 문자열로 시작하는 아티스트의 음악을 조회한다.
+
+**Independent Test**: `artist=Radiohead&page=0` 요청이 아티스트 완전일치 결과를 앞일치 결과보다 먼저 반환하고, 제목이 `Radiohead`인 다른 아티스트의 음악은 포함하지 않는다.
+
+### Tests for User Story 2
+
+- [X] T013 [P] [US2] `backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`와 `MusicSearchServiceTests.java`에 `artist` 단독 요청 전달·페이지 응답 테스트를 작성하고 실패를 확인한다.
+- [X] T014 [P] [US2] `backend/src/test/java/com/ssafy/backend/music/MusicSearchReaderAdapterTests.java`에 아티스트 조건의 lowercase·리터럴 와일드카드 이스케이프·`size+1`·`long offset`·필터 매퍼 선택 테스트를 작성하고 실패를 확인한다.
+
+### Implementation for User Story 2
+
+- [X] T015 [US2] `backend/src/main/java/com/ssafy/backend/music/mapper/MusicSearchMapper.java`에 정규화한 아티스트 원문·앞일치 패턴과 선택적 음악 조건·`cap/size/offset`을 받는 `findFilteredPage` 선언을 추가한다.
+- [X] T016 [US2] `backend/src/main/resources/mapper/music/MusicSearchMapper.xml`의 `findFilteredPage`에 아티스트 완전일치와 앞일치 2단계를 상호 배타적으로 구현하고 각 단계에 `video_id IS DISTINCT FROM 'none'`, `ORDER BY id`, `LIMIT cap`, 전체 `timeout="2"`를 적용한다.
+- [X] T017 [US2] `backend/src/main/java/com/ssafy/backend/music/search/MusicSearchReaderAdapter.java`에서 `artist` 단독 조건을 `findFilteredPage`로 전달하고 기존 장르 일괄 조회·`MusicSummary`·좌표·재생 정보 조립을 공유한다.
+- [X] T018 [US2] US2 테스트를 실행하고 `Radiohead`·NULL 아티스트·`video_id='none'` 사례의 기대 결과를 `specs/002-music-search/validation-results.md`에 기록한다.
+
+**Checkpoint**: 아티스트 단독 검색이 통합 검색과 독립적으로 검증된다.
+
+---
+
+## Phase 5: User Story 3 — 동명 음악을 아티스트로 좁히기 (Priority: P1)
+
+**Goal**: `music+artist` 조건을 모두 만족하는 음악만 반환하고 두 조건의 완전일치 조합으로 관련성 순서를 정한다.
+
+**Independent Test**: `music=Love&artist=Lana Del Rey&page=0` 요청이 각 조건으로 시작하는 교집합만 반환하며 모두 완전일치 → 아티스트만 완전일치 → 음악만 완전일치 → 모두 앞일치 순서를 지킨다.
+
+### Tests for User Story 3
+
+- [X] T019 [P] [US3] `backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`와 `MusicSearchServiceTests.java`에 `music+artist` 요청 전달과 빈 교집합 200 응답 테스트를 작성하고 실패를 확인한다.
+- [X] T020 [P] [US3] `backend/src/test/java/com/ssafy/backend/music/MusicSearchReaderAdapterTests.java`에 두 조건 정규화·이스케이프·필터 매퍼 인자·다중 페이지 `hasNext` 테스트를 작성하고 실패를 확인한다.
+
+### Implementation for User Story 3
+
+- [X] T021 [US3] `backend/src/main/resources/mapper/music/MusicSearchMapper.xml`의 `findFilteredPage`를 음악 조건 존재 시 4개 상호 배타적 tier로 확장하고 모든 조건을 단계별 `LIMIT` 전에 적용해 `UNION ALL` 중복과 페이지 누락을 막는다.
+- [X] T022 [US3] `backend/src/main/java/com/ssafy/backend/music/search/MusicSearchReaderAdapter.java`가 음악 원문·앞일치 패턴을 필터 매퍼에 전달하도록 확장하되 응답 조립은 US2 경로와 공유한다.
+- [X] T023 [US3] US3 테스트를 실행하고 `Love`·`Lana Del Rey`, 두 조건은 각각 많지만 교집합 0건, 11건 이상 다중 페이지 사례의 기대 결과를 `specs/002-music-search/validation-results.md`에 기록한다.
+
+**Checkpoint**: 동명 음악 좁히기가 아티스트 단독 검색 및 기존 통합 검색과 함께 동작한다.
+
+---
+
+## Phase 6: User Story 4 — 결과 없음과 요청 실패 구분 (Priority: P2)
+
+**Goal**: 유효한 빈 결과는 200으로, 잘못된 조건은 400으로, 내부 실패는 500으로 구분하고 인증 계약의 현재 상태를 명확히 검증한다.
+
+**Independent Test**: 세 유효 경로의 0건은 빈 `content`와 200을 반환하고, 전부 누락·공백·`music` 단독·`query` 혼합·잘못된 page는 400 `INVALID_INPUT`, 매퍼 timeout은 500 `INTERNAL_SERVER_ERROR`를 반환한다.
+
+### Tests for User Story 4
+
+- [X] T024 [US4] `backend/src/test/java/com/ssafy/backend/music/MusicSearchControllerTests.java`에 조건 누락·각 필드 공백·`music` 단독·`query` 혼합·page 누락/음수/비정수·필터 내부 실패 계약 테스트를 작성하고 구현 전 실패를 확인한다.
+- [X] T025 [P] [US4] `backend/src/test/java/com/ssafy/backend/music/MusicSearchMapperTimeoutTests.java`와 `MusicSearchMapperVideoIdFilterTests.java`가 `findFilteredPage`의 2초 timeout 및 모든 tier의 `video_id='none'` 제외를 검증하도록 확장하고 실패를 확인한다.
+
+### Implementation for User Story 4
+
+- [X] T026 [US4] T024·T025 실패를 `MusicSearchCondition.java`, `MusicController.java`, `MusicSearchMapper.xml`의 기존 책임 범위에서 수정하고 별도 예외 타입·엔드포인트·전략 클래스를 추가하지 않는다.
+- [X] T027 [US4] 현재 `backend/src/main/java/com/ssafy/backend/config/SecurityConfig.java`의 임시 `permitAll` 상태에서 미인증 요청 결과를 확인해 `specs/002-music-search/validation-results.md`에 계약 미충족으로 기록하고, Core 인증 정책 복구 후 401 재검증 항목을 남긴다.
+
+**Checkpoint**: 인증을 제외한 성공·빈 결과·400·500 계약이 자동 검사로 구분되고, 401의 외부 의존성이 숨겨지지 않는다.
+
+---
+
+## Phase 7: Polish & Cross-Cutting Concerns
+
+**Purpose**: 실제 PostgreSQL 정확성·성능과 공통 계약을 검증해 완료 여부를 판정한다.
+
+- [ ] T028 `quickstart.md`의 고정 fixture를 전용 PostgreSQL+pgvector 환경에 구성하고 기존 MyBatis XML로 통합·아티스트·동시 조건의 전체 기대 ID 순서, 특수 문자, NULL 아티스트, `video_id` 필터, 연속 페이지 중복·누락을 검증해 `specs/002-music-search/validation-results.md`에 기록한다.
+- [ ] T029 T002의 기존 인덱스로 흔한·희소·0건·교집합 0건·깊은 페이지 입력의 `EXPLAIN (ANALYZE, BUFFERS)`를 제한 시간 안에서 실행하고 plan·실행시간·buffer를 `specs/002-music-search/validation-results.md`에 기록한다.
+- [ ] T030 [P] 동일 데이터·설정·부하에서 기존 통합 검색 p95 회귀 10% 미만과 신규 아티스트/동시 검색 p95 300ms 이하를 측정하고 timeout·오류를 포함한 결과를 `specs/002-music-search/validation-results.md`에 기록한다.
+- [ ] T031 T029·T030이 기준을 넘을 때만 원인을 분석해 필요한 SQL 또는 인덱스 변경 제안을 `specs/002-music-search/validation-results.md`에 작성하고, DB DDL은 BE4 협의용 별도 Jira 이슈로 분리한다.
+- [ ] T032 [P] 승인된 API 계약을 `docs/api-spec.md` §3.1과 `docs/rules/BACKEND-NOTES.md`에 동기화하고 Frontend 담당자에게 [frontend-handoff.md](frontend-handoff.md)의 신규 파라미터·페이지 응답·인증 제약을 전달한다.
+- [X] T033 `backend/gradlew.bat test`와 `backend/gradlew.bat build`를 실행하고 전체 결과를 `specs/002-music-search/validation-results.md`에 기록한다.
+- [X] T034 `specs/002-music-search/quickstart.md`의 Backend·실 DB·성능·Frontend 연동·인증 항목을 통과/실패/미실행으로 최종 판정하고 하나라도 필수 게이트가 미검증이면 전체 완료로 표시하지 않는다.
 
 ---
 
 ## Dependencies & Execution Order
 
-- 🟢: T005 → T006 → T007 → T008 → T009. (T005가 검증 매핑 선행)
-- 🔴 B-A: T101 → T102 → T103. B-D: T201 → T202 → (T203·T204·T205). B-Common: T301 독립.
-- 🟢 완료해도 실제 검색 동작은 T202(어댑터)·T102(인증) 후 end-to-end.
+### Phase Dependencies
+
+- **Setup**: 즉시 시작한다. T001은 로컬 구현 기준선, T002·T003은 실 DB 접근 가능 시 병렬 수행한다.
+- **Foundational**: T004 → T005. 모든 사용자 스토리를 막는다.
+- **US1**: T005 후 T006·T007을 병렬 작성하고 T008 → T009 → T010 → T011 → T012 순으로 통합 검색 회귀를 고정한다.
+- **US2**: US1 후 T013·T014를 병렬 작성하고 T015 → T016 → T017 → T018 순으로 구현한다.
+- **US3**: US2의 필터 매퍼가 필요하다. T019·T020 → T021 → T022 → T023.
+- **US4**: 세 성공 경로가 있어야 전체 오류 계약을 검증할 수 있다. T024·T025 → T026 → T027.
+- **Polish**: 원하는 사용자 스토리 완료 후 수행하며 T028 → T029 → T030 → T031, 문서·빌드는 가능한 범위에서 병렬화한다.
+
+### User Story Dependencies
+
+```text
+Foundational
+    └── US1 기존 통합 검색
+          └── US2 아티스트 검색
+                └── US3 음악+아티스트 검색
+                      └── US4 오류 구분
+                            └── 실제 DB·성능·통합 검증
+```
+
+스토리 의존성은 동일 endpoint·reader·mapper를 최소 수정으로 확장하기 때문에 생긴다. 각 Checkpoint에서는 해당 스토리의 요청만으로 독립 검증할 수 있다.
+
+### Parallel Opportunities
+
+- T002와 T003은 다른 DB 점검·부하 측정으로 병렬 가능하다.
+- T006과 T007, T013과 T014, T019와 T020은 각각 컨트롤러/서비스 계약과 어댑터 경계를 다른 테스트 파일에서 병렬 작성할 수 있다.
+- T025는 컨트롤러 오류 테스트와 다른 XML 검사 파일이므로 T024와 병렬 가능하다.
+- T030 성능 측정과 T032 문서 동기화는 코드·계약이 고정된 뒤 서로 다른 산출물에서 병렬 가능하다.
+
+## Parallel Example: User Story 2
+
+```text
+Task A: T013 — Controller/Service의 artist 단독 요청 계약 테스트
+Task B: T014 — ReaderAdapter의 정규화·이스케이프·mapper 인자 테스트
+
+두 테스트가 실패하는 것을 확인한 뒤 T015~T017을 순서대로 구현한다.
+```
 
 ## Implementation Strategy
 
-### MVP (지금 최대치)
-1. T005(검증 매핑) → T006~T008(standalone 테스트) → T009(green).
-2. **STOP**: 컨트롤러 계약·검증·에러코드·서비스 조립 green. 실검색(A2/A4)·인증(E4)은 블로커 대기.
+### MVP First
 
-### 블로커 후
-- B-D → T202 완료 시 실제 검색 동작. B-A → 인증. B-Common → 전역 @WebMvcTest.
+1. T001과 T004~T005로 기준선과 조건 객체를 준비한다.
+2. T006~T012로 기존 통합 검색을 새 요청 구조에 연결한다.
+3. 여기서 멈추고 기존 `query` API의 응답·정렬·성능이 유지되는지 확인한다.
+
+### Incremental Delivery
+
+1. **US1**: 호환 가능한 요청 구조와 기존 통합 검색 보존.
+2. **US2**: 기존 아티스트 인덱스를 사용하는 아티스트 단독 검색.
+3. **US3**: 같은 필터 매퍼를 확장한 음악+아티스트 교집합 검색.
+4. **US4**: 빈 결과·잘못된 요청·실패 계약과 인증 의존성 확인.
+5. **Polish**: 실제 PostgreSQL 정확성·성능·FE 연동을 통과한 뒤 완료 판정.
 
 ## Notes
-- ponytail: 🟢 신규 코드 = 공통 핸들러 검증 매핑 1곳 + 테스트 방식 전환. 프로덕션 로직(서비스·컨트롤러·DTO·port)은 이미 이전·재배선 완료라 재작성 없음.
-- T005·T301은 BE1/BE-infra 소유 파일 → MR 리뷰 플래그.
-- 에러코드는 master `GlobalErrorCode` 기준. api-spec §0.5 불일치는 정본 갱신 대상(spec [충돌]).
 
----
-
-## Phase 4: Convergence (2026-09-12, Jira S15P21A405-229)
-
-B-D 해소 — BE4가 어댑터 구현을 BE2에 위임. 운영 DB는 PostgreSQL(pgvector 0.7.0), `music` 6,624,399행 적재 완료.
-근거 질의·실측·함정: `origin/data/dev:data/ingest/map_layer_queries.sql`, 스키마: `origin/data/dev:data/ingest/load_postgres.sh`.
-
-- [X] T302 `MusicSearchMapper`를 `com.ssafy.backend.music.mapper` 에 둔다 per plan: 소스 구조 (contradicts) — plan·T202는 `music/search/MusicSearchMapper.java`로 적었으나 `@MapperScan("com.ssafy.backend.*.mapper")` 는 와일드카드 1단계라 `music.search` 를 스캔하지 않는다. **경로**: 처음엔 스캔 범위 밖에 두고 `SqlSession.getMapper()` 로 우회했다(매퍼 빈이 늘면 슬라이스 10곳이 죽어서 — 실측 63건). 그 뒤 T301(S15P21A405-232)로 근본 원인을 없애고 표준 위치로 되돌렸다.
-- [X] T303 [US1] `MusicSearchReader` MyBatis 어댑터 구현 per FR-001·FR-009·FR-010 (missing) — `MusicSearchMapper.xml`(classpath:mapper/music/)에 `title ILIKE '%'||#{query}||'%' OR artist ILIKE '%'||#{query}||'%'`, `ORDER BY youtube_cnt DESC, id ASC`, `LIMIT #{size} OFFSET #{page}*#{size}` + count 질의. `music/search/MusicSearchReaderAdapter`가 port를 구현해 매퍼에 위임.
-- [X] T304 [US1] `MusicSummary` 조립 per FR-005 (missing) — `genres`는 `music_genre`+`genre` 조인(곡당 0..n, collection resultMap), `album`·`youtube_url`은 적재 결과상 전 행 NULL이므로 null 그대로 싣는다(FR-007 재생 불가 곡 유지). `map-underscore-to-camel-case` 전제.
-- [X] T305 [US1] `location vector(16)` → `Location(pc1..pc16)` 매핑 per FR-006·SC-002 (missing) — pgvector 값을 저장값 그대로 읽어 담는다. 재계산·재투영·반올림 금지. JDBC가 `vector`를 문자열로 돌려주므로 SELECT에서 `(location::real[])[n]` 로 축을 펴거나 TypeHandler 중 하나를 택한다.
-- [X] T306 [US1] 어댑터 단위 테스트 per SC-004·Constitution III (missing) — 매퍼 mock 기준으로 page/size→offset 계산, hasNext 판정(size+1 조회), query trim 전달을 검증한다. 실 DB(H2에 pgvector 없음) 통합 검증은 T204로 남는다.
-- [X] T307 substring 인덱스 미도입 상태를 기록한다 per plan: 성능 목표 p95<300ms (partial) — 6,624,399행에 `ILIKE %q%`는 순차 스캔이다. `pg_trgm` GIN 생성은 운영 DB 변경이라 BE4/Infra 합의 후(T203). 그 전까지 p95<300ms를 충족했다고 보고하지 않는다. **기록 완료**: 매퍼 XML 주석과 MR 에 남겼다. 측정도 인덱스도 하지 않았다.
-
-## youtubeUrl 은 조회 시 만든다 (2026-09-12, S15P21A405-233)
-
-`music.youtube_url` 은 662만 행 전부 NULL 이고 채울 방법이 없다(규칙 6 + YouTube Data API 할당량, data 스펙 18 D12).
-그래서 Backend 가 조회 시 `https://www.youtube.com/results?search_query=<아티스트>+<제목>` 을 만들어 담는다. 만드는 곳은 `music/YoutubeSearchUrl` 하나다.
-
-**따라온 결과 둘 — 확인 필요**
-
-1. **`youtubeUrl: null` 인 곡이 사실상 사라진다.** 아티스트·제목이 둘 다 비어야만 null 이다. FR-007(재생 불가 곡을 제외하지 않고 null 유지)은 계약으로는 유효하지만 실제로는 거의 도달하지 않는다. 프론트의 "재생 불가" 표시 조건을 다시 볼 필요가 있다.
-2. **`MapPoint.playable` 은 그대로 전부 false 다.** 지도 별은 전부 흐리게 나오는데 검색·상세에서는 모든 곡에 링크가 있어 서로 어긋난다. `playable` 을 true 로 뒤집으면 FE 의 흐림 상태가 의미를 잃으므로 FE 확인 없이 정하지 않았다(S15P21A405-233 제외 범위).
+- 기존 `findPage`, 페이지 크기, 응답 DTO, 장르 일괄 조회, 함수 인덱스와 timeout을 재사용한다.
+- 신규 프로덕션 타입은 `MusicSearchCondition` 하나, 신규 SQL 진입점은 `findFilteredPage` 하나다.
+- 아티스트 테이블·캐시·자동완성·전체 개수·새 라이브러리·초기 복합 인덱스는 만들지 않는다.
+- `music` 칩만 있고 아티스트 입력이 비어 있으면 Frontend가 요청하지 않는다.
+- Frontend 소스는 파트 소유권과 브랜치 규칙상 이 Backend 브랜치에서 수정하지 않는다.

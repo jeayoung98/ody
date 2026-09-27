@@ -8,34 +8,29 @@ import org.springframework.core.io.ClassPathResource;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.scripting.support.ResourceScriptSource;
 
-/**
- * Lua 스크립트를 DefaultRedisScript 빈으로 등록. 원자성이 필요한 연산은 전부 Lua 로 처리한다.
- * 빈 이름 = 파라미터 이름으로 주입받는다(타입 소거로 이름 매칭 필요).
- *
- * 골격 단계: 스크립트 파일은 스텁(return {}). 실제 로직은 내부작업(R-04).
- */
+/** Redis에서 실행할 Lua 파일을 Spring에 등록한다. */
 @Configuration
 public class RedisScriptConfig {
 
-	/** 배치·이사 원자 — join(활성 배치). 반환: {'OK'}/{'STALE'}. 만남 없음. */
+	/** 사용자를 선택한 곡과 셀에 등록한다. */
 	@Bean
 	public DefaultRedisScript<List> presenceJoinScript() {
 		return listScript("redis/presence-join.lua");
 	}
 
-	/** 곡 변경 원자 갱신 — 반환: 진입 직전 신곡 청취자 목록(만남 판정용). */
+	/** 듣는 곡과 위치를 바꾸고 새 곡의 기존 청취자를 돌려준다. */
 	@Bean
 	public DefaultRedisScript<List> presencePlayScript() {
 		return listScript("redis/presence-play.lua");
 	}
 
-	/** 이탈 정리 원자 — 반환: 제거된 {musicId, layer, cellX, cellY} 또는 {}. */
+	/** 나간 사용자의 위치와 주변사람 구독을 함께 지운다. */
 	@Bean
 	public DefaultRedisScript<List> presenceLeaveScript() {
 		return listScript("redis/presence-leave.lua");
 	}
 
-	/** 셀 인원수 재검증 — 반환: 불일치 셀 수. */
+	/** 저장된 셀 인원수를 실제 청취자 수와 다시 맞춘다. */
 	@Bean
 	public DefaultRedisScript<Long> usercountRecountScript() {
 		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
@@ -44,6 +39,81 @@ public class RedisScriptConfig {
 		return script;
 	}
 
+	/** 주변사람 패널이 지켜볼 곡 목록을 바꾼다. */
+	@Bean
+	public DefaultRedisScript<Long> nearbySubscriptionReplaceScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/nearby-subscription-replace.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
+	/** 현재 접속에서 연 주변사람 패널의 구독을 닫는다. */
+	@Bean
+	public DefaultRedisScript<Long> nearbySubscriptionCloseScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/nearby-subscription-close.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
+	/** 현재 화면에서 지켜볼 셀 목록을 바꾼다. */
+	@Bean
+	public DefaultRedisScript<Long> viewportSubscriptionReplaceScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/viewport-subscription-replace.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
+	/** 현재 접속에서 마지막으로 연 화면의 구독을 닫는다. */
+	@Bean
+	public DefaultRedisScript<Long> viewportSubscriptionCloseScript() {
+		DefaultRedisScript<Long> script = new DefaultRedisScript<>();
+		script.setScriptSource(new ResourceScriptSource(
+				new ClassPathResource("redis/viewport-subscription-close.lua")));
+		script.setResultType(Long.class);
+		return script;
+	}
+
+	/** 따라가기 자격을 확인하고 등록까지 한 번에 한다. */
+	@Bean
+	public DefaultRedisScript<List> rideMountScript() {
+		return listScript("redis/ride-mount.lua");
+	}
+
+	/** 따라가는 사람을 인솔자 자리로 옮기되 지도에는 넣지 않는다. */
+	@Bean
+	public DefaultRedisScript<List> ridePlaceScript() {
+		return listScript("redis/ride-place.lua");
+	}
+
+	/** 따라가기를 끝내고 지도에 다시 넣는다. */
+	@Bean
+	public DefaultRedisScript<List> rideDismountScript() {
+		return listScript("redis/ride-dismount.lua");
+	}
+
+	/** 인솔자 한 명의 선단을 흩고, 그를 따라가던 사람 전원을 지도에 다시 넣는다. */
+	@Bean
+	public DefaultRedisScript<List> rideDisbandScript() {
+		return listScript("redis/ride-disband.lua");
+	}
+
+	/** 따라가던 사람 한 명이 사라졌을 때 그 사람만 뺀다. 선단은 유지된다. */
+	@Bean
+	public DefaultRedisScript<List> rideRiderLeaveScript() {
+		return listScript("redis/ride-rider-leave.lua");
+	}
+
+	/**
+	 * 목록을 돌려주는 Lua 파일을 읽는다.
+	 * @param path Lua 파일 경로
+	 * @return 실행할 Lua 정보
+	 */
 	private DefaultRedisScript<List> listScript(String path) {
 		DefaultRedisScript<List> script = new DefaultRedisScript<>();
 		script.setScriptSource(new ResourceScriptSource(new ClassPathResource(path)));

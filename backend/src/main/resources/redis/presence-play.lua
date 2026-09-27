@@ -1,10 +1,13 @@
 -- presence-play.lua — 재생 선언(RT-02) = 이동. "재생 = 위치 이동의 유일한 원본".
 -- 활성 배치 코어는 presence-join.lua 와 동일. 차이: 새 (레이어,곡) 청취자를 '만남 후보'로 반환한다.
--- 좌표·셀(부동소수)은 Java(CoordinateMapper)에서 계산해 정수·문자열만 넘긴다(Lua 안 부동소수 금지).
+-- 좌표·셀(부동소수)은 Java(MusicPositionCalculator)에서 계산해 정수·문자열만 넘긴다(Lua 안 부동소수 금지).
 --
 -- KEYS[1] presence:user:{email}
 --
--- ARGV (presence-join.lua 와 동일):
+-- ARGV — presence-join.lua 와 비슷하지만 같지 않다. join 은 [2] 가 접속 번호라
+-- 그 뒤가 한 칸씩 밀려 있다. 한쪽을 고칠 때 다른 쪽을 따라 고치면 전부 어긋난다.
+-- 여기에 접속 번호가 없는 것은 재생이 REST 로 들어와 소켓 접속 번호를 실을 수 없기 때문이다.
+-- 대신 "따라가는 중인가"와 "이전 곡이 맞는가" 두 가지로 늦은 요청을 거른다.
 --   [1] email  [2] oldMusicId("" 정지/첫재생)  [3] oldLayer("")  [4] oldCellField("ox:oy","")
 --   [5] newMusicId  [6] newLayer  [7] newCellField("nx:ny")
 --   [8] x  [9] y  [10] newCellX  [11] newCellY
@@ -12,7 +15,8 @@
 --   [14] activeCellPrefix "active-song:cell:"    [15] activeCellsPrefix "active-song:cells:"
 --   [16] usercountPrefix "cell:usercount:"
 --
--- 반환: {'OK', 만남email...} 성공(같은 자리 재선언이면 빈 만남). {'STALE'} presence 없음/old 불일치.
+-- 반환: {'OK', 만남email...} 성공(같은 자리 재선언이면 빈 만남).
+--       {'STALE'} presence 없음 · 따라가는 중 · 이전 곡 불일치.
 
 local email = ARGV[1]
 local oldM, oldL, oldCellF = ARGV[2], ARGV[3], ARGV[4]
@@ -23,7 +27,13 @@ if redis.call('EXISTS', KEYS[1]) == 0 then
   return {'STALE'}
 end
 
--- 1) 가드: 저장된 현재 곡이 넘어온 old 와 같은가
+-- 1) 가드: 따라가는 중이면 지도에 없다. 여기서 옮기면 지도에 다시 나타나고
+--    인솔자 셀 인원수도 깎인다. 컨트롤러가 이미 막지만 경합으로 새어 들어올 수 있다.
+if redis.call('HGET', KEYS[1], 'riding') then
+  return {'STALE'}
+end
+
+-- 2) 가드: 저장된 현재 곡이 넘어온 old 와 같은가
 local cur = redis.call('HGET', KEYS[1], 'musicId')
 local curStr = cur or ''
 if curStr ~= oldM then

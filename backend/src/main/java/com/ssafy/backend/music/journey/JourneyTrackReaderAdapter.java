@@ -1,11 +1,6 @@
 package com.ssafy.backend.music.journey;
 
-import static java.util.stream.Collectors.groupingBy;
-import static java.util.stream.Collectors.mapping;
-import static java.util.stream.Collectors.toList;
-
 import java.util.List;
-import java.util.Map;
 
 import org.springframework.stereotype.Repository;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,8 +8,8 @@ import org.springframework.transaction.annotation.Transactional;
 import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
-import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
+import com.ssafy.backend.music.videoid.VideoIds;
 
 /**
  * {@link JourneyTrackReader} 의 MyBatis 어댑터 (T045, 헌법 X: BE2 계약 / 실행 분리).
@@ -41,8 +36,8 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 	}
 
 	/**
-	 * 질의 2회로 끝낸다 — 곡 일괄 조회 1회 + 장르 일괄 조회 1회. 곡당 왕복을 돌면
-	 * 정거장 18개에 36왕복이라 종단 예산을 넘긴다(SC-002).
+	 * 질의 1회로 끝낸다 — 곡 일괄 조회만 한다. 곡당 왕복을 돌면
+	 * 정거장 18개에 18왕복이라 종단 예산을 넘긴다(SC-002).
 	 */
 	@Override
 	@Transactional(readOnly = true)
@@ -52,13 +47,6 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 		}
 
 		List<MusicDetailRow> rows = mapper.findByIds(ids);
-		if (rows.isEmpty()) {
-			return List.of();
-		}
-
-		Map<Long, List<String>> genres = mapper.findGenresByMusicIds(
-						rows.stream().map(MusicDetailRow::getId).toList()).stream()
-				.collect(groupingBy(MusicGenreRow::getMusicId, mapping(MusicGenreRow::getName, toList())));
 
 		return rows.stream()
 				.map(row -> new MusicDetail(
@@ -69,9 +57,10 @@ public class JourneyTrackReaderAdapter implements JourneyTrackReader {
 						row.getBpm(),
 						row.getDuration(),
 						row.getAlbum(),
-						genres.getOrDefault(row.getId(), List.of()),
+						row.getAlbumMbid(),
+						row.getReleaseYear(),
 						YoutubeSearchUrl.of(row.getArtist(), row.getTitle()),
-						row.getVideoId(),
+						VideoIds.of(row.isUnplayable(), row.getVideoId()),
 						row.toLocation(),
 						row.getPlayCnt(),
 						row.getYoutubeCnt()))

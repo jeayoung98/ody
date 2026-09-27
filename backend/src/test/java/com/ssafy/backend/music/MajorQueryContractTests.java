@@ -73,4 +73,24 @@ class MajorQueryContractTests {
 		assertThrows(IllegalArgumentException.class,
 				() -> new MapPoint(1L, Collections.nCopies(8, 0.0), 0, 0, "t", "a", null, null, false));
 	}
+
+	@Test
+	void mapPointRoundsCoordinatesToThreeDecimals() {
+		List<Double> pc = new java.util.ArrayList<>(pc16());
+		pc.set(0, -24.20094);
+
+		MapPoint point = new MapPoint(1L, pc, 0, 0, "t", "a", null, null, true);
+
+		assertEquals(-24.201, point.pc().get(0));
+	}
+
+	@Test
+	void mapPointRoundsHalfAwayFromZero() {
+		List<Double> pc = new java.util.ArrayList<>(pc16());
+		pc.set(0, -1.2345);
+
+		MapPoint point = new MapPoint(1L, pc, 0, 0, "t", "a", null, null, true);
+
+		assertEquals(-1.235, point.pc().get(0));
+	}
 }

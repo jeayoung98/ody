@@ -14,7 +14,7 @@ import com.ssafy.backend.music.mapper.MajorTrackMapper;
  * {@link MajorTrackReader} 의 MyBatis 어댑터 (T016, 헌법 X: BE2 계약 / 실행 분리).
  *
  * 서버는 상주 집합을 공간적으로 고르게 돌려줄 뿐 인기순 선별을 하지 않는다(D16).
- * 좌표는 SELECT 가 펼쳐 준 pc1~pc16 을 그대로 옮긴다 — 재계산·재투영 없음(FR-007).
+ * SELECT가 펼친 pc1~pc16은 재계산·재투영하지 않고 MapPoint 응답 경계에서만 3자리로 반올림한다(FR-007·FR-016).
  */
 @Repository
 public class MajorTrackReaderAdapter implements MajorTrackReader {
@@ -26,14 +26,9 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	 * {@code GENRE_NAMES}·{@code GENRE_COLORS} 는 11칸이고 마지막(10)이 무장르용 회청색이다
 	 * (2026-09-12 origin/frontend/dev 확인). 0 을 보내면 앰비언트 청록이라 지도가 한 색이 된다.
 	 *
-	 * <p>DB {@code genre} 는 멜론 대분류 29행이라 체계가 다르고(멜론은 록/메탈을 한 코드로 묶고,
-	 * FE 에는 발라드·댄스·트로트·OST 가 없다), 장르 보유 곡은 66,036개로 전체의 1.0% 다.
-	 * 29→10 은 손실 있는 제품 결정이라 임의로 정하지 않는다(헌법 IX). 매핑 확정 전까지는
-	 * 그 1.0% 도 무장르로 내린다 — 지도는 깨지지 않는다(FE 확인, S15P21A405-240).
-	 *
-	 * <p>ponytail: 매핑이 오면 {@link #genreIdOf} 본문만 바꾸고, XML 의 {@code findLayerOneSample}·
-	 * {@code findInAccumulatedBoxes} 에 {@code music_genre} 조인을 더한 뒤 {@link MapPointRow} 에
-	 * 장르 필드를 추가한다. 그 전까지 조인하지 않는 편이 map_sample 의 조인 절감 이점을 덜 깎는다.
+	 * <p>DB 의 {@code genre}·{@code music_genre} 테이블은 삭제됐다(S15P21A405-475). 장르 색을 칠할
+	 * 원천이 없으므로 전 곡을 무장르로 내린다 — 지도는 깨지지 않는다(FE 확인, S15P21A405-240).
+	 * 새 장르 원천이 생기면 {@link #genreIdOf} 본문을 바꾸고 {@link MapPointRow} 에 장르 필드를 더한다.
 	 */
 	private static final int GENRE_ID_NO_GENRE = 10;
 
@@ -56,7 +51,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	@Override
 	public List<MapPoint> findResidentSet(MajorQuery query) {
 		List<MapPointRow> rows = query.isTopLevel()
-				? mapper.findLayerOneSample()
+				? mapper.findLayerOneSample(query.limit())
 				: mapper.findInAccumulatedBoxes(checkAxes(query.accumulated()), query.limit());
 		return rows.stream().map(MajorTrackReaderAdapter::toMapPoint).toList();
 	}
@@ -64,7 +59,7 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 	private static MapPoint toMapPoint(MapPointRow row) {
 		// music.youtube_url 은 662만 행 전부 NULL 이라 읽지 않는다. map_sample 이 들고 있는
 		// title·artist 로 검색 URL 을 만든다 (D12) — 조인이 없어 0.4 ms 이점이 유지된다.
-		String youtubeUrl = YoutubeSearchUrl.of(row.getArtist(), row.getTitle());
+		boolean playable = YoutubeSearchUrl.of(row.getArtist(), row.getTitle()) != null;
 		return new MapPoint(
 				row.getMusicId(),
 				row.toPcList(),
@@ -72,9 +67,9 @@ public class MajorTrackReaderAdapter implements MajorTrackReader {
 				UNIFORM_WEIGHT,
 				row.getTitle(),
 				row.getArtist(),
-				youtubeUrl,
 				VIDEO_ID_NOT_LOADED,
-				youtubeUrl != null);
+				row.getAlbumMbid(),
+				playable);
 	}
 
 	/** 장르 인덱스를 정하는 유일한 지점. FE 매핑이 오면 여기만 바꾼다. */

@@ -78,7 +78,7 @@ class PlaylistServiceTests {
 	private static MusicDetail music(long id, int duration) {
 		// 곡마다 다른 좌표. 상세 응답이 좌표를 그대로 실어 보내는지 확인하려면 값이 구별돼야 한다.
 		Location loc = new Location(id * 0.5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, id * -0.25);
-		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", List.of("K-Pop"),
+		return new MusicDetail(id, "mbid", "제목", "가수", 120.0, duration, "앨범", "album-mbid", 2006,
 				"https://youtu.be/x", null, loc, 10, 1);
 	}
 
@@ -133,13 +133,14 @@ class PlaylistServiceTests {
 	// ---- getDetail (§4.2) ----
 
 	@Test
-	void getDetail_notOwner_throwsForbidden() {
+	void getDetail_notOwner_returnsDetail() { // S15P21A405-603: 소유자가 아니어도 조회된다
 		when(playlistMapper.findById(42)).thenReturn(playlist(42, "owner@gmail.com", "드라이브"));
+		when(playlistMapper.findMusicIdsInOrder(42)).thenReturn(List.of());
 
-		assertThatThrownBy(() -> serviceWithAdapter().getDetail(42, "someone-else@gmail.com"))
-				.isInstanceOf(CustomException.class)
-				.extracting(e -> ((CustomException) e).getErrorCode())
-				.isEqualTo(GlobalErrorCode.FORBIDDEN);
+		PlaylistDetailResponse response = serviceWithAdapter().getDetail(42, "someone-else@gmail.com");
+
+		assertThat(response.playlistId()).isEqualTo(42);
+		assertThat(response.playlistName()).isEqualTo("드라이브");
 	}
 
 	@Test

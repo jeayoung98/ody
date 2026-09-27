@@ -26,6 +26,18 @@
 > 아래 Notes 의 "master 통합 재검증(M 항목)" 참조.
 > (plan.md 에는 해당 절이 없다 — M 번호는 S15P21A405-115 작업 메모에서 왔다)
 
+> ✅ **2026-09-17 A-30~A-32 후속(S15P21A405-391)**: optional `size`를 모든 레이어의 반환 상한으로 적용하고,
+> 지도 `MapPoint.youtubeUrl`을 제거하며 PC16 응답값을 HALF_UP 3자리로 반올림한다.
+> `size` 생략 시 1레이어는 기존 정적 표본 전체, 2레이어 이상은 기존 1000곡 상한을 유지한다.
+
+## Phase 0: A-30~A-32 후속
+
+- [X] T037 [US1] `size` 1~10,000 입력과 생략 시 기존 동작을 컨트롤러·서비스 계약에 반영
+- [X] T038 [US1] 1레이어 정적 표본과 2레이어 이상 조회에 `size` 상한 적용
+- [X] T039 [P] [US1] 지도 `MapPoint`와 SQL projection에서 `youtubeUrl` 제거, 상세 응답 계약 유지
+- [X] T040 [P] [US1] 지도 PC16을 응답 경계에서 HALF_UP 3자리로 반올림
+- [X] T041 [US1] 기본값·경계값·1레이어 상한·필드 제거·반올림 계약 테스트
+
 ---
 
 ## Phase 1: Setup
@@ -64,7 +76,7 @@
 - [X] T009 (2026-09-10 완료 → **2026-09-12 코드 삭제**, S15P21A405-236) 대표곡 선정 순수 로직 `MajorSelection.topByYoutubeCnt`. D16 으로 서버는 인기순 선별을 하지 않고(클라이언트가 화면 픽셀 격자에서 한다), `youtube_cnt` 는 662만 행 전부 0 이다(data 스펙 18)
 - [X] T010 (2026-09-10 완료 → **2026-09-12 테스트 삭제**, S15P21A405-236) 선정 단위테스트 A14
 - [X] T011 (2026-09-12 **D18 로 교체됨**, S15P21A405-236: `major_successItem_carriesPc16AndBaselineCoordinates` + `major_itemOmitsDetailFields` / 원래 항목은 `major_successItem_carriesAllContractFieldsAndBaselineCoordinates` — 컨트롤러가 아직 `MajorResponse(List<MusicDetail>)` 를 반환하므로 이 테스트는 **지금 코드에 대해 유효하다**. T015 가 응답을 `MapPoint` 로 바꿀 때 함께 교체한다. 그때까지 삭제하지 않는다) [US1] MVC 슬라이스 테스트 A2: 성공 항목이 §0.6 필드 전부 포함, `location.pc1`~`pc16`이 곡 기준선 좌표와 일치 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T012 (2026-09-12 **D18 로 교체** → **S15P21A405-249 로 되돌림**: D18 당시엔 `MapPoint` 에 `youtubeUrl` 이 없었으나, FE 요청으로 2026-09-12 다시 **추가됐다**. `playable` 은 `youtubeUrl != null` 로 파생된다. 검증 테스트도 `youtubeUrl_isBuiltFromTitleAndArtist_notTheNullColumn` · `playable_isFalse_whenTitleAndArtistAreBothBlank` 로 교체됐다) [US1] MVC 슬라이스 테스트 A3: `youtubeUrl: null`이어도 항목 유지·null 보존 (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
+- [X] T012 (2026-09-17 **A-31로 재교체**: 지도 `MapPoint.youtubeUrl` 제거, `playable` 유지. 상세 응답의 `youtubeUrl`은 유지) [US1] MVC 슬라이스 테스트 A3
 
 ### 게이트 대기
 
@@ -85,7 +97,7 @@
 **Independent Test**: `GET /api/api/music/major?level=1` PC 미포함 요청이 PC 생략만으로 검증 오류가 아님을 확인.
 
 - [X] T018 (2026-09-10 완료: `major_level1_returnsSuccessEnvelope`) [US2] MVC 슬라이스 테스트 A5: `level=1` PC 생략 → `VALIDATION_ERROR` 아님(200) (`backend/src/test/java/com/ssafy/backend/music/MusicControllerTests.java`)
-- [X] T019 (2026-09-12 완료, S15P21A405-236) [US2] level=1 은 범위 파라미터 없이 `map_sample` 정적 결과를 돌려준다. 중심을 (0,0)/전체 영역으로 대체하지 않는다 — 애초에 받지 않는다. level=1 은 `limit` 을 적용하지 않는다 — `map_sample` 1레이어는 이미 화면 크기로 계산된 정적 집합(실측 1,094칸)이라 1000 으로 자르면 별 94개가 사라진다. port javadoc 에 예외로 명시했다(D18: 정확한 수는 강제하지 않는다)
+- [X] T019 (2026-09-17 **A-30으로 개정**) [US2] level=1은 범위 없이 `map_sample` 정적 결과를 읽는다. `size` 명시 시 상한을 적용하고, 생략 시 기존 정적 표본 전체를 반환한다
 
 **Checkpoint**: A5 계약은 T018로 유지. 최상위 실제 반환은 B2 후.
 
@@ -268,6 +280,45 @@ spec FR-012·FR-013 이 **격자 모델**로 개정됐다(팀 결정: FE 구현 
 
 ⚠️ **이 귀결이 의도와 다르면 D15 의 "1레이어 정적 서빙" 을 다시 열어야 한다.** 서버가 화면 격자로
 대표곡을 고르려면 요청마다 줌 배율을 받아야 하고 20,941 ms 전역 집계가 되살아난다.
+
+## D20 영향 (2026-09-18) — 1레이어 상주 집합 밀도 가중
+
+D16 의 "격자" 를 **화면 격자**와 **데이터 좌표 격자**로 갈랐다. 위 D16 표의 "격자 — 샘플링 수단으로만
+사용 (칸 중심 최근접)" 항목이 아래로 대체된다.
+
+| | 서버 | 클라이언트 |
+|---|---|---|
+| 화면 격자 (86px, 줌 가변) | 적용하지 않음 (MUST NOT) | 표시 규칙 (칸 내 1위를 크게) |
+| 데이터 좌표 격자 (간격 2.0, 줌 무관) | **1레이어에 적용** — 칸당 `k = min(round(cbrt(n)), 40)`, 칸 안 `md5(id::text)` 무작위 | 해당 없음 |
+
+**태스크 영향**
+- T016 1레이어 `map_sample` 정적 조회 — 테이블 내용이 "칸당 1곡 · 중심 최근접" 에서
+  "칸당 밀도 가중 · 칸 내 무작위 · 재생 가능 곡 한정" 으로 바뀐다. 조회 형태는 그대로다
+- T016 `MajorTrackMapper.xml` 의 재생 가능 필터는 **이 이슈에서 건드리지 않는다.**
+  그 줄은 S15P21A405-454(MR 330)가 `NOT m.is_unplayable` 로 바꾸며 소유한다.
+  ~~"중복이라 제거, 342칸(31%) 삭제"~~ — **철회.** 운영 실집계(2026-09-18): 칸 수는 1,094 가 아니라
+  **850**, 필터가 지우는 것은 342칸이 아니라 **96칸(11.3%)** 이다. 응답 745점 경로는
+  850 → 조인 소실 9 → 841 → 재생 불가 96 → **745**. 구·신 필터 결과가 745 로 같아 454 백필은 정확하다.
+  응답 단계 필터를 둘지는 spec 008(지도가 재생 불가 곡을 뺀다) ↔ FR-009 사이의 **미해결 충돌**이다
+- **T-new (data, 466 선행) `map_sample` PK 가 칸당 1행을 강제한다** — `PRIMARY KEY (layer, gx, gy)`.
+  칸당 `k` 곡을 담으려면 PK 에 `music_id` 를 더하거나 별도 테이블이 필요하다.
+  **스키마 변경 없이는 D20 을 구현할 수 없다.** 설계·실행은 data 소유
+- **T-new (data) `map_sample` 이 삭제된 곡 9건을 가리킨다** — 조인에서 칸이 조용히 사라진다.
+  재생성 시 `music` 실재 행만 담도록 한다
+- T025 상주 집합 크기 계약 — **밀도 가중 배분 결과**(실집계 예측 7,272곡)다. 겹마다 수가 달라진다
+- ⚠️ **문서 곳곳의 "1,094칸" 은 2026-09-11 기록이고 현재값이 아니다.** `map_sample` 이 그 뒤 재생성돼
+  2026-09-18 실측은 **850칸**이다. D15·D16 절과 plan 성능표(0.4 ms / 1,094행)의 수치는 당시 기록으로
+  남기되, **현재값으로 인용하지 않는다**
+- T019 level=1 조회 대상은 그대로 `map_sample`
+
+**파트 경계**: `map_sample` 재생성은 **data 소유**다(S15P21A405-466). 이 이슈(S15P21A405-465)는
+명세 개정과 백엔드 중복 필터 제거까지다.
+
+⚠️ **FE 를 같이 고쳐야 지도가 산다.** 점이 8.6배(850 → 7,272 실집계)면 화면 안 곡도 그만큼인데 FE `DRILL.gateMaxDensity`
+임계(200 곡/Mpx²)는 고정이라 `zoomRange.max=24` 천장에서도 드릴다운이 안 열린다.
+실측: 현행 825점은 ×6.0에서 열림, 7,024점은 ×24(최대)에서 158곡 > 임계 119곡으로 **영영 안 열림**.
+1700 으로 올리니 정상 동작했다. 겹마다 상주 수가 다르면 상수 하나로는 못 푼다 — **겹 상한 3~4겹 결정 필요**
+(`size` 로 하위 겹도 10,000 맞추면 4겹에서 93곡으로 데이터가 마른다: 2겹 10,000 / 3겹 5,745 / 4겹 93).
 
 ## D17 영향 (2026-09-11) — 선별 재료는 제공, 선별 규칙은 유예
 

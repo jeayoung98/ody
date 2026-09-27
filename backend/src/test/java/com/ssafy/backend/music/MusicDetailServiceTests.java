@@ -14,6 +14,7 @@ import org.mockito.Mockito;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.MusicErrorCode;
 import com.ssafy.backend.music.detail.MusicDetailReader;
+import com.ssafy.backend.music.like.MusicLikeMapper;
 import com.ssafy.backend.music.dto.Location;
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailResponse;
@@ -33,14 +34,63 @@ class MusicDetailServiceTests {
 			new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
 
 	private static MusicDetail detail() {
-		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning",
-				List.of("K-Pop"), "https://youtu.be/x", null, LOC, 1428, 3);
+		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", "8f3a...", 2024,
+				"https://youtu.be/x", null, LOC, 1428, 3);
 	}
 
 	private static NeighborTrack neighbor(long id, double distance) {
 		return new NeighborTrack(
-				new MusicSummary(id, "t", "IU", "Palette", List.of("K-Pop"), "https://youtu.be/y", null, LOC),
-				distance);
+				new MusicSummary(id, "t", "IU", "Palette", "https://youtu.be/y", null, LOC),
+				"album-" + id, distance);
+	}
+
+	/** 로그인 사용자가 좋아요한 곡이면 하트를 채울 수 있어야 한다 (S15P21A405-599). */
+	@Test
+	void getDetail_reportsLiked_whenRequesterHasLikedTheTrack() throws Exception {
+		MusicLikeMapper likeMapper = Mockito.mock(MusicLikeMapper.class);
+		when(likeMapper.findLikedAt("me@gmail.com", 10234L))
+				.thenReturn(java.time.OffsetDateTime.now());
+
+		MusicDetailResponse res = serviceWith(reader(), nearbyWith(), Mockito.mock(VideoIdEnricher.class), likeMapper)
+				.getDetail(10234L, "me@gmail.com");
+
+		assertThat(res.liked()).isTrue();
+	}
+
+	@Test
+	void getDetail_reportsNotLiked_whenRequesterHasNotLikedTheTrack() throws Exception {
+		MusicLikeMapper likeMapper = Mockito.mock(MusicLikeMapper.class);
+		when(likeMapper.findLikedAt("me@gmail.com", 10234L)).thenReturn(null);
+
+		MusicDetailResponse res = serviceWith(reader(), nearbyWith(), Mockito.mock(VideoIdEnricher.class), likeMapper)
+				.getDetail(10234L, "me@gmail.com");
+
+		assertThat(res.liked()).isFalse();
+	}
+
+	/** 비로그인은 조회 자체를 하지 않는다 — 상세는 인증 없이도 그대로 열린다. */
+	@Test
+	void getDetail_doesNotQueryLikes_whenAnonymous() throws Exception {
+		MusicLikeMapper likeMapper = Mockito.mock(MusicLikeMapper.class);
+
+		MusicDetailResponse res = serviceWith(reader(), nearbyWith(), Mockito.mock(VideoIdEnricher.class), likeMapper)
+				.getDetail(10234L, null);
+
+		assertThat(res.liked()).isFalse();
+		Mockito.verifyNoInteractions(likeMapper);
+	}
+
+	private static MusicDetailReader reader() {
+		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
+		when(reader.findDetail(10234L)).thenReturn(Optional.of(detail()));
+		return reader;
+	}
+
+	private static NearbyService nearbyWith() {
+		NearbyService nearby = Mockito.mock(NearbyService.class);
+		when(nearby.neighborsOf(Mockito.any()))
+				.thenReturn(new NearbyService.NeighborResult(List.of(), false));
+		return nearby;
 	}
 
 	private static MusicService serviceWith(MusicDetailReader reader, NearbyService nearby) {
@@ -48,7 +98,13 @@ class MusicDetailServiceTests {
 	}
 
 	private static MusicService serviceWith(MusicDetailReader reader, NearbyService nearby, VideoIdEnricher enricher) {
-		return new MusicService(Optional.empty(), Optional.ofNullable(reader), Optional.empty(), nearby, enricher);
+		return serviceWith(reader, nearby, enricher, null);
+	}
+
+	private static MusicService serviceWith(MusicDetailReader reader, NearbyService nearby, VideoIdEnricher enricher,
+			MusicLikeMapper likeMapper) {
+		return new MusicService(Optional.empty(), Optional.ofNullable(reader), Optional.empty(), nearby, enricher,
+				Optional.ofNullable(likeMapper));
 	}
 
 	@Test
@@ -59,7 +115,7 @@ class MusicDetailServiceTests {
 		when(nearby.neighborsOf(Mockito.any())).thenReturn(
 				new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01), neighbor(2L, 0.02)), false));
 
-		MusicDetailResponse res = serviceWith(reader, nearby).getDetail(10234L);
+		MusicDetailResponse res = serviceWith(reader, nearby).getDetail(10234L, null);
 
 		assertThat(res.detail().id()).isEqualTo(10234L);
 		assertThat(res.neighbors()).hasSize(2);
@@ -75,7 +131,7 @@ class MusicDetailServiceTests {
 		when(nearby.neighborsOf(Mockito.any()))
 				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
 
-		assertThat(serviceWith(reader, nearby).getDetail(10234L).neighbors()).hasSize(1);
+		assertThat(serviceWith(reader, nearby).getDetail(10234L, null).neighbors()).hasSize(1);
 	}
 
 	/** E2 — 유사도 낮음 표시가 곡 상세 응답에도 그대로 실린다 (005 SC-006). */
@@ -87,7 +143,7 @@ class MusicDetailServiceTests {
 		when(nearby.neighborsOf(Mockito.any()))
 				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 5.0)), true));
 
-		assertThat(serviceWith(reader, nearby).getDetail(10234L).lowSimilarity()).isTrue();
+		assertThat(serviceWith(reader, nearby).getDetail(10234L, null).lowSimilarity()).isTrue();
 	}
 
 	/**
@@ -105,10 +161,10 @@ class MusicDetailServiceTests {
 		when(nearby.neighborsOf(center))
 				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
 
-		serviceWith(reader, nearby).getDetail(10234L);
+		serviceWith(reader, nearby).getDetail(10234L, null);
 
 		verify(nearby).neighborsOf(center);
-		verify(reader, Mockito.never()).findSummariesByIds(Mockito.anyList());
+		verify(reader, Mockito.never()).findDetailsByIds(Mockito.anyList());
 	}
 
 	@Test
@@ -116,7 +172,7 @@ class MusicDetailServiceTests {
 		MusicDetailReader reader = Mockito.mock(MusicDetailReader.class);
 		when(reader.findDetail(999L)).thenReturn(Optional.empty());
 
-		assertThatThrownBy(() -> serviceWith(reader, Mockito.mock(NearbyService.class)).getDetail(999L))
+		assertThatThrownBy(() -> serviceWith(reader, Mockito.mock(NearbyService.class)).getDetail(999L, null))
 				.isInstanceOf(CustomException.class)
 				.extracting(e -> ((CustomException) e).getErrorCode())
 				.isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND);
@@ -124,7 +180,7 @@ class MusicDetailServiceTests {
 
 	@Test
 	void getDetail_noReader_throwsUnsupported() {
-		assertThatThrownBy(() -> serviceWith(null, Mockito.mock(NearbyService.class)).getDetail(10234L))
+		assertThatThrownBy(() -> serviceWith(null, Mockito.mock(NearbyService.class)).getDetail(10234L, null))
 				.isInstanceOf(UnsupportedOperationException.class);
 	}
 
@@ -138,13 +194,14 @@ class MusicDetailServiceTests {
 		when(reader.findDetail(10234L)).thenReturn(Optional.of(center));
 		when(nearby.neighborsOf(center))
 				.thenReturn(new NearbyService.NeighborResult(List.of(neighbor(1L, 0.01)), false));
-		when(enricher.resolve(10234L, "IU", "Love wins all", null)).thenReturn("centerVideoId");
+		when(enricher.resolve(10234L, "IU", "Love wins all", "The Winning", null, 275)).thenReturn("centerVideoId");
 
-		MusicDetailResponse res = serviceWith(reader, nearby, enricher).getDetail(10234L);
+		MusicDetailResponse res = serviceWith(reader, nearby, enricher).getDetail(10234L, null);
 
 		assertThat(res.detail().videoId()).isEqualTo("centerVideoId");
 		// 이웃곡은 최대 10건이라 순차 호출하면 느려져 걷어냈다 — DB 값(여기선 null) 그대로 나간다.
 		assertThat(res.neighbors().get(0).music().videoId()).isNull();
-		verify(enricher, Mockito.never()).resolve(Mockito.eq(1L), Mockito.any(), Mockito.any(), Mockito.any());
+		verify(enricher, Mockito.never()).resolve(Mockito.eq(1L), Mockito.any(), Mockito.any(), Mockito.any(),
+				Mockito.any(), Mockito.any());
 	}
 }

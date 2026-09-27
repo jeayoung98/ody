@@ -11,10 +11,10 @@ import com.ssafy.backend.music.retrieval.LayerBox;
 public interface MajorTrackMapper {
 
 	/**
-	 * 1레이어 정적 상주 집합. 미리 계산한 map_sample 을 읽는다(전역 실시간 집계는 20,941 ms).
-	 * 이미 화면 크기로 계산된 집합이라 limit 을 받지 않는다 — 자르면 첫 화면 별이 사라진다(실측 1,094칸).
+	 * 1레이어 정적 상주 집합. 미리 계산한 map_sample 을 읽고 요청 상한까지만 반환한다.
+	 * 상한보다 표본이 적으면 가용 표본 전체를 반환한다.
 	 */
-	List<MapPointRow> findLayerOneSample();
+	List<MapPointRow> findLayerOneSample(@Param("limit") int limit);
 
 	/**
 	 * 누적 범위에 드는 곡. boxes[0] 만 표현식 GiST, 나머지는 BETWEEN heap 필터다.

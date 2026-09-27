@@ -112,7 +112,7 @@
 
 **Location**: `pc1`~`pc16` (각 float).
 
-**MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `playCnt`(int), `youtubeCnt`(int).
+**MusicDetail** = MusicSummary + `mbid`, `bpm`(float), `duration`(int, 초), `releaseYear`(int\|null, 발매 연도), `playCnt`(int), `youtubeCnt`(int).
 
 **`videoId` 규약** (2026-09-13, S15P21A405-57 · spec 006): 유튜브 영상 식별자 11자다. `youtubeUrl` 이 **검색** URL 이라 그 곡이라는 보장이 없는 반면, `videoId` 는 **확인된 영상**이다 — 곡 길이 ±3초(공식 채널 `- Topic`·VEVO 는 ±30초) 일치와 `embeddable` 을 확인한 것만 담는다. 조건을 못 넘기면 담지 않는다.
 - **키는 항상 있고 값이 `null` 일 수 있다.** 키 자체가 빠지지 않는다 (`"videoId":null`)
@@ -120,7 +120,8 @@
 - `videoId` 가 없으면 기존대로 `youtubeUrl` 로 폴백한다
 - **적재 전까지 전 곡 `null` 이다.** 저장소·적재 배치는 미정이며, 매핑률 실측은 66%다(S15P21A405-40 코멘트)
 
-**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-11 스냅샷 선행 갱신, Notion 미반영): `musicId`(int), `pc`(float 16개 **배열**), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `youtubeUrl`(string\|null, 유튜브 **검색** URL — `title`·`artist` 로 생성, D12), `videoId`(string(11)\|null, 확인된 영상 — 위 `videoId` 규약 참고), `playable`(boolean, `youtubeUrl != null`).
+**MapPoint** (지도 레이어 상주 집합 — §3.4 전용. ⚠️ 2026-09-17 A-31·A-32 반영, Notion 미반영): `musicId`(int), `pc`(소수점 이하 **최대 3자리**로 반올림한 float 16개 배열), `genreId`(int, **비음수**), `weight`(int, 별 크기·클라이언트 선별용), `title`(string), `artist`(string\|null), `videoId`(string(11)\|null, 확인된 영상 — 위 `videoId` 규약 참고), `playable`(boolean, 기존 재생 가능 의미 유지).
+`youtubeUrl`은 지도 응답에서 보내지 않는다. 곡 상세(`/api/music/detail`)과 다른 음악 DTO에서는 기존 계약을 유지한다.
 좌표를 `Location` 객체가 아니라 배열로 싣는 유일한 DTO다 — 클라이언트가 레이어 축 `pc(2n-1)`·`pc(2n)` 으로 재투영하기 때문.
 
 **PlaylistTrack**: `id`(int, 곡 ID), `title`, `artist`, `duration`(int, 초), `youtubeUrl`(string\|null).
@@ -134,7 +135,8 @@
   - 해당: `auth/logout`, `user/update`, `user/ispublic`, `user/delete`, `user/follow/insert`, `user/follow/delete`, `playlist/create`
   - 이유: body의 email을 신뢰하면 남의 email만 알아도 정보 수정·탈퇴 가능. 파라미터 자체 제거.
 - **타인 조회 API는 `email` 유지** — `user/detail`, `user/follow/list`, `playlist/search`
-- 소유 리소스 ID 접근 API(`playlist/detail`, `playlist/update`, `playlist/delete`, `playlist/music/*`)는 서버가 `playlist.ownerEmail == token.email` 검증, 불일치 시 `FORBIDDEN`.
+- 소유 리소스 ID 접근 API(`playlist/update`, `playlist/delete`, `playlist/music/*`)는 서버가 `playlist.ownerEmail == token.email` 검증, 불일치 시 `FORBIDDEN`.
+  `playlist/detail` 은 조회 전용이라 소유자 검증을 하지 않는다 — 로그인한 누구나 조회 가능 (S15P21A405-603).
 
 ---
 
@@ -295,8 +297,13 @@ body: `idToken`(String, required).
 
 > 경로는 `/api/music/*` (S15P21A405-213). 이 저장소의 `/api/auth/*`·`/api/users/*` 컨벤션과 프론트 `api-endpoints.ts` 에 맞춘 것으로, 정본 v1.0 의 `/music/*` 표기를 대체한다.
 
-### 3.1 노래 검색
-`GET /api/music/search` · 인증 필요. param: `query`(String, required), `page`(int, required, 0).
+### 3.1 음악 검색
+`GET /api/music/search` · 인증 필요. param: `page`(int, required, 0)와 아래 조건 중 하나.
+
+- 통합 검색: `query`(String, required)
+- 아티스트 검색: `artist`(String, required)
+- 음악+아티스트 검색: `music`(String, required), `artist`(String, required)
+- `query`와 필터 조건 혼합, `music` 단독, 빈 문자열은 400 `INVALID_INPUT`
 ```json
 { "success": true, "data": { "content": [ {
   "id": 10234, "title": "Love wins all", "artist": "IU", "album": "The Winning",
@@ -304,16 +311,20 @@ body: `idToken`(String, required).
   "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }
 } ], "page": 0, "size": 10, "hasNext": true }, "error": null }
 ```
-- 결과 없음은 빈 content+200. 에러: `VALIDATION_ERROR`.
-- **정렬은 관련성 순**: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치 → 나머지 부분일치. 같은 순위 안에서는 `id` 오름차순. 대소문자 구분 없음 (2026-09-12 변경, S15P21A405-234 — 이전은 `youtubeCnt` 내림차순이었으나 값이 전 행 0 이라 무작위였다).
+- 결과 없음은 빈 content+200. 검증 에러: `INVALID_INPUT`.
+- 모든 검색은 대소문자를 구분하지 않는 **앞일치**다. `%`, `_`, `\`는 와일드카드가 아닌 문자로 검색한다.
+- 통합 검색 정렬: 제목 완전일치 → 아티스트 완전일치 → 제목 앞일치 → 아티스트 앞일치.
+- 아티스트 검색 정렬: 아티스트 완전일치 → 아티스트 앞일치.
+- 음악+아티스트 검색 정렬: 모두 완전일치 → 아티스트만 완전일치 → 음악만 완전일치 → 모두 앞일치. 같은 순위는 `id` 오름차순이다.
 - **총 개수(`totalElements`·`totalPages`)는 내려주지 않는다** (2026-09-13, S15P21A405-255). §0.3 참고. 페이지 이동은 `hasNext`로 판단한다.
+- **2026-09-17 확장 (S15P21A405-365)**: 기존 `query+page` 요청은 유지하고 `artist`, `music+artist` 조건을 추가했다. 현재 전역 보안은 임시 `permitAll` 상태이므로 미인증 401은 Core 정책 복구 후 다시 검증한다.
 
 ### 3.2 노래 상세 조회
 `GET /api/music/detail` · 인증 필요. param: `id`(int, required).
 ```json
 { "success": true, "data": {
   "id": 10234, "mbid": "b1a9c0e9-d987-4042-ae91-78d6a3267d69", "title": "Love wins all", "artist": "IU",
-  "bpm": 128.4, "duration": 275, "album": "The Winning", "genres": ["K-Pop"],
+  "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"],
   "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
   "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 },
   "playCnt": 1428, "youtubeCnt": 3,
@@ -341,7 +352,7 @@ body: `idToken`(String, required).
   "musicCnt": 14, "totalDuration": 3480,
   "path": [ {
     "step": 0, "id": 10234, "mbid": "b1a9c0e9-...", "title": "Love wins all", "artist": "IU",
-    "bpm": 128.4, "duration": 275, "album": "The Winning", "genres": ["K-Pop"],
+    "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"],
     "youtubeUrl": "https://www.youtube.com/watch?v=oCveByMXd_0",
     "location": { "pc1": -0.4213, "pc2": 1.0872, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3
   } ]
@@ -362,25 +373,32 @@ body: `idToken`(String, required).
 
 `GET /api/music/major` · 인증 필요. 지도 레이어(`level`)와 이전 겹들에서 좁힌 누적 범위로 그 레이어에 **상주하는 곡 집합**을 반환. 레이어 n 은 평면 `pc(2n-1)`·`pc(2n)` 을 축으로 씀.
 
-param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, 레이어 1..level-1 각각의 min·max 쌍).
+param: `level`(int, required, 1~8), `size`(int, optional, 1~10,000), 누적 축 범위(level ≥ 2 에서 required, 레이어 1..level-1 각각의 min·max 쌍).
 ```json
 { "success": true, "data": { "content": [ {
   "musicId": 10234,
-  "pc": [-0.4213, 1.0872, "...", -0.123],
+  "pc": [-0.421, 1.087, "...", -0.123],
   "genreId": 0, "weight": 0,
-  "title": "Love wins all", "artist": "IU", "playable": false
+  "title": "Love wins all", "artist": "IU", "videoId": null, "playable": true
 } ] }, "error": null }
 ```
-- `level = 1`(최상위)은 범위 없이 호출. 서버가 미리 계산한 정적 결과를 반환.
+- `level = 1`(최상위)은 범위 없이 호출. 서버가 미리 계산한 정적 결과를 반환. `level`이 1~8 밖이거나 비정수면 400 `INVALID_INPUT`.
 - 누적 범위는 **클라이언트가 캐싱해 전부 전달**. 서버는 탐색 상태를 보관하지 않으며 요청 하나로 완결됨. 레이어를 올라가면 클라이언트가 해당 범위를 폐기.
 - **선정 책임 분리**: 서버는 상주 집합을 공간적으로 고르게 뽑음. 인기순 대표 선별은 클라이언트가 화면 픽셀 격자에서 수행 — 격자가 줌에 따라 변해 서버가 적용할 수 없음.
-- 반환 개수는 1,000 **규모**. 정확한 수는 강제하지 않음.
+- `size`는 레이어별 상주 곡 수를 측정하기 위한 임시 파라미터다. 지정하면 모든 레이어에 반환 상한으로 적용하며, 후보가 충분하면 요청 수만큼, 부족하면 후보 수만큼 반환한다. 허용 범위는 1~10,000이고 범위 밖 또는 비정수면 400 `INVALID_INPUT`.
+- 1레이어에서도 `size`를 상한으로 적용한다. 요청값이 정적 표본보다 작으면 요청 수만큼, 크면 가용 정적 표본 전체를 반환한다.
+- `size`를 생략하면 현행 약 1,000곡 동작을 유지한다. 특히 1레이어는 기존 정적 표본 전체를 반환하므로 정확히 1,000개를 강제하지 않는다.
+- `pc` 16개는 원본 좌표를 변경하거나 재학습하지 않고 **응답 직렬화 값만** `HALF_UP`으로 소수점 이하 최대 3자리로 반올림한다. 범위 판정과 내부 계산은 원본 정밀도를 유지한다.
+- `MapPoint`에서 `youtubeUrl`을 보내지 않는다. `playable`의 의미와 곡 상세의 `youtubeUrl`은 바뀌지 않는다.
+- 후보가 없으면 오류가 아니라 200과 빈 `content`를 반환한다.
 - 상세 필드(`bpm`·`duration`·`album`·`genres`·`mbid`·`playCnt`·`youtubeCnt`)는 담지 않음 — §3.2 담당.
-- 에러: `VALIDATION_ERROR`.
+- 에러: `INVALID_INPUT`(`level`·`size`·누적 범위 검증 실패).
 
 **미정**: 범위 파라미터의 이름·표기는 FE 구현 시 확정(후보 `pc{n}min`·`pc{n}max`). `genreId` 의 무장르 인덱스 번호와 멜론 코드 29종 → 색 인덱스 매핑은 FE 통보 대기.
 
-**현재 데이터 상태**(계약이 아니라 사실): `weight` 는 인기 지표 부재로 균일값, `playable` 은 `youtube_url` 미수집이라 전부 false.
+**현재 데이터 상태**(계약이 아니라 사실): `weight` 는 인기 지표 부재로 균일값이다. `playable`은 저장된 `youtube_url`이 아니라 제목·아티스트로 검색 링크를 만들 수 있는지에 따라 계산한다.
+
+**1레이어 측정 선행 조건**: 현재 정적 표본은 약 1천 건뿐이므로 `size=3000`·`size=10000`을 실제로 검증하려면 공간 균등 성질을 유지한 더 큰 1레이어 표본이 먼저 필요하다. 기존 약 1천 건 표본에서 단순 `LIMIT`만 바꾸어 더 많은 곡을 만들 수는 없다.
 
 #### 변경 이력 — 2026-09-11 (D15~D19, 이슈 S15P21A405-50)
 
@@ -389,7 +407,7 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 | 요청 | `level` + 중심좌표 `pc1`~`pc16` | `level` + **누적 축 범위**(1레이어는 파라미터 없음) |
 | 조회 구역 | 서버가 레벨별 **반경**으로 정하는 **원형** | **격자**. 구역 선택·이동은 **클라이언트 뷰포트** |
 | 선정 | 서버가 `youtubeCnt` **내림차순 상위 k** | 서버는 **공간 균등 상주 집합**, 인기순은 **클라이언트** |
-| 응답 | `MusicDetail` (13필드, `location` 객체) | **`MapPoint`** (9필드, `pc` 배열) |
+| 응답 | `MusicDetail` (14필드, `location` 객체) | **`MapPoint`** (9필드, `pc` 배열) |
 | 1레이어 | 다른 레벨과 동일 처리 | **정적 사전 계산** |
 
 **왜**: FE 가 이 모델로 이미 구현했고(`map-engine.ts`), data 가 거기 맞춰 인프라를 만들었으며(스펙 16 `map_sample`·GiST),
@@ -505,10 +523,11 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 ```json
 { "success": true, "data": {
   "playlistId": 42, "playlistName": "새벽 드라이브", "musicCnt": 2, "totalDuration": 512,
-  "musics": [ { "id": 10234, "mbid": "...", "title": "Love wins all", "artist": "IU", "bpm": 128.4, "duration": 275, "album": "The Winning", "genres": ["K-Pop"], "youtubeUrl": "https://...", "location": { "pc1": -0.4213, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3 } ]
+  "musics": [ { "id": 10234, "mbid": "...", "title": "Love wins all", "artist": "IU", "bpm": 128.4, "duration": 275, "album": "The Winning", "releaseYear": 2009, "genres": ["K-Pop"], "youtubeUrl": "https://...", "location": { "pc1": -0.4213, "...": "...", "pc16": -0.123 }, "playCnt": 1428, "youtubeCnt": 3 } ]
 }, "error": null }
 ```
-- `youtubeUrl`이 null인 곡은 클라이언트에서 재생 불가로 표시. 에러: `PLAYLIST_NOT_FOUND`, `FORBIDDEN`.
+- 로그인한 사용자라면 **누구의 플레이리스트든** 조회할 수 있다. 소유자의 공개 여부(`isPublic`)와도 무관하다 (S15P21A405-603).
+- `youtubeUrl`이 null인 곡은 클라이언트에서 재생 불가로 표시. 에러: `PLAYLIST_NOT_FOUND`.
 
 ### 4.3 플레이리스트 생성
 `POST /playlist/create` · 인증 필요. body: `playlistName`(String, required), `musicIdList`(Array\<int\>, required, 빈 배열 허용). res 201:
@@ -555,7 +574,7 @@ param: `level`(int, required), 누적 축 범위(level ≥ 2 에서 required, �
 
 ## 5. 탐색 설문 (S15P21A405-289)
 
-> 주변 탐색(§3.5)·경로 탐색(§3.3)에서 **곡 하나가 끝날 때마다** FE 가 1건 보낸다. 20초 이상 들은 곡은 설문이 강제로 뜨고 응답해야 다음 동작이 가능하다(질문 1개 👍/👎, 👎 면 이유 칩 하나 필수). 20초 전에 끝났거나 스킵한 곡은 설문 없이 `verdict=null` 로 보낸다.
+> 주변 탐색(§3.5)·경로 탐색(§3.3)에서 **곡 하나를 떠날 때마다** FE 가 1건 보낸다. 설문이 강제로 뜨고 응답해야 다음 동작이 가능하다(질문 1개 👍/👎, 👎 면 이유 칩 하나 필수). 청취 시간 조건은 없다(20초 조건 제거, S15P21A405-346). 답하지 않고 떠난 곡은 `verdict=null` 로 보낸다. 같은 사람은 같은 문항에 한 번만 답한다(§5.2).
 > 설문 방식·분석 쿼리는 `docs/notion/product/01_EXPLORE_SURVEY.md`. 테이블 DDL 은 `backend/src/main/resources/db/explore_feedback.sql`.
 > 거리·bpm 은 보내지 않는다 — 분석 시 `music.location`·`music.bpm` 을 조인해 계산한다(여정 응답은 거리를 노출하지 않음).
 
@@ -589,7 +608,7 @@ req:
 | `targetMusicId` | int | journey O | 도착곡 id. nearby 는 null |
 | `prevMusicId` | int | — | journey: 앞 역 id (1역은 출발곡). nearby 는 null |
 | `musicId` | int | O | 평가 대상 곡 |
-| `verdict` | bool | — | nearby: "기준곡과 비슷했나요?" / journey: "앞 곡에서 자연스럽게 이어졌나요?" `true`/`false`. 20초 전 종료·스킵은 설문 없이 `null` 로 **그래도 보낸다** |
+| `verdict` | bool | — | nearby: "기준곡과 비슷했나요?" / journey: "앞 곡에서 자연스럽게 이어졌나요?" `true`/`false`. 답하지 않고 떠난 곡은 `null` 로 **그래도 보낸다** |
 | `reason` | `dup` \| `mood` \| `tempo` \| `spoken` | verdict=false 면 O | 단일 선택. 같은 곡 / 분위기 다름 / 템포 다름 / 음악 아님. `verdict` 가 `true`/`null` 이면 보내지 않는다 |
 | `listenedSec` | int | — | 실제 들은 초 |
 | `skipped` | bool | — | 스킵으로 끝났는가. 기본 false |
@@ -597,5 +616,24 @@ req:
 res: `{ "success": true, "data": { "feedbackId": 7 }, "error": null }`
 
 - 같은 `(sessionId, rank)` 재요청은 `verdict`·`reason`·`listenedSec`·`skipped` 만 갱신하고 같은 `feedbackId` 를 돌려준다(답 바꾸기).
+- **같은 사람은 같은 문항에 한 번만 답한다** (S15P21A405-346). 사람 = 로그인 이메일 또는 `anonymousId`, 문항 = `(mode, anchorMusicId, prevMusicId, musicId)`.
+  다른 세션에서 이미 `verdict` 를 남긴 문항이면 저장하지 않고 **그 첫 답의 `feedbackId` 를 200 으로 돌려준다**(에러 아님). `verdict=null` 로만 남은 기록은 답이 아니므로 다시 답할 수 있다.
+  FE 는 §5.2 로 답한 문항을 미리 받아 설문을 띄우지 않는다.
 - 서버가 `bundle`(`ody.serving.bundle`)과 임계값 스냅샷(`rules`)을 행에 찍는다. 규칙을 바꾼 뒤 전후 비교용.
 - 에러 `INVALID_INPUT`(400): mode·reason 값 범위 밖, rank 0 또는 50 초과, uuid 형식 오류, journey 에 `targetMusicId` 없음, nearby 에 `targetMusicId`/`prevMusicId` 있음, `verdict=false` 인데 `reason` 없음, `verdict≠false` 인데 `reason` 있음.
+
+### 5.2 이미 답한 문항 조회
+`GET /api/feedback/answered?anonymousId=<uuid>` · **인증 선택** (S15P21A405-346).
+로그인 이메일 또는 `anonymousId` 중 하나로 사람을 찾는다. 둘 다 있으면 둘 중 하나라도 같은 행 전부.
+FE 는 탐색 결과를 받은 뒤 이 목록에 있는 문항엔 설문을 띄우지 않는다.
+
+res:
+```json
+{ "success": true, "data": [
+  { "mode": "nearby",  "anchorMusicId": 10234, "prevMusicId": null,  "musicId": 10877, "verdict": false },
+  { "mode": "journey", "anchorMusicId": 10234, "prevMusicId": 10877, "musicId": 11020, "verdict": true }
+], "error": null }
+```
+
+- `verdict=null` 인 기록(답하지 않고 떠남)은 포함하지 않는다.
+- 에러 `INVALID_INPUT`(400): 비로그인인데 `anonymousId` 없음, `anonymousId` 가 uuid 형식이 아님.

@@ -1,0 +1,210 @@
+package com.ssafy.backend.realtime.service.play;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyDouble;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+import java.util.List;
+import java.util.Optional;
+
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.InOrder;
+import org.mockito.Mock;
+import org.mockito.Mockito;
+import org.mockito.junit.jupiter.MockitoExtension;
+
+import com.ssafy.backend.common.CustomException;
+import com.ssafy.backend.common.MusicErrorCode;
+import com.ssafy.backend.realtime.error.RealtimeErrorCode;
+import com.ssafy.backend.realtime.dto.play.PlayHistoryRow;
+import com.ssafy.backend.realtime.dto.play.PlayResponse;
+import com.ssafy.backend.realtime.event.PositionChanged;
+import com.ssafy.backend.realtime.event.RealtimeEventService;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator;
+import com.ssafy.backend.realtime.geometry.MusicPositionCalculator.Placement;
+import com.ssafy.backend.realtime.repository.mapper.PlayHistoryMapper;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository;
+import com.ssafy.backend.realtime.repository.redis.PresenceRedisRepository.PresenceSnapshot;
+import com.ssafy.backend.realtime.service.meeting.MeetingService;
+import com.ssafy.backend.realtime.service.music.MusicLocationService;
+import com.ssafy.backend.realtime.service.ride.RiderMoveService;
+
+/** 곡 변경 뒤 이전 위치와 새 위치를 알리는지 검증한다. */
+@ExtendWith(MockitoExtension.class)
+class MusicPlayServiceTests {
+
+	private static final String EMAIL = "user@x.com";
+
+	@Mock PresenceRedisRepository presenceRedisRepository;
+	@Mock MusicLocationService musicLocationService;
+	@Mock MusicPositionCalculator musicPositionCalculator;
+	@Mock RealtimeEventService realtimeEventService;
+	@Mock PlayHistoryMapper playHistoryMapper;
+	@Mock MeetingService meetingService;
+	@Mock RiderMoveService riderMoveService;
+	@InjectMocks MusicPlayService service;
+
+	@Test
+	@DisplayName("곡을 바꾸면 이전 위치와 새 위치를 알린다")
+	void playPublishesOldAndNewPosition() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, 10L, 2, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(List.of());
+
+		// 요청에 다른 레이어(5)를 넣어도 서 있는 레이어(2)를 유지한다.
+		service.play(EMAIL, 20L, "MAP", 5);
+
+		PositionChanged event = new PositionChanged(
+				EMAIL, 7L, 2, 2,
+				10L, 20L,
+				"1:1", "2:7",
+				0.2, 0.7);
+		InOrder order = Mockito.inOrder(
+				presenceRedisRepository, playHistoryMapper, realtimeEventService, meetingService);
+		order.verify(presenceRedisRepository).applyPlay(
+				EMAIL, 10L, 2, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7);
+		order.verify(playHistoryMapper).insert(org.mockito.ArgumentMatchers.any(PlayHistoryRow.class));
+		order.verify(realtimeEventService).send(event);
+		order.verify(meetingService).recordMeetings(EMAIL, List.of());
+	}
+
+	@Test
+	@DisplayName("같은 곡을 다시 재생하면 기록만 만들고 위치 변경은 알리지 않는다")
+	void replayingSameMusicDoesNotPublishMove() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(20L, 2, 2, 7, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, 20L, 2, 2, 7,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(List.of());
+
+		service.play(EMAIL, 20L, "MAP", null);
+
+		verify(playHistoryMapper).insert(org.mockito.ArgumentMatchers.any(PlayHistoryRow.class));
+		verify(playHistoryMapper).incrementPlayCnt(20L);
+		verify(meetingService).recordMeetings(EMAIL, List.of());
+		verifyNoInteractions(realtimeEventService);
+	}
+
+	@Test
+	@DisplayName("아직 지도에 없는 사용자는 요청한 레이어로 첫 자리를 잡는다")
+	void firstPlayPlacesAtRequestedLayer() {
+		double[] location = new double[16];
+		// 레이어 3 의 표시축은 pc5·pc6 — 응답 x·y 는 이 원시 값이어야 한다(정규화 0.4·0.6 이 아니다)
+		location[4] = 1.25;
+		location[5] = -0.5;
+		Placement placement = new Placement(3, 5, 6, 0.4, 0.6, 6, 9);
+		// 접속만 하고 아무 곡도 안 들은 상태: 곡·레이어·셀이 전부 없다.
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(null, null, null, null, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 3)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, null, null, null, null,
+				20L, 3, 0.4, 0.6, 6, 9)).thenReturn(List.of());
+
+		PlayResponse response = service.play(EMAIL, 20L, "MAP", 3);
+
+		assertThat(response.layer()).isEqualTo(3);
+		assertThat(response.x()).isEqualTo(1.25);
+		assertThat(response.y()).isEqualTo(-0.5);
+		verify(presenceRedisRepository).applyPlay(
+				EMAIL, null, null, null, null,
+				20L, 3, 0.4, 0.6, 6, 9);
+		// 첫 진입이므로 이전 값 없이 새 위치만 알린다.
+		verify(realtimeEventService).send(new PositionChanged(
+				EMAIL, 7L, null, 3,
+				null, 20L,
+				null, "6:9",
+				0.4, 0.6));
+	}
+
+	@Test
+	@DisplayName("지도에 없고 요청에도 레이어가 없으면 어디에 놓을지 몰라 거부한다")
+	void firstPlayWithoutLayerIsRejected() {
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(null, null, null, null, 7L));
+
+		assertThatThrownBy(() -> service.play(EMAIL, 20L, "MAP", null))
+				.isInstanceOf(CustomException.class);
+
+		verifyNoInteractions(musicLocationService, playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("존재하지 않는 곡은 404 MUSIC_NOT_FOUND 로 거부한다")
+	void missingMusicIsNotFound() {
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(999L)).thenReturn(Optional.empty());
+		when(musicLocationService.exists(999L)).thenReturn(false);
+
+		assertThatThrownBy(() -> service.play(EMAIL, 999L, "MAP", null))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(MusicErrorCode.MUSIC_NOT_FOUND));
+
+		verifyNoInteractions(playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("곡은 있지만 좌표가 없으면 422 PRESENCE_ERROR 로 거부한다")
+	void musicWithoutLocationIsPresenceError() {
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.empty());
+		when(musicLocationService.exists(20L)).thenReturn(true);
+
+		assertThatThrownBy(() -> service.play(EMAIL, 20L, "MAP", null))
+				.isInstanceOfSatisfying(CustomException.class,
+						e -> assertThat(e.getErrorCode()).isEqualTo(RealtimeErrorCode.PRESENCE_ERROR));
+
+		verifyNoInteractions(playHistoryMapper, realtimeEventService, meetingService);
+	}
+
+	@Test
+	@DisplayName("따라오는 사람이 있으면 기록을 한 번에 넣고 위치 알림은 한 건만 나간다")
+	void playWithRidersWritesOneBatchAndSendsOneEvent() {
+		double[] location = new double[16];
+		Placement placement = new Placement(2, 3, 4, 0.2, 0.7, 2, 7);
+		when(presenceRedisRepository.snapshot(EMAIL))
+				.thenReturn(new PresenceSnapshot(10L, 2, 1, 1, 7L));
+		when(musicLocationService.findLocation(20L)).thenReturn(Optional.of(location));
+		when(musicPositionCalculator.calculate(location, 2)).thenReturn(placement);
+		when(presenceRedisRepository.applyPlay(
+				EMAIL, 10L, 2, 1, 1,
+				20L, 2, 0.2, 0.7, 2, 7)).thenReturn(List.of());
+		when(riderMoveService.ridersOf(EMAIL)).thenReturn(List.of("r1@x.com", "r2@x.com"));
+		when(riderMoveService.moveAll(
+				eq(EMAIL), any(), eq(20L), eq(2), eq(placement),
+				anyDouble(), anyDouble(), eq("MAP"))).thenReturn(555L);
+
+		PlayResponse response = service.play(EMAIL, 20L, "MAP", 5);
+
+		// 인솔자 기록도 따라오는 사람들과 같이 들어가므로 한 줄씩 넣는 경로는 타지 않는다
+		assertThat(response.playHistoryId()).isEqualTo(555L);
+		verify(playHistoryMapper, never()).insert(any(PlayHistoryRow.class));
+		verify(playHistoryMapper, never()).incrementPlayCnt(20L);
+		// 따라오는 사람은 지도에 올리지 않아 알림은 인솔자 것 한 건뿐이다
+		verify(realtimeEventService, times(1)).send(any(PositionChanged.class));
+	}
+}

@@ -1,6 +1,7 @@
 package com.ssafy.backend.music;
 
 import static org.hamcrest.Matchers.nullValue;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
@@ -59,27 +60,30 @@ class MusicDetailControllerTests {
 
 
 
+	/** 앨범(release) MBID. FE 가 이 값으로 Cover Art Archive 를 두드린다(S15P21A405-520). */
+	private static final String ALBUM_MBID = "0d1b2c3d-4e5f-6071-8293-a4b5c6d7e8f9";
+
 	private static Location loc() {
 		return new Location(-0.4213, 1.0872, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, -0.123);
 	}
 
 	private static MusicDetail detail(String youtubeUrl) {
-		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning",
-				List.of("K-Pop"), youtubeUrl, null, loc(), 1428, 3);
+		return new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", ALBUM_MBID, 2024,
+				youtubeUrl, null, loc(), 1428, 3);
 	}
 
 	private static NeighborTrack neighbor(long id, String youtubeUrl, double distance) {
 		return new NeighborTrack(
-				new MusicSummary(id, "Through the Night", "IU", "Palette", List.of("K-Pop"), youtubeUrl, null, loc()),
-				distance);
+				new MusicSummary(id, "Through the Night", "IU", "Palette", youtubeUrl, null, loc()),
+				"album-" + id, distance);
 	}
 
 	@Test
 	void detail_success_returnsFlatDetailWithNeighbors() throws Exception {
 		MusicDetailResponse body = new MusicDetailResponse(detail("https://youtu.be/x"),
 				List.of(neighbor(10877L, "https://youtu.be/y", 0.0412),
-						neighbor(10999L, "https://youtu.be/z", 0.0510)), false);
-		when(musicService.getDetail(eq(10234L))).thenReturn(body);
+						neighbor(10999L, "https://youtu.be/z", 0.0510)), false, false);
+		when(musicService.getDetail(eq(10234L), any())).thenReturn(body);
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -88,21 +92,25 @@ class MusicDetailControllerTests {
 				// @JsonUnwrapped: 상세 필드가 data top-level에 flat
 				.andExpect(jsonPath("$.data.id").value(10234))
 				.andExpect(jsonPath("$.data.mbid").value("b1a9c0e9"))
+				// 앨범 커버를 여는 열쇠는 recording mbid 가 아니라 이쪽이다 (S15P21A405-520)
+				.andExpect(jsonPath("$.data.albumMbid").value(ALBUM_MBID))
 				.andExpect(jsonPath("$.data.bpm").value(128.4))
+				.andExpect(jsonPath("$.data.releaseYear").value(2024))
 				.andExpect(jsonPath("$.data.location.pc1").value(-0.4213))
 				.andExpect(jsonPath("$.data.playCnt").value(1428))
-				// neighbors: MusicSummary 필드 flat + distance
+				// neighbors: MusicSummary 필드 flat + albumMbid + distance
 				.andExpect(jsonPath("$.data.neighbors[0].id").value(10877))
 				.andExpect(jsonPath("$.data.neighbors[0].artist").value("IU"))
 				.andExpect(jsonPath("$.data.neighbors[0].location.pc16").value(-0.123))
+				.andExpect(jsonPath("$.data.neighbors[0].albumMbid").value("album-10877"))
 				.andExpect(jsonPath("$.data.neighbors[0].distance").value(0.0412))
 				.andExpect(jsonPath("$.data.neighbors[1].id").value(10999));
 	}
 
 	@Test
 	void detail_targetNotPlayable_returns200WithNullUrl() throws Exception {
-		when(musicService.getDetail(anyLong()))
-				.thenReturn(new MusicDetailResponse(detail(null), List.of(), false));
+		when(musicService.getDetail(anyLong(), any()))
+				.thenReturn(new MusicDetailResponse(detail(null), List.of(), false, false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -113,9 +121,9 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_neighborNotPlayable_keptInList() throws Exception {
-		when(musicService.getDetail(anyLong()))
+		when(musicService.getDetail(anyLong(), any()))
 				.thenReturn(new MusicDetailResponse(detail("https://youtu.be/x"),
-						List.of(neighbor(10877L, null, 0.0412)), false));
+						List.of(neighbor(10877L, null, 0.0412)), false, false));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isOk())
@@ -125,7 +133,7 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_notFound_returns404MusicNotFound() throws Exception {
-		when(musicService.getDetail(eq(999L)))
+		when(musicService.getDetail(eq(999L), any()))
 				.thenThrow(new CustomException(MusicErrorCode.MUSIC_NOT_FOUND));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "999"))
@@ -159,7 +167,7 @@ class MusicDetailControllerTests {
 
 	@Test
 	void detail_internalFailure_returns500() throws Exception {
-		when(musicService.getDetail(anyLong())).thenThrow(new RuntimeException("boom"));
+		when(musicService.getDetail(anyLong(), any())).thenThrow(new RuntimeException("boom"));
 
 		mockMvc.perform(get("/api/music/detail").param("id", "10234"))
 				.andExpect(status().isInternalServerError())

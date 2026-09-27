@@ -18,4 +18,9 @@ public class VideoIdWriterAdapter implements VideoIdWriterPort {
 	public void save(long musicId, String videoId) {
 		mapper.updateVideoId(musicId, videoId);
 	}
+
+	@Override
+	public boolean markUnplayable(long musicId) {
+		return mapper.markUnplayable(musicId) == 1;
+	}
 }

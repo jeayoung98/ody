@@ -5,7 +5,7 @@ set -e
 IMAGE_NAME=${1:-backend:1.0}
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ENV_FILE="${SCRIPT_DIR}/.env"
+ENV_FILE="${SCRIPT_DIR}/.env" 
 
 # Fail before changing a slot when an image has not been transferred yet.
 docker image inspect "$IMAGE_NAME" >/dev/null
@@ -37,6 +37,28 @@ if [ ! -f "$ENV_FILE" ]; then
     echo "ERROR: $ENV_FILE not found. Create it on this host before deploying."
     exit 1
 fi
+
+# --------------------------------------------------
+# 0. 프로필 이미지 업로드 디렉터리 (S15P21A405-426)
+# --------------------------------------------------
+# Blue/Green 두 슬롯이 같은 호스트 디렉터리를 컨테이너 안에서도 같은 경로로 본다. 컨테이너는 비루트
+# (Dockerfile 의 spring, uid 10001)로 돌기 때문에 디렉터리 소유자를 그 uid 로 맞춘다.
+# 슬롯을 건드리기 전에 확인해서, 설정 누락이 배포 중간이 아니라 여기서 드러나게 한다.
+
+PROFILE_IMAGE_DIR=/home/ubuntu/profileImages
+CONTAINER_UID=10001
+
+if ! grep -q '^PROFILE_IMAGE_BASE_URL=' "$ENV_FILE"; then
+    echo "ERROR: PROFILE_IMAGE_BASE_URL is missing in $ENV_FILE."
+    echo "       e.g. PROFILE_IMAGE_BASE_URL=https://j15a405a.p.ssafy.io/api/user/images"
+    exit 1
+fi
+
+sudo mkdir -p "$PROFILE_IMAGE_DIR"
+sudo chown "${CONTAINER_UID}:${CONTAINER_UID}" "$PROFILE_IMAGE_DIR"
+sudo chmod 755 "$PROFILE_IMAGE_DIR"
+
+echo "Profile image dir : $PROFILE_IMAGE_DIR"
 
 # --------------------------------------------------
 # 1. 현재 활성 포트 확인
@@ -87,12 +109,23 @@ fi
 
 echo "Starting new container..."
 
+# realtime 프로파일 (S15P21A405-495). 실시간 존재·주변 사람·따라가기 컨트롤러와 서비스가 전부
+# @Profile("realtime") 이라, 이 값이 없으면 /ws 소켓은 열려도 /app/presence/* 를 받는 쪽이 없고
+# /api/realtime/* 과 /api/music/play 는 404 가 된다.
+#
+# ACTIVE 가 아니라 INCLUDE 인 이유: 위 DB rollout 분기가 /etc/ody/backend.env 로 프로파일을
+# 정하는데, ACTIVE 로 넘기면 그걸 통째로 덮어써서 db 프로파일이 날아간다. INCLUDE 는 이미
+# 활성화된 집합에 더하기만 한다.
+
 docker run -d \
     "${DOCKER_RUNTIME_ARGS[@]}" \
     --name "$TARGET_CONTAINER" \
     --restart unless-stopped \
     -p "127.0.0.1:${TARGET_PORT}:8080" \
     --env-file "$ENV_FILE" \
+    -e SPRING_PROFILES_INCLUDE=realtime \
+    -e PROFILE_IMAGE_DIR="$PROFILE_IMAGE_DIR" \
+    -v "${PROFILE_IMAGE_DIR}:${PROFILE_IMAGE_DIR}" \
     "$IMAGE_NAME"
 
 # --------------------------------------------------

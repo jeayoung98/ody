@@ -4,6 +4,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -26,6 +27,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 import com.ssafy.backend.config.SecurityConfig;
 import com.ssafy.backend.feedback.controller.FeedbackController;
+import com.ssafy.backend.feedback.dto.AnsweredRow;
 import com.ssafy.backend.feedback.dto.FeedbackResponse;
 import com.ssafy.backend.feedback.service.FeedbackService;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
@@ -64,6 +66,30 @@ class FeedbackControllerTests {
 		mockMvc.perform(post("/api/feedback").contentType(MediaType.APPLICATION_JSON).content(BODY))
 				.andExpect(status().isOk())
 				.andExpect(jsonPath("$.data.feedbackId").value(8));
+	}
+
+	@Test
+	void answered_passesEmailAndAnonymousId() throws Exception {
+		AnsweredRow row = new AnsweredRow();
+		row.setMode("nearby");
+		row.setAnchorMusicId(1);
+		row.setMusicId(55);
+		row.setVerdict(true);
+		when(feedbackService.answered(eq("me@gmail.com"), eq("0b6a0d8e-1c2f-4a3b-9d4e-5f6a7b8c9d0e"))).thenReturn(List.of(row));
+		mockMvc.perform(get("/api/feedback/answered").param("anonymousId", "0b6a0d8e-1c2f-4a3b-9d4e-5f6a7b8c9d0e")
+						.principal(new UsernamePasswordAuthenticationToken(
+								"me@gmail.com", null, List.of(new SimpleGrantedAuthority("ROLE_USER")))))
+				.andExpect(status().isOk())
+				.andExpect(jsonPath("$.data[0].musicId").value(55))
+				.andExpect(jsonPath("$.data[0].prevMusicId").isEmpty())
+				.andExpect(jsonPath("$.data[0].verdict").value(true));
+	}
+
+	@Test
+	void answered_badUuid_returns400() throws Exception {
+		mockMvc.perform(get("/api/feedback/answered").param("anonymousId", "not-a-uuid"))
+				.andExpect(status().isBadRequest())
+				.andExpect(jsonPath("$.error.code").value("INVALID_INPUT"));
 	}
 
 	@Test

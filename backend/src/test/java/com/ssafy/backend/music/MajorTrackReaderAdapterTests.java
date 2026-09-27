@@ -3,7 +3,6 @@ package com.ssafy.backend.music;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyList;
@@ -16,7 +15,6 @@ import java.util.List;
 
 import org.junit.jupiter.api.Test;
 
-import com.ssafy.backend.music.YoutubeSearchUrl;
 import com.ssafy.backend.music.dto.MapPoint;
 import com.ssafy.backend.music.dto.MapPointRow;
 import com.ssafy.backend.music.retrieval.LayerBox;
@@ -36,12 +34,12 @@ class MajorTrackReaderAdapterTests {
 	private final MajorTrackMapper mapper = mock(MajorTrackMapper.class);
 	private final MajorTrackReaderAdapter adapter = new MajorTrackReaderAdapter(mapper);
 
-	private static MapPointRow row(long musicId, String youtubeUrl) {
+	private static MapPointRow row(long musicId) {
 		MapPointRow r = new MapPointRow();
 		r.setMusicId(musicId);
 		r.setTitle("t" + musicId);
 		r.setArtist("a" + musicId);
-		r.setYoutubeUrl(youtubeUrl);
+		r.setAlbumMbid("alb-" + musicId);
 		r.setPc1(PCS[0]);
 		r.setPc2(PCS[1]);
 		r.setPc16(PCS[15]);
@@ -51,11 +49,11 @@ class MajorTrackReaderAdapterTests {
 	@Test
 	void level1_readsPrecomputedSample_notTheLiveScan() {
 		// 전역 실시간 집계는 20,941 ms 라 1레이어는 map_sample 을 읽어야 한다.
-		when(mapper.findLayerOneSample()).thenReturn(List.of(row(1L, null)));
+		when(mapper.findLayerOneSample(1000)).thenReturn(List.of(row(1L)));
 
 		adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 
-		verify(mapper).findLayerOneSample(); // 정적 집합은 자르지 않는다(실측 1,094칸)
+		verify(mapper).findLayerOneSample(1000);
 		verify(mapper, never()).findInAccumulatedBoxes(anyList(), anyInt());
 	}
 
@@ -67,27 +65,29 @@ class MajorTrackReaderAdapterTests {
 		adapter.findResidentSet(new MajorQuery(2, List.of(layer1), 1000));
 
 		verify(mapper).findInAccumulatedBoxes(List.of(layer1), 1000);
-		verify(mapper, never()).findLayerOneSample();
+		verify(mapper, never()).findLayerOneSample(anyInt());
 	}
 
 	@Test
 	void copiesStoredCoordinatesVerbatim_as16Axes() {
-		when(mapper.findLayerOneSample()).thenReturn(List.of(row(7L, null)));
+		when(mapper.findLayerOneSample(1000)).thenReturn(List.of(row(7L)));
 
 		MapPoint point = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000)).get(0);
 
 		assertEquals(MapPoint.PC_DIMS, point.pc().size());
-		assertEquals(PCS[0], point.pc().get(0)); // 재계산·반올림 없음 (FR-007)
+		assertEquals(PCS[0], point.pc().get(0));
 		assertEquals(PCS[1], point.pc().get(1));
 		assertEquals(PCS[15], point.pc().get(15));
 		assertEquals(7L, point.musicId());
+		// 앨범 커버를 여는 열쇠다. music 조인으로 실어 보낸다 (S15P21A405-520)
+		assertEquals("alb-7", point.albumMbid());
 	}
 
 	@Test
 	void genreIdIsNoGenre_andWeightIsUniform() {
 		// genreId 는 FE NO_GENRE_ID(10). 0 을 보내면 앰비언트 청록이라 지도가 한 색이 된다.
 		// weight 는 인기 지표 부재로 균일값(D17).
-		when(mapper.findLayerOneSample()).thenReturn(List.of(row(1L, null), row(2L, "https://y/2")));
+		when(mapper.findLayerOneSample(1000)).thenReturn(List.of(row(1L), row(2L)));
 
 		List<MapPoint> points = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 
@@ -96,30 +96,34 @@ class MajorTrackReaderAdapterTests {
 	}
 
 	@Test
-	void youtubeUrl_isBuiltFromTitleAndArtist_notTheNullColumn() {
-		// music.youtube_url 은 662만 행 전부 NULL 이다. 저장값이 아니라 title·artist 로 만든다(D12).
-		when(mapper.findLayerOneSample()).thenReturn(List.of(row(1L, null), row(2L, "https://y/2")));
+	void playable_isDerivedWithoutExposingYoutubeUrl() {
+		when(mapper.findLayerOneSample(1000)).thenReturn(List.of(row(1L), row(2L)));
 
 		List<MapPoint> points = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 
-		// 컬럼이 NULL 인 1번도 URL 이 생긴다 — 예전엔 이 행이 playable=false 였다.
-		assertEquals(YoutubeSearchUrl.of("a1", "t1"), points.get(0).youtubeUrl());
 		assertTrue(points.get(0).playable());
-		// 컬럼에 값이 있어도 읽지 않는다.
-		assertEquals(YoutubeSearchUrl.of("a2", "t2"), points.get(1).youtubeUrl());
+		assertTrue(points.get(1).playable());
+	}
+
+	@Test
+	void level1_appliesRequestedSizeAsUpperBound() {
+		when(mapper.findLayerOneSample(500)).thenReturn(List.of());
+
+		adapter.findResidentSet(new MajorQuery(1, List.of(), 500));
+
+		verify(mapper).findLayerOneSample(500);
 	}
 
 	@Test
 	void playable_isFalse_whenTitleAndArtistAreBothBlank() {
 		// 적재 실측상 제목이 빈 문자열인 곡이 3,977개 있다. 그 곡은 검색어를 만들 수 없다.
-		MapPointRow blank = row(3L, null);
+		MapPointRow blank = row(3L);
 		blank.setTitle("");
 		blank.setArtist("");
-		when(mapper.findLayerOneSample()).thenReturn(List.of(blank));
+		when(mapper.findLayerOneSample(1000)).thenReturn(List.of(blank));
 
 		List<MapPoint> points = adapter.findResidentSet(new MajorQuery(1, List.of(), 1000));
 
-		assertNull(points.get(0).youtubeUrl());
 		assertFalse(points.get(0).playable());
 	}
 

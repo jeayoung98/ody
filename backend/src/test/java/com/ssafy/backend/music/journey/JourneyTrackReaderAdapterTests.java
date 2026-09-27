@@ -17,7 +17,6 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.music.dto.MusicDetailRow;
-import com.ssafy.backend.music.dto.MusicGenreRow;
 import com.ssafy.backend.music.mapper.MusicDetailMapper;
 
 @ExtendWith(MockitoExtension.class)
@@ -45,12 +44,11 @@ class JourneyTrackReaderAdapterTests {
 	void emptyInputDoesNotQuery() {
 		assertThat(adapter.findDetailsByIds(List.of())).isEmpty();
 		verify(mapper, never()).findByIds(anyList());
-		verify(mapper, never()).findGenresByMusicIds(anyList());
 	}
 
 	@Test
-	@DisplayName("정거장 20건을 질의 2회로 읽는다 — 곡당 왕복이면 예산을 넘는다")
-	void readsAllStationsInTwoQueries() {
+	@DisplayName("정거장 20건을 질의 1회로 읽는다 — 곡당 왕복이면 예산을 넘는다")
+	void readsAllStationsInOneQuery() {
 		List<Long> ids = new java.util.ArrayList<>();
 		List<MusicDetailRow> rows = new java.util.ArrayList<>();
 		for (int i = 1; i <= 20; i++) {
@@ -58,11 +56,9 @@ class JourneyTrackReaderAdapterTests {
 			rows.add(row(i, "mbid-" + i, "곡 " + i, "아티스트"));
 		}
 		given(mapper.findByIds(ids)).willReturn(rows);
-		given(mapper.findGenresByMusicIds(anyList())).willReturn(List.of());
 
 		assertThat(adapter.findDetailsByIds(ids)).hasSize(20);
 		verify(mapper).findByIds(ids);
-		verify(mapper).findGenresByMusicIds(anyList());
 	}
 
 	@Test
@@ -70,39 +66,10 @@ class JourneyTrackReaderAdapterTests {
 	void missingIdIsOmitted() {
 		given(mapper.findByIds(anyList()))
 				.willReturn(List.of(row(1, "있음", "제목", "가수")));
-		given(mapper.findGenresByMusicIds(anyList())).willReturn(List.of());
 
 		List<MusicDetail> found = adapter.findDetailsByIds(List.of(1L, 2L));
 
 		assertThat(found).hasSize(1);
 		assertThat(found.get(0).id()).isEqualTo(1L);
-	}
-
-	@Test
-	@DisplayName("장르를 곡별로 묶어 채운다")
-	void fillsGenresPerTrack() {
-		given(mapper.findByIds(anyList()))
-				.willReturn(List.of(row(1, "a", "제목1", "가수1"), row(2, "b", "제목2", "가수2")));
-		MusicGenreRow g1 = new MusicGenreRow();
-		g1.setMusicId(1L);
-		g1.setName("rock");
-		MusicGenreRow g2 = new MusicGenreRow();
-		g2.setMusicId(1L);
-		g2.setName("pop");
-		given(mapper.findGenresByMusicIds(anyList())).willReturn(List.of(g1, g2));
-
-		List<MusicDetail> found = adapter.findDetailsByIds(List.of(1L, 2L));
-
-		assertThat(found.get(0).genres()).containsExactly("rock", "pop");
-		assertThat(found.get(1).genres()).isEmpty();
-	}
-
-	@Test
-	@DisplayName("한 건도 못 찾으면 장르 질의를 하지 않는다")
-	void noRowsSkipsGenreQuery() {
-		given(mapper.findByIds(anyList())).willReturn(List.of());
-
-		assertThat(adapter.findDetailsByIds(List.of(999L))).isEmpty();
-		verify(mapper, never()).findGenresByMusicIds(anyList());
 	}
 }

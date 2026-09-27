@@ -35,6 +35,26 @@ test("아티스트가 없는 곡은 제목만 본다. 제목이 없으면 null",
   assert.equal(matchDemoSong({ title: "Hollywood Action" }, [{ id: 8, title: "Hollywood", artist: null }]), null);
 });
 
+test("동명 곡이 많은 제목(BAD)은 아티스트가 맞는 곡만 — 한글·영문 표기 어느 쪽이든", () => {
+  const items = [
+    { id: 11, title: "Bad", artist: "Michael Jackson" },
+    { id: 12, title: "BAD", artist: "Someone Else" },
+    { id: 13, title: "BAD", artist: "ATEEZ" },
+  ];
+  const want = DEMO_SONGS.find((s) => s.title === "BAD");
+  assert.ok(want, "목록에 BAD 가 있다");
+  assert.equal(matchDemoSong(want, items)?.id, 13);
+  assert.equal(matchDemoSong(want, [{ id: 14, title: "Bad", artist: "에이티즈" }])?.id, 14);
+  // 아티스트가 하나도 안 맞고 후보가 여럿이면 엉뚱한 Bad 를 집지 않는다
+  assert.equal(matchDemoSong(want, items.slice(0, 2)), null);
+});
+
+test("ELEVEN 은 아이브/IVE 어느 표기로도 잡힌다", () => {
+  const want = DEMO_SONGS.find((s) => s.title === "ELEVEN");
+  assert.ok(want);
+  assert.equal(matchDemoSong(want, [{ id: 21, title: "Eleven", artist: "IVE (아이브)" }])?.id, 21);
+});
+
 test("시연 곡 목록은 제목이 비어 있지 않다", () => {
   assert.ok(DEMO_SONGS.length >= 1);
   for (const s of DEMO_SONGS) assert.ok(s.title.trim().length > 0);

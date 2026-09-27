@@ -41,7 +41,7 @@ class MusicDetailServiceTests {
 	private static NeighborTrack neighbor(long id, double distance) {
 		return new NeighborTrack(
 				new MusicSummary(id, "t", "IU", "Palette", "https://youtu.be/y", null, LOC),
-				distance);
+				"album-" + id, distance);
 	}
 
 	/** 로그인 사용자가 좋아요한 곡이면 하트를 채울 수 있어야 한다 (S15P21A405-599). */
@@ -164,7 +164,7 @@ class MusicDetailServiceTests {
 		serviceWith(reader, nearby).getDetail(10234L, null);
 
 		verify(nearby).neighborsOf(center);
-		verify(reader, Mockito.never()).findSummariesByIds(Mockito.anyList());
+		verify(reader, Mockito.never()).findDetailsByIds(Mockito.anyList());
 	}
 
 	@Test

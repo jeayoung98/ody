@@ -25,6 +25,8 @@ import org.springframework.test.web.servlet.MockMvc;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.config.SecurityConfig;
+import com.ssafy.backend.music.dto.Location;
+import com.ssafy.backend.music.dto.MusicDetail;
 import com.ssafy.backend.security.JwtAuthenticationFilter;
 import com.ssafy.backend.user.controller.UserController;
 import com.ssafy.backend.user.dto.UserDetailResponse;
@@ -62,7 +64,9 @@ class UserDetailControllerTests {
 				OffsetDateTime.parse("2026-09-07T13:41:02+09:00"),
 				OffsetDateTime.parse("2026-08-21T09:12:44+09:00"),
 				"https://cdn.example.com/profile/abc.png",
-				0, 0, false, isMe, 42, 7, true);
+				0, 0, false, isMe, 42, 7, true,
+				new MusicDetail(10234L, "b1a9c0e9", "Love wins all", "IU", 128.4, 275, "The Winning", "8f3a", 2024,
+						"https://youtu.be/x", null, new Location(0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0), 1428, 3));
 	}
 
 	@Test
@@ -77,7 +81,10 @@ class UserDetailControllerTests {
 				.andExpect(jsonPath("$.error").doesNotExist())
 				.andExpect(jsonPath("$.data.email").value("you@gmail.com"))
 				.andExpect(jsonPath("$.data.tutorialCompleted").value(true))
-				.andExpect(jsonPath("$.data.lastMusic").doesNotExist())
+				// 마지막 재생곡은 MusicDetail 을 그대로 싣는다 (S15P21A405-713)
+				.andExpect(jsonPath("$.data.lastMusic.id").value(10234))
+				.andExpect(jsonPath("$.data.lastMusic.title").value("Love wins all"))
+				.andExpect(jsonPath("$.data.lastMusic.albumMbid").value("8f3a"))
 				.andExpect(jsonPath("$.data.isPublic").value(true))
 				.andExpect(jsonPath("$.data.isMe").value(false));
 	}

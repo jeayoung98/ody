@@ -19,4 +19,7 @@ public interface UserMapper {
 	int countDistinctPlayedMusic(@Param("email") String email);
 
 	int countDiscoveredMusic(@Param("email") String email);
+
+	/** 마지막으로 재생한 곡의 id. 기록이 없으면 {@code null}. */
+	Long findLastPlayedMusicId(@Param("email") String email);
 }

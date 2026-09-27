@@ -74,4 +74,19 @@
 		WHERE email = #{email}
 	</select>
 
+	<!--
+		마지막으로 재생한 곡 (S15P21A405-713). played_at 이 같은 행(따라가기로 한꺼번에 들어간 줄)은
+		id 로 순서를 굳힌다 — 실시간 입장 위치(PlayHistoryMapper.findLatestMusicId)와 같은 규칙이라
+		프로필의 마지막 곡과 지도에 선 자리가 어긋나지 않는다. 기록이 없으면 결과 없음 → null.
+		(email, played_at, id) 인덱스가 있어야 그 사용자의 최신 한 줄만 읽는다
+		(db/play_history_003_email_played_at_index.sql). 없으면 그 사용자 기록 전체를 정렬한다.
+	-->
+	<select id="findLastPlayedMusicId" resultType="long">
+		SELECT music_id
+		FROM play_history
+		WHERE email = #{email}
+		ORDER BY played_at DESC, id DESC
+		LIMIT 1
+	</select>
+
 </mapper>

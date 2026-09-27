@@ -15,6 +15,7 @@ import com.ssafy.backend.common.AuthErrorCode;
 import com.ssafy.backend.common.CustomException;
 import com.ssafy.backend.presence.OfflineOnlyStatusService;
 import com.ssafy.backend.follow.service.FollowService;
+import com.ssafy.backend.music.detail.MusicDetailReader;
 import com.ssafy.backend.common.GlobalErrorCode;
 import com.ssafy.backend.common.UserErrorCode;
 import com.ssafy.backend.user.dto.NicknameUpdateRequest;
@@ -31,7 +32,8 @@ class UserNicknameServiceTests {
 
 	private final UserMapper userMapper = mock(UserMapper.class);
 	private final AuthMapper authMapper = mock(AuthMapper.class);
-	private final UserService userService = new UserService(userMapper, authMapper, mock(FollowService.class), new OfflineOnlyStatusService());
+	private final UserService userService = new UserService(userMapper, authMapper, mock(FollowService.class), new OfflineOnlyStatusService(),
+			mock(MusicDetailReader.class));
 
 	private static UserProfileRow row(String nickname) {
 		UserProfileRow row = new UserProfileRow();

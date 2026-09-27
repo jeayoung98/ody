@@ -11,6 +11,7 @@ import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
+import { useDemoPins } from "@/hooks/use-demo-pins";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
@@ -82,6 +83,8 @@ export default function MapView({ occlusion }: MapViewProps) {
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
   const { data: rawSongs, isError: songsFailed } = useMapSongsQuery(boxes);
+  // 시연 곡은 상주 집합과 별개로 좌표를 받아 못 박는다 (S15P21A405-717)
+  useDemoPins(engine);
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);

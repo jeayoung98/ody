@@ -21,6 +21,7 @@ import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { rememberMusicHints } from "@/lib/music-hints";
+import { overlayTapSnap } from "@/lib/overlay-tap-snap";
 import { useMapStore } from "@/stores/use-map-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -774,14 +775,18 @@ export default function MapView({ occlusion }: MapViewProps) {
        * **2 단으로 연다** (S15P21A405-703, 사용자 결정). 1 단은 제목 줄뿐이라 눌러 놓고 다시 올려야
        * 했다. 1 단은 이제 **지도를 움직일 때** 내려앉는 자리다(`collapse`). 누른 별은 시트 위에 남은
        * 지도의 가운데로 온다 — 가림폭에 시트 높이가 들어간다(`main-screen`).
+       *
+       * **폰의 주변 탐색·별자리 뷰는 예외다** (S15P21A405-715, 사용자 결정) — 누를 때 단을 바꾸지 않는다. 2 단으로 올라오면
+       * 고리·별자리 아래쪽이 시트에 가려졌다(`overlayTapSnap`).
        */
-      openSongFromMap(s.musicId);
+      const panel = usePanelStore.getState();
+      openSongFromMap(s.musicId, overlayTapSnap({ narrow, viewMode: map.viewMode, activePanel: panel.activePanel, snap: panel.snap }));
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, openSongFromMap, playSong, selectMusic],
+    [engine, narrow, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(

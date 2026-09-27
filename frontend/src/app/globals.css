@@ -2,29 +2,41 @@
 @import "../styles/tokens.css";
 
 /* ---------- 기본 ---------- */
-html,
-body {
-  height: 100%;
-  background: var(--color-void);
-  color: var(--color-ink);
-  font-family: var(--font-body);
-  font-weight: 400;
-  -webkit-font-smoothing: antialiased;
-  overflow: hidden;
-}
-button {
-  font: inherit;
-  color: inherit;
-  cursor: pointer;
-}
-input {
-  font: inherit;
-  color: inherit;
-}
-:focus-visible {
-  outline: 2px solid var(--color-teal);
-  outline-offset: 2px;
-  border-radius: 6px;
+/*
+ * **반드시 `@layer base` 안에 둔다.** 레이어 밖의 규칙은 레이어 안의 것을 **언제나** 이긴다 —
+ * 우선순위(specificity)와 무관하다. 예전에 이 블록이 레이어 밖에 있어서 `button { font: inherit }`
+ * 이 Tailwind 유틸리티(`.text-xs` 등, `@layer utilities`)를 눌러 버렸고, **버튼 글씨 크기 클래스가
+ * 전부 무시된 채** 상속값(16px)으로 그려졌다 (S15P21A405-384 에서 발견).
+ */
+@layer base {
+  html,
+  body {
+    height: 100%;
+    background: var(--color-void);
+    color: var(--color-ink);
+    font-family: var(--font-body);
+    font-weight: 400;
+    -webkit-font-smoothing: antialiased;
+    overflow: hidden;
+  }
+  button {
+    font: inherit;
+    color: inherit;
+    cursor: pointer;
+  }
+  input {
+    font: inherit;
+    color: inherit;
+  }
+  /*
+   * **포커스 테두리를 긋지 않는다** (S15P21A405-703, 사용자 결정). 청록 2px 테두리를 두었는데, 터치로 누른
+   * 탭·버튼에도 떠서 누를 때마다 네모 테두리가 남았고, 함께 걸린 `border-radius: 8px` 가 알약 버튼의
+   * 모서리까지 바꿨다. 키보드로 옮겨 다닐 때의 표시도 같이 사라진다 — 되살리려면 여기 한 곳이다.
+   */
+  :focus,
+  :focus-visible {
+    outline: none;
+  }
 }
 ::-webkit-scrollbar {
   width: 8px;
@@ -57,9 +69,203 @@ input {
     box-shadow: var(--shadow-box);
   }
 }
+/**
+ * 리퀴드 글래스 — 떠 있는 버튼·검색창처럼 **손이 닿는 작은 HUD** 용 (S15P21A405-477).
+ *
+ * `.glass` 는 패널처럼 넓은 면을 위한 것이라 평평하다. 작고 둥근 것들은 그 위에 **유리 한 겹의
+ * 두께**가 보여야 iOS 의 그것처럼 읽힌다. 세 가지를 더한다.
+ * 1. 위가 살짝 밝고 아래로 옅어지는 틴트 — 빛이 위에서 온다는 약속
+ * 2. 윗변 안쪽의 하이라이트 한 줄과 아랫변의 옅은 반사 — 유리의 모서리
+ * 3. 블러 — 뒤의 별빛이 유리를 통과하며 번진다. 바탕은 아주 얇게(10%) 깔아 **뒤가 실제로
+ *    비치게** 두고, 글씨가 묻히지 않는 몫은 블러가 맡는다.
+ *    **채도는 올리지 않는다.** 2.1 까지 올렸더니 어두운 남색 배경이 과채도로 끌려 올라와서
+ *    유리가 아니라 **남색 판때기**로 보였다 (S15P21A405-477) — 검색창이 특히 그랬다
+ *
+ * **떠 있는 것에 붙인다** — 검색창(상단·여정 만들기 둘 다)·네비바·프로필·물음표, 우측
+ * 패널(`Box`)과 좌하단 계기판, 그리고 그 손잡이들. 화면 위에 얹혀 지도를 가리는 것들이라 유리로 읽혀야 뒤가 비쳐 보인다.
+ * `Box` 를 쓰는 팝업(신고·플리 추가)도 함께 바뀐다 — 같은 껍데기라 따로 놀면 그게 더 이상하다.
+ *
+ * 남겨 둔 것들은 `.glass` 그대로다: 토스트·호버 카드·반응 고르개처럼 **잠깐 떴다 사라지는 것**과,
+ * 이미 유리 위에 얹히는 것(검색 결과 목록·튜토리얼 카드). 유리 위에 유리를 겹치면 경계가 사라진다.
+ *
+ * 여정 만들기 검색창은 477 에서 빠졌다가 S15P21A405-498 에서 합류했다 — 상단 검색창과 나란히
+ * 떴을 때 두 유리가 달라 보였다.
+ *
+ * **밝기는 눌러 둔다.** 처음에 흰 틴트를 0.14 까지 올렸더니 어두운 별하늘 위에서 유리가
+ * 아니라 밝은 판때기로 떠 버렸다. 유리답게 보이는 건 흰색의 양이 아니라 **위아래 밝기 차이와
+ * 모서리 한 줄**이라, 전체 밝기는 배경에 잠기게 두고 그 둘만 남긴다.
+ */
+@layer components {
+  .glass-liquid {
+    background: var(--glass-sheen), var(--glass-tint);
+    -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    border: 1px solid rgb(255 255 255 / 0.1);
+    border-radius: var(--radius-box);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 rgb(255 255 255 / 0.04),
+      inset 0 0 20px -12px rgb(255 255 255 / 0.22),
+      0 12px 32px -16px rgb(0 0 0 / 0.8);
+    transition:
+      border-color var(--duration-fast) ease,
+      box-shadow var(--duration-fast) ease;
+  }
+  /* 손이 닿으면 유리가 한 겹 더 두꺼워진다 — 평소에는 배경에 잠겨 있어야 한다 */
+  .glass-liquid:hover {
+    border-color: rgb(255 255 255 / 0.08);
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.24),
+      inset 0 -1px 0 rgb(255 255 255 / 0.06),
+      inset 0 0 24px -12px rgb(255 255 255 / 0.32),
+      0 14px 36px -16px rgb(0 0 0 / 0.85);
+  }
+}
+
+/*
+ * 접기 손잡이 — `.glass-liquid` 와 **겹쳐 쓰지 않는 독립된 한 겹**이고, **유리가 아니다**
+ * (S15P21A405-477).
+ *
+ * 블러를 걷고 불투명한 남색으로 칠한다. 폭이 17px 뿐이라 흐릴 면적이 없어 뒤가 그대로 비쳤고,
+ * 계기판 쪽 손잡이는 부모가 `.glass-liquid` 라 **backdrop root** 안에 갇혀 제 블러가 먹지도
+ * 않았다 — 같은 컴포넌트인데 좌우가 달라 보인 원인이다. 색 하나로 칠하면 어디에 붙어 있든
+ * 똑같이 보인다.
+ *
+ * 유리의 기미는 sheen 한 겹과 안쪽 하이라이트 두 줄로만 남긴다. 테두리도 반경도 주지 않는다 —
+ * 모양은 `clip-path` 가 만들고(`collapse-handle`), 잘린 자리에는 테두리가 남지 않는다.
+ */
+@layer components {
+  .glass-handle {
+    background: var(--glass-sheen), var(--glass-handle-bg);
+    /* 테는 없다 (S15P21A405-664) — 선이 보이면 붙인 조각처럼 읽혔다. 눈에 띄는 건 호스트의 drop-shadow 빛이 맡는다 */
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.1),
+      inset 0 -1px 0 rgb(255 255 255 / 0.04),
+      0 8px 22px -14px rgb(0 0 0 / 0.8);
+    transition:
+      color var(--duration-fast) ease,
+      box-shadow var(--duration-fast) ease;
+  }
+  .glass-handle-host:hover .glass-handle {
+    box-shadow:
+      inset 0 1px 0 rgb(255 255 255 / 0.24),
+      inset 0 -1px 0 rgb(255 255 255 / 0.06),
+      0 10px 26px -14px rgb(0 0 0 / 0.85);
+  }
+}
+
+/*
+ * 폰 맨 아래 고정 탭바의 바닥판 (S15P21A405-417).
+ *
+ * 유리는 `glass-liquid` 와 같은데 **모서리를 안 깎는다** — 둥글기는 쓰는 쪽이 정한다.
+ * 재생바 아래에 붙어 한 상자의 아랫칸이 되므로, 위는 각지고 아래만 둥글어야 한다.
+ *
+ * 따로 만든 이유는 `glass-liquid` 가 `@layer components` 라 `max-tablet:` 같은 변형이
+ * 안 붙기 때문이다. 폰에서만 켜야 하므로 변형이 붙는 `@utility` 여야 한다.
+ */
+@utility glass-bar {
+  background: var(--glass-sheen), var(--glass-tint);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  backdrop-filter: blur(var(--glass-blur)) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  border: 1px solid rgb(255 255 255 / 0.1);
+  box-shadow:
+    inset 0 1px 0 rgb(255 255 255 / 0.1),
+    0 12px 32px -16px rgb(0 0 0 / 0.8);
+}
+/*
+ * 유리를 벗긴다 (S15P21A405-417). 폰 하단 탭바는 **바 하나만** 유리다 —
+ * 그 안의 알약이 제 유리를 그대로 쓰면 유리 위에 유리가 겹쳐 테두리가 두 겹으로 보이고,
+ * 블러도 두 번 걸려 뒤의 별이 뭉갠 것처럼 흐려진다. 바 안에서만 쓴다.
+ */
+@utility glass-off {
+  background: none;
+  background-color: transparent;
+  -webkit-backdrop-filter: none;
+  backdrop-filter: none;
+  border: 0;
+  box-shadow: none;
+}
+/*
+ * 폰에서는 **유리 너머로 별이 비치지 않는다** (S15P21A405-417).
+ *
+ * 유리 밑칠은 10% 뿐이라 뒤가 그대로 보인다. 데스크톱에서는 HUD 가 작고 지도가 옆에 있어
+ * 그게 멋이지만, 폰에서는 패널이 화면을 통째로 덮고 아래 상자가 가로를 다 먹는다 — 그 위로
+ * 별과 곡 이름이 그대로 떠올라 **UI 와 지도가 겹쳐 읽힌다.** 실제로 곡 이름이 네비 줄
+ * 한가운데 떠 있었다. 밑칠만 불투명한 남색으로 바꾸면 무늬(sheen)·블러·테두리는 그대로고
+ * 뒤만 막힌다.
+ *
+ * **미디어 쿼리 하나로 끝낸다.** 컴포넌트마다 `max-tablet:bg-*` 를 붙이면 빠뜨리는 곳이
+ * 반드시 생기고(유리를 쓰는 곳이 패널·재생바·네비·검색·브랜드·카드로 여섯 갈래다),
+ * 유틸리티끼리 어느 쪽이 이기는지도 생성 순서에 달린다. 넓은 화면은 이 블록에 안 들어온다.
+ */
+/* 경계는 tokens.css 의 --breakpoint-tablet 과 같은 선이다 — 미디어 쿼리는 var() 를 못 쓴다. 한쪽을 고치면 둘 다 고친다 */
+/*
+ * **이제 막지 않고 짙게만 한다** (S15P21A405-703, 사용자 결정 — "검정 배경은 하나도 없이 다 유리로").
+ * 위 설명대로 불투명한 남색(void-2)으로 막아 두었는데, 폰 화면이 온통 검은 판으로 읽혔다. 밑칠을
+ * 반투명으로 되돌리되 넓은 화면(0.1 · 0.5)보다 짙게 둔다 — 폰은 판이 크고 지도와 겹치는 면이 넓어서,
+ * 넓은 화면 값 그대로면 별과 곡 이름이 글자 사이로 비쳐 읽기 어렵다. 블러는 그대로라 뒤는 흐리게만 보인다.
+ * 시트·탭 화면처럼 판이 큰 곳은 제 자리에서 한 번 더 짙게 한다(`[data-sheet]`, `panel-screen`).
+ */
+@media (width < 900px) {
+  :root {
+    --glass-tint: rgb(6 9 17 / 0.45);
+  }
+  .glass {
+    background:
+      linear-gradient(var(--color-glass), var(--color-glass)),
+      rgb(9 13 24 / 0.6);
+  }
+  /*
+   * 지도 위에 떠 있는 **작은 칩**은 막지 않고 유리로 둔다 (S15P21A405-703). 위 규칙은 화면을 덮는
+   * 패널·바 때문에 생긴 것이라, 글자 한 줄짜리 칩까지 막으면 별자리 뷰 칩만 폰에서 딴 물건처럼
+   * 떴다. 떠 있는 버튼들(`glass-liquid`)과 같은 무늬(sheen)에 반투명 밑칠이다.
+   */
+  /*
+   * **검색은 폰에서도 넓은 화면과 같은 유리다** (S15P21A405-703, 사용자 결정). 펼친 검색창과 그 아래
+   * 드롭다운이 지도 위에 떠 있는 작은 조각이라 막을 이유가 없다. 값은 `tokens.css` 의
+   * `--glass-tint` 와 위 `@layer components` 의 `.glass` 그대로다 — 같이 고친다.
+   */
+  [data-search-web] {
+    --glass-tint: rgb(6 9 17 / 0.1);
+  }
+  [data-search-web] .glass {
+    background:
+      linear-gradient(var(--color-glass), var(--color-glass)),
+      rgb(9 13 24 / 0.5);
+  }
+  /*
+   * 탭 화면(주변 사람·랭킹·마이페이지)은 화면 통째 반투명 유리다 (S15P21A405-703). 그 너머로 지도의
+   * 윗줄(검색 돋보기·레이어 자취·윗줄 그늘)이 흐리게 비쳐 보이면 페이지 위에 딴 것이 떠 있는 것처럼
+   * 읽힌다 — 탭 화면이 떠 있는 동안에는 감춘다. 지도로 돌아오면 그대로 돌아온다.
+   */
+  :root:has([data-panel-screen]) :is([data-search-web], [data-brand], [data-top-scrim]) {
+    visibility: hidden;
+  }
+  /* 검색을 펴면 오른쪽 끝까지 늘어나 그 자리의 주변 탐색·여정을 덮는다 — 비쳐 보이지 않게 감춘다 */
+  :root:has([data-search-open]) [data-map-actions] {
+    opacity: 0;
+    pointer-events: none;
+  }
+  .glass[data-glass-clear] {
+    background: var(--glass-sheen), rgb(6 9 17 / 0.35);
+    -webkit-backdrop-filter: blur(18px) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+    backdrop-filter: blur(18px) saturate(var(--glass-saturate)) brightness(var(--glass-brightness));
+  }
+}
+
 @utility lbl {
   font-family: var(--font-mono);
-  font-size: 9.5px;
+  /*
+   * 9.5 → 11 (S15P21A405-631) → **12.5** (S15P21A405-649).
+   *
+   * 두 번째로 올린 이유: 쓰는 사람이 "작다" 고 짚은 자리가 `팔로워/팔로잉` · `음악 취향` ·
+   * `이번주 탐험왕` 처럼 **전부 이 유틸을 쓰는 라벨**이었다. 한 곳씩 덮어쓰면 같은 유틸을
+   * 쓰는 38곳이 제각각이 된다 — 여기 한 줄로 올린다.
+   *
+   * 대문자 + 자간 0.14em 이라 같은 px 라도 본문보다 작게 읽힌다. 그래서 본문(`--text-sm` 14)
+   * 보다 낮게 두되, 눈에 들어오는 선까지는 올렸다.
+   */
+  font-size: 12.5px;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--color-ink-3);
@@ -71,6 +277,15 @@ input {
 @utility grad-bg {
   background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
 }
+/*
+ * 같은 색인데 가로로 눕혔다 (S15P21A405-479). 깊이 게이지처럼 **여러 칸이 하나의
+ * 그라데이션을 나눠 갖는** 자리에 쓴다 — 칸마다 `background-size`·`background-position-x`
+ * 로 제 몫의 구간만 보여주면, 칸이 떨어져 있어도 전체가 한 줄기로 읽힌다.
+ * 118deg 인 `grad-bg` 를 그대로 쓰면 칸마다 대각선이 다시 시작해 줄기가 끊긴다.
+ */
+@utility grad-bg-h {
+  background-image: linear-gradient(90deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
+}
 @utility grad-text {
   background: linear-gradient(118deg, #4fe3ce 0%, #5c9dff 46%, #a67cff 100%);
   -webkit-background-clip: text;
@@ -78,11 +293,106 @@ input {
   color: transparent;
 }
 
+/* ---------- 가로로 미는 줄 (곡 상세 주변 음악 카드) ---------- */
+/*
+ * 스크롤바를 숨긴다. 카드가 패널 좌우 끝까지 흘러 나가는 줄이라, 8px 짜리 가로 막대가
+ * 카드 밑에 걸리면 줄이 끊겨 보인다. 스크롤은 그대로 된다 (휠·트랙패드·드래그).
+ */
+.rail {
+  scrollbar-width: none;
+}
+.rail::-webkit-scrollbar {
+  display: none;
+}
+
+/* ---------- 막대 없는 스크롤 (Box 본문) ---------- */
+/*
+ * 스크롤 막대를 아예 없앤다 (S15P21A405-477). 네이티브 8px 짜리는 **자리를 차지해서** 패널
+ * 안쪽 폭을 그만큼 먹고, 유리 위에 회색 기둥 하나가 늘 서 있다.
+ *
+ * 자리를 차지하지 않는 3px 막대를 내용 위에 띄워 굴릴 때만 보이게도 해 봤지만 (`scroll-thumb`),
+ * 그 3px 도 유리 오른쪽에 군더더기로 보였다 — 걷어냈다. 스크롤은 그대로 된다.
+ */
+.scroll-quiet {
+  scrollbar-width: none;
+}
+.scroll-quiet::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}
+
+/* ---------- 불러오는 동안의 자리 (skeleton.tsx) ---------- */
+/*
+ * 빛이 왼쪽에서 오른쪽으로 한 번 훑고 지나간다 — "멈춘 게 아니라 오는 중" 을 말하는 최소한의
+ * 움직임이다 (S15P21A405-384). 깜빡임(opacity)보다 눈이 덜 피로하고, 여러 줄이 같이 깜빡일 때
+ * 생기는 "화면이 뛰는" 느낌이 없다.
+ */
+.skel {
+  background-color: rgb(255 255 255 / 0.055);
+  background-image: linear-gradient(100deg, transparent 20%, rgb(255 255 255 / 0.055) 40%, transparent 60%);
+  background-size: 260% 100%;
+  animation: skel 1.4s ease-in-out infinite;
+}
+@keyframes skel {
+  from {
+    background-position: 130% 0;
+  }
+  to {
+    background-position: -30% 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skel {
+    animation: none;
+  }
+}
+
+/* ---------- 넘치는 한 줄 흘리기 (marquee-text.tsx) ---------- */
+/*
+ * 기본값은 **꺼짐**이다. 넘치는지는 브라우저에서 재야 알 수 있으므로 JS 가 재고 data-run 을 켠다
+ * (`marquee-text.tsx`). 서버 렌더에서는 사본이 숨겨진 채로 나가 같은 글자가 두 번 보이지 않는다.
+ */
+.marquee {
+  overflow: hidden;
+  white-space: nowrap;
+}
+.marquee-track {
+  display: inline-flex;
+  min-width: 100%;
+}
+.marquee[data-run="off"] .marquee-copy {
+  display: none;
+}
+.marquee[data-run="on"] {
+  -webkit-mask-image: linear-gradient(to right, #000 86%, transparent);
+  mask-image: linear-gradient(to right, #000 86%, transparent);
+}
+.marquee[data-run="on"] .marquee-track {
+  animation: marquee var(--marquee-dur) linear infinite;
+}
+/* 글자가 흐르면 읽던 자리를 놓친다 — 얹으면 멈춘다 */
+.marquee[data-run="on"]:hover .marquee-track {
+  animation-play-state: paused;
+}
+@keyframes marquee {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    transform: translateX(calc(-1 * var(--marquee-shift)));
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .marquee[data-run="on"] .marquee-track {
+    animation: none;
+  }
+}
+
 /* ---------- 스테이지 배경 (지도 뒤) ---------- */
 .stage-bg {
   background:
-    radial-gradient(120% 80% at 18% 8%, #0a1226 0%, transparent 62%),
-    radial-gradient(90% 70% at 88% 92%, #120b26 0%, transparent 60%),
+    radial-gradient(120% 80% at 18% 8%, #060b18 0%, transparent 62%),
+    radial-gradient(90% 70% at 88% 92%, #0a0619 0%, transparent 60%),
     var(--color-void);
 }
 .vignette {
@@ -116,11 +426,67 @@ input {
 .animate-pulse-dot {
   animation: pulse-dot 1.5s infinite;
 }
+/*
+ * 레이더의 숨쉬기 (S15P21A405-496). 자주 마주친 사람만 약하게 커졌다 작아진다.
+ *
+ * **기본은 4% 다.** 더 키우면 옆 사람과 부딪히고, 여럿이 동시에 뛰면 화면이 출렁인다.
+ * 주기도 사람마다 달리 줘서(인라인 `animation-duration`) 심장박동처럼 맞아떨어지지 않게 했다.
+ *
+ * 배율은 부르는 쪽이 올릴 수 있다 (`--breathe-hi`, S15P21A405-506) — 레이더 **가운데의 나**는
+ * 옆에 부딪힐 것이 없고 하나뿐이라 세게 뛰어도 화면이 출렁이지 않는다. `tbeat` 와 같은 방식이다.
+ */
+@keyframes breathe {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(var(--breathe-hi, 1.04)); }
+}
+.animate-breathe {
+  animation: breathe 2.6s ease-in-out infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-breathe {
+    animation: none;
+  }
+}
+/*
+ * 레이더 탐색 빛 (S15P21A405-510). 판이 멈춰 있으면 그냥 과녁이라, 돌아가는 빛 하나로
+ * "찾는 중" 을 말한다.
+ *
+ * `rotate` 속성을 쓴다 — `transform` 을 쓰면 크기·위치 유틸리티와 서로 덮어쓴다.
+ * 움직임을 줄인 환경에서는 **숨긴다** — 멈춰 있는 부채꼴만 남으면 고장처럼 보인다.
+ */
+@keyframes radar-sweep {
+  to {
+    rotate: 360deg;
+  }
+}
+.animate-radar-sweep {
+  animation: radar-sweep 4s linear infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-radar-sweep {
+    display: none;
+  }
+}
 @keyframes tin {
   from { opacity: 0; transform: translateY(10px); }
 }
 .animate-tin {
   animation: tin 0.3s var(--ease-spring);
+}
+/* 겹 진입 타이틀 카드 (S15P21A405-690) — 2.2s = LAYER_TITLE.showMs. 떠오르고, 머물고, 흩어진다 */
+@keyframes layer-title {
+  0% { opacity: 0; transform: translateY(8px) scale(0.98); }
+  16% { opacity: 1; transform: none; }
+  72% { opacity: 1; transform: none; }
+  100% { opacity: 0; transform: translateY(-6px); }
+}
+.animate-layer-title {
+  animation: layer-title 2.2s var(--ease-spring) forwards;
+}
+@media (prefers-reduced-motion: reduce) {
+  .animate-layer-title {
+    animation: none;
+  }
 }
 @keyframes tring {
   0% { transform: scale(0.95); opacity: 0.85; }
@@ -176,5 +542,217 @@ input {
   * {
     animation-duration: 0.01ms !important;
     transition-duration: 0.06s !important;
+  }
+}
+
+
+/* 플레이어바 파형 — 재생 헤드 근처 바만 숨 쉰다 (S15P21A405-428, waveform-bars.tsx) */
+@keyframes wave {
+  0%, 100% { transform: scaleY(1); }
+  50% { transform: scaleY(1.5); }
+}
+.animate-wave {
+  animation: wave 0.9s ease-in-out infinite;
+  transform-origin: center;
+}
+
+/*
+ * 바텀시트를 **내렸을 때** 곡 상세의 커버 창을 줄인다 (S15P21A405-417).
+ *
+ * 접으면 화면에 걸리는 건 머리글(`곡 상세`)과 커버 창뿐이라 **무슨 곡인지가 안 보였다** —
+ * 커버만 188px 그대로 깔려 있었다. 창을 없애면 제목·가수·칩이 그 자리로 따라 올라온다.
+ * 펴면 원래대로 돌아간다.
+ *
+ * 인라인 `height` 를 덮어야 해서 `!important` 다. 폰에서만, 접힌 시트 안에서만 먹는다.
+ */
+/* 경계는 tokens.css 의 --breakpoint-tablet 과 같은 선이다 — 미디어 쿼리는 var() 를 못 쓴다. 한쪽을 고치면 둘 다 고친다 */
+@media (width < 900px) {
+  /*
+   * **단마다 내려보내는 거리가 다르다** (S15P21A405-416). 값이 셋이라 컴포넌트의 클래스 한
+   * 줄로는 못 적는다 — 거기서는 `data-snap` 만 달고 거리는 여기서 고른다.
+   *
+   * `translate` 를 쓴다(구식 `transform: translate()` 가 아니라). 시트는 가로 이동도 같이
+   * 받는데(데스크톱 접기) 한 속성에 둘을 섞으면 서로 덮어쓴다. 별도 속성이라 겹치지 않고,
+   * `transition-[translate]` 도 그대로 먹는다.
+   */
+  /*
+   * 시트는 재생바·네비 **뒤까지** 내려간다 (S15P21A405-703) — 둘이 반투명 유리라 그 뒤로 시트가
+   * 비쳐야 한다. 그래서 걸리는 높이(s1·s2)에 가려지는 높이(`--nav-bottom`)를 더해 내린다.
+   * 안 더하면 1 단이 통째로 재생바 뒤에 숨는다.
+   */
+  [data-sheet][data-snap="1"] {
+    translate: 0 calc(100% - var(--spacing-sheet-s1) - var(--nav-bottom));
+  }
+  [data-sheet][data-snap="2"] {
+    translate: 0 calc(100% - var(--spacing-sheet-s2) - var(--nav-bottom));
+  }
+  [data-sheet][data-snap="3"] {
+    translate: 0 0;
+  }
+  /*
+   * 2 단 높이를 **내용이 정한 판** (S15P21A405-703). 프로필은 팔로우·따라가기 버튼 아래에서 멈춘다 —
+   * 버튼 줄을 재서 `--sheet-stop` 을 심는 쪽은 `use-sheet-stop` 이다. 없으면 위의 기본 높이다.
+   */
+  [data-sheet][data-snap="2"][data-stop] {
+    translate: 0 calc(100% - var(--sheet-stop) - var(--nav-bottom));
+  }
+  /*
+   * **1 단은 머리글 없이 걸린다 — 내용이 정한 판만** (S15P21A405-703). 곡 상세는 제목·가수·＋·▶ 줄까지,
+   * 프로필은 팔로워·팔로잉 줄 위까지다. 재서 `--sheet-peek` 을 심는 쪽은 `use-sheet-peek` 이다.
+   *
+   * 머리글은 `display: none` 이 아니라 **높이를 접는다.** 단이 바뀌는 동안 시트가 미끄러지는데,
+   * 머리글이 한 번에 빠지면 그 순간 본문이 44px 튀어 오른다. 접는 동안은 넘친 것을 자른다 —
+   * 평소에는 안 자른다(머리글에서 내려오는 메뉴가 있다).
+   */
+  [data-sheet][data-snap="1"][data-peek] {
+    translate: 0 calc(100% - var(--sheet-peek) - var(--nav-bottom));
+  }
+  [data-sheet][data-peek] > section > header {
+    max-height: 80px;
+    transition:
+      max-height var(--duration-normal) ease,
+      padding var(--duration-normal) ease,
+      opacity var(--duration-fast) ease;
+  }
+  [data-sheet][data-snap="1"][data-peek] > section > header {
+    max-height: 0;
+    padding-block: 0;
+    border-bottom-width: 0;
+    opacity: 0;
+    overflow: hidden;
+    pointer-events: none;
+  }
+  [data-sheet][data-snap="1"][data-peek] [data-sheet-body] {
+    padding-top: var(--spacing-sheet-peek-top);
+  }
+
+  /*
+   * **시트도 유리다** (S15P21A405-703, 사용자 결정). 폰 공통 밑칠(0.45)보다 한 단 짙게 둔다 — 시트는
+   * 화면 절반 넘게 덮고 글이 많아서 뒤의 별이 글자 사이로 비치면 읽기 어렵다. 탭 화면과 같은 값이다
+   * (`panel-screen.tsx`). 곡 상세의 바닥판도 같이 비친다 (`song-detail-panel.tsx`).
+   */
+  [data-sheet] {
+    --glass-tint: rgb(6 9 17 / 0.6);
+    --glass-blur: 18px;
+  }
+  /*
+   * **아래 두 구석은 각지게** (S15P21A405-593). 시트는 화면 아래(재생바 위)에 붙어 끝나는데
+   * `Box` 는 네 모서리를 다 깎으므로, 그 둥근 구석 사이로 지도가 비친다 — 바닥에 깔린 판인데
+   * 떠 있는 카드처럼 보이고 끝선이 지저분해진다. 위쪽 둥근 모서리는 그대로 둔다 (바텀시트의 표식이다).
+   */
+  [data-sheet] > section {
+    /* 위 모서리는 폰의 아래에서 올라오는 판들과 같은 30px (S15P21A405-703) */
+    border-start-start-radius: var(--radius-sheet);
+    border-start-end-radius: var(--radius-sheet);
+    border-end-start-radius: 0;
+    border-end-end-radius: 0;
+  }
+  /*
+   * **곡 상세의 시트도 바닥까지 간다** (S15P21A405-593).
+   *
+   * 패널을 바닥까지 늘렸더니 이번엔 **늘린 자리의 경계가 그대로 보였다.** 곡 상세는 두 겹이라
+   * 그렇다 — 유리 밑칠(`--glass-tint` = void-2 #05080f)과 그 위에 덮는 시트(void-3 #080d17)가
+   * **서로 다른 남색**이고, 게다가 유리의 sheen 은 아래로 갈수록 흰색 5% 로 밝아진다.
+   * 글이 끝나는 자리에서 시트가 멈추니 그 아래 139px 만 색이 다르게 남았다(실측).
+   *
+   * 색을 맞추는 대신 **시트를 끝까지 민다.** 밑칠을 시트 색으로 바꾸면 sheen 이 그대로 남아
+   * 경계가 다시 생기고, 시트를 쓰지 않는 다른 패널의 색까지 같이 흔들린다.
+   *
+   * 커버 창은 단마다 높이가 다르므로(3 단 188px, 그 외 0) 숫자를 적지 않고 flex 로 남은
+   * 높이를 준다. 커버 창과 시트 둘 다 `shrink` 를 0 으로 두는 것이 중요하다 — 내용이 길어
+   * 넘칠 때 눌려서 커버가 얇아지면 안 된다.
+   */
+  [data-sheet] .scroll-quiet:has([data-cover-window]) {
+    display: flex;
+    flex-direction: column;
+  }
+  [data-sheet] [data-cover-window] {
+    flex: 0 0 auto;
+  }
+  [data-sheet] [data-cover-window] + div {
+    flex: 1 0 auto;
+  }
+  /*
+   * 커버 창은 **3 단에서만** 편다. 1·2 단은 걸리는 높이가 112·238px 인데 커버가 188px 이라,
+   * 펴 두면 그 자리를 커버가 다 먹고 무슨 곡인지가 안 보인다 (S15P21A405-417 에서 겪었다).
+   */
+  [data-sheet]:not([data-snap="3"]) [data-cover-window] {
+    height: 0 !important;
+  }
+  /*
+   * 커버 창을 접으면 **글자가 커버 바로 위에 앉는다** (S15P21A405-703). 3 단에서는 글자가 커버
+   * 아래에 있어 상관없었는데, 1·2 단에서는 흰 제목·가수가 밝은 커버 위에 얹혀 안 읽혔다.
+   * 커버를 치우지 않고 어두운 막만 덮는다 — 무슨 곡인지 색의 기미는 남는다. 3 단으로 펴면 걷힌다.
+   */
+  [data-sheet] [data-cover-backdrop]::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background: color-mix(in srgb, var(--color-void-2) 78%, transparent);
+    opacity: 0;
+    transition: opacity var(--duration-normal) ease;
+  }
+  [data-sheet]:not([data-snap="3"]) [data-cover-backdrop]::after {
+    opacity: 1;
+  }
+
+  /*
+   * **1 단은 틈을 줄인다** (S15P21A405-547).
+   *
+   * 1 단에 걸려야 하는 것은 머리글(곡 상세·신고·닫기)과 제목·가수, 그리고 바로 누를 ＋·▶
+   * 까지다. 그런데 머리글 아래 여백(12) + 본문 위 여백(14) 이 26px 을 먹어서, 112px 안에서
+   * **버튼과 가수 줄이 6~8px 씩 잘린 채 걸렸다** (실측). 커버 창을 접어도 그 여백은 남는다.
+   *
+   * 3 단에서는 그 여백이 커버 사진과 글 사이의 숨 쉴 자리라 그대로 둔다 — 1 단에서만 줄인다.
+   */
+  [data-sheet][data-snap="1"] header {
+    padding-bottom: 2px;
+  }
+  [data-sheet][data-snap="1"] .scroll-quiet,
+  [data-sheet][data-snap="1"] [data-cover-window] + div {
+    padding-top: 0px;
+  }
+  /*
+   * 앨범 줄과 칩 줄은 그 아래다 — 남겨 두면 줄 머리만 몇 px 걸쳐서 **잘린 채** 보인다.
+   * 접으면 1 단은 제목·가수와 ＋·▶ 로 딱 끝나고, 둘 다 2 단에서 돌아온다.
+   */
+  [data-sheet][data-snap="1"] [data-sheet-album],
+  [data-sheet][data-snap="1"] [data-sheet-chips] {
+    display: none;
+  }
+
+  /*
+   * **3 단에서만 굴린다** (S15P21A405-547).
+   *
+   * 1·2 단은 **걸쳐 놓은 자리**지 읽는 자리가 아니다. 거기서도 굴러가면 화면에 112·238px 만
+   * 걸린 채 내용이 저 혼자 흘러서, 지금 보고 있는 것이 곡의 어디쯤인지 알 수가 없다.
+   * 게다가 시트를 위아래로 밀어 단을 옮기는 동작과 **같은 손짓이라 서로 먹는다** —
+   * 굴릴 데가 없으면 그 손짓은 전부 단 옮기기로 간다.
+   *
+   * 굴림을 막아도 `scrollTop` 은 0 이라 `use-panel-swipe` 의 "내용이 굴러 있으면 스크롤로
+   * 본다" 판정은 그대로 통과한다.
+   */
+  [data-sheet]:not([data-snap="3"]) .scroll-quiet {
+    overflow-y: hidden;
+  }
+
+  /*
+   * **목록 끝에 재생바·네비만큼 여백** (S15P21A405-703). 시트와 탭 화면이 두 바 뒤까지 내려가서,
+   * 여백이 없으면 마지막 줄이 바 뒤에 깔려 끝까지 굴려도 안 올라온다.
+   *
+   * 여백은 **가장 안쪽 스크롤 상자에만** 붙인다. 주변 사람처럼 본문 안에 목록 스크롤이 또 있는
+   * 화면에서 바깥에도 붙이면 목록이 그만큼 짧아져 바 위에서 끊긴다.
+   * 패딩이 아니라 빈 칸을 덧붙이는 이유: 스크롤 상자마다 제 아래 패딩이 따로 있어 덮으면 잃는다.
+   *
+   * 아래에 붙박이 줄(`Box` 의 footer — 여정 요약)이 있는 판은 그 줄을 대신 바 위로 올린다.
+   */
+  :is([data-sheet] > section, [data-panel-screen] > section):not(:has(> footer)) .scroll-quiet:not(:has(.scroll-quiet))::after {
+    content: "";
+    display: block;
+    flex: none;
+    height: var(--nav-bottom);
+  }
+  :is([data-sheet], [data-panel-screen]) > section > footer {
+    margin-bottom: var(--nav-bottom);
   }
 }

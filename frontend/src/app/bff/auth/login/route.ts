@@ -1,15 +1,9 @@
-import { fail, ok } from "@/lib/api-response";
-import { findAccount, tokenFor } from "@/mocks/auth";
+import { backendProxy } from "@/lib/backend";
 
 /**
- * 이메일·비밀번호 로그인 (AUTH-02, 목).
- * 계정이 없거나 구글 전용 계정이면 INVALID_CREDENTIALS, 비밀번호만 틀리면 PASSWORD_MISMATCH —
- * backend/dev AuthService.login 과 같은 구분이다.
+ * 이메일·비밀번호 로그인 (AUTH-02) — **배포 백엔드 실연동** (S15P21A405-462).
+ *
+ * 응답을 가공하지 않고 그대로 넘긴다. 화면이 실패 코드(`INVALID_CREDENTIALS` ·
+ * `PASSWORD_MISMATCH`)로 문구를 갈라 쓰고, refresh 쿠키도 백엔드가 심는 것을 그대로 전달해야 한다.
  */
-export async function POST(req: Request) {
-  const body = (await req.json().catch(() => ({}))) as { email?: string; password?: string };
-  const acc = findAccount(body.email ?? "");
-  if (!acc || acc.social) return fail("INVALID_CREDENTIALS", "이메일 또는 비밀번호가 올바르지 않습니다.", 401);
-  if (acc.password !== (body.password ?? "")) return fail("PASSWORD_MISMATCH", "비밀번호가 올바르지 않습니다.", 401);
-  return ok({ accessToken: tokenFor(acc.email) });
-}
+export const POST = (req: Request) => backendProxy(req, "/api/auth/login");

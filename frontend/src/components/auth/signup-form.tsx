@@ -59,7 +59,7 @@ export default function SignupForm() {
           hint="영문과 숫자를 포함해 8자 이상"
           onChange={(e) => setPassword(e.target.value)}
           trailing={
-            <button type="button" onClick={() => setShow((v) => !v)} className="shrink-0 text-[11px] text-ink-3 transition-colors hover:text-ink">
+            <button type="button" onClick={() => setShow((v) => !v)} className="shrink-0 text-[13px] text-ink-3 transition-colors hover:text-ink">
               {show ? "숨기기" : "표시"}
             </button>
           }
@@ -76,12 +76,12 @@ export default function SignupForm() {
         <NicknameCheckField value={nickname} onChange={setNickname} onStatus={useCallback((ok: boolean) => setNicknameOk(ok), [])} />
       </div>
 
-      {signup.isError && <p className="mt-3 text-[11.5px] text-bad">{(signup.error as ApiError).message}</p>}
+      {signup.isError && <p className="mt-3 text-[13.5px] text-bad">{(signup.error as ApiError).message}</p>}
 
       <button
         type="submit"
         disabled={signup.isPending || !nicknameOk}
-        className="grad-bg mt-5 w-full rounded-pill py-3 text-[13.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
+        className="grad-bg mt-5 w-full rounded-pill py-3 text-[15.5px] font-semibold text-[#031018] shadow-[0_8px_28px_-12px_rgba(92,157,255,.9)] transition-[filter] hover:brightness-110 disabled:opacity-60"
       >
         {signup.isPending ? "가입 중…" : "가입하기"}
       </button>

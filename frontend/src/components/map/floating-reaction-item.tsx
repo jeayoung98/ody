@@ -1,18 +1,23 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { REACTIONS } from "@/constants";
+import { emojiOf } from "@/constants";
 import type { FloatingReaction } from "@/stores/use-reaction-store";
 
 /**
- * 반응 이모지 하나 (SOCIAL-02).
+ * 반응 이모지 하나 (SOCIAL-02, S15P21A405-694).
  * 바깥 div 는 지도 위 좌표를 따라다니는 앵커 — 매 프레임 엔진에서 보낸 사람의 화면 좌표를 받아 옮긴다.
  * 안쪽 span 이 떠올랐다 사라지는 연출을 맡는다. 보낸 사람이 화면 밖이면 통째로 숨긴다.
+ *
+ * 닉네임은 받을 때 주변 사람 목록에서 찾아 온다(`use-reaction-live`). 패널을 한 번도 안 열었으면
+ * 그 목록이 비어 있으므로, 없으면 지도에 떠 있는 그 사람 표식의 닉네임을 쓴다.
  */
 export default function FloatingReactionItem({ reaction }: { reaction: FloatingReaction }) {
   const ref = useRef<HTMLDivElement>(null);
-  const emoji = REACTIONS.find((x) => x.key === reaction.reactionKey)?.emoji ?? "✨";
+  const emoji = emojiOf(reaction.reactionKey);
+  const [mapNickname] = useState(() => (reaction.fromEmail ? (getMapEngine()?.friendNickname(reaction.fromEmail) ?? null) : null));
+  const nickname = reaction.nickname ?? mapNickname;
 
   useEffect(() => {
     let raf = 0;
@@ -38,7 +43,7 @@ export default function FloatingReactionItem({ reaction }: { reaction: FloatingR
     <div ref={ref} className="absolute top-0 left-0 opacity-0">
       <span className="animate-fly absolute bottom-0 left-0 flex flex-col items-center gap-0.5">
         <span className="text-[30px] leading-none drop-shadow-[0_2px_10px_rgba(0,0,0,.6)]">{emoji}</span>
-        {reaction.nickname && <span className="lbl whitespace-nowrap text-[9px] text-ink-2">{reaction.nickname}</span>}
+        {nickname && <span className="lbl whitespace-nowrap text-[9px] text-ink-2">{nickname}</span>}
       </span>
     </div>
   );

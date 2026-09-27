@@ -172,7 +172,8 @@ try {
 - 색·폰트·반경·그림자 등 디자인 값은 `src/styles/tokens.css`(`@theme`)에만 정의한다. 컴포넌트에서 hex 값을 직접 쓰지 않고 `bg-glass`, `text-ink-2`, `border-line`, `rounded-box` 같은 토큰 유틸리티를 쓴다.
 - canvas 등 JS에서 색이 필요하면 `src/constants/design-tokens.ts`를 쓴다. 두 파일은 같은 값을 미러링하므로 함께 고친다.
 - 박스 형태 UI는 `Box`(글래스 패널)를, 반복되는 스타일은 `globals.css`의 `@utility`(glass / lbl / num / grad-bg / grad-text)를 재사용한다.
-- 디자인 기준은 별지도 프로토타입(artifact 189966aa)이다. 풀스크린 캔버스 위에 글래스 HUD가 떠 있는 구성, 청록→파랑→보라 그라데이션, IBM Plex Sans KR / IBM Plex Mono / Familjen Grotesk 폰트.
+- 디자인 기준은 별지도 프로토타입(artifact 189966aa)이다. 풀스크린 캔버스 위에 글래스 HUD가 떠 있는 구성, 청록→파랑→보라 그라데이션.
+- **폰트는 Pretendard 하나다** (S15P21A405-538). 프로토타입은 IBM Plex Sans KR / IBM Plex Mono / Familjen Grotesk 를 섞었는데, Familjen Grotesk 에 한글 글리프가 없어 **한 줄 안에서 영문과 한글의 서체가 갈렸다.** `--font-display` · `--font-body` · `--font-mono` 토큰 이름은 그대로 두고 값만 같게 맞췄다 — 부르는 자리를 안 건드리려는 것이고, 제목용 서체를 따로 쓰고 싶어지면 `tokens.css` 한 줄만 바꾼다. **`constants/design-tokens.ts` 의 `FONTS` 와 항상 같은 값이어야 한다** (캔버스가 그쪽을 쓴다).
 - 예외: `src/components/common/icons.tsx`는 라인 아이콘 세트라 한 파일에 여러 컴포넌트를 둔다.
 
 ### 기타

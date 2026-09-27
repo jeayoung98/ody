@@ -10,9 +10,6 @@ import {
 import { mockMusicDetail } from "@/mocks/music";
 import type { MusicDetail } from "@/types";
 
-/** 상세 패널에 노출하는 주성분 개수 */
-const SHOWN_PC_COUNT = 6;
-
 /**
  * 백엔드 상세 응답 → 화면이 쓰는 MusicDetail.
  *
@@ -25,12 +22,12 @@ function toMusicDetail(res: BackendMusicDetailResponse): MusicDetail {
   return {
     ...toMusic(res),
     // 백엔드는 장르를 **이름만** 준다. id 는 배열 순번을 채운 자리표시자이지 실제 genre.id 가 아니다 (B-21)
-    genres: (res.genres ?? []).map((name, i) => ({ id: i, name })),
-    principalComponents: pc
-      .slice(0, SHOWN_PC_COUNT)
-      .map((v, i) => ({ label: `PC${i + 1}`, value: Math.max(-1, Math.min(1, v / 2.5)) })),
+    // 16개를 **원값 그대로** 보낸다. 축마다 흩어진 폭이 달라서 어느 것이 유별난지는
+    // 상주 집합의 축별 폭으로 재야 알 수 있다 — 그 잣대를 가진 쪽은 화면이다 (S15P21A405-355)
+    principalComponents: pc.map((v, i) => ({ axis: i, value: v })),
     nearby: res.neighbors.map((n) => ({ id: n.id, title: n.title, artist: n.artist })),
     relatedPlaylists: [],
+    liked: res.liked ?? false,
   };
 }
 

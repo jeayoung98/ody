@@ -22,7 +22,73 @@ export type ImplementedErrorCode =
   | "INVALID_CREDENTIALS"
   | "PASSWORD_MISMATCH"
   | "INVALID_PASSWORD_FORMAT"
-  | "INVALID_NICKNAME_LENGTH";
+  | "INVALID_NICKNAME_LENGTH"
+  // 실시간 (S15P21A405-482, 실시간 작업명세 §7.2)
+  /** 422 — 소켓 미연결 · 첫 배치인데 layer 없음 · 곡 좌표 없음 · 재생 없이 주변 사람 요청 */
+  | "PRESENCE_ERROR"
+  /** 503 — 주변 사람의 비슷한 곡 계산이 일시적으로 실패했다. **영구 오류가 아니다** */
+  // 따라가기 = 탑승 (S15P21A405-530, backend RealtimeErrorCode)
+  /**
+   * 사유마다 **사용자가 할 일이 다르다.** 잠시 뒤 다시 하면 되는 것(`RIDE_CAPTAIN_INACTIVE`·
+   * `RIDE_FULL`)과 아무리 해도 안 되는 것(`RIDE_SELF`)을 한 코드로 뭉치면 안내를 가를 수 없다.
+   */
+  /** 409 — 따라갈 사람이 곡 위에 없다 */
+  | "RIDE_CAPTAIN_INACTIVE"
+  /** 400 — 자기 자신을 골랐다 */
+  | "RIDE_SELF"
+  /** 409 — 이미 누군가를 따라가는 중이다. 갈아타려면 먼저 내려야 한다 */
+  | "RIDE_ALREADY_RIDING"
+  /** 409 — 줄줄이 따라가기. 나를 따라오는 사람이 있거나 상대가 남을 따라가는 중이다 */
+  | "RIDE_CHAIN_FORBIDDEN"
+  /** 409 — 자리가 다 찼다 (최대 20명) */
+  | "RIDE_FULL"
+  /** 409 — 따라가는 중이 아닌데 내리려 했다. **조용히 넘긴다** — 이미 `RIDE_ENDED` 로 끝났을 수 있다 */
+  | "RIDE_NOT_RIDING"
+  /** 409 — 따라가는 중이라 스스로 할 수 없는 동작이다 */
+  | "RIDE_NOT_CAPTAIN"
+  /**
+   * 409 — 그 사이 상태가 어긋났다 (2차 명세 §3.3). **실제로 온다** (2026-09-22 배포, A-51).
+   *
+   * 그 사이 다른 사람을 따라가기 시작했거나, 이전 연결에서 만든 탑승이거나, 서 있는 자리가
+   * 없는 경우다. **화면을 새로 고치면 풀린다.** 접속 자체가 없는 경우는 여기 오지 않고
+   * `PRESENCE_ERROR` 로 따로 나온다 — 둘은 사용자가 할 일이 다르다.
+   */
+  | "RIDE_STALE"
+  // 반응하기 (S15P21A405-607, backend RealtimeErrorCode)
+  /** 400 — 자기 자신에게 보냈다 */
+  | "REACTION_SELF"
+  /** 409 — 상대가 내 층에 없다. 접속이 없거나 다른 층이다 */
+  | "REACTION_NOT_NEARBY"
+  /** 429 — 같은 사람에게 너무 빨리 다시 보냈다 (SOCIAL-04) */
+  | "REACTION_COOLDOWN"
+  // 취향 분석 (S15P21A405-630, backend TasteErrorCode)
+  /**
+   * 422 — 유효한 좋아요 곡이 10개 미만이라 리포트를 만들 수 없다.
+   * **오류로 보여 주지 않는다** — 조회 응답의 `reportEligibility` 가 같은 사실을 미리 말해 주므로,
+   * 화면은 버튼을 잠그고 몇 곡이 더 필요한지 적는다. 이 코드는 그 잠금을 뚫고 눌렀을 때의 답이다.
+   */
+  | "TASTE_INSUFFICIENT_SAMPLE"
+  /** 429 — 오늘 몫을 이미 썼다. 생성은 하루 한 번이다 */
+  | "TASTE_DAILY_LIMIT"
+  /** 409 — 이미 만들고 있다. 기다리면 된다 */
+  | "TASTE_ANALYSIS_IN_PROGRESS"
+  /** 503 — 분석 기준(전체 카탈로그 통계)이 아직 준비되지 않았다. 우리가 할 수 있는 일이 없다 */
+  | "TASTE_REFERENCE_UNAVAILABLE"
+  // 별자리 작품 = 콘테스트 (S15P21A405-640, backend ArtworkErrorCode)
+  /** 404 — 없는 작품, 또는 **남의 미채점 작품** (403 으로 내면 존재가 새서 404 다) */
+  | "ARTWORK_NOT_FOUND"
+  /** 409 — 열린 회차가 없는데 출품·좋아요 */
+  | "ARTWORK_ROUND_CLOSED"
+  /** 409 — 실패하지 않은 작품에 재평가 요청 */
+  | "ARTWORK_NOT_FAILED"
+  /** 409 — 재평가 3회 소진 */
+  | "ARTWORK_RETRY_EXHAUSTED"
+  /** 400 — 그린 점이 한 곳에 몰려 모양이 없다. 점 개수 부족은 `INVALID_INPUT` */
+  | "ARTWORK_DRAWING_DEGENERATE"
+  /** 409 — 이번 회차 좋아요를 다 썼다. 하나를 거두면 다시 줄 수 있다 */
+  | "ARTWORK_VOTE_LIMIT"
+  /** 400 — 내 작품에 좋아요를 주려 했다 */
+  | "ARTWORK_VOTE_SELF";
 
 /** API 명세서 §0.5 목록 */
 export type SpecErrorCode =
@@ -45,7 +111,15 @@ export type SpecErrorCode =
   | "FILE_TOO_LARGE"
   | "INTERNAL_ERROR";
 
-export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode;
+/**
+ * BFF 라우트만 내는 코드. 백엔드 목록에는 없다.
+ *
+ * `NOT_IMPLEMENTED` 는 **배포 API 에 그 기능이 아예 없다**는 뜻이다 (S15P21A405-468). 목으로
+ * 성공한 척하면 새로고침 때 사라져서 "저장이 가끔 안 된다" 로 보이므로, 실패를 드러낸다.
+ */
+export type BffErrorCode = "NOT_IMPLEMENTED";
+
+export type ApiErrorCode = ImplementedErrorCode | SpecErrorCode | BffErrorCode;
 
 export interface ApiErrorBody {
   code: ApiErrorCode;

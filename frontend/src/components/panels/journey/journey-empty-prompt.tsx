@@ -9,10 +9,10 @@ export default function JourneyEmptyPrompt() {
   return (
     <button
       type="button"
-      onClick={() => openComposer("start")}
+      onClick={() => openComposer()}
       className="flex w-full flex-col items-center gap-2 rounded-box border border-dashed border-line px-4 py-8 text-center transition-colors duration-fast hover:border-teal/50 hover:bg-white/[.03]"
     >
-      <span className="grad-text font-display text-[15px] font-semibold">두 곡 사이를 여행해보세요</span>
+      <span className="grad-text font-display text-[17px] font-semibold">두 곡 사이를 여행해보세요</span>
       <span className="text-xs leading-relaxed text-ink-3">
         출발과 도착을 정하면 그 사이의 곡들이
         <br />

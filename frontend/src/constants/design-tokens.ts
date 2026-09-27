@@ -39,12 +39,12 @@ export function genreColor(genreId: number): string {
 }
 
 export const PALETTE = {
-  void: "#04060d",
-  void2: "#070b16",
+  void: "#02040a",
+  void2: "#05080f",
   ink: "#e9f1ff",
   ink2: "#93a4c4",
-  ink3: "#586a8b",
-  ink4: "#3a4761",
+  ink3: "#7688a8",
+  ink4: "#586c93",
   teal: "#4fe3ce",
   azure: "#5c9dff",
   violet: "#a67cff",
@@ -75,6 +75,30 @@ export const MAP_COLORS = {
   core: "#f2f7ff",
 } as const;
 
+/**
+ * 겹마다 배경 성운 워시를 물들이는 색 (S15P21A405-690). 인덱스 = 겹 번호. 배경만 보고도 겹이 갈리게 하려는 것이다.
+ *
+ * **곡 별 색(장르)은 건드리지 않는다.** 물드는 것은 배경 성운 빛뿐이고 그 빛은 원래 밝기 0.1 남짓이라,
+ * 장르 색 채널과 부딪히지 않을 만큼만 섞는다(`LAYER_TINT_MIX`). `LAYER_DEPTH` 가 "배경 색은 건드리지 않는다" 고
+ * 정해 둔 것을 이 한 곳에서만 푼다 — 더 세게 섞고 싶으면 장르 색과 겹쳐 보이는지부터 본다.
+ */
+/**
+ * **이웃한 겹은 확실히 다른 색이다** — 파랑 다음 보라처럼 가까운 색을 이으면 겹을 옮겨도 바뀐 줄 모른다.
+ * 차가운 색과 따뜻한 색을 번갈아 두고, 이웃끼리 색상(hue)이 70° 넘게 벌어지게 골랐다 (가장 가까운 쌍이 자홍→호박 71°). 떨어진 겹끼리는 비슷해도 된다.
+ */
+export const LAYER_TINTS: ReadonlyArray<readonly [number, number, number]> = [
+  [70, 110, 235], // 우주 — 짙은 파랑
+  [220, 90, 170], // 은하단 — 자홍
+  [210, 160, 95], // 우리은하 — 은하 중심의 호박색
+  [150, 90, 240], // 성운 — 보라
+  [80, 200, 230], // 성단 — 하늘색
+  [240, 140, 55], // 태양계 — 주황
+  [70, 205, 150], // 행성 — 청록
+  [235, 110, 140], // 저궤도 — 장밋빛
+];
+/** 워시 원래 색에 겹 색을 섞는 비율 (0 = 그대로, 1 = 겹 색만) */
+export const LAYER_TINT_MIX = 0.6;
+
 /** 배경 성운 워시 — 화면 비율 좌표(u,v), 반지름 비율, 색 */
 export const NEBULA_WASH: ReadonlyArray<{ u: number; v: number; r: number; c: readonly [number, number, number] }> = [
   { u: 0.16, v: 0.2, r: 0.92, c: [44, 102, 214] },
@@ -85,8 +109,70 @@ export const NEBULA_WASH: ReadonlyArray<{ u: number; v: number; r: number; c: re
   { u: 0.92, v: 0.55, r: 0.66, c: [150, 90, 235] },
 ];
 
+/**
+ * 캔버스가 쓰는 폰트. `styles/tokens.css` 의 `--font-*` 와 **같은 값이어야 한다** — 한쪽만
+ * 고치면 DOM 글자와 지도 글자가 서로 다른 서체로 갈린다.
+ *
+ * **셋 다 Pretendard 다** (S15P21A405-538). 이름을 셋으로 남긴 이유는 tokens.css 주석에 있다.
+ * 캔버스에는 `tabular-nums` 가 없으므로, 숫자를 세로로 줄 맞춰야 하는 자리는 지금처럼
+ * 그리는 쪽에서 자리를 잡아 준다.
+ */
+const PRETENDARD = '"Pretendard Variable",Pretendard,system-ui,sans-serif';
 export const FONTS = {
-  body: '"IBM Plex Sans KR",system-ui,sans-serif',
-  mono: '"IBM Plex Mono",ui-monospace,monospace',
-  display: '"Familjen Grotesk","IBM Plex Sans KR",sans-serif',
+  body: PRETENDARD,
+  mono: PRETENDARD,
+  display: PRETENDARD,
 } as const;
+
+/**
+ * 브레이크포인트 (**CSS 픽셀**). 원본은 `src/styles/tokens.css` 의 `--breakpoint-*` 이고
+ * 값이 바뀌면 양쪽을 함께 고친다. `desk` 는 좁은 화면 게이트(globals.css 의 899)와 같은 선이다.
+ *
+ * **화면을 가르는 것은 CSS 미디어 쿼리 담당이다.** 렌더 분기에 `window.innerWidth` 를 읽지 않는다 —
+ * 서버 렌더에는 창 크기가 없어 하이드레이션이 어긋나고, JS 가 뜨기 전 첫 페인트에 잘못된 화면이
+ * 그대로 보인다 (S15P21A405-379). 이 상수는 하이드레이션 이후에만 도는 캔버스 엔진처럼
+ * **JS 안에서 이미 폭을 재고 있는 곳**이 같은 경계를 쓰려고 참조한다.
+ */
+export const BREAKPOINTS = {
+  tablet: 900,
+  desk: 900,
+} as const;
+
+/** 최소 터치 타깃(px). `tokens.css` 의 `--spacing-touch` 와 같은 값 */
+export const TOUCH_TARGET_MIN = 44;
+
+/**
+ * 우측 패널 폭(px). `tokens.css` 의 `--spacing-right-panel` 과 같은 값 — **함께 고친다.**
+ * 지도 엔진이 패널에 가려지는 폭을 재려고 JS 에서 이 값을 쓴다 (S15P21A405-479).
+ */
+export const RIGHT_PANEL_W = 376;
+
+/**
+ * 폰에서 아래에서 올라오는 판의 윗모서리(px). `tokens.css` 의 `--radius-sheet` 와 같은 값 — **함께 고친다.**
+ * 재생바가 네비 줄 뒤로 이만큼 내려가 있어서(`bottom-bar.tsx`) 지도 가림폭에서 JS 로 빼야 한다 (S15P21A405-703).
+ */
+export const SHEET_RADIUS_PX = 30;
+
+/**
+ * 폰 바텀시트가 1·2 단에서 재생바 위로 걸리는 높이(px). `tokens.css` 의 `--spacing-sheet-s1`·`-s2` 와
+ * 같은 값 — **함께 고친다.** 지도 엔진이 시트 위에 남은 지도의 가운데를 잡으려고 쓴다 (S15P21A405-703).
+ * 3 단은 지도가 거의 다 덮이므로 2 단 값을 그대로 쓴다 — 올렸다 내릴 때 가운데가 출렁이지 않게.
+ */
+export const SHEET_SNAP_PX = { 1: 102, 2: 238, 3: 238 } as const;
+
+/**
+ * 머리글 없이 1 단으로 걸리는 시트(곡 상세·프로필)의 **본문 위 여백**(px). `tokens.css` 의
+ * `--spacing-sheet-peek-top` 과 같은 값 — **함께 고친다.** 손잡이 막대(14px)를 비켜 글이 선다 (S15P21A405-703).
+ */
+export const SHEET_PEEK_TOP_PX = 20;
+
+/**
+ * 폰 시트 2·3 단에서 **시트 윗끝부터 본문 글이 시작하는 곳까지**(px) (S15P21A405-714). 1 단은 머리글을 접으므로 그 자리에서는
+ * {@link SHEET_PEEK_TOP_PX} 다. `use-sheet-stop` 이 2 단 높이를 "본문 안 거리 + 이 값" 으로 정한다 — 머리글이 접혔든
+ * 펴졌든 같은 값이 나와야 해서다.
+ *
+ * 여정 시트 2 단(360 × 780)에서 잰 값이다. `Box` 머리글(위 여백 14 + 한 줄 28 + 아래 여백 12 + 밑줄 1)과 본문 위 여백 14 를
+ * 더하면 69 인데 잰 값은 70 이다 — 남는 1px 은 판 윗테두리로 보인다(추측). `common/box.tsx` 의 머리글·본문 여백을 바꾸면
+ * **함께 고친다.** 배경을 까는 패널(곡 상세)은 밑줄이 없어 1px 작다 — 2 단이 1px 더 서는 정도라 나누지 않는다.
+ */
+export const SHEET_HEAD_PX = 70;

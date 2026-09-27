@@ -23,6 +23,13 @@
 | [008](008-hover-flag-stuck-after-card-unmount.md) | 호버 카드를 한 번 쓰면 별 호버가 영영 안 잡힘 | 포인터 밑에서 사라진 카드가 `mouseleave` 를 못 쏴 "카드 위" 플래그가 굳음 | S15P21A405-277 |
 | [010](010-constellation-layout-403-on-localhost.md) | 로컬에서만 별자리가 안 그려짐 (배포는 멀쩡) | rewrite 가 브라우저 `Origin` 을 그대로 넘겨 백엔드가 403 — 배치가 영영 안 옴 | S15P21A405-303 |
 | [011](011-ascend-lands-at-max-zoom-empty-screen.md) | 겹을 떠오르면 화면에 별이 하나도 없음 | 게이트를 미느라 7.7배까지 확대된 배율을 그대로 복원 — [006](006-layer-entry-scale-lost-on-ascend.md) 이 반만 고친 자리 | S15P21A405-327 |
+| [012](012-survey-playback-lifecycle.md) | 설문이 사라지거나 다음 곡이 멈춤·튜토리얼 완료 복원 누락 | 재생 의도와 실제 청취를 혼동하고 뷰·제출 수명주기를 결합, 로컬 완료값 미복원 | S15P21A405-369 |
+| [013](013-analytics-uuid-on-http.md) | HTTP 테스트 주소에서 분석 이벤트가 전부 멈춤 | 보안 컨텍스트 전용 `crypto.randomUUID()` 호출이 첫 이벤트 생성을 중단 | S15P21A405-295 |
+| [014](014-button-font-size-utilities-ignored.md) | 버튼 글씨 크기 클래스가 전부 무시됨 | 레이어 밖의 `button { font: inherit }` 가 `@layer utilities` 의 `.text-*` 를 항상 이김 | S15P21A405-384 |
+| [015](015-stars-blink-every-3-seconds.md) | 별이 3초마다 사라졌다 나타남 (재로딩처럼 보임) | 기억 정리가 `first`(처음 본 때)를 잣대로 써 **지금 그리는 별**을 지움 — 다음 프레임에 알파 0부터 다시 밝힘 | S15P21A405-479 |
+| [016](016-canvas-photo-blocked-by-img-cache.md) | 인솔자·동승자 헬멧에만 프로필 사진이 안 뜸 | 패널 `<img>` 가 CORS 없이 먼저 받아 캐시한 응답에 ACAO 가 없어 캔버스용 CORS 요청이 거부됨 (추정) — 캐시를 비켜 다시 받고, 안 되면 CORS 없이 | S15P21A405-676 |
+| [017](017-phone-probe-labels-overlap.md) | 폰 주변 탐색 라벨이 잘리고, 가두면 서로 겹침 | 크기가 아니라 넓이 — 360px 폰은 안쪽 고리 반지름이 75px 라 두 줄 라벨 열한 묶음이 안 들어가고, 반씩 미는 방식은 경계에 막혀 겹친 채 끝남 | S15P21A405-715 |
+| [018](018-sheet-stop-measured-with-folded-header.md) | 1단으로 열린 여정 시트를 2단으로 올리면 재생 줄이 플레이어 바에 깔림 | 2단 멈춤을 시트 윗끝에서 재서 1단(머리글 접힘)에서 잰 값이 짧음 — 머리글을 따로 지켜보게 했더니 매 프레임 값이 바뀌어 떨려서 본문 윗끝 기준으로 바꿈 | S15P21A405-714 |
 
 ---
 

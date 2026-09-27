@@ -17,52 +17,71 @@ const round = (v: number) => v.toFixed(4);
  * 프로덕션에서 아예 닿지 않는다** — 실제로 그래서 모든 데이터 화면이 500 이었다 (S15P21A405-273).
  * 그래서 우리 것은 전부 `/bff/` 다.
  *
- * 지금 `/api/` 로 남아 있는 건 **목이 없어서 백엔드를 직접 부를 수밖에 없는 것**뿐이다
- * (`googleLogin` · `exchange` · `reissue`). 로컬에서 쓰려면 `live-api-paths.ts` 에 넣어야 한다.
- *
- * 로그인·온보딩은 **의도적으로 목이다.** 유저 테스트가 주변 탐색·경로 탐색만 보기 때문에
- * 실계정 가입 절차를 태우지 않는다. 백엔드에는 `/api/auth/*` 가 전부 있으므로
- * 나중에 `live-api-paths.ts` 에 다시 넣기만 하면 실연동으로 돌아온다.
+ * 인증·마이페이지는 **실연동이다** (S15P21A405-462). 다만 경로는 `/bff/` 로 둔다 —
+ * `/api/` 로 직접 부르면 로컬에서 rewrite 가 브라우저의 `Origin` 을 실어 보내 403 이 된다
+ * (S15P21A405-303). BFF 라우트가 호출자의 Bearer 토큰과 refresh 쿠키를 그대로 중계한다.
  */
 export const API_ENDPOINTS = {
   health: "/bff/health",
 
   auth: {
-    /** 목. 본인 조회는 백엔드에 아직 없다 (BACKEND-NOTES A-15) */
+    /** 실연동. **본인 조회 API 가 없어서** 토큰의 `sub` 로 `GET /api/user/detail` 을 대신 부른다 (A-15) */
     me: "/bff/auth/me",
-    /** 목. 백엔드 `POST /api/auth/logout` 이 있다 */
+    /** 실연동 → `POST /api/auth/logout`. 토큰 무효화 + refresh 쿠키 삭제 */
     logout: "/bff/auth/logout",
     /**
-     * 구글 idToken 로그인 (S15P21A405-129). `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
-     * 목이 없는 유일한 인증 경로라 실제로 쓰려면 `live-api-paths.ts` 에 이 경로를 넣어야 한다.
+     * 구글 idToken 로그인 (S15P21A405-129) → `POST /api/auth/login/google`.
+     * `use-google-login-mutation` 이 `{idToken}` 을 POST 한다.
      * 백엔드의 리다이렉트 진입점 `/oauth2/authorization/google` 은 그 흐름을 쓰지 않으므로 여기 두지 않는다.
      */
-    googleLogin: "/api/auth/login/google",
-    /** 목. 백엔드 `POST /api/auth/signup` 이 있다 — 본문 `{email, password, nickname}` */
+    googleLogin: "/bff/auth/google",
+    /** 실연동 → `POST /api/auth/signup`. 본문 `{email, password, nickname}` */
     signup: "/bff/auth/signup",
-    /** 목. 백엔드 `POST /api/auth/login` 이 있다 — 본문 `{email, password}` */
+    /** 실연동 → `POST /api/auth/login`. 본문 `{email, password}` */
     login: "/bff/auth/login",
-    /** 목. 백엔드에서는 `PATCH /api/user/profile` 이 이 역할을 한다 (A-13) */
-    nickname: "/bff/auth/nickname",
-    /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 */
+    /** 목. 백엔드 `POST /api/auth/exchange` 가 있다 — OAuth 리다이렉트 흐름을 쓸 때 붙인다 */
     exchange: "/api/auth/exchange",
-    /** 목. 백엔드 `PATCH /api/user/tutorial-completed` 가 이 역할을 한다 */
+    /** 실연동 → `PATCH /api/user/tutorial-completed` */
     completeTutorial: "/bff/auth/tutorial/complete",
-    /** 백엔드 전용 — refresh 쿠키로 재발급. 실연동으로 돌아갈 때 쓴다 (B-8) */
-    reissue: "/api/auth/reissue",
+    /** 실연동 → `POST /api/auth/reissue`. refresh 쿠키로 재발급 (B-8) */
+    reissue: "/bff/auth/reissue",
   },
 
   user: {
     /**
-     * 목. 백엔드는 `GET /api/user/detail?email=` 이고 **도달은 된다** (B-16 해소).
-     * 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe` 가 더 오고 `updatedAt` 은 없다 (0-2 필드 대조).
+     * 실연동 → `GET /api/user/detail?email=`. 응답에 `followerCnt`·`followingCnt`·`isFollowing`·`isMe`
+     * 가 더 오고 `updatedAt` 은 없다. **지금 듣는 곡·만남 횟수·대시보드 통계는 백엔드에 아예 없다** (A-35).
      */
     detail: (email: string) => `/bff/users/${encodeURIComponent(email)}`,
-    /** 목. 백엔드 `GET /api/users/nickname-available` 이 있다 */
+    /** 실연동 → `GET /api/users/nickname-available` */
     nicknameAvailable: (nickname: string) => `/bff/users/nickname-available?nickname=${encodeURIComponent(nickname)}`,
-    nearby: (layer: number) => `/bff/users/nearby?layer=${layer}`,
-    follow: (email: string) => `/bff/users/${encodeURIComponent(email)}/follow`,
-    reaction: (email: string) => `/bff/users/${encodeURIComponent(email)}/reactions`,
+    /**
+     * 실연동 → `PATCH /api/user/nickname`. 가입 직후 닉네임 화면과 프로필 수정 화면이 같이 쓴다.
+     *
+     * 예전에는 이미지와 함께 `PATCH /api/user/profile` 하나로 보냈는데(A-13), 백엔드가 둘을
+     * 갈라 놓으면서 그 경로가 없어졌다 (S15P21A405-426 · 474).
+     */
+    nickname: "/bff/user/nickname",
+    /** 실연동 → `PATCH /api/user/image`. **파일**을 올린다 — 주소 문자열은 받지 않는다 */
+    image: "/bff/user/image",
+    /**
+     * 실연동 → `PATCH /api/user/public`. **설정이 아니라 전원을 공개로 못박는 자리다**
+     * (S15P21A405-574). 공개/비공개 계정은 폐지됐는데 배포 백엔드가 아직 그 값으로 막는다.
+     * 백엔드가 `USER_PRIVATE` 를 걷어내면(BACKEND-NOTES A-59) 이 항목도 같이 지운다.
+     */
+    publicVisibility: "/bff/user/public",
+    /**
+     * 팔로우 = **구독**이다 (S15P21A405-489, BACKEND-NOTES A-37~A-39). 인스타그램식으로
+     * 상대를 구독해 두는 것이고, 지도에서 그 사람을 **따라다니는 탑승(ride)과 다르다.**
+     * 탑승은 `POST /api/realtime/ride` 로 따로 있다 (S15P21A405-530, 실연동).
+     *
+     * 거는 쪽은 토큰 주체라 본문에 없다. 경로가 사용자별이 아니라 고정인 것도 그래서다.
+     */
+    followInsert: "/bff/users/follow/insert",
+    followDelete: "/bff/users/follow/delete",
+    /** `type` 은 `follower`(나를 구독한 사람) / `following`(내가 구독한 사람), `page` 는 0부터 */
+    followList: (email: string, type: "follower" | "following", page = 0) =>
+      `/bff/users/follow/list?email=${encodeURIComponent(email)}&type=${type}&page=${page}`,
   },
 
   map: {
@@ -81,16 +100,27 @@ export const API_ENDPOINTS = {
       return `/bff/map/songs?${q.join("&")}`;
     },
     // nearby 는 라우트 핸들러가 백엔드 `GET /api/music/detail?id=` 의 neighbors 로 만들어 준다
-    representatives: (layer: number) => `/bff/map/layers/${layer}/representatives`,
     nearby: (musicId: number) => `/bff/map/nearby/${musicId}`,
   },
 
   music: {
     detail: (id: number) => `/bff/music/${id}`,
+    /** 곡 좋아요 (S15P21A405-611) — 백엔드 `POST /api/music/like`, 본문 `{musicId, liked}`. `liked` 는 목표 상태다 */
+    like: "/bff/music/like",
     search: "/bff/music/search",
-    play: (id: number) => `/bff/music/${id}/play`,
+    /**
+     * 재생 선언 (S15P21A405-482). **곡 ID 를 본문으로 보낸다** — 경로에 안 넣는다.
+     * 이 호출이 곧 내 위치 이동이다.
+     */
+    play: "/bff/music/play",
+    /** 재생 종료. 위치는 바뀌지 않고 들은 시간만 남긴다 */
     /** 곡 하나의 videoId. 상세 응답이 아니라 **전용 엔드포인트**가 출처다 (S15P21A405-340) */
     videoId: (id: number) => `/bff/music/${id}/video-id`,
+    /**
+     * 곡 신고 (S15P21A405-377). **실연동이다** (BACKEND-NOTES A-28).
+     * 경로는 프론트 것으로 둔다 — 백엔드는 곡을 본문으로 받고, 그 번역은 BFF 라우트가 한다.
+     */
+    report: (id: number) => `/bff/music/${id}/report`,
   },
 
   /**
@@ -104,12 +134,78 @@ export const API_ENDPOINTS = {
    */
   playlist: {
     list: "/bff/playlists",
-    mine: "/bff/playlists/mine",
-    liked: "/bff/playlists/liked",
+    /**
+     * 만든 플리 · 좋아요한 플리. **이메일을 주면 그 사람 것**이다 (S15P21A405-587).
+     *
+     * 백엔드 `GET /api/playlist/search` · `/liked` 는 처음부터 `email` 로 **아무나** 조회하는
+     * API 다 ("본인 목록도 이 API(email에 본인 email)" — 컨트롤러 주석). 공개 범위 판정도
+     * 서비스 안에 있다. 우리 쪽만 토큰 주체로 박아 두고 있어서 남의 피드에 못 붙였다.
+     *
+     * 경로 이름은 `mine` 그대로 둔다 — 부르는 쪽 대부분이 실제로 내 것을 원하고(플리 추가 메뉴 ·
+     * 플리 패널), 이름을 바꾸면 그 자리들까지 건드리게 된다. 안 주면 예전과 똑같이 토큰 주체다.
+     */
+    mine: (email?: string | null) => (email ? `/bff/playlists/mine?email=${encodeURIComponent(email)}` : "/bff/playlists/mine"),
+    liked: (email?: string | null) => (email ? `/bff/playlists/liked?email=${encodeURIComponent(email)}` : "/bff/playlists/liked"),
     detail: (id: number) => `/bff/playlists/${id}`,
     items: (id: number) => `/bff/playlists/${id}/items`,
     item: (id: number, musicId: number) => `/bff/playlists/${id}/items/${musicId}`,
+    /**
+     * 곡 순서 바꾸기 (S15P21A405-540) → 백엔드 `POST /api/playlist/music/reorder`.
+     * 본문은 **새 순서의 전체 목록**(`{musicIds}`)이다 — 바뀐 곡만 보내는 길이 없다.
+     */
+    order: (id: number) => `/bff/playlists/${id}/order`,
     like: (id: number) => `/bff/playlists/${id}/like`,
+  },
+
+  /**
+   * 실시간 (S15P21A405-482).
+   *
+   * **`/bff/` 를 거친다 — 명세와 다른 선택이다.** 명세 §0 은 "브라우저가 직접 부른다,
+   * `/bff/` 라우트를 만들지 않는다" 고 적었고 이유는 "서버가 대신 부르면 전원이 한 사람으로
+   * 취급된다" 였다. 그 이유가 S15P21A405-481 로 사라졌다 — BFF 가 **호출자의 Authorization 을
+   * 그대로 넘기므로** 백엔드는 각 사용자를 그대로 본다.
+   *
+   * 대신 직접 호출에는 막는 함정이 있다 (`live-api-paths.ts`, S15P21A405-303): rewrite 는
+   * 브라우저의 `Origin` 을 그대로 넘기는데 백엔드가 `http://localhost:3000` 을
+   * `403 Invalid CORS request` 로 막는다. 직접 호출로 두면 **로컬에서만 전부 터진다.**
+   *
+   * 되돌리기는 쉽다 — 경로를 `/api/...` 로 바꾸고 `live-api-paths.ts` 에 세 줄을 넣으면 된다.
+   * 백엔드 CORS 허용 목록에 로컬 오리진이 들어가면 그때 옮긴다.
+   */
+  realtime: {
+    /** 주변 사람 목록 열기. 본문 없음. 이 호출이 곧 실시간 구독 시작이다 */
+    nearby: "/bff/realtime/nearby",
+    /**
+     * 탑승(POST, 본문 `{captainEmail}`)과 하차(DELETE, 본문 없음)가 **같은 경로**다
+     * (S15P21A405-530) — 백엔드 `POST·DELETE /api/realtime/ride`.
+     *
+     * **소켓이 아니라 REST 인 이유**가 계약에 적혀 있다: 소켓으로 보내면 거부당했을 때 아무
+     * 응답도 오지 않아 버튼만 안 먹는 것처럼 보인다. 거부 사유(`RIDE_FULL` · `RIDE_SELF` …)가
+     * 사용자에게 보여야 하는 경로다.
+     */
+    ride: "/bff/realtime/ride",
+    /**
+     * 선단 해체 = **강제 하차** (DELETE, 본문 없음) — 백엔드 `DELETE /api/realtime/ride/fleet`
+     * (S15P21A405-606). 인솔자가 따라오는 사람 전부를 내린다. 따라오는 사람이 없으면 `RIDE_NOT_CAPTAIN`.
+     */
+    rideFleet: "/bff/realtime/ride/fleet",
+    /**
+     * 그 겹에서 **재생 중인 사람 전부** (S15P21A405-537, BACKEND-NOTES §5).
+     *
+     * **화면 범위와 무관하다.** 소켓 `VIEWPORT_SNAPSHOT` 은 보이는 범위만 주고 칸이 많아지면
+     * "N명" 뭉치로 바꿔 버리는데, 지도는 줌과 상관없이 사람을 **전부 한 명씩** 그리기로 했다
+     * (팀 결정). 그 결정을 만족시키는 유일한 출처다.
+     *
+     * `layer` 는 **0-based** 로 그대로 넘긴다 — 곡 조회(`map.songs`)의 `level` 처럼 +1 하지 않는다.
+     * 범위(0~7) 밖이면 400 이다. 밀어 주는 이벤트가 없어서 **레이어를 옮길 때와 주기적으로** 다시 부른다.
+     */
+    layerUsers: (layer: number) => `/bff/realtime/layers/${layer}/users`,
+    /**
+     * 반응 보내기 (SOCIAL-02, S15P21A405-607) — 백엔드 `POST /api/realtime/reactions`, 본문 `{toEmail, reactionKey}`.
+     * 응답 `data` 는 null. 거부 사유 `REACTION_SELF`(400) · `REACTION_NOT_NEARBY`(409) · `REACTION_COOLDOWN`(429).
+     * 받는 쪽에는 개인 큐로 `REACTION` 이 온다.
+     */
+    reactions: "/bff/realtime/reactions",
   },
 
   constellation: {
@@ -133,6 +229,53 @@ export const API_ENDPOINTS = {
   },
 
   chart: {
-    ranking: (type: string) => `/bff/charts/${type}`,
+    /**
+     * 이번 주 랭킹 — **실연동** (S15P21A405-604). 라우트 핸들러가 배포 백엔드
+     * `GET /api/stats/weekly` (발견왕·탐험왕·기여도 top 10) 를 대신 부른다.
+     * 종류별 경로(`/bff/charts/{type}`) 목은 걷어냈다 — 백엔드가 셋을 한 번에 주기 때문이다.
+     */
+    weekly: "/bff/charts/weekly",
+    /** 실시간 탑 버스기사 — **실연동** (S15P21A405-681). 배포 백엔드 `GET /api/realtime/ride/ranking` */
+    topDriver: "/bff/charts/top-driver",
+  },
+
+  /**
+   * 별자리 콘테스트 (S15P21A405-602 · 640) — **실연동**. 라우트 핸들러가 배포 백엔드 `/api/artwork/*`
+   * (S15P21A405-563 · 598 · 616)를 호출자 토큰으로 대신 부른다. 대응표는 BACKEND-NOTES §6-9.
+   *
+   * 목이던 때의 `{id}` 경로 인자가 없다 — 백엔드는 "지금 열린 회차" 하나만 다룬다(출품·리더보드 모두).
+   */
+  contest: {
+    /** `GET /api/artwork/round/current`. 열린 회차가 없으면 `null` */
+    current: "/bff/contests/current",
+    /** `POST /api/artwork/draw` — 그린 점 → 곡·좌표·모양 일치도 */
+    match: "/bff/contests/match",
+    /** `GET /api/artwork/templates` — AI 추천 모양 목록 (S15P21A405-595) */
+    templates: "/bff/contests/templates",
+    /** `POST /api/artwork/generate { template }` — 추천 모양대로 곡을 골라 **내 플리를 만든다**. 출품은 따로 */
+    generate: "/bff/contests/generate",
+    /** GET = 리더보드(`/api/artwork/leaderboard`) · POST = 출품(플리 생성 → `/api/artwork/submit`) */
+    entries: "/bff/contests/entries",
+    /** `GET /api/artwork/mine` — 내 작품(모든 상태). 채점 결과는 여기서 읽는다 */
+    mine: "/bff/contests/mine",
+    /** `POST /api/artwork/like { artworkId, liked }` — 토글이 아니라 목표 상태 */
+    like: (artworkId: number) => `/bff/contests/entries/${artworkId}/like`,
+    /** `GET /api/artwork/detail?artworkId=` — 작품 한 점의 별자리 좌표 (S15P21A405-701) */
+    detail: (artworkId: number) => `/bff/contests/entries/${artworkId}`,
+    /** `POST /api/artwork/retry/{id}` — 실패한 내 작품 재평가 */
+    retry: (artworkId: number) => `/bff/contests/entries/${artworkId}/retry`,
+    /** 남의 작품을 내 플리로 — `POST /api/playlist/create` (곡 순서 그대로) */
+    save: "/bff/contests/save",
+  },
+
+  /**
+   * 음악 취향 분석 (S15P21A405-630) — **실연동**. 라우트 핸들러가 배포 백엔드
+   * `GET·POST /api/taste-analysis` 를 호출자 토큰으로 대신 부른다 (S15P21A405-512).
+   *
+   * **경로 하나에 메서드 둘이다.** GET 은 지금 상태를 읽고, POST 는 리포트를 새로 만든다
+   * (하루 한 번). 백엔드가 그렇게 두었고 여기서 갈라 둘 이유가 없다.
+   */
+  taste: {
+    analysis: "/bff/taste-analysis",
   },
 } as const;

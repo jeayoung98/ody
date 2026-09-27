@@ -1,6 +1,6 @@
 import { API_ENDPOINTS, STORAGE_KEYS } from "@/constants";
 import type { ApiErrorCode, ApiResponse } from "@/types";
-import { readStorage, readStorageScope, writeStorage } from "./storage";
+import { readStorage, readStorageScope, removeStorage, writeStorage } from "./storage";
 import { logLiveResponse } from "./live-log";
 
 /**
@@ -51,11 +51,33 @@ async function reissueAccessToken(): Promise<boolean> {
         headers: { "Content-Type": "application/json; charset=UTF-8" },
       });
       const body = (await res.json().catch(() => null)) as ApiResponse<{ accessToken: string }> | null;
-      if (!res.ok || !body?.success || !body.data?.accessToken) return false;
+      if (!res.ok || !body?.success || !body.data?.accessToken) {
+        // 답을 받았는데 새 토큰이 없다 = 이 세션은 되살아나지 않는다. 죽은 토큰을 남겨 두면
+        // AuthGuard 가 계속 "로그인됨" 으로 읽어서, 로그아웃을 직접 누르기 전까지 401 만
+        // 받는 홈에 머문다 (S15P21A405-473). 지우면 그 자리에서 로그인으로 간다
+        removeStorage(STORAGE_KEYS.accessToken);
+        return false;
+      }
+
+      /**
+       * **재발급이 도는 사이에 로그아웃했으면 그 결과를 버린다** (S15P21A405-588).
+       *
+       * 토큰이 사라졌다는 것은 그 사이에 누군가 지웠다는 뜻이고, 지우는 자리는 로그아웃과
+       * 바로 위(되살아나지 않는 세션)뿐이다. 둘 다 "이 세션은 끝났다" 는 결론이라 여기서
+       * 새 토큰을 써 넣으면 **방금 로그아웃한 사람이 다시 로그인된다.**
+       *
+       * 실제로 그랬다. 지도는 10초마다 겹 사용자를 폴링하고 액세스 토큰 수명은 30분이라,
+       * 로그아웃을 누르는 순간 401 재발급이 떠 있을 확률이 낮지 않다. 그러면 로그인 화면에서
+       * `GuestGate` 가 되살아난 토큰을 보고 스플래시(점 하나)를 띄운 채 홈으로 되돌린다 —
+       * 사용자에게는 "로그아웃했는데 로그인 창이 안 뜬다" 로 보인다.
+       */
+      if (readStorage<string>(STORAGE_KEYS.accessToken) == null) return false;
 
       writeStorage(STORAGE_KEYS.accessToken, body.data.accessToken, readStorageScope(STORAGE_KEYS.accessToken) ?? "local");
       return true;
     } catch {
+      // 네트워크가 끊겨 답 자체를 못 받은 경우다. 토큰은 그대로 둔다 —
+      // 와이파이가 끊겼다고 로그아웃시키면 돌아왔을 때 다시 로그인해야 한다
       return false;
     } finally {
       // 다음 401 때 다시 시도할 수 있도록 비운다
@@ -70,12 +92,15 @@ async function reissueAccessToken(): Promise<boolean> {
 
 function request(path: string, init?: RequestInit): Promise<Response> {
   const token = readStorage<string>(STORAGE_KEYS.accessToken);
+  // 파일을 보낼 때는 `Content-Type` 을 우리가 정하지 않는다 — multipart 는 헤더에 경계
+  // 문자열이 들어가야 하고 그 값은 `fetch` 가 `FormData` 를 보고 만든다 (S15P21A405-474)
+  const isForm = init?.body instanceof FormData;
   return fetch(`${BASE_URL}${path}`, {
     ...init,
     // refresh token 이 httpOnly 쿠키로 심겨 있어서 쿠키를 실어 보내야 한다
     credentials: "include",
     headers: {
-      "Content-Type": "application/json; charset=UTF-8",
+      ...(isForm ? {} : { "Content-Type": "application/json; charset=UTF-8" }),
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
       ...init?.headers,
     },

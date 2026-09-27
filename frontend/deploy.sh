@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 
-set -Eeuo pipefail
+set -Eeuo pipefail 
 
 readonly DEPLOY_ROOT="/var/www/ody"
 readonly RELEASES_DIR="${DEPLOY_ROOT}/releases"
@@ -8,12 +8,11 @@ readonly CURRENT_LINK="${DEPLOY_ROOT}/current"
 readonly PREVIOUS_LINK="${DEPLOY_ROOT}/previous"
 
 readonly FRONTEND_SERVICE="ody-frontend.service"
+readonly FRONTEND_ENV_FILE="/etc/ody/frontend.env"
+readonly FRONTEND_ENV_DROP_IN_DIR="/etc/systemd/system/${FRONTEND_SERVICE}.d"
+readonly FRONTEND_ENV_DROP_IN="${FRONTEND_ENV_DROP_IN_DIR}/20-ody-frontend-env.conf"
 readonly LOCAL_BASE_URL="http://127.0.0.1:3000"
 readonly PUBLIC_BASE_URL="${ODY_FRONTEND_PUBLIC_BASE_URL:-https://j15a405.p.ssafy.io}"
-
-readonly NGINX_CONFIG="/etc/nginx/sites-available/backend"
-readonly NGINX_NEXT_CONFIG="/etc/nginx/sites-available/backend.next"
-readonly NGINX_LEGACY_BACKUP="/etc/nginx/sites-available/backend.before-next"
 
 readonly LOCK_FILE="/run/lock/ody-frontend-deploy.lock"
 readonly RETAIN_RELEASES=5
@@ -140,11 +139,37 @@ nginx_check() {
     nginx -t
 }
 
-
 frontend_service_exists() {
     systemctl cat "${FRONTEND_SERVICE}" >/dev/null 2>&1
 }
 
+configure_frontend_environment() {
+    local temporary="${FRONTEND_ENV_DROP_IN}.tmp.$$"
+
+    [[ -f ${FRONTEND_ENV_FILE} && -r ${FRONTEND_ENV_FILE} ]] || \
+        fail "Frontend environment file is missing or unreadable: ${FRONTEND_ENV_FILE}"
+
+    frontend_service_exists || \
+        fail "Frontend systemd service does not exist: ${FRONTEND_SERVICE}"
+
+    install -d \
+        -o root \
+        -g root \
+        -m 0755 \
+        "${FRONTEND_ENV_DROP_IN_DIR}"
+
+    printf '[Service]\nEnvironmentFile=%s\n' "${FRONTEND_ENV_FILE}" > "${temporary}"
+
+    install \
+        -o root \
+        -g root \
+        -m 0644 \
+        "${temporary}" \
+        "${FRONTEND_ENV_DROP_IN}"
+
+    rm -f -- "${temporary}"
+    systemctl daemon-reload
+}
 
 restart_frontend() {
     if ! frontend_service_exists; then
@@ -166,43 +191,6 @@ restart_frontend() {
 
     return 0
 }
-
-reload_nginx() {
-    if [[ ! -f ${NGINX_NEXT_CONFIG} ]]; then
-        log "Next.js Nginx configuration is unavailable: ${NGINX_NEXT_CONFIG}"
-        return 1
-    fi
-
-    log "Activating Next.js Nginx configuration."
-
-    cp "${NGINX_NEXT_CONFIG}" "${NGINX_CONFIG}"
-
-    if ! nginx_check; then
-        log "Next.js Nginx configuration is invalid."
-        return 1
-    fi
-
-    systemctl reload nginx
-}
-
-restore_legacy_nginx() {
-    if [[ ! -f ${NGINX_LEGACY_BACKUP} ]]; then
-        log "Legacy Nginx backup is unavailable: ${NGINX_LEGACY_BACKUP}"
-        return 1
-    fi
-
-    log "Restoring legacy Nginx configuration."
-
-    cp "${NGINX_LEGACY_BACKUP}" "${NGINX_CONFIG}"
-
-    if ! nginx_check; then
-        log "Restored legacy Nginx configuration is invalid."
-        return 1
-    fi
-
-    systemctl reload nginx
-}
-
 
 wait_local_health() {
     local release_id=$1
@@ -244,6 +232,7 @@ wait_local_health() {
 public_health() {
     local release_id=$1
     local marker
+    local actuator_status
 
     log "Checking public frontend."
 
@@ -262,7 +251,27 @@ public_health() {
             "${PUBLIC_BASE_URL}/build-id.txt?release=${release_id}"
     )"
 
-    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || return 1
+    [[ $(tr -d '\r\n' <<<"${marker}") == "${release_id}" ]] || \
+        return 1
+
+    log "Checking backend API."
+
+    curl -fsS \
+        --retry 5 \
+        --retry-delay 1 \
+        --max-time 10 \
+        "${PUBLIC_BASE_URL}/api/hello" \
+        >/dev/null
+
+    actuator_status="$(
+        curl -sS \
+            -o /dev/null \
+            -w '%{http_code}' \
+            --max-time 10 \
+            "${PUBLIC_BASE_URL}/actuator/health"
+    )"
+
+    [[ ${actuator_status} == "403" || ${actuator_status} == "404" ]]
 }
 
 
@@ -344,6 +353,7 @@ deploy_release() {
 
     validate_release_id "${release_id}"
     validate_archive "${artifact}"
+    configure_frontend_environment
 
     release_dir="${RELEASES_DIR}/${release_id}"
     incoming="${RELEASES_DIR}/.incoming-${release_id}-$$"
@@ -417,9 +427,9 @@ deploy_release() {
     atomic_link "${release_dir}" "${CURRENT_LINK}"
 
     # 새 current를 기준으로 Next.js 재시작
+    # Nginx 설정은 Backend 블루그린이 관리하므로 여기서 건드리지 않는다 (S15P21A405-357)
     if ! restart_frontend ||
         ! wait_local_health "${release_id}" ||
-        ! reload_nginx ||
         ! public_health "${release_id}"; then
 
         log "Health verification failed; restoring previous symlinks."
@@ -434,21 +444,10 @@ deploy_release() {
 
             systemctl restart "${FRONTEND_SERVICE}" || true
             wait_local_health "$(basename "${old_current}")" || true
-
-            # Next.js Nginx 설정 유지
-            nginx_check || true
-            systemctl reload nginx || true
-
         else
-            # 첫 Next.js 전환 실패:
-            # 기존 Vite release + 기존 정적 Nginx 설정으로 복구
-            log "Restoring legacy static frontend."
+            log "No previous Next.js release to restore; stopping ${FRONTEND_SERVICE}."
 
             systemctl stop "${FRONTEND_SERVICE}" || true
-
-            if ! restore_legacy_nginx; then
-                log "WARNING: Failed to restore legacy Nginx configuration."
-            fi
         fi
 
         fail "Deployment rolled back."
@@ -469,6 +468,8 @@ rollback_release() {
     local release_id
     local old_current
     local old_previous
+
+    configure_frontend_environment
 
     old_current="$(link_target "${CURRENT_LINK}")"
     old_previous="$(link_target "${PREVIOUS_LINK}")"
@@ -556,7 +557,6 @@ main() {
         tar \
         nginx \
         curl \
-        cp \
         flock \
         find \
         sort \
@@ -611,6 +611,5 @@ main() {
             ;;
     esac
 }
-
 
 main "$@"

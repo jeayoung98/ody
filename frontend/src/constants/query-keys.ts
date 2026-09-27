@@ -3,7 +3,7 @@
  * 모든 useQuery / invalidateQueries 는 반드시 여기 정의된 키를 사용한다.
  * 계층 구조: [도메인, 세부, 파라미터] — 상위 키로 invalidate 하면 하위가 함께 무효화된다.
  */
-import type { LayerBox } from "@/types";
+import type { LayerBox, SearchCondition } from "@/types";
 
 export const QUERY_KEYS = {
   health: ["health"] as const,
@@ -26,8 +26,6 @@ export const QUERY_KEYS = {
      */
     songs: (boxes: readonly LayerBox[]) =>
       ["map", "songs", boxes.map((b) => `${b.layer}:${[b.xMin, b.yMin, b.xMax, b.yMax].map((v) => v.toFixed(4)).join(",")}`).join("|")] as const,
-    /** 레이어별 대표곡 ID */
-    representatives: (layer: number) => ["map", "representatives", layer] as const,
     /** 이 곡이 대표곡으로 노출되는 레이어 목록 */
     /** 특정 곡 기준 가까운 곡 */
     nearby: (musicId: number) => ["map", "nearby", musicId] as const,
@@ -36,20 +34,41 @@ export const QUERY_KEYS = {
   music: {
     all: ["music"] as const,
     detail: (id: number) => ["music", "detail", id] as const,
-    search: (keyword: string) => ["music", "search", keyword] as const,
+    /**
+     * 검색 (S15P21A405-399). **모드까지 키에 넣는다** — 같은 문자열이라도 통합 검색과 아티스트
+     * 검색은 다른 질문이라, 조건을 바꿨을 때 이전 모드의 결과가 그대로 보이면 안 된다.
+     */
+    search: (c: SearchCondition) =>
+      (c.mode === "all"
+        ? (["music", "search", "all", c.query] as const)
+        : c.mode === "artist"
+          ? (["music", "search", "artist", c.artist, c.music] as const)
+          : (["music", "search", "music", c.music, c.artist] as const)),
     videoId: (id: number) => ["music", "video-id", id] as const,
   },
 
   user: {
+    /** 프로필을 고치면 내 것이든 남이 보는 것이든 전부 다시 읽어야 한다 */
+    all: ["user"] as const,
     profile: (email: string) => ["user", "profile", email] as const,
-    nearby: (layer: number) => ["user", "nearby", layer] as const,
+    /** 팔로워·팔로잉 목록 (S15P21A405-489). 보는 사람 기준 값이 섞여 있어 email·type·page 가 다 키다 */
+    followList: (email: string, type: "follower" | "following", page: number) => ["user", "follow-list", email, type, page] as const,
+    /** 모든 팔로워·팔로잉 목록 — 구독이 바뀌면 줄마다 있는 `isFollowing` 을 한꺼번에 고친다 (S15P21A405-675) */
+    followListAll: ["user", "follow-list"] as const,
   },
 
   playlist: {
     all: ["playlist"] as const,
     detail: (id: number) => ["playlist", "detail", id] as const,
-    mine: ["playlist", "mine"] as const,
-    liked: ["playlist", "liked"] as const,
+    /**
+     * 만든 플리. **이메일이 키에 들어간다** (S15P21A405-587) — 남의 피드도 같은 목록을 쓰므로
+     * 키가 하나뿐이면 내 플리와 남의 플리가 한 자리를 서로 덮어쓴다. `null` 은 "토큰 주체".
+     */
+    mine: (email: string | null) => ["playlist", "mine", email] as const,
+    /** 누구 것이든 만든 플리 전부 — 무효화할 때 쓴다 (이메일을 모르는 자리에서 부른다) */
+    mineAll: ["playlist", "mine"] as const,
+    liked: (email: string | null) => ["playlist", "liked", email] as const,
+    likedAll: ["playlist", "liked"] as const,
   },
 
   journey: {
@@ -57,6 +76,40 @@ export const QUERY_KEYS = {
   },
 
   chart: {
-    ranking: (type: string) => ["chart", type] as const,
+    /** 세 랭킹이 한 응답이라 키도 하나다 (S15P21A405-604) */
+    weekly: ["chart", "weekly"] as const,
+    /** 실시간 탑 버스기사 (S15P21A405-681). 주간 셋과 따로 받는다 — 신선도가 다르다 */
+    topDriver: ["chart", "topDriver"] as const,
   },
+
+  /**
+   * 음악 취향 분석 (S15P21A405-630). **인자가 없다** — 백엔드가 토큰으로 사람을 정하므로
+   * 이 키가 가리키는 것은 언제나 "내 것" 하나다.
+   */
+  taste: {
+    analysis: ["taste", "analysis"] as const,
+  },
+
+  /**
+   * 별자리 콘테스트 (S15P21A405-602 · 640). 좋아요·출품이 회차(남은 표)·리더보드·내 작품 셋에 걸려
+   * `all` 로 함께 무효화한다. 회차 인자가 없다 — 백엔드가 열린 회차 하나만 다룬다
+   */
+  contest: {
+    all: ["contest"] as const,
+    current: ["contest", "current"] as const,
+    entries: ["contest", "entries"] as const,
+    mine: ["contest", "mine"] as const,
+    detail: (artworkId: number) => ["contest", "detail", artworkId] as const,
+    templates: ["contest", "templates"] as const,
+  },
+  /**
+   * 실시간 (S15P21A405-482). `user.nearby(layer)` 와 **다른 축이다** — 저건 화면 범위 기준
+   * 폴링이었고, 이건 내가 듣는 곡 기준이라 레이어를 타지 않는다. 그래서 키에 인자가 없다.
+   */
+  realtime: {
+    nearby: ["realtime", "nearby"] as const,
+    /** 겹이 바뀌면 다른 목록이다 — 키에 겹을 넣어야 옮길 때 이전 겹 사람이 잠깐 남지 않는다 */
+    layerUsers: (layer: number) => ["realtime", "layerUsers", layer] as const,
+  },
+
 } as const;

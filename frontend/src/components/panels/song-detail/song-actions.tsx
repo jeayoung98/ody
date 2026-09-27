@@ -1,110 +1,90 @@
 "use client";
 
-import { useState } from "react";
-import Button from "@/components/common/button";
-import { PauseIcon, PlayIcon } from "@/components/common/icons";
+import { ArriveIcon, DepartIcon } from "@/components/common/icons";
 import Note from "@/components/common/note";
-import { FEATURES, UNPLAYABLE_NOTICE } from "@/constants";
-import { useRecordPlayMutation } from "@/hooks/mutations/use-record-play-mutation";
-import { useVideoIdQuery } from "@/hooks/queries/use-video-id-query";
-import { usePlaySong } from "@/hooks/use-play-song";
-import { useJourneyStore } from "@/stores/use-journey-store";
+import { RIDING_JOURNEY_BLOCKED, PLAYBACK_BLOCKED } from "@/constants";
+import { usePlayability } from "@/hooks/queries/use-video-id-query";
 import { useOpenJourneyComposer } from "@/hooks/use-open-journey-composer";
-import { usePlayerStore } from "@/stores/use-player-store";
-import { useToastStore } from "@/stores/use-toast-store";
-import type { MusicDetail } from "@/types";
-import AddToPlaylistMenu from "../playlist/add-to-playlist-menu";
+import { useFollowStore } from "@/stores/use-follow-store";
+import { useJourneyStore } from "@/stores/use-journey-store";
 
-/** 재생 · 플리에 추가 · 여정 출발/도착으로 지정 */
-export default function SongActions({ music }: { music: MusicDetail }) {
-  const [menuOpen, setMenuOpen] = useState(false);
-  const playWithConfirm = usePlaySong();
-  const pause = usePlayerStore((s) => s.pause);
-  const currentMusicId = usePlayerStore((s) => s.currentMusicId);
-  const isPlaying = usePlayerStore((s) => s.isPlaying);
-  const recordPlay = useRecordPlayMutation();
+/** 세그먼트 한 칸 — 둘이 한 덩어리라 `Button` 을 쓰지 않는다 (테두리가 두 겹이 된다) */
+const HALF =
+  "flex flex-1 items-center justify-center gap-[7px] px-2 py-2.5 text-[16px] transition-colors duration-fast not-disabled:hover:bg-white/[.07] disabled:cursor-not-allowed disabled:opacity-40";
+
+/**
+ * 이 곡을 여정의 **출발점 / 도착점**으로 지정 (JOURNEY-01).
+ *
+ * 둘을 **테두리 하나로 묶었다** (S15P21A405-384). 떨어뜨려 두면 남남으로 읽히는데 실제로는
+ * 한 쌍이다. 버튼 글자에서 `여정` 을 뺐다 — 아이콘 색(출발 teal · 도착 violet)이 이미 한 쌍임을
+ * 말하고, 글자가 짧아진 만큼 16px 로도 한 줄에 여유롭다. 눈에 보이는 글자는 짧게 두고,
+ * 화면 낭독기에는 `aria-label` 로 온전한 문장을 준다.
+ *
+ * 아이콘 색은 여정 패널과 같다 (`journey-endpoints.tsx`): 출발 teal · 도착 violet.
+ *
+ * **재생·플리는 여기 없다.** 이 곡 하나에 대한 행동은 제목 줄로 모았다 (`song-header`).
+ * 여기는 두 곡을 잇는 일만 남는다. 못 트는 곡 안내(`Note`)는 여기 남는다 — 여정에도 걸리는
+ * 사정이라 행동 줄 가까이 있어야 한다.
+ *
+ * **곡 ID 하나만 받는다** (S15P21A405-691). 상세 응답을 기다리지 않고 패널을 여는 즉시 그리려는
+ * 것이다 — 처음 여는 곡은 응답이 2~3초 걸리는데, 이 줄은 그 응답에서 쓰는 값이 없다.
+ */
+export default function SongActions({ musicId }: { musicId: number }) {
   const setStart = useJourneyStore((s) => s.setStart);
   const setEnd = useJourneyStore((s) => s.setEnd);
+  /**
+   * **여정 입구는 여기에도 있다** (S15P21A405-660). 레일·동작 줄만 잠그면 이 둘이 남는다 —
+   * 따라가는 동안에도 곡 상세는 열려 있기 때문이다(인솔자가 보는 곡). 누르면 `openComposer` 가
+   * 토스트로 막지만 그 **전에 출발·도착이 이미 스토어에 들어간다.** 아예 못 누르게 둔다.
+   */
+  const riding = useFollowStore((s) => s.leaderEmail != null);
   const openComposer = useOpenJourneyComposer();
-  const showToast = useToastStore((s) => s.show);
-
+  /** 왜 못 트는지 (SONG-04) — 판단은 `usePlayability` 한 곳에서 온다 */
+  const { blocked } = usePlayability(musicId);
   /**
-   * 들을 수 있는 곡인가 — **`videoId` 하나로 판단한다** (S15P21A405-326).
-   *
-   * 예전에는 `videoId` 가 없으면 유튜브 검색 링크를 새 탭으로 열었다. 탭이 열리면 탐색 흐름이
-   * 끊겨서 그 길을 걷어냈다. 이제 사이트 안에서 못 트는 곡은 `재생 불가` 다 (SONG-04).
+   * 찾아봤는데 음원이 없는 곡은 **여정 지점으로도 못 쓴다** (S15P21A405-384). 아무도 못 듣는
+   * 곡을 경로의 끝에 두면 그 여정은 시작이나 끝이 조용하다. 흐리게 두되 눌리지는 않는다.
    */
-  const video = useVideoIdQuery(music.id);
-  const canPlay = video.data ? video.data.videoId != null : true;
-
-  /** 지금 이 곡이 울리고 있나 — 버튼이 상태를 보여줘야 또 누르지 않는다 (S15P21A405-325) */
-  const isThisPlaying = canPlay && currentMusicId === music.id && isPlaying;
-
-  /**
-   * **사이트 안에서** 듣는다 — 하단의 공식 플레이어가 스토어를 보고 재생한다.
-   * 앱에는 "이 곡을 듣는 중" 상태가 남아 내 표식이 그 곡으로 이동한다 (MAP-08).
-   *
-   * 울리는 중에 다시 누르면 멈춘다 — 라벨이 `정지` 인데 눌러도 안 멈추면 고장으로 읽힌다.
-   */
-  const handlePlay = () => {
-    /**
-     * 음원이 없는 곡이면 **왜 안 되는지 알려 준다** (S15P21A405-336). 예전에는 버튼이 꺼져 있어
-     * 눌러도 아무 일도 안 났다 — 아래 안내문을 못 본 사람에게는 고장으로 보인다.
-     */
-    if (!canPlay) {
-      showToast(UNPLAYABLE_NOTICE);
-      return;
-    }
-    if (isThisPlaying) {
-      pause();
-      return;
-    }
-    // 순차 재생 중 목록 밖의 곡이면 먼저 물어본다 (S15P21A405-341)
-    playWithConfirm(music.id, () => recordPlay.mutate({ musicId: music.id, source: "MAP", playedMs: 0 }));
-  };
+  const dead = blocked === PLAYBACK_BLOCKED.noVideo;
 
   return (
-    <div className="relative flex flex-col gap-2">
-      <div className="flex gap-2">
-        <Button variant={canPlay ? "primary" : "secondary"} className="flex-1" onClick={handlePlay}>
-          {isThisPlaying ? <PauseIcon size={13} /> : <PlayIcon size={13} />} {isThisPlaying ? "정지" : canPlay ? "재생" : "재생 불가"}
-        </Button>
-        {/* 유저 테스트 동안 플리를 감췄다 (S15P21A405-333) */}
-        {FEATURES.playlist && (
-          <Button onClick={() => setMenuOpen((v) => !v)} active={menuOpen}>
-            ＋ 플리
-          </Button>
-        )}
-      </div>
-      {/* 지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 (JOURNEY-01) */}
-      <div className="flex gap-2">
-        <Button
-          size="sm"
-          className="flex-1"
+    <div className="flex flex-col gap-2">
+      {/* 지점을 넣고 곧바로 확장 검색창으로 넘어간다 — 나머지 한 지점을 거기서 고른다 */}
+      <div className="flex overflow-hidden rounded-box-sm border border-line bg-white/[.04]">
+        <button
+          type="button"
+          aria-label={riding ? RIDING_JOURNEY_BLOCKED : dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 출발점으로 지정"}
+          title={riding ? RIDING_JOURNEY_BLOCKED : undefined}
+          disabled={dead || riding}
+          className={HALF}
           onClick={() => {
-            setStart(music.id);
+            setStart(musicId);
             openComposer("end");
           }}
         >
-          여정 출발점으로
-        </Button>
-        <Button
-          size="sm"
-          className="flex-1"
+          <DepartIcon className="text-teal" /> 출발점으로
+        </button>
+        <span aria-hidden className="w-px shrink-0 bg-line" />
+        <button
+          type="button"
+          aria-label={riding ? RIDING_JOURNEY_BLOCKED : dead ? "재생할 수 없는 곡은 여정에 쓸 수 없어요" : "이 곡을 여정 도착점으로 지정"}
+          title={riding ? RIDING_JOURNEY_BLOCKED : undefined}
+          disabled={dead || riding}
+          className={HALF}
           onClick={() => {
-            setEnd(music.id);
+            setEnd(musicId);
             openComposer("start");
           }}
         >
-          여정 도착점으로
-        </Button>
+          <ArriveIcon className="text-violet" /> 도착점으로
+        </button>
       </div>
-      {!canPlay && (
-        <Note>
-          이 곡은 음원 연결이 없습니다. 지도에는 계속 표시되지만 재생은 되지 않아요. <span className="text-ink-4">SONG-04</span>
-        </Note>
-      )}
-      {FEATURES.playlist && menuOpen && <AddToPlaylistMenu musicId={music.id} onDone={() => setMenuOpen(false)} />}
+      {/*
+        기능 ID(`SONG-04`)는 **화면에 적지 않는다** (S15P21A405-384). 개발자만 읽는 코드라
+        사용자에게는 뜻 없는 글자다 — 패널 헤더의 `SONG-02` 를 뺀 것과 같은 이유다.
+        값 자체는 남겨 둔다: 플레이어바가 분석 이벤트의 `reason` 으로 보낸다 (`player-bar`).
+      */}
+      {blocked && <Note>{blocked.detail}</Note>}
     </div>
   );
 }

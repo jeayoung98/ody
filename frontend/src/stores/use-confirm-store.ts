@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { devtools } from "zustand/middleware";
+import { track } from "@/lib/analytics/client";
 
 export interface ConfirmRequest {
   title: string;
@@ -25,10 +26,11 @@ export const useConfirmStore = create<ConfirmState>()(
       ask: (pending) => set({ pending }, false, "ask"),
       confirm: () => {
         const p = get().pending;
+        if (p) track("activity_switch_decided", { decision: "confirm" });
         set({ pending: null }, false, "confirm");
         p?.onConfirm();
       },
-      cancel: () => set({ pending: null }, false, "cancel"),
+      cancel: () => { if (get().pending) track("activity_switch_decided", { decision: "cancel" }); set({ pending: null }, false, "cancel"); },
     }),
     { name: "confirm-store" },
   ),

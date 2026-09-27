@@ -5,21 +5,37 @@ import { useEffect } from "react";
 import { ROUTES, STORAGE_KEYS } from "@/constants";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { readStorage } from "@/lib/storage";
+import { useTutorialStore } from "@/stores/use-tutorial-store";
+import { setAnalyticsContext, trackOnce } from "@/lib/analytics/client";
 
 /**
- * 로컬 스토리지에 내 곡(=현재 위치)이 없고 서버의 tutorialCompleted 도 false 면 튜토리얼로 보낸다.
- * 튜토리얼은 "탐색 시작점"을 만들어주는 용도.
+ * 완료/건너뛰기 기록을 로컬 또는 서버에서 복원한다.
+ * 완료 기록도 기존 시작점도 없는 사용자만 튜토리얼로 보낸다.
  */
 export default function TutorialGate() {
   const router = useRouter();
-  const { data: me } = useMeQuery();
+  const { data: me, isPending } = useMeQuery();
 
   useEffect(() => {
-    if (!me) return;
+    // Local completion/skip wins even while /me is loading or has failed.
+    if (useTutorialStore.getState().hydrateCompletion(me?.tutorialCompleted)) {
+      setAnalyticsContext({ phase: "free" });
+      trackOnce("free-explore", "free_explore_started");
+      return;
+    }
+    /**
+     * 아직 답을 기다리는 동안만 미룬다. **`me` 가 없다는 것으로 미루면 안 된다** —
+     * 계정 없이 도는 설문 모드에서는 `/me` 가 401 로 끝나서(S15P21A405-462) 영영 오지 않고,
+     * 그러면 처음 온 테스터가 튜토리얼로 못 간다.
+     */
+    if (isPending) return;
     const saved = readStorage<number>(STORAGE_KEYS.myMusicId);
-    const doneLocally = readStorage<boolean>(STORAGE_KEYS.tutorialDone);
-    if (saved == null && !me.tutorialCompleted && !doneLocally) router.replace(ROUTES.tutorial);
-  }, [me, router]);
+    if (saved == null) router.replace(ROUTES.tutorial);
+    else {
+      setAnalyticsContext({ phase: "free" });
+      trackOnce("free-explore", "free_explore_started");
+    }
+  }, [me, isPending, router]);
 
   return null;
 }

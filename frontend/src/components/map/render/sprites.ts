@@ -2,6 +2,8 @@ import { NO_GENRE_ID } from "@/constants";
 import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
 import { starColorIdx } from "./star-look";
 import type { MapPoint, NearbyUser } from "@/types";
+import { BudgetCache, canvasBytes } from "@/lib/budget-cache";
+import { albumCover } from "./cover-art";
 
 /** mulberry32 — 프로토타입과 같은 결정적 난수 */
 export function mulberry32(a: number) {
@@ -39,6 +41,64 @@ export function glowSprites(): HTMLCanvasElement[] {
 }
 
 /** 먼 배경 별 — 화면 비율 좌표에 고정 */
+/**
+ * **먼 별밭 두 겹을 통째로 구워 둔 타일** (S15P21A405-499).
+ *
+ * 배경 별밭은 프레임당 5,170번 `drawImage` 를 부른다. 트레이스에서 `drawBackground` 가
+ * `drawMap` 의 88%(11,232ms)를 먹은 원인이 여기였는데, **draw 한 번이 비싼 게 아니라 횟수가
+ * 많은 것**이었다 — 스프라이트를 미리 줄여 1:1 로 찍거나(A) 알파를 단계로 뭉쳐도(B) 오히려
+ * 느려졌다 (실측: 6.43 → 7.13 / 7.05ms). 줄여야 하는 것은 호출 수다.
+ *
+ * 그래서 시차 중간·원경 두 겹(1,100 + 770 = 1,870 draw)을 화면 한 장에 구워 두고 **감아 붙인다**
+ * (4 blit × 2겹). 타일이 곧 별밭의 한 주기라 감아 붙이면 **시차는 그대로 살아 있다.**
+ *
+ * **잃는 것: 이 두 겹의 반짝임.** 별마다 다른 위상으로 깜빡이던 것이 평균 밝기로 굳는다.
+ * 가장 먼 별밭과 가까운 별먼지는 손대지 않아 화면의 반짝임 자체는 남는다 — 이 두 겹은
+ * `farFieldAlpha` 가 곱해져 원래도 어두운 쪽이라 굳은 것이 덜 보인다.
+ *
+ * **밝기(aK)는 굽지 않는다.** 겹 깊이에 따라 `dim` 이 계속 변하는데 그때마다 다시 구우면
+ * 아무것도 아끼지 못한다. 붙일 때 `globalAlpha` 로 곱한다 — `lighter` 는 더하기라 전체에
+ * 한 번 곱하는 것과 별마다 곱하는 것이 같다.
+ *
+ * **기기 픽셀이 아니라 CSS 픽셀로 굽는다.** dpr 2 로 구우면 1600x900 화면에서 두 장이 49MB 다
+ * (실측). CSS 픽셀이면 12.2MB 이고, 대신 빨라지는 폭이 1.67배에서 1.33배로 준다 — 이 두 겹이
+ * 화면에서 가장 어두운 겹이라 살짝 뭉개지는 쪽을 골랐다 (S15P21A405-586 의 캐시 예산과 같은 저울).
+ */
+const farTiles = new Map<string, HTMLCanvasElement>();
+
+export interface FarFieldTile {
+  canvas: HTMLCanvasElement;
+  /** 타일 한 변 = 별밭 한 주기 (CSS px) */
+  w: number;
+  h: number;
+}
+
+export function farFieldTile(id: string, W: number, H: number, sizeK: number, stars: SkyStar[], n: number): FarFieldTile {
+  const w = W + 64;
+  const h = H + 64;
+  const key = `${id}:${w}x${h}`;
+  const hit = farTiles.get(key);
+  if (hit) return { canvas: hit, w, h };
+  const c = document.createElement("canvas");
+  c.width = w;
+  c.height = h;
+  const g = c.getContext("2d")!;
+  g.globalCompositeOperation = "lighter";
+  for (let k = 0; k < n; k++) {
+    const bg = stars[k];
+    const px = (bg.u % 1) * w - 32;
+    const py = (bg.v % 1) * h - 32;
+    const d = bg.d0 * sizeK;
+    // 반짝임(0.55~1.0)의 한가운데 값으로 굳힌다 — 평균보다 밝지도 어둡지도 않게
+    g.globalAlpha = (0.06 + bg.lum * 0.19) * 0.775;
+    g.drawImage(glowSprites()[bg.spr], px - d / 2, py - d / 2, d, d);
+  }
+  // 화면이 바뀌면 이전 크기 타일은 쓸 데가 없다. 두 겹뿐이라 통째로 비운다
+  if (farTiles.size >= 2) farTiles.clear();
+  farTiles.set(key, c);
+  return { canvas: c, w, h };
+}
+
 export interface SkyStar {
   i: number;
   u: number;
@@ -46,19 +106,29 @@ export interface SkyStar {
   m: number;
   spr: number;
   lum: number;
+  /**
+   * 크기의 밑값(px). `m` 만으로 정해지므로 **프레임마다 다시 잴 이유가 없다** (S15P21A405-499).
+   * 예전에는 `Math.pow(m, 1.5)` 를 별마다 매 프레임 돌렸다 — 배경 별이 5,170개라 그만큼이었다.
+   * 쓰는 쪽은 여기에 그 겹의 `sizeK` 만 곱한다.
+   */
+  d0: number;
 }
 let sky: SkyStar[] | null = null;
 export function skyStars(): SkyStar[] {
   if (sky) return sky;
   const rnd = mulberry32(20260902);
-  sky = Array.from({ length: 1100 }, (_, i) => ({
-    i,
-    u: rnd(),
-    v: rnd(),
-    m: Math.pow(rnd(), 1.9),
-    spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
-    lum: Math.pow(rnd(), 0.7),
-  }));
+  sky = Array.from({ length: 1100 }, (_, i) => {
+    const m = Math.pow(rnd(), 1.9);
+    return {
+      i,
+      u: rnd(),
+      v: rnd(),
+      m,
+      spr: Math.floor(rnd() * NO_GENRE_ID), // 배경 별은 장식이라 색 있는 장르만 (무장르 회색 제외)
+      lum: Math.pow(rnd(), 0.7),
+      d0: 1.3 + Math.pow(m, 1.5) * 4.2,
+    };
+  });
   return sky;
 }
 
@@ -71,15 +141,19 @@ let dust: SkyStar[] | null = null;
 export function dustStars(): SkyStar[] {
   if (dust) return dust;
   const rnd = mulberry32(20260912);
-  dust = Array.from({ length: 2200 }, (_, i) => ({
-    i,
-    u: rnd(),
-    v: rnd(),
+  dust = Array.from({ length: 2200 }, (_, i) => {
     // skyStars(1.9)보다 완만해 큰 별의 비율이 높다 — 상주 별과 같은 크기대로 올라온다
-    m: Math.pow(rnd(), 1.15),
-    spr: Math.floor(rnd() * NO_GENRE_ID), // 장식이라 색 있는 장르만 (무장르 회색 제외)
-    lum: Math.pow(rnd(), 0.6),
-  }));
+    const m = Math.pow(rnd(), 1.15);
+    return {
+      i,
+      u: rnd(),
+      v: rnd(),
+      m,
+      spr: Math.floor(rnd() * NO_GENRE_ID), // 장식이라 색 있는 장르만 (무장르 회색 제외)
+      lum: Math.pow(rnd(), 0.6),
+      d0: 1.3 + Math.pow(m, 1.5) * 4.2,
+    };
+  });
   return dust;
 }
 
@@ -182,7 +256,6 @@ export const ME_AVATAR: NearbyUser = {
   nickname: "나",
   imageUrl: null,
   isOnline: true,
-  isPublic: true,
   musicId: 0,
   viewingMusicId: 0,
   genreId: 0,
@@ -192,13 +265,39 @@ export const ME_AVATAR: NearbyUser = {
   avatarSeed: [0.32, 0.58, 0.21, 0.77, 0.44, 0.68],
 };
 
-/* ---------- 절차적 앨범 커버 ---------- */
-const coverCache = new Map<number, HTMLCanvasElement>();
-export function coverFor(s: MapPoint): HTMLCanvasElement {
-  let c = coverCache.get(s.musicId);
+/* ---------- 앨범 커버 ---------- */
+/**
+ * 지도가 쓰는 크기(px). 별 위 커버는 19~33px 로 그려지니 이만큼이면 넉넉하다 —
+ * 수백 장을 들고 있는 자리라 크게 구울 이유가 없다.
+ */
+export const COVER_PX = 104;
+
+/**
+ * 키에 크기가 들어간다 — 같은 곡도 쓰는 자리마다 해상도가 다르다 (S15P21A405-518).
+ *
+ * **예산으로 잰다** (S15P21A405-586). 500장으로 세던 것을 12MB 로 바꿨다 — 104px 과 512px 이
+ * 24배 차이라 장수로는 무엇을 막는지 알 수 없었고, 넘치면 `clear()` 로 통째로 비워서 지금
+ * 화면에 서 있는 커버까지 다시 그려야 했다. 이제 가장 오래 안 쓴 것부터 하나씩 나간다.
+ */
+const coverCache = new BudgetCache<string, HTMLCanvasElement>(12 * 1024 * 1024, canvasBytes);
+
+/**
+ * 이 곡의 커버.
+ *
+ * **진짜 앨범 커버가 있으면 그걸 준다** (S15P21A405-518) — `albumMbid` 로 Cover Art Archive
+ * 에서 받아 둔 그림이다. 아직 안 왔거나 없으면 아래 절차적 그림으로 떨어진다. 부르는 쪽은
+ * 둘을 구분하지 않는다: 지도는 rAF 로 계속 다시 그리므로 도착한 다음 프레임부터 저절로 바뀐다.
+ *
+ * `size` 를 받는 이유는 **화질** 이다. 예전에는 104px 고정이라 곡 상세 배경(376px)에 깔면
+ * 세 배 넘게 늘어나 뭉갰다. 그리는 좌표가 전부 `N` 비율이라 크게 구우면 그대로 선명해진다.
+ */
+export function coverFor(s: MapPoint, size: number = COVER_PX): HTMLCanvasElement {
+  const real = albumCover(s.musicId, s.albumMbid, size);
+  if (real) return real;
+  const key = `${s.musicId}:${size}`;
+  let c = coverCache.get(key);
   if (c) return c;
-  if (coverCache.size > 500) coverCache.clear();
-  const N = 104;
+  const N = size;
   c = document.createElement("canvas");
   c.width = c.height = N;
   const g = c.getContext("2d")!;
@@ -239,7 +338,7 @@ export function coverFor(s: MapPoint): HTMLCanvasElement {
     }
   }
   g.globalAlpha = 1;
-  coverCache.set(s.musicId, c);
+  coverCache.set(key, c);
   return c;
 }
 

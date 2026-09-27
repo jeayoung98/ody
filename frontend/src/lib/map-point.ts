@@ -15,6 +15,8 @@ export function musicToMapPoint(m: Music): MapPoint | null {
     weight: m.playCnt,
     title: m.title,
     artist: m.artist,
+    // 편입된 곡도 진짜 커버를 받아야 한다 — 시연 곡이 절차적 커버로 뜨면 곤란하다 (S15P21A405-717)
+    albumMbid: m.albumMbid ?? null,
     youtubeUrl: m.youtubeUrl,
     playable: m.youtubeUrl != null,
   };

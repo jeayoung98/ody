@@ -1,13 +1,29 @@
 "use client";
 
+import { useEffect, useRef, useState } from "react";
+import { ChevronRightIcon } from "@/components/common/icons";
 import { LAYER_COUNT, LAYER_NAMES } from "@/constants";
+import { ro } from "@/lib/korean";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 
 /**
- * #crumbs .step — 레이어(PC 단계) 스테퍼. 계층 경로 표시 겸 한 칸 이동 (MAP-07).
- * 아래 칸은 게이트가 열렸을 때만, 위 칸은 되돌아갈 프레임이 있을 때만 활성.
- * 오버레이 뷰(주변 탐색·별자리)가 떠 있는 동안에는 전부 잠긴다 — 임시 뷰라 탐색이 멈춘다 (PATH-01-1).
+ * #crumbs — **지나온 겹의 자취** (MAP-07, S15P21A405-477).
+ *
+ * `우주 › 은하단 › 우리은하` 처럼 **밟아 온 겹만** 적는다. 예전에는 여덟 겹을 항상 전부 네모
+ * 칸으로 늘어놓았는데, 가 보지도 않은 겹이 자리를 차지해 "지금 어디까지 왔나" 가 안 읽혔다.
+ * 파고들 때마다 한 칸씩 자란다.
+ *
+ * **글자와 꺾쇠뿐이다.** 테두리도 밑줄도 `L0` 같은 번호도 없다 — 웹에서 흔한 빵부스러기
+ * 그대로다. 지금 겹만 굵고 밝게, 지나온 겹은 흐리게 두면 위치는 그것만으로 읽힌다.
+ * 번호는 이름 옆에 붙어 있어 봐야 "몇 번째 겹" 과 "몇 겹짜리 지도" 가 헷갈리기만 했다.
+ *
+ * 상위 겹에 마우스를 올리면 **거기까지가 밝아지고 그 뒤는 더 흐려진다.** "여기를 누르면
+ * 여기까지 돌아간다" 를 누르기 전에 보여 주는 자리다. 누르면 중간 겹을 거치지 않고 한 번에
+ * 떠오른다(`surfaceTo`).
+ *
+ * 게이트가 열리면 **다음 겹 한 칸이 청록으로 미리 선다** — 내려가는 길도 여기서 이어진다.
+ * 오버레이 뷰(주변 탐색·별자리)·따라가기·전환 중에는 전부 잠긴다 (PATH-01-1).
  */
 export default function LayerStepper() {
   const layer = useMapStore((s) => s.layer);
@@ -15,52 +31,79 @@ export default function LayerStepper() {
   const canRise = useMapStore((s) => s.canRise);
   const morph = useMapStore((s) => s.morph);
   const drillDown = useMapStore((s) => s.drillDown);
-  const surface = useMapStore((s) => s.surface);
+  const surfaceTo = useMapStore((s) => s.surfaceTo);
   const overlayOpen = useMapStore((s) => s.viewMode !== "default");
   const isFollowing = useFollowStore((s) => s.leaderEmail != null);
+  /** 마우스가 얹힌 겹. 여기까지가 "돌아갈 길" 이다 */
+  const [hover, setHover] = useState<number | null>(null);
+
+  const locked = isFollowing || morph || overlayOpen;
+  /** 게이트가 열렸으면 다음 겹까지 그린다 — 내려가는 길을 자취 끝에 이어 붙인다 */
+  const nextOpen = !locked && gateOpen && layer + 1 < LAYER_COUNT;
+  const last = nextOpen ? layer + 1 : layer;
+
+  /**
+   * 이 칸의 글자 크기. **지나온 겹은 작다** (S15P21A405-479). 색과 굵기만으로 갈라 두었더니
+   * 여덟 칸이 다 같은 덩치라 "지금 어디" 가 한눈에 안 잡혔다. 크기까지 다르면 훑기만 해도 읽힌다.
+   *
+   * 다음 겹(청록 미리보기)은 줄이지 않는다 — 지나온 길이 아니라 **갈 수 있는 길**이라, 작아지면
+   * 이미 지난 것처럼 보인다. 줄에서 가장 큰 글자가 늘 지금 겹이라 `items-center` 기준선도
+   * 흔들리지 않는다.
+   */
+  const size = (i: number) => (i < layer ? "text-sm" : "text-lg");
+
+  /**
+   * **폰에서는 옆으로 민다** (S15P21A405-703). 7·8 겹까지 파고들면 자취가 화면 폭을 넘어 오른쪽이
+   * 잘렸다. 줄을 가로 스크롤로 두고 막대는 숨긴다(`.rail`). 겹이 바뀌면 **끝으로 굴려** 지금 겹과
+   * 다음 겹이 늘 보이게 한다 — 앞쪽 지나온 길은 밀어서 본다. 넓은 화면은 넘치지 않아 굴러갈 것이 없다.
+   */
+  const trailRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const el = trailRef.current;
+    if (el && el.scrollWidth > el.clientWidth) el.scrollTo({ left: el.scrollWidth, behavior: "smooth" });
+  }, [layer, last]);
+
+  /** 이 칸의 글자 색. 겨누는 중이면 돌아갈 길만 밝고 나머지는 물러난다 */
+  const tone = (i: number) => {
+    if (i === layer + 1) return "text-teal/70";
+    if (hover != null) return i <= hover ? "text-ink" : "text-ink-4/70";
+    return i === layer ? "font-semibold text-ink" : "text-ink-3";
+  };
 
   return (
-    <div className="pointer-events-auto flex max-w-[min(34vw,420px)] flex-wrap items-center gap-1">
-      {Array.from({ length: LAYER_COUNT }, (_, i) => {
+    // 폰에서는 첫 칸 여백(px-2)만큼 당겨 글자가 화면 여백(20)에 딱 서게 한다 (S15P21A405-703) — 안 당기면 28px 에서 시작해 떠 보였다
+    <div
+      ref={trailRef}
+      className="rail pointer-events-auto flex w-fit max-w-[min(34vw,420px)] items-center max-tablet:-ml-2 max-tablet:max-w-[calc(100dvw-2*var(--spacing-gutter-sm)+8px)] max-tablet:overflow-x-auto"
+      onMouseLeave={() => setHover(null)}
+    >
+      {Array.from({ length: last + 1 }, (_, i) => {
         const on = i === layer;
-        const past = i < layer;
         const next = i === layer + 1;
-        const enabled = !isFollowing && !morph && !overlayOpen && ((next && gateOpen) || (i === layer - 1 && canRise));
-        const handle = () => (i > layer ? drillDown() : surface());
+        // 위로는 어디든(되돌아갈 프레임이 있을 때), 아래로는 게이트가 열린 다음 한 칸만
+        const enabled = !locked && (next ? gateOpen : i < layer && canRise);
         return (
-          <button
-            key={i}
-            type="button"
-            disabled={!enabled}
-            onClick={handle}
-            title={
-              on
-                ? `지금 단계 · ${LAYER_NAMES[i]}`
-                : overlayOpen
-                  ? "뷰를 닫으면 다시 이동할 수 있어요"
-                  : next
-                    ? gateOpen
+          <div key={i} className="flex shrink-0 items-center">
+            {i > 0 && <ChevronRightIcon size={17} className="shrink-0 text-ink-4/60" />}
+            <button
+              type="button"
+              disabled={!enabled}
+              onClick={() => (next ? drillDown() : surfaceTo(i))}
+              onMouseEnter={() => enabled && !next && setHover(i)}
+              title={
+                on
+                  ? `지금 단계 · ${LAYER_NAMES[i]}`
+                  : overlayOpen
+                    ? "뷰를 닫으면 다시 이동할 수 있어요"
+                    : next
                       ? "한 칸 깊이 — 이 겹의 별을 그대로 데려가 새 축으로 재투영"
-                      : "임계치까지 확대하면 열립니다"
-                    : i === layer - 1
-                      ? "한 칸 얕게 — 두고 온 별이 돌아오고 좌표도 복원"
-                      : "한 칸씩만 이동합니다"
-            }
-            className={`inline-flex flex-col items-stretch gap-[3px] rounded-[9px] border px-[7px] pt-1 pb-[3px] transition-all duration-fast ${
-              on ? "border-line-2 bg-white/[.07]" : next && gateOpen ? "border-teal/30" : "border-transparent"
-            } ${!enabled && !on ? "opacity-40" : "hover:border-line hover:bg-white/[.06]"} disabled:cursor-default`}
-          >
-            <span
-              className={`flex items-baseline gap-1 text-[11.5px] leading-none ${
-                on ? "font-semibold text-ink" : past ? "text-ink-3" : next && gateOpen ? "text-teal" : "text-ink-4"
-              }`}
+                      : `${LAYER_NAMES[i]}${ro(LAYER_NAMES[i])} 떠오르기 — 두고 온 별이 돌아오고 좌표도 복원`
+              }
+              className={`px-2 py-1 leading-none whitespace-nowrap transition-colors duration-fast disabled:cursor-default ${size(i)} ${tone(i)}`}
             >
               {LAYER_NAMES[i]}
-              <em className="num text-[8px] tracking-[0.02em] opacity-55 not-italic">L{i}</em>
-            </span>
-            <span className={`h-[3px] w-full rounded-pill ${on ? "grad-bg" : past ? "bg-teal/50" : "bg-white/[.13]"}`} />
-            {next && <span className="num text-[8.5px] text-teal">{gateOpen ? "▼" : ""}</span>}
-          </button>
+            </button>
+          </div>
         );
       })}
     </div>

@@ -1,46 +1,74 @@
 "use client";
 
-import Button from "@/components/common/button";
 import UserRow from "@/components/common/user-row";
-import { useStartFollowMutation } from "@/hooks/mutations/use-follow-mutation";
+import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useStartActivity } from "@/hooks/use-start-activity";
+import { useRideMutation } from "@/hooks/mutations/use-ride-mutation";
 import { useFollowStore } from "@/stores/use-follow-store";
-import { usePanelStore } from "@/stores/use-panel-store";
-import type { NearbyUser } from "@/types";
+import { useOpenProfile } from "@/hooks/use-open-profile";
+import type { NearbyPerson } from "@/types";
 
-/** 프로필 컴포넌트: 프사 · 닉네임 · 따라가기 중이면 누구를 따라가는지 */
-export default function FriendRow({ user }: { user: NearbyUser }) {
-  const openFeed = usePanelStore((s) => s.openFeed);
+/**
+ * 주변 사람 한 줄 — 프사 · 닉네임 · **지금 듣는 곡** (S15P21A405-482).
+ *
+ * **따라가기 버튼을 되살렸다** (S15P21A405-530). 예전에는 숨겨 뒀다 — 탑승 API 가 배포에 없고
+ * `riderCount` 도 늘 0 이라, 누를 수 있게 두면 눌리는데 아무 일도 안 일어났기 때문이다.
+ * 지금은 `POST /api/realtime/ride` 가 배포에 있고 인솔자의 조작이 소켓으로 전파된다.
+ *
+ * 여기서 말하는 따라가기는 **탑승(ride)** 이다. 구독(follow)과 다르다 — 구독은 오래 남는
+ * 관계이고 프로필 화면에 따로 있다.
+ *
+ * `isOnline` 자리도 뺐다 — 목록에 있다는 것이 곧 접속 중이라는 뜻이라(명세 §5.6) 늘 참이고,
+ * 늘 참인 표시는 아무것도 말해 주지 않는다. 대신 그 자리에 듣는 곡을 적는다.
+ */
+export default function FriendRow({ person }: { person: NearbyPerson }) {
+  const openProfile = useOpenProfile();
   const leaderEmail = useFollowStore((s) => s.leaderEmail);
-  const start = useFollowStore((s) => s.start);
-  const follow = useStartFollowMutation();
+  const ride = useRideMutation();
   const startActivity = useStartActivity();
+  /**
+   * 폰에서 주변 사람은 **제 화면**이다 (S15P21A405-417). 남의 프로필은 지도 위 패널로 뜨므로,
+   * 이 화면에 남아 있으면 눌러도 아무 일이 없어 보인다 — 누르는 순간 지도 탭으로 돌아간다.
+   */
+  const backToMap = useBackToMap();
 
-  const isLeader = leaderEmail === user.email;
+
+  /**
+   * 이미 그 사람을 따라가는 중이면 다시 누를 일이 없다. 다른 사람을 따라가는 중이면
+   * `startActivity` 가 먼저 물어본다 (ACT-01) — 서버도 `RIDE_ALREADY_RIDING` 으로 막는다.
+   */
+  const isRidingThis = leaderEmail === person.email;
+  const handleRide = () =>
+    startActivity("follow", person.email, () => {
+      // 목록은 그 사람이 선 곡을 안다 — 넘기면 표식이 응답을 안 기다리고 바로 옮겨진다 (S15P21A405-642)
+      ride.mutate({ email: person.email, nickname: person.nickname, imageUrl: person.imageUrl, musicId: person.musicId });
+      backToMap();
+    });
 
   return (
     <UserRow
-      nickname={user.nickname}
-      imageUrl={user.imageUrl}
-      online={user.isOnline}
-      caption={user.followingNickname ? `🚀 ${user.followingNickname} 님을 따라가는 중` : user.isOnline ? "탐색 중" : "오프라인"}
-      onClick={() => openFeed(user.email)}
-      actions={
-        <Button
-          size="sm"
-          variant={isLeader ? "secondary" : "primary"}
-          disabled={!user.isOnline || isLeader || follow.isPending}
-          onClick={(e) => {
-            e.stopPropagation();
-            // ACT-01: 진행 중인 활동이 있으면 확인 후 멈추고 시작한다
-            startActivity("follow", user.email, () => {
-              follow.mutate(user.email);
-              start(user.email, user.nickname);
-            });
-          }}
-        >
-          {isLeader ? "탑승 중" : "따라가기"}
-        </Button>
+      nickname={person.nickname ?? "이름 없음"}
+      imageUrl={person.imageUrl}
+      onClick={() => {
+        openProfile(person.email, { drill: true });
+        backToMap();
+      }}
+      right={
+        <div className="flex items-center gap-2">
+          {person.meetingCount > 0 && <span className="num text-[14px] text-ink-3">{person.meetingCount}번째</span>}
+          {/* 줄 전체가 프로필로 가는 버튼이라, 여기서 클릭이 위로 올라가면 패널이 갈아탄다 */}
+          <button
+            type="button"
+            disabled={isRidingThis || ride.isPending}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleRide();
+            }}
+            className="shrink-0 rounded-pill border border-violet/35 bg-violet/[.14] px-3 py-1.5 text-[14px] text-ink-2 transition-colors hover:bg-violet/25 disabled:opacity-45"
+          >
+            {isRidingThis ? "탑승 중" : "🚀 따라가기"}
+          </button>
+        </div>
       }
     />
   );

@@ -1,0 +1,155 @@
+import type { Email, Id, ISODateString } from "./common";
+
+/**
+ * 별자리 콘테스트 = 백엔드의 **작품(artwork)** 도메인 (S15P21A405-640).
+ *
+ * 602 에서 목으로 먼저 붙였던 계약(A-62~A-70)은 폐기했고, 이 파일은 2026-09-23 `origin/backend/dev` 의
+ * `backend/.../artwork/dto/*.java` 를 읽어 옮긴 것이다 (BACKEND-NOTES §6·§6-8·§6-9, S15P21A405-563·598·616).
+ *
+ * 목과 달라진 것: 회차에 `status`·`roundNo`·`announceAt`·규칙 묶음이 없다(기간만 온다). **즉시 심사가 없다** —
+ * AI 채점은 출품 뒤 서버가 비동기로 하고, 화면은 내 작품 상태(`PENDING`→`SCORED`/`FAILED`)를 다시 읽는다.
+ * AI 게이트·최종점수 식·저장 수·재출품 횟수 제한도 없다.
+ */
+
+/** 회차 (`ArtworkRound`). 열려 있는지는 `startsAt`~`endsAt` 로 화면이 판단한다 (`lib/contest-view`) */
+export interface Contest {
+  roundId: Id;
+  /** 테마 한 단어 (예: 고양이). 채점 기준 문장은 내려오지 않는다 — 그대로 맞추는 것이 최적 전략이 되기 때문 */
+  theme: string;
+  startsAt: ISODateString;
+  endsAt: ISODateString;
+  /** 회차당 남의 작품에 줄 수 있는 좋아요 수 (S15P21A405-616) */
+  voteLimit: number;
+  /** 남은 좋아요. 비로그인이면 `null` */
+  myVotesLeft: number | null;
+}
+
+/** 캔버스 입력 점. 0~1 정규화, **y 는 아래가 양수**(화면 좌표). 클릭 위치 ÷ 캔버스 크기 그대로 */
+export interface SketchPoint {
+  x: number;
+  y: number;
+}
+
+/**
+ * 별자리의 한 점과 그 곡 (`ArtworkTrack`). 좌표 규약은 `ConstellationPoint` 와 같다 — -1~1, **y 는 위가 양수**.
+ * `title` 은 곡이 지워졌으면 `null` 이다 — 원소는 남고 이름만 빈다(그림이 깨지지 않는 것이 우선).
+ */
+export interface ContestTrack {
+  musicId: Id;
+  title: string | null;
+  artist: string | null;
+  x: number;
+  y: number;
+}
+
+/**
+ * 작품 한 점의 그림 — `GET /api/artwork/detail` 에서 필요한 만큼만 (S15P21A405-701). 내 작품 목록(`mine`)은 좌표를
+ * 빈 목록으로 줘서, 채점 끝난 내 작품의 별자리는 이걸로 따로 받아 그린다.
+ */
+export interface ContestArtworkShape {
+  artworkId: Id;
+  tracks: ContestTrack[];
+  closed: boolean;
+}
+
+/** 그린 모양과 찾은 배치가 얼마나 닮았나 (`DrawResponse.quality`). `LOW` 도 정상 응답이다 — 경고만 띄운다 */
+export type MatchQuality = "HIGH" | "MEDIUM" | "LOW";
+
+/** AI 추천 모양 한 줄 (`CatTemplateSummary`). `pointCount` 가 곧 만들어질 플레이리스트의 곡 수다 */
+export interface ContestTemplate {
+  name: string;
+  label: string;
+  pointCount: number;
+}
+
+/**
+ * 별자리 후보 — 그려서 찾았거나(`POST /api/artwork/draw`), AI 추천 모양으로 만들었거나(`POST /api/artwork/generate`).
+ * **AI 채점이 아니다** — 그린 것은 모양 일치도, 추천은 템플릿 적합도다.
+ */
+export interface ContestMatch {
+  /** 모양 일치도 0~100. 그린 것은 서버 값, 추천은 `fitError` 를 화면 척도로 옮긴 값 (`lib/contest-view` `templateScore`) */
+  score: number;
+  quality: MatchQuality;
+  /** 점 입력 순서와 같은 순서. 곡 중복 없음 */
+  tracks: ContestTrack[];
+  /**
+   * AI 추천 모양으로 만든 것이면 채워진다 (S15P21A405-595). 서버가 **플레이리스트를 이미 만들었다** — 출품은 그 플리를
+   * 그대로 내고(이름만 바꾼다), 다시 플리를 만들지 않는다.
+   */
+  template?: {
+    name: string;
+    label: string;
+    playlistId: Id;
+    playlistName: string;
+    /** 템플릿 점과 실제 곡 위치의 평균 거리 ÷ 템플릿 반폭. 0 이 완벽 */
+    fitError: number;
+  };
+}
+
+/**
+ * 작품 평가 상태 (`ArtworkStatus`). `FAILED` 는 `score` 가 **`null`** 이다 — 0 이 아니다.
+ * 리더보드에는 `SCORED` 만 선다. 내 작품(`/mine`)은 모든 상태가 온다.
+ */
+export type ArtworkStatus = "PENDING" | "SCORED" | "FAILED";
+
+/** 목록 한 줄 (`ArtworkSummary`). 리더보드와 내 작품이 같은 모양이다 */
+export interface ContestEntry {
+  artworkId: Id;
+  /** 리더보드에서만. 내 작품 목록은 `null` */
+  rank: number | null;
+  title: string;
+  ownerEmail: Email | null;
+  /**
+   * 작품 주인 닉네임 (S15P21A405-645). **`null` 일 수 있다** — 탈퇴 등으로 user 행이 없는 경우다.
+   * 그때는 이메일 앞부분으로 떨어진다 (`ownerLabel`).
+   */
+  ownerNickname: string | null;
+  status: ArtworkStatus;
+  /** AI 점수 0~100. 평가 전·실패면 `null` */
+  score: number | null;
+  aiComment: string | null;
+  /** 실패 사유. 소유자에게만 채워진다 */
+  failReason: string | null;
+  likeCnt: number;
+  likedByMe: boolean;
+  musicCnt: number;
+  createdAt: ISODateString;
+  /** 순위 점수 = 좋아요 + AI ÷ 100 × K (K 회차별, 기본 5). 리더보드에서만 */
+  rankScore: number | null;
+  /** 마지막 곡 → 첫 곡을 잇는가 */
+  closed: boolean;
+  /** 별자리 좌표 + 곡 이름, 출품 순서 (백엔드 `points`). 내 작품 목록은 빈 배열 */
+  tracks: ContestTrack[];
+  /**
+   * 출품한 플레이리스트 (S15P21A405-684). `artwork.playlist_id` 에는 있는데 **리더보드 응답에 아직 없다** —
+   * 백엔드 확인 필요 (BACKEND-NOTES A-91). 없으면 `null` 이고, 지도에서 눌러도 틀지 못한다.
+   */
+  playlistId: Id | null;
+}
+
+export interface ContestLeaderboard {
+  round: Contest;
+  /** 순위순 (`rankScore` ↓ → `score` ↓ → 먼저 낸 순). 갤러리 정렬은 화면이 이 안에서 다시 한다 */
+  items: ContestEntry[];
+  page: number;
+  size: number;
+  totalCnt: number;
+}
+
+/** 출품 결과. `status` 는 언제나 `PENDING` — 점수는 `/mine` 을 다시 읽어야 보인다 */
+export interface ContestSubmitResult {
+  artworkId: Id;
+  status: ArtworkStatus;
+  /** 출품하려고 만든 플레이리스트 */
+  playlistId: Id;
+}
+
+export interface ContestLikeResult {
+  artworkId: Id;
+  liked: boolean;
+  /** 변경 후 값 */
+  likeCnt: number;
+}
+
+/** 갤러리 정렬. 서버는 순위순 하나만 주므로 나머지는 받아 온 페이지 안에서 화면이 정렬한다 */
+export type ContestSort = "rank" | "latest" | "likes" | "ai";

@@ -1,132 +1,141 @@
-/**
- * 설문 전용 상태 (S15P21A405-294).
- *
- * **기존 스토어(use-player-store, use-map-store)에 설문 상태를 섞지 않는다.**
- * 최종 배포 때 걷어낼 기능이라, 섞이면 지울 때 리팩터링이 된다.
- *
- * 이 스토어는 기존 스토어를 import 하지 않는다 — 의존이 한 방향(설문 → 없음)이어야
- * 폴더째 삭제할 수 있다. 평가 대상은 띄우는 쪽이 인자로 넘긴다.
- */
 import { create } from "zustand";
-import type { ResolvedPrompt, SurveyPrompt, SurveyTarget } from "@/types/survey";
+import { createUuid } from "@/lib/uuid";
+import { hearSong, type Exploration, type ListeningFlow } from "@/hooks/survey/listening-flow";
+import { questionKey, type SurveyEdge, type SurveySubmission, type SurveyTarget } from "@/types/survey";
 
-/** 한 곡을 듣는 한 번의 방문 */
-interface Visit {
-  musicId: number;
-  /** 지금까지 **재생된** 시간(ms). 멈춰 있는 동안은 안 늘어난다 */
-  accruedMs: number;
-  /** 지금 돌고 있는 재생 구간의 시작 시각. 멈춰 있으면 null */
-  playingSince: number | null;
-}
-
+interface Visit { musicId: number; accruedMs: number; playingSince: number | null }
 interface SurveyState {
-  /** 지금 묻고 있는 것. null 이면 설문이 떠 있지 않다 */
-  prompt: ResolvedPrompt | null;
-  /**
-   * 곡별 **마지막 체류의 재생 시간**(ms). 누적이 아니다.
-   *
-   * 15초 듣고 나갔다가 나중에 10초 더 들었으면 **10초**다. 25초로 치지 않는다 —
-   * 15초는 이미 `skipped` 행으로 따로 기록됐고, 그걸 다시 "들은 시간" 으로 세면
-   * 한 값이 두 뜻을 갖는다.
-   */
-  lastStintMs: Record<number, number>;
-  /**
-   * 지금 듣고 있는 곡의 방문.
-   *
-   * 장부(`lastStintMs`)는 곡을 떠날 때 마감된다. 그래서 **아직 듣고 있는 곡은 장부에 없다** —
-   * 설문 카드는 그 곡이 재생 중일 때 뜨므로, 장부만 읽으면 늘 0 이 나간다.
-   * 실제로 그랬다: 답한 행의 `listened_sec` 이 전부 0 이었다.
-   */
+  pending: SurveyEdge | null;
+  prompt: SurveyEdge | null;
+  queued: (() => void) | null;
+  resolving: boolean;
+  historyLoading: boolean;
+  flow: ListeningFlow | null;
+  lastAudible: number | null;
+  unplayable: ReadonlySet<number>;
+  answered: ReadonlySet<string>;
   visit: Visit | null;
-  /**
-   * 이미 전송한 행. `${sessionId}:${rank}` 를 키로 쓴다 — 서버의 `UNIQUE(session_id, rank)` 와
-   * 같은 기준이다. 무응답 행을 보낸 뒤 같은 곡을 또 묻거나 보내는 낭비를 막는다.
-   */
-  sent: Set<string>;
-
-  /**
-   * 물어도 되는 질문인지 판정한다 — **비교 상대를 그 턴에 20초 이상 들었나**.
-   *
-   * 주변 탐색은 기준곡, 경로 탐색은 **바로 앞 역**이다. 앞 역을 5초만 듣고 넘겼으면
-   * 그 전환은 겪지 못한 것이라 **묻지 않는다.**
-   *
-   * 더 앞의 역까지 거슬러 올라가 묻지 않는 이유는, 그렇게 하면 경로에 없는 전환
-   * (1→3)을 평가하게 되기 때문이다. 알고리즘이 고른 간선은 1→2·2→3 뿐이라
-   * 하지도 않은 일에 점수를 매기는 꼴이 된다. 건너뛴 역은 스킵 행으로 따로 남고,
-   * 그 다음 역부터 평가가 정상 복구된다 — 손실은 전환 하나뿐이다.
-   */
-  resolve: (prompt: SurveyPrompt, minListenMs: number) => ResolvedPrompt | null;
-  open: (prompt: ResolvedPrompt) => void;
-  close: () => void;
-
-  /** 곡이 바뀌었다 — 새 방문을 연다 */
-  beginVisit: (musicId: number) => void;
-  /** 재생이 시작·정지됐다. 멈춘 동안은 시계가 안 돈다 */
-  setPlaying: (playing: boolean, at: number) => void;
-  /** 곡을 떠난다 — 이번 방문의 재생 시간을 장부에 마감한다 */
-  endVisit: () => void;
-  /** 그 곡의 **이번 체류 재생 시간**(ms). 지금 곡이면 재는 중, 지나간 곡이면 마지막 체류 */
+  /** Immutable retry payload. Non-null also suppresses pagehide null writes. */
+  submission: SurveySubmission | null;
+  saving: boolean;
+  saveError: boolean;
+  unansweredSent: boolean;
+  enter: (musicId: number | null, playing: boolean, at: number) => void;
   stintMs: (musicId: number) => number;
-
-  markSent: (target: SurveyTarget) => void;
-  hasSent: (target: SurveyTarget) => boolean;
+  hear: (musicId: number, source: Exploration | null) => void;
+  markUnplayable: (musicId: number) => void;
+  setResolving: (resolving: boolean) => void;
+  gate: (resume: () => void) => boolean;
+  close: () => void;
+  loadAnswered: (keys: readonly string[]) => void;
+  setHistoryLoading: (loading: boolean) => void;
+  hasAnswered: (target: SurveyTarget) => boolean;
+  beginSubmission: (row: SurveySubmission) => boolean;
+  finishSubmission: (row: SurveySubmission, success: boolean) => void;
+  takeUnanswered: () => SurveyEdge | null;
+  resumeAfterPagehide: () => void;
+  resetListening: () => void;
 }
 
-/** 행의 식별자. 서버의 `UNIQUE(session_id, rank)` 와 같은 기준이다 */
-const keyOf = (t: SurveyTarget) => `${t.sessionId}:${t.rank}`;
+const listeningInitial = {
+  pending: null, prompt: null, queued: null, resolving: false, historyLoading: false, flow: null,
+  lastAudible: null, visit: null, submission: null, saving: false, saveError: false,
+  unansweredSent: false,
+};
 
-/** 방문이 지금까지 쌓은 재생 시간 */
-const played = (v: Visit, now: number) => v.accruedMs + (v.playingSince == null ? 0 : now - v.playingSince);
-
+/** Survey owns all policy/state. No imports from player, map, or tutorial stores. */
 export const useSurveyStore = create<SurveyState>()((set, get) => ({
-  prompt: null,
-  lastStintMs: {},
-  visit: null,
-  sent: new Set(),
-
-  resolve: (prompt, minListenMs) => {
-    // 후보는 늘 하나다 — 주변 탐색은 기준곡, 경로 탐색은 바로 앞 역. 못 채웠으면 안 묻는다
-    const compare = prompt.candidates[0];
-    if (!compare || get().stintMs(compare.musicId) < minListenMs) return null;
-    return { target: prompt.target, subject: prompt.subject, compare };
-  },
-
-  open: (prompt) => {
-    // 답하는 중이면 새 질문으로 갈아치우지 않는다. 자동 넘김(S15P21A405-258)이 붙어 있어서
-    // 설문이 떠 있는 동안에도 곡이 뒤에서 넘어갈 수 있고, 그때 답하던 것이 날아간다
-    if (get().prompt) return;
-    if (get().sent.has(keyOf(prompt.target))) return;
-    set({ prompt });
-  },
-
-  close: () => set({ prompt: null }),
-
-  beginVisit: (musicId) => set({ visit: { musicId, accruedMs: 0, playingSince: null } }),
-
-  setPlaying: (playing, at) =>
-    set((s) => {
-      const v = s.visit;
-      if (!v) return s;
-      if (playing) return v.playingSince == null ? { visit: { ...v, playingSince: at } } : s;
-      if (v.playingSince == null) return s;
-      return { visit: { ...v, accruedMs: v.accruedMs + (at - v.playingSince), playingSince: null } };
-    }),
-
-  endVisit: () =>
-    set((s) => {
-      const v = s.visit;
-      if (!v) return s;
-      // **덮어쓴다.** 더하면 15초 스킵 + 10초 재청취가 25초가 되어 어느 쪽도 아닌 값이 된다
-      return { lastStintMs: { ...s.lastStintMs, [v.musicId]: played(v, Date.now()) }, visit: null };
-    }),
-
+  ...listeningInitial,
+  unplayable: new Set(), answered: new Set(),
+  enter: (musicId, playing, at) => set((s) => {
+    const v = s.visit;
+    if (musicId != null && v?.musicId !== musicId) return { visit: { musicId, accruedMs: 0, playingSince: playing ? at : null } };
+    if (!v) return s;
+    if (playing && musicId != null) return v.playingSince == null ? { visit: { ...v, playingSince: at } } : s;
+    if (v.playingSince == null) return s;
+    return { visit: { ...v, accruedMs: v.accruedMs + Math.max(0, at - v.playingSince), playingSince: null } };
+  }),
   stintMs: (musicId) => {
-    const s = get();
-    if (s.visit?.musicId === musicId) return played(s.visit, Date.now());
-    return s.lastStintMs[musicId] ?? 0;
+    const v = get().visit;
+    return v?.musicId === musicId ? v.accruedMs + (v.playingSince == null ? 0 : Math.max(0, Date.now() - v.playingSince)) : 0;
   },
-
-  markSent: (target) => set((s) => ({ sent: new Set(s.sent).add(keyOf(target)) })),
-
-  hasSent: (target) => get().sent.has(keyOf(target)),
+  hear: (musicId, source) => {
+    const s = get();
+    const unplayable = new Set(s.unplayable);
+    unplayable.delete(musicId);
+    const { flow, edge } = hearSong(source, musicId, s.flow, s.lastAudible, unplayable, createUuid);
+    // First unanswered question wins. Every requested transition should be
+    // gated, but transport events can still arrive late/out of order. Never
+    // let a later PLAYING report silently erase or replace the question owed.
+    const owed = s.pending && !s.hasAnswered(s.pending.target) ? s.pending : null;
+    const pending = owed ?? (edge && !s.hasAnswered(edge.target) ? edge : null);
+    set({ flow, unplayable, lastAudible: musicId, pending, resolving: false, unansweredSent: false });
+    settleQueued();
+  },
+  markUnplayable: (musicId) => set((s) => ({ unplayable: new Set(s.unplayable).add(musicId) })),
+  setResolving: (resolving) => set({ resolving }),
+  gate: (resume) => {
+    const s = get();
+    // First intent wins. Late ended/next reports cannot retarget an open dialog.
+    if (s.queued) return true;
+    if (s.resolving || (s.historyLoading && s.pending)) { set({ queued: resume }); return true; }
+    if (!s.pending || s.hasAnswered(s.pending.target)) return false;
+    set({ prompt: s.pending, pending: null, queued: resume, submission: null, saving: false, saveError: false });
+    return true;
+  },
+  close: () => {
+    const resume = get().queued;
+    set({ prompt: null, pending: null, queued: null, submission: null, saving: false, saveError: false });
+    resume?.();
+  },
+  loadAnswered: (keys) => {
+    const s = get();
+    const answered = new Set([...s.answered, ...keys]);
+    set({ answered, historyLoading: false });
+    // A late history response can dismiss an already-answered question, but
+    // must never interrupt an in-flight/failed explicit submission.
+    if (s.prompt && answered.has(questionKey(s.prompt.target)) && !s.submission) get().close();
+    else settleQueued();
+  },
+  setHistoryLoading: (historyLoading) => { set({ historyLoading }); if (!historyLoading) settleQueued(); },
+  hasAnswered: (target) => get().answered.has(questionKey(target)),
+  beginSubmission: (row) => {
+    const s = get();
+    if (s.saving || !s.prompt || questionKey(s.prompt.target) !== questionKey(row)) return false;
+    set({ submission: s.submission ?? row, saving: true, saveError: false });
+    return true;
+  },
+  finishSubmission: (row, success) => {
+    const s = get();
+    if (s.submission !== row) return;
+    if (!success) { set({ saving: false, saveError: true }); return; }
+    set({ answered: new Set(s.answered).add(questionKey(row)) });
+    get().close();
+  },
+  takeUnanswered: () => {
+    const s = get();
+    const edge = s.prompt ?? s.pending;
+    if (!edge || s.submission || s.unansweredSent || s.hasAnswered(edge.target)) return null;
+    // Prevent repeated pagehide (including bfcache) from reusing the same row.
+    set({ unansweredSent: true });
+    return edge;
+  },
+  resumeAfterPagehide: () => {
+    const s = get();
+    if (!s.unansweredSent) return;
+    // On bfcache restoration, a delayed beacon must not overwrite a new answer.
+    const sessionId = createUuid();
+    const renew = (edge: SurveyEdge | null) => edge ? { ...edge, target: { ...edge.target, sessionId } } : null;
+    set({ pending: renew(s.pending), prompt: renew(s.prompt),
+      flow: s.flow ? { ...s.flow, sessionId, slots: new Map() } : null });
+  },
+  resetListening: () => set({ ...listeningInitial, unplayable: new Set() }),
 }));
+
+/** Both recommendation resolution and answered-history loading join here. */
+function settleQueued(): void {
+  const s = useSurveyStore.getState();
+  if (!s.queued || s.prompt || s.resolving || s.historyLoading) return;
+  if (s.pending && !s.hasAnswered(s.pending.target)) useSurveyStore.setState({ prompt: s.pending, pending: null });
+  else s.close();
+}

@@ -1,5 +1,6 @@
 import { failLive, ok, okLive } from "@/lib/api-response";
 import { backendPost, BackendError, isBackendEnabled } from "@/lib/backend";
+import { isLoopbackBackend, shouldPersistSurvey } from "@/lib/survey-persistence";
 
 /**
  * POST /bff/feedback — 탐색 설문 응답 저장 (S15P21A405-294).
@@ -25,14 +26,19 @@ export async function POST(req: Request) {
   }
 
   /**
-   * 목 모드에서는 **보내지 않는다.**
+   * 목에서는 보내지 않고, 로컬에서는 명시적으로 연결한 로컬 DB에만 보낸다.
    *
-   * 설문은 조회가 아니라 **쓰기**다. 목을 켜 두고 개발하면서 설문을 누를 때마다 실제
-   * `explore_feedback` 에 행이 쌓이면, 유저 테스트 집계에 개발 중 찍은 값이 섞인다.
-   * 지우려면 누가 언제 넣었는지 가려내야 하는데 비로그인이라 가려낼 수가 없다.
+   * 설문은 조회가 아니라 쓰기라서 테스트 응답이 `explore_feedback`에 섞이면
+   * 비로그인 데이터에서 나중에 골라낼 방법이 없다.
    */
-  if (!isBackendEnabled()) {
-    console.log("[survey:mock]", JSON.stringify(body));
+  const requestUrl = new URL(req.url);
+  if (!shouldPersistSurvey({
+    backendEnabled: isBackendEnabled(),
+    hostname: requestUrl.hostname,
+    localTestDatabase: process.env.SURVEY_TEST_DATABASE === "local"
+      && isLoopbackBackend(process.env.BACKEND_ORIGIN),
+  })) {
+    console.debug("[survey:skipped] non-persistent test context");
     return ok({ feedbackId: 0 });
   }
 

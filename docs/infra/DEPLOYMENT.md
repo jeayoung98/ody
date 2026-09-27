@@ -54,11 +54,37 @@ Frontend는 Backend container와 분리해 `/var/www/ody`에 배포한다.
 `/api/hello`, 외부 Actuator 차단을 확인한다. 실패하면 기존 `current`/`previous` symlink를 복원한다.
 최신 release 외에도 current, previous와 추가 과거 release를 보존한다.
 
+Next.js 런타임 환경변수는 app-node의 `/etc/ody/frontend.env`에서 관리한다. `frontend/deploy.sh`는 배포와
+rollback 전에 파일을 preflight하고 `ody-frontend.service`의 systemd drop-in에 `EnvironmentFile`로 연결한 뒤
+서비스를 재시작한다. 환경변수 값은 출력하지 않는다. `NEXT_PUBLIC_*`는 런타임 값이 아니라 build 결과에
+포함되므로 Jenkins build 시점에 별도로 주입해야 한다.
+
 app-node Nginx의 기존 TLS server block에는
 `docs/infra/examples/frontend-nginx.locations.conf`를 기준으로 static location을 반영한다. 기존 `/api/` proxy,
 `/actuator/` 접근 제어, upstream, Certbot block은 그대로 둔다. 변경 전후 `sudo nginx -t`를 통과한 경우에만
 reload한다. 이 routing은 2026-09-08 app-node에 적용해 root, SPA fallback, build marker, Backend API와
 Actuator 차단을 검증했다. Repository에서 live Nginx를 자동 덮어쓰지는 않는다.
+
+### Frontend location 마커 (S15P21A405-357)
+
+`frontend/deploy.sh`의 `reload_nginx()`/`restore_legacy_nginx()`는 라이브
+`/etc/nginx/sites-available/backend`를 통째로 교체하지 않는다. `docs/infra/examples/frontend-nginx.locations.conf`와
+같은 `# BEGIN ODY-FRONTEND-LOCATIONS` / `# END ODY-FRONTEND-LOCATIONS` 마커 사이 내용만
+`backend.next`(또는 rollback 시 `backend.before-next`)에서 읽어 라이브 파일의 같은 마커 사이에 이식한다
+(`splice_frontend_block()`). 마커 바깥의 backend upstream(`server 127.0.0.1:<port>;`), TLS, Certbot 블록은
+건드리지 않으므로 backend blue-green이 전환해 둔 활성 포트가 프론트 배포로 되돌아가지 않는다.
+
+이 방식이 동작하려면 app-node의 세 파일 모두 같은 마커로 프론트 location 블록을 감싸고 있어야 한다.
+
+```text
+/etc/nginx/sites-available/backend
+/etc/nginx/sites-available/backend.next
+/etc/nginx/sites-available/backend.before-next
+```
+
+마커가 없거나 개수가 안 맞으면 `splice_frontend_block()`은 라이브 설정을 임의로 바꾸는 대신 실패한다
+(fail-safe). 위 세 파일에 마커를 추가하는 것은 **운영 서버 설정 변경**이므로 Repository가 자동으로 하지
+않는다 — app-node에 수동으로 한 번 반영한 뒤 `sudo nginx -t`로 검증한다.
 
 수동 rollback:
 

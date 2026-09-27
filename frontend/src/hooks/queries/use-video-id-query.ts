@@ -1,12 +1,20 @@
+import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "@/lib/api";
-import { API_ENDPOINTS, QUERY_KEYS } from "@/constants";
+import { API_ENDPOINTS, PLAYBACK_BLOCKED, QUERY_KEYS, type PlaybackBlocked } from "@/constants";
+import { useUnplayableStore } from "@/stores/use-unplayable-store";
+import type { VideoIdLookup } from "@/types";
 
 interface VideoIdResult {
   musicId: number;
-  /** 사이트 안에서 틀 수 있는 영상. 없으면 null — 아직 음원이 연결되지 않은 곡이다 (SONG-04) */
+  /** 사이트 안에서 틀 수 있는 영상. `lookup` 이 `found` 일 때만 채워진다 */
   videoId: string | null;
+  /** 검색이 어디까지 갔는가. `"없다"` 와 `"모른다"` 를 가른다 (S15P21A405-332) */
+  lookup: VideoIdLookup;
 }
+
+/** 한 곡의 영상은 세션 중에 바뀌지 않는다. `staleTime` 과 `gcTime` 을 같은 값으로 묶는다 */
+const VIDEO_ID_CACHE_MS = 30 * 60 * 1000;
 
 /**
  * 곡 하나의 `videoId` (SONG-03, S15P21A405-340).
@@ -22,6 +30,55 @@ export function useVideoIdQuery(musicId: number | null) {
     queryKey: QUERY_KEYS.music.videoId(musicId ?? -1),
     queryFn: () => api<VideoIdResult>(API_ENDPOINTS.music.videoId(musicId!)),
     enabled: musicId != null,
-    staleTime: 30 * 60 * 1000,
+    staleTime: VIDEO_ID_CACHE_MS,
+    /**
+     * **`gcTime` 을 같이 올려야 30분 캐시가 산다** (S15P21A405-586). 기본값은 5분이라, 그 곡을
+     * 보는 컴포넌트가 사라지면 5분 뒤 버려졌다 — `staleTime` 30분은 곡 상세를 열어 둔 동안만
+     * 뜻이 있었고, 닫았다 다시 열면 다시 물었다. 이 조회는 DB 에 없으면 백엔드가 **외부 API 를
+     * 부르는** 비싼 길이라 그만큼이 그대로 낭비였다.
+     *
+     * 메모리는 문제가 아니다 — 항목이 `{musicId, videoId, lookup}` 세 칸이라 곡 천 개를 들고
+     * 있어도 수십 KB 다.
+     */
+    gcTime: VIDEO_ID_CACHE_MS,
   });
+}
+
+/**
+ * **이 곡을 지금 들을 수 있나, 못 들으면 뭐라고 말할까** (S15P21A405-364).
+ *
+ * 재생 가능 여부는 `videoId` 하나로 갈리는데(S15P21A405-326) 그 판단이 플레이어바·곡 상세·
+ * 상세 헤더에 따로 적혀 있었다. 셋 다 `data` 가 없으면 "틀 수 있는 곡" 으로 보고 있어서,
+ * **조회가 실패하면 버튼이 멀쩡한 채 눌러도 소리가 안 나고 아무 안내도 없었다** — 여정에서
+ * 곡이 조용히 지나가는 것으로 보였다. 규칙을 여기 하나로 모아 세 곳이 같은 답을 받게 한다.
+ *
+ * **아직 모르는 동안(`pending`)에는 막지 않는다.** 도착하면 그때 판정이 잡힌다 — 여기서 미리
+ * 막으면 곡을 열 때마다 잠깐씩 `재생 불가` 가 스쳐 지나간다.
+ */
+export function usePlayability(musicId: number | null): { canPlay: boolean; blocked: PlaybackBlocked | null; retry: () => void } {
+  const { status, data, refetch } = useVideoIdQuery(musicId);
+  const markUnplayable = useUnplayableStore((s) => s.markUnplayable);
+
+  /** 막힌 이유가 다시 시도해볼 만한 것이면 버튼을 누를 때 한 번 더 물어본다 */
+  const retry = () => void refetch();
+
+  /**
+   * **찾아봤는데 없는 곡은 화면에서 뺀다** (S15P21A405-544). 지도의 별과 검색 결과가 이 표시를
+   * 보고 그 곡을 지운다 — 눌러도 아무 일이 없는 별을 또 만나지 않게 하려는 것이다.
+   *
+   * **`notFound` 만이다.** `unsearched`(아직 안 찾아봄)와 조회 실패는 다시 물으면 채워질 수
+   * 있어서, 그걸 같이 숨기면 멀쩡한 곡을 버리게 된다.
+   *
+   * 렌더 중이 아니라 effect 에서 표시한다. 판정은 아래 분기 한 곳에만 두고 싶은데, 그 자리는
+   * 렌더 중이라 다른 컴포넌트의 상태를 건드릴 수 없다.
+   */
+  const noVideo = status === "success" && data.lookup === "notFound";
+  useEffect(() => {
+    if (noVideo && musicId != null) markUnplayable(musicId);
+  }, [noVideo, musicId, markUnplayable]);
+
+  if (status === "error") return { canPlay: false, blocked: PLAYBACK_BLOCKED.lookupFailed, retry };
+  if (noVideo) return { canPlay: false, blocked: PLAYBACK_BLOCKED.noVideo, retry };
+  if (status === "success" && data.lookup === "unsearched") return { canPlay: false, blocked: PLAYBACK_BLOCKED.notSearched, retry };
+  return { canPlay: true, blocked: null, retry };
 }

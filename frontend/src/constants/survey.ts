@@ -1,5 +1,5 @@
 /**
- * 설문 문항·상수 (S15P21A405-294).
+ * 설문 문항·상수 (S15P21A405-294 · 335).
  *
  * **문항을 바꾸려면 이 파일만 고친다.** 다만 `reason` 값은 백엔드
  * `explore_feedback.reason` 의 CHECK 제약과 같아야 한다 — 없는 값을 보내면 DB 가 거부한다.
@@ -10,17 +10,19 @@
  */
 import type { SurveyDefinition } from "@/types/survey";
 
-/** 이만큼 들은 뒤에야 묻는다. 못 채우고 떠난 곡은 묻지 않고 무응답 행만 보낸다 */
-export const SURVEY_MIN_LISTEN_MS = 20_000;
-
-/** 개발용 — 이 쿼리가 붙으면 청취 시간과 무관하게 즉시 띄운다 (`?survey=force`) */
-export const SURVEY_FORCE_PARAM = "survey";
-
-/** 위 강제 플래그를 탭 세션에 남겨두는 자리 */
-export const SURVEY_FORCE_KEY = "ody:survey-force";
+/**
+ * **청취 시간 조건은 없다** (S15P21A405-335 · 346).
+ *
+ * 예전에는 두 곡을 각각 20초 이상 들었을 때만 물었다(`SURVEY_MIN_LISTEN_MS`). 그 조건이
+ * 표본을 너무 줄였고 짧게 훑는 탐색에서는 아무것도 안 남았다. 지금은 **알고리즘이 제안한
+ * 간선을 밟았으면** 묻는다 — 얼마나 들었는지는 `listened_sec` 값으로만 남고 판정에 안 쓴다.
+ * 조건이 사라지면서 `?survey=force` 도 할 일이 없어져 함께 걷어냈다.
+ */
 
 /** 익명 사용자 식별자를 담는 자리. 정본이 이 키를 지정한다 */
 export const SURVEY_ANON_KEY = "ody_anon_id";
+export const SURVEY_API = { feedback: "/bff/feedback", answered: "/bff/feedback/answered" } as const;
+export const SURVEY_QUERY_KEYS = { answered: ["survey", "answered"] as const };
 
 /**
  * 평가 대상 곡에 붙는 말. **모드가 달라도 같다** — 비교 상대(`compareLabel`)는 기준곡이냐
@@ -35,6 +37,9 @@ export const SURVEY_TARGET_LABEL = "방금 들은 곡";
  * - `mood` 소리 자체가 다름 → `tau_far` 하향·hub 벌점. 가까운 거리에서도 많으면 좌표 문제
  * - `tempo` 분위기는 비슷한데 빠르기 차이 → bpm 차이 벌점
  * - `spoken` 말·낭독·효과음 → 정제 규칙에서 제외
+ * - `compare` **비교 상대가 문제다** → 이 응답은 연결 품질 지표에서 빼고, 그 곡을 따로 본다
+ *   (S15P21A405-380). 넷은 모두 "방금 들은 곡" 에 대한 판단인데 이것만 반대쪽을 가리킨다.
+ *   이 자리가 없으면 사용자가 엉뚱한 이유를 골라, 알고리즘이 고른 연결이 나쁘다고 읽히게 된다
  *
  * **문구는 모드마다 다르다.** 주변 탐색은 두 곡을 나란히 놓고 비교하니 `다름` 이고,
  * 여정은 흐름이 끊긴 것을 묻는 것이라 `튐` 이다. 저장되는 코드는 같아서 분석은 한 표에서 본다.
@@ -44,6 +49,8 @@ const NEARBY_REASONS = [
   { value: "tempo", label: "템포 다름" },
   { value: "dup", label: "같은 곡 반복" },
   { value: "spoken", label: "음악 아님" },
+  // 이상한 쪽이 방금 들은 곡이 아니라 기준곡일 때 (S15P21A405-380)
+  { value: "compare", label: "기준곡이 이상함" },
 ] as const;
 
 const JOURNEY_REASONS = [
@@ -51,6 +58,8 @@ const JOURNEY_REASONS = [
   { value: "tempo", label: "템포 튐" },
   { value: "dup", label: "같은 곡 반복" },
   { value: "spoken", label: "음악 아님" },
+  // 같은 코드, 다른 말 — 여정에서 비교 상대는 앞 곡이다 (S15P21A405-380)
+  { value: "compare", label: "앞 곡이 이상함" },
 ] as const;
 
 /**

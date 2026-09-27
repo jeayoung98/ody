@@ -45,7 +45,8 @@ export interface EngineSnapshot {
   pressure: number;
   pressureDir: 1 | -1 | 0;
   /** 모프 진행 중 안내 문구 */
-  morph: { big: string; sub: string } | null;
+  /** 전환 안내. `sub` 는 겹을 불러오는 중일 때만 있다 — 축 문장은 지도 가장자리가 맡는다 (S15P21A405-358) */
+  morph: { big: string } | null;
   /** 내 곡 = 내 위치. 곡을 재생해야 생긴다 — 없으면 표식을 그리지 않는다 */
   myMusicId: number | null;
   /**
@@ -59,6 +60,8 @@ export interface EngineSnapshot {
   playingElsewhere: boolean;
   /** "내 위치로 가기" 로 돌아갈 자리가 있는가 (재생한 적이 있는가) */
   canGoHome: boolean;
+  /** "내 위치로 가기" 로 옮겨 가는 중 — 누른 순간부터 도착까지 (S15P21A405-670). 패널이 이걸 보고 접혔다 펴진다 */
+  homeTraveling: boolean;
 }
 
 interface MapState extends EngineSnapshot {
@@ -88,8 +91,15 @@ interface MapState extends EngineSnapshot {
   setViewMode: (mode: MapViewMode) => void;
   selectMusic: (musicId: number | null) => void;
   setMyMusicId: (musicId: number | null) => void;
-  enterNearby: (musicId: number) => void;
+  /**
+   * 주변 탐색을 켠다. `panelHandled` 는 **부른 쪽이 패널을 직접 정했다**는 뜻이다
+   * (S15P21A405-384) — `map-view` 의 "중심곡 상세도 같이 연다" 효과(348)가 이 값을 보고
+   * 비켜난다. 이웃 카드를 고를 때처럼 중심곡이 아니라 **고른 곡**의 상세를 띄워야 할 때 쓴다.
+   */
+  enterNearby: (musicId: number, panelHandled?: boolean) => void;
   exitNearby: () => void;
+  /** {@link enterNearby} 참고. 효과가 읽고 나면 다음 enterNearby 가 다시 정한다 */
+  nearbyPanelHandled: boolean;
   /** 목록을 넣고 별자리 뷰를 바로 켠다. 주변 탐색이 켜져 있으면 닫힌다 (PATH-01-1) */
   showConstellation: (musicIds: number[], points: MapPoint[] | undefined, source: PlayContext) => void;
   /** 목록만 갈아끼운다 (뷰는 건드리지 않음) — 패널을 열었을 때 택만 뜨게 */
@@ -108,6 +118,15 @@ interface MapState extends EngineSnapshot {
    * 이 겹에 있으면 그 곡으로 확대하고, 없으면 고스트별로 띄운다 (MAP-12) — 레이어를 자동으로 옮기지 않는다.
    */
   focusMusic: (musicId: number) => void;
+  /**
+   * 검색한 곡을 **지도에 실제로 띄운다** (S15P21A405-581).
+   *
+   * 지도가 모르는 곡이면 좌표를 먼저 넣어 줘야 한다 — 부르는 쪽이 곡 상세에서 만들어 넘긴다
+   * (`lib/map-point`). 없으면 지금까지처럼 고스트별로 떨어진다.
+   *
+   * 옮기지 못하는 상황(따라가는 중·전환 중)에서도 고스트별로 떨어진다.
+   */
+  revealMusic: (musicId: number, point?: MapPoint | null) => void;
   /** 고스트별을 끈다 (배너의 닫기) */
   dismissGhost: () => void;
   /** 고스트별의 곡이 있는 곳으로 간다 — 레이어 0으로 떠오른 뒤 그 곡을 확대 (MAP-12) */
@@ -118,13 +137,18 @@ interface MapState extends EngineSnapshot {
   drillDown: () => void;
   /** 상위 레이어로 떠오르기 */
   surface: () => void;
+  /**
+   * 지나온 겹 중 하나로 **한 번에** 떠오른다 (S15P21A405-477). 좌상단 브레드크럼이 쓴다 —
+   * 한 칸씩(`surface`) 부르면 모프가 비동기라 두 번째 호출이 그냥 씹힌다.
+   */
+  surfaceTo: (layer: number) => void;
   /** 엔진 → 스토어 동기화 */
   syncFromEngine: (snap: Partial<EngineSnapshot>) => void;
 }
 
 export const useMapStore = create<MapState>()(
   devtools(
-    (set) => ({
+    (set, get) => ({
       layer: 0,
       boxes: EMPTY_BOXES,
       prefetchBoxes: null,
@@ -145,8 +169,10 @@ export const useMapStore = create<MapState>()(
       ghostMusicId: null,
       playingElsewhere: false,
       canGoHome: false,
+      homeTraveling: false,
 
       viewMode: "default",
+      nearbyPanelHandled: false,
       selectedMusicId: null,
       nearbyCenterMusicId: null,
       constellationMusicIds: EMPTY_IDS,
@@ -156,19 +182,34 @@ export const useMapStore = create<MapState>()(
       setViewMode: (viewMode) => set({ viewMode }, false, "setViewMode"),
       selectMusic: (selectedMusicId) => set({ selectedMusicId }, false, "selectMusic"),
       setMyMusicId: (myMusicId) => {
+        const engine = getMapEngine();
+        /**
+         * **날아가는 중이면 옛 자리는 버린다** (S15P21A405-565). 재생 직전에 보낸 presence
+         * join 의 답이 몇백 ms 뒤 직전 곡을 싣고 도착하는데, 그때 프론트는 이미 다음 곡으로
+         * 가고 있다. 그대로 받으면 표식이 되돌아가고 카메라가 따라가 화면이 직전 곡에 박힌다.
+         */
+        if (myMusicId != null && engine && !engine.acceptsAnchor(myMusicId)) return;
         set({ myMusicId }, false, "setMyMusicId");
-        getMapEngine()?.setMy(myMusicId);
+        engine?.setMy(myMusicId);
       },
 
       // 오버레이 뷰는 하나만 (PATH-01-1) — 주변 탐색을 켜면 별자리가 닫히고, 그 반대도 마찬가지
-      enterNearby: (musicId) => {
+      enterNearby: (musicId, panelHandled = false) => {
         set(
-          { viewMode: "nearby", nearbyCenterMusicId: musicId, selectedMusicId: musicId, constellationMusicIds: EMPTY_IDS, constellationPoints: EMPTY_POINTS, constellationSource: null },
+          {
+            viewMode: "nearby",
+            nearbyCenterMusicId: musicId,
+            selectedMusicId: musicId,
+            nearbyPanelHandled: panelHandled,
+            constellationMusicIds: EMPTY_IDS,
+            constellationPoints: EMPTY_POINTS,
+            constellationSource: null,
+          },
           false,
           "enterNearby",
         );
       },
-      exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null }, false, "exitNearby"),
+      exitNearby: () => set({ viewMode: "default", nearbyCenterMusicId: null, nearbyPanelHandled: false }, false, "exitNearby"),
 
       showConstellation: (constellationMusicIds, points = EMPTY_POINTS, constellationSource) =>
         set(
@@ -207,6 +248,20 @@ export const useMapStore = create<MapState>()(
         if (engine?.isAlive(musicId)) engine.focusSong(musicId);
         else engine?.setGhost(musicId);
       },
+
+      revealMusic: (musicId, point) => {
+        const engine = getMapEngine();
+        set({ selectedMusicId: musicId }, false, "revealMusic");
+        if (!engine) return;
+        // 지도가 모르는 곡이면 좌표를 먼저 넣는다. 레이어 0 에서는 `adopt` 가 상주까지 켜 준다
+        if (point && !engine.isAlive(musicId)) engine.adopt([point]);
+        /**
+         * **띄우지 못하면 예전 길로 떨어진다** (S15P21A405-581). 따라가는 중이거나 겹을 건너는
+         * 중이면 화면을 옮기지 않기로 돼 있고, 좌표를 못 구한 곡은 놓을 자리가 없다.
+         * 그때는 고스트별이라도 띄워 "저쪽 바깥에 있다" 를 남긴다 (MAP-12).
+         */
+        if (engine.revealSong(musicId) === "none") engine.setGhost(musicId);
+      },
       dismissGhost: () => {
         getMapEngine()?.clearGhost();
         set({ ghostMusicId: null }, false, "dismissGhost");
@@ -215,10 +270,30 @@ export const useMapStore = create<MapState>()(
         set({ selectedMusicId: musicId }, false, "surfaceToMusic");
         getMapEngine()?.surfaceToSong(musicId);
       },
-      /** 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다 */
-      goHome: () => getMapEngine()?.goHome() ?? "none",
+      /**
+       * 재생으로 내 위치가 정해졌던 겹·화면으로 돌아간다.
+       *
+       * **임시 뷰(주변 탐색·별자리)가 떠 있으면 먼저 닫고 간다** (S15P21A405-445). 예전에는 "닫고
+       * 눌러 달라" 고 토스트만 띄웠는데, 내 위치는 곧 재생 중인 곡이라 어디서 누르든 거기로 가는
+       * 게 맞다. 엔진 쪽 뷰를 여기서 직접 내린다 — 스토어만 바꾸면 효과가 도는 다음 렌더까지
+       * 엔진은 아직 뷰가 떠 있다고 보고 "overlay" 를 돌려준다.
+       */
+      goHome: () => {
+        const engine = getMapEngine();
+        if (!engine) return "none";
+        const { viewMode } = get();
+        if (viewMode === "nearby") {
+          engine.exitProbe();
+          get().exitNearby();
+        } else if (viewMode === "constellation") {
+          engine.exitConstellation();
+          get().hideConstellationView();
+        }
+        return engine.goHome();
+      },
       drillDown: () => getMapEngine()?.descend(),
       surface: () => getMapEngine()?.ascend(),
+      surfaceTo: (layer) => getMapEngine()?.ascendTo(layer),
 
       syncFromEngine: (snap) => set(snap, false, "syncFromEngine"),
     }),

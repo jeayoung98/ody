@@ -19,4 +19,28 @@ export const STORAGE_KEYS = {
   tutorialDone: "ody:tutorial-done",
   /** 테스트 안내 화면을 봤는가 (S15P21A405-343). 한 번 보면 다시 띄우지 않는다 */
   testGuideSeen: "ody:test-guide-seen",
+  /**
+   * 설문 모드 스위치 (S15P21A405-383 · 696). `true` 면 설문 모드, 없거나 `false` 면 개발 모드(기본).
+   * 읽는 쪽은 [`useSurveyMode`](../hooks/use-survey-mode.ts) 하나다.
+   */
+  surveyMode: "ody:survey-mode",
+  /** 없거나 `true`면 분석 전송, `false`면 이 브라우저의 GA4·PostHog 수집을 모두 끈다. */
+  analyticsMode: "ody:analytics-mode",
+  /** `true`일 때 이 브라우저의 GA4 이벤트만 DebugView 대상으로 표시한다. */
+  analyticsDebug: "ody:analytics-debug",
+  /**
+   * 발견 힌트를 이미 본 문맥들 (S15P21A405-393). `["map","nearby","journey"]` 꼴의 배열.
+   * 문맥마다 키를 따로 두지 않는 이유는 힌트가 늘어날 때 키가 문맥 수만큼 곱해지기 때문이다.
+   */
+  playHintSeen: "ody:hint-play-seen",
+  /**
+   * 새로고침 너머로 들고 가는 쿼리 캐시 (S15P21A405-504). 내 정보·프로필·내 플리 등
+   * **지난 값을 먼저 보여 줘도 되는 것**만 들어간다. 넣고 빼는 쪽은 [`query-persist`](../lib/query-persist.ts).
+   */
+  queryCache: "ody:query-cache",
+  /**
+   * 따라가는 인솔자 `{email, nickname, imageUrl}` (S15P21A405-615). **sessionStorage** 에만 둔다 —
+   * 새로고침은 이어 타고, 새 탭은 새로 시작한다. 하차하면 지운다. 읽는 쪽은 `use-ride-session` 하나다.
+   */
+  rideLeader: "ody:ride-leader",
 } as const;

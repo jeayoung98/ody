@@ -18,7 +18,7 @@ export default function PlaylistRow({ playlist, actions, onClick }: PlaylistRowP
       className="flex w-full cursor-pointer items-center gap-2.5 rounded-box-sm border border-transparent px-[9px] py-2 text-left transition-colors duration-fast hover:border-line hover:bg-white/[.055]"
     >
       <span
-        className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[7px] text-xs text-ink shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]"
+        className="grid h-[30px] w-[30px] shrink-0 place-items-center rounded-[9px] text-xs text-ink shadow-[inset_0_0_0_1px_rgba(255,255,255,.14)]"
         style={{ background: "linear-gradient(140deg,#12203c,#1b1330)" }}
       >
         ♪
@@ -29,7 +29,7 @@ export default function PlaylistRow({ playlist, actions, onClick }: PlaylistRowP
           {playlist.ownerNickname ?? "-"} · {playlist.itemCount}곡
         </p>
       </div>
-      <span className="num shrink-0 text-[10px] text-ink-3">♥ {playlist.likeCnt ?? 0}</span>
+      <span className="num shrink-0 text-[12.5px] text-ink-3">♥ {playlist.likeCnt ?? 0}</span>
       {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>
   );

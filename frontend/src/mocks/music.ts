@@ -36,18 +36,17 @@ export function mockMusic(id: number): Music {
 export function mockMusicDetail(id: number): MusicDetail {
   const base = mockMusic(id);
   const s = songById(id);
-  const genreId = s?.genreId ?? id % GENRE_NAMES.length;
   const pc = s?.pc ?? [];
   return {
     ...base,
     albumCoverUrl: null,
+    liked: false,
     country: "KR",
     language: "ko",
     composer: `Composer ${(id % 15) + 1}`,
     lyricist: `Lyricist ${(id % 12) + 1}`,
     moods: [MOODS[id % MOODS.length], MOODS[(id + 2) % MOODS.length]],
-    genres: [{ id: genreId, name: GENRE_NAMES[genreId] }],
-    principalComponents: pc.slice(0, 6).map((v, i) => ({ label: `PC${i + 1}`, value: Math.max(-1, Math.min(1, v / 2.5)) })),
+    principalComponents: pc.map((v, i) => ({ axis: i, value: v })),
     nearby: (s ? nearestSongs(s, NEARBY_COUNT) : []).map((p) => ({ id: p.musicId, title: p.title, artist: p.artist })),
     relatedPlaylists: [
       { id: 1, playlistName: "새벽 드라이브", email: "luna@ody.app" },
@@ -61,11 +60,28 @@ export function mockNearby(musicId: number): NearbyResponse {
   return { center, neighbors: nearestSongs(center, NEARBY_COUNT) };
 }
 
-export function mockSearch(keyword: string): MusicSearchResult[] {
-  const q = keyword.trim().toLowerCase();
-  if (!q) return [];
+/**
+ * 목 검색 (S15P21A405-399). **실제 계약과 같이 대소문자 무시 앞일치다.**
+ *
+ * 예전에는 부분일치였는데, 그러면 목에서만 나오는 결과가 있어서 실연동 뒤에 "왜 안 나오지" 가
+ * 된다 (백엔드는 S15P21A405-298 에서 앞일치로 바꿨다).
+ *
+ * 조건 셋을 실서버와 같은 규칙으로 가른다 — 통합은 제목 또는 아티스트, 나머지는 각 칸에 앞일치.
+ */
+export function mockSearch({ q, artist, music }: { q: string; artist: string; music: string }): MusicSearchResult[] {
+  const starts = (value: string | null, prefix: string) => (value ?? "").toLowerCase().startsWith(prefix.toLowerCase());
+  const all = q.trim();
+  const byArtist = artist.trim();
+  const byMusic = music.trim();
+  if (!all && !byArtist && !byMusic) return [];
   return allSongs()
-    .filter((p) => p.title.toLowerCase().includes(q) || (p.artist ?? "").toLowerCase().includes(q))
+    .filter((p) =>
+      all
+        ? starts(p.title, all) || starts(p.artist, all)
+        : byArtist
+          ? starts(p.artist, byArtist) && (!byMusic || starts(p.title, byMusic))
+          : starts(p.title, byMusic),
+    )
     .slice(0, 48)
     .map((p) => ({ id: p.musicId, title: p.title, artist: p.artist }));
 }
@@ -106,7 +122,7 @@ export function mockJourney(startId: number, endId: number): JourneyRoute {
   path.push(b);
   const stops = path.map((s, i) => {
     const m = mockMusic(s.musicId);
-    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, genreName: GENRE_NAMES[s.genreId], pc: [...s.pc] };
+    return { id: s.musicId, title: s.title, artist: s.artist, duration: m.duration, order: i, pc: [...s.pc] };
   });
   return { startMusicId: a.musicId, endMusicId: b.musicId, stops, totalDuration: stops.reduce((sum, s) => sum + (s.duration ?? 0), 0) };
 }

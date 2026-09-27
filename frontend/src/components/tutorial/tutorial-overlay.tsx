@@ -1,10 +1,10 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { ROUTES, STORAGE_KEYS, TUTORIAL_STEPS } from "@/constants";
 import { useCompleteTutorialMutation } from "@/hooks/mutations/use-complete-tutorial-mutation";
-import { removeStorage, writeStorage } from "@/lib/storage";
+import { removeStorage } from "@/lib/storage";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -13,6 +13,7 @@ import { StarHint, WheelHint } from "./tutorial-hint";
 import TutorialSpotlight from "./tutorial-spotlight";
 import TutorialOutro from "./tutorial-outro";
 import TutorialStepCard from "./tutorial-step-card";
+import { analyticsId, setAnalyticsContext, trackOnce } from "@/lib/analytics/client";
 
 /** 안내 카드가 차지하는 세로 끝(px). 짚어 줄 별을 이보다 아래에서 고른다 */
 const CARD_BOTTOM = 330;
@@ -33,7 +34,7 @@ const CARD_AT = {
 
 /**
  * 단계별 태스크(확대 · 짚어 준 별 누르기 · 주변 탐색 · 여정 세 단계)를 주고 완료되면 다음으로.
- * 마지막 단계가 끝나면 지금 내 곡(재생/선택한 곡)을 시작점으로 저장하고 메인으로 간다.
+ * 마지막 단계의 마무리 화면 또는 건너뛰기를 거쳐 연습 상태를 비우고 메인으로 간다.
  */
 export default function TutorialOverlay() {
   const stepIndex = useTutorialStore((s) => s.stepIndex);
@@ -41,11 +42,16 @@ export default function TutorialOverlay() {
   const complete = useTutorialStore((s) => s.complete);
   const skip = useTutorialStore((s) => s.skip);
   const reset = useTutorialStore((s) => s.reset);
-  const completeMutation = useCompleteTutorialMutation();
+  const { mutate: completeTutorial } = useCompleteTutorialMutation();
   /** 이 단계가 짚어 준 별. 단계가 바뀔 때마다 새로 고른다 */
   const [starId, setStarId] = useState<number | null>(null);
+  const analyticsRun = useRef<string | null>(null);
 
   useEffect(() => {
+    analyticsRun.current ??= analyticsId();
+    setAnalyticsContext({ phase: "tutorial" });
+    trackOnce(`tutorial:${analyticsRun.current}`, "tutorial_started", { tutorial_id: analyticsRun.current });
+    trackOnce(`tutorial-step:${analyticsRun.current}`, "tutorial_step_viewed", { step: 0, task: TUTORIAL_STEPS[0].task });
     reset();
   }, [reset]);
 
@@ -65,10 +71,12 @@ export default function TutorialOverlay() {
     removeStorage(STORAGE_KEYS.myMusicId);
     removeStorage(STORAGE_KEYS.myHome);
     removeStorage(STORAGE_KEYS.playingMusicId);
-    writeStorage(STORAGE_KEYS.tutorialDone, true);
-    completeMutation.mutate(undefined, { onSettled: () => window.location.replace(ROUTES.home) });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+    useTutorialStore.getState().finish();
+    // Local completion is authoritative for navigation. Server sync is best effort
+    // and uses keepalive, so a slow/offline API cannot trap the user in the outro.
+    completeTutorial();
+    window.location.replace(ROUTES.home);
+  }, [completeTutorial]);
 
   const skipTutorial = () => {
     skip();
@@ -175,27 +183,64 @@ export default function TutorialOverlay() {
   if (!step) return null;
 
   return (
-    <div className="pointer-events-none absolute inset-0 z-[60]">
+    <>
       {/*
-        덤 먼저 — 안내 카드와 손짓이 그 위에 와야 한다. 덤은 아무것도 막지 않는다.
-        확대 단계는 **휠을 유도하는 동안만** 덮는다 — 굴리기 시작하면 지도를 훑어보는
-        시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
+        손짓(휠 안내·별 반짝임)은 **지도에 붙는 것**이라 패널 아래에 깔린다 (S15P21A405-417).
+        폰에서는 시트가 화면을 덮는데 그 위로 별 반짝임이 뚫고 나왔다.
+
+        **형제로 빼야 한다** (S15P21A405-532). 처음에는 z-60 짜리 오버레이 **안에** z-19 상자를
+        넣었는데 아무 효과가 없었다 — z 를 가진 부모가 이미 쌓임 맥락을 만들어서, 그 안의
+        숫자는 형제들끼리의 순서일 뿐 바깥의 패널·탭바와는 비교되지 않는다. 덩어리 전체가
+        여전히 60에 떠 있었다. 그래서 오버레이 밖으로 꺼내 **같은 맥락에서** 겨루게 한다.
       */}
-      {step.veil && !(zooming && wheeled) && <TutorialSpotlight spotlight={step.spotlight} />}
-      {step.hint === "wheel" && !wheeled && <WheelHint />}
-      {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
-      <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
-        <TutorialStepCard
-          index={stepIndex}
-          total={TUTORIAL_STEPS.length}
-          title={step.title}
-          description={step.description}
-          // 누를 곳이 따로 없는 단계는 카드의 버튼으로 넘긴다 (여정 결과 보기)
-          cta={step.cta || undefined}
-          onConfirm={step.cta ? () => complete(step.task) : undefined}
-          onSkip={skipTutorial}
-        />
+      <div className="pointer-events-none absolute inset-0 z-[19]">
+        {step.hint === "wheel" && !wheeled && <WheelHint />}
+        {step.hint === "star" && starId != null && <StarHint musicId={starId} onPick={pickStar} />}
       </div>
-    </div>
+      {/*
+        덤과 맥박 고리. 아무것도 막지 않는다. 확대 단계는 **휠을 유도하는 동안만** 덮는다 —
+        굴리기 시작하면 지도를 훑어보는 시간이므로 걷어 준다. 다음 단계에서 다시 덮인다.
+
+        **폰에서는 이것도 지도 층으로 내린다** (S15P21A405-532). 손짓만 내리고 이건 z-60 에
+        뒀더니, 곡 상세 시트를 열면 **맥박 뛰는 teal 고리가 시트 위로 떠올랐다.** 덤·고리는
+        화면의 어느 자리를 가리키는 표시라 손짓과 같은 성질이다 — 시트가 화면을 덮으면 그
+        아래로 들어가는 것이 맞다.
+
+        데스크톱은 z-60 그대로다. 거기서는 고리가 **우측 패널(z-20)을 감싸기도** 하므로
+        내리면 패널 뒤로 숨어 버린다.
+      */}
+      {step.veil && !(zooming && wheeled) && (
+        <div className="pointer-events-none absolute inset-0 z-[60] max-tablet:z-[19]">
+          <TutorialSpotlight spotlight={step.spotlight} />
+        </div>
+      )}
+      {/*
+        안내 카드. 데스크톱에서는 맨 위다 — 지도 옆에 패널이 서므로 카드가 위에 떠 있어도
+        무엇 하나 가리지 않는다.
+
+        **폰에서는 이것도 내린다** (S15P21A405-532). 곡 상세가 화면을 통째로 덮는데 그 위에
+        카드가 얹히면 **두 화면이 겹쳐 보인다.** 요청은 "곡 상세 위로는 아무것도 올라오면
+        안 된다" 였고, 카드도 예외가 아니다.
+
+        **대가가 있다.** 곡 상세가 열려 있는 동안에는 안내를 읽을 수 없다. 그런데 폰에서는
+        그 다음 단계가 어차피 막혀 있다 — 가리키는 대상(`주변 탐색`, `map-actions`)이
+        곡 상세가 열리면 함께 숨기 때문이다. 카드를 어디에 두든 같다. 그 흐름을 제대로
+        고치는 것은 S15P21A405-418(튜토리얼 모바일 대응)이 맡는다.
+      */}
+      <div className="pointer-events-none absolute inset-0 z-[60] max-tablet:z-[19]">
+        <div className={`pointer-events-auto absolute w-[min(340px,84vw)] ${CARD_AT[step.card]}`}>
+          <TutorialStepCard
+            index={stepIndex}
+            total={TUTORIAL_STEPS.length}
+            title={step.title}
+            description={step.description}
+            // 누를 곳이 따로 없는 단계는 카드의 버튼으로 넘긴다 (여정 결과 보기)
+            cta={step.cta || undefined}
+            onConfirm={step.cta ? () => complete(step.task) : undefined}
+            onSkip={skipTutorial}
+          />
+        </div>
+      </div>
+    </>
   );
 }

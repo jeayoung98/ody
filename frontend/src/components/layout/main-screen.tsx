@@ -1,29 +1,56 @@
 "use client";
 
-import type { ReactNode } from "react";
-import { FEATURES, PANEL_ENABLED } from "@/constants";
+import { useEffect, useMemo, type ReactNode } from "react";
+import { HUD_OCCLUSION } from "@/constants";
+import type { Occlusion } from "@/components/map/engine/map-engine";
+import { useFeatures, usePanelEnabled } from "@/hooks/use-features";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
+import { useBrandBottom, usePlayerBarHeight, useTabBarHeight } from "@/hooks/use-hud-bar-height";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import BottomBar from "@/components/player/bottom-bar";
 import ConfirmDialog from "@/components/common/confirm-dialog";
 import Toast from "@/components/common/toast";
-import ReactionButton from "@/components/player/reaction-button";
 import Brand from "./brand";
-import HelpButton from "./help-button";
+import TopScrim from "./top-scrim";
+import MapActions from "./map-actions";
 import Rail from "./rail";
 import JourneyComposer from "./journey-composer";
 import SearchBar from "./search-bar";
-import SearchOpenButton from "./search-open-button";
 import FollowBanner from "@/components/map/follow-banner";
 import GhostBanner from "@/components/map/ghost-banner";
+import MapAxisLabels from "@/components/map/map-axis-labels";
 import MapView from "@/components/map/map-view";
+import { useRealtime } from "@/hooks/use-realtime";
+import { useHomeTravelPanel } from "@/hooks/use-home-travel-panel";
+import { usePanelFollowsTrack } from "@/hooks/use-panel-follows-track";
 import MinimapPanel from "@/components/minimap/minimap-panel";
 import RightPanel from "@/components/panels/right-panel";
+import { HANDLE_W } from "@/components/common/collapse-handle";
+import { RIGHT_PANEL_W, SHEET_RADIUS_PX, SHEET_SNAP_PX } from "@/constants/design-tokens";
+import PlayHint from "@/components/discovery/play-hint";
+import ContestModal from "@/components/contest/contest-modal";
 import SurveyGate from "@/components/survey/survey-gate"; // REMOVE-WITH-SURVEY
 
-/** 우측 패널·레일이 가리는 폭(px). tokens.css 의 --spacing-right-panel / --spacing-rail 과 맞춘다 */
-const RAIL_OCCLUSION = 76;
-const PANEL_OCCLUSION = 376 + 74 + 16;
+/**
+ * 우측 패널이 가리는 폭(px). 지도 엔진이 **별·고리·카메라를 패널 밖에 두는** 기준이라,
+ * 패널의 실제 기하와 어긋나면 그만큼 지도가 손해를 본다.
+ *
+ * **숫자를 직접 적지 않고 패널 기하에서 끌어온다** (S15P21A405-479). 477 에서 핸들이 22→17 로
+ * 줄고 미는 식이 `376` 고정에서 `calc(100% - 10px)` 로 바뀌었는데 여기 상수만 예전 값(64)으로
+ * 남아, 접었을 때 엔진이 19px 을 과하게 비우고 있었다. 세 군데에 같은 숫자를 손으로 적어 두면
+ * 또 어긋난다.
+ *
+ * 접힘: 손잡이 폭(`collapse-handle.tsx` 의 `W`)만. 몸통은 화면 밖이다 (S15P21A405-664).
+ * 펼침: 패널폭 + 여백(18) + 틈(16).
+ */
+const PANEL_EDGE = 18;
+/**
+ * 접었을 때 화면 끝에 남는 것은 **손잡이뿐**이다 (S15P21A405-664). 예전에는 몸통 10px 을 일부러 남겼는데
+ * (`calc(100% - 10px)`) 부스러기로 보여 다 밀어 넣었다 — `right-panel.tsx` 의 `calc(100% + 18px)`.
+ */
+const PEEK_OCCLUSION = HANDLE_W;
+const PANEL_OCCLUSION = RIGHT_PANEL_W + PANEL_EDGE + 16;
 
 interface MainScreenProps {
   /** 지도 위에 얹을 오버레이 (튜토리얼 등) */
@@ -32,39 +59,136 @@ interface MainScreenProps {
 
 /**
  * 기본 화면 = 풀스크린 별지도 위에 떠 있는 글래스 HUD.
- * 상단(브랜드·레이어 스테퍼 / 검색 / 도움말) · 우측(패널 + 레일) · 좌하단(계기판) · 하단(플레이어·주변 탐색) · 우하단(반응)
+ * 상단(브랜드·레이어 스테퍼 / 검색 / 네비·프사) · 우측(패널) · 좌하단(계기판·도움말) · 우하단(플레이어)
  */
 export default function MainScreen({ overlay }: MainScreenProps) {
   const activePanel = usePanelStore((s) => s.activePanel);
-  const panelCollapsed = usePanelStore((s) => s.collapsed);
+  const snap = usePanelStore((s) => s.snap);
+  const sheetStop = usePanelStore((s) => s.sheetStop);
+  const sheetPeek = usePanelStore((s) => s.sheetPeek);
+  const panelCollapsed = snap === 1;
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   /**
    * 감춘 기능의 패널은 열려 있어도 화면에 없다 (S15P21A405-333). 여기서도 같은 판정을 써야
    * **안 보이는 패널 몫으로 지도가 좁아지는** 일이 없다.
    */
-  const panelOpen = activePanel != null && PANEL_ENABLED[activePanel];
-  // 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318)
-  const occludedRight = panelOpen && !panelCollapsed ? PANEL_OCCLUSION : RAIL_OCCLUSION;
+  const features = useFeatures();
+  /**
+   * 실시간(내 위치·지도 위 사람·주변 사람)의 시작점 (S15P21A405-482).
+   * 화면 전체에 소켓 하나만 있어야 해서 지도가 아니라 여기서 연다 — 지도는 언마운트될 수 있다.
+   */
+  useRealtime();
+  usePanelFollowsTrack();
+  useHomeTravelPanel();
+  const panelEnabled = usePanelEnabled();
+  const panelOpen = activePanel != null && panelEnabled[activePanel];
+  /**
+   * 접힌 패널은 화면 밖으로 나가 있으므로 가리지 않는다 — 별자리가 그만큼 넓게 퍼진다 (S15P21A405-318).
+   *
+   * **좁은 화면에서는 오른쪽을 아무도 안 가린다** (S15P21A405-417). 패널이 지도를 통째로
+   * 덮거나 아예 닫혀 있거나 둘 중 하나라 "옆으로 비켜 준다" 는 개념이 없다.
+   * 이걸 안 갈랐더니 375px 화면에 "오른쪽 410px 이 가려졌다" 고 알려 주게 돼서,
+   * 엔진이 남은 폭을 최소치 120px 로 잘랐다 — 주변 탐색 고리 반지름이 119 에서 43 으로 줄어
+   * 왼쪽 구석에 찌그러져 보였다 (실측).
+   */
+  const narrow = useIsNarrow();
+  const occludedRight = narrow ? 0 : panelOpen && !panelCollapsed ? PANEL_OCCLUSION : PEEK_OCCLUSION;
+  /**
+   * 지도가 가려지는 네 변 (S15P21A405-414).
+   * **매 렌더 새 객체를 만들면 안 된다** — 받는 쪽 effect 의 의존성이라 값이 같아도 매번 다시 돈다.
+   *
+   * 재생바 **위**가 어디인지 (S15P21A405-417). 재생바 높이는 재생 상태에 따라 바뀐다 —
+   * 곡이 없으면 한 줄, 재생 중이면 진행바가 붙어 더 높다. 상수로 박으면 그 차이만큼
+   * 위에 얹힌 것이 떠 보이거나 겹치므로 **재서** 쓰고, CSS 변수로 내려 보낸다.
+   * 좁은 화면에서 패널이 이 선 위까지 차지한다 (`panels/right-panel.tsx`).
+   */
+  const playerH = usePlayerBarHeight();
+  const tabBarH = useTabBarHeight();
+  /**
+   * 폰에서 아래로 쌓이는 순서: **네비 줄 → 재생바 → 패널**. 앞의 둘은 한 상자로 읽힌다.
+   *
+   * 재생바는 네비 뒤로 모서리 반경(`--radius-sheet`)만큼 내려가 있다 (S15P21A405-703, `bottom-bar.tsx`).
+   * 잰 `playerH` 에 그 겹친 몫이 들어 있어서 뺀다 — 안 빼면 시트가 30px 떠서 걸린다.
+   *
+   * **시트는 이 선 아래까지 내려간다** (S15P21A405-703). 재생바·네비가 유리라 그 뒤로 내용이 비쳐야
+   * 해서다 — 시트에서는 이 값이 "내용이 가려지는 높이" 로 읽힌다(단 높이 계산·목록 끝 여백, `globals.css`).
+   * 탭 화면(`panel-screen`)도 화면 바닥까지 내려가 재생바(z-21) 뒤에 깔린다 — 아래 `absolute` 설명 참고.
+   *
+   * 패널이 끝나는 선은 CSS 로 내려보낸다 — 탭바 높이에는 안전영역이 섞여 있어 `env()` 로
+   * 적어야 기기마다 맞는다. 자바스크립트로 잰 `tabBarH` 는 지도 엔진에만 준다(숫자가 필요한
+   * 쪽). 두 값이 한 프레임 어긋나도 지도는 이미 이 선 위를 그리고 있어 티가 안 난다.
+   */
+  const navBottom = `calc(var(--spacing-tabbar) + env(safe-area-inset-bottom, 0px) + ${playerH}px - var(--radius-sheet))`;
+  /**
+   * **html 에 심는다** (S15P21A405-417). 예전에는 아래 `<div>` 에 인라인으로 걸었는데, 하단 탭이
+   * 여는 하위 화면(`panel-screen.tsx`)은 이 컴포넌트 바깥에 그려져서 그 변수를 못 봤다.
+   * 값은 여전히 `max-tablet:` 안에서만 읽히므로 넓은 화면은 한 픽셀도 안 바뀐다.
+   */
+  useEffect(() => {
+    document.documentElement.style.setProperty("--nav-bottom", navBottom);
+  }, [navBottom]);
+  /**
+   * 재생바는 네비 뒤로 모서리 반경만큼 내려가 있다 — 잰 높이에 그 몫이 겹쳐 들어 있어 뺀다 (S15P21A405-703).
+   *
+   * **폰에서 시트가 떠 있으면 그 높이도 가린 것으로 친다** (S15P21A405-703). 별을 누르면 시트가 2 단으로
+   * 올라오는데, 가운데 맞춤이 시트를 모르면 누른 별이 시트 뒤에 깔린다. 엔진은 가운데 고정 중이면
+   * 가림폭이 바뀔 때 그 별을 새 가운데로 따라가고(`centerLock`), 손으로 밀면 고정이 풀리므로
+   * 드래그로 1 단에 내려앉을 때 지도가 손 밑에서 미끄러지지 않는다.
+   */
+  // 단 높이를 내용이 정한 시트는 그 값을 쓴다 — 1 단 `use-sheet-peek`, 2·3 단 `use-sheet-stop`
+  const measured = snap === 1 ? sheetPeek : sheetStop;
+  const sheetH = narrow && panelOpen ? (measured ?? SHEET_SNAP_PX[snap]) : 0;
+  const occludedBottom = narrow ? tabBarH + playerH - SHEET_RADIUS_PX + sheetH : HUD_OCCLUSION.bottom;
+  /**
+   * 폰의 윗변은 **레이어 설명 아래끝**이다 (S15P21A405-703). 누른 별이 설명 아래 ~ 시트 윗끝 사이
+   * 가운데로 온다. 데스크톱은 윗줄만 비키면 된다 — 브랜드가 좌상단 모서리에 작게 있고 옆이 비어 있다.
+   */
+  const brandBottom = useBrandBottom(HUD_OCCLUSION.top);
+  const occludedTop = narrow ? brandBottom : HUD_OCCLUSION.top;
+  const occlusion = useMemo<Occlusion>(
+    () => ({ top: occludedTop, right: occludedRight, bottom: occludedBottom, left: 0 }),
+    [occludedTop, occludedRight, occludedBottom],
+  );
 
   return (
-    <div className="fixed inset-0 overflow-hidden bg-void text-ink">
-      <MapView occludedRight={occludedRight} />
+    /*
+      **`fixed` 가 아니라 `absolute` 다** (S15P21A405-703). `fixed` 는 z 가 없어도 늘 제 쌓임 맥락을 만들어서,
+      안에 든 재생바(z-21)가 바깥의 탭 화면(`panel-screen`) 위로 못 나왔다 — 안에서 z 를 아무리 올려도
+      판째로 아래에 깔렸다. `absolute` 는 z 가 없으면 맥락을 안 만들어, 안의 z 가 화면 전체 순서에 그대로
+      선다: **네비(23) > 재생바(21) > 탭 화면(20) > 지도**. html·body 가 화면 높이에 `overflow: hidden` 이라
+      자리는 `fixed` 와 같다. 토스트(30)·확인 팝업(70)도 이제 네비 위로 올라온다.
+    */
+    <div className="absolute inset-0 overflow-hidden bg-void text-ink">
+      <MapView occlusion={occlusion} />
+      {/*
+        축 라벨은 지도 바로 위, 나머지 HUD 아래다 — 배경처럼 깔려야 한다.
+        **폰에서는 그리지 않는다** (S15P21A405-695, 사용자 결정). 아래 라벨은 탭바·재생바에 덮이고 긴 라벨은
+        잘렸다. 축 뜻은 겹 전환 자막과 곡 상세의 소리 특징에서 계속 보인다
+      */}
+      {!narrow && <MapAxisLabels occlusion={occlusion} />}
+      {/* 폰 윗줄 흰 아이콘 뒤의 옅은 그늘 (S15P21A405-703) — 폰에서만 보인다 */}
+      <TopScrim />
       <Brand />
       {/* 여정 만들기 중에는 검색바가 확장 패널로 바뀐다 (JOURNEY-01).
-          검색창과 우측 패널은 동시에 뜨지 않는다 — 패널이 열려 있으면 검색은 작은 버튼으로 접힌다 */}
-      {composerOpen ? <JourneyComposer /> : panelOpen ? <SearchOpenButton /> : <SearchBar />}
-      <HelpButton />
-      {FEATURES.social && <FollowBanner />}
+          검색창은 스스로 접혔다 펴진다 — 펴질 때 우측 패널을 닫는다 (S15P21A405-440) */}
+      {composerOpen ? <JourneyComposer /> : <SearchBar />}
+      {features.social && <FollowBanner />}
       <GhostBanner />
       <Rail />
+      {/* 지도 탭에서만 나오는 동작(주변 탐색·여정) — 폰 전용 (S15P21A405-417) */}
+      <MapActions />
       {panelOpen && <RightPanel />}
       <MinimapPanel />
       <BottomBar />
-      {FEATURES.social && <ReactionButton />}
       {overlay}
+      {/* 바로재생을 모르는 사람에게 문맥마다 한 번 짚어 준다 (S15P21A405-393). 조작은 막지 않는다.
+          **지금은 스위치로 내려 둔 상태다** (S15P21A405-636) — `FEATURES.playHint` 참고 */}
+      {features.playHint && <PlayHint />}
+      {/* 이벤트(별자리 콘테스트) — 우측 패널이 아니라 화면 대부분을 덮는 모달 (S15P21A405-602). body 에 포털로 그린다 */}
+      {features.contest && <ContestModal />}
       <Toast />
       <ConfirmDialog />
-      {/* 설문 — NEXT_PUBLIC_SURVEY_ENABLED 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
+      {/* 설문 — NEXT_PUBLIC_TEST_TOOLS(빌드) + ody:survey-mode(브라우저) 로 켠다. 걷어내는 법은 survey-gate.tsx */}{/* REMOVE-WITH-SURVEY */}
       <SurveyGate />{/* REMOVE-WITH-SURVEY */}
     </div>
   );

@@ -20,19 +20,23 @@ interface TrackRowProps {
   onClick?: () => void;
 }
 
-/** .item — 곡 한 줄 컴포넌트. 플레이리스트/여정/가까운 곡 목록 등에 공통 사용 */
+/**
+ * .item — 곡 한 줄 컴포넌트. 플레이리스트/여정/가까운 곡 목록 등에 공통 사용.
+ * 줄 전체가 `group` 이라 `actions` 는 `group-hover:` 로 호버에만 드러낼 수 있다.
+ */
 export default function TrackRow({ title, artist, index, duration, meta, right, active = false, dotColor, actions, onClick }: TrackRowProps) {
   return (
     <div
       role={onClick ? "button" : undefined}
       tabIndex={onClick ? 0 : undefined}
       onClick={onClick}
-      onKeyDown={onClick ? (e) => e.key === "Enter" && onClick() : undefined}
-      className={`flex w-full items-center gap-2.5 rounded-box-sm border px-[9px] py-2 text-left transition-colors duration-fast ${
+      // 안의 액션 버튼에서 올라온 Enter 까지 줄 클릭으로 세면, 재생 버튼 하나에 상세까지 같이 열린다
+      onKeyDown={onClick ? (e) => e.target === e.currentTarget && e.key === "Enter" && onClick() : undefined}
+      className={`group flex w-full items-center gap-2.5 rounded-box-sm border px-[9px] py-2 text-left transition-colors duration-fast ${
         active ? "border-teal/30 bg-teal/[.08]" : "border-transparent"
       } ${onClick ? "cursor-pointer hover:border-line hover:bg-white/[.055]" : ""}`}
     >
-      {index != null && <span className="num w-4 shrink-0 text-right text-[10px] text-ink-4">{index}</span>}
+      {index != null && <span className="num w-4 shrink-0 text-right text-[12.5px] text-ink-4">{index}</span>}
       {dotColor && <span className="h-[7px] w-[7px] shrink-0 rounded-pill" style={{ background: dotColor, boxShadow: `0 0 8px ${dotColor}` }} />}
       <div className="min-w-0 flex-1">
         <p className="truncate text-sm leading-[1.3]">{title}</p>
@@ -42,9 +46,9 @@ export default function TrackRow({ title, artist, index, duration, meta, right, 
         </p>
       </div>
       {right != null ? (
-        <span className="num shrink-0 text-right text-[10px] leading-[1.45] text-ink-3">{right}</span>
+        <span className="num shrink-0 text-right text-[12.5px] leading-[1.45] text-ink-3">{right}</span>
       ) : duration != null ? (
-        <span className="num shrink-0 text-[10px] text-ink-3">{formatDuration(duration)}</span>
+        <span className="num shrink-0 text-[12.5px] text-ink-3">{formatDuration(duration)}</span>
       ) : null}
       {actions && <div className="flex shrink-0 items-center gap-1">{actions}</div>}
     </div>

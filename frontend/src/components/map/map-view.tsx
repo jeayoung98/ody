@@ -668,8 +668,12 @@ export default function MapView({ occlusion }: MapViewProps) {
            * 열린 패널이 지도를 376px 가리고 있으므로 자리를 비켜 준다. 누르기와 드래그를
            * 가르는 이 기준을 그대로 쓰는 이유는, 별을 누르려다 손이 떨린 정도로 접히면
            * 안 되기 때문이다. 닫지는 않는다 — 별자리도 목록도 그대로 살아 있다.
+           *
+           * **별자리·주변 탐색 뷰에서는 접지 않는다** (S15P21A405-708, 사용자 결정). 거기서 끄는 것은
+           * 지도가 아니라 별자리·탐색 별 뷰이고, 패널의 목록을 옆에 두고 보며 쓰는 화면이다.
            */
-          usePanelStore.getState().collapse();
+          const overlay = useMapStore.getState().viewMode;
+          if (overlay !== "constellation" && overlay !== "nearby") usePanelStore.getState().collapse();
         }
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)

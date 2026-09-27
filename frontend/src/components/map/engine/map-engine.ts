@@ -3,6 +3,7 @@ import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
 import { arcBetween, atArc, type Arc } from "./arc";
+import { ShipTurn } from "./ship-turn";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
 import { approxTextWidth, separateLabels, type LabelBox } from "./probe-layout";
@@ -287,6 +288,8 @@ export class MapEngine {
    * a = 출발, b = 도착, c = 곡선 제어점, t0 = 시작 시각
    */
   meFlight: { ax: number; ay: number; bx: number; by: number; cx: number; cy: number; t0: number } | null = null;
+  /** 우주선 기수를 돌려서 바꾼다 — 내 것과 남의 것이 같은 규칙을 쓴다 (S15P21A405-709, `ship-turn.ts`) */
+  readonly shipTurn = new ShipTurn();
   /**
    * 주변 탐색 고리 **안에서의** 이동 — 정찰 (S15P21A405-288). 고리 곡은 실제 좌표가 아니라 연출 자리에
    * 그려지므로 월드 비행(meFlight)으로는 못 간다. 출발한 **화면 자리**만 적어 두고 도착 자리는 매 프레임

@@ -1005,10 +1005,20 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    * 예전에는 내가 따라갈 때만 우주선 뒤에 줄이 섰다 — 인솔자 쪽은 제 선단을 볼 길이 없어서
    * 혼자 다니는 것과 구분이 안 됐다. 그리는 모양은 따라갈 때와 같고 '나' 자리만 다르다.
    *
-   * 기수는 **날아온 방향**을 쓴다. 서 있을 때는 방향이랄 것이 없으므로 위를 본다.
+   * 기수는 **날아가는 방향**을 쓰고, 도착하면 **날아온 방향을 그대로 본다** (S15P21A405-709).
+   * 예전에는 서 있을 때 방향이 없다고 보고 위로 돌렸다 — 도착할 때마다 기수가 휙 들렸다.
+   * 방향이 바뀔 때는 `shipTurn` 이 돌려 준다. 출발 직후처럼 아직 거의 안 움직였으면 지나온 자리로는
+   * 방향을 잴 수 없어서, 그때는 도착점 쪽을 본다.
    */
   if (e.myRiders > 0) {
-    const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    let target: number | null = null;
+    if (from) {
+      const fl = e.meFlight;
+      const to = fl ? e.worldToScreen(fl.bx, fl.by) : null;
+      const [dx, dy] = Math.hypot(px - from.px, py - from.py) > 2 || !to ? [px - from.px, py - from.py] : [to.px - from.px, to.py - from.py];
+      if (Math.hypot(dx, dy) > 1e-3) target = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+    const ang = e.shipTurn.step("me", target, e.time * 1000);
     // 나는 조종석에 있다 — 줄에는 따라오는 사람만 선다 (S15P21A405-676)
     drawQueue(g, px, py, ME_SHIP_R, ang, e.time, { me: null, riders: e.myRiderUsers, count: e.myRiders }, e.myQueueScreen);
     drawShip(g, px, py, ME_SHIP_R, ang, e.time);

@@ -55,6 +55,23 @@ test("ELEVEN 은 아이브/IVE 어느 표기로도 잡힌다", () => {
   assert.equal(matchDemoSong(want, [{ id: 21, title: "Eleven", artist: "IVE (아이브)" }])?.id, 21);
 });
 
+test("아티스트는 낱말로 맞춘다 — IVE 가 Ancient River 의 r-ive-r 에 걸리지 않는다 (시연에서 실제로 났던 것)", () => {
+  const want = { title: "ELEVEN", artist: ["아이브", "IVE"] };
+  const items = [
+    { id: 31, title: "ELEVEN", artist: "Ancient River" },
+    { id: 32, title: "ELEVEN", artist: "IVE" },
+  ];
+  assert.equal(matchDemoSong(want, items)?.id, 32, "앞에 있는 Ancient River 곡을 집으면 안 된다");
+  // 괄호·빈칸은 경계다 — 표기가 섞여도 잡힌다
+  assert.equal(matchDemoSong(want, [{ id: 33, title: "ELEVEN", artist: "IVE (아이브)" }])?.id, 33);
+  assert.equal(matchDemoSong({ title: "REDRED", artist: "CORTIS" }, [{ id: 34, title: "REDRED", artist: "CORTIS(코르티스)" }])?.id, 34);
+});
+
+test("ELEVEN 은 id 로 고정한다 — 검색하지 않으니 동명 곡으로 샐 수 없다", () => {
+  const eleven = DEMO_SONGS.find((s) => s.title === "ELEVEN");
+  assert.equal(eleven?.id, 10000940);
+});
+
 test("시연 곡 목록은 제목이 비어 있지 않다", () => {
   assert.ok(DEMO_SONGS.length >= 1);
   for (const s of DEMO_SONGS) assert.ok(s.title.trim().length > 0);

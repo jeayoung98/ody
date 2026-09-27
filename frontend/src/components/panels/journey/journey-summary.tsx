@@ -12,7 +12,8 @@ import { usePlayerStore } from "@/stores/use-player-store";
 import type { JourneyRoute } from "@/types";
 
 /**
- * 여정 패널 바닥 — 총 재생 시간 · 경로 지우기 · 순차 재생 (PATH-02).
+ * 여정 재생 줄 — 총 재생 시간 · 경로 지우기 · 순차 재생 (PATH-02).
+ * 넓은 화면은 패널 바닥에, 폰은 출발·도착 바로 밑에 선다 (`journey-top`, S15P21A405-714).
  * 경로를 **만드는** 버튼은 여기 없다. 지점 지정과 경로 생성은 확장 검색창에서만 한다 (JOURNEY-01).
  */
 export default function JourneySummary({ route }: { route: JourneyRoute | null }) {

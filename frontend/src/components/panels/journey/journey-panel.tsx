@@ -4,15 +4,16 @@ import { useEffect } from "react";
 import Box from "@/components/common/box";
 import { NO_GENRE_ID } from "@/constants";
 import { useJourneyRouteQuery } from "@/hooks/queries/use-journey-route-query";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import PanelBackButton from "../panel-back-button";
 import PanelCloseButton from "../panel-close-button";
 import JourneyEmptyPrompt from "./journey-empty-prompt";
-import JourneyEndpoints from "./journey-endpoints";
 import JourneySkeleton from "./journey-skeleton";
 import JourneyStopList from "./journey-stop-list";
 import JourneySummary from "./journey-summary";
+import JourneyTop from "./journey-top";
 import { analyticsContext, trackOnce } from "@/lib/analytics/client";
 import { journeyResult } from "@/lib/analytics/flows";
 
@@ -56,15 +57,17 @@ export default function JourneyPanel() {
   }, [stops, routeStart, routeEnd, showConstellation]);
 
   const hasRoute = isRouteRequested && !!route.data;
+  // 폰은 재생 줄을 출발·도착 밑으로 올린다 (`journey-top`, S15P21A405-714) — 바닥 줄은 넓은 화면에만 남긴다
+  const narrow = useIsNarrow();
 
   return (
-    <Box lead={<PanelBackButton />} title="여정" actions={<PanelCloseButton />} footer={<JourneySummary route={route.data ?? null} />}>
+    <Box lead={<PanelBackButton />} title="여정" actions={<PanelCloseButton />} footer={narrow ? undefined : <JourneySummary route={route.data ?? null} />}>
       {!isRouteRequested && <JourneyEmptyPrompt />}
       {isRouteRequested && route.isPending && <JourneySkeleton />}
-      {hasRoute && (
+      {hasRoute && route.data && (
         <>
-          <JourneyEndpoints />
-          <JourneyStopList route={route.data ?? null} />
+          <JourneyTop route={route.data} />
+          <JourneyStopList route={route.data} />
         </>
       )}
     </Box>

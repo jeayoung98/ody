@@ -21,9 +21,36 @@ export interface LabelBox {
   fixed?: boolean;
 }
 
-/** 겹친 쌍이 없어질 때까지(또는 `maxIter` 번) 민 뒤의 별 자리 */
-export function separateLabels(boxes: readonly LabelBox[], gap: number, maxIter = 160): Map<number, { x: number; y: number }> {
+/**
+ * 라벨 묶음이 들어가야 하는 사각형 (고리 중심 기준 px) — **폰에서만 준다** (S15P21A405-715).
+ *
+ * 미는 계산이 화면을 몰라서, 좁은 화면에서는 끝 라벨이 밖으로 밀려나거나 시트 밑에 깔렸다. 주면 밀 때마다
+ * 이 안으로 되돌린다. 넓은 화면은 고리가 화면보다 한참 작아 줄 이유가 없고, 안 주면 예전과 똑같이 민다.
+ */
+export interface LabelBounds {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+}
+
+/** 상자를 사각형 안으로 되돌린다. 사각형보다 큰 쪽 축은 가운데에 둔다 — 어느 끝에 붙여도 반은 잘린다 */
+function keepInside(b: LabelBox, r: LabelBounds) {
+  const minX = r.x0 + b.w / 2;
+  const maxX = r.x1 - b.w / 2;
+  b.x = minX > maxX ? (r.x0 + r.x1) / 2 : Math.min(maxX, Math.max(minX, b.x));
+  const minY = r.y0 - b.top;
+  const maxY = r.y1 - b.bottom;
+  b.y = minY > maxY ? (minY + maxY) / 2 : Math.min(maxY, Math.max(minY, b.y));
+}
+
+/** 겹친 쌍이 없어질 때까지(또는 `maxIter` 번) 민 뒤의 별 자리. `bounds` 를 주면 그 안에 가둔다 */
+export function separateLabels(boxes: readonly LabelBox[], gap: number, maxIter = 160, bounds?: LabelBounds): Map<number, { x: number; y: number }> {
   const p = boxes.map((b) => ({ ...b }));
+  const confine = () => {
+    if (bounds) for (const b of p) if (!b.fixed) keepInside(b, bounds);
+  };
+  confine();
   for (let it = 0; it < maxIter; it++) {
     let moved = false;
     for (let i = 0; i < p.length; i++) {
@@ -51,6 +78,8 @@ export function separateLabels(boxes: readonly LabelBox[], gap: number, maxIter 
         }
       }
     }
+    // 민 자리가 밖으로 나갔으면 되돌린다 — 되돌린 자리가 다시 겹치면 다음 바퀴가 또 민다
+    confine();
     if (!moved) break;
   }
   return new Map(p.map((b) => [b.id, { x: b.x, y: b.y }]));

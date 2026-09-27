@@ -613,6 +613,22 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
   // 앞자리일수록 먼저 자리를 잡는다. 같은 등급이면 여정 순서대로
   const rank = (i: number) => (i === cursor ? 0 : pts[i].id === e.selectedId ? 1 : pts[i].id === e.hoverId ? 2 : 3);
   const order = pts.map((_, i) => i).sort((a, b) => rank(a) - rank(b) || a - b);
+  /**
+   * **폰은 라벨을 남은 화면 안에서 고른다** (S15P21A405-715). 자리 넷을 먼저 안으로 당겨 두고 그중 빈 자리를 쓴다 —
+   * 끝 별의 라벨이 화면 밖이나 시트 밑으로 나가 잘렸다. 당긴 만큼 별에서 조금 비켜 서지만 읽히는 쪽이 낫다.
+   * 넓은 화면은 그대로다
+   */
+  const fr = e.freeRect();
+  const em = CONSTELLATION.labelEdgePx;
+  const narrow = e.isNarrow();
+  const inside = <T extends { x0: number; y0: number; x1: number; y1: number }>(q: T): T => {
+    if (!narrow) return q;
+    const w = q.x1 - q.x0;
+    const h = q.y1 - q.y0;
+    const x0 = Math.min(Math.max(q.x0, fr.x0 + em), fr.x1 - em - w);
+    const y0 = Math.min(Math.max(q.y0, fr.y0 + em), fr.y1 - em - h);
+    return { ...q, x0, y0, x1: x0 + w, y1: y0 + h };
+  };
   for (const i of order) {
     const p = pts[i];
     const s = e.songs[e.songs.findIndex((x) => x.musicId === p.id)];
@@ -625,7 +641,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
       { x0: p.x - w / 2, y0: p.y - 14 - H },
       { x0: p.x + 14, y0: p.y - H / 2 },
       { x0: p.x - 14 - w, y0: p.y - H / 2 },
-    ].map((q) => ({ ...q, x1: q.x0 + w, y1: q.y0 + H }));
+    ].map((q) => inside({ ...q, x1: q.x0 + w, y1: q.y0 + H }));
     // 읽혀야 하는 라벨은 자리가 없어도 기본 자리에 그린다 — 안 보이는 것보다 겹치는 게 낫다
     const box = spots.find((q) => !hits(q)) ?? (must ? spots[0] : null);
     if (!box) continue;
@@ -769,24 +785,31 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   /** 라벨 글씨 배율 — 확대의 일부만 따라간다 (S15P21A405-688) */
   const sc = e.probeLabelScale();
+  /**
+   * 폰은 글줄 폭에 상한이 있다 (S15P21A405-715) — 넓은 화면은 `Infinity` 라 그대로 다 쓴다(697).
+   * 엔진이 같은 상한으로 라벨 폭을 세므로(`laidOutRing`) 줄인 글과 민 자리가 맞는다
+   */
+  const cap = e.probeLabelCap();
+  const clip = (text: string, max: number) => (Number.isFinite(max) ? fitText(g, text, max * sc) : text);
   const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
     // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
     const L = PROBE_LABEL;
     g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
-    // 제목은 자르지 않는다 — 길면 길게 다 보이고, 겹치지 않게 별 자리를 엔진이 민다 (S15P21A405-697)
-    const tw = g.measureText(s.title).width;
+    // 제목은 자르지 않는다 — 길면 길게 다 보이고, 겹치지 않게 별 자리를 엔진이 민다 (S15P21A405-697). 폰만 상한까지
+    const title = clip(s.title, cap.line);
+    const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
     roundRect(g, x - tw / 2 - 6 * sc, y + L.boxTop * sc, tw + 12 * sc, L.boxH * sc, 5 * sc);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(s.title, x, y + (L.boxTop + L.boxH / 2) * sc);
+    g.fillText(title, x, y + (L.boxTop + L.boxH / 2) * sc);
     if (sub) {
       // 제목 상자와 가수 줄 사이를 띄운다 — 붙어 있으면 한 덩어리로 읽힌다 (S15P21A405-649 · 688 · 697)
       g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
-      g.fillText(sub, x, y + L.subY * sc);
+      g.fillText(clip(sub, cap.line), x, y + L.subY * sc);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
@@ -861,15 +884,17 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   // 라벨은 뛰는 링(rr)이 아니라 고정 반지름에 단다 — 링을 따라가면 제목·안내 줄이 출렁인다 (S15P21A405-697)
   const lr = L.centerRingR;
   g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
-  const tw = g.measureText(song.title).width;
+  // 가운데 제목도 폰에서는 상한까지 (S15P21A405-715) — 하나뿐이라 이웃보다 넓게 둔다
+  const centerTitle = clip(song.title, cap.center);
+  const tw = g.measureText(centerTitle).width;
   g.fillStyle = MAP_COLORS.labelBg;
   roundRect(g, tx - tw / 2 - 7 * sc, ty + lr + L.centerGap * sc, tw + 14 * sc, L.centerBoxH * sc, 6 * sc);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
-  g.fillText(song.title, tx, ty + lr + (L.centerGap + L.centerBoxH / 2) * sc);
+  g.fillText(centerTitle, tx, ty + lr + (L.centerGap + L.centerBoxH / 2) * sc);
   g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
   g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + lr + L.centerSubY * sc);
+  g.fillText(clip(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, cap.center), tx, ty + lr + L.centerSubY * sc);
 
   // 선택한 곡의 라벨 — 모든 라벨 위에. 지금 고리의 이웃이거나 이전 고리의 중심이다
   const sel = e.selectedId;

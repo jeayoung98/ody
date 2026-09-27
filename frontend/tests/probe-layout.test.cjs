@@ -61,6 +61,45 @@ test("이미 떨어져 있으면 건드리지 않는다", () => {
   assert.deepEqual(pos.get(2), { x: 300, y: 0 });
 });
 
+/**
+ * **폰에서는 남은 화면 안에 가둔다** (S15P21A405-715). 360px 폰 크기의 경계에서 고리 한 바퀴를 민다 —
+ * 틀리면 끝 라벨이 화면 밖이나 시트 밑으로 나가 잘린다.
+ */
+const PHONE = { x0: -172, x1: 172, y0: -187, y1: 187 };
+const inside = (b, p, r) =>
+  p.x - b.w / 2 >= r.x0 - 1e-6 && p.x + b.w / 2 <= r.x1 + 1e-6 && p.y + b.top >= r.y0 - 1e-6 && p.y + b.bottom <= r.y1 + 1e-6;
+
+test("경계를 주면 고리 한 바퀴가 다 그 안에 머문다", () => {
+  const boxes = [{ id: 0, x: 0, y: 0, w: 200, top: -26, bottom: 66, fixed: true }];
+  for (let k = 0; k < 10; k++) {
+    const ang = -Math.PI / 2 + (k / 10) * Math.PI * 2;
+    const R = k % 2 === 0 ? 0.58 * 130 : 130;
+    boxes.push({ id: k + 1, x: Math.cos(ang) * R, y: Math.sin(ang) * R, w: k % 3 === 0 ? 163 : 110, top: -10, bottom: 66 });
+  }
+  const pos = separateLabels(boxes, GAP, undefined, PHONE);
+  for (const b of boxes.slice(1)) assert.ok(inside(b, pos.get(b.id), PHONE), `${b.id} 가 경계 밖으로 나갔다 ${JSON.stringify(pos.get(b.id))}`);
+});
+
+test("경계보다 넓은 상자는 가운데에 둔다 — 어느 끝에 붙여도 반은 잘린다", () => {
+  const boxes = [{ id: 1, x: 150, y: 0, w: 400, top: -10, bottom: 66 }];
+  assert.equal(separateLabels(boxes, GAP, undefined, PHONE).get(1).x, 0);
+});
+
+test("고정된 가운데 라벨은 경계가 있어도 안 움직인다", () => {
+  const boxes = [
+    { id: 0, x: 0, y: 0, w: 200, top: -26, bottom: 66, fixed: true },
+    { id: 1, x: 170, y: 0, w: 120, top: -10, bottom: 66 },
+  ];
+  const pos = separateLabels(boxes, GAP, undefined, PHONE);
+  assert.deepEqual(pos.get(0), { x: 0, y: 0 });
+  assert.ok(inside(boxes[1], pos.get(1), PHONE));
+});
+
+test("경계를 안 주면 예전처럼 밖으로도 민다 — 넓은 화면은 그대로다", () => {
+  const boxes = [{ id: 1, x: 300, y: 0, w: 200, top: -10, bottom: 66 }];
+  assert.deepEqual(separateLabels(boxes, GAP).get(1), { x: 300, y: 0 });
+});
+
 test("글자 폭 어림 — 한글은 영문보다 넓게 잡는다", () => {
   assert.ok(approxTextWidth("가나다", 13) > approxTextWidth("abc", 13));
   assert.equal(approxTextWidth("", 13), 0);

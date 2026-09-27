@@ -1,4 +1,5 @@
 import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HOP_LINK, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -1123,20 +1124,37 @@ export class MapEngine {
    */
   private laidOutRing(r: ProbeRing): Map<number, { x: number; y: number }> {
     const R = this.ringR();
-    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}`;
+    const f = this.freeRect();
+    const narrow = this.isNarrow();
+    // 폰은 남은 화면 안에 가두므로 그 사각형이 바뀌어도(시트 단) 다시 민다
+    const box = narrow ? `${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}` : "";
+    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}|${box}`;
     if (this.ringLayout?.key === key) return this.ringLayout.pos;
     const L = PROBE_LABEL;
+    const cap = this.probeLabelCap();
     const titleOf = (id: number) => this.pointOf(id)?.title ?? "";
     const artistOf = (id: number) => this.pointOf(id)?.artist ?? "";
+    // 그리는 쪽(`draw-map`)이 같은 상한으로 줄여 그리므로 폭도 상한까지만 센다
+    const lineW = (text: string, px: number, mono = false, max = cap.line) => Math.min(approxTextWidth(text, px, mono), max);
     const boxes: LabelBox[] = r.ids.map((id, rank) => {
       const at = this.polarSlot(r, rank, R);
-      const w = Math.max(approxTextWidth(titleOf(id), L.titlePx) + 12, approxTextWidth(`#${rank + 1} · ${artistOf(id)}`, L.subPx, true));
+      const w = Math.max(lineW(titleOf(id), L.titlePx) + 12, lineW(`#${rank + 1} · ${artistOf(id)}`, L.subPx, true));
       return { id, x: at.x, y: at.y, w, top: -10, bottom: HOP_LINK.dy + HOP_LINK.h / 2 };
     });
     // 가운데 곡: 링부터 안내 줄 아래까지. 폭은 제목과 안내 줄 중 넓은 쪽
-    const cw = Math.max(approxTextWidth(titleOf(r.centerId), L.centerTitlePx) + 14, approxTextWidth(`NEARBY · 유사도 상위 ${r.ids.length}곡 · ${LAYER_NAMES[this.layer]}`, L.centerSubPx, true));
+    const cw = Math.max(
+      lineW(titleOf(r.centerId), L.centerTitlePx, false, cap.center) + 14,
+      lineW(`NEARBY · 유사도 상위 ${r.ids.length}곡 · ${LAYER_NAMES[this.layer]}`, L.centerSubPx, true, cap.center),
+    );
     boxes.push({ id: r.centerId, x: 0, y: 0, w: cw, top: -L.centerRingR - 4, bottom: L.centerRingR + L.centerSubY + 8, fixed: true });
-    const pos = separateLabels(boxes, L.minGapPx);
+    /**
+     * **폰은 남은 화면 안에 가둔다** (S15P21A405-715). 멈춘 고리의 중심은 남은 화면 한가운데라(`probeBasePos`)
+     * 경계는 그 기준이다. 고리 크기(`ringR`)는 그대로 두고 끝 라벨만 안으로 당긴다 — 고리를 줄여 맞추면 360px 폰에서
+     * 반지름이 130 → 97px 로 준다(라벨 반폭만큼, 계산). 그만큼 이웃이 가운데로 뭉친다
+     */
+    const m = L.narrowEdgePx;
+    const bounds = narrow ? { x0: f.x0 + m - f.cx, x1: f.x1 - m - f.cx, y0: f.y0 + m - f.cy, y1: f.y1 - m - f.cy } : undefined;
+    const pos = separateLabels(boxes, L.minGapPx, undefined, bounds);
     pos.delete(r.centerId);
     this.ringLayout = { key, pos };
     return pos;
@@ -1183,6 +1201,22 @@ export class MapEngine {
   ringK(r: ProbeRing, now = performance.now()) {
     if (r.leavingAt) return 1 - easeInOut(Math.min(1, (now - r.leavingAt) / PROBE.exitMs));
     return easeInOut(Math.min(1, (now - r.t0) / PROBE.enterMs));
+  }
+
+  /** 좁은 화면(폰·태블릿)인가 — 라벨을 화면 안에 가두는 규칙이 여기서 갈린다 (S15P21A405-715) */
+  isNarrow(): boolean {
+    return this.W < BREAKPOINTS.tablet;
+  }
+
+  /**
+   * 주변 탐색 글줄 폭 상한(px, 1 배) — **폰만** (S15P21A405-715). 넓은 화면은 자르지 않는다(697).
+   * 엔진은 이 값으로 라벨 폭을 세고, 그리는 쪽(`draw-map`)은 같은 값으로 줄여 그린다
+   */
+  probeLabelCap(): { line: number; center: number } {
+    if (!this.isNarrow()) return { line: Infinity, center: Infinity };
+    const f = this.freeRect();
+    const w = f.x1 - f.x0;
+    return { line: w * PROBE_LABEL.narrowCapRatio, center: w * PROBE_LABEL.narrowCenterCapRatio };
   }
 
   /** 주변 탐색 라벨 글씨 배율 — 확대의 일부만 따라간다 (`PROBE_LABEL.zoomGain`, S15P21A405-688) */
@@ -1316,7 +1350,8 @@ export class MapEngine {
     const b = this.constellation?.box;
     const f = this.constellationRect();
     if (!b) return { s: 1, bx: 0, by: 0 };
-    const p = CONSTELLATION.pad;
+    // 폰은 여백을 넓힌다 — 끝 별의 라벨이 화면 밖으로 반쯤 나갔다 (S15P21A405-715)
+    const p = this.isNarrow() ? CONSTELLATION.padNarrow : CONSTELLATION.pad;
     const fw = f.x1 - f.x0;
     const fh = f.y1 - f.y0;
     // 점이 하나뿐이거나 일직선이면 그 축은 넓이가 0 이다 — 다른 축 배율만 남게 크게 잡는다

@@ -801,10 +801,23 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
    */
   const narrow = e.isNarrow();
   const subOf = (rank: number, s: Song) => (narrow ? null : `#${rank + 1} · ${s.artist ?? ""}`);
-  /** 링크 글씨 가운데 y. 폰에서 남은 화면 아래(시트 밑)로 나가면 별 위로 올린다 — 못 누르는 링크가 된다 */
-  const linkY = (y: number, sub: string | null) => {
+  /**
+   * 링크 글씨 가운데 y. 넓은 화면은 가수 줄 아래 한 자리다. **폰은 가수 줄 자리가 먼저고, 거기가 남은 화면 밖(시트 밑)이거나
+   * 다른 별을 덮으면 별 위로 올린다** (S15P21A405-715) — 시트 밑 링크는 못 누르고, 링크에 덮인 별도 못 누른다.
+   * 390px 에서 선택한 10위의 링크가 9위 별을 덮었다(실측). 둘 다 안 되면 화면 안인 쪽
+   */
+  const linkY = (id: number, x: number, y: number, sub: string | null, lw: number) => {
     const below = y + (sub || !narrow ? HOP_LINK.dy : L.subY) * sc;
-    return narrow && below + (HOP_LINK.h * sc) / 2 > f.y1 ? y - HOP_LINK.upDy * sc : below;
+    if (!narrow) return below;
+    const hh = (HOP_LINK.h * sc) / 2;
+    const hw = lw / 2 + HOP_LINK.padX;
+    const fits = (ly: number) => ly - hh >= f.y0 && ly + hh <= f.y1;
+    // 별은 선택 링(반지름 12)까지, 가운데 곡은 라벨을 다는 링까지 비켜야 덮지 않는다
+    const covers = (ly: number, sx: number, sy: number, r: number) => Math.abs(sx - x) < hw + r && Math.abs(sy - ly) < hh + r;
+    const clear = (ly: number) => !covers(ly, tx, ty, L.centerRingR) && !nodes.some((n) => n.cur && n.id !== id && covers(ly, n.x, n.y, 12));
+    const above = y - HOP_LINK.upDy * sc;
+    for (const ly of [below, above]) if (fits(ly) && clear(ly)) return ly;
+    return fits(below) ? below : above;
   };
   const LINK = "주변 보기 ›";
   const drawLabel = (x: number, y: number, s: Song, sub: string | null, a: number, link: boolean) => {
@@ -831,7 +844,7 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
       g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
       const lw = g.measureText(LINK).width;
-      const ly = linkY(y, sub);
+      const ly = linkY(s.musicId, x, y, sub, lw);
       g.fillText(LINK, x, ly);
       e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: ly - (HOP_LINK.h * sc) / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h * sc };
     }
@@ -861,8 +874,9 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
       }
       if (link) {
         g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
-        half = Math.max(half, g.measureText(LINK).width / 2 + HOP_LINK.padX);
-        const ly = linkY(y, sub);
+        const lw = g.measureText(LINK).width;
+        half = Math.max(half, lw / 2 + HOP_LINK.padX);
+        const ly = linkY(s.musicId, x, y, sub, lw);
         y0 = Math.min(y0, ly - (HOP_LINK.h * sc) / 2);
         y1 = Math.max(y1, ly + (HOP_LINK.h * sc) / 2);
       }

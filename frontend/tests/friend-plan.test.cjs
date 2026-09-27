@@ -46,3 +46,10 @@ test("아무도 없으면 빈 배치를 그대로 쓴다", () => {
   assert.deepEqual(reusablePlan([], setOf()), []);
   assert.equal(reusablePlan([], setOf("a")), null, "없던 사람이 생겼다");
 });
+
+/** 탑승자가 생겨도 명단은 그대로다 — 우주선이 배지 숫자 속에 남으면 로켓이 안 보인다 (S15P21A405-718) */
+test("우주선이 남의 묶음 속이면 다시 정한다", () => {
+  assert.equal(reusablePlan(plan, setOf("a", "b", "c", "d"), null, setOf("c")), null);
+  assert.deepEqual(reusablePlan(plan, setOf("a", "b", "c", "d"), null, setOf("a")), plan, "우주선이 이미 대표면 그대로 쓴다");
+  assert.deepEqual(reusablePlan(plan, setOf("a", "b", "c", "d"), null, setOf("d")), plan);
+});

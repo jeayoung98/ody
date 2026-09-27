@@ -10,6 +10,8 @@
  * 배율이 바뀌거나 명단이 바뀔 때만 다시 정한다.
  */
 
+const EMPTY: ReadonlySet<string> = new Set();
+
 /** 표식 하나와, 그 자리에 묶인 사람들 */
 export interface FriendPlanEntry {
   marker: string;
@@ -26,10 +28,20 @@ export interface FriendPlanEntry {
  * **인솔자는 반드시 제 표식이어야 한다** (S15P21A405-625). 묶여 있던 사람을 따라가기 시작하면
  * 명단은 그대로인데 그 사람이 남의 배지 숫자 속에 남아 **우주선이 화면에 없다.** 인솔자가 지난
  * 배치의 대표가 아니면 다시 정한다 — 새로 정할 때는 인솔자가 경합 밖이라 늘 제 모습으로 선다.
+ *
+ * **우주선(탑승자를 태운 사람)도 마찬가지다** (S15P21A405-718). `riderCount` 가 0→1 이 되는 것은 명단을 바꾸지
+ * 않아서, 그대로 두면 헬멧 뒤에 묶여 있던 사람이 우주선이 된 뒤에도 배지 숫자 속에 남는다. 우주선이 대표가
+ * 아닌 배치는 다시 정한다.
  */
-export function reusablePlan(plan: readonly FriendPlanEntry[] | null, present: ReadonlySet<string>, leader: string | null = null): FriendPlanEntry[] | null {
+export function reusablePlan(
+  plan: readonly FriendPlanEntry[] | null,
+  present: ReadonlySet<string>,
+  leader: string | null = null,
+  ships: ReadonlySet<string> = EMPTY,
+): FriendPlanEntry[] | null {
   if (!plan) return null;
   if (leader && !plan.some((entry) => entry.marker === leader)) return null;
+  if (ships.size && plan.some((entry) => entry.stacked.some((email) => ships.has(email)))) return null;
   let count = 0;
   for (const entry of plan) {
     if (!present.has(entry.marker)) return null;

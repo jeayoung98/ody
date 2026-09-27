@@ -8,7 +8,6 @@ import { useFeatures } from "@/hooks/use-features";
 import { PLAYBACK_BLOCKED } from "@/constants";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
-import { usePanelBack } from "@/hooks/use-panel-back";
 import { useMapStore } from "@/stores/use-map-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import PanelBackButton from "../panel-back-button";
@@ -69,12 +68,6 @@ export default function SongDetailPanel() {
   const elsewhere = useMapStore((s) => s.selectedMusicId === musicId && s.ghostMusicId === musicId);
   const bodyRef = useRef<HTMLDivElement>(null);
   /**
-   * 돌아갈 자리가 있으면 **패널 제목이 그 이름이 된다** (S15P21A405-384) — `곡 상세` 는 어느
-   * 곡을 보든 같은 말이라 자리를 내줘도 잃을 게 없고, 화살표 옆에 이름이 서야 어디로 가는지
-   * 눌러 보기 전에 안다.
-   */
-  const back = usePanelBack();
-  /**
    * 찾아봤는데 음원이 없는 곡 (S15P21A405-384).
    *
    * **아래를 통째로 접는다.** 못 듣는 곡을 두고 "이런 소리예요" 를 보여 주거나 "가장 비슷한
@@ -114,7 +107,12 @@ export default function SongDetailPanel() {
 
   return (
     <Box
-      title={back?.label ?? "곡 상세"}
+      /*
+        **제목은 늘 `곡 상세` 다** (S15P21A405-716, 사용자 결정) — 다른 패널처럼 제 이름을 두고, 돌아갈 곳은 ← 가 맡는다.
+        예전(S15P21A405-384)에는 돌아갈 곳이 있으면 제목을 그 이름으로 바꿨는데, 여정 경로의 곡을 지도에서 누르면 곡 상세
+        머리글이 "여정" 이라 여정 패널로 읽혔다. 이 패널만 그렇게 해서 다른 패널과도 어긋났다
+      */
+      title="곡 상세"
       lead={<PanelBackButton />}
       // 기능 코드(SONG-02) 자리를 신고 버튼에 내줬다 (S15P21A405-384) — 코드는 개발자만 읽는다
       actions={

@@ -1,4 +1,4 @@
-import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HOP_LINK, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { CONSTELLATION, DEMO_PIN, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HOP_LINK, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
@@ -407,6 +407,11 @@ export class MapEngine {
   private expandedStack: { email: string; since: number } | null = null;
   /** 이 레이어의 대표곡 (커버) */
   repIds = new Set<number>();
+  /**
+   * **시연 곡** (S15P21A405-717, `constants/demo-pins`). 모든 겹에서 상주로 남고 깊이가 최전면(`DEMO_PIN.z`)이며,
+   * `drawCovers` 가 개수·간격 규칙 밖에서 늘 커버로 그린다. 좌표는 `useDemoPins` 가 `adopt` 로 먼저 넣어 준다.
+   */
+  demoIds = new Set<number>();
   private repLayer = -1;
   /** 레이어 전환 시 커버·프로필 페이드. 모프 중 0으로, 새 레이어 데이터가 오면 1로 */
   coverAlpha = 0;
@@ -511,7 +516,7 @@ export class MapEngine {
     // 깊이는 별 크기 등급에서 나온다 — 큰 별이 가깝다(z>0). 크기와 같은 해시라 새로고침해도 같은 하늘이고,
     // 화면을 끌면 큰 별은 빨리, 작은 별은 천천히 지나가 겹겹의 원근으로 읽힌다 (S15P21A405-609)
     this.z = growF(this.z, this.N, keep);
-    for (let i = keep; i < this.N; i++) this.z[i] = (starMag(songs[i]) - 0.5) * 2;
+    for (let i = keep; i < this.N; i++) this.z[i] = this.demoIds.has(songs[i].musicId) ? DEMO_PIN.z : (starMag(songs[i]) - 0.5) * 2;
     this.pos = growF(this.pos, this.N * 2, keep * 2);
     this.from = growF(this.from, this.N * 2, keep * 2);
     this.to = growF(this.to, this.N * 2, keep * 2);
@@ -730,6 +735,11 @@ export class MapEngine {
   pointOf(musicId: number): MapPoint | null {
     const i = this.index.get(musicId);
     return i == null ? null : this.songs[i];
+  }
+
+  /** 곡 id 의 버퍼 인덱스. 그리기 쪽이 `pos`·`depthScale` 을 짚을 때 쓴다 (S15P21A405-717) */
+  indexOf(musicId: number): number | undefined {
+    return this.index.get(musicId);
   }
 
   /** 이 레이어의 대표곡 ID (앨범 커버로 띄우는 곡). 레이어마다 다르다 */
@@ -989,13 +999,15 @@ export class MapEngine {
      * 레이어 0 의 `residentMask` 는 `ghostOnly` 와 무관하게 전부 1 이다. 그래서 여기서만 켠다.
      * 파고든 겹에서는 **진짜로 이 겹 밖의 곡**이라 0 으로 둔다.
      */
-    if (this.layer === 0) {
-      for (let i = keep; i < this.N; i++) {
-        this.subset[i] = 1;
-        this.alpha[i] = 1;
-      }
-      this.rebuildAliveIdx();
+    let resident = false;
+    for (let i = keep; i < this.N; i++) {
+      // 시연 곡은 겹과 무관하게 상주다 (S15P21A405-717) — `setDemoIds` 가 먼저 불렸을 때의 길
+      if (this.layer !== 0 && !this.demoIds.has(this.songs[i].musicId)) continue;
+      this.subset[i] = 1;
+      this.alpha[i] = 1;
+      resident = true;
     }
+    if (resident) this.rebuildAliveIdx();
     this.project();
   }
 
@@ -2204,6 +2216,7 @@ export class MapEngine {
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
     this.keepPinned(ns, layer);
     this.keepMine(ns, layer);
+    this.keepDemo(ns);
     return ns;
   }
 
@@ -2875,6 +2888,40 @@ export class MapEngine {
     if (i != null) mask[i] = 1;
   }
 
+  /** 시연 곡은 어느 겹의 마스크에서도 빠지지 않는다 (S15P21A405-717). 좌표가 아직 없는(편입 전) 곡은 건너뛴다 */
+  private keepDemo(mask: Uint8Array) {
+    for (const id of this.demoIds) {
+      const i = this.index.get(id);
+      if (i != null) mask[i] = 1;
+    }
+  }
+
+  /**
+   * 시연 곡을 정한다 (S15P21A405-717). 좌표는 이미 `adopt` 로 들어와 있어야 한다 — 없는 곡은 id 만 기억해 두고
+   * 나중에 편입될 때 `allocate` 가 깊이를 맞춘다. 지금 겹 상주에 바로 넣고 깊이를 최전면으로 못 박는다.
+   * 전환 중이면 도착할 집합에도 넣는다 — 안 그러면 전환이 끝나는 순간 사라진다 (`hideSong` 과 같은 이유).
+   */
+  setDemoIds(ids: Iterable<number>) {
+    this.demoIds = new Set(ids);
+    let changed = false;
+    for (const id of this.demoIds) {
+      const i = this.index.get(id);
+      if (i == null) continue;
+      this.z[i] = DEMO_PIN.z;
+      if (this.subset[i] !== 1) {
+        this.subset[i] = 1;
+        this.alpha[i] = 1;
+        changed = true;
+      }
+      if (this.anim && this.anim.subset[i] !== 1) {
+        this.anim.subset[i] = 1;
+        this.aTo[i] = 1;
+      }
+    }
+    if (changed) this.rebuildAliveIdx();
+    this.project();
+  }
+
   /**
    * "내 위치로 가기" 로 도착한 자리에 '나'를 앉힌다.
    *
@@ -2926,6 +2973,8 @@ export class MapEngine {
         }
       }
     }
+    // 범위 밖이어도 시연 곡은 남는다 — 이 겹의 축에서 어디 있든 좌표는 있다 (S15P21A405-717)
+    this.keepDemo(m);
     return m;
   }
 
@@ -3848,6 +3897,7 @@ export class MapEngine {
   private residentMask(layer = this.layer) {
     const m = new Uint8Array(this.N);
     for (let i = 0; i < this.N; i++) m[i] = this.songs[i].ghostOnly && layer > 0 ? 0 : 1;
+    this.keepDemo(m);
     return m;
   }
 

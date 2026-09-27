@@ -1,4 +1,4 @@
-import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { CONSTELLATION, COVER_COUNT, DEMO_PIN, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { cullLabels, type LabelRect } from "../engine/probe-layout";
@@ -423,10 +423,24 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   const spaced = (i: number, picked: number[]) =>
     picked.every((j) => (e.pos[i * 2] - e.pos[j * 2]) ** 2 + (e.pos[i * 2 + 1] - e.pos[j * 2 + 1]) ** 2 >= gap2);
 
-  // ① 있던 커버를 먼저 지킨다 — 이게 반짝임을 막는 핵심이다
+  /**
+   * ⓪ **시연 곡은 규칙 밖이다** (S15P21A405-717, `constants/demo-pins`). 개수 상한·최소 간격·밀기 중 보류를 다
+   * 건너뛰고, 그림이 화면에 조금이라도 걸치면(`-KEEP`) 그린다. 다른 커버는 이들과 간격을 두어 비켜난다 —
+   * 상한도 시연 곡 수만큼 늘려 시연 곡이 일반 커버 자리를 잡아먹지 않게 한다.
+   */
+  const demo = new Set<number>();
   const picked: number[] = [];
+  for (const id of e.demoIds) {
+    const i = e.indexOf(id);
+    if (i == null || !usable(i)) continue;
+    demo.add(i);
+    picked.push(i);
+  }
+  const quota = n + demo.size;
+  // ① 있던 커버를 먼저 지킨다 — 이게 반짝임을 막는 핵심이다
   for (const i of coverIdx) {
-    if (picked.length >= n) break;
+    if (picked.length >= quota) break;
+    if (demo.has(i)) continue;
     if (usable(i) && spaced(i, picked)) picked.push(i);
   }
   /*
@@ -440,7 +454,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
    * 그래서 **화면을 커버 수만큼 칸으로 나누고 칸마다 하나씩** 집는다. 이미 커버가 있는 칸은
    * 건너뛰므로 새 커버는 늘 비어 있는 쪽으로 간다.
    */
-  if (picked.length < n && !panning) {
+  if (picked.length < quota && !panning) {
     const candidates = new Set<number>();
     for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
     /**
@@ -460,7 +474,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
      */
     const fill = spreadOrder(
       [...candidates]
-        .filter((i) => !picked.includes(i) && usable(i, true))
+        .filter((i) => !picked.includes(i) && !demo.has(i) && usable(i, true))
         .sort(byCoverPriority((i) => e.songs[i].albumMbid != null, (i) => e.songs[i].weight)),
       at,
       f,
@@ -470,7 +484,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     // 처음(들고 있던 게 없다)에는 한 번에 채운다. 그 뒤로는 한 칸씩만 — 위 주석 참고
     let room = coverIdx.length === 0 ? n : COVER_COUNT.fillPerFrame;
     for (const i of fill) {
-      if (picked.length >= n || room <= 0) break;
+      if (picked.length >= quota || room <= 0) break;
       if (spaced(i, picked)) {
         picked.push(i);
         room--;
@@ -490,12 +504,15 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
    * 보였다. 화가 알고리즘대로 깊이 배율 오름차순으로 그린다 — `picked` 자체는 안 건드린다,
    * 그 순서는 다음 프레임의 자리 유지에 쓰인다.
    */
-  const paintOrder = [...picked].sort((a, b) => e.depthScale(a) - e.depthScale(b));
+  // 시연 곡은 깊이가 같아도 **맨 위** — 가장 앞에 있는 것으로 읽혀야 한다 (S15P21A405-717)
+  const rank = (i: number) => e.depthScale(i) + (demo.has(i) ? 10 : 0);
+  const paintOrder = [...picked].sort((a, b) => rank(a) - rank(b));
   for (const i of paintOrder) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
     // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)
-    const S = COVER_COUNT.sizePx * grow * e.depthScale(i);
+    // 시연 곡은 거기에 한 번 더 키운다 — 깊이만으로는 해시가 우연히 가까운 곡과 같은 크기다 (S15P21A405-717)
+    const S = COVER_COUNT.sizePx * grow * e.depthScale(i) * (demo.has(i) ? DEMO_PIN.coverGrow : 1);
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다

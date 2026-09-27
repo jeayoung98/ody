@@ -7,6 +7,8 @@ import JourneyEndpointField from "./journey-endpoint-field";
 /**
  * 여정 패널 상단의 출발·도착 표시 (JOURNEY-01).
  * 여기서는 바꿀 수 없다 — 곡 이름을 누르면 패널이 닫히고 상단 확장 검색창이 열린다.
+ *
+ * 폰 시트의 1·2 단은 이 상자가 아니라 그 밑 재생 줄까지 감싼 묶음에서 멈춘다 (`journey-top`, S15P21A405-714).
  */
 export default function JourneyEndpoints() {
   const startMusicId = useJourneyStore((s) => s.startMusicId);

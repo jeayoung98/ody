@@ -9,6 +9,7 @@ export * from "./dev-mode";
 export * from "./features";
 export * from "./messages";
 export * from "./map";
+export * from "./demo-pins";
 export * from "./panel";
 export * from "./reactions";
 export * from "./chart";

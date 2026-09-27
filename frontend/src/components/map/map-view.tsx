@@ -11,6 +11,7 @@ import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
 import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
+import { useDemoPins } from "@/hooks/use-demo-pins";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
@@ -21,6 +22,7 @@ import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { rememberMusicHints } from "@/lib/music-hints";
+import { overlayTapSnap } from "@/lib/overlay-tap-snap";
 import { useMapStore } from "@/stores/use-map-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePanelStore } from "@/stores/use-panel-store";
@@ -81,6 +83,8 @@ export default function MapView({ occlusion }: MapViewProps) {
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
   const { data: rawSongs, isError: songsFailed } = useMapSongsQuery(boxes);
+  // 시연 곡은 상주 집합과 별개로 좌표를 받아 못 박는다 (S15P21A405-717)
+  useDemoPins(engine);
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);
@@ -668,8 +672,12 @@ export default function MapView({ occlusion }: MapViewProps) {
            * 열린 패널이 지도를 376px 가리고 있으므로 자리를 비켜 준다. 누르기와 드래그를
            * 가르는 이 기준을 그대로 쓰는 이유는, 별을 누르려다 손이 떨린 정도로 접히면
            * 안 되기 때문이다. 닫지는 않는다 — 별자리도 목록도 그대로 살아 있다.
+           *
+           * **별자리·주변 탐색 뷰에서는 접지 않는다** (S15P21A405-708, 사용자 결정). 거기서 끄는 것은
+           * 지도가 아니라 별자리·탐색 별 뷰이고, 패널의 목록을 옆에 두고 보며 쓰는 화면이다.
            */
-          usePanelStore.getState().collapse();
+          const overlay = useMapStore.getState().viewMode;
+          if (overlay !== "constellation" && overlay !== "nearby") usePanelStore.getState().collapse();
         }
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
@@ -770,14 +778,18 @@ export default function MapView({ occlusion }: MapViewProps) {
        * **2 단으로 연다** (S15P21A405-703, 사용자 결정). 1 단은 제목 줄뿐이라 눌러 놓고 다시 올려야
        * 했다. 1 단은 이제 **지도를 움직일 때** 내려앉는 자리다(`collapse`). 누른 별은 시트 위에 남은
        * 지도의 가운데로 온다 — 가림폭에 시트 높이가 들어간다(`main-screen`).
+       *
+       * **폰의 주변 탐색·별자리 뷰는 예외다** (S15P21A405-715, 사용자 결정) — 누를 때 단을 바꾸지 않는다. 2 단으로 올라오면
+       * 고리·별자리 아래쪽이 시트에 가려졌다(`overlayTapSnap`).
        */
-      openSongFromMap(s.musicId);
+      const panel = usePanelStore.getState();
+      openSongFromMap(s.musicId, overlayTapSnap({ narrow, viewMode: map.viewMode, activePanel: panel.activePanel, snap: panel.snap }));
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
       useTutorialStore.getState().complete("select");
     },
-    [engine, openSongFromMap, playSong, selectMusic],
+    [engine, narrow, openSongFromMap, playSong, selectMusic],
   );
 
   const onPointerUp = useCallback(

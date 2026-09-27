@@ -1,4 +1,5 @@
 import { CONSTELLATION, DRILL, FOCUS, FOLLOW, FRIEND_MARKER, FRIEND_SPREAD, GHOST, HOLD, HOP_LINK, HUD_OCCLUSION, ME_FLIGHT, ME_OFFSCREEN, LAYER_COUNT, LAYER_NAMES, FRIEND_MOVE_EPS, MAP_FRIENDS_MAX, OCCLUSION_EASE, OVERLAY_ZOOM, PAN_LIMIT, PROBE, PROBE_LABEL, REPRESENTATIVE_GRID_PX, STAR_VIEW, WHEEL_ZOOM } from "@/constants";
+import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { EngineSnapshot } from "@/stores/use-map-store";
 import type { ConstellationPoint, CrowdCell, LayerBox, MapCamera, MapPoint, NearbyUser } from "@/types";
 import { ro } from "@/lib/korean";
@@ -6,7 +7,7 @@ import { arcBetween, atArc, type Arc } from "./arc";
 import { ShipTurn } from "./ship-turn";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
-import { approxTextWidth, separateLabels, type LabelBox } from "./probe-layout";
+import { approxTextWidth, placeLabels, separateLabels, type LabelBox } from "./probe-layout";
 import { nearestLayerWith } from "./reveal-layer";
 import { riseLandingScale } from "./rise-scale";
 import { wheelIntent } from "./ride-zoom";
@@ -922,7 +923,7 @@ export class MapEngine {
         const R = this.ringR();
         // 뭉치가 남은 화면 안에 들도록 밀어내는 거리를 줄인다 — 새 중심은 화면 가운데로 오므로
         // 뭉치의 화면 자리는 가운데 + 이 벡터다. 패널이 열려 화면이 좁으면 그대로 두면 밖으로 나간다
-        const f = this.freeRect();
+        const f = this.overlayRect();
         let vx = u.x * R * PROBE.prevDist;
         let vy = u.y * R * PROBE.prevDist;
         const bx = Math.max(1, (f.x1 - f.x0) / 2 - R * PROBE.prevScale - 24);
@@ -1044,7 +1045,7 @@ export class MapEngine {
     if (!p || p.exitingAt || p.zoom <= 1) return null;
     const cur = this.currentRing();
     const c = cur ? this.probeBasePos(cur.centerId) : null;
-    const f = this.freeRect();
+    const f = this.overlayRect();
     return { cx: c?.x ?? f.cx, cy: c?.y ?? f.cy, z: p.zoom };
   }
 
@@ -1052,7 +1053,7 @@ export class MapEngine {
   probePan(dx: number, dy: number) {
     const p = this.probe;
     if (!p || p.exitingAt) return;
-    const f = this.freeRect();
+    const f = this.overlayRect();
     const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
     // 손가락이 민 것은 **벌어진 화면의 px** 이다 — 밀기는 벌리기 전 공간에 쌓이고 확대가 그걸 다시 벌리므로
     // 배율로 나눠 단위를 맞춘다. 안 그러면 벌려 놓을수록 같은 손짓이 몇 배로 밀린다
@@ -1069,9 +1070,9 @@ export class MapEngine {
     return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
   }
 
-  /** 고리 반지름(px) — 남은 화면의 짧은 변 기준 */
+  /** 고리 반지름(px) — 남은 화면의 짧은 변 기준. 폰은 뷰가 뜰 때 붙잡은 화면이다({@link overlayRect}) */
   private ringR() {
-    const f = this.freeRect();
+    const f = this.overlayRect();
     return Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
   }
 
@@ -1120,11 +1121,21 @@ export class MapEngine {
    * **라벨이 서로 가리지 않게 고리 자리를 민다** (S15P21A405-697). 제목·가수는 자르지 않고 다 보이게 두고,
    * 라벨 묶음(제목 상자 · `#순위 · 가수` 줄 · "주변 보기 ›" 자리)끼리 `PROBE_LABEL.minGapPx` 만큼 떨어뜨린다.
    * 가운데 곡과 그 라벨은 고정이다. 1 배 기준으로 민다 — 확대하면 자리는 배율만큼, 글씨는 그보다 덜 커져 계속 안 겹친다.
+   * 폰은 따로 놓는다 — {@link narrowRingLayout}
    */
   private laidOutRing(r: ProbeRing): Map<number, { x: number; y: number }> {
     const R = this.ringR();
-    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}`;
+    const narrow = this.isNarrow();
+    const f = this.overlayRect();
+    // 폰은 붙잡은 화면(`overlayRect`) 안에 놓는다. 시트 단이 바뀌어도 그 사각형은 그대로라 다시 놓지 않는다 — 떨림 없음
+    const box = narrow ? `|${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}` : "";
+    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}${box}`;
     if (this.ringLayout?.key === key) return this.ringLayout.pos;
+    if (narrow) {
+      const pos = this.narrowRingLayout(r, R, f);
+      this.ringLayout = { key, pos };
+      return pos;
+    }
     const L = PROBE_LABEL;
     const titleOf = (id: number) => this.pointOf(id)?.title ?? "";
     const artistOf = (id: number) => this.pointOf(id)?.artist ?? "";
@@ -1139,6 +1150,41 @@ export class MapEngine {
     const pos = separateLabels(boxes, L.minGapPx);
     pos.delete(r.centerId);
     this.ringLayout = { key, pos };
+    return pos;
+  }
+
+  /**
+   * **폰 고리 배치** (S15P21A405-715) — 남은 화면 안에, 앞 순위부터 원래 고리 자리에서 가장 가까운 빈자리에 놓는다
+   * (`placeLabels`). 360px 폰은 넓은 화면처럼 밀어서는 라벨이 다 안 들어간다(`probe-layout` 머리말).
+   *
+   * 폰 라벨은 **이웃은 제목만, 가운데는 안내 줄 없이** 그리므로(`draw-map`) 그만큼만 센다 — 가수는 누르면 시트에
+   * 뜨고, 안내 줄은 위 뷰 칩·레이어 이름과 같은 말이다. 폭은 그리는 쪽과 같은 상한까지다(`probeLabelCap`).
+   * 멈춘 고리의 중심이 남은 화면 한가운데라(`probeBasePos`) 경계도 그 기준이다.
+   *
+   * 선택은 보지 않는다 — 누를 때마다 자리를 다시 놓으면 누른 별이 옮겨 간다. 선택한 곡의 링크에 부딪히는 글자와
+   * 빈자리를 못 찾은 글자는 그리는 쪽이 숨긴다(`cullLabels`).
+   */
+  private narrowRingLayout(r: ProbeRing, R: number, f: ReturnType<MapEngine["freeRect"]>): Map<number, { x: number; y: number }> {
+    const L = PROBE_LABEL;
+    const cap = this.probeLabelCap();
+    const titleW = (id: number, px: number, max: number) => Math.min(approxTextWidth(this.pointOf(id)?.title ?? "", px), max);
+    const m = L.narrowEdgePx;
+    const bounds = { x0: f.x0 + m - f.cx, x1: f.x1 - m - f.cx, y0: f.y0 + m - f.cy, y1: f.y1 - m - f.cy };
+    const boxes: LabelBox[] = [
+      {
+        id: r.centerId,
+        x: 0,
+        y: 0,
+        w: titleW(r.centerId, L.centerTitlePx, cap.center) + 14,
+        top: -L.centerRingR - 4,
+        bottom: L.centerRingR + L.centerGap + L.centerBoxH + 4,
+        fixed: true,
+      },
+      ...r.ids.map((id, rank) => ({ id, ...this.polarSlot(r, rank, R), w: titleW(id, L.titlePx, cap.line) + 12, top: -10, bottom: L.boxTop + L.boxH + 2 })),
+    ];
+    const star = { w: L.narrowStarPx, top: -L.narrowStarPx / 2, bottom: L.narrowStarPx / 2 };
+    const pos = placeLabels(boxes, L.narrowGapPx, bounds, R * L.narrowShiftRatio, star);
+    pos.delete(r.centerId);
     return pos;
   }
 
@@ -1185,6 +1231,22 @@ export class MapEngine {
     return easeInOut(Math.min(1, (now - r.t0) / PROBE.enterMs));
   }
 
+  /** 좁은 화면(폰·태블릿)인가 — 라벨을 화면 안에 가두는 규칙이 여기서 갈린다 (S15P21A405-715) */
+  isNarrow(): boolean {
+    return this.W < BREAKPOINTS.tablet;
+  }
+
+  /**
+   * 주변 탐색 글줄 폭 상한(px, 1 배) — **폰만** (S15P21A405-715). 넓은 화면은 자르지 않는다(697).
+   * 엔진은 이 값으로 라벨 폭을 세고, 그리는 쪽(`draw-map`)은 같은 값으로 줄여 그린다
+   */
+  probeLabelCap(): { line: number; center: number } {
+    if (!this.isNarrow()) return { line: Infinity, center: Infinity };
+    const f = this.overlayRect();
+    const w = f.x1 - f.x0;
+    return { line: w * PROBE_LABEL.narrowCapRatio, center: w * PROBE_LABEL.narrowCenterCapRatio };
+  }
+
   /** 주변 탐색 라벨 글씨 배율 — 확대의 일부만 따라간다 (`PROBE_LABEL.zoomGain`, S15P21A405-688) */
   probeLabelScale(): number {
     const z = this.probeZoomFrame()?.z ?? 1;
@@ -1211,7 +1273,8 @@ export class MapEngine {
     const real = { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
     const sl = this.overlaySlot(id);
     if (!sl) return real;
-    const f = this.freeRect();
+    // 고리 가운데 — 폰은 뷰가 뜰 때 붙잡은 화면의 가운데다. 시트를 올려도 고리가 따라 올라가지 않는다
+    const f = this.overlayRect();
     const off = this.probeOffset();
     // 배치는 **벌리기 전 자리**다. 확대는 `probePos` 가 중심 별 기준으로 건다 (S15P21A405-688)
     const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
@@ -1316,7 +1379,8 @@ export class MapEngine {
     const b = this.constellation?.box;
     const f = this.constellationRect();
     if (!b) return { s: 1, bx: 0, by: 0 };
-    const p = CONSTELLATION.pad;
+    // 폰은 여백을 넓힌다 — 끝 별의 라벨이 화면 밖으로 반쯤 나갔다 (S15P21A405-715)
+    const p = this.isNarrow() ? CONSTELLATION.padNarrow : CONSTELLATION.pad;
     const fw = f.x1 - f.x0;
     const fh = f.y1 - f.y0;
     // 점이 하나뿐이거나 일직선이면 그 축은 넓이가 0 이다 — 다른 축 배율만 남게 크게 잡는다
@@ -1706,9 +1770,9 @@ export class MapEngine {
     this.instrumentInset = px;
   }
 
-  /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
+  /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다. 폰은 뷰가 뜰 때 붙잡은 화면이다({@link overlayRect}) */
   private constellationRect() {
-    const base = this.freeRect();
+    const base = this.overlayRect();
     const x0 = base.x0 + this.instrumentInset;
     const y1 = base.y1 - 20;
     return { x0, y0: base.y0, x1: base.x1, y1, cx: (x0 + base.x1) / 2, cy: (base.y0 + y1) / 2 };
@@ -1735,12 +1799,48 @@ export class MapEngine {
    * 스물몇 군데가 전부 NaN·무한대로 번진다. 좁아도 유효한 사각형이 나가는 편이 낫다.
    */
   freeRect() {
-    const o = this.occluded;
+    return this.rectFor(this.occluded);
+  }
+
+  private rectFor(o: Occlusion) {
     const x0 = o.left;
     const x1 = Math.max(x0 + 120, this.W - o.right);
     const y0 = o.top;
     const y1 = Math.max(y0 + 120, this.H - o.bottom);
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  }
+
+  /** 폰 연출 뷰가 붙잡은 남은 화면 — {@link overlayRect}. `owner` 는 그 뷰 객체다(건너가기로 고리가 늘어도 같은 뷰) */
+  private overlayHold: { owner: object; W: number; H: number; settleUntil: number; rect: ReturnType<MapEngine["freeRect"]> } | null = null;
+
+  /**
+   * **폰에서 주변 탐색·별자리가 쓰는 남은 화면** — 뷰가 처음 뜰 때 붙잡아 끝날 때까지 쓴다 (S15P21A405-715, 사용자 결정).
+   *
+   * 폰은 시트가 단을 옮길 때마다 가림폭이 바뀐다. 두 뷰가 그걸 따라가서 2 단으로 올리면 고리·별자리가 그만큼 줄었고,
+   * 가림폭은 여러 프레임에 걸쳐 따라가므로(`setOcclusion` 의 ease) 그동안 배치를 매 프레임 다시 해 화면이 떨렸다.
+   * 사용자: "2단 올릴 때 축소시키지 말고 주변탐색뷰·여정뷰 유지시켜".
+   *
+   * 들어오는 동안(`enterMs`)만 **목표** 가림폭을 따라간다 — 뷰를 연 손짓이 시트 단도 함께 옮기고(712), 여정 시트는
+   * 열린 뒤에 1 단 높이를 잰다(`use-sheet-peek`). 그 뒤로는 시트를 올리든 내리든 그대로다. 화면 크기(W·H)가 바뀌면
+   * 다시 잡는다. 넓은 화면은 그대로 {@link freeRect} 다 — 우측 패널이 열리면 별자리가 좁아지는 것이 맞다(S15P21A405-330).
+   */
+  overlayRect() {
+    if (!this.isNarrow()) return this.freeRect();
+    const p = this.probe;
+    const c = this.constellation;
+    const owner = p && !p.exitingAt ? p : c && !c.exitingAt ? c : (p ?? c);
+    if (!owner) {
+      this.overlayHold = null;
+      return this.freeRect();
+    }
+    const now = performance.now();
+    let h = this.overlayHold;
+    if (!h || h.owner !== owner || h.W !== this.W || h.H !== this.H) {
+      const settleUntil = owner === p && p ? p.rings[0].t0 + PROBE.enterMs : c ? c.t0 + CONSTELLATION.enterMs : now;
+      h = this.overlayHold = { owner, W: this.W, H: this.H, settleUntil, rect: this.rectFor(this.occludedTarget) };
+    }
+    if (now < h.settleUntil) h.rect = this.rectFor(this.occludedTarget);
+    return h.rect;
   }
 
   /** `p` 는 깊이 시차 배율({@link parOf}). 별 위에 서는 것(나·사람·선택 링)은 그 별의 값을 넘겨야 별과 같이 움직인다 */

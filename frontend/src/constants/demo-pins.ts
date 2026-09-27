@@ -30,6 +30,7 @@ export const DEMO_SONGS: readonly DemoSong[] = [
   { title: "Hollywood Action" },
   { title: "REDRED", artist: ["코르티스", "CORTIS"] },
   { title: "ELEVEN", artist: ["아이브", "IVE"] },
+  { title: "BAD", artist: ["에이티즈", "ATEEZ"] },
 ];
 
 export const DEMO_PIN = {
@@ -40,9 +41,10 @@ export const DEMO_PIN = {
   z: 1,
   /**
    * 커버 한 변에 더 곱하는 배율. z=1 만으로는 해시가 우연히 1 근처인 곡과 같은 크기라 "가장 크다" 가 안 된다.
-   * 34px × 1.3(깊이) × 1.35 ≈ 60px — 최소 간격(54px)보다 조금 큰 정도라 옆 커버를 크게 덮지는 않는다.
+   * 1.35 로 시작했는데 실제 화면에서 너무 컸다(사용자 피드백) — 34px × 1.3(깊이) × 1.15 ≈ 51px,
+   * 최소 간격(54px) 안에 들어와 옆 커버를 덮지 않으면서도 일반 커버(최대 44px)보다는 또렷이 크다.
    */
-  coverGrow: 1.35,
+  coverGrow: 1.15,
 } as const;
 
 /** 제목 비교용 — 대소문자·앞뒤 공백·연속 공백을 무시한다. 백엔드 제목 표기 흔들림을 흡수한다 */

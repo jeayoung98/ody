@@ -7,7 +7,7 @@ import { arcBetween, atArc, type Arc } from "./arc";
 import { ShipTurn } from "./ship-turn";
 import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
-import { approxTextWidth, separateLabels, type LabelBox } from "./probe-layout";
+import { approxTextWidth, placeLabels, separateLabels, type LabelBox } from "./probe-layout";
 import { nearestLayerWith } from "./reveal-layer";
 import { riseLandingScale } from "./rise-scale";
 import { wheelIntent } from "./ride-zoom";
@@ -1121,49 +1121,69 @@ export class MapEngine {
    * **라벨이 서로 가리지 않게 고리 자리를 민다** (S15P21A405-697). 제목·가수는 자르지 않고 다 보이게 두고,
    * 라벨 묶음(제목 상자 · `#순위 · 가수` 줄 · "주변 보기 ›" 자리)끼리 `PROBE_LABEL.minGapPx` 만큼 떨어뜨린다.
    * 가운데 곡과 그 라벨은 고정이다. 1 배 기준으로 민다 — 확대하면 자리는 배율만큼, 글씨는 그보다 덜 커져 계속 안 겹친다.
+   * 폰은 따로 놓는다 — {@link narrowRingLayout}
    */
   private laidOutRing(r: ProbeRing): Map<number, { x: number; y: number }> {
     const R = this.ringR();
-    const f = this.freeRect();
     const narrow = this.isNarrow();
-    // 폰은 남은 화면 안에 가두므로 그 사각형이 바뀌어도(시트 단) 다시 민다. 링크 자리가 선택한 곡에만 있어 선택도 본다
-    const box = narrow ? `${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}|${this.selectedId}` : "";
-    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}|${box}`;
+    const f = this.freeRect();
+    // 폰은 남은 화면 안에 놓으므로 그 사각형이 바뀌면(시트 단) 다시 놓는다 (S15P21A405-715)
+    const box = narrow ? `|${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}` : "";
+    const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}${box}`;
     if (this.ringLayout?.key === key) return this.ringLayout.pos;
+    if (narrow) {
+      const pos = this.narrowRingLayout(r, R, f);
+      this.ringLayout = { key, pos };
+      return pos;
+    }
     const L = PROBE_LABEL;
-    const cap = this.probeLabelCap();
     const titleOf = (id: number) => this.pointOf(id)?.title ?? "";
     const artistOf = (id: number) => this.pointOf(id)?.artist ?? "";
-    // 그리는 쪽(`draw-map`)이 같은 상한으로 줄여 그리므로 폭도 상한까지만 센다
-    const lineW = (text: string, px: number, mono = false, max = cap.line) => Math.min(approxTextWidth(text, px, mono), max);
-    /**
-     * 라벨 묶음 아래끝 — "주변 보기 ›" 링크 자리까지. **폰은 그 자리를 선택한 이웃에만 둔다** (S15P21A405-715).
-     * 링크는 선택한 곡에만 뜨는데 열 묶음 모두 16px 씩 비워 두느라 좁은 화면에서 서로 겹쳤다
-     */
-    const linkBottom = HOP_LINK.dy + HOP_LINK.h / 2;
-    const subBottom = L.subY + L.subPx / 2 + 2;
     const boxes: LabelBox[] = r.ids.map((id, rank) => {
       const at = this.polarSlot(r, rank, R);
-      const w = Math.max(lineW(titleOf(id), L.titlePx) + 12, lineW(`#${rank + 1} · ${artistOf(id)}`, L.subPx, true));
-      return { id, x: at.x, y: at.y, w, top: -10, bottom: narrow && id !== this.selectedId ? subBottom : linkBottom };
+      const w = Math.max(approxTextWidth(titleOf(id), L.titlePx) + 12, approxTextWidth(`#${rank + 1} · ${artistOf(id)}`, L.subPx, true));
+      return { id, x: at.x, y: at.y, w, top: -10, bottom: HOP_LINK.dy + HOP_LINK.h / 2 };
     });
     // 가운데 곡: 링부터 안내 줄 아래까지. 폭은 제목과 안내 줄 중 넓은 쪽
-    const cw = Math.max(
-      lineW(titleOf(r.centerId), L.centerTitlePx, false, cap.center) + 14,
-      lineW(`NEARBY · 유사도 상위 ${r.ids.length}곡 · ${LAYER_NAMES[this.layer]}`, L.centerSubPx, true, cap.center),
-    );
+    const cw = Math.max(approxTextWidth(titleOf(r.centerId), L.centerTitlePx) + 14, approxTextWidth(`NEARBY · 유사도 상위 ${r.ids.length}곡 · ${LAYER_NAMES[this.layer]}`, L.centerSubPx, true));
     boxes.push({ id: r.centerId, x: 0, y: 0, w: cw, top: -L.centerRingR - 4, bottom: L.centerRingR + L.centerSubY + 8, fixed: true });
-    /**
-     * **폰은 남은 화면 안에 가둔다** (S15P21A405-715). 멈춘 고리의 중심은 남은 화면 한가운데라(`probeBasePos`)
-     * 경계는 그 기준이다. 고리 크기(`ringR`)는 그대로 두고 끝 라벨만 안으로 당긴다 — 고리를 줄여 맞추면 360px 폰에서
-     * 반지름이 130 → 97px 로 준다(라벨 반폭만큼, 계산). 그만큼 이웃이 가운데로 뭉친다
-     */
-    const m = L.narrowEdgePx;
-    const bounds = narrow ? { x0: f.x0 + m - f.cx, x1: f.x1 - m - f.cx, y0: f.y0 + m - f.cy, y1: f.y1 - m - f.cy } : undefined;
-    // 가두면 밀고 되돌리기를 되풀이하므로 바퀴를 넉넉히 준다
-    const pos = separateLabels(boxes, L.minGapPx, bounds ? 400 : undefined, bounds);
+    const pos = separateLabels(boxes, L.minGapPx);
     pos.delete(r.centerId);
     this.ringLayout = { key, pos };
+    return pos;
+  }
+
+  /**
+   * **폰 고리 배치** (S15P21A405-715) — 남은 화면 안에, 앞 순위부터 원래 고리 자리에서 가장 가까운 빈자리에 놓는다
+   * (`placeLabels`). 360px 폰은 넓은 화면처럼 밀어서는 라벨이 다 안 들어간다(`probe-layout` 머리말).
+   *
+   * 폰 라벨은 **이웃은 제목만, 가운데는 안내 줄 없이** 그리므로(`draw-map`) 그만큼만 센다 — 가수는 누르면 시트에
+   * 뜨고, 안내 줄은 위 뷰 칩·레이어 이름과 같은 말이다. 폭은 그리는 쪽과 같은 상한까지다(`probeLabelCap`).
+   * 멈춘 고리의 중심이 남은 화면 한가운데라(`probeBasePos`) 경계도 그 기준이다.
+   *
+   * 선택은 보지 않는다 — 누를 때마다 자리를 다시 놓으면 누른 별이 옮겨 간다. 선택한 곡의 링크에 부딪히는 글자와
+   * 빈자리를 못 찾은 글자는 그리는 쪽이 숨긴다(`cullLabels`).
+   */
+  private narrowRingLayout(r: ProbeRing, R: number, f: ReturnType<MapEngine["freeRect"]>): Map<number, { x: number; y: number }> {
+    const L = PROBE_LABEL;
+    const cap = this.probeLabelCap();
+    const titleW = (id: number, px: number, max: number) => Math.min(approxTextWidth(this.pointOf(id)?.title ?? "", px), max);
+    const m = L.narrowEdgePx;
+    const bounds = { x0: f.x0 + m - f.cx, x1: f.x1 - m - f.cx, y0: f.y0 + m - f.cy, y1: f.y1 - m - f.cy };
+    const boxes: LabelBox[] = [
+      {
+        id: r.centerId,
+        x: 0,
+        y: 0,
+        w: titleW(r.centerId, L.centerTitlePx, cap.center) + 14,
+        top: -L.centerRingR - 4,
+        bottom: L.centerRingR + L.centerGap + L.centerBoxH + 4,
+        fixed: true,
+      },
+      ...r.ids.map((id, rank) => ({ id, ...this.polarSlot(r, rank, R), w: titleW(id, L.titlePx, cap.line) + 12, top: -10, bottom: L.boxTop + L.boxH + 2 })),
+    ];
+    const pos = placeLabels(boxes, L.narrowGapPx, bounds, R * L.narrowShiftRatio);
+    pos.delete(r.centerId);
     return pos;
   }
 

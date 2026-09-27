@@ -5,6 +5,9 @@
  * 보고, 흘려 쓰면(마퀴) 정신없다 — 그래서 글은 다 보이게 두고 **자리를 민다.** 상자끼리 `gap` 만큼 떨어질 때까지
  * 겹친 쌍을 덜 겹친 축으로 반씩 밀어낸다. 고정된 상자(가운데 곡)는 안 움직이고 상대가 다 밀린다.
  *
+ * 폰은 다르다 (S15P21A405-715) — 미는 대신 {@link placeLabels} 로 앞 순위부터 빈자리에 놓고, 그래도 부딪히는 글자는
+ * {@link cullLabels} 로 숨긴다.
+ *
  * 순수 함수다 — 엔진이 부르고 `tests/probe-layout.test.cjs` 가 묶는다.
  */
 export interface LabelBox {
@@ -83,6 +86,97 @@ export function separateLabels(boxes: readonly LabelBox[], gap: number, maxIter 
     if (!moved) break;
   }
   return new Map(p.map((b) => [b.id, { x: b.x, y: b.y }]));
+}
+
+/** 두 상자(별 자리 기준)가 `gap` 보다 가까운가 */
+function tooClose(a: LabelBox, ax: number, ay: number, b: LabelBox, bx: number, by: number, gap: number) {
+  return (
+    Math.min(ax + a.w / 2, bx + b.w / 2) - Math.max(ax - a.w / 2, bx - b.w / 2) + gap > 1e-6 &&
+    Math.min(ay + a.bottom, by + b.bottom) - Math.max(ay + a.top, by + b.top) + gap > 1e-6
+  );
+}
+
+/**
+ * **폰 배치** (S15P21A405-715) — 앞 순위부터 하나씩, 원래 고리 자리에서 **가장 가까운 빈자리**에 놓는다.
+ *
+ * 폰은 남은 화면이 360 × 354px 남짓이라 안쪽 고리 반지름이 75px 이다. 그 둘레에 이웃 라벨 다섯과 가운데 제목이
+ * 함께 들어갈 자리가 없다. 겹친 쌍을 반씩 미는 {@link separateLabels} 는 경계에 막혀 밀고 되돌리기를 되풀이하다
+ * 겹친 채 끝났다 — 지도 곡 172개로 만든 고리 201개를 360 × 760 에서 돌리면 겹침 없는 고리가 0% 였다(계산).
+ *
+ * `boxes` 순서가 우선순위다(고정 상자는 순서와 상관없이 먼저 선다). 원래 자리에서 `maxShift` 안에 빈자리가 없으면
+ * 경계 안 원래 자리에 둔다 — 그 라벨은 겹치므로 그리는 쪽이 {@link cullLabels} 로 글자를 숨긴다. 넓은 화면은 안 쓴다.
+ */
+export function placeLabels(
+  boxes: readonly LabelBox[],
+  gap: number,
+  bounds: LabelBounds,
+  maxShift: number,
+  step = 4,
+): Map<number, { x: number; y: number }> {
+  const out = new Map<number, { x: number; y: number }>();
+  const placed: { b: LabelBox; x: number; y: number }[] = [];
+  for (const b of boxes) {
+    if (!b.fixed) continue;
+    placed.push({ b, x: b.x, y: b.y });
+    out.set(b.id, { x: b.x, y: b.y });
+  }
+  for (const b of boxes) {
+    if (b.fixed) continue;
+    const at = { ...b };
+    keepInside(at, bounds);
+    // 경계보다 큰 축은 가운데 한 줄만 본다 (keepInside 와 같다)
+    const wideX = bounds.x0 + b.w / 2 > bounds.x1 - b.w / 2;
+    const wideY = bounds.y0 - b.top > bounds.y1 - b.bottom;
+    let best: { x: number; y: number } | null = null;
+    let bestD = Infinity;
+    for (let dx = wideX ? 0 : -maxShift; dx <= (wideX ? 0 : maxShift) + 1e-6; dx += step) {
+      for (let dy = wideY ? 0 : -maxShift; dy <= (wideY ? 0 : maxShift) + 1e-6; dy += step) {
+        const d = Math.hypot(dx, dy);
+        if (d > maxShift + 1e-6 || d >= bestD) continue;
+        const x = at.x + dx;
+        const y = at.y + dy;
+        if (!wideX && (x < bounds.x0 + b.w / 2 - 1e-6 || x > bounds.x1 - b.w / 2 + 1e-6)) continue;
+        if (!wideY && (y < bounds.y0 - b.top - 1e-6 || y > bounds.y1 - b.bottom + 1e-6)) continue;
+        if (placed.some((q) => tooClose(b, x, y, q.b, q.x, q.y, gap))) continue;
+        best = { x, y };
+        bestD = d;
+      }
+    }
+    // 빈자리를 못 찾은 라벨은 자리를 차지하지 않는다 — 뒤 순위가 그 자리를 쓸 수 있고, 이 라벨은 글자가 숨는다
+    if (best) placed.push({ b, x: best.x, y: best.y });
+    out.set(b.id, best ?? { x: at.x, y: at.y });
+  }
+  return out;
+}
+
+/** 화면에 그릴 라벨 사각형(px) — {@link cullLabels} 가 받는다 */
+export interface LabelRect {
+  id: number;
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  /** 겹쳐도 그린다 (가운데 곡·선택한 곡) */
+  keep?: boolean;
+}
+
+/**
+ * **부딪히는 라벨은 글자를 숨긴다** (S15P21A405-715, 폰만). `rects` 순서가 우선순위다 — 앞에서 그리기로 한 것과
+ * `gap` 보다 가까우면 숨긴다. `keep` 은 늘 그리고 뒤 라벨을 가린다. 별은 그대로 그려지고 누를 수 있다 — 누르면 선택한
+ * 곡이 되어 늘 보인다. 지도 라벨이 부딪힐 때 낮은 순위부터 빼는 것과 같다. 숨긴 id 를 돌려준다.
+ */
+export function cullLabels(rects: readonly LabelRect[], gap: number): Set<number> {
+  const hidden = new Set<number>();
+  const shown: LabelRect[] = [];
+  const hit = (a: LabelRect, b: LabelRect) =>
+    Math.min(a.x1, b.x1) - Math.max(a.x0, b.x0) + gap > 1e-6 && Math.min(a.y1, b.y1) - Math.max(a.y0, b.y0) + gap > 1e-6;
+  for (const r of rects) if (r.keep) shown.push(r);
+  for (const r of rects) {
+    if (r.keep) continue;
+    if (shown.some((s) => hit(s, r))) hidden.add(r.id);
+    else shown.push(r);
+  }
+  return hidden;
 }
 
 /**

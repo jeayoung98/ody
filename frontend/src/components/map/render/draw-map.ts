@@ -1,6 +1,7 @@
 import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
+import { cullLabels, type LabelRect } from "../engine/probe-layout";
 import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
 
 /**
@@ -787,15 +788,28 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const sc = e.probeLabelScale();
   /**
    * 폰은 글줄 폭에 상한이 있다 (S15P21A405-715) — 넓은 화면은 `Infinity` 라 그대로 다 쓴다(697).
-   * 엔진이 같은 상한으로 라벨 폭을 세므로(`laidOutRing`) 줄인 글과 민 자리가 맞는다
+   * 엔진이 같은 상한으로 라벨 폭을 세므로(`narrowRingLayout`) 줄인 글과 놓은 자리가 맞는다
    */
   const cap = e.probeLabelCap();
   const clip = (text: string, max: number) => (Number.isFinite(max) ? fitText(g, text, max * sc) : text);
-  const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
+  // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
+  const L = PROBE_LABEL;
+  type Song = (typeof e.songs)[number];
+  /**
+   * **폰 라벨은 한 줄이다** (S15P21A405-715) — 이웃은 제목만, 가운데는 안내 줄 없이. 360px 폰의 남은 화면에는 두 줄 라벨
+   * 열한 묶음이 안 들어간다(엔진 `narrowRingLayout`). 가수는 누르면 시트에 뜬다. 선택한 이웃의 링크는 가수 줄 자리에 선다
+   */
+  const narrow = e.isNarrow();
+  const subOf = (rank: number, s: Song) => (narrow ? null : `#${rank + 1} · ${s.artist ?? ""}`);
+  /** 링크 글씨 가운데 y. 폰에서 남은 화면 아래(시트 밑)로 나가면 별 위로 올린다 — 못 누르는 링크가 된다 */
+  const linkY = (y: number, sub: string | null) => {
+    const below = y + (sub || !narrow ? HOP_LINK.dy : L.subY) * sc;
+    return narrow && below + (HOP_LINK.h * sc) / 2 > f.y1 ? y - HOP_LINK.upDy * sc : below;
+  };
+  const LINK = "주변 보기 ›";
+  const drawLabel = (x: number, y: number, s: Song, sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
-    // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
-    const L = PROBE_LABEL;
     g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
     // 제목은 자르지 않는다 — 길면 길게 다 보이고, 겹치지 않게 별 자리를 엔진이 민다 (S15P21A405-697). 폰만 상한까지
     const title = clip(s.title, cap.line);
@@ -816,19 +830,61 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
       g.globalAlpha = a * pulse;
       g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
-      const label = "주변 보기 ›";
-      const lw = g.measureText(label).width;
-      const ly = y + HOP_LINK.dy * sc;
-      g.fillText(label, x, ly);
+      const lw = g.measureText(LINK).width;
+      const ly = linkY(y, sub);
+      g.fillText(LINK, x, ly);
       e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: ly - (HOP_LINK.h * sc) / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h * sc };
     }
   };
+  const sel = e.selectedId;
+  const song = e.songs.find((s) => s.musicId === cur.centerId)!;
+  // 라벨은 뛰는 링(rr)이 아니라 고정 반지름에 단다 — 링을 따라가면 제목·안내 줄이 출렁인다 (S15P21A405-697)
+  const lr = L.centerRingR;
+  /**
+   * **폰은 부딪히는 글자를 숨긴다** (S15P21A405-715) — 엔진이 빈자리를 못 찾은 라벨과, 선택한 곡의 링크에 걸린 라벨.
+   * 가운데 곡과 선택한 곡은 늘 그리고, 이웃은 순위 순, 이전 중심은 맨 뒤다. 별은 숨기지 않는다 — 누르면 선택한 곡이 되어
+   * 보인다. 확대하면 자리가 벌어지므로 매 프레임 그린 자리로 다시 본다
+   */
+  let hidden = new Set<number>();
+  if (narrow) {
+    const songOf = (id: number) => e.songs.find((x) => x.musicId === id)!;
+    const rectOf = (x: number, y: number, s: Song, sub: string | null, link: boolean, keep = false): LabelRect => {
+      g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
+      let half = g.measureText(clip(s.title, cap.line)).width / 2 + 6 * sc;
+      // 엔진 배치와 같은 상자 — 별 자리(위 10px)부터 제목 상자 아래까지
+      let y0 = y - 10 * sc;
+      let y1 = y + (L.boxTop + L.boxH + 2) * sc;
+      if (sub) {
+        g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
+        half = Math.max(half, g.measureText(clip(sub, cap.line)).width / 2);
+        y1 = y + (L.subY + L.subPx / 2 + 2) * sc;
+      }
+      if (link) {
+        g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
+        half = Math.max(half, g.measureText(LINK).width / 2 + HOP_LINK.padX);
+        const ly = linkY(y, sub);
+        y0 = Math.min(y0, ly - (HOP_LINK.h * sc) / 2);
+        y1 = Math.max(y1, ly + (HOP_LINK.h * sc) / 2);
+      }
+      return { id: s.musicId, x0: x - half, x1: x + half, y0, y1, keep };
+    };
+    g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
+    const ch = Math.max(g.measureText(clip(song.title, cap.center)).width / 2 + 7 * sc, lr + 4);
+    const rects: LabelRect[] = [{ id: song.musicId, x0: tx - ch, x1: tx + ch, y0: ty - lr - 4, y1: ty + lr + (L.centerGap + L.centerBoxH + 4) * sc, keep: true }];
+    const selN = nodes.find((n) => n.id === sel && n.cur);
+    const selC = selN ? null : centers.find((c) => c.id === sel && !c.cur);
+    if (selN) rects.push(rectOf(selN.x, selN.y, songOf(selN.id), null, true, true));
+    else if (selC) rects.push(rectOf(selC.x, selC.y, songOf(selC.id), "이전 중심", true, true));
+    for (const n of nodes) if (n.cur && n.id !== sel) rects.push(rectOf(n.x, n.y, songOf(n.id), null, false));
+    for (const c of centers) if (!c.cur && c.id !== sel) rects.push(rectOf(c.x, c.y, songOf(c.id), "이전 중심", false));
+    hidden = cullLabels(rects, 0);
+  }
   // 라벨은 지금 고리에만 — 옅은 고리까지 글자를 달면 읽히지 않고 어지럽기만 하다.
   // **선택한 곡의 라벨은 맨 나중에** 그린다 (아래) — 겹친 라벨 밑에 깔려 안 읽히면 무엇을 눌렀는지 모른다
   for (const n of nodes) {
-    if (!n.cur || n.id === e.selectedId) continue;
+    if (!n.cur || n.id === sel || hidden.has(n.id)) continue;
     const s = e.songs.find((x) => x.musicId === n.id)!;
-    drawLabel(n.x, n.y, s, `#${n.rank + 1} · ${s.artist ?? ""}`, n.a, false);
+    drawLabel(n.x, n.y, s, subOf(n.rank, s), n.a, false);
   }
   g.globalAlpha = 1;
 
@@ -854,12 +910,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     }
     // 제목은 늘 옅게 붙여 둔다 — 어디서 건너왔는지 이름으로 읽히고, 누를 수 있는 자리라는 힌트가 된다.
     // 선택되면 아래에서 또렷한 라벨을 위에 덧그린다
-    if (e.selectedId !== c.id) drawLabel(c.x, c.y, s, "이전 중심", c.a * 1.6, false);
+    if (sel !== c.id && !hidden.has(c.id)) drawLabel(c.x, c.y, s, "이전 중심", c.a * 1.6, false);
     g.globalCompositeOperation = "lighter";
   }
 
   // 기준 곡 강조 + 라벨
-  const song = e.songs.find((s) => s.musicId === cur.centerId)!;
   const frgb = starRgb(song);
   // 건너온 중심은 열리면서 한 번 부풀었다 가라앉는다 (누른 별이 열리는 느낌)
   const rk = e.ringK(cur);
@@ -880,9 +935,6 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.lineWidth = 1;
   g.stroke();
   g.globalCompositeOperation = "source-over";
-  const L = PROBE_LABEL;
-  // 라벨은 뛰는 링(rr)이 아니라 고정 반지름에 단다 — 링을 따라가면 제목·안내 줄이 출렁인다 (S15P21A405-697)
-  const lr = L.centerRingR;
   g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
   // 가운데 제목도 폰에서는 상한까지 (S15P21A405-715) — 하나뿐이라 이웃보다 넓게 둔다
   const centerTitle = clip(song.title, cap.center);
@@ -892,17 +944,19 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
   g.fillText(centerTitle, tx, ty + lr + (L.centerGap + L.centerBoxH / 2) * sc);
-  g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
-  g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(clip(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, cap.center), tx, ty + lr + L.centerSubY * sc);
+  // 안내 줄 — 폰은 뺀다 (S15P21A405-715). 위 뷰 칩("주변 탐색 뷰")과 레이어 이름이 같은 말을 하고, 줄 하나가 가운데 폭을 다 먹는다
+  if (!narrow) {
+    g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
+    g.fillStyle = "rgba(147,164,196,.62)";
+    g.fillText(clip(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, cap.center), tx, ty + lr + L.centerSubY * sc);
+  }
 
   // 선택한 곡의 라벨 — 모든 라벨 위에. 지금 고리의 이웃이거나 이전 고리의 중심이다
-  const sel = e.selectedId;
   if (sel != null && sel !== cur.centerId) {
     const n = nodes.find((x) => x.id === sel && x.cur);
     const c = n ? null : centers.find((x) => x.id === sel && !x.cur);
     const s = e.songs.find((x) => x.musicId === sel);
-    if (n && s) drawLabel(n.x, n.y, s, `#${n.rank + 1} · ${s.artist ?? ""}`, n.a, true);
+    if (n && s) drawLabel(n.x, n.y, s, subOf(n.rank, s), n.a, true);
     else if (c && s) drawLabel(c.x, c.y, s, "이전 중심", Math.min(1, k), true);
   }
   g.globalAlpha = 1;

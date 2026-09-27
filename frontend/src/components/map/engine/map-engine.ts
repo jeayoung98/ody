@@ -3781,6 +3781,12 @@ export class MapEngine {
      */
     const spreadCells = MAP_FRIENDS_MAX;
     const isLeaderOf = (u: NearbyUser) => this.follow?.leader.email === u.email;
+    /**
+     * **우주선은 묶음 속에 숨지 않는다** (S15P21A405-718, 사용자 결정). 탑승자를 태운 사람은 `draw-friends` 가
+     * 우주선으로 그리는데, 헬멧과 같은 칸이면 먼저 선 헬멧 뒤에 묶여 배지를 눌러 펼쳐야 보였다. 우주선은
+     * "여기 탑승 중인 방이 있다" 는 신호라 늘 대표로 선다 — 인솔자(625)와 같은 대접이되 자리 경합은 한다.
+     */
+    const hasShip = (u: NearbyUser) => u.riderCount > 0;
 
     /**
      * 지난 프레임에 보이던 사람. **칸 경계는 카메라를 따라 움직인다** — 그냥 두면 지도를 밀
@@ -3846,7 +3852,23 @@ export class MapEngine {
           for (let b = -1; b <= 1; b++) {
             const at = owner.get(`${cx + a},${cy + b}`);
             if (at != null) {
-              this.visFriends[at].stacked.push(c.u);
+              const v = this.visFriends[at];
+              /**
+               * 우주선이 헬멧 자리에 왔다 — 헬멧을 뒤로 보내고 우주선이 대표가 된다 (S15P21A405-718).
+               * 대표가 이미 우주선·인솔자면 그대로 뒤에 선다. 자리(칸)는 먼저 선 쪽 것을 그대로 쓴다 —
+               * 칸 주인을 바꾸면 지도를 밀 때 묶임이 다시 흔들린다 (566).
+               */
+              if (hasShip(c.u) && !v.isLeader && !hasShip(v.user)) {
+                const was = v.user;
+                v.user = c.u;
+                v.px = c.px;
+                v.py = c.py;
+                v.heading = c.heading;
+                v.scale = c.scale;
+                v.stacked.unshift(was);
+              } else {
+                v.stacked.push(c.u);
+              }
               return;
             }
           }
@@ -3866,7 +3888,9 @@ export class MapEngine {
      */
     const byEmail = new Map([...leader, ...cands].map((c) => [c.u.email, c]));
     // 인솔자가 남의 묶음 속이면 다시 정한다 — 안 그러면 따라가는 우주선이 배지 숫자로만 남는다 (S15P21A405-625)
-    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys()), this.follow?.leader.email ?? null) : null;
+    // 우주선이 남의 묶음 속이어도 다시 정한다 — 탑승자가 생기는 것은 명단을 안 바꿔서 (S15P21A405-718)
+    const ships = new Set(cands.filter((c) => hasShip(c.u)).map((c) => c.u.email));
+    const keep = this.cam.s === this.friendPlanScale ? reusablePlan(this.friendPlan, new Set(byEmail.keys()), this.follow?.leader.email ?? null, ships) : null;
     this.friendPlanScale = this.cam.s;
 
     if (keep) {

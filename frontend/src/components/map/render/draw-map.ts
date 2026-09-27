@@ -619,7 +619,8 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
    * 끝 별의 라벨이 화면 밖이나 시트 밑으로 나가 잘렸다. 당긴 만큼 별에서 조금 비켜 서지만 읽히는 쪽이 낫다.
    * 넓은 화면은 그대로다
    */
-  const fr = e.freeRect();
+  // 붙잡은 화면 기준 — 시트를 올려도 라벨이 따라 움직이지 않는다 (`overlayRect`)
+  const fr = e.overlayRect();
   const em = CONSTELLATION.labelEdgePx;
   const narrow = e.isNarrow();
   const inside = <T extends { x0: number; y0: number; x1: number; y1: number }>(q: T): T => {
@@ -681,9 +682,9 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const tx = center.x;
   const ty = center.y;
 
-  // 전체를 어둡게 덮는다 (진행도에 따라) — 지금 중심을 기준으로
+  // 전체를 어둡게 덮는다 (진행도에 따라) — 지금 중심을 기준으로. 폰은 뷰가 뜰 때 붙잡은 화면이다 (`overlayRect`)
   g.globalCompositeOperation = "source-over";
-  const f = e.freeRect();
+  const f = e.overlayRect();
   const Rv = Math.min(f.x1 - f.x0, f.y1 - f.y0) * 0.5;
   const vg = g.createRadialGradient(tx, ty, Rv * 0.2, tx, ty, Rv * 1.9);
   vg.addColorStop(0, `rgba(4,6,13,${0.55 * k})`);

@@ -923,7 +923,7 @@ export class MapEngine {
         const R = this.ringR();
         // 뭉치가 남은 화면 안에 들도록 밀어내는 거리를 줄인다 — 새 중심은 화면 가운데로 오므로
         // 뭉치의 화면 자리는 가운데 + 이 벡터다. 패널이 열려 화면이 좁으면 그대로 두면 밖으로 나간다
-        const f = this.freeRect();
+        const f = this.overlayRect();
         let vx = u.x * R * PROBE.prevDist;
         let vy = u.y * R * PROBE.prevDist;
         const bx = Math.max(1, (f.x1 - f.x0) / 2 - R * PROBE.prevScale - 24);
@@ -1045,7 +1045,7 @@ export class MapEngine {
     if (!p || p.exitingAt || p.zoom <= 1) return null;
     const cur = this.currentRing();
     const c = cur ? this.probeBasePos(cur.centerId) : null;
-    const f = this.freeRect();
+    const f = this.overlayRect();
     return { cx: c?.x ?? f.cx, cy: c?.y ?? f.cy, z: p.zoom };
   }
 
@@ -1053,7 +1053,7 @@ export class MapEngine {
   probePan(dx: number, dy: number) {
     const p = this.probe;
     if (!p || p.exitingAt) return;
-    const f = this.freeRect();
+    const f = this.overlayRect();
     const lim = Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
     // 손가락이 민 것은 **벌어진 화면의 px** 이다 — 밀기는 벌리기 전 공간에 쌓이고 확대가 그걸 다시 벌리므로
     // 배율로 나눠 단위를 맞춘다. 안 그러면 벌려 놓을수록 같은 손짓이 몇 배로 밀린다
@@ -1070,9 +1070,9 @@ export class MapEngine {
     return { x: lerp(p.offFrom.x, p.offTo.x, k) + p.pan.x, y: lerp(p.offFrom.y, p.offTo.y, k) + p.pan.y };
   }
 
-  /** 고리 반지름(px) — 남은 화면의 짧은 변 기준 */
+  /** 고리 반지름(px) — 남은 화면의 짧은 변 기준. 폰은 뷰가 뜰 때 붙잡은 화면이다({@link overlayRect}) */
   private ringR() {
-    const f = this.freeRect();
+    const f = this.overlayRect();
     return Math.min(f.x1 - f.x0, f.y1 - f.y0) * PROBE.ringRatio;
   }
 
@@ -1126,8 +1126,8 @@ export class MapEngine {
   private laidOutRing(r: ProbeRing): Map<number, { x: number; y: number }> {
     const R = this.ringR();
     const narrow = this.isNarrow();
-    const f = this.freeRect();
-    // 폰은 남은 화면 안에 놓으므로 그 사각형이 바뀌면(시트 단) 다시 놓는다 (S15P21A405-715)
+    const f = this.overlayRect();
+    // 폰은 붙잡은 화면(`overlayRect`) 안에 놓는다. 시트 단이 바뀌어도 그 사각형은 그대로라 다시 놓지 않는다 — 떨림 없음
     const box = narrow ? `|${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}` : "";
     const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}${box}`;
     if (this.ringLayout?.key === key) return this.ringLayout.pos;
@@ -1242,7 +1242,7 @@ export class MapEngine {
    */
   probeLabelCap(): { line: number; center: number } {
     if (!this.isNarrow()) return { line: Infinity, center: Infinity };
-    const f = this.freeRect();
+    const f = this.overlayRect();
     const w = f.x1 - f.x0;
     return { line: w * PROBE_LABEL.narrowCapRatio, center: w * PROBE_LABEL.narrowCenterCapRatio };
   }
@@ -1273,7 +1273,8 @@ export class MapEngine {
     const real = { x: this.pos[i * 2], y: this.pos[i * 2 + 1] };
     const sl = this.overlaySlot(id);
     if (!sl) return real;
-    const f = this.freeRect();
+    // 고리 가운데 — 폰은 뷰가 뜰 때 붙잡은 화면의 가운데다. 시트를 올려도 고리가 따라 올라가지 않는다
+    const f = this.overlayRect();
     const off = this.probeOffset();
     // 배치는 **벌리기 전 자리**다. 확대는 `probePos` 가 중심 별 기준으로 건다 (S15P21A405-688)
     const target = { x: f.cx + off.x + sl.x, y: f.cy + off.y + sl.y };
@@ -1769,9 +1770,9 @@ export class MapEngine {
     this.instrumentInset = px;
   }
 
-  /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다 */
+  /** 별자리를 놓을 영역 — 좌하단 계기판 위에 얹히지 않게 뺀다. 폰은 뷰가 뜰 때 붙잡은 화면이다({@link overlayRect}) */
   private constellationRect() {
-    const base = this.freeRect();
+    const base = this.overlayRect();
     const x0 = base.x0 + this.instrumentInset;
     const y1 = base.y1 - 20;
     return { x0, y0: base.y0, x1: base.x1, y1, cx: (x0 + base.x1) / 2, cy: (base.y0 + y1) / 2 };
@@ -1798,12 +1799,48 @@ export class MapEngine {
    * 스물몇 군데가 전부 NaN·무한대로 번진다. 좁아도 유효한 사각형이 나가는 편이 낫다.
    */
   freeRect() {
-    const o = this.occluded;
+    return this.rectFor(this.occluded);
+  }
+
+  private rectFor(o: Occlusion) {
     const x0 = o.left;
     const x1 = Math.max(x0 + 120, this.W - o.right);
     const y0 = o.top;
     const y1 = Math.max(y0 + 120, this.H - o.bottom);
     return { x0, y0, x1, y1, cx: (x0 + x1) / 2, cy: (y0 + y1) / 2 };
+  }
+
+  /** 폰 연출 뷰가 붙잡은 남은 화면 — {@link overlayRect}. `owner` 는 그 뷰 객체다(건너가기로 고리가 늘어도 같은 뷰) */
+  private overlayHold: { owner: object; W: number; H: number; settleUntil: number; rect: ReturnType<MapEngine["freeRect"]> } | null = null;
+
+  /**
+   * **폰에서 주변 탐색·별자리가 쓰는 남은 화면** — 뷰가 처음 뜰 때 붙잡아 끝날 때까지 쓴다 (S15P21A405-715, 사용자 결정).
+   *
+   * 폰은 시트가 단을 옮길 때마다 가림폭이 바뀐다. 두 뷰가 그걸 따라가서 2 단으로 올리면 고리·별자리가 그만큼 줄었고,
+   * 가림폭은 여러 프레임에 걸쳐 따라가므로(`setOcclusion` 의 ease) 그동안 배치를 매 프레임 다시 해 화면이 떨렸다.
+   * 사용자: "2단 올릴 때 축소시키지 말고 주변탐색뷰·여정뷰 유지시켜".
+   *
+   * 들어오는 동안(`enterMs`)만 **목표** 가림폭을 따라간다 — 뷰를 연 손짓이 시트 단도 함께 옮기고(712), 여정 시트는
+   * 열린 뒤에 1 단 높이를 잰다(`use-sheet-peek`). 그 뒤로는 시트를 올리든 내리든 그대로다. 화면 크기(W·H)가 바뀌면
+   * 다시 잡는다. 넓은 화면은 그대로 {@link freeRect} 다 — 우측 패널이 열리면 별자리가 좁아지는 것이 맞다(S15P21A405-330).
+   */
+  overlayRect() {
+    if (!this.isNarrow()) return this.freeRect();
+    const p = this.probe;
+    const c = this.constellation;
+    const owner = p && !p.exitingAt ? p : c && !c.exitingAt ? c : (p ?? c);
+    if (!owner) {
+      this.overlayHold = null;
+      return this.freeRect();
+    }
+    const now = performance.now();
+    let h = this.overlayHold;
+    if (!h || h.owner !== owner || h.W !== this.W || h.H !== this.H) {
+      const settleUntil = owner === p && p ? p.rings[0].t0 + PROBE.enterMs : c ? c.t0 + CONSTELLATION.enterMs : now;
+      h = this.overlayHold = { owner, W: this.W, H: this.H, settleUntil, rect: this.rectFor(this.occludedTarget) };
+    }
+    if (now < h.settleUntil) h.rect = this.rectFor(this.occludedTarget);
+    return h.rect;
   }
 
   /** `p` 는 깊이 시차 배율({@link parOf}). 별 위에 서는 것(나·사람·선택 링)은 그 별의 값을 넘겨야 별과 같이 움직인다 */

@@ -32,12 +32,14 @@ const H = BASE_H * SCALE;
 /** 화살표 끝이 가림 영역(검색창·재생바·패널)에서 떨어지는 거리 */
 const EDGE_GAP = 10;
 /**
- * 위아래 화살표가 화면 위·아래 끝에서 떨어지는 거리 — **둘이 같다** (S15P21A405-719).
+ * 위아래 화살표가 화면 위·아래 끝에서 떨어지는 거리 (S15P21A405-719).
  * 가림 영역(`HUD_OCCLUSION` 58·92)을 쓰면 위는 검색창에 8px 로 붙고 아래는 붕 떴다(사용자 피드백).
  * 데스크톱 재생바는 우측 패널 칸(오른쪽 아래)에 있어 **아래 가운데는 비어 있는데** 92 는 재생바 몫이라서다.
- * 그래서 위를 기준으로 잡는다: 검색창 아래끝 60(`hud-t` 16 + `h-11` 44) + 16. 아래도 같은 값을 써 대칭이 된다.
+ * - 위: 검색창 아래끝 60(`hud-t` 16 + `h-11` 44) + 16 간격
+ * - 아래: 가릴 것이 없어 끝으로 붙인다. 검색창–위 화살표 간격(16)보다 조금 더 띄운다(사용자 결정)
  */
-const EDGE_Y = 76;
+const EDGE_TOP = 76;
+const EDGE_BOTTOM = 24;
 
 /** `clip-path: path()` 는 px 좌표만 받고 배율을 따로 못 준다 — 숫자를 미리 곱해 둔다 */
 const scalePath = (d: string) => d.replace(/-?\d+(\.\d+)?/g, (n) => String(+(Number(n) * SCALE).toFixed(2)));
@@ -105,7 +107,7 @@ function GlassArrow({ dir, awake }: { dir: Dir; awake: boolean }) {
  * 13px 글씨·30% 투명도로는 평소에 아예 안 보여서(S15P21A405-719) 유리 화살표를 붙이고 글씨를 키웠다.
  *
  * **네 변 가운데에 대칭으로 선다** (S15P21A405-719). 가로는 우측 패널을 뺀 보이는 지도 기준이라 패널이 열리면
- * 위아래 화살표도 남은 지도 가운데로 옮겨 간다. 세로는 화면 기준이다 — 위아래 끝에서 같은 거리(`EDGE_Y`).
+ * 위아래 화살표도 남은 지도 가운데로 옮겨 간다. 세로는 화면 기준이다 — 위는 검색창 아래, 아래는 화면 끝 가까이(`EDGE_TOP`·`EDGE_BOTTOM`).
  *
  * 움직임은 **카메라를 들여다봐서** 안다. 휠·드래그 이벤트를 듣는 것보다 확실하다 — 내 위치로
  * 가기나 겹 전환처럼 코드가 옮기는 경우까지 같은 잣대로 잡힌다.
@@ -156,12 +158,12 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
         <span className={`${text} text-right`}>{x[1]}</span>
         <GlassArrow dir="right" awake={awake} />
       </div>
-      {/* 위아래는 화면 끝에서 같은 거리 — 위는 검색창 바로 아래, 아래는 그와 대칭 */}
-      <div className={`${wrap} -translate-x-1/2 flex-col gap-1.5`} style={{ top: EDGE_Y, left: midX }}>
+      {/* 위는 검색창 바로 아래, 아래는 가릴 것이 없어 화면 끝 가까이 */}
+      <div className={`${wrap} -translate-x-1/2 flex-col gap-1.5`} style={{ top: EDGE_TOP, left: midX }}>
         <GlassArrow dir="up" awake={awake} />
         <span className={`${text} text-center`}>{y[1]}</span>
       </div>
-      <div className={`${wrap} -translate-x-1/2 flex-col-reverse gap-1.5`} style={{ bottom: EDGE_Y, left: midX }}>
+      <div className={`${wrap} -translate-x-1/2 flex-col-reverse gap-1.5`} style={{ bottom: EDGE_BOTTOM, left: midX }}>
         <GlassArrow dir="down" awake={awake} />
         <span className={`${text} text-center`}>{y[0]}</span>
       </div>

@@ -54,16 +54,21 @@ export default function JourneySummary({ route }: { route: JourneyRoute | null }
     openComposer();
   };
 
+  /**
+   * **폰에서는 버튼 글자를 한 줄로 묶는다** (S15P21A405-714). 314px 폭에서 `경로 지우기` · `순차 재생` 이
+   * 한 단어 가운데서 꺾였다(`순차 재 / 생`, 실측 — 360px 에서는 안 꺾인다). 버튼 묶음은 줄지 않게 두고,
+   * 모자라는 폭은 `총 재생` 이 값 앞에서 두 줄로 접어 받는다 — 셋 다 묶으면 314px 에서 줄이 9px 넘쳤다
+   */
   return (
     <div className="flex items-center justify-between gap-2">
       <span className="lbl">
         총 재생 <b className="num text-sm normal-case tracking-normal text-ink">{formatDuration(route.totalDuration)}</b>
       </span>
-      <div className="flex gap-2">
-        <Button size="sm" onClick={handleClear}>
+      <div className="flex gap-2 max-tablet:shrink-0">
+        <Button size="sm" className="max-tablet:whitespace-nowrap" onClick={handleClear}>
           경로 지우기
         </Button>
-        <Button size="sm" variant="primary" onClick={handlePlay}>
+        <Button size="sm" variant="primary" className="max-tablet:whitespace-nowrap" onClick={handlePlay}>
           <PlayIcon size={14} /> 순차 재생
         </Button>
       </div>

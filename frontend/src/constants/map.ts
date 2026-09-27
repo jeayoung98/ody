@@ -781,6 +781,11 @@ export const PROBE_LABEL = {
    * 줄이면 고리 모양은 살지만 숨는 라벨이 는다 — 0.6 이면 360 × 760 에서 보이는 라벨이 88%, 0.9 면 95% 다(계산)
    */
   narrowShiftRatio: 0.9,
+  /**
+   * 폰에서 라벨 자리를 못 찾은 곡의 별이 차지하는 네모 한 변(px) — 선택 링 지름(24). 글자는 숨어도 별은 다른 라벨 밑에
+   * 깔리지 않게 이만큼은 비운 곳에 둔다 (`placeLabels`)
+   */
+  narrowStarPx: 24,
 } as const;
 
 export const HOP_LINK = {

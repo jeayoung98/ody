@@ -150,6 +150,21 @@ test("폰 배치: 한도 안에 빈자리가 없으면 경계 안 제자리에 �
   assert.deepEqual(placeLabels(boxes, PGAP, PHONE, 20).get(1), { x: 10, y: 10 });
 });
 
+test("폰 배치: 라벨 자리가 없으면 별만이라도 빈 곳에 — 다른 라벨 밑에 깔리지 않는다", () => {
+  // 360px 폰에서 실제로 났던 것: 숨은 10위의 별이 9위 제목 상자 안에 그려졌다
+  const STAR = { w: 24, top: -12, bottom: 12 };
+  const boxes = [
+    { id: 1, x: 0, y: 0, w: 150, top: -10, bottom: 34 },
+    { id: 2, x: 0, y: 19, w: 150, top: -10, bottom: 34 },
+  ];
+  const pos = placeLabels(boxes, PGAP, { x0: -80, x1: 80, y0: -12, y1: 80 }, 40, STAR);
+  const p = pos.get(2);
+  const a = rect(boxes[0], pos.get(1));
+  const s = { x0: p.x - 12, x1: p.x + 12, y0: p.y - 12, y1: p.y + 12 };
+  const apart = Math.min(a.x1, s.x1) - Math.max(a.x0, s.x0) + PGAP <= 1e-6 || Math.min(a.y1, s.y1) - Math.max(a.y0, s.y0) + PGAP <= 1e-6;
+  assert.ok(apart, `2 의 별 ${JSON.stringify(p)} 이 1 의 라벨 ${JSON.stringify(a)} 에 깔렸다`);
+});
+
 test("폰 배치: 고정 상자는 경계와 상관없이 그 자리다", () => {
   const boxes = [
     { id: 0, x: 0, y: 0, w: 200, top: -25, bottom: 50, fixed: true },

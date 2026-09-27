@@ -104,13 +104,16 @@ function tooClose(a: LabelBox, ax: number, ay: number, b: LabelBox, bx: number, 
  * 겹친 채 끝났다 — 지도 곡 172개로 만든 고리 201개를 360 × 760 에서 돌리면 겹침 없는 고리가 0% 였다(계산).
  *
  * `boxes` 순서가 우선순위다(고정 상자는 순서와 상관없이 먼저 선다). 원래 자리에서 `maxShift` 안에 빈자리가 없으면
- * 경계 안 원래 자리에 둔다 — 그 라벨은 겹치므로 그리는 쪽이 {@link cullLabels} 로 글자를 숨긴다. 넓은 화면은 안 쓴다.
+ * 그 라벨은 글자가 숨는다 — 그리는 쪽이 {@link cullLabels} 로 가린다. 그래도 **별은 보여야 하므로** `star`(별만의 상자)가
+ * 들어갈 빈자리를 다시 찾는다. 처음엔 경계 안 원래 자리에 두었더니 360px 폰에서 숨은 곡의 별이 옆 라벨의 제목 상자
+ * 밑에 깔려 안 보였다(실측, 10위 별이 9위 제목 상자 안). 그 자리도 없으면 경계 안 원래 자리다. 넓은 화면은 안 쓴다.
  */
 export function placeLabels(
   boxes: readonly LabelBox[],
   gap: number,
   bounds: LabelBounds,
   maxShift: number,
+  star?: { w: number; top: number; bottom: number },
   step = 4,
 ): Map<number, { x: number; y: number }> {
   const out = new Map<number, { x: number; y: number }>();
@@ -120,10 +123,8 @@ export function placeLabels(
     placed.push({ b, x: b.x, y: b.y });
     out.set(b.id, { x: b.x, y: b.y });
   }
-  for (const b of boxes) {
-    if (b.fixed) continue;
-    const at = { ...b };
-    keepInside(at, bounds);
+  /** 경계 안 원래 자리에서 `maxShift` 안의 가장 가까운 빈자리 (없으면 null) */
+  const nearestFree = (b: LabelBox, at: { x: number; y: number }) => {
     // 경계보다 큰 축은 가운데 한 줄만 본다 (keepInside 와 같다)
     const wideX = bounds.x0 + b.w / 2 > bounds.x1 - b.w / 2;
     const wideY = bounds.y0 - b.top > bounds.y1 - b.bottom;
@@ -142,9 +143,25 @@ export function placeLabels(
         bestD = d;
       }
     }
-    // 빈자리를 못 찾은 라벨은 자리를 차지하지 않는다 — 뒤 순위가 그 자리를 쓸 수 있고, 이 라벨은 글자가 숨는다
-    if (best) placed.push({ b, x: best.x, y: best.y });
-    out.set(b.id, best ?? { x: at.x, y: at.y });
+    return best;
+  };
+  for (const b of boxes) {
+    if (b.fixed) continue;
+    const at = { ...b };
+    keepInside(at, bounds);
+    const spot = nearestFree(b, at);
+    if (spot) {
+      placed.push({ b, ...spot });
+      out.set(b.id, spot);
+      continue;
+    }
+    // 라벨 자리가 없다 — 별 자리만이라도 비운 곳에. 별만 차지하므로 뒤 순위는 그 둘레를 쓸 수 있다
+    const s = star ? { ...b, ...star } : null;
+    const sAt = s ? { ...s } : null;
+    if (s && sAt) keepInside(sAt, bounds);
+    const starSpot = s && sAt ? nearestFree(s, sAt) : null;
+    if (s && starSpot) placed.push({ b: s, ...starSpot });
+    out.set(b.id, starSpot ?? { x: at.x, y: at.y });
   }
   return out;
 }

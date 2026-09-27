@@ -1182,7 +1182,8 @@ export class MapEngine {
       },
       ...r.ids.map((id, rank) => ({ id, ...this.polarSlot(r, rank, R), w: titleW(id, L.titlePx, cap.line) + 12, top: -10, bottom: L.boxTop + L.boxH + 2 })),
     ];
-    const pos = placeLabels(boxes, L.narrowGapPx, bounds, R * L.narrowShiftRatio);
+    const star = { w: L.narrowStarPx, top: -L.narrowStarPx / 2, bottom: L.narrowStarPx / 2 };
+    const pos = placeLabels(boxes, L.narrowGapPx, bounds, R * L.narrowShiftRatio, star);
     pos.delete(r.centerId);
     return pos;
   }

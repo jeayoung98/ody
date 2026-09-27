@@ -1,7 +1,7 @@
 import { FRIEND_MARKER } from "@/constants";
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
-import type { MapEngine } from "../engine/map-engine";
+import type { MapEngine, VisibleFriend } from "../engine/map-engine";
 import { drawCropped, photoFor } from "@/lib/avatar-photo";
 import { avatarFor, ME_AVATAR, trailOf } from "./sprites";
 import { queueSlots, type QueueInput } from "./queue-slots";
@@ -340,7 +340,9 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
    * 덮어 원근이 뒤집힌다. 인솔자는 그 위 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는
    * 우주선이 가려지지 않는다 (S15P21A405-625).
    */
-  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader) || a.scale - b.scale);
+  // 우주선은 헬멧 위, 인솔자 우주선은 그 위 (S15P21A405-718) — 겹쳐도 로켓이 먼저 보여야 한다
+  const tier = (v: VisibleFriend) => (v.isLeader ? 2 : v.user.riderCount > 0 ? 1 : 0);
+  const order = [...e.visFriends].sort((a, b) => tier(a) - tier(b) || a.scale - b.scale);
   for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);

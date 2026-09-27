@@ -1126,8 +1126,8 @@ export class MapEngine {
     const R = this.ringR();
     const f = this.freeRect();
     const narrow = this.isNarrow();
-    // 폰은 남은 화면 안에 가두므로 그 사각형이 바뀌어도(시트 단) 다시 민다
-    const box = narrow ? `${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}` : "";
+    // 폰은 남은 화면 안에 가두므로 그 사각형이 바뀌어도(시트 단) 다시 민다. 링크 자리가 선택한 곡에만 있어 선택도 본다
+    const box = narrow ? `${Math.round(f.x0)},${Math.round(f.y0)},${Math.round(f.x1)},${Math.round(f.y1)}|${this.selectedId}` : "";
     const key = `${r.centerId}|${r.ids.join(",")}|${Math.round(R)}|${this.layer}|${box}`;
     if (this.ringLayout?.key === key) return this.ringLayout.pos;
     const L = PROBE_LABEL;
@@ -1136,10 +1136,16 @@ export class MapEngine {
     const artistOf = (id: number) => this.pointOf(id)?.artist ?? "";
     // 그리는 쪽(`draw-map`)이 같은 상한으로 줄여 그리므로 폭도 상한까지만 센다
     const lineW = (text: string, px: number, mono = false, max = cap.line) => Math.min(approxTextWidth(text, px, mono), max);
+    /**
+     * 라벨 묶음 아래끝 — "주변 보기 ›" 링크 자리까지. **폰은 그 자리를 선택한 이웃에만 둔다** (S15P21A405-715).
+     * 링크는 선택한 곡에만 뜨는데 열 묶음 모두 16px 씩 비워 두느라 좁은 화면에서 서로 겹쳤다
+     */
+    const linkBottom = HOP_LINK.dy + HOP_LINK.h / 2;
+    const subBottom = L.subY + L.subPx / 2 + 2;
     const boxes: LabelBox[] = r.ids.map((id, rank) => {
       const at = this.polarSlot(r, rank, R);
       const w = Math.max(lineW(titleOf(id), L.titlePx) + 12, lineW(`#${rank + 1} · ${artistOf(id)}`, L.subPx, true));
-      return { id, x: at.x, y: at.y, w, top: -10, bottom: HOP_LINK.dy + HOP_LINK.h / 2 };
+      return { id, x: at.x, y: at.y, w, top: -10, bottom: narrow && id !== this.selectedId ? subBottom : linkBottom };
     });
     // 가운데 곡: 링부터 안내 줄 아래까지. 폭은 제목과 안내 줄 중 넓은 쪽
     const cw = Math.max(
@@ -1154,7 +1160,8 @@ export class MapEngine {
      */
     const m = L.narrowEdgePx;
     const bounds = narrow ? { x0: f.x0 + m - f.cx, x1: f.x1 - m - f.cx, y0: f.y0 + m - f.cy, y1: f.y1 - m - f.cy } : undefined;
-    const pos = separateLabels(boxes, L.minGapPx, undefined, bounds);
+    // 가두면 밀고 되돌리기를 되풀이하므로 바퀴를 넉넉히 준다
+    const pos = separateLabels(boxes, L.minGapPx, bounds ? 400 : undefined, bounds);
     pos.delete(r.centerId);
     this.ringLayout = { key, pos };
     return pos;

@@ -34,10 +34,14 @@ export default function MapActions() {
 
   if (pathname !== ROUTES.home) return null;
 
-  /** 레일의 여정 버튼과 같은 규칙이다 (S15P21A405-434) — 상자가 떠 있으면 상자를, 아니면 패널을 */
+  /**
+   * 레일의 여정 버튼과 같은 규칙이다 (S15P21A405-434) — 상자가 떠 있으면 상자를, 아니면 패널을.
+   * 다른 점은 **시트를 1 단으로 연다**는 것 하나다 (S15P21A405-712) — 경로 별자리가 지도에 그려진
+   * 결과라 시트가 절반을 덮으면 안 된다. 레일은 데스크톱이라 단이 없다
+   */
   const pressJourney = () => {
     if (composerOpen) closeComposer();
-    else if (hasJourney) toggle("journey");
+    else if (hasJourney) toggle("journey", 1);
     else openComposer();
   };
 
@@ -57,7 +61,7 @@ export default function MapActions() {
       data-map-actions
       className="absolute top-hud-t right-gutter-sm z-[22] hidden h-8 items-center gap-3 transition-opacity duration-300 max-tablet:flex"
     >
-      <NearbyExploreButton bare />
+      <NearbyExploreButton bare sheetSnap={1} />
       {panelEnabled.journey && (
         /* 레일과 같은 규칙으로 잠근다 (S15P21A405-660) — 여기만 열려 있으면 폰에서만 뚫린다 */
         <RailButton

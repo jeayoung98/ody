@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { CloseIcon } from "@/components/common/icons";
 import { flattenSearch, useMusicSearchQuery } from "@/hooks/queries/use-music-search-query";
+import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { useLoadMoreOnBottom } from "@/hooks/use-load-more-on-bottom";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { rememberMusicHints } from "@/lib/music-hints";
@@ -47,6 +48,7 @@ export default function JourneyComposer() {
   const requestRoute = useJourneyStore((s) => s.requestRoute);
   const close = useJourneyStore((s) => s.closeComposer);
   const openJourneyPanel = usePanelStore((s) => s.openJourney);
+  const narrow = useIsNarrow();
 
   const ready = startMusicId != null && endMusicId != null && startMusicId !== endMusicId;
   const searching = keyword.trim().length > 0;
@@ -70,7 +72,8 @@ export default function JourneyComposer() {
     if (!ready) return;
     requestJourney(startMusicId, endMusicId);
     requestRoute();
-    openJourneyPanel();
+    // 폰은 시트를 1 단으로 연다 (S15P21A405-712) — 방금 만든 경로 별자리가 결과라 가리면 안 된다. 데스크톱은 단이 없어 그대로
+    openJourneyPanel(narrow ? 1 : undefined);
     // 튜토리얼의 여정 단계는 **경로를 만든 순간** 끝난다 (S15P21A405-343)
     useTutorialStore.getState().complete("journey");
   };

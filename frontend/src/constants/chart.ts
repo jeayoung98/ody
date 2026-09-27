@@ -10,12 +10,15 @@
  * `unit` 은 `UserRankingItem.score` 의 뜻이다 — 종류마다 다르다 (발견한 곡 수 / 재생 횟수 / 신고 건수 /
  * 지금 태우고 있는 인원). 버스기사를 "동승" 이라 적으면 누적으로 읽혀서 "명" 이다.
  * `empty` 는 빈 목록 문구. 버스기사는 **빈 목록이 기본 상태에 가깝다** — 아무도 안 태우면 `[]` 다.
+ *
+ * **화면 이름은 "선장" 이다** (S15P21A405-720, 사용자 결정). 명세(SOCIAL-12)와 이 파일의 주석·키(`topDriver`)는
+ * "버스기사" 그대로다 — 화면 글자만 바꿨다. 탑승이 우주선을 타는 것이라 빈 목록도 "우주선" 이다.
  */
 export const CHART_TYPES = [
   { key: "discovery", label: "이번주 발견왕", short: "발견왕", unit: "곡", description: "이번 주 처음 재생된 곡을 가장 많이 찾아낸 사람", empty: "이번 주에는 아직 기록이 없어요." },
   { key: "explore", label: "이번주 탐험왕", short: "탐험왕", unit: "회", description: "이번 주 재생 횟수가 가장 많은 사람 (같은 곡을 다시 들어도 센다)", empty: "이번 주에는 아직 기록이 없어요." },
   { key: "contribution", label: "이번주 기여도", short: "기여도", unit: "건", description: "이번 주 잘못된 곡을 가장 많이 신고한 사람", empty: "이번 주에는 아직 기록이 없어요." },
-  { key: "topDriver", label: "실시간 탑 버스기사", short: "버스기사", unit: "명", description: "지금 가장 많은 사람을 태우고 있는 사람", empty: "지금 운행 중인 버스가 없어요." },
+  { key: "topDriver", label: "실시간 탑 선장", short: "선장", unit: "명", description: "지금 가장 많은 사람을 태우고 있는 사람", empty: "지금 운행 중인 우주선이 없어요." },
 ] as const;
 export type ChartType = (typeof CHART_TYPES)[number]["key"];
 

@@ -28,6 +28,7 @@
 | [014](014-button-font-size-utilities-ignored.md) | 버튼 글씨 크기 클래스가 전부 무시됨 | 레이어 밖의 `button { font: inherit }` 가 `@layer utilities` 의 `.text-*` 를 항상 이김 | S15P21A405-384 |
 | [015](015-stars-blink-every-3-seconds.md) | 별이 3초마다 사라졌다 나타남 (재로딩처럼 보임) | 기억 정리가 `first`(처음 본 때)를 잣대로 써 **지금 그리는 별**을 지움 — 다음 프레임에 알파 0부터 다시 밝힘 | S15P21A405-479 |
 | [016](016-canvas-photo-blocked-by-img-cache.md) | 인솔자·동승자 헬멧에만 프로필 사진이 안 뜸 | 패널 `<img>` 가 CORS 없이 먼저 받아 캐시한 응답에 ACAO 가 없어 캔버스용 CORS 요청이 거부됨 (추정) — 캐시를 비켜 다시 받고, 안 되면 CORS 없이 | S15P21A405-676 |
+| [018](018-sheet-stop-measured-with-folded-header.md) | 1단으로 열린 여정 시트를 2단으로 올리면 재생 줄이 플레이어 바에 깔림 | 2단 멈춤을 1단(머리글 접힘)에서 재고, 머리글이 펴져 요소가 내려가도 크기는 그대로라 다시 안 잼 — 머리글 여백은 내용 상자로는 안 보임 | S15P21A405-714 |
 
 ---
 

@@ -9,10 +9,10 @@ import HelpDialog from "./help-dialog";
 import { setAnalyticsContext, track } from "@/lib/analytics/client";
 
 /**
- * 도움말 — 지도가 뭔지, 별이 뭔지 설명. **좌하단 미니맵의 왼쪽 위 모서리**에 선다 (S15P21A405-722, 사용자
+ * 도움말 — 지도가 뭔지, 별이 뭔지 설명. **좌하단 미니맵 바로 위, 왼쪽 끝**에 선다 (S15P21A405-722, 사용자
  * 결정). 예전에는 계기판 유리 상자 오른쪽에 44px 알약으로 붙어 있었는데(S15P21A405-434 · 479), 상자와
- * 접기가 없어지면서 미니맵 안으로 들어왔다. 미니맵이 150px 이라 32px 로 줄였다 — 44 는 축소판 한 귀퉁이를
- * 다 가린다. 유리는 그대로다 — 계기판 유리가 없어져 backdrop root 문제도 없다.
+ * 접기가 없어지면서 미니맵 위로 올라왔다. 미니맵 안에 넣어 봤더니 축소판 한 귀퉁이를 가려서 밖으로 뺐다.
+ * 크기는 32px — 옆에 선 것이 없어 44 는 혼자 커 보인다. 유리는 그대로다.
  *
  * 다이얼로그는 `document.body` 로 빼서 그린다. 계기판에 `transform` 이 걸려 있어서 안에 두면
  * `fixed inset-0` 이 화면이 아니라 계기판 안에 갇힌다 (신고 팝업과 같은 문제, S15P21A405-378).
@@ -49,7 +49,7 @@ export default function HelpButton() {
         title="도움말"
         onClick={() => { track("help_opened"); setAnalyticsContext({ help_open: true }); setOpen(true); }}
         // 폰에서는 안 보인다 (S15P21A405-703, 사용자 결정) — 윗줄 오른쪽 끝은 주변 탐색·여정이 차지한다
-        className="glass-liquid absolute top-2 left-2 z-[22] grid h-8 w-8 place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink max-tablet:hidden"
+        className="glass-liquid absolute -top-10 left-0 z-[22] grid h-8 w-8 place-items-center rounded-pill! text-ink-2 transition-colors hover:text-ink max-tablet:hidden"
       >
         <HelpIcon />
       </button>

@@ -33,7 +33,7 @@ export default function MinimapPanel() {
         contestOpen ? "translate-x-[calc(-100%_-_18px)]" : ""
       }`}
     >
-      {/* 미니맵 + 그 위에 겹친 나침반 + 왼쪽 위 도움말. 나침반은 클릭을 받지 않아 미니맵 클릭 이동이 그대로 된다 */}
+      {/* 미니맵 + 그 위에 겹친 나침반 + 미니맵 위쪽 왼쪽 끝에 도움말. 나침반은 클릭을 받지 않아 미니맵 클릭 이동이 그대로 된다 */}
       <div data-body className="relative">
         <MinimapCanvas />
         <AxisCompass />

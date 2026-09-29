@@ -100,7 +100,7 @@ export const LAYER_TINTS: ReadonlyArray<readonly [number, number, number]> = [
 export const LAYER_TINT_MIX = 0.85;
 
 /** 상주 별 스프라이트 모양 (S15P21A405-723). 겹마다 하나씩 골라 "다른 곳에 왔다" 가 별 자체에서 읽히게 한다 */
-export type StarShape = "halo" | "cross" | "smear" | "diffuse" | "point" | "ring" | "disc" | "spark";
+export type StarShape = "halo" | "cross" | "smear" | "diffuse" | "point" | "disc" | "spark";
 
 /**
  * 성운 구름 스타일 (S15P21A405-723). `count` 0 이면 그 겹은 구름이 없다.
@@ -138,8 +138,8 @@ export const LAYER_THEMES: ReadonlyArray<{
   { sky: [[26, 11, 58], [5, 3, 15]], star: "diffuse", cloud: { count: 30, scale: 0.8, alpha: 1.5, stretch: 1 } },
   // 성단 — 하늘색. 작고 날카로운 점, 맑은 밤
   { sky: [[4, 32, 42], [2, 10, 16]], star: "point", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 } },
-  // 태양계 — 주황. 고리 달린 원반, 따뜻한 빛무리
-  { sky: [[42, 22, 6], [10, 5, 3]], star: "ring", cloud: { count: 6, scale: 1.6, alpha: 0.6, stretch: 1.2 } },
+  // 태양계 — 주황. 십자 빛줄기(해처럼), 따뜻한 빛무리. 고리 달린 원반은 못생겨서 뺐다 — 은하단과 모양이 겹치지만 색이 갈라 준다 (사용자 결정)
+  { sky: [[42, 22, 6], [10, 5, 3]], star: "cross", cloud: { count: 6, scale: 1.6, alpha: 0.6, stretch: 1.2 } },
   // 행성 — 청록. 그늘진 원판, 구름 없음
   { sky: [[4, 36, 28], [2, 12, 9]], star: "disc", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 } },
   // 저궤도 — 장밋빛. 반짝이는 스파크, 얇게 깔린 연무

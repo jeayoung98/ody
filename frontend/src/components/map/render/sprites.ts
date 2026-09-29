@@ -80,25 +80,6 @@ export function glowSprites(shape: StarShape = "halo"): HTMLCanvasElement[] {
         // 심만 또렷하고 후광은 짧다
         halo(1.2, 0.55);
         break;
-      case "ring": {
-        halo(0.9, 0.7);
-        g.beginPath();
-        g.arc(m, m, m * 0.3, 0, 6.284);
-        g.fillStyle = rgba(rgb, 1);
-        g.fill();
-        // 기울어진 고리
-        g.save();
-        g.translate(m, m);
-        g.rotate(-0.4);
-        g.scale(1, 0.32);
-        g.beginPath();
-        g.arc(0, 0, m * 0.78, 0, 6.284);
-        g.restore();
-        g.strokeStyle = rgba(light, 0.85);
-        g.lineWidth = 2.2;
-        g.stroke();
-        break;
-      }
       case "disc": {
         halo(0.9, 0.7, 0.7);
         g.beginPath();

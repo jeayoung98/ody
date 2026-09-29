@@ -3,7 +3,7 @@
 import { useEffect, useRef } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { MINIMAP } from "@/constants";
-import { genreRgb, rgba } from "@/constants/design-tokens";
+import { genreRgb, LAYER_THEMES, rgba } from "@/constants/design-tokens";
 import { fromMini, minimapFit, toMini } from "@/lib/minimap-fit";
 
 /** #miniWrap — 이 레이어 상주 곡을 점으로, 뷰포트 사각형과 내 위치를 얹는다. 클릭하면 그 지점으로 이동 */
@@ -29,7 +29,14 @@ export default function MinimapCanvas() {
         cv.height = h * dpr;
       }
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      // 겹 하늘 색과 맞춘다 (S15P21A405-723) — 지도 배경과 같은 그라데이션을 조금 더 어둡게
+      const sky = LAYER_THEMES[Math.min(LAYER_THEMES.length - 1, e?.layer ?? 0)].sky;
+      const sg = g.createLinearGradient(0, 0, 0, h);
+      sg.addColorStop(0, rgba(sky[0], 0.75));
+      sg.addColorStop(1, rgba(sky[1], 0.75));
       g.fillStyle = "#050810";
+      g.fillRect(0, 0, w, h);
+      g.fillStyle = sg;
       g.fillRect(0, 0, w, h);
       if (!e || !e.N) return;
       // 이 겹 상주 별 전체 범위를 미니맵에 통째로 담는다 (S15P21A405-685)

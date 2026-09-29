@@ -2,17 +2,13 @@
 
 import { useEffect, useRef } from "react";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
-import { LAYER_NAMES, MINIMAP } from "@/constants";
+import { MINIMAP } from "@/constants";
 import { genreRgb, rgba } from "@/constants/design-tokens";
 import { fromMini, minimapFit, toMini } from "@/lib/minimap-fit";
-import { useMapStore } from "@/stores/use-map-store";
 
 /** #miniWrap — 이 레이어 상주 곡을 점으로, 뷰포트 사각형과 내 위치를 얹는다. 클릭하면 그 지점으로 이동 */
 export default function MinimapCanvas() {
   const ref = useRef<HTMLCanvasElement>(null);
-  const layer = useMapStore((s) => s.layer);
-  const residentCount = useMapStore((s) => s.residentCount);
-
   useEffect(() => {
     const cv = ref.current;
     if (!cv) return;
@@ -103,7 +99,8 @@ export default function MinimapCanvas() {
 
   return (
     <div
-      className="relative h-24 cursor-crosshair overflow-hidden rounded-[13px] border border-white/[.075] bg-[#050810]"
+      // 높이는 나침반 별과 네 축 라벨이 안에 들어가는 값이다 (S15P21A405-722). 예전 96px 에는 별만 겨우 들어갔다
+      className="relative h-[150px] cursor-crosshair overflow-hidden rounded-[13px] border border-white/[.075] bg-[#050810]"
       onPointerDown={(e) => {
         const eng = getMapEngine();
         if (!eng || !eng.N) return;
@@ -114,9 +111,6 @@ export default function MinimapCanvas() {
       }}
     >
       <canvas ref={ref} className="block h-full w-full" />
-      <span className="lbl pointer-events-none absolute bottom-1.5 left-2">
-        {LAYER_NAMES[layer]} · {residentCount.toLocaleString()}곡
-      </span>
     </div>
   );
 }

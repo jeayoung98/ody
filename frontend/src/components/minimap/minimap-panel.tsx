@@ -10,7 +10,10 @@ import LayerName from "./layer-name";
 import MinimapCanvas from "./minimap-canvas";
 
 /**
- * #instr — 좌하단 계기판: 미니맵 · 깊이 게이지 · 레이어 이름 · 축 나침반.
+ * #instr — 좌하단 계기판: 깊이 게이지 · 레이어 이름(유리 상자) + 그 아래 미니맵 위에 겹친 축 나침반.
+ *
+ * **미니맵과 나침반은 유리 상자 밖이다** (S15P21A405-722, 사용자 결정). 레이어 설명 아래에 미니맵을 따로
+ * 두고, 나침반 별과 축 라벨을 그 미니맵 위에 연하게 겹친다 — 방향 설명이 지도 축소판 안에서 바로 읽힌다.
  * 지도를 넓게 보고 싶을 때가 있어서 접을 수 있다.
  *
  * 접기·펼치기는 패널 **오른쪽 가장자리에 튀어나온 핸들** 하나다 (S15P21A405-287). 접으면 패널이 왼쪽으로
@@ -68,9 +71,12 @@ export default function MinimapPanel() {
       <HelpButton />
       {/* 유리는 여기. 손잡이·도움말은 이 밖에 있어야 제 블러가 산다 */}
       <div className="glass-liquid flex flex-col gap-[11px] px-3.5 pt-[13px] pb-3.5">
-        <MinimapCanvas />
         <LayerGauge />
         <LayerName />
+      </div>
+      {/* 미니맵 + 그 위에 겹친 나침반. 나침반은 클릭을 받지 않아 미니맵 클릭 이동이 그대로 된다 */}
+      <div className="relative mt-[10px]">
+        <MinimapCanvas />
         <AxisCompass />
       </div>
     </aside>

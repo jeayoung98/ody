@@ -14,7 +14,7 @@ function Point({ len, wide, rotate, bright, dim }: { len: number; wide: number; 
     <g transform={`rotate(${rotate} 60 60)`}>
       <polygon points={`60,${tip} ${60 - wide},${base} 60,60`} fill="#ffffff" fillOpacity={bright} />
       <polygon points={`60,${tip} ${60 + wide},${base} 60,60`} fill="#ffffff" fillOpacity={dim} />
-      <polygon points={`60,${tip} ${60 - wide},${base} 60,60 ${60 + wide},${base}`} fill="none" stroke="#ffffff" strokeOpacity={0.28} strokeWidth={0.8} strokeLinejoin="round" />
+      <polygon points={`60,${tip} ${60 - wide},${base} 60,60 ${60 + wide},${base}`} fill="none" stroke="#ffffff" strokeOpacity={0.18} strokeWidth={0.8} strokeLinejoin="round" />
     </g>
   );
 }
@@ -39,15 +39,16 @@ export default function AxisCompass() {
   const cl = "absolute text-[10.5px] leading-[1.25] text-ink-2 drop-shadow-[0_1px_3px_rgba(2,4,10,.95)]";
   return (
     <div className="pointer-events-none absolute inset-0" aria-hidden>
-      <svg viewBox="0 0 120 120" className="absolute top-1/2 left-1/2 h-[96px] w-[96px] -translate-x-1/2 -translate-y-1/2">
+      {/* 미니맵 높이(150) 에 거의 꽉 차게. 라벨 줄 위아래로 조금만 남긴다 */}
+      <svg viewBox="0 0 120 120" className="absolute top-1/2 left-1/2 h-[140px] w-[140px] -translate-x-1/2 -translate-y-1/2">
         {/* 짧은 갈래(대각) 먼저 — 긴 갈래가 위에 덮인다 */}
         {[45, 135, 225, 315].map((r) => (
-          <Point key={r} len={27} wide={4} rotate={r} bright={0.18} dim={0.06} />
+          <Point key={r} len={27} wide={4} rotate={r} bright={0.1} dim={0.035} />
         ))}
         {[0, 90, 180, 270].map((r) => (
-          <Point key={r} len={46} wide={5.5} rotate={r} bright={0.34} dim={0.11} />
+          <Point key={r} len={52} wide={5.5} rotate={r} bright={0.2} dim={0.065} />
         ))}
-        <circle cx="60" cy="60" r="1.6" fill="#ffffff" fillOpacity={0.5} />
+        <circle cx="60" cy="60" r="1.6" fill="#ffffff" fillOpacity={0.35} />
       </svg>
       <span className={`${cl} top-1.5 left-1/2 max-w-[70%] -translate-x-1/2 text-center`}>{t(ax.y[1])}</span>
       <span className={`${cl} bottom-1.5 left-1/2 max-w-[70%] -translate-x-1/2 text-center`}>{t(ax.y[0])}</span>

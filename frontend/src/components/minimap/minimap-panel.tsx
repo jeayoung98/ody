@@ -3,17 +3,15 @@
 import HelpButton from "@/components/layout/help-button";
 import { useContestStore } from "@/stores/use-contest-store";
 import AxisCompass from "./axis-compass";
-import LayerGauge from "./layer-gauge";
-import LayerName from "./layer-name";
 import MinimapCanvas from "./minimap-canvas";
 
 /**
- * #instr — 좌하단 계기판: 깊이 게이지 · 레이어 이름 · 그 아래 미니맵 위에 겹친 축 나침반.
+ * #instr — 좌하단 계기판: **미니맵 하나**, 그 위에 겹친 축 나침반과 도움말 버튼.
  *
- * **유리 상자도 접기 손잡이도 없다** (S15P21A405-722, 사용자 결정). 예전에는 유리 패널 안에 넷을 넣고
- * 오른쪽 손잡이로 접었는데(S15P21A405-287 · 350), 접은 채로 시작해서 계기판이 있는 줄 모르는 사람이 많았다.
- * 지금은 지도 위에 글자·미니맵이 바로 떠 있고 **항상 보인다.** 배경 유리가 없어 지도를 가리는 면적도 줄었다.
- * 나침반 별과 축 라벨은 미니맵 위에 연하게 겹친다 — 방향 설명이 지도 축소판 안에서 바로 읽힌다.
+ * **유리 상자·접기 손잡이·겹 게이지·겹 이름을 다 뺐다** (S15P21A405-722, 사용자 결정). 예전에는 유리 패널
+ * 안에 넷을 넣고 오른쪽 손잡이로 접었는데(S15P21A405-287 · 350), 접은 채로 시작해서 계기판이 있는 줄 모르는
+ * 사람이 많았다. 지금은 미니맵만 지도 위에 바로 떠 **항상 보인다.** 겹 이름·깊이는 좌상단 브랜드 아래
+ * 스테퍼가, 축은 미니맵 위 나침반이 말한다. 게이지·이름 컴포넌트는 폰 쪽이 여전히 쓴다.
  *
  * 이벤트 모달이 떠 있는 동안만 왼쪽으로 밀려 나간다 (S15P21A405-665) — 우측 패널과 같은 규칙.
  */
@@ -35,17 +33,11 @@ export default function MinimapPanel() {
         contestOpen ? "translate-x-[calc(-100%_-_18px)]" : ""
       }`}
     >
-      {/* 도움말 — 계기판 오른쪽에 붙는다 (S15P21A405-434) */}
-      <HelpButton />
-      {/* 유리 없이 지도 위에 바로 선다 — 글자는 그림자로 바탕을 눌러 별 위에서도 읽힌다 */}
-      <div data-body className="flex flex-col gap-[11px] [text-shadow:0_1px_3px_rgba(2,4,10,.9)]">
-        <LayerGauge />
-        <LayerName />
-        {/* 미니맵 + 그 위에 겹친 나침반. 나침반은 클릭을 받지 않아 미니맵 클릭 이동이 그대로 된다 */}
-        <div className="relative">
-          <MinimapCanvas />
-          <AxisCompass />
-        </div>
+      {/* 미니맵 + 그 위에 겹친 나침반 + 왼쪽 위 도움말. 나침반은 클릭을 받지 않아 미니맵 클릭 이동이 그대로 된다 */}
+      <div data-body className="relative">
+        <MinimapCanvas />
+        <AxisCompass />
+        <HelpButton />
       </div>
     </aside>
   );

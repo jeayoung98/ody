@@ -150,7 +150,9 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
     g.fillStyle = `rgba(0,0,0,${(depth * LAYER_DEPTH.maxDarken).toFixed(3)})`;
     g.fillRect(0, 0, W, H);
   }
-  const nebulaK = 1 - depth * LAYER_DEPTH.maxNebulaFade;
+  // 겹 워시 세기 (S15P21A405-723) — 전환 중에는 두 겹 사이를 잇는다. 첫 겹은 화면을 어둡게 두려고 낮다
+  const washK = e.anim ? themeOf(e, true).wash + (themeOf(e).wash - themeOf(e, true).wash) * e.morphT : themeOf(e).wash;
+  const nebulaK = (1 - depth * LAYER_DEPTH.maxNebulaFade) * washK;
   g.globalCompositeOperation = "lighter";
   const big = Math.max(W, H);
   // 겹마다 다른 색으로 물든다 (S15P21A405-690)

@@ -120,6 +120,8 @@ export interface CloudStyle {
  * - `sky`: 배경에 깔리는 세로 그라데이션 [위, 아래]. `LAYER_SKY_ALPHA` 만큼 검은 바탕 위에 덮는다.
  * - `star`: 그 겹 상주 별의 스프라이트 모양. **색은 여전히 장르다** — 모양만 바뀐다.
  * - `cloud`: 성운 퍼프 스타일.
+ * - `wash`: 배경 성운 워시 세기 배수. 화면 전체 밝기는 하늘 색이 아니라 이 워시(`lighter`)가 정한다 —
+ *   하늘만 어둡게 해도 워시가 그대로면 화면은 밝다. 첫 겹은 서비스 얼굴이라 낮게 둔다.
  *
  * 하늘 색은 `LAYER_TINTS` 와 같은 계열이다 — 이웃 겹은 색상이 70° 넘게 갈린다(그쪽 주석 참고).
  */
@@ -127,23 +129,24 @@ export const LAYER_THEMES: ReadonlyArray<{
   sky: readonly [readonly [number, number, number], readonly [number, number, number]];
   star: StarShape;
   cloud: CloudStyle;
+  wash: number;
 }> = [
   // 우주 — 검정에 가까운 남색. 첫 화면이 서비스의 얼굴이라 튀지 않게 두고, 파고들수록 색이 짙어지게 한다 (사용자 결정)
-  { sky: [[4, 8, 26], [1, 2, 7]], star: "halo", cloud: { count: 22, scale: 1.0, alpha: 1.0, stretch: 1 } },
+  { sky: [[4, 8, 26], [1, 2, 7]], star: "halo", cloud: { count: 22, scale: 1.0, alpha: 1.0, stretch: 1 }, wash: 0.45 },
   // 은하단 — 자홍. 십자 빛줄기, 가늘게 뻗은 필라멘트
-  { sky: [[42, 10, 44], [7, 3, 15]], star: "cross", cloud: { count: 14, scale: 0.7, alpha: 1.2, stretch: 2.2 } },
+  { sky: [[42, 10, 44], [7, 3, 15]], star: "cross", cloud: { count: 14, scale: 0.7, alpha: 1.2, stretch: 2.2 }, wash: 1 },
   // 우리은하 — 호박색. 옆으로 번진 별, 은하수 띠
-  { sky: [[43, 28, 10], [10, 6, 4]], star: "smear", cloud: { count: 18, scale: 1.2, alpha: 0.9, stretch: 2.8 } },
+  { sky: [[43, 28, 10], [10, 6, 4]], star: "smear", cloud: { count: 18, scale: 1.2, alpha: 0.9, stretch: 2.8 }, wash: 1 },
   // 성운 — 보라. 퍼진 뭉게별, 알록달록한 덩어리
-  { sky: [[26, 11, 58], [5, 3, 15]], star: "diffuse", cloud: { count: 30, scale: 0.8, alpha: 1.5, stretch: 1 } },
+  { sky: [[26, 11, 58], [5, 3, 15]], star: "diffuse", cloud: { count: 30, scale: 0.8, alpha: 1.5, stretch: 1 }, wash: 1.1 },
   // 성단 — 하늘색. 작고 날카로운 점, 맑은 밤
-  { sky: [[4, 32, 42], [2, 10, 16]], star: "point", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 } },
+  { sky: [[4, 32, 42], [2, 10, 16]], star: "point", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 }, wash: 0.8 },
   // 태양계 — 주황. 십자 빛줄기(해처럼), 따뜻한 빛무리. 고리 달린 원반은 못생겨서 뺐다 — 은하단과 모양이 겹치지만 색이 갈라 준다 (사용자 결정)
-  { sky: [[42, 22, 6], [10, 5, 3]], star: "cross", cloud: { count: 6, scale: 1.6, alpha: 0.6, stretch: 1.2 } },
+  { sky: [[42, 22, 6], [10, 5, 3]], star: "cross", cloud: { count: 6, scale: 1.6, alpha: 0.6, stretch: 1.2 }, wash: 1 },
   // 행성 — 청록. 그늘진 원판, 구름 없음
-  { sky: [[4, 36, 28], [2, 12, 9]], star: "disc", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 } },
+  { sky: [[4, 36, 28], [2, 12, 9]], star: "disc", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 }, wash: 0.8 },
   // 저궤도 — 장밋빛. 반짝이는 스파크, 얇게 깔린 연무
-  { sky: [[42, 12, 22], [11, 4, 7]], star: "spark", cloud: { count: 10, scale: 1.1, alpha: 0.7, stretch: 3.2 } },
+  { sky: [[42, 12, 22], [11, 4, 7]], star: "spark", cloud: { count: 10, scale: 1.1, alpha: 0.7, stretch: 3.2 }, wash: 1 },
 ];
 /** 하늘 그라데이션을 검은 바탕 위에 덮는 세기. 1 이면 `sky` 색 그대로다 */
 export const LAYER_SKY_ALPHA = 0.85;

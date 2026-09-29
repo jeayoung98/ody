@@ -128,8 +128,8 @@ export const LAYER_THEMES: ReadonlyArray<{
   star: StarShape;
   cloud: CloudStyle;
 }> = [
-  // 우주 — 짙은 파랑. 부드러운 큰 후광, 화면을 덮는 거대한 연무
-  { sky: [[6, 16, 51], [2, 4, 10]], star: "halo", cloud: { count: 22, scale: 1.0, alpha: 1.0, stretch: 1 } },
+  // 우주 — 검정에 가까운 남색. 첫 화면이 서비스의 얼굴이라 튀지 않게 두고, 파고들수록 색이 짙어지게 한다 (사용자 결정)
+  { sky: [[4, 8, 26], [1, 2, 7]], star: "halo", cloud: { count: 22, scale: 1.0, alpha: 1.0, stretch: 1 } },
   // 은하단 — 자홍. 십자 빛줄기, 가늘게 뻗은 필라멘트
   { sky: [[42, 10, 44], [7, 3, 15]], star: "cross", cloud: { count: 14, scale: 0.7, alpha: 1.2, stretch: 2.2 } },
   // 우리은하 — 호박색. 옆으로 번진 별, 은하수 띠

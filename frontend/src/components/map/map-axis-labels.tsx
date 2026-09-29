@@ -114,6 +114,12 @@ function GlassArrow({ dir, awake }: { dir: Dir; awake: boolean }) {
  */
 export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
   const layer = useMapStore((s) => s.layer);
+  /**
+   * 주변 탐색·별자리 뷰는 캔버스에 어두운 막을 그린다 (S15P21A405-725). 라벨은 DOM 이라 그 위에 그대로 떠서
+   * 뷰가 켜졌는데 축 라벨만 밝게 남았다 — 막 뒤에 잠긴 것처럼 막의 세기(`CONSTELLATION.dim`)만큼 옅게 한다.
+   * 투명도를 걸면 화살표의 유리(backdrop-filter)는 못 비치지만, 그 세기에서는 어차피 안 읽힌다.
+   */
+  const veiled = useMapStore((s) => s.viewMode !== "default");
   const [awake, setAwake] = useState(false);
 
   useEffect(() => {
@@ -144,7 +150,7 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
   // 보이는 지도(우측 패널 뺀) 가로 가운데
   const midX = `calc((100% + ${left - right}px) / 2)`;
 
-  const wrap = "pointer-events-none absolute z-[19] flex items-center";
+  const wrap = `pointer-events-none absolute z-[19] flex items-center transition-opacity duration-500 ${veiled ? "opacity-[0.14]" : ""}`;
   // 글씨도 유리와 같은 결로 한 단계 내렸다 — 평소엔 거의 잠기고, 움직이면 ink-3 까지만 올라온다 (사용자 피드백)
   const text = `max-w-[24vw] truncate text-[15px] font-medium tracking-[0.02em] transition-colors duration-500 ${awake ? "text-ink-3" : "text-ink-4/60"}`;
   return (

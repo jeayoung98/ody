@@ -2133,7 +2133,12 @@ export class MapEngine {
    * `minInView` 만큼 모아 보낸다.
    */
   private zoomedEnough() {
-    return this.zoomK() >= DRILL.gateMinZoom && this.countInView() <= this.gateMaxInView();
+    return this.zoomK() >= this.gateMinZoom() && this.countInView() <= this.gateMaxInView();
+  }
+
+  /** 이 겹에서 게이트가 열리는 최소 배율 — 최상단은 더 높다 (S15P21A405-728, `DRILL.gateMinZoom`) */
+  private gateMinZoom() {
+    return this.layer === 0 ? DRILL.gateMinZoom.top : DRILL.gateMinZoom.deep;
   }
 
   /**
@@ -2154,7 +2159,7 @@ export class MapEngine {
    * 막대가 꽉 찼는데 안 열리거나, 덜 찼는데 열리는 일이 없다.
    */
   gateProgress() {
-    const byZoom = Math.min(1, this.zoomK() / DRILL.gateMinZoom);
+    const byZoom = Math.min(1, this.zoomK() / this.gateMinZoom());
     const n = this.countInView();
     const max = this.gateMaxInView();
     const byCount = n <= max ? 1 : max / n;

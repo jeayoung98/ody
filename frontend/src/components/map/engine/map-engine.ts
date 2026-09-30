@@ -123,6 +123,8 @@ export interface VisibleFriend {
   /** 서 있는 별의 깊이 크기 배율({@link MapEngine.depthScaleOf}). 반지름·잔상에 곱한다 (S15P21A405-614) */
   scale: number;
   isLeader: boolean;
+  /** 펼친 묶음에서 갈라져 나온 개별 표식 (S15P21A405-727). 다시 펼치지 않고 누르면 바로 프로필이다 */
+  spread?: boolean;
   /**
    * 이 표식 **뒤에 겹쳐 선 사람들** (S15P21A405-550). 대표는 빼고 담는다.
    *
@@ -2133,7 +2135,12 @@ export class MapEngine {
    * `minInView` 만큼 모아 보낸다.
    */
   private zoomedEnough() {
-    return this.zoomK() >= DRILL.gateMinZoom && this.countInView() <= this.gateMaxInView();
+    return this.zoomK() >= this.gateMinZoom() && this.countInView() <= this.gateMaxInView();
+  }
+
+  /** 이 겹에서 게이트가 열리는 최소 배율 — 최상단은 더 높다 (S15P21A405-728, `DRILL.gateMinZoom`) */
+  private gateMinZoom() {
+    return this.layer === 0 ? DRILL.gateMinZoom.top : DRILL.gateMinZoom.deep;
   }
 
   /**
@@ -2154,7 +2161,7 @@ export class MapEngine {
    * 막대가 꽉 찼는데 안 열리거나, 덜 찼는데 열리는 일이 없다.
    */
   gateProgress() {
-    const byZoom = Math.min(1, this.zoomK() / DRILL.gateMinZoom);
+    const byZoom = Math.min(1, this.zoomK() / this.gateMinZoom());
     const n = this.countInView();
     const max = this.gateMaxInView();
     const byCount = n <= max ? 1 : max / n;
@@ -2617,7 +2624,15 @@ export class MapEngine {
     return best;
   }
 
-  /** 배지(+N) 있는 표식을 펼친다 (S15P21A405-618). 다음 프레임부터 `spreadExpandedStack` 이 갈라 그린다 */
+  /**
+   * 표식이 서 있는 자리의 곡 (S15P21A405-727). 사람은 듣는 곡의 별 위에 그려져 별을 덮는다 — 이게 있으면
+   * 혼자 선 표식도 눌렀을 때 펼쳐서(`spreadExpandedStack`) 가운데 곡을 비운다
+   */
+  songUnder(fr: VisibleFriend): VisibleStar | null {
+    return this.hitTest(fr.px, fr.py);
+  }
+
+  /** 배지(+N) 있는 표식, 또는 곡 위에 선 표식을 펼친다 (S15P21A405-618·727). 다음 프레임부터 `spreadExpandedStack` 이 갈라 그린다 */
   expandStack(email: string): void {
     this.expandedStack = { email, since: performance.now() };
   }
@@ -2636,12 +2651,17 @@ export class MapEngine {
    * 둘이면 좌우로, 셋 이상이면 원 둘레에 고르게 선다. 반지름은 헬멧이 서로 닿지 않는 값이다.
    * 퍼지는 동안은 스프링 곡선으로 반지름을 키운다. 대표가 화면에서 사라졌거나 뒤에 아무도
    * 없게 됐으면 저절로 접는다.
+   *
+   * **곡 위에 선 표식은 혼자여도 펼친다** (S15P21A405-727) — 사람이 별을 덮으면 그 곡을 누를 길이 없었다.
+   * 혼자면 별 위쪽으로 비켜서고, 몇이든 반지름은 밑의 별(또는 커버)이 가운데에 온전히 드러날 만큼 벌린다.
+   * 뒤에 아무도 없고 밑에 곡도 없으면 펼칠 것이 없어 접는다.
    */
   private spreadExpandedStack(): void {
     const ex = this.expandedStack;
     if (!ex) return;
     const at = this.visFriends.findIndex((v) => v.user.email === ex.email);
-    if (at < 0 || this.visFriends[at].stacked.length === 0) {
+    const under = at < 0 ? null : this.songUnder(this.visFriends[at]);
+    if (at < 0 || (this.visFriends[at].stacked.length === 0 && !under)) {
       this.expandedStack = null;
       return;
     }
@@ -2662,11 +2682,13 @@ export class MapEngine {
      * 아래 가운데 정렬로 붙어서, 헬멧만 안 겹치게 두면 이름끼리 포개져 읽을 수 없었다.
      */
     const nameW = Math.max(0, ...people.map((u) => approxNameWidth(u.nickname ?? "")));
-    const fit = (Math.max(2 * R, nameW) + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
-    const radius = Math.max(FRIEND_SPREAD.radiusPx * front, fit) * k;
+    const fit = n === 1 ? 0 : (Math.max(2 * R, nameW) + FRIEND_SPREAD.gapPx) / (2 * Math.sin(Math.PI / n));
+    // 가운데 곡이 드러나는 반지름 — 헬멧이 별(커버) 가장자리에서 틈만큼 떨어진다 (727)
+    const clear = under ? under.r + R + FRIEND_SPREAD.gapPx : 0;
+    const radius = Math.max(FRIEND_SPREAD.radiusPx * front, fit, clear) * k;
     const parts: VisibleFriend[] = people.map((u, i) => {
       const a = n === 2 ? (i === 0 ? Math.PI : 0) : -Math.PI / 2 + (i * 2 * Math.PI) / n;
-      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale, isLeader: false, stacked: [] };
+      return { user: u, px: v.px + Math.cos(a) * radius, py: v.py + Math.sin(a) * radius, heading: v.heading, scale, isLeader: false, spread: true, stacked: [] };
     });
     this.visFriends.splice(at, 1, ...parts);
   }

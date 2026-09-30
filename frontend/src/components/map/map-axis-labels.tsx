@@ -1,15 +1,9 @@
 "use client";
 
-import { useEffect, useState, type CSSProperties } from "react";
+import type { CSSProperties } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { LAYER_AXES } from "@/constants";
 import { useMapStore } from "@/stores/use-map-store";
-import { getMapEngine } from "./engine/engine-registry";
-
-/** 움직임이 멎고 이만큼 지나면 다시 연해진다 */
-const CALM_MS = 1500;
-/** 카메라를 들여다보는 주기. 이보다 촘촘할 이유가 없다 — 눈에 보이는 건 유리 세기뿐이다 */
-const TICK_MS = 160;
 
 /**
  * 화살표 모양 — 넓게 벌어진 큰 갈매기 하나와 그 품에 든 다이아몬드 (S15P21A405-719, 사용자 결정).
@@ -25,8 +19,11 @@ const WING =
 const DIAMOND = "M98.5,3.7 Q100,2 101.5,3.7 L106.6,9.4 Q108,11 106.6,12.6 L101.5,18.3 Q100,20 98.5,18.3 L93.4,12.6 Q92,11 93.4,9.4 Z";
 const BASE_W = 200;
 const BASE_H = 40;
-/** 화면에 그릴 배율 — 원본 200px 을 128px 로. 0.56 은 얇은 날개라 유리가 안 읽혔고, 0.8 은 너무 컸다(사용자 피드백) */
-const SCALE = 0.64;
+/**
+ * 화면에 그릴 배율 — 원본 200px 을 150px 로. 0.56 은 얇은 날개라 유리가 안 읽혔고, 0.8 은 너무 컸다(사용자 피드백, 719).
+ * 0.64 로 두었다가 "잘 안 보인다" 로 한 단계 키웠다 (S15P21A405-729). ponytail: 더/덜은 이 값만
+ */
+const SCALE = 0.75;
 const W = BASE_W * SCALE;
 const H = BASE_H * SCALE;
 /** 화살표 끝이 가림 영역(검색창·재생바·패널)에서 떨어지는 거리 */
@@ -46,30 +43,25 @@ const scalePath = (d: string) => d.replace(/-?\d+(\.\d+)?/g, (n) => String(+(Num
 const CLIP = `path('${scalePath(WING)} ${scalePath(DIAMOND)}')`;
 
 /**
- * **유리 세기로만 두 단계를 둔다** (사용자 결정). 투명도(opacity)로 흐리게 하면 유리가 아니라 흐린 그림이 된다.
- * 평소엔 블러·밝기를 눌러 배경에 잠기고, 움직이면 블러·밝기·흰 틴트·테두리가 함께 올라온다.
+ * 유리 세기 — **한 단계만 둔다** (S15P21A405-729). 예전에는 카메라가 멎으면 연해지는 calm 단계가 따로 있었는데
+ * 시연 화면에서 "라벨이 잘 안 보인다" 로 겪었다. 옛 awake 값을 조금 더 올린 값이다. 투명도(opacity)로 흐리게
+ * 하지 않는 원칙은 그대로 — 흐리게 하면 유리가 아니라 흐린 그림이 된다.
  */
-const GLASS = {
-  // 움직일 때가 첫 안의 "평소" 세기다 — 그것도 강하다는 사용자 피드백으로 한 단계씩 내렸다
-  calm: { filter: "blur(5px) saturate(1.05) brightness(1.1)", tint: "rgb(255 255 255 / 0.03)", rim: 0.06 },
-  awake: { filter: "blur(8px) saturate(1.1) brightness(1.25)", tint: "rgb(255 255 255 / 0.07)", rim: 0.12 },
-} as const;
+const GLASS = { filter: "blur(8px) saturate(1.15) brightness(1.35)", tint: "rgb(255 255 255 / 0.1)", rim: 0.2 } as const;
 
 type Dir = "up" | "down" | "left" | "right";
 /** 원본은 아래를 가리킨다 */
 const ROTATE: Record<Dir, number> = { down: 0, up: 180, left: 90, right: -90 };
 
-function GlassArrow({ dir, awake }: { dir: Dir; awake: boolean }) {
-  const g = awake ? GLASS.awake : GLASS.calm;
+function GlassArrow({ dir }: { dir: Dir }) {
   const vertical = dir === "left" || dir === "right";
   const glass: CSSProperties = {
     width: W,
     height: H,
     clipPath: CLIP,
-    background: g.tint,
-    WebkitBackdropFilter: g.filter,
-    backdropFilter: g.filter,
-    transition: "backdrop-filter 500ms ease, -webkit-backdrop-filter 500ms ease, background-color 500ms ease",
+    background: GLASS.tint,
+    WebkitBackdropFilter: GLASS.filter,
+    backdropFilter: GLASS.filter,
   };
   return (
     // 돌려도 레이아웃 상자는 안 돈다 — 좌우 화살표는 상자 가로세로를 바꿔 두고 안에서 돌린다
@@ -85,8 +77,7 @@ function GlassArrow({ dir, awake }: { dir: Dir; awake: boolean }) {
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
             strokeLinejoin="round"
-            strokeOpacity={g.rim}
-            style={{ transition: "stroke-opacity 500ms ease" }}
+            strokeOpacity={GLASS.rim}
           />
         </svg>
       </span>
@@ -102,9 +93,10 @@ function GlassArrow({ dir, awake }: { dir: Dir; awake: boolean }) {
  * 이어지지 않는다. 오른쪽 가장자리에 "밝고 거친" 이 적혀 있으면 오른쪽으로 끄는 일이 곧
  * 그쪽으로 가는 일이 된다.
  *
- * **평소엔 연하게, 움직이면 또렷하게.** 늘 진하면 곡 제목과 시야를 다투고, 전환할 때만
- * 뜨면 오 분 뒤에 "어느 쪽이 밝은 거였지" 하면 답이 없다. 밝기를 두 단계로 두면 둘 다 된다.
- * 13px 글씨·30% 투명도로는 평소에 아예 안 보여서(S15P21A405-719) 유리 화살표를 붙이고 글씨를 키웠다.
+ * **늘 또렷하다** (S15P21A405-729). 처음엔 "평소엔 연하게, 움직이면 또렷하게" 두 단계였다(358·719) —
+ * 곡 제목과 시야를 다투지 않으려는 뜻이었는데, 시연 화면에서 연한 단계가 사실상 안 보였다. 카메라를
+ * 들여다보던 타이머와 calm 단계를 걷어내고 한 세기로 고정했다. 글씨도 15px → 19px 로 키우고 그림자를 달아
+ * 밝은 별·성운 위에서도 읽힌다.
  *
  * **네 변 가운데에 대칭으로 선다** (S15P21A405-719). 가로는 우측 패널을 뺀 보이는 지도 기준이라 패널이 열리면
  * 위아래 화살표도 남은 지도 가운데로 옮겨 간다. 세로는 화면 기준이다 — 위는 검색창 아래, 아래는 화면 끝 가까이(`EDGE_TOP`·`EDGE_BOTTOM`).
@@ -120,26 +112,6 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
    * 투명도를 걸면 화살표의 유리(backdrop-filter)는 못 비치지만, 그 세기에서는 어차피 안 읽힌다.
    */
   const veiled = useMapStore((s) => s.viewMode !== "default");
-  const [awake, setAwake] = useState(false);
-
-  useEffect(() => {
-    let last = "";
-    let calmAt = 0;
-    const id = window.setInterval(() => {
-      const c = getMapEngine()?.cam;
-      if (!c) return;
-      const now = `${c.s.toFixed(4)}|${c.cx.toFixed(2)}|${c.cy.toFixed(2)}`;
-      if (now !== last) {
-        last = now;
-        calmAt = Date.now() + CALM_MS;
-        setAwake(true);
-      } else if (calmAt && Date.now() > calmAt) {
-        calmAt = 0;
-        setAwake(false);
-      }
-    }, TICK_MS);
-    return () => window.clearInterval(id);
-  }, []);
 
   const ax = LAYER_AXES[layer];
   // 라벨이 빈 축은 이름을 지어내지 않는다 — 나침반이 쓰는 말과 같게 적는다
@@ -151,26 +123,26 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
   const midX = `calc((100% + ${left - right}px) / 2)`;
 
   const wrap = `pointer-events-none absolute z-[19] flex items-center transition-opacity duration-500 ${veiled ? "opacity-[0.14]" : ""}`;
-  // 글씨도 유리와 같은 결로 한 단계 내렸다 — 평소엔 거의 잠기고, 움직이면 ink-3 까지만 올라온다 (사용자 피드백)
-  const text = `max-w-[24vw] truncate text-[15px] font-medium tracking-[0.02em] transition-colors duration-500 ${awake ? "text-ink-3" : "text-ink-4/60"}`;
+  // 글씨는 늘 진하다(ink-2). 별밭 위에서 획이 묻히지 않게 어두운 그림자를 깐다 (S15P21A405-729)
+  const text = "max-w-[24vw] truncate text-[19px] font-semibold tracking-[0.02em] text-ink-2 [text-shadow:0_1px_10px_rgb(0_0_0/0.85)]";
   return (
     <>
       <div className={`${wrap} -translate-y-1/2 gap-2`} style={{ left: left + EDGE_GAP, top: "50%" }}>
-        <GlassArrow dir="left" awake={awake} />
+        <GlassArrow dir="left" />
         <span className={text}>{x[0]}</span>
       </div>
       {/* 우측 패널이 열리면 그만큼 안쪽으로 — 패널 뒤에 숨으면 적어 둔 보람이 없다 */}
       <div className={`${wrap} -translate-y-1/2 gap-2`} style={{ right: right + EDGE_GAP, top: "50%" }}>
         <span className={`${text} text-right`}>{x[1]}</span>
-        <GlassArrow dir="right" awake={awake} />
+        <GlassArrow dir="right" />
       </div>
       {/* 위는 검색창 바로 아래, 아래는 가릴 것이 없어 화면 끝 가까이 */}
       <div className={`${wrap} -translate-x-1/2 flex-col gap-1.5`} style={{ top: EDGE_TOP, left: midX }}>
-        <GlassArrow dir="up" awake={awake} />
+        <GlassArrow dir="up" />
         <span className={`${text} text-center`}>{y[1]}</span>
       </div>
       <div className={`${wrap} -translate-x-1/2 flex-col-reverse gap-1.5`} style={{ bottom: EDGE_BOTTOM, left: midX }}>
-        <GlassArrow dir="down" awake={awake} />
+        <GlassArrow dir="down" />
         <span className={`${text} text-center`}>{y[0]}</span>
       </div>
     </>

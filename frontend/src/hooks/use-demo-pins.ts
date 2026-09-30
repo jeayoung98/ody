@@ -8,22 +8,31 @@ import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query"
 import { searchRequestPath } from "@/hooks/queries/use-music-search-query";
 import { api } from "@/lib/api";
 import { musicToMapPoint } from "@/lib/map-point";
-import type { MapPoint, MusicSearchPage } from "@/types";
+import type { MapPoint, MusicSearchPage, SearchCondition } from "@/types";
 
 /** 제목 검색에서 이만큼까지만 넘겨 본다 — 앞일치라 동명 곡이 많을 때 첫 장에 없을 수 있다 */
 const SEARCH_PAGES = 3;
 
 /**
- * 시연 곡 하나의 id — 적혀 있으면 그대로, 아니면 통합 검색에서 제목·아티스트로 찾는다 (`matchDemoSong`).
+ * 시연 곡 하나의 id — 적혀 있으면 그대로, 아니면 검색에서 제목·아티스트로 찾는다 (`matchDemoSong`).
+ * 아티스트를 알면 **아티스트+제목으로 좁혀 먼저** 찾는다 (S15P21A405-726) — "Dynamite" 처럼 동명 곡이 많은 제목은
+ * 통합 검색 3장 안에 그 곡이 안 실린다. 표기(방탄소년단/BTS)마다 한 번씩 해 보고, 다 빠지면 통합 검색으로 돈다.
  * 못 찾으면 null. 검색이 401 이든 비어 있든 예외는 부르는 쪽이 삼킨다.
  */
 async function resolveId(song: DemoSong): Promise<number | null> {
   if (song.id != null) return song.id;
-  for (let page = 0; page < SEARCH_PAGES; page++) {
-    const res = await api<MusicSearchPage>(searchRequestPath({ mode: "all", query: song.title }, page));
-    const hit = matchDemoSong(song, res.items);
-    if (hit) return hit.id;
-    if (!res.hasNext) break;
+  const artists = Array.isArray(song.artist) ? song.artist : song.artist ? [song.artist] : [];
+  const conds: SearchCondition[] = [
+    ...artists.map((artist): SearchCondition => ({ mode: "artist", artist, music: song.title })),
+    { mode: "all", query: song.title },
+  ];
+  for (const cond of conds) {
+    for (let page = 0; page < SEARCH_PAGES; page++) {
+      const res = await api<MusicSearchPage>(searchRequestPath(cond, page));
+      const hit = matchDemoSong(song, res.items);
+      if (hit) return hit.id;
+      if (!res.hasNext) break;
+    }
   }
   return null;
 }
@@ -59,7 +68,10 @@ export function useDemoPins(engine: MapEngine) {
       const found = points.filter((p): p is MapPoint => p != null);
       if (!found.length) return;
       engine.adopt(found);
-      engine.setDemoIds(found.map((p) => p.musicId));
+      engine.setDemoIds(
+        found.map((p) => p.musicId),
+        new Map(points.flatMap((p, k) => (p && DEMO_SONGS[k].minLayer ? [[p.musicId, DEMO_SONGS[k].minLayer]] : []))),
+      );
       for (const p of found) albumCover(p.musicId, p.albumMbid, COVER_PX);
     });
     return () => {

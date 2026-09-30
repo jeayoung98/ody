@@ -24,10 +24,11 @@ export interface DemoSong {
 }
 
 export const DEMO_SONGS: readonly DemoSong[] = [
-  { title: "Cayendo (Side A - Acoustic)", artist: "Frank Ocean" },
-  { title: "PICK ME", artist: "PRODUCE 101" },
-  { title: "Let's Play House", artist: "Parliament" },
-  { title: "Plier", artist: "Wizzo" },
+  // 시연 시나리오 순서 (S15P21A405-726): 어두운 → 밝은 → 여백 → 밀도
+  { title: "서쪽하늘", artist: "이승철" },
+  { title: "그대에게", artist: "무한궤도" },
+  { title: "Dynamite", artist: ["방탄소년단", "BTS"] },
+  { title: "낭만고양이", artist: ["체리필터", "Cherry Filter"] },
   { title: "Hollywood Action" },
   { title: "REDRED", artist: ["코르티스", "CORTIS"] },
   /*

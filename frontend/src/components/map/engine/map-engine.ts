@@ -412,6 +412,18 @@ export class MapEngine {
    * `drawCovers` 가 개수·간격 규칙 밖에서 늘 커버로 그린다. 좌표는 `useDemoPins` 가 `adopt` 로 먼저 넣어 준다.
    */
   demoIds = new Set<number>();
+  /** 시연 곡이 보이기 시작하는 겹 (S15P21A405-726). 없으면 0 — 최상단부터 */
+  private demoMinLayer = new Map<number, number>();
+
+  /**
+   * 시연 곡 `i` 가 `layer` 겹의 `boxes` 갈래에서 보이는가 (S15P21A405-726).
+   * ① 그 곡의 겹 이상이어야 한다 — 최상단에서 감추고 파고들어야 보이는 곡이 있다.
+   * ② 파고든 사각형 안이어야 한다 — 예전엔 어느 겹에서든 남겨서 다른 갈래로 들어가도 떠 있었다.
+   */
+  private demoVisible(i: number, layer: number, boxes: readonly LayerBox[] = this.boxes) {
+    if ((this.demoMinLayer.get(this.songs[i].musicId) ?? 0) > layer) return false;
+    return insideBoxes(this.songs[i].pc, boxes, layer);
+  }
   private repLayer = -1;
   /** 레이어 전환 시 커버·프로필 페이드. 모프 중 0으로, 새 레이어 데이터가 오면 1로 */
   coverAlpha = 0;
@@ -1001,8 +1013,8 @@ export class MapEngine {
      */
     let resident = false;
     for (let i = keep; i < this.N; i++) {
-      // 시연 곡은 겹과 무관하게 상주다 (S15P21A405-717) — `setDemoIds` 가 먼저 불렸을 때의 길
-      if (this.layer !== 0 && !this.demoIds.has(this.songs[i].musicId)) continue;
+      // 시연 곡은 자기 겹·자기 갈래에서만 상주다 (S15P21A405-717·726) — `setDemoIds` 가 먼저 불렸을 때의 길
+      if (this.demoIds.has(this.songs[i].musicId) ? !this.demoVisible(i, this.layer) : this.layer !== 0) continue;
       this.subset[i] = 1;
       this.alpha[i] = 1;
       resident = true;
@@ -2204,6 +2216,8 @@ export class MapEngine {
       // 임시 집합: 지금 겹 곡을 그대로 데려간다 (확인용 고스트곡은 레이어 0 아래로 따라오지 않는다)
       ns = this.residentMask(nl);
       for (let i = 0; i < this.N; i++) if (!this.subset[i]) ns[i] = 0;
+      // 최상단에서 감춰 둔 시연 곡은 지금 겹 상주가 아니라 위에서 빠졌다 — 도착 겹에서 보이면 데려간다 (S15P21A405-726)
+      this.keepDemo(ns, nl);
     }
     this.morph(nl, this.fitCam(nl, ns, this.fitAnchor(ns, nl)), ns, big);
   }
@@ -2216,7 +2230,7 @@ export class MapEngine {
     for (const s of songs) ns[this.index.get(s.musicId)!] = 1;
     this.keepPinned(ns, layer);
     this.keepMine(ns, layer);
-    this.keepDemo(ns);
+    this.keepDemo(ns, layer);
     return ns;
   }
 
@@ -2888,34 +2902,44 @@ export class MapEngine {
     if (i != null) mask[i] = 1;
   }
 
-  /** 시연 곡은 어느 겹의 마스크에서도 빠지지 않는다 (S15P21A405-717). 좌표가 아직 없는(편입 전) 곡은 건너뛴다 */
-  private keepDemo(mask: Uint8Array) {
+  /**
+   * 시연 곡을 마스크에 맞춘다 (S15P21A405-717·726) — 보이는 겹·갈래면 서버 top-k 에 빠졌어도 넣고, 아니면 서버가
+   * 담아 왔어도 뺀다(최상단에서 감춘 곡이 일반 별로라도 뜨면 안 된다). 좌표가 아직 없는(편입 전) 곡은 건너뛴다
+   */
+  private keepDemo(mask: Uint8Array, layer: number, boxes: readonly LayerBox[] = this.boxes) {
     for (const id of this.demoIds) {
       const i = this.index.get(id);
-      if (i != null) mask[i] = 1;
+      if (i != null) mask[i] = this.demoVisible(i, layer, boxes) ? 1 : 0;
     }
   }
 
   /**
-   * 시연 곡을 정한다 (S15P21A405-717). 좌표는 이미 `adopt` 로 들어와 있어야 한다 — 없는 곡은 id 만 기억해 두고
-   * 나중에 편입될 때 `allocate` 가 깊이를 맞춘다. 지금 겹 상주에 바로 넣고 깊이를 최전면으로 못 박는다.
-   * 전환 중이면 도착할 집합에도 넣는다 — 안 그러면 전환이 끝나는 순간 사라진다 (`hideSong` 과 같은 이유).
+   * 시연 곡을 정한다 (S15P21A405-717·726). 좌표는 이미 `adopt` 로 들어와 있어야 한다 — 없는 곡은 id 만 기억해 두고
+   * 나중에 편입될 때 `allocate` 가 깊이를 맞춘다. 지금 겹·갈래에서 보이는 곡만 상주에 넣고(`demoVisible`) 깊이를
+   * 최전면으로 못 박는다. 전환 중이면 도착할 겹 기준으로 도착 집합에도 넣는다 — 안 그러면 전환이 끝나는 순간 사라진다.
+   * `minLayer` 는 곡별로 보이기 시작하는 겹 (`DemoSong.minLayer`).
    */
-  setDemoIds(ids: Iterable<number>) {
+  setDemoIds(ids: Iterable<number>, minLayer: ReadonlyMap<number, number> = new Map()) {
     this.demoIds = new Set(ids);
+    this.demoMinLayer = new Map(minLayer);
     let changed = false;
     for (const id of this.demoIds) {
       const i = this.index.get(id);
       if (i == null) continue;
       this.z[i] = DEMO_PIN.z;
-      if (this.subset[i] !== 1) {
-        this.subset[i] = 1;
-        this.alpha[i] = 1;
+      // 보이면 넣고, 감출 겹이면 이미 상주(최상단은 전곡 상주)라도 뺀다
+      const show = this.demoVisible(i, this.layer) ? 1 : 0;
+      if (this.subset[i] !== show) {
+        this.subset[i] = show;
+        this.alpha[i] = show;
         changed = true;
       }
-      if (this.anim && this.anim.subset[i] !== 1) {
-        this.anim.subset[i] = 1;
-        this.aTo[i] = 1;
+      if (this.anim) {
+        const to = this.demoVisible(i, this.anim.layer) ? 1 : 0;
+        if (this.anim.subset[i] !== to) {
+          this.anim.subset[i] = to;
+          this.aTo[i] = to;
+        }
       }
     }
     if (changed) this.rebuildAliveIdx();
@@ -2973,8 +2997,8 @@ export class MapEngine {
         }
       }
     }
-    // 범위 밖이어도 시연 곡은 남는다 — 이 겹의 축에서 어디 있든 좌표는 있다 (S15P21A405-717)
-    this.keepDemo(m);
+    // 시연 곡은 갈래 안·자기 겹일 때만 (S15P21A405-726)
+    this.keepDemo(m, upTo, boxes);
     return m;
   }
 
@@ -3921,7 +3945,7 @@ export class MapEngine {
   private residentMask(layer = this.layer) {
     const m = new Uint8Array(this.N);
     for (let i = 0; i < this.N; i++) m[i] = this.songs[i].ghostOnly && layer > 0 ? 0 : 1;
-    this.keepDemo(m);
+    this.keepDemo(m, layer);
     return m;
   }
 

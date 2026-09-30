@@ -9,7 +9,6 @@ import { shouldRestartFollow } from "./follow-restart";
 import { reusablePlan, type FriendPlanEntry } from "./friend-plan";
 import { approxTextWidth, placeLabels, separateLabels, type LabelBox } from "./probe-layout";
 import { nearestLayerWith } from "./reveal-layer";
-import { riseLandingScale } from "./rise-scale";
 import { wheelIntent } from "./ride-zoom";
 import { acceptsAnchor } from "./stale-anchor";
 import { keptFirst, spreadOrder, type Rect } from "../render/cover-spread";
@@ -2318,20 +2317,16 @@ export class MapEngine {
     const dx = p.layer * 2;
     const dy = p.layer * 2 + 1;
     /**
-     * **배율은 그 겹에 처음 들어왔던 것으로 되돌린다** (S15P21A405-327).
+     * **그 겹의 최대 확대로 착지한다** (S15P21A405-731, 사용자 결정).
      *
-     * `p.cam.s` 는 게이트를 밀며 한 겹 최대(`zoomRange.max`)까지 확대된 뒤 대기 중 `waitZoom`
-     * 까지 더해진 값이라 진입 배율의 7배를 넘는다. 그대로 복원하면 **축소하려고 휠을 돌렸는데
-     * 최대 확대 상태의 좁은 구역에 착지하고**, 그 구역이 비어 있으면 화면에 별이 하나도 없다.
-     * 진입 배율은 그 겹이 화면에 맞춰지던 배율이므로 여기로 오면 별이 화면을 채운다.
+     * 327 은 진입 배율(`entryS`)로, 673 은 0겹만 화면을 덮는 배율로 착지시켰다 — 둘 다 "떠오르면 별이
+     * 화면을 채운다" 가 목적이었는데, 실제로는 **파고들 때 최대로 확대해 둔 자리에서 갑자기 줌아웃된
+     * 화면으로 튀어 올라온다** 고 느껴졌다. 파고들기의 역재생처럼 보이려면 파고들던 그 배율로 돌아와야 한다.
+     * `p.cam.s` 그대로가 아니라 `zoomRange.max` 배인 이유: 두고 온 값에는 대기 중 `waitZoom` 까지
+     * 더해져 있어 휠 한계 밖이고, 그러면 휠을 굴려도 한 틱은 아무 일이 안 생긴다.
+     * 줌 한계·파고들기 임계는 여전히 `entryS` 대비라 휠을 뒤로 굴리면 전역까지 그대로 나온다.
      */
-    /**
-     * **0겹만 진입 배율로는 부족하다** (S15P21A405-673). 0겹의 `entryS` 는 반지름 맞춤이라
-     * 정사각 상자를 가로로 긴 화면에 넣어 좌우가 통째로 빈다 — 469 가 첫 화면에서 실측한
-     * 그 화면(가로 30%·세로 62%)이다. 첫 화면만 덮는 배율로 고쳤던 걸 떠오르는 길에도 준다.
-     * 자세한 이유는 {@link riseLandingScale}.
-     */
-    const s = riseLandingScale(p.layer, p.entryS, this.fitBox(dx, dy, p.subset).sCover);
+    const s = p.entryS * DRILL.zoomRange.max;
     /**
      * 내 곡을 가운데 두는 건 **그 곡이 이 겹에 상주할 때만** 이다.
      * 없는 곡 좌표로 가면 그 겹에 아무것도 없는 빈 곳이라 역시 화면이 텅 빈다.

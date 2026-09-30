@@ -1,5 +1,5 @@
 import { CONSTELLATION, COVER_COUNT, DEMO_PIN, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
-import { FONTS, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
+import { FONTS, LAYER_SKY_ALPHA, LAYER_THEMES, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
 import { cullLabels, type LabelRect } from "../engine/probe-layout";
 import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
@@ -98,6 +98,27 @@ export function layerTint(layerF: number): [number, number, number] {
   return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * k)) as [number, number, number];
 }
 
+/**
+ * 지금 그리는 겹의 테마 (S15P21A405-723). 전환 중에는 **들어오는 겹**이 기본이고, `out` 이면 나가는 겹이다 —
+ * 그래야 두 겹의 별이 각자 제 모양으로 교차하며 "다른 곳으로 간다" 가 별에서 읽힌다.
+ */
+function themeOf(e: MapEngine, out = false) {
+  const layer = e.anim && !out ? e.anim.layer : e.layer;
+  return LAYER_THEMES[Math.min(LAYER_THEMES.length - 1, Math.max(0, layer))];
+}
+
+/** 겹 사이를 잇는 하늘 색 — 전환 중에는 두 겹 색의 중간이다 */
+function skyOf(layerF: number): [readonly [number, number, number], readonly [number, number, number]] {
+  const n = LAYER_THEMES.length;
+  const l = Math.min(n - 1, Math.max(0, layerF));
+  const a = LAYER_THEMES[Math.floor(l)].sky;
+  const b = LAYER_THEMES[Math.min(n - 1, Math.floor(l) + 1)].sky;
+  const k = l - Math.floor(l);
+  const mix = (p: readonly [number, number, number], q: readonly [number, number, number]) =>
+    [0, 1, 2].map((i) => Math.round(p[i] + (q[i] - p[i]) * k)) as [number, number, number];
+  return [mix(a[0], b[0]), mix(a[1], b[1])];
+}
+
 /** 워시 원래 색에 겹 색을 섞는다 */
 function tinted(c: readonly [number, number, number], tint: readonly [number, number, number]): [number, number, number] {
   return [0, 1, 2].map((i) => Math.round(c[i] + (tint[i] - c[i]) * LAYER_TINT_MIX)) as [number, number, number];
@@ -115,11 +136,23 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   g.globalCompositeOperation = "source-over";
   g.fillStyle = MAP_COLORS.background;
   g.fillRect(0, 0, W, H);
+  // 겹 하늘 색 (S15P21A405-723) — 위에서 아래로 흐르는 그라데이션. 겹을 옮기면 하늘부터 바뀐다
+  {
+    const layerF = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
+    const [top, bottom] = skyOf(layerF);
+    const sg = g.createLinearGradient(0, 0, 0, H);
+    sg.addColorStop(0, rgba(top, LAYER_SKY_ALPHA));
+    sg.addColorStop(1, rgba(bottom, LAYER_SKY_ALPHA));
+    g.fillStyle = sg;
+    g.fillRect(0, 0, W, H);
+  }
   if (depth > 0) {
     g.fillStyle = `rgba(0,0,0,${(depth * LAYER_DEPTH.maxDarken).toFixed(3)})`;
     g.fillRect(0, 0, W, H);
   }
-  const nebulaK = 1 - depth * LAYER_DEPTH.maxNebulaFade;
+  // 겹 워시 세기 (S15P21A405-723) — 전환 중에는 두 겹 사이를 잇는다. 첫 겹은 화면을 어둡게 두려고 낮다
+  const washK = e.anim ? themeOf(e, true).wash + (themeOf(e).wash - themeOf(e, true).wash) * e.morphT : themeOf(e).wash;
+  const nebulaK = (1 - depth * LAYER_DEPTH.maxNebulaFade) * washK;
   g.globalCompositeOperation = "lighter";
   const big = Math.max(W, H);
   // 겹마다 다른 색으로 물든다 (S15P21A405-690)
@@ -132,8 +165,8 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
     const rr = w.r * big * 0.62;
     const gr = g.createRadialGradient(px, py, 0, px, py, rr);
     const c = tinted(w.c, tint);
-    gr.addColorStop(0, rgba(c, 0.105 * nebulaK));
-    gr.addColorStop(0.42, rgba(c, 0.04 * nebulaK));
+    gr.addColorStop(0, rgba(c, 0.16 * nebulaK));
+    gr.addColorStop(0.42, rgba(c, 0.06 * nebulaK));
     gr.addColorStop(1, rgba(c, 0));
     g.fillStyle = gr;
     g.beginPath();
@@ -217,10 +250,13 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const H = e.H;
   // 기준 반지름. 0.55·60 이던 것을 0.75·80 으로 — 화면에서 구름이 자잘하게 흩어져 보였다 (S15P21A405-643).
   // 퍼프 수·알파는 그대로다: lighter 합성이라 그것까지 올리면 겹치는 자리가 하얗게 뜬다
-  const R = clamp(0.75 * e.cam.s, 80, Math.max(W, H) * 0.8);
+  // 겹 구름 스타일 (S15P21A405-723) — 수·크기·세기·늘림이 겹마다 다르다. 없는 겹은 그리지 않는다
+  const cloud = themeOf(e, out).cloud;
+  if (cloud.count === 0) return;
+  const R = clamp(0.75 * e.cam.s, 80, Math.max(W, H) * 0.8) * cloud.scale;
   g.globalCompositeOperation = "lighter";
-  // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
-  const step = Math.max(1, Math.floor(e.N / 22));
+  // 앵커: 곡 수와 무관하게 겹이 정한 수만큼 (결정적)
+  const step = Math.max(1, Math.floor(e.N / cloud.count));
   for (let i = 0; i < e.N; i += step) {
     // 전환 중에는 성운을 늦게 올린다 — 들어오는 겹이 작게 뭉쳐 있는 동안 켜면 가운데가 하얗게 뜬다
     const a0 = e.anim ? A[i] * A[i] * A[i] : A[i];
@@ -231,8 +267,11 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     if (px < -R * 1.7 || px > W + R * 1.7 || py < -R * 1.7 || py > H + R * 1.7) continue;
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
-      g.globalAlpha = q.a * a0;
-      g.drawImage(puffFor(q.k, starColorIdx(s)), px + q.dx * R - rr, py + q.dy * R - rr, rr * 2, rr * 2);
+      // 늘림 — 가로로 길고 세로로 얇게. 띠·필라멘트 느낌은 여기서 나온다
+      const rx = rr * cloud.stretch;
+      const ry = rr / cloud.stretch;
+      g.globalAlpha = Math.min(1, q.a * a0 * cloud.alpha);
+      g.drawImage(puffFor(q.k, starColorIdx(s)), px + q.dx * R - rx, py + q.dy * R - ry, rx * 2, ry * 2);
     }
   }
   g.globalAlpha = 1;
@@ -242,7 +281,8 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
 function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const P = out ? e.posOut : e.pos;
   const A = out ? e.alphaOut : e.alpha;
-  const spr = glowSprites();
+  // 상주 별은 그 겹의 모양으로 (S15P21A405-723). 배경 별밭은 기본 후광 그대로다
+  const spr = glowSprites(themeOf(e, out).star);
   const W = e.W;
   const H = e.H;
   const t = e.time;

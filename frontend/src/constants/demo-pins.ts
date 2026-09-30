@@ -21,13 +21,19 @@ export interface DemoSong {
   title: string;
   /** 아티스트 대조(낱말 단위 일치, 대소문자 무시 — `hasWord`). 여럿이면 하나만 맞으면 된다. 없으면 제목만 본다 */
   artist?: string | string[];
+  /**
+   * 이 겹부터 보인다 (S15P21A405-726). 없으면 0 — 최상단부터. 시연 흐름상 최상단에서는 감춰 두고 다른 시연 곡을
+   * 눌러 파고들었을 때 처음 나타나야 하는 곡에 1 을 준다. 어느 겹이든 **파고든 사각형 안에 있을 때만** 뜬다
+   */
+  minLayer?: number;
 }
 
 export const DEMO_SONGS: readonly DemoSong[] = [
-  { title: "Cayendo (Side A - Acoustic)", artist: "Frank Ocean" },
-  { title: "PICK ME", artist: "PRODUCE 101" },
-  { title: "Let's Play House", artist: "Parliament" },
-  { title: "Plier", artist: "Wizzo" },
+  // 시연 시나리오 순서 (S15P21A405-726): 어두운 → 밝은 → (그대에게로 파고든 뒤) 여백 → 밀도
+  { title: "서쪽하늘", artist: "이승철" },
+  { title: "그대에게", artist: "무한궤도" },
+  { title: "Dynamite", artist: ["방탄소년단", "BTS"], minLayer: 1 },
+  { title: "낭만고양이", artist: ["체리필터", "Cherry Filter"], minLayer: 1 },
   { title: "Hollywood Action" },
   { title: "REDRED", artist: ["코르티스", "CORTIS"] },
   /*

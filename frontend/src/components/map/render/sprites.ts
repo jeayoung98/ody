@@ -1,5 +1,5 @@
 import { NO_GENRE_ID } from "@/constants";
-import { GENRE_COLORS, genreRgb, rgba } from "@/constants/design-tokens";
+import { GENRE_COLORS, genreRgb, rgba, type StarShape } from "@/constants/design-tokens";
 import { starColorIdx } from "./star-look";
 import type { MapPoint, NearbyUser } from "@/types";
 import { BudgetCache, canvasBytes } from "@/lib/budget-cache";
@@ -17,27 +17,113 @@ export function mulberry32(a: number) {
 }
 
 const SPR_SIZE = 48;
-let glow: HTMLCanvasElement[] | null = null;
+const glowByShape = new Map<StarShape, HTMLCanvasElement[]>();
 
-/** 장르별 글로우 스프라이트 (48px 방사 그라데이션) */
-export function glowSprites(): HTMLCanvasElement[] {
-  if (glow) return glow;
-  glow = GENRE_COLORS.map((rgb) => {
+/**
+ * 장르별 글로우 스프라이트 (48px). **모양은 겹 테마가 정한다** (S15P21A405-723, `LAYER_THEMES.star`) — 기본 `halo` 는
+ * 예전과 같은 방사 후광이고, 나머지 일곱은 그 위에 십자·고리·번짐 같은 특징을 얹는다. 색은 장르 그대로다.
+ * 모양 × 장르로 한 번씩만 굽는다.
+ */
+export function glowSprites(shape: StarShape = "halo"): HTMLCanvasElement[] {
+  const hit = glowByShape.get(shape);
+  if (hit) return hit;
+  const made = GENRE_COLORS.map((rgb) => {
     const c = document.createElement("canvas");
     c.width = c.height = SPR_SIZE;
     const g = c.getContext("2d")!;
-    const grd = g.createRadialGradient(SPR_SIZE / 2, SPR_SIZE / 2, 0, SPR_SIZE / 2, SPR_SIZE / 2, SPR_SIZE / 2);
+    const m = SPR_SIZE / 2;
     const light: [number, number, number] = [Math.min(255, rgb[0] + 70), Math.min(255, rgb[1] + 70), Math.min(255, rgb[2] + 70)];
-    grd.addColorStop(0, "rgba(255,255,255,1)");
-    grd.addColorStop(0.14, rgba(light, 0.95));
-    grd.addColorStop(0.33, rgba(rgb, 0.5));
-    grd.addColorStop(0.62, rgba(rgb, 0.12));
-    grd.addColorStop(1, rgba(rgb, 0));
-    g.fillStyle = grd;
-    g.fillRect(0, 0, SPR_SIZE, SPR_SIZE);
+    /** 방사 후광. `core` 가 클수록 심이 크고, `spread` 가 클수록 멀리 퍼진다 */
+    const halo = (core: number, spread: number, peak = 1) => {
+      const grd = g.createRadialGradient(m, m, 0, m, m, m);
+      grd.addColorStop(0, `rgba(255,255,255,${peak})`);
+      grd.addColorStop(0.14 * core, rgba(light, 0.95 * peak));
+      grd.addColorStop(0.33 * spread, rgba(rgb, 0.5 * peak));
+      grd.addColorStop(Math.min(0.98, 0.62 * spread), rgba(rgb, 0.12 * peak));
+      grd.addColorStop(1, rgba(rgb, 0));
+      g.fillStyle = grd;
+      g.fillRect(0, 0, SPR_SIZE, SPR_SIZE);
+    };
+    switch (shape) {
+      case "halo":
+        halo(1, 1);
+        break;
+      case "cross": {
+        halo(0.8, 0.7);
+        // 네 갈래 빛줄기 — 끝으로 갈수록 옅어진다
+        g.strokeStyle = rgba(light, 0.55);
+        g.lineWidth = 1.6;
+        g.lineCap = "round";
+        g.beginPath();
+        g.moveTo(m - m * 0.95, m);
+        g.lineTo(m + m * 0.95, m);
+        g.moveTo(m, m - m * 0.95);
+        g.lineTo(m, m + m * 0.95);
+        g.stroke();
+        break;
+      }
+      case "smear":
+        // 옆으로 흐르는 타원 — 은하수의 별처럼
+        g.save();
+        g.translate(m, m);
+        g.rotate(-0.32);
+        g.scale(1.55, 0.6);
+        g.translate(-m, -m);
+        halo(1, 1);
+        g.restore();
+        break;
+      case "diffuse":
+        // 심이 작고 멀리까지 퍼지는 뭉게별
+        halo(0.6, 1.45, 0.85);
+        break;
+      case "point":
+        // 심만 또렷하고 후광은 짧다
+        halo(1.2, 0.55);
+        break;
+      case "disc": {
+        halo(0.9, 0.7, 0.7);
+        g.beginPath();
+        g.arc(m, m, m * 0.42, 0, 6.284);
+        g.fillStyle = rgba(rgb, 1);
+        g.fill();
+        // 그늘진 반달 — 오른쪽 아래가 어둡다
+        g.save();
+        g.beginPath();
+        g.arc(m, m, m * 0.42, 0, 6.284);
+        g.clip();
+        g.beginPath();
+        g.arc(m - m * 0.16, m - m * 0.16, m * 0.42, 0, 6.284);
+        g.rect(0, 0, SPR_SIZE, SPR_SIZE);
+        g.fillStyle = "rgba(0,0,0,.5)";
+        g.fill("evenodd");
+        g.restore();
+        break;
+      }
+      case "spark": {
+        halo(1, 0.5);
+        // 가늘고 긴 네 스파이크
+        g.fillStyle = rgba(light, 0.85);
+        const L = m * 0.98;
+        const w = m * 0.13;
+        g.beginPath();
+        g.moveTo(m - L, m);
+        g.lineTo(m, m - w);
+        g.lineTo(m + L, m);
+        g.lineTo(m, m + w);
+        g.closePath();
+        g.moveTo(m, m - L);
+        g.lineTo(m + w, m);
+        g.lineTo(m, m + L);
+        g.lineTo(m - w, m);
+        g.closePath();
+        g.fill();
+        break;
+      }
+    }
     return c;
   });
-  return glow;
+  glowByShape.set(shape, made);
+  return made;
 }
 
 /** 먼 배경 별 — 화면 비율 좌표에 고정 */

@@ -834,10 +834,11 @@ export default function MapView({ occlusion }: MapViewProps) {
       if (fr) {
         /**
          * 겹친 표식(+N)은 **먼저 갈라 보인다** (S15P21A405-618). 같은 노래를 듣는 사람은 좌표가 같아
-         * 확대해도 안 풀리므로, 누르는 것이 뒤사람을 보는 유일한 길이다. 갈라진 개별 표식은
-         * `stacked` 가 비어 있어 예전처럼 바로 프로필이다.
+         * 확대해도 안 풀리므로, 누르는 것이 뒤사람을 보는 유일한 길이다.
+         * **곡 위에 선 표식도 같다** (S15P21A405-727) — 사람이 별을 덮어 그 곡을 못 눌렀다. 혼자여도 펼쳐서
+         * 가운데 곡을 비운다. 갈라진 개별 표식(`spread`)은 예전처럼 바로 프로필이다.
          */
-        if (fr.stacked.length > 0) {
+        if (!fr.spread && (fr.stacked.length > 0 || engine.songUnder(fr))) {
           engine.expandStack(fr.user.email);
           return;
         }

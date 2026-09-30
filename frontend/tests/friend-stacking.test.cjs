@@ -84,3 +84,48 @@ test("화면 밖 사람은 여전히 후보가 아니다 — 겹침과 다른 �
   const e = engine([person("inside", 400, 400), person("outside", -500, 400)]);
   assert.equal(counted(e), 1);
 });
+
+/**
+ * **곡 위에 선 표식은 혼자여도 펼쳐 가운데 곡을 비운다** (S15P21A405-727).
+ * 사람은 듣는 곡의 별 위에 그려지고 판정은 사람을 먼저 보므로, 펼치지 않으면 그 곡을 누를 길이 없다.
+ */
+const { FRIEND_MARKER } = require("../src/constants/map.ts");
+
+/** 화면 (300,300) 에 별 하나가 있는 엔진 */
+function engineWithStar(people) {
+  const e = engine(people);
+  e.songs = [{ musicId: 1, title: "t", artist: "a" }];
+  e.visible = [{ i: 0, px: 300, py: 300, r: 15 }];
+  e.coverHits = [];
+  return e;
+}
+
+test("곡 위의 혼자 표식을 펼치면 별 밖으로 비켜서고, 그 자리의 곡이 잡힌다", () => {
+  const e = engineWithStar([person("a", 300, 300)]);
+  assert.equal(e.hitFriend(300, 300)?.user.email, "a", "펼치기 전엔 사람이 별을 덮는다");
+  e.expandStack("a");
+  e.updateFriends();
+  e.spreadExpandedStack();
+  // 스프링이 끝난 뒤 자리를 본다
+  e.expandedStack.since -= 10_000;
+  e.updateFriends();
+  e.spreadExpandedStack();
+  const v = e.visFriends[0];
+  assert.equal(v.spread, true, "갈라진 표식으로 표시된다 — 다시 펼치지 않는다");
+  const d = Math.hypot(v.px - 300, v.py - 300);
+  assert.ok(d > 15 + FRIEND_MARKER.radiusPx, `헬멧이 별 밖에 있어야 한다 (d=${d})`);
+  assert.equal(e.hitFriend(300, 300), null, "가운데를 누르면 사람이 아니다");
+  assert.equal(e.hitTest(300, 300)?.i, 0, "가운데를 누르면 곡이다");
+});
+
+test("밑에 곡이 없는 혼자 표식은 펼칠 것이 없어 접힌다", () => {
+  const e = engine([person("a", 300, 300)]);
+  e.songs = [];
+  e.visible = [];
+  e.coverHits = [];
+  e.expandStack("a");
+  e.updateFriends();
+  e.spreadExpandedStack();
+  assert.equal(e.expandedStack, null);
+  assert.equal(e.visFriends[0].spread, undefined);
+});

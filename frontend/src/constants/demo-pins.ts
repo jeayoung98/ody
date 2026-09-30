@@ -33,7 +33,7 @@ export const DEMO_SONGS: readonly DemoSong[] = [
   { title: "서쪽하늘", artist: "이승철" },
   { title: "그대에게", artist: "무한궤도" },
   { title: "Dynamite", artist: ["방탄소년단", "BTS"], minLayer: 1 },
-  { title: "낭만고양이", artist: ["체리필터", "Cherry Filter"], minLayer: 1 },
+  { title: "STEP", artist: ["카라", "KARA"], minLayer: 1 },
   { title: "Hollywood Action" },
   { title: "REDRED", artist: ["코르티스", "CORTIS"] },
   /*

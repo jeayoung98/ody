@@ -22,3 +22,10 @@
     --glass-tint: rgb(150 170 210 / 0.22);
   }
 }
+/* 미니맵 — 접기 손잡이(`collapse-handle`)와 같은 청록 빛 번짐. 테두리도 한 톤 밝힌다 */
+html [data-minimap] {
+  border-color: rgb(79 227 206 / 0.35);
+  box-shadow:
+    0 0 14px rgb(79 227 206 / 0.45),
+    0 0 32px rgb(79 227 206 / 0.2);
+}

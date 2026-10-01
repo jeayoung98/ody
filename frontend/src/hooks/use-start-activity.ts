@@ -2,6 +2,7 @@
 
 import { useCallback } from "react";
 import { ACTIVITY_CONFIRM, type ActivityKind } from "@/constants";
+import { DEMO, skipConfirm } from "@/constants/demo";
 import { useConfirmStore } from "@/stores/use-confirm-store";
 import { ownedMapRepresentation, playbackActivity, type PlaybackActivity } from "@/lib/play-context";
 import { dismountRide } from "@/hooks/mutations/use-dismount-mutation";
@@ -33,7 +34,9 @@ function currentActivity(): CurrentActivity | null {
  * 여정·플리·따라가기에서 넘어올 때는 그대로 묻는다. 그건 정말로 다른 것을 버리는 일이다.
  */
 export function useStartActivity() {
-  const ask = useConfirmStore((s) => s.ask);
+  const confirmAsk = useConfirmStore((s) => s.ask);
+  // 시연용 (S15P21A405-732): 활동 전환 확인 팝업 없이 바로 바꾼다
+  const ask = DEMO ? skipConfirm : confirmAsk;
 
   const stopCurrent = useCallback(
     (cur: CurrentActivity) => {

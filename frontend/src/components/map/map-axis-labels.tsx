@@ -1,5 +1,6 @@
 "use client";
 
+import { DEMO } from "@/constants/demo";
 import type { CSSProperties } from "react";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { LAYER_AXES } from "@/constants";
@@ -48,6 +49,9 @@ const CLIP = `path('${scalePath(WING)} ${scalePath(DIAMOND)}')`;
  * 하지 않는 원칙은 그대로 — 흐리게 하면 유리가 아니라 흐린 그림이 된다.
  */
 const GLASS = { filter: "blur(8px) saturate(1.15) brightness(1.35)", tint: "rgb(255 255 255 / 0.1)", rim: 0.2 } as const;
+// 시연용 (S15P21A405-732): 발표 화면에서 안 보여 밝힌 값
+const DEMO_GLASS = { filter: "blur(10px) saturate(1.15) brightness(1.8)", tint: "rgb(255 255 255 / 0.24)", rim: 0.45 } as const;
+const G = DEMO ? DEMO_GLASS : GLASS;
 
 type Dir = "up" | "down" | "left" | "right";
 /** 원본은 아래를 가리킨다 */
@@ -59,9 +63,9 @@ function GlassArrow({ dir }: { dir: Dir }) {
     width: W,
     height: H,
     clipPath: CLIP,
-    background: GLASS.tint,
-    WebkitBackdropFilter: GLASS.filter,
-    backdropFilter: GLASS.filter,
+    background: G.tint,
+    WebkitBackdropFilter: G.filter,
+    backdropFilter: G.filter,
   };
   return (
     // 돌려도 레이아웃 상자는 안 돈다 — 좌우 화살표는 상자 가로세로를 바꿔 두고 안에서 돌린다
@@ -77,7 +81,7 @@ function GlassArrow({ dir }: { dir: Dir }) {
             strokeWidth={1}
             vectorEffect="non-scaling-stroke"
             strokeLinejoin="round"
-            strokeOpacity={GLASS.rim}
+            strokeOpacity={G.rim}
           />
         </svg>
       </span>
@@ -124,7 +128,7 @@ export default function MapAxisLabels({ occlusion }: { occlusion: Occlusion }) {
 
   const wrap = `pointer-events-none absolute z-[19] flex items-center transition-opacity duration-500 ${veiled ? "opacity-[0.14]" : ""}`;
   // 글씨는 늘 진하다(ink-2). 별밭 위에서 획이 묻히지 않게 어두운 그림자를 깐다 (S15P21A405-729)
-  const text = "max-w-[24vw] truncate text-[19px] font-semibold tracking-[0.02em] text-ink-2 [text-shadow:0_1px_10px_rgb(0_0_0/0.85)]";
+  const text = `max-w-[24vw] truncate text-[19px] font-semibold tracking-[0.02em] ${DEMO ? "text-ink" : "text-ink-2"} [text-shadow:0_1px_10px_rgb(0_0_0/0.85)]`;
   return (
     <>
       <div className={`${wrap} -translate-y-1/2 gap-2`} style={{ left: left + EDGE_GAP, top: "50%" }}>

@@ -107,6 +107,7 @@ export default function MinimapCanvas() {
   return (
     <div
       // 높이는 나침반 별과 네 축 라벨이 안에 들어가는 값이다 (S15P21A405-722). 예전 96px 에는 별만 겨우 들어갔다
+      data-minimap
       className="relative h-[150px] cursor-crosshair overflow-hidden rounded-[13px] border border-white/[.075] bg-[#050810]"
       onPointerDown={(e) => {
         const eng = getMapEngine();

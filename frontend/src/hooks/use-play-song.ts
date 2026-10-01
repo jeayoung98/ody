@@ -3,16 +3,13 @@
 import { useCallback } from "react";
 import { ACTIVITY_CONFIRM, LEAVE_LIST_CONFIRM, RIDING_LOCKED } from "@/constants";
 import { playbackActivity, samePlayContext, shouldConfirmListExit, visiblePlayContext } from "@/lib/play-context";
-import { DEMO } from "@/constants/demo";
-import { useConfirmStore, type ConfirmRequest } from "@/stores/use-confirm-store";
+import { DEMO, skipConfirm } from "@/constants/demo";
+import { useConfirmStore } from "@/stores/use-confirm-store";
 import { isRiding } from "@/stores/use-follow-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { runPlaybackTransition, useBlockingStore } from "@/stores/use-blocking-store";
-
-/** 시연용 (S15P21A405-732): 묻지 않고 바로 확인한 것으로 친다 */
-const skipConfirm = (req: ConfirmRequest) => req.onConfirm();
 
 /**
  * 곡 하나를 재생하는 **유일한 통로** (S15P21A405-341).

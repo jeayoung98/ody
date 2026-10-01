@@ -3,12 +3,16 @@
 import { useCallback } from "react";
 import { ACTIVITY_CONFIRM, LEAVE_LIST_CONFIRM, RIDING_LOCKED } from "@/constants";
 import { playbackActivity, samePlayContext, shouldConfirmListExit, visiblePlayContext } from "@/lib/play-context";
-import { useConfirmStore } from "@/stores/use-confirm-store";
+import { DEMO } from "@/constants/demo";
+import { useConfirmStore, type ConfirmRequest } from "@/stores/use-confirm-store";
 import { isRiding } from "@/stores/use-follow-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { runPlaybackTransition, useBlockingStore } from "@/stores/use-blocking-store";
+
+/** 시연용 (S15P21A405-732): 묻지 않고 바로 확인한 것으로 친다 */
+const skipConfirm = (req: ConfirmRequest) => req.onConfirm();
 
 /**
  * 곡 하나를 재생하는 **유일한 통로** (S15P21A405-341).
@@ -24,7 +28,9 @@ import { runPlaybackTransition, useBlockingStore } from "@/stores/use-blocking-s
  * [`useStartActivity`](./use-start-activity.ts) 가 맡는다 (ACT-01). 여기는 단일 곡 전용이다.
  */
 export function usePlaySong() {
-  const ask = useConfirmStore((s) => s.ask);
+  const confirmAsk = useConfirmStore((s) => s.ask);
+  // 시연용 (S15P21A405-732): 여정·주변 탐색 중 다른 곡을 열 때 확인 팝업 없이 바로 바꾼다
+  const ask = DEMO ? skipConfirm : confirmAsk;
 
   /**
    * `after` 는 **실제로 틀었을 때만** 돈다. 재생 로그처럼 서버에 남는 일을 여기 넣는다 —

@@ -1,3 +1,4 @@
+import { DEMO } from "@/constants/demo";
 import { NO_GENRE_ID } from "@/constants";
 import { GENRE_COLORS, genreRgb, rgba, type StarShape } from "@/constants/design-tokens";
 import { starColorIdx } from "./star-look";
@@ -32,12 +33,13 @@ export function glowSprites(shape: StarShape = "halo"): HTMLCanvasElement[] {
     c.width = c.height = SPR_SIZE;
     const g = c.getContext("2d")!;
     const m = SPR_SIZE / 2;
-    const light: [number, number, number] = [Math.min(255, rgb[0] + 70), Math.min(255, rgb[1] + 70), Math.min(255, rgb[2] + 70)];
+    // 시연용 (S15P21A405-732): 심은 하얗게, 장르색은 바깥으로 번지는 빛으로만
+    const light: [number, number, number] = DEMO ? [255, 255, 255] : [Math.min(255, rgb[0] + 70), Math.min(255, rgb[1] + 70), Math.min(255, rgb[2] + 70)];
     /** 방사 후광. `core` 가 클수록 심이 크고, `spread` 가 클수록 멀리 퍼진다 */
     const halo = (core: number, spread: number, peak = 1) => {
       const grd = g.createRadialGradient(m, m, 0, m, m, m);
       grd.addColorStop(0, `rgba(255,255,255,${peak})`);
-      grd.addColorStop(0.14 * core, rgba(light, 0.95 * peak));
+      grd.addColorStop(0.14 * core * (DEMO ? 1.4 : 1), rgba(light, 0.95 * peak));
       grd.addColorStop(0.33 * spread, rgba(rgb, 0.5 * peak));
       grd.addColorStop(Math.min(0.98, 0.62 * spread), rgba(rgb, 0.12 * peak));
       grd.addColorStop(1, rgba(rgb, 0));

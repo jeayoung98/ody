@@ -1,5 +1,6 @@
 @import "tailwindcss";
 @import "../styles/tokens.css";
+@import "../styles/demo.css"; /* 시연용 임시 (S15P21A405-732) — 지우면 원래대로 */
 
 /* ---------- 기본 ---------- */
 /*

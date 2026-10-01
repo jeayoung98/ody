@@ -1,0 +1,24 @@
+/*
+ * **시연용 임시 설정** (S15P21A405-732) — 이 파일과 globals.css 끝의 import 한 줄을 지우면 원래대로다.
+ * 유리(블러·무늬)는 그대로 두고 밑칠만 밝혀 네비·검색바가 보이게 한다. 배경은 남색 → 검정.
+ */
+:root {
+  --color-void: #000;
+  --glass-tint: rgb(150 170 210 / 0.22);
+  --glass-brightness: 1.35;
+}
+.stage-bg {
+  background: #000;
+}
+.glass,
+[data-search-web] .glass {
+  background:
+    linear-gradient(rgb(255 255 255 / 0.2), rgb(255 255 255 / 0.2)),
+    rgb(120 140 180 / 0.18);
+}
+@media (width < 900px) {
+  :root,
+  [data-search-web] {
+    --glass-tint: rgb(150 170 210 / 0.22);
+  }
+}

@@ -1,3 +1,4 @@
+import { DEMO } from "@/constants/demo";
 import { CONSTELLATION, COVER_COUNT, DEMO_PIN, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
 import { FONTS, LAYER_SKY_ALPHA, LAYER_THEMES, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
@@ -159,7 +160,8 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   const tint = layerTint(e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer);
   const ox = Math.sin(t * 0.015) * 44;
   const oy = Math.cos(t * 0.011) * 34;
-  for (const w of NEBULA_WASH) {
+  // 시연용 (S15P21A405-732): 성운 워시가 배경을 남색으로 띄워 별을 묻는다 — 끈다
+  for (const w of DEMO ? [] : NEBULA_WASH) {
     const px = w.u * W + ox;
     const py = w.v * H + oy;
     const rr = w.r * big * 0.62;

@@ -1,3 +1,5 @@
+import { DEMO } from "@/constants/demo";
+
 /**
  * JS(canvas) 에서 필요한 디자인 토큰. CSS 원본은 src/styles/tokens.css.
  * 값이 바뀌면 양쪽을 함께 고친다.
@@ -53,7 +55,7 @@ export const PALETTE = {
 } as const;
 
 export const MAP_COLORS = {
-  background: PALETTE.void,
+  background: DEMO ? "#000" : PALETTE.void, // 시연용 (S15P21A405-732)
   me: PALETTE.teal,
   meRing: "rgba(79,227,206,.55)",
   meRingInner: "rgba(79,227,206,.28)",

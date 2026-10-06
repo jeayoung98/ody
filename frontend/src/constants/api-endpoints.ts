@@ -235,6 +235,8 @@ export const API_ENDPOINTS = {
      * 종류별 경로(`/bff/charts/{type}`) 목은 걷어냈다 — 백엔드가 셋을 한 번에 주기 때문이다.
      */
     weekly: "/bff/charts/weekly",
+    /** 실시간 탑 버스기사 — **실연동** (S15P21A405-681). 배포 백엔드 `GET /api/realtime/ride/ranking` */
+    topDriver: "/bff/charts/top-driver",
   },
 
   /**
@@ -258,6 +260,8 @@ export const API_ENDPOINTS = {
     mine: "/bff/contests/mine",
     /** `POST /api/artwork/like { artworkId, liked }` — 토글이 아니라 목표 상태 */
     like: (artworkId: number) => `/bff/contests/entries/${artworkId}/like`,
+    /** `GET /api/artwork/detail?artworkId=` — 작품 한 점의 별자리 좌표 (S15P21A405-701) */
+    detail: (artworkId: number) => `/bff/contests/entries/${artworkId}`,
     /** `POST /api/artwork/retry/{id}` — 실패한 내 작품 재평가 */
     retry: (artworkId: number) => `/bff/contests/entries/${artworkId}/retry`,
     /** 남의 작품을 내 플리로 — `POST /api/playlist/create` (곡 순서 그대로) */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { ChevronLeftIcon, ListPlayIcon } from "@/components/common/icons";
 import TransportButton from "@/components/common/transport-button";
 import InfoHint from "@/components/common/info-hint";
@@ -83,6 +83,17 @@ export default function SongNearbyList({ items, centerMusicId }: SongNearbyListP
     setAtStart(el.scrollLeft <= 2);
     setAtEnd(el.scrollLeft + el.clientWidth >= el.scrollWidth - 2);
   };
+  /**
+   * 곡이 바뀌면 **맨 앞으로 되돌린다** (S15P21A405-697). 세로 스크롤은 상세 패널이 이미 맨 위로 돌리는데
+   * (`song-detail-panel`), 이 줄은 같은 상자를 계속 쓰므로 가로 위치가 남아 새 곡의 1위 카드가 안 보였다.
+   * DOM 에 바로 쓰고 화살표 상태도 같이 맞춘다 — 스크롤 이벤트를 기다리면 한 프레임 동안 화살표가 틀린다.
+   */
+  useEffect(() => {
+    const el = railRef.current;
+    if (!el) return;
+    el.scrollTo({ left: 0 });
+    readEdges(el);
+  }, [centerMusicId]);
   /** 카드 한 장 + 사이 간격만큼 민다 — 스냅이 다음 카드 머리에 맞춰 세운다 */
   const nudge = (dir: 1 | -1) => railRef.current?.scrollBy({ left: dir * (CARD_W + CARD_GAP) * 2, behavior: "smooth" });
 

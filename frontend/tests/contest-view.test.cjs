@@ -61,3 +61,36 @@ test("AI 추천 적합도는 그린 별자리와 같은 0~100·등급 척도로 
   assert.deepEqual(templateScore(0.5), { score: 50, quality: "LOW" });
   assert.deepEqual(templateScore(3), { score: 0, quality: "LOW" }, "반폭 넘게 어긋나면 0 으로 누른다");
 });
+
+// ── 그리기 탭 단계 이동 (S15P21A405-702) ───────────────────────────────────────
+{
+  const { backStep, visibleStep } = require("../src/lib/contest-view.ts");
+
+  test("뒤로는 그리기 단계 안에서만 — 곡 확인은 그리기로, 이름은 곡 확인으로", () => {
+    assert.equal(backStep("review"), "draw");
+    assert.equal(backStep("submit"), "review");
+    assert.equal(backStep("draw"), null, "첫 단계는 돌아갈 곳이 없다");
+    assert.equal(backStep("scoring"), null, "채점은 출품 뒤라 되돌아가지 않는다");
+  });
+
+  test("찾은 곡이 없는데 곡 확인·이름 단계면 그리기로 보여 준다 — 점을 고치면 곡이 버려진다", () => {
+    assert.equal(visibleStep("review", { hasMine: false, hasMatch: false }), "draw");
+    assert.equal(visibleStep("submit", { hasMine: true, hasMatch: false }), "draw");
+    assert.equal(visibleStep("review", { hasMine: false, hasMatch: true }), "review");
+  });
+
+  test("낸 작품이 없는데 채점·완성 단계면 그리기로 보여 준다", () => {
+    assert.equal(visibleStep("scoring", { hasMine: false, hasMatch: false }), "draw");
+    assert.equal(visibleStep("done", { hasMine: false, hasMatch: false }), "draw");
+  });
+
+  test("채점이 끝나면 완성으로 저절로 넘어가고, 아직이면 채점에 머문다", () => {
+    assert.equal(visibleStep("scoring", { hasMine: true, hasMatch: false, mineScored: true }), "done");
+    assert.equal(visibleStep("scoring", { hasMine: true, hasMatch: false, mineScored: false }), "scoring");
+    assert.equal(visibleStep("done", { hasMine: true, hasMatch: false, mineScored: false }), "scoring", "재출품해서 다시 채점 중이면 채점으로");
+  });
+
+  test("완성에서도 뒤로는 없다", () => {
+    assert.equal(backStep("done"), null);
+  });
+}

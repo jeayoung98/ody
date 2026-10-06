@@ -5,7 +5,8 @@ import { SmileIcon } from "@/components/common/icons";
 import { REACTION_REJECTED, type ReactionKey } from "@/constants";
 import { useSendReactionMutation } from "@/hooks/mutations/use-send-reaction-mutation";
 import { ApiError } from "@/lib/api";
-import { isBot } from "@/lib/bots/roster";
+import { reactionRecipients } from "@/lib/realtime/reaction-recipients";
+import { useFollowStore } from "@/stores/use-follow-store";
 import { useReactionStore } from "@/stores/use-reaction-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import type { NearbyPerson } from "@/types";
@@ -13,26 +14,31 @@ import ReactionPicker from "./reaction-picker";
 
 /**
  * 반응 보내기 — **주변 사람 패널 오른쪽 아래** (SOCIAL-02, S15P21A405-434·496). 기본 반응 세트를
- * 고르면 레이더 가운데(나) 위로 떠서 사라진다. 우하단 FAB 였는데 플레이어바가 그 자리를 차지해 패널 안으로
+ * 고르면 **지도의 내 표식** 위로 떠서 사라진다 (S15P21A405-694). 우하단 FAB 였는데 플레이어바가 그 자리를 차지해 패널 안으로
  * 들어왔고, 목록 위에 있다가 아래로 내려왔다 — 반응은 주변 사람을 **보고 나서** 하는 일이라
  * 목록보다 먼저 걸리면 순서가 뒤집힌다.
  *
  * **패널에 뜬 사람 전원에게 보낸다** (S15P21A405-607). 명세(FEATURES 18)는 반응이 "내 위로 떠서"
  * 주변에 보이는 것이라 특정 한 명에게 보내는 쪽지가 아니다. 백엔드는 받는 사람 한 명씩 받으므로
- * 여기서 펼쳐 보낸다. 봇은 서버에 없는 사람이라 건너뛴다. 재전송 제한(SOCIAL-04)은 서버 429 다.
+ * 여기서 펼쳐 보낸다. 재전송 제한(SOCIAL-04)은 서버 429 다.
+ *
+ * **선단도 받는다** (S15P21A405-699). 따라가는 사람은 주변 목록에 없어서, 따라가기 중에는 인솔자와 동승자가
+ * 서로 반응을 못 주고받았다. 받는 사람은 `reactionRecipients` 가 정한다.
  */
 export default function ReactionButton({ people }: { people: NearbyPerson[] }) {
   const [open, setOpen] = useState(false);
   const push = useReactionStore((s) => s.push);
   const showToast = useToastStore((s) => s.show);
   const send = useSendReactionMutation();
+  const leaderEmail = useFollowStore((s) => s.leaderEmail);
+  const riders = useFollowStore((s) => s.riders);
 
   const handlePick = async (key: ReactionKey) => {
     setOpen(false);
     push({ reactionKey: key, mine: true, fromEmail: null });
-    const targets = people.filter((p) => !isBot(p.email));
-    if (targets.length === 0) return;
-    const results = await Promise.allSettled(targets.map((p) => send.mutateAsync({ toEmail: p.email, reactionKey: key })));
+    const to = reactionRecipients(people, leaderEmail, riders);
+    if (to.length === 0) return;
+    const results = await Promise.allSettled(to.map((toEmail) => send.mutateAsync({ toEmail, reactionKey: key })));
     // 한 명에게라도 갔으면 조용히 넘긴다. 전부 거부됐을 때만 첫 사유를 말한다
     if (results.some((r) => r.status === "fulfilled")) return;
     const first = results[0] as PromiseRejectedResult;

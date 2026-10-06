@@ -1,7 +1,9 @@
-import { CONSTELLATION, COVER_COUNT, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
-import { FONTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
+import { DEMO } from "@/constants/demo";
+import { CONSTELLATION, COVER_COUNT, DEMO_PIN, FRIEND_MARKER, GHOST, HOLD, HOP_LINK, LAYER_COUNT, LAYER_DEPTH, LAYER_NAMES, MAP_TITLE_PX, ME_FLIGHT, ME_OFFSCREEN, PROBE, PROBE_LABEL, STAR_SIZE, STAR_TWINKLE, STAR_VIEW } from "@/constants";
+import { FONTS, LAYER_SKY_ALPHA, LAYER_THEMES, LAYER_TINT_MIX, LAYER_TINTS, MAP_COLORS, NEBULA_WASH, rgba } from "@/constants/design-tokens";
 import type { MapEngine } from "../engine/map-engine";
-import { drawFriends, drawQueue, drawShip } from "./draw-friends";
+import { cullLabels, type LabelRect } from "../engine/probe-layout";
+import { drawFriends, drawQueue, drawShip, drawVisor, meAvatar } from "./draw-friends";
 
 /**
  * 내가 선단을 이끌 때의 우주선 크기 (S15P21A405-557).
@@ -10,7 +12,8 @@ import { drawFriends, drawQueue, drawShip } from "./draw-friends";
  * **배율은 남의 배와 같은 것을 쓴다** (S15P21A405-642). 하나만 올리면 그 "같은 눈높이" 가
  * 그대로 깨진다 — 배가 커지는 규칙은 `FRIEND_MARKER.shipScale` 한 곳에만 둔다.
  */
-const ME_SHIP_R = 13 * FRIEND_MARKER.shipScale;
+// 인솔자 우주선(`draw-friends`)과 같은 크기 — 누가 나를 따라오든 내가 따라가든 우주선은 한 크기다 (S15P21A405-677)
+const ME_SHIP_R = FRIEND_MARKER.leaderRadiusPx * FRIEND_MARKER.shipScale;
 /** 나는 늘 청록이다 (`--teal`). 남은 장르 색을 쓰지만 내 색은 고정이다 */
 import { coverFor, dustStars, farFieldTile, fitText, glowSprites, puffFor, roundRect, skyStars, mulberry32, type FarFieldTile, type SkyStar } from "./sprites";
 import { starColorIdx, starMag, starRgb } from "./star-look";
@@ -84,6 +87,44 @@ function touch(id: number, t: number) {
  * 지금 겹의 깊이 0~1. 전환 중에는 두 겹 사이 소수로 건너간다 —
  * 끝나는 순간 배경이 툭 바뀌면 그것부터 눈에 띈다.
  */
+/**
+ * 지금 겹의 배경 색 (S15P21A405-690). 전환 중에는 두 겹 색 사이 — 배경 깊이(`depthOf`)와 같은 잣대라 어둡기와 색이 함께 건너간다.
+ */
+export function layerTint(layerF: number): [number, number, number] {
+  const n = LAYER_TINTS.length;
+  const l = Math.min(n - 1, Math.max(0, layerF));
+  const a = LAYER_TINTS[Math.floor(l)];
+  const b = LAYER_TINTS[Math.min(n - 1, Math.floor(l) + 1)];
+  const k = l - Math.floor(l);
+  return [0, 1, 2].map((i) => Math.round(a[i] + (b[i] - a[i]) * k)) as [number, number, number];
+}
+
+/**
+ * 지금 그리는 겹의 테마 (S15P21A405-723). 전환 중에는 **들어오는 겹**이 기본이고, `out` 이면 나가는 겹이다 —
+ * 그래야 두 겹의 별이 각자 제 모양으로 교차하며 "다른 곳으로 간다" 가 별에서 읽힌다.
+ */
+function themeOf(e: MapEngine, out = false) {
+  const layer = e.anim && !out ? e.anim.layer : e.layer;
+  return LAYER_THEMES[Math.min(LAYER_THEMES.length - 1, Math.max(0, layer))];
+}
+
+/** 겹 사이를 잇는 하늘 색 — 전환 중에는 두 겹 색의 중간이다 */
+function skyOf(layerF: number): [readonly [number, number, number], readonly [number, number, number]] {
+  const n = LAYER_THEMES.length;
+  const l = Math.min(n - 1, Math.max(0, layerF));
+  const a = LAYER_THEMES[Math.floor(l)].sky;
+  const b = LAYER_THEMES[Math.min(n - 1, Math.floor(l) + 1)].sky;
+  const k = l - Math.floor(l);
+  const mix = (p: readonly [number, number, number], q: readonly [number, number, number]) =>
+    [0, 1, 2].map((i) => Math.round(p[i] + (q[i] - p[i]) * k)) as [number, number, number];
+  return [mix(a[0], b[0]), mix(a[1], b[1])];
+}
+
+/** 워시 원래 색에 겹 색을 섞는다 */
+function tinted(c: readonly [number, number, number], tint: readonly [number, number, number]): [number, number, number] {
+  return [0, 1, 2].map((i) => Math.round(c[i] + (tint[i] - c[i]) * LAYER_TINT_MIX)) as [number, number, number];
+}
+
 function depthOf(e: MapEngine) {
   const l = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
   return l / (LAYER_COUNT - 1);
@@ -96,23 +137,39 @@ function drawBackground(g: CanvasRenderingContext2D, e: MapEngine, depth: number
   g.globalCompositeOperation = "source-over";
   g.fillStyle = MAP_COLORS.background;
   g.fillRect(0, 0, W, H);
+  // 겹 하늘 색 (S15P21A405-723) — 위에서 아래로 흐르는 그라데이션. 겹을 옮기면 하늘부터 바뀐다
+  {
+    const layerF = e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer;
+    const [top, bottom] = skyOf(layerF);
+    const sg = g.createLinearGradient(0, 0, 0, H);
+    sg.addColorStop(0, rgba(top, LAYER_SKY_ALPHA));
+    sg.addColorStop(1, rgba(bottom, LAYER_SKY_ALPHA));
+    g.fillStyle = sg;
+    g.fillRect(0, 0, W, H);
+  }
   if (depth > 0) {
     g.fillStyle = `rgba(0,0,0,${(depth * LAYER_DEPTH.maxDarken).toFixed(3)})`;
     g.fillRect(0, 0, W, H);
   }
-  const nebulaK = 1 - depth * LAYER_DEPTH.maxNebulaFade;
+  // 겹 워시 세기 (S15P21A405-723) — 전환 중에는 두 겹 사이를 잇는다. 첫 겹은 화면을 어둡게 두려고 낮다
+  const washK = e.anim ? themeOf(e, true).wash + (themeOf(e).wash - themeOf(e, true).wash) * e.morphT : themeOf(e).wash;
+  const nebulaK = (1 - depth * LAYER_DEPTH.maxNebulaFade) * washK;
   g.globalCompositeOperation = "lighter";
   const big = Math.max(W, H);
+  // 겹마다 다른 색으로 물든다 (S15P21A405-690)
+  const tint = layerTint(e.anim ? e.layer + (e.anim.layer - e.layer) * e.morphT : e.layer);
   const ox = Math.sin(t * 0.015) * 44;
   const oy = Math.cos(t * 0.011) * 34;
-  for (const w of NEBULA_WASH) {
+  // 시연용 (S15P21A405-732): 성운 워시가 배경을 남색으로 띄워 별을 묻는다 — 끈다
+  for (const w of DEMO ? [] : NEBULA_WASH) {
     const px = w.u * W + ox;
     const py = w.v * H + oy;
     const rr = w.r * big * 0.62;
     const gr = g.createRadialGradient(px, py, 0, px, py, rr);
-    gr.addColorStop(0, rgba(w.c, 0.105 * nebulaK));
-    gr.addColorStop(0.42, rgba(w.c, 0.04 * nebulaK));
-    gr.addColorStop(1, rgba(w.c, 0));
+    const c = tinted(w.c, tint);
+    gr.addColorStop(0, rgba(c, 0.16 * nebulaK));
+    gr.addColorStop(0.42, rgba(c, 0.06 * nebulaK));
+    gr.addColorStop(1, rgba(c, 0));
     g.fillStyle = gr;
     g.beginPath();
     g.arc(px, py, rr, 0, Math.PI * 2);
@@ -195,10 +252,13 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const H = e.H;
   // 기준 반지름. 0.55·60 이던 것을 0.75·80 으로 — 화면에서 구름이 자잘하게 흩어져 보였다 (S15P21A405-643).
   // 퍼프 수·알파는 그대로다: lighter 합성이라 그것까지 올리면 겹치는 자리가 하얗게 뜬다
-  const R = clamp(0.75 * e.cam.s, 80, Math.max(W, H) * 0.8);
+  // 겹 구름 스타일 (S15P21A405-723) — 수·크기·세기·늘림이 겹마다 다르다. 없는 겹은 그리지 않는다
+  const cloud = themeOf(e, out).cloud;
+  if (cloud.count === 0) return;
+  const R = clamp(0.75 * e.cam.s, 80, Math.max(W, H) * 0.8) * cloud.scale;
   g.globalCompositeOperation = "lighter";
-  // 앵커: 곡 수와 무관하게 22개 정도 (결정적)
-  const step = Math.max(1, Math.floor(e.N / 22));
+  // 앵커: 곡 수와 무관하게 겹이 정한 수만큼 (결정적)
+  const step = Math.max(1, Math.floor(e.N / cloud.count));
   for (let i = 0; i < e.N; i += step) {
     // 전환 중에는 성운을 늦게 올린다 — 들어오는 겹이 작게 뭉쳐 있는 동안 켜면 가운데가 하얗게 뜬다
     const a0 = e.anim ? A[i] * A[i] * A[i] : A[i];
@@ -209,8 +269,11 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
     if (px < -R * 1.7 || px > W + R * 1.7 || py < -R * 1.7 || py > H + R * 1.7) continue;
     for (const q of puffsOf(s.musicId)) {
       const rr = R * q.sc;
-      g.globalAlpha = q.a * a0;
-      g.drawImage(puffFor(q.k, starColorIdx(s)), px + q.dx * R - rr, py + q.dy * R - rr, rr * 2, rr * 2);
+      // 늘림 — 가로로 길고 세로로 얇게. 띠·필라멘트 느낌은 여기서 나온다
+      const rx = rr * cloud.stretch;
+      const ry = rr / cloud.stretch;
+      g.globalAlpha = Math.min(1, q.a * a0 * cloud.alpha);
+      g.drawImage(puffFor(q.k, starColorIdx(s)), px + q.dx * R - rx, py + q.dy * R - ry, rx * 2, ry * 2);
     }
   }
   g.globalAlpha = 1;
@@ -220,7 +283,8 @@ function drawNebula(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
 function drawStars(g: CanvasRenderingContext2D, e: MapEngine, out = false) {
   const P = out ? e.posOut : e.pos;
   const A = out ? e.alphaOut : e.alpha;
-  const spr = glowSprites();
+  // 상주 별은 그 겹의 모양으로 (S15P21A405-723). 배경 별밭은 기본 후광 그대로다
+  const spr = glowSprites(themeOf(e, out).star);
   const W = e.W;
   const H = e.H;
   const t = e.time;
@@ -401,10 +465,24 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
   const spaced = (i: number, picked: number[]) =>
     picked.every((j) => (e.pos[i * 2] - e.pos[j * 2]) ** 2 + (e.pos[i * 2 + 1] - e.pos[j * 2 + 1]) ** 2 >= gap2);
 
-  // ① 있던 커버를 먼저 지킨다 — 이게 반짝임을 막는 핵심이다
+  /**
+   * ⓪ **시연 곡은 규칙 밖이다** (S15P21A405-717, `constants/demo-pins`). 개수 상한·최소 간격·밀기 중 보류를 다
+   * 건너뛰고, 그림이 화면에 조금이라도 걸치면(`-KEEP`) 그린다. 다른 커버는 이들과 간격을 두어 비켜난다 —
+   * 상한도 시연 곡 수만큼 늘려 시연 곡이 일반 커버 자리를 잡아먹지 않게 한다.
+   */
+  const demo = new Set<number>();
   const picked: number[] = [];
+  for (const id of e.demoIds) {
+    const i = e.indexOf(id);
+    if (i == null || !usable(i)) continue;
+    demo.add(i);
+    picked.push(i);
+  }
+  const quota = n + demo.size;
+  // ① 있던 커버를 먼저 지킨다 — 이게 반짝임을 막는 핵심이다
   for (const i of coverIdx) {
-    if (picked.length >= n) break;
+    if (picked.length >= quota) break;
+    if (demo.has(i)) continue;
     if (usable(i) && spaced(i, picked)) picked.push(i);
   }
   /*
@@ -418,7 +496,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
    * 그래서 **화면을 커버 수만큼 칸으로 나누고 칸마다 하나씩** 집는다. 이미 커버가 있는 칸은
    * 건너뛰므로 새 커버는 늘 비어 있는 쪽으로 간다.
    */
-  if (picked.length < n && !panning) {
+  if (picked.length < quota && !panning) {
     const candidates = new Set<number>();
     for (let i = 0; i < e.N; i++) if (e.subset[i] && e.repIds.has(e.songs[i].musicId)) candidates.add(i);
     /**
@@ -438,7 +516,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
      */
     const fill = spreadOrder(
       [...candidates]
-        .filter((i) => !picked.includes(i) && usable(i, true))
+        .filter((i) => !picked.includes(i) && !demo.has(i) && usable(i, true))
         .sort(byCoverPriority((i) => e.songs[i].albumMbid != null, (i) => e.songs[i].weight)),
       at,
       f,
@@ -448,7 +526,7 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
     // 처음(들고 있던 게 없다)에는 한 번에 채운다. 그 뒤로는 한 칸씩만 — 위 주석 참고
     let room = coverIdx.length === 0 ? n : COVER_COUNT.fillPerFrame;
     for (const i of fill) {
-      if (picked.length >= n || room <= 0) break;
+      if (picked.length >= quota || room <= 0) break;
       if (spaced(i, picked)) {
         picked.push(i);
         room--;
@@ -468,12 +546,15 @@ function drawCovers(g: CanvasRenderingContext2D, e: MapEngine) {
    * 보였다. 화가 알고리즘대로 깊이 배율 오름차순으로 그린다 — `picked` 자체는 안 건드린다,
    * 그 순서는 다음 프레임의 자리 유지에 쓰인다.
    */
-  const paintOrder = [...picked].sort((a, b) => e.depthScale(a) - e.depthScale(b));
+  // 시연 곡은 깊이가 같아도 **맨 위** — 가장 앞에 있는 것으로 읽혀야 한다 (S15P21A405-717)
+  const rank = (i: number) => e.depthScale(i) + (demo.has(i) ? 10 : 0);
+  const paintOrder = [...picked].sort((a, b) => rank(a) - rank(b));
   for (const i of paintOrder) {
     const it = { px: e.pos[i * 2], py: e.pos[i * 2 + 1], s: e.songs[i] };
     // 글자 밝기는 곡마다 같다 (S15P21A405-518). 크기는 배율 확대에 **서 있는 별의 깊이**만 곱한다 —
     // 가까운 별 위 커버는 크고 빨리, 먼 별 위는 작고 천천히 지나가 별과 한 몸으로 읽힌다 (S15P21A405-614)
-    const S = COVER_COUNT.sizePx * grow * e.depthScale(i);
+    // 시연 곡은 거기에 한 번 더 키운다 — 깊이만으로는 해시가 우연히 가까운 곡과 같은 크기다 (S15P21A405-717)
+    const S = COVER_COUNT.sizePx * grow * e.depthScale(i) * (demo.has(i) ? DEMO_PIN.coverGrow : 1);
     // 그림이 별(r=15)보다 크다 — 클릭도 커버 크기로 받는다 (S15P21A405-452).
     // 호버·선택 곡은 커버 대신 큰 별로 그리지만 상자는 남긴다 — 빼면 호버가 켜지는 순간
     // 집을 자리가 사라져 깜빡인다
@@ -592,6 +673,23 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
   // 앞자리일수록 먼저 자리를 잡는다. 같은 등급이면 여정 순서대로
   const rank = (i: number) => (i === cursor ? 0 : pts[i].id === e.selectedId ? 1 : pts[i].id === e.hoverId ? 2 : 3);
   const order = pts.map((_, i) => i).sort((a, b) => rank(a) - rank(b) || a - b);
+  /**
+   * **폰은 라벨을 남은 화면 안에서 고른다** (S15P21A405-715). 자리 넷을 먼저 안으로 당겨 두고 그중 빈 자리를 쓴다 —
+   * 끝 별의 라벨이 화면 밖이나 시트 밑으로 나가 잘렸다. 당긴 만큼 별에서 조금 비켜 서지만 읽히는 쪽이 낫다.
+   * 넓은 화면은 그대로다
+   */
+  // 붙잡은 화면 기준 — 시트를 올려도 라벨이 따라 움직이지 않는다 (`overlayRect`)
+  const fr = e.overlayRect();
+  const em = CONSTELLATION.labelEdgePx;
+  const narrow = e.isNarrow();
+  const inside = <T extends { x0: number; y0: number; x1: number; y1: number }>(q: T): T => {
+    if (!narrow) return q;
+    const w = q.x1 - q.x0;
+    const h = q.y1 - q.y0;
+    const x0 = Math.min(Math.max(q.x0, fr.x0 + em), fr.x1 - em - w);
+    const y0 = Math.min(Math.max(q.y0, fr.y0 + em), fr.y1 - em - h);
+    return { ...q, x0, y0, x1: x0 + w, y1: y0 + h };
+  };
   for (const i of order) {
     const p = pts[i];
     const s = e.songs[e.songs.findIndex((x) => x.musicId === p.id)];
@@ -604,7 +702,7 @@ function drawConstellation(g: CanvasRenderingContext2D, e: MapEngine, currentMus
       { x0: p.x - w / 2, y0: p.y - 14 - H },
       { x0: p.x + 14, y0: p.y - H / 2 },
       { x0: p.x - 14 - w, y0: p.y - H / 2 },
-    ].map((q) => ({ ...q, x1: q.x0 + w, y1: q.y0 + H }));
+    ].map((q) => inside({ ...q, x1: q.x0 + w, y1: q.y0 + H }));
     // 읽혀야 하는 라벨은 자리가 없어도 기본 자리에 그린다 — 안 보이는 것보다 겹치는 게 낫다
     const box = spots.find((q) => !hits(q)) ?? (must ? spots[0] : null);
     if (!box) continue;
@@ -643,9 +741,9 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   const tx = center.x;
   const ty = center.y;
 
-  // 전체를 어둡게 덮는다 (진행도에 따라) — 지금 중심을 기준으로
+  // 전체를 어둡게 덮는다 (진행도에 따라) — 지금 중심을 기준으로. 폰은 뷰가 뜰 때 붙잡은 화면이다 (`overlayRect`)
   g.globalCompositeOperation = "source-over";
-  const f = e.freeRect();
+  const f = e.overlayRect();
   const Rv = Math.min(f.x1 - f.x0, f.y1 - f.y0) * 0.5;
   const vg = g.createRadialGradient(tx, ty, Rv * 0.2, tx, ty, Rv * 1.9);
   vg.addColorStop(0, `rgba(4,6,13,${0.55 * k})`);
@@ -746,41 +844,121 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
    * 이웃을 누르는 것만으로는 건너가지 않으므로(선택·재생만), 건너가는 길이 시선이 있는 자리에 글씨로 보여야 한다.
    * 떠다니는 버튼을 얹는 대신 이미 있는 라벨 묶음 안에 넣는다. 히트 영역은 엔진에 적어 두고 클릭은 map-view 가 받는다
    */
-  const drawLabel = (x: number, y: number, s: (typeof e.songs)[number], sub: string | null, a: number, link: boolean) => {
+  /** 라벨 글씨 배율 — 확대의 일부만 따라간다 (S15P21A405-688) */
+  const sc = e.probeLabelScale();
+  /**
+   * 폰은 글줄 폭에 상한이 있다 (S15P21A405-715) — 넓은 화면은 `Infinity` 라 그대로 다 쓴다(697).
+   * 엔진이 같은 상한으로 라벨 폭을 세므로(`narrowRingLayout`) 줄인 글과 놓은 자리가 맞는다
+   */
+  const cap = e.probeLabelCap();
+  const clip = (text: string, max: number) => (Number.isFinite(max) ? fitText(g, text, max * sc) : text);
+  // 크기·간격은 `PROBE_LABEL` 한 곳이고, 확대하면 그 일부만 같이 커진다(`sc`) (S15P21A405-688)
+  const L = PROBE_LABEL;
+  type Song = (typeof e.songs)[number];
+  /**
+   * **폰 라벨은 한 줄이다** (S15P21A405-715) — 이웃은 제목만, 가운데는 안내 줄 없이. 360px 폰의 남은 화면에는 두 줄 라벨
+   * 열한 묶음이 안 들어간다(엔진 `narrowRingLayout`). 가수는 누르면 시트에 뜬다. 선택한 이웃의 링크는 가수 줄 자리에 선다
+   */
+  const narrow = e.isNarrow();
+  const subOf = (rank: number, s: Song) => (narrow ? null : `#${rank + 1} · ${s.artist ?? ""}`);
+  /**
+   * 링크 글씨 가운데 y. 넓은 화면은 가수 줄 아래 한 자리다. **폰은 가수 줄 자리가 먼저고, 거기가 남은 화면 밖(시트 밑)이거나
+   * 다른 별을 덮으면 별 위로 올린다** (S15P21A405-715) — 시트 밑 링크는 못 누르고, 링크에 덮인 별도 못 누른다.
+   * 390px 에서 선택한 10위의 링크가 9위 별을 덮었다(실측). 둘 다 안 되면 화면 안인 쪽
+   */
+  const linkY = (id: number, x: number, y: number, sub: string | null, lw: number) => {
+    const below = y + (sub || !narrow ? HOP_LINK.dy : L.subY) * sc;
+    if (!narrow) return below;
+    const hh = (HOP_LINK.h * sc) / 2;
+    const hw = lw / 2 + HOP_LINK.padX;
+    const fits = (ly: number) => ly - hh >= f.y0 && ly + hh <= f.y1;
+    // 별은 선택 링(반지름 12)까지, 가운데 곡은 라벨을 다는 링까지 비켜야 덮지 않는다
+    const covers = (ly: number, sx: number, sy: number, r: number) => Math.abs(sx - x) < hw + r && Math.abs(sy - ly) < hh + r;
+    const clear = (ly: number) => !covers(ly, tx, ty, L.centerRingR) && !nodes.some((n) => n.cur && n.id !== id && covers(ly, n.x, n.y, 12));
+    const above = y - HOP_LINK.upDy * sc;
+    for (const ly of [below, above]) if (fits(ly) && clear(ly)) return ly;
+    return fits(below) ? below : above;
+  };
+  const LINK = "주변 보기 ›";
+  const drawLabel = (x: number, y: number, s: Song, sub: string | null, a: number, link: boolean) => {
     g.globalCompositeOperation = "source-over";
     g.globalAlpha = a;
-    g.font = `500 ${MAP_TITLE_PX.label}px ${FONTS.body}`;
-    const title = fitText(g, s.title, 126);
+    g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
+    // 제목은 자르지 않는다 — 길면 길게 다 보이고, 겹치지 않게 별 자리를 엔진이 민다 (S15P21A405-697). 폰만 상한까지
+    const title = clip(s.title, cap.line);
     const tw = g.measureText(title).width;
     g.fillStyle = MAP_COLORS.labelBg;
-    roundRect(g, x - tw / 2 - 6, y + 13, tw + 12, 19, 5);
+    roundRect(g, x - tw / 2 - 6 * sc, y + L.boxTop * sc, tw + 12 * sc, L.boxH * sc, 5 * sc);
     g.fill();
     g.fillStyle = "rgba(233,241,255,.92)";
-    g.fillText(title, x, y + 22.5);
+    g.fillText(title, x, y + (L.boxTop + L.boxH / 2) * sc);
     if (sub) {
-      // 10px 이었다 (S15P21A405-649). 제목만 커지고 이 줄은 그대로라 `#3 · 가수` 가 안 읽혔다.
-      // 베이스라인도 같이 내린다 — 글자가 커지면 제목 상자(y+13 부터 19) 에 머리가 닿는다
-      g.font = `500 12px ${FONTS.mono}`;
+      // 제목 상자와 가수 줄 사이를 띄운다 — 붙어 있으면 한 덩어리로 읽힌다 (S15P21A405-649 · 688 · 697)
+      g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
       g.fillStyle = "rgba(147,164,196,.7)";
-      g.fillText(sub, x, y + 36);
+      g.fillText(clip(sub, cap.line), x, y + L.subY * sc);
     }
     if (link) {
       const pulse = 0.72 + 0.28 * Math.sin(e.time * 3);
       g.globalAlpha = a * pulse;
-      g.font = `600 11.5px ${FONTS.body}`;
+      g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
       g.fillStyle = MAP_COLORS.me;
-      const label = "주변 보기 ›";
-      const lw = g.measureText(label).width;
-      g.fillText(label, x, y + HOP_LINK.dy);
-      e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: y + HOP_LINK.dy - HOP_LINK.h / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h };
+      const lw = g.measureText(LINK).width;
+      const ly = linkY(s.musicId, x, y, sub, lw);
+      g.fillText(LINK, x, ly);
+      e.hopLink = { id: s.musicId, x: x - lw / 2 - HOP_LINK.padX, y: ly - (HOP_LINK.h * sc) / 2, w: lw + HOP_LINK.padX * 2, h: HOP_LINK.h * sc };
     }
   };
+  const sel = e.selectedId;
+  const song = e.songs.find((s) => s.musicId === cur.centerId)!;
+  // 라벨은 뛰는 링(rr)이 아니라 고정 반지름에 단다 — 링을 따라가면 제목·안내 줄이 출렁인다 (S15P21A405-697)
+  const lr = L.centerRingR;
+  /**
+   * **폰은 부딪히는 글자를 숨긴다** (S15P21A405-715) — 엔진이 빈자리를 못 찾은 라벨과, 선택한 곡의 링크에 걸린 라벨.
+   * 가운데 곡과 선택한 곡은 늘 그리고, 이웃은 순위 순, 이전 중심은 맨 뒤다. 별은 숨기지 않는다 — 누르면 선택한 곡이 되어
+   * 보인다. 확대하면 자리가 벌어지므로 매 프레임 그린 자리로 다시 본다
+   */
+  let hidden = new Set<number>();
+  if (narrow) {
+    const songOf = (id: number) => e.songs.find((x) => x.musicId === id)!;
+    const rectOf = (x: number, y: number, s: Song, sub: string | null, link: boolean, keep = false): LabelRect => {
+      g.font = `500 ${L.titlePx * sc}px ${FONTS.body}`;
+      let half = g.measureText(clip(s.title, cap.line)).width / 2 + 6 * sc;
+      // 엔진 배치와 같은 상자 — 별 자리(위 10px)부터 제목 상자 아래까지
+      let y0 = y - 10 * sc;
+      let y1 = y + (L.boxTop + L.boxH + 2) * sc;
+      if (sub) {
+        g.font = `500 ${L.subPx * sc}px ${FONTS.mono}`;
+        half = Math.max(half, g.measureText(clip(sub, cap.line)).width / 2);
+        y1 = y + (L.subY + L.subPx / 2 + 2) * sc;
+      }
+      if (link) {
+        g.font = `600 ${11.5 * sc}px ${FONTS.body}`;
+        const lw = g.measureText(LINK).width;
+        half = Math.max(half, lw / 2 + HOP_LINK.padX);
+        const ly = linkY(s.musicId, x, y, sub, lw);
+        y0 = Math.min(y0, ly - (HOP_LINK.h * sc) / 2);
+        y1 = Math.max(y1, ly + (HOP_LINK.h * sc) / 2);
+      }
+      return { id: s.musicId, x0: x - half, x1: x + half, y0, y1, keep };
+    };
+    g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
+    const ch = Math.max(g.measureText(clip(song.title, cap.center)).width / 2 + 7 * sc, lr + 4);
+    const rects: LabelRect[] = [{ id: song.musicId, x0: tx - ch, x1: tx + ch, y0: ty - lr - 4, y1: ty + lr + (L.centerGap + L.centerBoxH + 4) * sc, keep: true }];
+    const selN = nodes.find((n) => n.id === sel && n.cur);
+    const selC = selN ? null : centers.find((c) => c.id === sel && !c.cur);
+    if (selN) rects.push(rectOf(selN.x, selN.y, songOf(selN.id), null, true, true));
+    else if (selC) rects.push(rectOf(selC.x, selC.y, songOf(selC.id), "이전 중심", true, true));
+    for (const n of nodes) if (n.cur && n.id !== sel) rects.push(rectOf(n.x, n.y, songOf(n.id), null, false));
+    for (const c of centers) if (!c.cur && c.id !== sel) rects.push(rectOf(c.x, c.y, songOf(c.id), "이전 중심", false));
+    hidden = cullLabels(rects, 0);
+  }
   // 라벨은 지금 고리에만 — 옅은 고리까지 글자를 달면 읽히지 않고 어지럽기만 하다.
   // **선택한 곡의 라벨은 맨 나중에** 그린다 (아래) — 겹친 라벨 밑에 깔려 안 읽히면 무엇을 눌렀는지 모른다
   for (const n of nodes) {
-    if (!n.cur || n.id === e.selectedId) continue;
+    if (!n.cur || n.id === sel || hidden.has(n.id)) continue;
     const s = e.songs.find((x) => x.musicId === n.id)!;
-    drawLabel(n.x, n.y, s, `#${n.rank + 1} · ${s.artist ?? ""}`, n.a, false);
+    drawLabel(n.x, n.y, s, subOf(n.rank, s), n.a, false);
   }
   g.globalAlpha = 1;
 
@@ -806,12 +984,11 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
     }
     // 제목은 늘 옅게 붙여 둔다 — 어디서 건너왔는지 이름으로 읽히고, 누를 수 있는 자리라는 힌트가 된다.
     // 선택되면 아래에서 또렷한 라벨을 위에 덧그린다
-    if (e.selectedId !== c.id) drawLabel(c.x, c.y, s, "이전 중심", c.a * 1.6, false);
+    if (sel !== c.id && !hidden.has(c.id)) drawLabel(c.x, c.y, s, "이전 중심", c.a * 1.6, false);
     g.globalCompositeOperation = "lighter";
   }
 
   // 기준 곡 강조 + 라벨
-  const song = e.songs.find((s) => s.musicId === cur.centerId)!;
   const frgb = starRgb(song);
   // 건너온 중심은 열리면서 한 번 부풀었다 가라앉는다 (누른 별이 열리는 느낌)
   const rk = e.ringK(cur);
@@ -832,24 +1009,28 @@ function drawProbe(g: CanvasRenderingContext2D, e: MapEngine) {
   g.lineWidth = 1;
   g.stroke();
   g.globalCompositeOperation = "source-over";
-  g.font = `600 13.5px ${FONTS.body}`;
-  const tw = g.measureText(song.title).width;
+  g.font = `600 ${L.centerTitlePx * sc}px ${FONTS.body}`;
+  // 가운데 제목도 폰에서는 상한까지 (S15P21A405-715) — 하나뿐이라 이웃보다 넓게 둔다
+  const centerTitle = clip(song.title, cap.center);
+  const tw = g.measureText(centerTitle).width;
   g.fillStyle = MAP_COLORS.labelBg;
-  roundRect(g, tx - tw / 2 - 7, ty + rr + 6, tw + 14, 19, 6);
+  roundRect(g, tx - tw / 2 - 7 * sc, ty + lr + L.centerGap * sc, tw + 14 * sc, L.centerBoxH * sc, 6 * sc);
   g.fill();
   g.fillStyle = "rgba(233,241,255,.98)";
-  g.fillText(song.title, tx, ty + rr + 15.5);
-  g.font = `500 11px ${FONTS.mono}`;
-  g.fillStyle = "rgba(147,164,196,.62)";
-  g.fillText(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, tx, ty + rr + 30);
+  g.fillText(centerTitle, tx, ty + lr + (L.centerGap + L.centerBoxH / 2) * sc);
+  // 안내 줄 — 폰은 뺀다 (S15P21A405-715). 위 뷰 칩("주변 탐색 뷰")과 레이어 이름이 같은 말을 하고, 줄 하나가 가운데 폭을 다 먹는다
+  if (!narrow) {
+    g.font = `500 ${L.centerSubPx * sc}px ${FONTS.mono}`;
+    g.fillStyle = "rgba(147,164,196,.62)";
+    g.fillText(clip(`NEARBY · 유사도 상위 ${cur.ids.length}곡 · ${LAYER_NAMES[e.layer]}`, cap.center), tx, ty + lr + L.centerSubY * sc);
+  }
 
   // 선택한 곡의 라벨 — 모든 라벨 위에. 지금 고리의 이웃이거나 이전 고리의 중심이다
-  const sel = e.selectedId;
   if (sel != null && sel !== cur.centerId) {
     const n = nodes.find((x) => x.id === sel && x.cur);
     const c = n ? null : centers.find((x) => x.id === sel && !x.cur);
     const s = e.songs.find((x) => x.musicId === sel);
-    if (n && s) drawLabel(n.x, n.y, s, `#${n.rank + 1} · ${s.artist ?? ""}`, n.a, true);
+    if (n && s) drawLabel(n.x, n.y, s, subOf(n.rank, s), n.a, true);
     else if (c && s) drawLabel(c.x, c.y, s, "이전 중심", Math.min(1, k), true);
   }
   g.globalAlpha = 1;
@@ -941,6 +1122,8 @@ function drawMeAway(g: CanvasRenderingContext2D, e: MapEngine, off: { x: number;
  * 글씨로 사정을 설명하지 않는다. 제자리 표식(링 + 다이아)과 눈으로 바로 갈라져야 한다.
  */
 function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
+  // 동승자 헬멧 자리는 이 프레임에 그린 것만 믿는다 — 안 그리고 나가는 길에서도 옛 자리가 남지 않게 먼저 비운다 (S15P21A405-699)
+  e.myQueueScreen.clear();
   // 전환 중에는 두 겹이 겹쳐 있어 내 자리를 하나로 찍을 수 없다 — 끝나면 다시 나온다
   if (e.anim || e.follow || e.myId == null || e.constellationActive()) return;
   // 화면 밖이면 자리 대신 가장자리 화살표를 그린다
@@ -975,12 +1158,25 @@ function drawMe(g: CanvasRenderingContext2D, e: MapEngine) {
    * 예전에는 내가 따라갈 때만 우주선 뒤에 줄이 섰다 — 인솔자 쪽은 제 선단을 볼 길이 없어서
    * 혼자 다니는 것과 구분이 안 됐다. 그리는 모양은 따라갈 때와 같고 '나' 자리만 다르다.
    *
-   * 기수는 **날아온 방향**을 쓴다. 서 있을 때는 방향이랄 것이 없으므로 위를 본다.
+   * 기수는 **날아가는 방향**을 쓰고, 도착하면 **날아온 방향을 그대로 본다** (S15P21A405-709).
+   * 예전에는 서 있을 때 방향이 없다고 보고 위로 돌렸다 — 도착할 때마다 기수가 휙 들렸다.
+   * 방향이 바뀔 때는 `shipTurn` 이 돌려 준다. 출발 직후처럼 아직 거의 안 움직였으면 지나온 자리로는
+   * 방향을 잴 수 없어서, 그때는 도착점 쪽을 본다.
    */
   if (e.myRiders > 0) {
-    const ang = from ? Math.atan2(py - from.py, px - from.px) + Math.PI / 2 : 0;
+    let target: number | null = null;
+    if (from) {
+      const fl = e.meFlight;
+      const to = fl ? e.worldToScreen(fl.bx, fl.by) : null;
+      const [dx, dy] = Math.hypot(px - from.px, py - from.py) > 2 || !to ? [px - from.px, py - from.py] : [to.px - from.px, to.py - from.py];
+      if (Math.hypot(dx, dy) > 1e-3) target = Math.atan2(dy, dx) + Math.PI / 2;
+    }
+    const ang = e.shipTurn.step("me", target, e.time * 1000);
+    // 나는 조종석에 있다 — 줄에는 따라오는 사람만 선다 (S15P21A405-676)
+    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, { me: null, riders: e.myRiderUsers, count: e.myRiders }, e.myQueueScreen);
     drawShip(g, px, py, ME_SHIP_R, ang, e.time);
-    drawQueue(g, px, py, ME_SHIP_R, ang, e.time, e.myRiders);
+    // 창 크기는 남의 우주선(`draw-friends`)과 같은 비율 — 내 얼굴이 유리 안에 든다
+    drawVisor(g, px, py, ME_SHIP_R * 0.72, meAvatar(e));
     g.globalCompositeOperation = "source-over";
   } else {
     drawMeMarker(g, px, py, e.time);
@@ -1170,23 +1366,7 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   forgetStale(e.time);
   // 링크 히트 영역은 이 프레임에 글씨를 그린 곳만 — 안 그리면 누를 수도 없어야 한다
   e.hopLink = null;
-  /**
-   * **주변 탐색의 확대는 여기 한 곳이다** (S15P21A405-593).
-   *
-   * 고리 반지름만 키우던 때는 중심 별도 제목도 배경도 그대로라 살만 길어졌다 — 확대가 아니라
-   * "줄이 늘어난 것" 으로 보였다. 화면을 통째로 키우면 배경 별밭·별 크기·글씨·선이 같은
-   * 비율로 커진다. 그리는 좌표는 아무 데도 안 고쳐도 된다.
-   *
-   * 되돌리는 쪽은 {@link MapEngine.unview} 하나다 — 클릭 판정이 보는 `visible`·`hopLink` 는
-   * 확대 전 자리에 그대로 남으므로, 눌린 점만 되돌리면 그리기와 클릭이 안 어긋난다.
-   */
-  const view = e.probeView();
-  if (view) {
-    g.save();
-    g.translate(view.cx, view.cy);
-    g.scale(view.z, view.z);
-    g.translate(-view.cx, -view.cy);
-  }
+  // 주변 탐색 확대는 캔버스를 키우지 않는다 — 고리 별 자리만 벌어진다 (`MapEngine.probePos`, S15P21A405-688)
   // 전환 중에는 배경 깊이(어둡기·별밭)도 두 겹 사이를 건너간다 — 끝나는 순간 툭 바뀌면 그것부터 눈에 띈다
   drawBackground(g, e, depthOf(e));
   if (e.anim) {
@@ -1212,5 +1392,4 @@ export function drawMap(g: CanvasRenderingContext2D, e: MapEngine, currentMusicI
   drawProbe(g, e);
   drawHold(g, e);
   drawPressure(g, e);
-  if (view) g.restore();
 }

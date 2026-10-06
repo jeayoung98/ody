@@ -50,9 +50,14 @@ export default function BottomTabs() {
       /*
        * **화면 맨 아래에 붙인다** (S15P21A405-417). 여백을 띄운 둥근 상자로 떠 있으니
        * 화면 끝과 바 사이에 뜬 지도 조각이 남아 어정쩡했다 — 앱들이 쓰는 대로 바닥에 깐다.
-       * 위 테두리 한 줄만 남기고, 안전영역(홈 인디케이터)만큼 아래에 패딩을 준다.
+       * 안전영역(홈 인디케이터)만큼 아래에 패딩을 준다.
+       *
+       * **유리가 아니라 거의 검정인 판이다** (S15P21A405-703, 사용자 결정). 테두리도 없다.
+       * 윗모서리는 30px — 패널·시트 윗모서리와 같은 값(`--radius-sheet`). 바로 위 재생바는 각졌고,
+       * 이 모서리 밑으로 비는 자리는 재생바가 그만큼 뒤로 내려와 메운다(`bottom-bar.tsx`).
+       * 이 바는 폰에서만 보이므로 넓은 화면에는 영향이 없다.
        */
-      className="glass-bar fixed inset-x-0 bottom-0 z-[23] hidden rounded-none border-x-0 border-b-0 pb-[env(safe-area-inset-bottom,0px)] max-tablet:block"
+      className="fixed inset-x-0 bottom-0 z-[23] hidden rounded-t-sheet bg-tabbar pb-[env(safe-area-inset-bottom,0px)] max-tablet:block"
     >
       <nav aria-label="네비" className="flex h-tabbar items-center justify-around px-gutter-sm">
         {tabs

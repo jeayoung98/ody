@@ -4,7 +4,6 @@ import Box from "@/components/common/box";
 import SkeletonRows from "@/components/common/skeleton-rows";
 import { useNearbyPeopleQuery } from "@/hooks/queries/use-nearby-people-query";
 import { useNearbyList } from "@/hooks/use-nearby-list";
-import { isBot } from "@/lib/bots/roster";
 import { useNearbyPeopleLive } from "@/hooks/use-nearby-people-live";
 import { useRealtimeConnected } from "@/hooks/use-realtime-connected";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -33,13 +32,13 @@ export default function FriendsPanel() {
    * `POST /api/realtime/nearby` 가 409 `RIDE_NOT_CAPTAIN` 으로 거부되는 경로다 — 부르면 패널에
    * 오류만 뜬다. 내 곡이 아니라 인솔자의 곡을 듣고 있으니 "내 주변" 이라는 기준 자체가 없다.
    */
-  const riding = useFollowStore((s) => s.leaderEmail != null && !isBot(s.leaderEmail));
+  const riding = useFollowStore((s) => s.leaderEmail != null);
   const live = connected && !riding;
   const { data, isLoading, error, refetch } = useNearbyPeopleQuery(live);
   // 델타도 연결됐을 때만 듣는다 — 예전에는 패널이 열리기만 하면 무조건 걸었다
   useNearbyPeopleLive(live, refetch);
   /**
-   * 서버 목록에 **겹 사용자 중 가까운 사람과 데모 봇을 섞는다** (S15P21A405-536 · 541).
+   * 서버 목록에 **겹 사용자 중 가까운 사람을 섞는다** (S15P21A405-541).
    * 소켓이 안 붙어도 목록이 찬다 — 지도에는 사람이 보이는데 이 패널만 비어 있는 것이
    * 두 화면이 같은 사실을 다르게 말하는 상황이라 제일 나쁘다.
    */
@@ -70,6 +69,12 @@ export default function FriendsPanel() {
       ? "지금 가까이에 있는 사람이 없어요."
       : null;
 
+  /**
+   * 목록에 올릴 사람이 없다 — 불러오는 중도 아니다. 이때는 레이더를 **본문 한가운데로** 내린다
+   * (S15P21A405-703). 위에 붙은 채 두면 그 아래가 통째로 빈 칸이라 화면이 텅 비어 보였다.
+   */
+  const empty = people.length === 0 && !(connected && isLoading);
+
   return (
     <Box lead={<PanelBackButton />} title="주변 사람" actions={<PanelCloseButton />}>
       {/*
@@ -82,25 +87,28 @@ export default function FriendsPanel() {
         그리면 실시간이 꺼져 있는 동안 패널에 빈 공간만 남아 무엇을 보는 화면인지 알 수 없다.
         눈금과 가운데의 나는 연결과 상관없이 참인 것들이라 먼저 보여 줘도 거짓말이 아니다.
       */}
-      <div className="relative">
-        <NearbyRadar people={people} />
-        {/* 반응은 레이더 **우측 하단**이다 (S15P21A405-608). 판 모서리는 원 밖이라 사람 헬멧이 오지 않는 자리다.
-            버튼이 맨 오른쪽이고 이모지 칸은 왼쪽으로 펼쳐진다 */}
-        <div className="absolute right-0 bottom-0 z-20">
-          <ReactionButton people={people} />
-        </div>
-      </div>
-      {/*
-        안내는 레이더 **아래의 고정 높이 칸**에 든다 (S15P21A405-608). 예전에는 레이더 위에 떠 있는
-        알약이었는데(S15P21A405-511) 둘레 사람이 아래쪽에 있으면 헬멧과 겹쳤다. 칸 높이를 고정해
-        안내가 생기고 사라져도 아래 목록이 출렁이지 않는다. 모양은 하단 토스트(`common/toast`)와 같다.
-      */}
-      <div className="flex h-9 items-center justify-center">
-        {notice && (
-          <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[13.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
-            {notice}
+      {/* 비었을 때만 레이더·안내를 한 덩어리로 묶어 가운데로 — 평소에는 `contents` 라 묶음이 없는 것과 같다 */}
+      <div className={empty ? "my-auto flex flex-col gap-3.5" : "contents"}>
+        <div className="relative">
+          <NearbyRadar people={people} />
+          {/* 반응은 레이더 **우측 하단**이다 (S15P21A405-608). 판 모서리는 원 밖이라 사람 헬멧이 오지 않는 자리다.
+              버튼이 맨 오른쪽이고 이모지 칸은 왼쪽으로 펼쳐진다 */}
+          <div className="absolute right-0 bottom-0 z-20">
+            <ReactionButton people={people} />
           </div>
-        )}
+        </div>
+        {/*
+          안내는 레이더 **아래의 고정 높이 칸**에 든다 (S15P21A405-608). 예전에는 레이더 위에 떠 있는
+          알약이었는데(S15P21A405-511) 둘레 사람이 아래쪽에 있으면 헬멧과 겹쳤다. 칸 높이를 고정해
+          안내가 생기고 사라져도 아래 목록이 출렁이지 않는다. 모양은 하단 토스트(`common/toast`)와 같다.
+        */}
+        <div className="flex h-9 items-center justify-center">
+          {notice && (
+            <div className="glass-liquid animate-tin flex items-center gap-2 rounded-pill! px-3.5 py-2 text-center text-[13.5px] text-ink-2 shadow-[0_8px_28px_-10px_#000]">
+              {notice}
+            </div>
+          )}
+        </div>
       </div>
       {/*
         **레이더는 붙박이, 목록만 스크롤** (S15P21A405-635). Box 본문이 통째로 스크롤 상자라 사람이
@@ -109,22 +117,24 @@ export default function FriendsPanel() {
         넘치게 하면 본문은 넘칠 일이 없어 바깥 스크롤이 서지 않는다. 데스크톱 패널(max-h)과 폰
         화면(`PanelScreen` 의 flex-1 section) 둘 다 본문 높이가 잡혀 있어 같은 식으로 된다.
       */}
-      <div className="scroll-quiet -mx-1.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
-        {/*
-          **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는
-          TanStack Query v5 에서 `pending` 으로 멈춰 있어서, `isPending` 으로 스피너를 띄우면
-          요청을 보낸 적도 없는데 영원히 "불러오는 중" 이 된다. 오류도 안내도 아닌 상태라
-          사용자는 기다리는 것 말고 할 수 있는 게 없다. `isLoading` 은 실제로 요청이 날아가는
-          동안만 참이다(= `isFetching && isPending`).
-        */}
-        {connected && isLoading && <SkeletonRows count={4} thumb="circle" />}
-        {/*
-          그냥 실패했을 때는 **아무 말도 하지 않는다** (S15P21A405-509). 지도 별과 같은 판단이다
-          (S15P21A405-508) — 사용자가 할 수 있는 게 없는 문구라, 레이더 밑에 한 줄 깔리면서
-          가운데의 나를 위로 밀어낼 뿐이었다. 할 일이 있는 422·503 안내는 위에 그대로 남는다.
-        */}
-        {people.map((p) => <FriendRow key={p.email} person={p} />)}
-      </div>
+      {!empty && (
+        <div className="scroll-quiet -mx-1.5 flex min-h-0 flex-1 flex-col gap-0.5 overflow-y-auto">
+          {/*
+            **연결 전에는 스피너를 돌리지 않는다** (S15P21A405-493). `enabled: false` 인 쿼리는
+            TanStack Query v5 에서 `pending` 으로 멈춰 있어서, `isPending` 으로 스피너를 띄우면
+            요청을 보낸 적도 없는데 영원히 "불러오는 중" 이 된다. 오류도 안내도 아닌 상태라
+            사용자는 기다리는 것 말고 할 수 있는 게 없다. `isLoading` 은 실제로 요청이 날아가는
+            동안만 참이다(= `isFetching && isPending`).
+          */}
+          {connected && isLoading && <SkeletonRows count={4} thumb="circle" />}
+          {/*
+            그냥 실패했을 때는 **아무 말도 하지 않는다** (S15P21A405-509). 지도 별과 같은 판단이다
+            (S15P21A405-508) — 사용자가 할 수 있는 게 없는 문구라, 레이더 밑에 한 줄 깔리면서
+            가운데의 나를 위로 밀어낼 뿐이었다. 할 일이 있는 422·503 안내는 위에 그대로 남는다.
+          */}
+          {people.map((p) => <FriendRow key={p.email} person={p} />)}
+        </div>
+      )}
     </Box>
   );
 }

@@ -5,9 +5,7 @@ import { NO_GENRE_ID, REALTIME } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { useLayerUsersQuery } from "@/hooks/queries/use-layer-users-query";
 import { seedOf } from "@/lib/avatar-seed";
-import { botAsNearbyUser } from "@/lib/bots/adapt";
 import { expect, onConnectionChange, onType, send, settle } from "@/lib/realtime/stomp-client";
-import { useBotStore } from "@/stores/use-bot-store";
 import { isRiding } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
 import type {
@@ -67,9 +65,8 @@ export function toViewportRequest(seq: number, boxes: readonly LayerBox[], view:
 }
 
 /**
- * 절차적 아바타 시드. 실제 구현은 [`lib/avatar-seed`](../lib/avatar-seed.ts) 로 옮겼다
- * (S15P21A405-536) — 봇을 `NearbyUser` 로 바꾸는 쪽도 써야 하는데, 거기서 이 훅을 부르면
- * 두 모듈이 서로를 가리킨다. 부르던 자리를 안 고치려고 이름만 여기서 다시 내보낸다.
+ * 절차적 아바타 시드. 실제 구현은 [`lib/avatar-seed`](../lib/avatar-seed.ts) 에 있다.
+ * 부르던 자리를 안 고치려고 이름만 여기서 다시 내보낸다.
  */
 export { seedOf };
 
@@ -136,6 +133,16 @@ export function mergePeople(
 }
 
 /**
+ * 지도 위 한 사람의 동승 인원을 **미리** 고친다 (S15P21A405-677). 하차를 누르는 순간 인솔자의 `riderCount` 가
+ * 서버 알림보다 먼저 줄어야 우주선이 바로 헬멧으로 돌아간다 — 안 그러면 인원 알림이 올 때까지(길면 다음 겹 조회까지)
+ * 내가 내렸는데도 그 사람이 우주선인 채로 남는다. 서버 값이 오면 그걸로 덮인다.
+ */
+let riderCountAdjust: ((email: string, delta: number) => void) | null = null;
+export function adjustRiderCount(email: string, delta: number): void {
+  riderCountAdjust?.(email, delta);
+}
+
+/**
  * 지금 화면 범위를 보낸다.
  *
  * 컴포넌트 밖에 둔다 — 스토어와 엔진에서 직접 읽으므로 렌더 상태가 필요 없고, 타임아웃에서
@@ -169,12 +176,21 @@ export function useViewportSubscription(enabled: boolean): void {
   const [overlay, setOverlay] = useState<Map<string, NearbyUser | null>>(() => new Map());
   /** 좌표 없이 숫자만 온 인원수 변경 (2차 명세 §7.1). 합칠 때 마지막에 덮는다 */
   const [riderCounts, setRiderCounts] = useState<Map<string, number>>(() => new Map());
-  /** 데모 봇 (S15P21A405-536). 굴리는 쪽은 `use-bots` 하나고 여기는 읽기만 한다 */
-  const bots = useBotStore((s) => s.bots);
   /** 지금 모드. 반대 모드의 프레임을 버리는 기준이다 */
   const mode = useRef<ViewportSnapshot["mode"] | null>(null);
   /** 옮겨 받은 화면(`RIDE_VIEWPORT*`)의 마지막 번호. **인솔자의 번호라 내 것과 섞지 않는다** */
   const ridingSeq = useRef(0);
+  /** 지금 화면에 그리는 그 사람의 인원을 기준으로 더하고 뺀다 — `riderCounts` 에 없으면 기준 목록 값이다 */
+  const peopleRef = useRef<Map<string, NearbyUser>>(new Map());
+  useEffect(() => {
+    riderCountAdjust = (email, delta) => {
+      const base = peopleRef.current.get(email)?.riderCount ?? 0;
+      setRiderCounts((prev) => new Map(prev).set(email, Math.max(0, base + delta)));
+    };
+    return () => {
+      riderCountAdjust = null;
+    };
+  }, []);
 
   // 겹이 바뀌면 다시 보낸다. **join 다음이다** — 순서가 바뀌면 내 표식이 이전 겹에 남는다 (§3.2).
   // `prefetchBoxes` 만으로는 보내지 않는다. layer·boxes 가 실제로 바뀐 뒤다
@@ -321,27 +337,16 @@ export function useViewportSubscription(enabled: boolean): void {
 
   /** 지도에 실제로 그릴 사람들 = 겹 조회(기준) + 소켓 델타(얹은 것) */
   const people = useMemo(() => mergePeople(layerUsers?.groups, overlay, riderCounts), [layerUsers, overlay, riderCounts]);
+  useEffect(() => {
+    peopleRef.current = people;
+  }, [people]);
 
   /**
    * 엔진에 넘긴다. 레이어를 함께 줘야 겹이 바뀌는 순간 이전 겹의 사람이 남지 않는다.
-   *
-   * **데모 봇을 여기서 섞는다** (S15P21A405-536). 엔진에 봇 전용 목록을 따로 두지 않는 이유는
-   * `friends` 를 읽는 자리가 그리기 경로 전반에 흩어져 있어서다 — 배열 하나를 합쳐 주는 편이
-   * 그 자리들을 하나도 안 건드린다. 지금 겹에 있는 봇만 들어간다.
-   *
-   * **봇은 겹 조회에 섞지 않는다** (S15P21A405-537). 그쪽은 서버가 준 기준 목록이고, 봇은
-   * 브라우저 안에서만 도는 가짜다 — 같은 자리에 담으면 다음 조회가 봇을 "떠난 사람" 으로 보고
-   * 지운다. 그릴 때만 한 배열로 합친다.
    */
   useEffect(() => {
-    const withBots = [...people.values()];
-    for (const bot of bots) {
-      if (bot.episode.layer !== layer) continue;
-      const as = botAsNearbyUser(bot);
-      if (as) withBots.push(as);
-    }
-    getMapEngine()?.setFriends(layer, withBots);
-  }, [layer, people, bots]);
+    getMapEngine()?.setFriends(layer, [...people.values()]);
+  }, [layer, people]);
   /**
    * **"N명" 뭉치는 더 이상 지도에 그리지 않는다** (S15P21A405-537).
    *

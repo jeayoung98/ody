@@ -4,7 +4,7 @@ import { CoronaIcon } from "@/components/common/icons";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { useMapStore } from "@/stores/use-map-store";
 import { useFollowStore } from "@/stores/use-follow-store";
-import { usePanelStore } from "@/stores/use-panel-store";
+import { usePanelStore, type SheetSnap } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import RailButton from "./rail-button";
@@ -19,7 +19,11 @@ import RailButton from "./rail-button";
  * 켜기/닫기 **토글만** 한다. 주변 탐색 중 다른 이웃으로 건너가는 것(항해)은 선택한 별 곁에 붙는
  * "주변 보기 ›" 링크가 맡는다 (S15P21A405-288) — 한 버튼이 두 뜻을 갖지 않게
  */
-export default function NearbyExploreButton() {
+/**
+ * `bare` — 폰 윗줄처럼 알약 없이 흰 아이콘으로 띄울 때 (`rail-button` 참고, S15P21A405-703)
+ * `sheetSnap` — 켤 때 떠 있는 곡 상세 시트를 이 단으로 내린다. 폰 윗줄이 1 을 준다 (S15P21A405-712)
+ */
+export default function NearbyExploreButton({ bare = false, sheetSnap }: { bare?: boolean; sheetSnap?: SheetSnap }) {
   const viewMode = useMapStore((s) => s.viewMode);
   const selectedMusicId = useMapStore((s) => s.selectedMusicId);
   const currentMusicId = usePlayerStore((s) => s.currentMusicId);
@@ -40,6 +44,7 @@ export default function NearbyExploreButton() {
    */
   const activePanel = usePanelStore((s) => s.activePanel);
   const closePanel = usePanelStore((s) => s.close);
+  const setSnap = usePanelStore((s) => s.setSnap);
   const composerOpen = useJourneyStore((s) => s.isComposerOpen);
   const closeComposer = useJourneyStore((s) => s.closeComposer);
 
@@ -57,6 +62,11 @@ export default function NearbyExploreButton() {
     if (active) exitNearby();
     else if (target != null) {
       if (activePanel != null && activePanel !== "song") closePanel();
+      /**
+       * 곡 상세는 고리와 같이 떠 있는 게 맞지만, 2·3 단이면 고리의 아래쪽 절반을 덮는다.
+       * 부른 쪽이 단을 주면 그리로 내린다 (S15P21A405-712) — 새로 열지는 않는다 (417)
+       */
+      else if (activePanel === "song" && sheetSnap != null) setSnap(sheetSnap);
       if (composerOpen) closeComposer();
       enterNearby(target);
       useTutorialStore.getState().complete("nearby");
@@ -72,6 +82,7 @@ export default function NearbyExploreButton() {
       title={riding ? "따라가는 중에는 지도를 움직일 수 없어요" : disabled ? "곡을 먼저 고르세요" : active ? "주변 탐색 닫기" : "주변 탐색"}
       onClick={handleClick}
       data-tutorial="nearby"
+      bare={bare}
     >
       <CoronaIcon size={17} />
     </RailButton>

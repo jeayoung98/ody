@@ -4,7 +4,7 @@ import { REALTIME } from "@/constants";
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { getPlayer } from "@/components/player/player-registry";
 import { sendJoinNow } from "@/hooks/use-presence-join";
-import { pushViewport } from "@/hooks/use-viewport-subscription";
+import { adjustRiderCount, pushViewport } from "@/hooks/use-viewport-subscription";
 import { subscribePlayback } from "@/lib/playback-events";
 import { send } from "@/lib/realtime/stomp-client";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -61,42 +61,106 @@ export function positionNow(positionMs: number, state: RidePlaybackState, server
  * `shouldPlay` 가 false 면 옮긴 **뒤에** 멈춘다. 인솔자가 멈춰 있는 지점에 맞춰 서는 길이다.
  * 소리가 아주 잠깐 난다 — 브라우저가 위치를 옮기려면 한 번 틀어야 하기 때문이다.
  * ponytail: 무음 선재생까지는 안 한다. 거슬리면 muted 로 태우고 도착 후 음소거 해제로 바꾼다.
+ *
+ * `receivedAt` 은 `positionMs` 가 맞았던 내 시계 시각이다. 받고 나서 기다렸다 트는 쪽(`RIDE_TRACK` 의 제목 대기)은
+ * 받은 시각을 넘겨야 기다린 만큼이 메워진다 (S15P21A405-682).
  */
-export function playFrom(musicId: number, positionMs: number, shouldPlay: boolean): void {
+export function playFrom(musicId: number, positionMs: number, shouldPlay: boolean, receivedAt: number = Date.now()): void {
+  anchor = { musicId, positionMs: Math.max(0, positionMs), playing: shouldPlay, localAt: receivedAt };
   usePlayerStore.getState().playSingle(musicId);
-  seekWhenReady(musicId, positionMs, shouldPlay);
+  seekWhenReady(musicId, shouldPlay);
 }
 
 /** 이미 틀고 있는 곡 안에서 위치·상태만 맞춘다 (`RIDE_PLAYBACK`) */
 export function syncPlayback(positionMs: number, state: RidePlaybackState): void {
   const player = usePlayerStore.getState();
   const shouldPlay = state === "PLAYING";
+  if (anchor) anchor = { ...anchor, positionMs: Math.max(0, positionMs), playing: shouldPlay, localAt: Date.now() };
   const p = getPlayer();
   if (p) p.seekTo(positionMs / 1000, true);
   if (shouldPlay && !player.isPlaying) player.toggle();
   else if (!shouldPlay && player.isPlaying) player.pause();
 }
 
+/**
+ * 따라가는 사람이 맞춰야 할 기준 — 인솔자 곡의 한 지점과, 그걸 **내 시계로** 받은 시각 (S15P21A405-682).
+ *
+ * 서버 시각(`serverTs`)은 받는 순간 `positionNow` 로 한 번만 쓰고 버린다. 그 뒤로 기기 시계와 서버 시계를
+ * 섞으면 시계가 틀어진 기기에서 보정이 곡 끝이나 0 으로 튄다 — 여기서는 내 시계끼리만 뺀다.
+ */
+export interface RideAnchor {
+  musicId: number;
+  positionMs: number;
+  playing: boolean;
+  localAt: number;
+}
+
+let anchor: RideAnchor | null = null;
+
+/** 기준에서 `now` 까지 흐른 만큼 더한 기대 위치. 멈춰 있으면 흐르지 않는다 */
+export function anchorPositionAt(a: RideAnchor, now: number): number {
+  return a.playing ? a.positionMs + Math.max(0, now - a.localAt) : a.positionMs;
+}
+
+/**
+ * 되돌릴 위치. 허용 범위 안이면 null 이다.
+ *
+ * **곡 끝 근처로는 옮기지 않는다.** 인솔자 쪽 곡 길이(서버 `duration`)와 내 영상 길이가 다르면 기대 위치가
+ * 영상 끝을 넘는다 — 거기로 옮기면 곡이 끝나 버리고 다음 곡(`RIDE_TRACK`)까지 조용해진다.
+ * 길이를 모르면(`durationMs` 0) 이 확인은 건너뛴다.
+ */
+export function driftTarget(actualMs: number, expectedMs: number, durationMs: number): number | null {
+  const tolerance = REALTIME.rideDriftToleranceMs;
+  if (durationMs > 0 && expectedMs >= durationMs - tolerance) return null;
+  return Math.abs(actualMs - expectedMs) > tolerance ? expectedMs : null;
+}
+
+/**
+ * 따라가는 중이면 어긋남을 확인해 되돌린다 (S15P21A405-682). `use-ride-session` 이 주기적으로 부른다.
+ *
+ * 인솔자가 재생 조작(`RIDE_PLAYBACK`)을 보낼 때만 맞추면, 곡만 넘기는 인솔자를 따라갈 때는 로딩·버퍼링으로
+ * 생긴 어긋남이 곡 끝까지 남는다. **내가 멈춰 둔 동안은 건드리지 않는다** — 다시 틀면 그때 맞춘다.
+ */
+export function correctDrift(): void {
+  const a = anchor;
+  if (!a || !a.playing || pendingSeek) return;
+  if (!useFollowStore.getState().leaderEmail) return;
+  const player = usePlayerStore.getState();
+  if (!player.isPlaying || player.currentMusicId !== a.musicId) return;
+  const p = getPlayer();
+  if (!p) return;
+  const duration = p.getDuration();
+  const target = driftTarget(currentPositionMs(), anchorPositionAt(a, Date.now()), Number.isFinite(duration) ? toMs(duration) : 0);
+  if (target != null) p.seekTo(target / 1000, true);
+}
+
 /** 기다리고 있는 위치 맞추기. 곡이 또 바뀌면 이전 것은 버린다 */
-let pendingSeek: { musicId: number; positionMs: number; shouldPlay: boolean } | null = null;
+let pendingSeek: { musicId: number; shouldPlay: boolean } | null = null;
 let unsubscribePlayback: (() => void) | null = null;
 
-function seekWhenReady(musicId: number, positionMs: number, shouldPlay: boolean): void {
-  pendingSeek = { musicId, positionMs, shouldPlay };
+/**
+ * 옮길 위치는 **곡이 실제로 틀리기 시작한 순간** 기준에서 계산한다 (S15P21A405-682). 받은 위치를 그대로 쓰면
+ * 영상을 세우는 동안(대개 수백 ms~수 초) 흐른 만큼 인솔자보다 늦는다.
+ */
+function seekWhenReady(musicId: number, shouldPlay: boolean): void {
+  pendingSeek = { musicId, shouldPlay };
   if (unsubscribePlayback) return;
   unsubscribePlayback = subscribePlayback((event) => {
     const want = pendingSeek;
     if (!want || event.musicId !== want.musicId || event.state !== "playing") return;
     pendingSeek = null;
     const p = getPlayer();
-    if (p && want.positionMs > 0) p.seekTo(want.positionMs / 1000, true);
+    const a = anchor;
+    const target = a && a.musicId === want.musicId ? anchorPositionAt(a, Date.now()) : 0;
+    if (p && Math.abs(target - currentPositionMs()) > REALTIME.rideSeekMinGapMs) p.seekTo(target / 1000, true);
     if (!want.shouldPlay) usePlayerStore.getState().pause();
   });
 }
 
-/** 탑승이 끝나면 기다리던 위치 맞추기도 버린다 — 하차 뒤에 엉뚱한 곳으로 튀지 않게 */
+/** 탑승이 끝나면 기다리던 위치 맞추기와 기준도 버린다 — 하차 뒤에 엉뚱한 곳으로 튀지 않게 */
 export function cancelPendingSeek(): void {
   pendingSeek = null;
+  anchor = null;
   unsubscribePlayback?.();
   unsubscribePlayback = null;
 }
@@ -113,13 +177,28 @@ export function cancelPendingSeek(): void {
  * **자리는 응답이 말한 곳이다.** 탑승 전 자리로 되돌리지 않는다. 인솔자가 층을 옮겼으면
  * `layer` 가 탈 때와 다르게 온다 (§8.4) — 그대로 두면 하차 직후 한 겹 어긋난 화면이 된다.
  */
-export function endRide(at: { musicId: number | null; layer: number }): void {
+/**
+ * **화면에서 먼저 내린다** (S15P21A405-674) — 우주선·배너를 지우고, 기다리던 위치 맞추기를 버린다.
+ * 서버에는 아직 아무 말도 하지 않는다. 하차 버튼이 누르는 순간 이걸 부르고, 응답이 오면 `endRide` 가
+ * 자리를 바로잡고 presence 를 보낸다. presence 를 먼저 보내면 서버는 아직 나를 태우고 있는 채라 순서가 어긋난다.
+ */
+export function leaveRideLocally(): void {
   cancelPendingSeek();
+  const leader = useFollowStore.getState().leaderEmail;
   useFollowStore.getState().stop();
-  const engine = getMapEngine();
-  engine?.stopFollow();
+  getMapEngine()?.stopFollow();
+  // 인솔자 표식의 동승 인원도 먼저 하나 뺀다 — 혼자 타고 있었으면 우주선이 바로 헬멧이 된다 (S15P21A405-677)
+  if (leader) adjustRiderCount(leader, -1);
+}
+
+export function endRide(at: { musicId: number | null; layer: number }): void {
+  leaveRideLocally();
   // 자리를 모르는 길이 하나 있다 — 이미 끝나 있어 `RIDE_NOT_RIDING` 이 온 경우다. 그때는 안 옮긴다
-  if (at.musicId != null) useMapStore.getState().setMyMusicId(at.musicId);
+  if (at.musicId != null) {
+    useMapStore.getState().setMyMusicId(at.musicId);
+    // 듣던 곡이 곧 내 자리다 — 표식·돌아갈 자리·가운데 고정을 그 곡에 못 박는다 (S15P21A405-677)
+    getMapEngine()?.settleAfterRide(at.musicId);
+  }
   /**
    * 겹 맞추기. **내려가는 쪽도 된다** (S15P21A405-560) — 엔진에 겹을 직접 지정하는 입구가
    * 생겼다. 예전에는 떠오르는 쪽만 할 수 있어서, 인솔자가 더 깊이 내려간 상태로 내리면

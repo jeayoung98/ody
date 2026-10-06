@@ -1,32 +1,39 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent, type WheelEvent } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import type { Occlusion } from "@/components/map/engine/map-engine";
 import { CONSTELLATION, COVER_COUNT, HOLD, HOVER_CARD, NO_GENRE_ID, PINCH, PROBE, REPRESENTATIVE_COUNT, RIDE_LOCK_TOAST_MS, RIDING_LOCKED, RIDING_MAP_LOCKED, STORAGE_KEYS, WHEEL_ZOOM } from "@/constants";
 import { BREAKPOINTS } from "@/constants/design-tokens";
 import type { LayerBox, MapPoint } from "@/types";
 import { useConstellationLayoutQuery } from "@/hooks/queries/use-constellation-layout-query";
 import { useMapSongsQuery } from "@/hooks/queries/use-map-songs-query";
+import { useMeQuery } from "@/hooks/queries/use-me-query";
 import { useNearbyQuery } from "@/hooks/queries/use-nearby-query";
-import { useBots } from "@/hooks/use-bots";
 import { useDeclarePlay } from "@/hooks/use-declare-play";
+import { useDemoPins } from "@/hooks/use-demo-pins";
 import { seedOf, useViewportSubscription } from "@/hooks/use-viewport-subscription";
 import { useFeatures } from "@/hooks/use-features";
 import { useIsNarrow } from "@/hooks/use-is-narrow";
 import { usePlaySong } from "@/hooks/use-play-song";
+import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { readStorage, writeStorage } from "@/lib/storage";
 import { isRiding, useFollowStore } from "@/stores/use-follow-store";
 import { useUnplayableStore } from "@/stores/use-unplayable-store";
 import { useJourneyStore } from "@/stores/use-journey-store";
 import { rememberMusicHints } from "@/lib/music-hints";
+import { overlayTapSnap } from "@/lib/overlay-tap-snap";
 import { useMapStore } from "@/stores/use-map-store";
 import { useToastStore } from "@/stores/use-toast-store";
 import { usePanelStore } from "@/stores/use-panel-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import { useTutorialStore } from "@/stores/use-tutorial-store";
 import { registerMapEngine } from "./engine/engine-registry";
+import { rideLayerTarget } from "./engine/ride-layer";
 import { MapEngine } from "./engine/map-engine";
+import FloatingReactions from "./floating-reactions";
 import HoverCard from "./hover-card";
+import LayerTitleCard from "./layer-title-card";
 import LayerToast from "./layer-toast";
 import MapCanvas from "./map-canvas";
 import { shouldFollowPlayback } from "./selection-follow";
@@ -76,6 +83,8 @@ export default function MapView({ occlusion }: MapViewProps) {
   // 겹마다 그 겹의 상주 집합을 받는다 — boxes(누적 범위)가 곧 요청 조건이자 캐시 키다
   const boxes = useMapStore((s) => s.boxes);
   const { data: rawSongs, isError: songsFailed } = useMapSongsQuery(boxes);
+  // 시연 곡은 상주 집합과 별개로 좌표를 받아 못 박는다 (S15P21A405-717)
+  useDemoPins(engine);
   // 압력이 차는 동안 다음 겹 집합을 미리 받는다. 같은 키로 요청하므로 파고든 순간 캐시에서 바로 나온다 —
   // 전환이 끝난 뒤 도착하면 임시 집합 → 실제 집합 교체가 한 번 더 보인다 (S15P21A405-284)
   const prefetchBoxes = useMapStore((s) => s.prefetchBoxes);
@@ -115,11 +124,6 @@ export default function MapView({ occlusion }: MapViewProps) {
    */
   useViewportSubscription(features.social);
   /**
-   * 데모 봇을 굴리는 유일한 시계 (S15P21A405-536). 지도 화면에만 둔다 — 두 군데서 돌면
-   * 같은 봇이 화면마다 다른 곡을 듣게 된다.
-   */
-  useBots(features.social);
-  /**
    * 재생 선언을 보내는 유일한 자리 (S15P21A405-569). 지도 화면에만 둔다 —
    * 두 군데서 걸면 곡마다 두 번 선언한다.
    */
@@ -144,14 +148,39 @@ export default function MapView({ occlusion }: MapViewProps) {
   const leaderImageUrl = useFollowStore((s) => s.leaderImageUrl);
   const leaderMusicId = useFollowStore((s) => s.leaderMusicId);
   const leaderViewingMusicId = useFollowStore((s) => s.leaderViewingMusicId);
+  const leaderLayer = useFollowStore((s) => s.leaderLayer);
+  // 인솔자 곡 좌표가 뒤늦게 편입되면 다시 건다 — 첫 시도는 `startFollow` 가 `index.has` 에서 빠져나갔다 (S15P21A405-674)
+  const leaderPointRevision = useFollowStore((s) => s.pointRevision);
   /**
    * 나를 따라오는 인원 (S15P21A405-557). 1 이상이면 내 표식이 우주선이 되고 뒤에 줄이 선다.
    * 엔진은 스토어를 모르므로 여기서 넣어 준다.
    */
   const followerCount = useFollowStore((s) => s.followerCount);
+  const riders = useFollowStore((s) => s.riders);
   useEffect(() => {
-    engine.setMyRiders(followerCount);
-  }, [engine, followerCount]);
+    // 얼굴을 아는 사람은 얼굴로, 수만 아는 만큼은 빈 헬멧으로 (S15P21A405-676)
+    engine.setMyRiders(
+      followerCount,
+      riders.map((r) => ({
+        email: r.email,
+        nickname: r.nickname,
+        imageUrl: r.imageUrl,
+        isOnline: true,
+        musicId: 0,
+        viewingMusicId: 0,
+        genreId: NO_GENRE_ID,
+        meetingCount: 0,
+        riderCount: 0,
+        followingNickname: null,
+        avatarSeed: seedOf(r.email),
+      })),
+    );
+  }, [engine, followerCount, riders]);
+  // 내 얼굴 — 내 우주선 창과 매달린 "나" 헬멧에 (S15P21A405-676)
+  const { data: me } = useMeQuery();
+  useEffect(() => {
+    engine.setMyProfile(me ? { nickname: me.nickname, imageUrl: me.imageUrl } : null);
+  }, [engine, me]);
   const pickTarget = useJourneyStore((s) => s.pickTarget);
   const { data: nearby } = useNearbyQuery(viewMode === "nearby" ? nearbyCenterMusicId : null);
   /**
@@ -358,11 +387,29 @@ export default function MapView({ occlusion }: MapViewProps) {
    * `leaderMusicId` 를 의존성에 둔 이유는 **겹이 바뀌면 다시 걸어야** 하기 때문이다 —
    * `startFollow` 는 그 곡이 지금 겹의 상주 집합에 있을 때만 켜진다.
    */
+  const residentCount = useMapStore((s) => s.residentCount);
+  const qc = useQueryClient();
   useEffect(() => {
     if (!leaderEmail || leaderMusicId == null) {
       engine.stopFollow();
       return;
     }
+    /**
+     * **지도가 준비되기 전에는 걸지 않고, 준비되면 다시 온다** (S15P21A405-676). 새로고침 복원은 소켓 재탑승이
+     * 지도 데이터보다 먼저 끝나서, 예전에는 여기서 `startFollow` 가 `index.has` 에 걸려 빠져나간 뒤 다시 부를
+     * 계기가 없었다 — 우주선도 안 뜨고 카메라도 안 움직였다. `residentCount` 를 의존성에 둔 것이 그 계기다:
+     * 겹 집합이 도착할 때마다 바뀐다.
+     */
+    if (!engine.ready) return;
+    if (!engine.pointOf(leaderMusicId)) {
+      void ensureSongPoint(qc, leaderMusicId).then((ok) => ok && useFollowStore.getState().markPointAdopted());
+      return;
+    }
+    // 겹을 건너는 중이면 도착한 뒤에 — `layer` 가 바뀌며 다시 온다
+    if (engine.anim) return;
+    // 인솔자가 다른 겹이면 먼저 그 겹으로. 탑승 응답이 지도보다 먼저 온 경우 `use-ride-mutation` 의 이동은 헛돌았다
+    const toLayer = rideLayerTarget(layer, leaderLayer);
+    if (toLayer != null && engine.rideToLayer(toLayer, leaderMusicId)) return;
     engine.startFollow(
       {
         email: leaderEmail,
@@ -382,7 +429,7 @@ export default function MapView({ occlusion }: MapViewProps) {
       },
       true,
     );
-  }, [engine, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, layer]);
+  }, [engine, qc, leaderEmail, leaderNickname, leaderImageUrl, leaderMusicId, leaderViewingMusicId, leaderLayer, leaderPointRevision, layer, residentCount]);
 
   // 내 곡·돌아갈 자리 영구 저장 — 새로고침해도 '나' 와 "내 위치로 가기" 가 살아 있게 (S15P21A405-275)
   useEffect(() => {
@@ -471,7 +518,8 @@ export default function MapView({ occlusion }: MapViewProps) {
        * 예전에는 확대가 아무 일도 안 했다. 이 뷰는 카메라가 아니라 화면 크기에서 반지름을
        * 뽑아 세운 배치라 확대할 카메라가 없었기 때문이다. 고리 반지름만 키워 봤더니 중심 별도
        * 제목도 배경도 그대로인 채 **살만 길어져서** "확대가 아니라 줄이 늘어난 것" 이 됐다 —
-       * 지금은 캔버스를 통째로 키운다 (`probeView`, `draw-map`).
+       * 캔버스를 통째로 키우던 때(S15P21A405-593)는 글씨·별까지 커져 여정 확대와 달랐다 — 지금은 여정처럼
+       * 고리 별 자리만 중심 별 기준으로 벌리고 글씨·별 크기는 그대로다 (`probePos`, S15P21A405-688).
        *
        * 축소는 그대로 **나가기**다 — 키운 것을 되돌리는 뜻으로만 쓰면 이 뷰를 빠져나가는
        * 길이 사라진다. 휠 한 칸의 비율을 그대로 배율로 쓴다.
@@ -624,8 +672,12 @@ export default function MapView({ occlusion }: MapViewProps) {
            * 열린 패널이 지도를 376px 가리고 있으므로 자리를 비켜 준다. 누르기와 드래그를
            * 가르는 이 기준을 그대로 쓰는 이유는, 별을 누르려다 손이 떨린 정도로 접히면
            * 안 되기 때문이다. 닫지는 않는다 — 별자리도 목록도 그대로 살아 있다.
+           *
+           * **별자리·주변 탐색 뷰에서는 접지 않는다** (S15P21A405-708, 사용자 결정). 거기서 끄는 것은
+           * 지도가 아니라 별자리·탐색 별 뷰이고, 패널의 목록을 옆에 두고 보며 쓰는 화면이다.
            */
-          usePanelStore.getState().collapse();
+          const overlay = useMapStore.getState().viewMode;
+          if (overlay !== "constellation" && overlay !== "nearby") usePanelStore.getState().collapse();
         }
         const mode = useMapStore.getState().viewMode;
         // 오버레이 안에서는 별자리만 움직인다 (뒷화면 지도는 그대로)
@@ -722,8 +774,16 @@ export default function MapView({ occlusion }: MapViewProps) {
        *
        * **주변 탐색·여정에서도 같다.** 주변 탐색만 예외였는데 (S15P21A405-288, 카드가 고리
        * 라벨을 덮는다는 이유) 덮을 카드가 없어졌으므로 그 예외도 같이 없앤다.
+       *
+       * **2 단으로 연다** (S15P21A405-703, 사용자 결정). 1 단은 제목 줄뿐이라 눌러 놓고 다시 올려야
+       * 했다. 1 단은 이제 **지도를 움직일 때** 내려앉는 자리다(`collapse`). 누른 별은 시트 위에 남은
+       * 지도의 가운데로 온다 — 가림폭에 시트 높이가 들어간다(`main-screen`).
+       *
+       * **폰의 주변 탐색·별자리 뷰는 예외다** (S15P21A405-715, 사용자 결정) — 누를 때 단을 바꾸지 않는다. 2 단으로 올라오면
+       * 고리·별자리 아래쪽이 시트에 가려졌다(`overlayTapSnap`).
        */
-      openSongFromMap(s.musicId, narrow ? 1 : undefined);
+      const panel = usePanelStore.getState();
+      openSongFromMap(s.musicId, overlayTapSnap({ narrow, viewMode: map.viewMode, activePanel: panel.activePanel, snap: panel.snap }));
       // 별자리 뷰는 카메라가 아니라 오버레이 변환으로 그린다 — 다가가는 길이 따로다 (S15P21A405-330)
       if (map.viewMode === "constellation") engine.overlayFocus(s.musicId);
       else if (map.viewMode !== "nearby") engine.viewSong(s.musicId);
@@ -774,10 +834,11 @@ export default function MapView({ occlusion }: MapViewProps) {
       if (fr) {
         /**
          * 겹친 표식(+N)은 **먼저 갈라 보인다** (S15P21A405-618). 같은 노래를 듣는 사람은 좌표가 같아
-         * 확대해도 안 풀리므로, 누르는 것이 뒤사람을 보는 유일한 길이다. 갈라진 개별 표식은
-         * `stacked` 가 비어 있어 예전처럼 바로 프로필이다.
+         * 확대해도 안 풀리므로, 누르는 것이 뒤사람을 보는 유일한 길이다.
+         * **곡 위에 선 표식도 같다** (S15P21A405-727) — 사람이 별을 덮어 그 곡을 못 눌렀다. 혼자여도 펼쳐서
+         * 가운데 곡을 비운다. 갈라진 개별 표식(`spread`)은 예전처럼 바로 프로필이다.
          */
-        if (fr.stacked.length > 0) {
+        if (!fr.spread && (fr.stacked.length > 0 || engine.songUnder(fr))) {
           engine.expandStack(fr.user.email);
           return;
         }
@@ -911,6 +972,9 @@ export default function MapView({ occlusion }: MapViewProps) {
       <div className="vignette pointer-events-none absolute inset-0" />
       <div className="grain pointer-events-none absolute inset-0" />
       <LayerToast />
+      {/* 반응 이모지는 지도에만 뜬다 (S15P21A405-694) — 패널을 닫아 둬도 받은 반응이 보여야 한다 */}
+      {features.social && <FloatingReactions />}
+      <LayerTitleCard />
       {/*
         **마우스 전용이다** (S15P21A405-593). 손가락에는 호버가 없고, 폰에서는 별을 누르면
         곡 상세가 바로 1 단으로 열린다 — 카드를 거칠 일이 없어졌다. 예전에는 폰에서도 이

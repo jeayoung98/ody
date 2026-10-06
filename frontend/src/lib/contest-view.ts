@@ -1,3 +1,4 @@
+import type { SketchStep } from "@/constants/contest";
 import type { Contest, ContestEntry, ContestSort, MatchQuality } from "@/types";
 
 /**
@@ -69,4 +70,23 @@ export function awaitingScore(mine: readonly ContestEntry[] | undefined): boolea
 /** 내 작품은 회차당 하나다 (재출품은 교체). 목록에서 그 하나를 꺼낸다 */
 export function myEntry(mine: readonly ContestEntry[] | undefined): ContestEntry | null {
   return mine?.[0] ?? null;
+}
+
+/** 뒤로 가는 곳 — **그리기 단계 안에서만** (S15P21A405-702). 첫 단계와 채점은 돌아갈 곳이 없다 */
+export function backStep(step: SketchStep): SketchStep | null {
+  return step === "review" ? "draw" : step === "submit" ? "review" : null;
+}
+
+/**
+ * 실제로 보여 줄 단계 (S15P21A405-702). 저장된 단계가 지금 상태와 안 맞으면 그리기로 돌린다 —
+ * 곡 확인·이름 단계인데 찾은 곡이 없거나(점을 고쳐 버려졌다), 채점 단계인데 낸 작품이 없을 때(지워졌다·로그아웃).
+ */
+export function visibleStep(step: SketchStep, state: { hasMine: boolean; hasMatch: boolean; mineScored?: boolean }): SketchStep {
+  // 채점과 완성은 내 작품 상태가 가른다 — 채점이 끝나면 완성으로 저절로 넘어간다
+  if (step === "scoring" || step === "done") {
+    if (!state.hasMine) return "draw";
+    return state.mineScored ? "done" : "scoring";
+  }
+  if ((step === "review" || step === "submit") && !state.hasMatch) return "draw";
+  return step;
 }

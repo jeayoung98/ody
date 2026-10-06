@@ -3,9 +3,10 @@
 import { useState } from "react";
 import { RIDING_LOCKED } from "@/constants";
 import { NextIcon, PauseIcon, PlayIcon, PlaylistAddIcon, PrevIcon } from "@/components/common/icons";
-import AddToPlaylistMenu from "@/components/panels/playlist/add-to-playlist-menu";
+import AddToPlaylistDialog from "@/components/panels/playlist/add-to-playlist-dialog";
 import { useMusicDetailQuery } from "@/hooks/queries/use-music-detail-query";
 import { usePlayability } from "@/hooks/queries/use-video-id-query";
+import { useBackToMap } from "@/hooks/use-back-to-map";
 import { useFeatures } from "@/hooks/use-features";
 import { useMusicLabel } from "@/hooks/use-music-label";
 import { useFollowStore } from "@/stores/use-follow-store";
@@ -16,6 +17,7 @@ import { useToastStore } from "@/stores/use-toast-store";
 import { usePlayerStore } from "@/stores/use-player-store";
 import LocateButton from "./locate-button";
 import PlayerBackdrop from "./player-backdrop";
+import ContestRankTag from "./contest-rank-tag";
 import PlayerProgress from "./player-progress";
 import TransportButton from "@/components/common/transport-button";
 import { track } from "@/lib/analytics/client";
@@ -52,6 +54,7 @@ export default function PlayerBar() {
   const openPlaylist = usePanelStore((s) => s.openPlaylist);
   const openJourney = usePanelStore((s) => s.openJourney);
   const features = useFeatures();
+  const backToMap = useBackToMap();
   const [menuOpen, setMenuOpen] = useState(false);
   const { data } = useMusicDetailQuery(currentMusicId);
   /**
@@ -67,6 +70,11 @@ export default function PlayerBar() {
    */
   const openContext = () => {
     if (currentMusicId == null) return;
+    /**
+     * **어느 탭에 있든 지도로 먼저 간다** (S15P21A405-703). 폰에서 랭킹·마이페이지 화면에 있으면
+     * 패널이 그 화면 밑에서 열려 눌러도 아무 일이 없어 보였다. 데스크톱은 늘 지도라 그대로다.
+     */
+    backToMap();
     const map = useMapStore.getState();
     const reopenConstellation = () => {
       if (map.constellationMusicIds.length >= 2 && map.viewMode !== "constellation") map.toggleConstellationView();
@@ -134,19 +142,32 @@ export default function PlayerBar() {
      *
      * 진행바를 빼는 것이 이 중 유일하게 잃는 것이다 — 바텀시트(S15P21A405-416)를 올리면
      * 그 안에서 전체 플레이어를 보여 주는 것이 다음 자리다.
+     *
+     * **폰에서는 모서리 없는 반투명 유리다** (S15P21A405-703). 둥글기는 아래 네비 줄이 갖는다(30px).
+     * 밑칠은 폰 공통 값(0.45)을 제 자리에 한 번 더 적어 둔다 — 공통 값이 바뀌어도 재생바는 이만큼 비친다.
+     * 커버 배경(`player-backdrop`)은 걷는다 — 뒤로 펼쳐진 시트나 별이 비쳐야 한다. 테두리는 걷는다.
+     * 위 여백은 16, 아래는 14 — 아래를 2px 덜 준다(사용자 결정). 아래에는 네비 뒤로 내려간 30px 이
+     * 더 붙는다(`bottom-bar.tsx`). 제목·가수 글자도 폰에서는 한 단계씩 작다 (17 → 15, 14.5 → 12.5).
+     * 좌우는 폰 공통 여백(`--spacing-gutter-sm` 20)이다. 윗변에만 약한 그림자를 깐다 — 유리 판이
+     * 뒤의 시트·지도와 붙어 경계가 흐려지지 않게. 안쪽 하이라이트 줄은 그림자가 덮어 없어진다.
      */
-    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-x-0 max-tablet:border-b-0 max-tablet:px-3 max-tablet:py-2">
+    <div data-analytics-manual className="glass-liquid relative flex min-w-0 flex-1 flex-col gap-2.5 overflow-visible px-4 pt-3.5 pb-3 max-tablet:flex-row max-tablet:flex-wrap max-tablet:items-center max-tablet:gap-x-2 max-tablet:gap-y-1 max-tablet:rounded-none! max-tablet:border-0 max-tablet:px-gutter-sm max-tablet:pt-4 max-tablet:pb-[calc(14px+var(--radius-sheet))] max-tablet:shadow-[0_-8px_20px_-10px_rgb(0_0_0/0.45)] max-tablet:[--glass-blur:18px] max-tablet:[--glass-tint:rgb(6_9_17/0.45)]">
       <PlayerBackdrop musicId={currentMusicId} />
       {/* 배경 위에 얹히는 것들은 전부 relative — 아니면 그라데이션 뒤로 들어간다 */}
       <button type="button" onClick={openContext} disabled={idle} className="relative min-w-0 text-left max-tablet:min-w-0 max-tablet:flex-1">
-        <p className="truncate font-display text-[17px] leading-tight font-semibold text-ink">
+        <p className="truncate font-display text-[17px] leading-tight font-semibold text-ink max-tablet:text-[15px]">
           {idle ? "재생할 곡을 고르세요" : title}
           {!idle && blocked && <span className="ml-2 text-[12.5px] font-normal text-warn">{blocked.badge}</span>}
         </p>
         {/* 고를 곡이 없을 때의 안내는 좁은 화면에서 뺀다 — 한 줄에 제목과 같이 들어가면 둘 다 잘린다 */}
-        {/* 가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다 */}
-        <p className={`mt-0.5 truncate text-[14.5px] text-ink-3 ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
+        {/*
+          가수 · 맥락 · 큐 자리. 13px 이었다 (S15P21A405-649) — 제목이 17px 이라 한 덩어리로 안 읽혔다.
+          ink-3 이었다 — 배경에 앨범 커버가 비치면서(S15P21A405-704) 밝은 커버 위에서 짙은 회청색이 묻혔다. 한 칸 밝힌다
+        */}
+        <p className={`mt-0.5 truncate text-[14.5px] text-ink-2 [text-shadow:0_1px_3px_rgba(2,4,10,.7)] max-tablet:text-[12.5px] ${idle ? "max-tablet:hidden" : ""}`}>{subtitle}</p>
       </button>
+      {/* 이벤트 탑 작품 플리면 순위 태그 — 제목 버튼 안에 넣으면 버튼 속 버튼이라 밖에 둔다 (S15P21A405-684) */}
+      <ContestRankTag />
 
       {/*
         좁은 화면에서는 **아랫줄로 떨어진다** (S15P21A405-417). 부모가 `flex-wrap` 이라
@@ -181,12 +202,8 @@ export default function PlayerBar() {
         )}
       </div>
 
-      {/* 메뉴는 원래 아래로 펼쳐지는 상자다 — 여기는 화면 맨 아래라 **위로** 띄운다 */}
-      {features.playlist && menuOpen && currentMusicId != null && (
-        <div className="absolute inset-x-0 bottom-full mb-2 [&>div]:static! [&>div]:mt-0!">
-          <AddToPlaylistMenu musicId={currentMusicId} onDone={() => setMenuOpen(false)} />
-        </div>
-      )}
+      {/* 화면 가운데 팝업 (S15P21A405-686) — 위로 펼치던 목록은 곡 상세 패널과 겹쳤다 */}
+      {features.playlist && menuOpen && currentMusicId != null && <AddToPlaylistDialog musicId={currentMusicId} onDone={() => setMenuOpen(false)} />}
     </div>
   );
 }

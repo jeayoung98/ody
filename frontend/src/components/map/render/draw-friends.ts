@@ -1,9 +1,10 @@
 import { FRIEND_MARKER } from "@/constants";
 import { FONTS, genreRgb, rgba } from "@/constants/design-tokens";
 import type { NearbyUser } from "@/types";
-import type { MapEngine } from "../engine/map-engine";
+import type { MapEngine, VisibleFriend } from "../engine/map-engine";
 import { drawCropped, photoFor } from "@/lib/avatar-photo";
 import { avatarFor, ME_AVATAR, trailOf } from "./sprites";
+import { queueSlots, type QueueInput } from "./queue-slots";
 
 const TEAL: readonly [number, number, number] = [79, 227, 206];
 
@@ -175,8 +176,24 @@ export function drawShip(g: CanvasRenderingContext2D, px: number, py: number, R:
   g.restore();
 }
 
-/** 탑승 후 선미 뒤로 줄줄이 달리는 동승자 (나 + 다른 사람들) */
-export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, riders: number) {
+/** 내 얼굴 — 내 우주선 창과 매달린 "나" 헬멧에 (S15P21A405-676). 프로필을 아직 못 받았으면 절차적 얼굴이다 */
+export function meAvatar(e: MapEngine): NearbyUser {
+  const p = e.myProfile;
+  return p ? { ...ME_AVATAR, nickname: p.nickname ?? ME_AVATAR.nickname, imageUrl: p.imageUrl } : ME_AVATAR;
+}
+
+/**
+ * 선미 뒤로 줄줄이 달리는 동승자. 누가 서는지는 `queueSlots` 가 정한다 (S15P21A405-676) — 내가 따라갈 때는 내가
+ * 맨 앞이고, 내가 인솔자면 나는 조종석이라 줄에 없다. 헬멧마다 그 사람 사진(없으면 절차적 얼굴)이 들어간다.
+ */
+/**
+ * 우주선 뒤 줄을 그린다. **"나" 칸을 그렸으면 그 화면 자리를 돌려준다** (S15P21A405-698) — 따라가는 동안 내 반응
+ * 이모지가 거기서 떠올라야 하는데, 칸 자리는 흔들림까지 들어간 이 계산에서만 나온다. 안 그렸으면 null.
+ *
+ * `slotsOut` 을 주면 **동승자마다** 헬멧 머리 자리를 이메일로 적는다 (S15P21A405-699) — 인솔자 화면에서 동승자의
+ * 반응을 띄울 자리다. 다섯 명을 넘어 `+N` 으로 접힌 사람은 그 동그라미 자리를 받는다.
+ */
+export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R: number, ang: number, t: number, queue: QueueInput, slotsOut?: Map<string, { x: number; y: number }>): { x: number; y: number } | null {
   const nx = -Math.sin(ang);
   const ny = Math.cos(ang);
   /**
@@ -187,8 +204,11 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
    */
   const rr = R * 0.68;
   const step = R * 1.92;
-  const shown = Math.min(5, riders + 1);
-  const extra = riders + 1 - shown;
+  const slots = queueSlots(queue);
+  if (!slots.length) return null;
+  let minePos: { x: number; y: number } | null = null;
+  const shown = Math.min(5, slots.length);
+  const extra = slots.length - shown;
   const at = (i: number): [number, number] => {
     const wob = Math.sin(t * 2.2 - i * 0.9) * R * 0.17;
     const d = step * (i + 2.7);
@@ -208,11 +228,13 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
   g.restore();
   for (let i = 0; i < shown; i++) {
     const [qx, qy] = at(i);
-    const mine = i === 0;
-    const rgb: readonly [number, number, number] = mine ? TEAL : genreRgb(i * 3);
+    const { user, mine } = slots[i];
+    const rgb: readonly [number, number, number] = mine ? TEAL : genreRgb(user.genreId);
     drawHelmet(g, qx, qy, rr, rgb, mine);
-    drawVisor(g, qx, qy, rr, mine ? ME_AVATAR : { ...ME_AVATAR, email: `rider-${i}`, genreId: i * 3, avatarSeed: [0.1 * i, 0.4, 0.6, 0.3, 0.7, 0.2] });
+    drawVisor(g, qx, qy, rr, user);
+    if (!mine) slotsOut?.set(user.email, { x: qx, y: qy - rr });
     if (mine) {
+      minePos = { x: qx, y: qy - rr };
       g.beginPath();
       g.arc(qx, qy, rr * 1.75, 0, 6.284);
       g.strokeStyle = "rgba(79,227,206,.9)";
@@ -227,6 +249,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
   }
   if (extra > 0) {
     const [qx, qy] = at(shown);
+    if (slotsOut) for (let i = shown; i < slots.length; i++) if (!slots[i].mine) slotsOut.set(slots[i].user.email, { x: qx, y: qy - rr * 1.28 });
     g.beginPath();
     g.arc(qx, qy, rr * 1.28, 0, 6.284);
     g.fillStyle = "rgba(14,21,38,.9)";
@@ -240,6 +263,7 @@ export function drawQueue(g: CanvasRenderingContext2D, px: number, py: number, R
     g.textBaseline = "middle";
     g.fillText(`+${extra}`, qx, qy);
   }
+  return minePos;
 }
 
 /** 주변 친구 전체 — 동선 잔상 → 헬멧/우주선 → 접속 점 → 이름 */
@@ -282,6 +306,8 @@ function drawCrowd(g: CanvasRenderingContext2D, e: MapEngine) {
 
 export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
   drawCrowd(g, e);
+  // 따라가는 동안의 내 헬멧 자리는 이 프레임에 그린 곳만 — 안 그렸으면 내 반응도 뜰 곳이 없다 (S15P21A405-698)
+  e.rideMeScreen = null;
   if (e.friendAlpha < 0.01) return;
   const t = e.time;
   const fade = e.friendAlpha;
@@ -314,13 +340,19 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
    * 덮어 원근이 뒤집힌다. 인솔자는 그 위 맨 마지막에 — 겹치는 표식 위에 올라와야 따라가는
    * 우주선이 가려지지 않는다 (S15P21A405-625).
    */
-  const order = [...e.visFriends].sort((a, b) => Number(a.isLeader) - Number(b.isLeader) || a.scale - b.scale);
+  // 우주선은 헬멧 위, 인솔자 우주선은 그 위 (S15P21A405-718) — 겹쳐도 로켓이 먼저 보여야 한다
+  const tier = (v: VisibleFriend) => (v.isLeader ? 2 : v.user.riderCount > 0 ? 1 : 0);
+  const order = [...e.visFriends].sort((a, b) => tier(a) - tier(b) || a.scale - b.scale);
   for (const fr of order) {
     const { px, py, user: u, isLeader } = fr;
     const riders = u.riderCount + (isLeader ? 1 : 0);
     const ship = riders > 0;
-    // 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614)
-    const R = (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
+    /**
+     * 서 있는 별의 깊이만큼 키운다 — 위치는 이미 그 별의 시차를 따르니 크기도 따라야 원근이 된다 (S15P21A405-614).
+     * **우주선은 예외다** (S15P21A405-677). 가까운 별에 서면 우주선과 매달린 헬멧이 커지고 먼 별에 서면 작아져서,
+     * 따라가는 내내 크기가 오락가락했다. 우주선은 헬멧이 아니라 탈것이라 한 크기로 두고, 내 우주선(`draw-map`)과도 같다.
+     */
+    const R = ship ? FRIEND_MARKER.leaderRadiusPx : (isLeader ? FRIEND_MARKER.leaderRadiusPx : FRIEND_MARKER.radiusPx) * fr.scale;
     const rgb = genreRgb(u.genreId);
     if (isLeader) {
       const rr = R * 1.9 + Math.sin(t * 2.4) * 3.5;
@@ -331,10 +363,12 @@ export function drawFriends(g: CanvasRenderingContext2D, e: MapEngine) {
       g.stroke();
     }
     if (ship) {
-      const ang = fr.heading + Math.PI / 2;
+      // 기수는 돌려서 바꾼다 — 출발할 때 새 방향으로 한 번에 튀지 않게 (S15P21A405-709)
+      const ang = e.shipTurn.step(u.email, fr.heading + Math.PI / 2, t * 1000);
       // 배는 헬멧보다 크다 (S15P21A405-642). 접속 점·닉네임 자리는 헬멧 기준 `R` 을 그대로 쓴다
       const SR = R * FRIEND_MARKER.shipScale;
-      if (isLeader) drawQueue(g, px, py, SR, ang, t, u.riderCount);
+      // 인솔자의 `riderCount` 에는 나도 들어 있다(오면). 나 말고 몇 명인지만 빈 헬멧으로 — 지금은 안 와서 0 이다 (A-86)
+      if (isLeader) e.rideMeScreen = drawQueue(g, px, py, SR, ang, t, { me: meAvatar(e), riders: [], count: Math.max(0, u.riderCount - 1) });
       drawShip(g, px, py, SR, ang, t);
       // 창 크기는 drawShip 의 유리(R * 0.72)와 같아야 한다 — 다르면 보라 테가 비치거나 사진이 테를 덮는다
       drawVisor(g, px, py, SR * 0.72, u);

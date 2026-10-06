@@ -1,3 +1,5 @@
+import { DEMO } from "@/constants/demo";
+
 /**
  * JS(canvas) 에서 필요한 디자인 토큰. CSS 원본은 src/styles/tokens.css.
  * 값이 바뀌면 양쪽을 함께 고친다.
@@ -53,7 +55,7 @@ export const PALETTE = {
 } as const;
 
 export const MAP_COLORS = {
-  background: PALETTE.void,
+  background: DEMO ? "#000" : PALETTE.void, // 시연용 (S15P21A405-732)
   me: PALETTE.teal,
   meRing: "rgba(79,227,206,.55)",
   meRingInner: "rgba(79,227,206,.28)",
@@ -74,6 +76,82 @@ export const MAP_COLORS = {
   labelBg: "rgba(6,10,19,.82)",
   core: "#f2f7ff",
 } as const;
+
+/**
+ * 겹마다 배경 성운 워시를 물들이는 색 (S15P21A405-690). 인덱스 = 겹 번호. 배경만 보고도 겹이 갈리게 하려는 것이다.
+ *
+ * **곡 별 색(장르)은 건드리지 않는다.** 물드는 것은 배경 성운 빛뿐이고 그 빛은 원래 밝기 0.1 남짓이라,
+ * 장르 색 채널과 부딪히지 않을 만큼만 섞는다(`LAYER_TINT_MIX`). `LAYER_DEPTH` 가 "배경 색은 건드리지 않는다" 고
+ * 정해 둔 것을 이 한 곳에서만 푼다 — 더 세게 섞고 싶으면 장르 색과 겹쳐 보이는지부터 본다.
+ */
+/**
+ * **이웃한 겹은 확실히 다른 색이다** — 파랑 다음 보라처럼 가까운 색을 이으면 겹을 옮겨도 바뀐 줄 모른다.
+ * 차가운 색과 따뜻한 색을 번갈아 두고, 이웃끼리 색상(hue)이 70° 넘게 벌어지게 골랐다 (가장 가까운 쌍이 자홍→호박 71°). 떨어진 겹끼리는 비슷해도 된다.
+ */
+export const LAYER_TINTS: ReadonlyArray<readonly [number, number, number]> = [
+  [70, 110, 235], // 우주 — 짙은 파랑
+  [220, 90, 170], // 은하단 — 자홍
+  [210, 160, 95], // 우리은하 — 은하 중심의 호박색
+  [150, 90, 240], // 성운 — 보라
+  [80, 200, 230], // 성단 — 하늘색
+  [240, 140, 55], // 태양계 — 주황
+  [70, 205, 150], // 행성 — 청록
+  [235, 110, 140], // 저궤도 — 장밋빛
+];
+/** 워시 원래 색에 겹 색을 섞는 비율 (0 = 그대로, 1 = 겹 색만). 0.6 이었다 — 겹이 바뀐 줄 모른다는 피드백으로 올렸다 (S15P21A405-723) */
+export const LAYER_TINT_MIX = 0.85;
+
+/** 상주 별 스프라이트 모양 (S15P21A405-723). 겹마다 하나씩 골라 "다른 곳에 왔다" 가 별 자체에서 읽히게 한다 */
+export type StarShape = "halo" | "cross" | "smear" | "diffuse" | "point" | "disc" | "spark";
+
+/**
+ * 성운 구름 스타일 (S15P21A405-723). `count` 0 이면 그 겹은 구름이 없다.
+ * `stretch` 는 가로/세로 비 — 1 이 둥근 뭉게, 2.5 는 옆으로 길게 깔린 띠.
+ */
+export interface CloudStyle {
+  count: number;
+  scale: number;
+  alpha: number;
+  stretch: number;
+}
+
+/**
+ * **겹별 하늘 테마** (S15P21A405-723). 겹을 옮겨도 바뀐 게 없다는 피드백에 대한 답이다 — 하늘 색·별 모양·구름을
+ * 겹마다 다르게 해서 같은 하늘을 확대한 것과 구별되게 한다. 인덱스 = 겹 번호.
+ *
+ * - `sky`: 배경에 깔리는 세로 그라데이션 [위, 아래]. `LAYER_SKY_ALPHA` 만큼 검은 바탕 위에 덮는다.
+ * - `star`: 그 겹 상주 별의 스프라이트 모양. **색은 여전히 장르다** — 모양만 바뀐다.
+ * - `cloud`: 성운 퍼프 스타일.
+ * - `wash`: 배경 성운 워시 세기 배수. 화면 전체 밝기는 하늘 색이 아니라 이 워시(`lighter`)가 정한다 —
+ *   하늘만 어둡게 해도 워시가 그대로면 화면은 밝다. 첫 겹은 서비스 얼굴이라 낮게 둔다.
+ *
+ * 하늘 색은 `LAYER_TINTS` 와 같은 계열이다 — 이웃 겹은 색상이 70° 넘게 갈린다(그쪽 주석 참고).
+ */
+export const LAYER_THEMES: ReadonlyArray<{
+  sky: readonly [readonly [number, number, number], readonly [number, number, number]];
+  star: StarShape;
+  cloud: CloudStyle;
+  wash: number;
+}> = [
+  // 우주 — 검정에 가까운 남색. 첫 화면이 서비스의 얼굴이라 튀지 않게 두고, 파고들수록 색이 짙어지게 한다 (사용자 결정)
+  { sky: [[4, 8, 26], [1, 2, 7]], star: "halo", cloud: { count: 22, scale: 1.0, alpha: 1.0, stretch: 1 }, wash: 0.45 },
+  // 은하단 — 자홍. 십자 빛줄기, 가늘게 뻗은 필라멘트
+  { sky: [[42, 10, 44], [7, 3, 15]], star: "cross", cloud: { count: 14, scale: 0.7, alpha: 1.2, stretch: 2.2 }, wash: 1 },
+  // 우리은하 — 호박색. 옆으로 번진 별, 은하수 띠
+  { sky: [[43, 28, 10], [10, 6, 4]], star: "smear", cloud: { count: 18, scale: 1.2, alpha: 0.9, stretch: 2.8 }, wash: 1 },
+  // 성운 — 보라. 퍼진 뭉게별, 알록달록한 덩어리
+  { sky: [[26, 11, 58], [5, 3, 15]], star: "diffuse", cloud: { count: 30, scale: 0.8, alpha: 1.5, stretch: 1 }, wash: 1.1 },
+  // 성단 — 하늘색. 작고 날카로운 점, 맑은 밤
+  { sky: [[4, 32, 42], [2, 10, 16]], star: "point", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 }, wash: 0.8 },
+  // 태양계 — 주황. 십자 빛줄기(해처럼), 따뜻한 빛무리. 고리 달린 원반은 못생겨서 뺐다 — 은하단과 모양이 겹치지만 색이 갈라 준다 (사용자 결정)
+  { sky: [[42, 22, 6], [10, 5, 3]], star: "cross", cloud: { count: 6, scale: 1.6, alpha: 0.6, stretch: 1.2 }, wash: 1 },
+  // 행성 — 청록. 그늘진 원판, 구름 없음
+  { sky: [[4, 36, 28], [2, 12, 9]], star: "disc", cloud: { count: 0, scale: 1, alpha: 0, stretch: 1 }, wash: 0.8 },
+  // 저궤도 — 장밋빛. 반짝이는 스파크, 얇게 깔린 연무
+  { sky: [[42, 12, 22], [11, 4, 7]], star: "spark", cloud: { count: 10, scale: 1.1, alpha: 0.7, stretch: 3.2 }, wash: 1 },
+];
+/** 하늘 그라데이션을 검은 바탕 위에 덮는 세기. 1 이면 `sky` 색 그대로다 */
+export const LAYER_SKY_ALPHA = 0.85;
 
 /** 배경 성운 워시 — 화면 비율 좌표(u,v), 반지름 비율, 색 */
 export const NEBULA_WASH: ReadonlyArray<{ u: number; v: number; r: number; c: readonly [number, number, number] }> = [
@@ -122,3 +200,33 @@ export const TOUCH_TARGET_MIN = 44;
  * 지도 엔진이 패널에 가려지는 폭을 재려고 JS 에서 이 값을 쓴다 (S15P21A405-479).
  */
 export const RIGHT_PANEL_W = 376;
+
+/**
+ * 폰에서 아래에서 올라오는 판의 윗모서리(px). `tokens.css` 의 `--radius-sheet` 와 같은 값 — **함께 고친다.**
+ * 재생바가 네비 줄 뒤로 이만큼 내려가 있어서(`bottom-bar.tsx`) 지도 가림폭에서 JS 로 빼야 한다 (S15P21A405-703).
+ */
+export const SHEET_RADIUS_PX = 30;
+
+/**
+ * 폰 바텀시트가 1·2 단에서 재생바 위로 걸리는 높이(px). `tokens.css` 의 `--spacing-sheet-s1`·`-s2` 와
+ * 같은 값 — **함께 고친다.** 지도 엔진이 시트 위에 남은 지도의 가운데를 잡으려고 쓴다 (S15P21A405-703).
+ * 3 단은 지도가 거의 다 덮이므로 2 단 값을 그대로 쓴다 — 올렸다 내릴 때 가운데가 출렁이지 않게.
+ */
+export const SHEET_SNAP_PX = { 1: 102, 2: 238, 3: 238 } as const;
+
+/**
+ * 머리글 없이 1 단으로 걸리는 시트(곡 상세·프로필)의 **본문 위 여백**(px). `tokens.css` 의
+ * `--spacing-sheet-peek-top` 과 같은 값 — **함께 고친다.** 손잡이 막대(14px)를 비켜 글이 선다 (S15P21A405-703).
+ */
+export const SHEET_PEEK_TOP_PX = 20;
+
+/**
+ * 폰 시트 2·3 단에서 **시트 윗끝부터 본문 글이 시작하는 곳까지**(px) (S15P21A405-714). 1 단은 머리글을 접으므로 그 자리에서는
+ * {@link SHEET_PEEK_TOP_PX} 다. `use-sheet-stop` 이 2 단 높이를 "본문 안 거리 + 이 값" 으로 정한다 — 머리글이 접혔든
+ * 펴졌든 같은 값이 나와야 해서다.
+ *
+ * 여정 시트 2 단(360 × 780)에서 잰 값이다. `Box` 머리글(위 여백 14 + 한 줄 28 + 아래 여백 12 + 밑줄 1)과 본문 위 여백 14 를
+ * 더하면 69 인데 잰 값은 70 이다 — 남는 1px 은 판 윗테두리로 보인다(추측). `common/box.tsx` 의 머리글·본문 여백을 바꾸면
+ * **함께 고친다.** 배경을 까는 패널(곡 상세)은 밑줄이 없어 1px 작다 — 2 단이 1px 더 서는 정도라 나누지 않는다.
+ */
+export const SHEET_HEAD_PX = 70;

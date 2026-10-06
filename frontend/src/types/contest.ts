@@ -42,6 +42,16 @@ export interface ContestTrack {
   y: number;
 }
 
+/**
+ * 작품 한 점의 그림 — `GET /api/artwork/detail` 에서 필요한 만큼만 (S15P21A405-701). 내 작품 목록(`mine`)은 좌표를
+ * 빈 목록으로 줘서, 채점 끝난 내 작품의 별자리는 이걸로 따로 받아 그린다.
+ */
+export interface ContestArtworkShape {
+  artworkId: Id;
+  tracks: ContestTrack[];
+  closed: boolean;
+}
+
 /** 그린 모양과 찾은 배치가 얼마나 닮았나 (`DrawResponse.quality`). `LOW` 도 정상 응답이다 — 경고만 띄운다 */
 export type MatchQuality = "HIGH" | "MEDIUM" | "LOW";
 
@@ -110,6 +120,11 @@ export interface ContestEntry {
   closed: boolean;
   /** 별자리 좌표 + 곡 이름, 출품 순서 (백엔드 `points`). 내 작품 목록은 빈 배열 */
   tracks: ContestTrack[];
+  /**
+   * 출품한 플레이리스트 (S15P21A405-684). `artwork.playlist_id` 에는 있는데 **리더보드 응답에 아직 없다** —
+   * 백엔드 확인 필요 (BACKEND-NOTES A-91). 없으면 `null` 이고, 지도에서 눌러도 틀지 못한다.
+   */
+  playlistId: Id | null;
 }
 
 export interface ContestLeaderboard {

@@ -6,12 +6,12 @@ import { API_ENDPOINTS, NO_GENRE_ID, QUERY_KEYS, REALTIME, RIDE_ENDED_BY_DISBAND
 import { getMapEngine } from "@/components/map/engine/engine-registry";
 import { rideLayerTarget } from "@/components/map/engine/ride-layer";
 import { useRideMutation, type RideTarget } from "@/hooks/mutations/use-ride-mutation";
-import { musicDetailQueryOptions } from "@/hooks/queries/use-music-detail-query";
 import { api } from "@/lib/api";
 import { musicToMapPoint } from "@/lib/map-point";
 import { onConnectionChange, onType } from "@/lib/realtime/stomp-client";
 import { readStorage } from "@/lib/storage";
-import { endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
+import { correctDrift, endRide, playFrom, positionNow, syncPlayback } from "@/lib/realtime/ride";
+import { ensureSongPoint } from "@/lib/realtime/ride-point";
 import { cancelResume, resumeRide } from "@/lib/realtime/ride-resume";
 import { useFollowStore } from "@/stores/use-follow-store";
 import { useMapStore } from "@/stores/use-map-store";
@@ -30,6 +30,7 @@ import type {
   RideRiderLeftPayload,
   RideTrackPayload,
   RideViewPayload,
+  UserProfile,
 } from "@/types";
 
 /**
@@ -66,24 +67,32 @@ export function useRideSession(): void {
     const stopTrack = onType<RideTrackPayload>(["RIDE_TRACK"], (p) => {
       if (!useFollowStore.getState().leaderEmail) return;
       /**
+       * **받은 순간을 기준으로 삼는다** (S15P21A405-682). 인솔자는 `serverTs` 에 0초부터 틀었다 — 도착 지연과
+       * 아래 제목 대기만큼 늦게 트는 것을 `playFrom` 이 메운다. 예전에는 트는 순간 0초부터라 그만큼 뒤처졌다.
+       */
+      const receivedAt = Date.now();
+      const startMs = positionNow(0, "PLAYING", p.serverTs);
+      /**
        * **제목을 받은 뒤 넘어간다** (S15P21A405-656). 바로 넘기면 플레이어바가 상세가 올 때까지 "Track 3242" 를
        * 보인다. 상세는 캐시(`staleTime: Infinity`)에 있으면 즉시, 없으면 한 번의 조회다. 상한을 넘기거나 실패하면
        * 제목 없이 진행한다. 기다리는 사이 더 새 곡이 오면 먼저 것은 버린다 — 옛 곡을 뒤늦게 틀면 안 된다.
        */
       const seq = ++trackSeq;
-      const detail = qc.fetchQuery(musicDetailQueryOptions(p.musicId)).catch(() => undefined);
+      // 제목과 함께 **좌표도 갖춘다** (S15P21A405-674) — 상주 집합 밖의 곡이면 우주선이 날아갈 자리가 없었다
+      const detail = ensureSongPoint(qc, p.musicId);
       const deadline = new Promise<void>((resolve) => setTimeout(resolve, REALTIME.rideTrackTitleWaitMs));
       void Promise.race([detail, deadline]).then(() => {
         if (seq !== trackSeq) return;
         const ride = useFollowStore.getState();
         if (!ride.leaderEmail) return;
-        applyTrack(p);
+        applyTrack(p, startMs, receivedAt);
       });
     });
 
-    function applyTrack(p: RideTrackPayload) {
+    function applyTrack(p: RideTrackPayload, startMs: number, receivedAt: number) {
       const ride = useFollowStore.getState();
       ride.setLeaderMusicId(p.musicId);
+      ride.setLeaderLayer(p.layer);
       /**
        * **겹도 같이 따라간다** (S15P21A405-560). 알림이 `layer` 를 주는데 버리고 있었다 —
        * 인솔자가 파고들면 나만 제자리에 남고, 그 겹에 없는 곡을 가리켜 우주선까지 사라졌다.
@@ -94,7 +103,7 @@ export function useRideSession(): void {
       useMapStore.getState().setMyMusicId(p.musicId);
       // 우주선이 이전 곡에서 새 곡으로 날아온다. 재생은 아래에서 따로 건다
       getMapEngine()?.rideTo(p.musicId);
-      if (p.playable) playFrom(p.musicId, 0, true);
+      if (p.playable) playFrom(p.musicId, startMs, true, receivedAt);
       else usePlayerStore.getState().pause();
     }
 
@@ -215,6 +224,8 @@ export function useRideSession(): void {
         return;
       }
       const target: RideTarget = { email: s.leaderEmail, nickname: s.leaderNickname, imageUrl: s.leaderImageUrl };
+      // 인솔자가 사라진 것은 확실하다 — 첫 재탑승 결과를 기다리지 않고 배너부터 바꾼다 (S15P21A405-700)
+      s.setReconnecting(true);
       resumeRide(target, remount, (code) => giveUp(target, code));
     });
 
@@ -225,8 +236,25 @@ export function useRideSession(): void {
      * 둘 다 **바뀐 뒤의** 인원을 싣는다. 탑승 쪽(`RIDE_RIDER_JOINED`)이 3차 계약에서 새로
      * 생겼고(S15P21A405-545), 그 전에는 누가 내릴 때까지 숫자를 몰라 아예 숨겨 뒀다.
      */
-    const stopRiders = onType<RideRiderJoinedPayload | RideRiderLeftPayload>(["RIDE_RIDER_JOINED", "RIDE_RIDER_LEFT"], (p) => {
-      useFollowStore.getState().setFollowerCount(p.riderCount);
+    const stopJoined = onType<RideRiderJoinedPayload>(["RIDE_RIDER_JOINED"], (p) => {
+      const ride = useFollowStore.getState();
+      ride.setFollowerCount(p.riderCount);
+      ride.addRider({ email: p.email, nickname: p.nickname, imageUrl: null });
+      /**
+       * **사진은 알림에 없다** (S15P21A405-676, BACKEND-NOTES A-85) — 사용자 상세로 받아 헬멧에 넣는다.
+       * 못 받으면 절차적 아바타로 남는다. 그 사이 내렸으면 `setRiderImage` 가 빈 목록을 그대로 둔다.
+       */
+      void qc
+        .fetchQuery({ queryKey: QUERY_KEYS.user.profile(p.email), queryFn: () => api<UserProfile>(API_ENDPOINTS.user.detail(p.email)), staleTime: 5 * 60 * 1000 })
+        .then((u) => useFollowStore.getState().setRiderImage(p.email, u.imageUrl))
+        .catch(() => {
+          /* 얼굴 없이 간다 */
+        });
+    });
+    const stopLeft = onType<RideRiderLeftPayload>(["RIDE_RIDER_LEFT"], (p) => {
+      const ride = useFollowStore.getState();
+      ride.setFollowerCount(p.riderCount);
+      ride.removeRider(p.email);
     });
 
     /**
@@ -238,13 +266,18 @@ export function useRideSession(): void {
       if (process.env.NODE_ENV !== "production") console.warn("[ride] 동승 중에 막힌 조작이 나갔다 — UI 잠금이 빠졌다", p);
     });
 
+    /** 어긋남 확인 (S15P21A405-682). 따라가는 중이 아니면 `correctDrift` 가 바로 돌아간다 */
+    const driftTimer = setInterval(correctDrift, REALTIME.rideDriftCheckMs);
+
     return () => {
+      clearInterval(driftTimer);
       stopTrack();
       stopPlayback();
       stopPanel();
       stopView();
       stopEnded();
-      stopRiders();
+      stopJoined();
+      stopLeft();
       stopErr();
       cancelResume();
     };
@@ -273,6 +306,14 @@ export function useRideSession(): void {
       onConnectionChange((up) => {
         if (!up) return;
         const s = useFollowStore.getState();
+        /**
+         * **내 선단은 서버에서 이미 풀렸다** (S15P21A405-707). 백엔드는 소켓이 새로 열릴 때마다 `onUserGone` 으로 그 사람의
+         * 선단을 해체하는데(`PresenceService.connect`) 인솔자에게는 알리지 않는다. 비우지 않으면 배너가 옛 인원을 말하고
+         * 다시 안 탄 사람의 헬멧이 남는다. 다시 타는 사람은 `RIDE_RIDER_JOINED` 로 다시 채워진다 — 이 콜백은 구독 직후
+         * 같은 틱에 돌아서 그 알림보다 먼저다.
+         */
+        s.setFollowerCount(0);
+        s.setRiders([]);
         const target: RideTarget | null = s.leaderEmail
           ? { email: s.leaderEmail, nickname: s.leaderNickname, imageUrl: s.leaderImageUrl }
           : readStorage<RideTarget>(STORAGE_KEYS.rideLeader);

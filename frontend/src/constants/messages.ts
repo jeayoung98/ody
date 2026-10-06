@@ -131,6 +131,11 @@ export const LIKE_FAILED = "좋아요를 반영하지 못했어요. 잠시 후 �
 export const RIDE_RESUMING = "연결이 불안정해요. 따라가기를 다시 잇는 중이에요";
 /** 다시 잇기를 다 해 봤지만 안 됐다 — 이제야 내린다 */
 export const RIDE_RESUME_FAILED = (who: string) => `${who} 님과 다시 연결하지 못해 따라가기를 마쳤어요`;
+/** 따라가기 배너 — 인솔자와 끊겨 다시 잇는 동안 (S15P21A405-700). 우주선이 사라진 사이 "탑승 중" 이라 말하지 않는다 */
+export const RIDE_RECONNECTING = {
+  title: (who: string) => `${who} 님과 연결이 끊겼어요`,
+  sub: "다시 연결하는 중 · 하차하면 이 자리에서 이어갑니다",
+} as const;
 
 /**
  * 반응이 거부됐을 때 (SOCIAL-02·04, S15P21A405-607, 백엔드 `RealtimeErrorCode`).
@@ -203,3 +208,10 @@ export const CHANGED = {
  */
 export const HOME_NO_COORDS = "이 곡은 지도에 자리가 없어서 갈 수 없어요";
 export const HOME_LOOKUP_FAILED = "곡의 자리를 못 불러왔어요. 다시 눌러 주세요";
+
+/**
+ * 낙관적으로 먼저 바꾼 화면을 **되돌렸다** (S15P21A405-675). 누르는 순간 바뀐 것이 도로 돌아가므로
+ * 말없이 두면 "내가 잘못 눌렀나" 가 된다. 곡 좋아요(`LIKE_FAILED`)와 같은 결의 문구다.
+ */
+export const FOLLOW_FAILED = "팔로우를 반영하지 못했어요. 잠시 후 다시 시도해 주세요";
+export const CHANGE_FAILED = "반영하지 못했어요. 잠시 후 다시 시도해 주세요";

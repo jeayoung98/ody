@@ -30,3 +30,12 @@ test("다시 잇기는 확정 전에 화면을 세우지 않는다", () => {
   assert.equal(canRideOptimistically({ ridingEmail: null, targetEmail: "a@ody.kr", silent: true }), false);
   assert.equal(canRideOptimistically({ ridingEmail: "a@ody.kr", targetEmail: "a@ody.kr", silent: true }), false);
 });
+
+// ── 좌표 편입 (S15P21A405-674) ──────────────────────────────────────────────
+const { useFollowStore } = require("../src/stores/use-follow-store.ts");
+
+test("인솔자 곡 좌표가 뒤늦게 들어오면 따라가기 효과를 다시 돌릴 계기가 생긴다", () => {
+  const before = useFollowStore.getState().pointRevision;
+  useFollowStore.getState().markPointAdopted();
+  assert.equal(useFollowStore.getState().pointRevision, before + 1);
+});

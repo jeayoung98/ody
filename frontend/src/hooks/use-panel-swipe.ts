@@ -50,6 +50,16 @@ export function usePanelSwipe() {
 
   const onPointerDown = useCallback((e: PointerEvent<HTMLElement>) => {
     if (e.pointerType === "mouse") return;
+    /*
+     * **시트 밖 DOM 에서 온 누름은 세지 않는다** (S15P21A405-706). 시트 안에서 연 팝업(플리 추가 등)은
+     * `document.body` 로 portal 되지만, React 이벤트는 DOM 이 아니라 **컴포넌트 트리**를 따라 올라온다.
+     * 그래서 팝업 배경·헤더를 누른 것이 여기까지 와서 "시트 탭" 으로 읽혀 시트가 한 단 올라왔다.
+     * 시작을 안 잡으면 move·up 도 할 일이 없다.
+     */
+    if (!(e.target instanceof Node) || !e.currentTarget.contains(e.target)) {
+      start.current = null;
+      return;
+    }
     start.current = { x: e.clientX, y: e.clientY };
     moved.current = false;
   }, []);

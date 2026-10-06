@@ -31,9 +31,20 @@
     console.error("[perf] window.__odyEngine 이 없다. 개발 빌드로 지도 화면(/)을 연 뒤 다시 실행한다.");
     return;
   }
+  /*
+   * 지도 캔버스 = 화면에서 제일 크게 그려진 것 (미니맵과 구분).
+   *
+   * **`canvas.width`(백스토어) 가 아니라 렌더 크기로 고른다** (S15P21A405-438).
+   * 리사이즈가 아직 안 돌았으면 백스토어가 둘 다 기본값 300x150 이라 어느 쪽이 지도인지
+   * 구분이 안 되고, `reduce` 가 그냥 앞의 것을 집는다. 화면에 잡힌 크기는 그럴 일이 없다.
+   */
+  const area = (c) => {
+    const r = c.getBoundingClientRect();
+    return r.width * r.height;
+  };
   // 지도 캔버스 = 가장 큰 것 (미니맵과 구분)
   const canvas = [...document.querySelectorAll("canvas")].reduce((a, b) =>
-    a.width * a.height >= b.width * b.height ? a : b,
+    area(a) >= area(b) ? a : b,
   );
   const ctx = canvas.getContext("2d"); // 같은 컨텍스트 객체가 돌아온다 — 앱이 쓰는 그것
   if (!ctx) {
@@ -61,6 +72,53 @@
     draw.totalMs += dt;
     return r;
   };
+
+  // ── 1-b. 미니맵 캔버스 가로채기 (S15P21A405-438) ───────────────────────
+  /*
+   * 지금까지 계측은 **제일 큰 캔버스(지도) 하나만** 봤다. 그래서 미니맵 비용이 한 번도
+   * 잡히지 않았다 — PERF-LOG 의 `fillStyle` 이 프레임당 59회뿐인 것이 그 증거다
+   * (미니맵이 잡혔다면 별 하나당 한 번씩 세팅하므로 1,000대여야 한다).
+   *
+   * 하필 미니맵이 문제인 이유: **전체 조망이라 뷰포트 컬링이 원천적으로 불가능하다.**
+   * 화면 밖이라는 개념이 없어서 매 프레임 O(N) 평균 계산 한 번 + O(N) 그리기 한 번을 돈다.
+   * 메인 지도는 화면 밖 별을 걸러 `drawImage` 를 건너뛰므로 **화면 안 개수**에 비례하지만,
+   * 미니맵은 **N 그 자체**에 비례한다 — 곡 수를 올릴 때 유일하게 선형으로 커지는 그리기다.
+   *
+   * 미니맵은 스프라이트가 아니라 `fillRect` 로 점을 찍으므로 `drawImage` 래퍼에 안 걸린다.
+   * 그래서 여기서 따로 센다.
+   */
+  const miniCanvases = [...document.querySelectorAll("canvas")].filter((c) => c !== canvas);
+  const mini = { fillRect: 0, ms: 0, fillStyle: 0, canvases: miniCanvases.length };
+  const miniRestore = [];
+  for (const mc of miniCanvases) {
+    const mctx = mc.getContext("2d");
+    if (!mctx) continue;
+    const origFillRect = mctx.fillRect;
+    mctx.fillRect = function (...a) {
+      const s0 = performance.now();
+      const r = origFillRect.apply(this, a);
+      mini.ms += performance.now() - s0;
+      mini.fillRect++;
+      return r;
+    };
+    const md = Object.getOwnPropertyDescriptor(Object.getPrototypeOf(mctx), "fillStyle");
+    if (md?.set) {
+      Object.defineProperty(mctx, "fillStyle", {
+        configurable: true,
+        get() {
+          return md.get.call(this);
+        },
+        set(v) {
+          mini.fillStyle++;
+          return md.set.call(this, v);
+        },
+      });
+    }
+    miniRestore.push(() => {
+      mctx.fillRect = origFillRect;
+      delete mctx.fillStyle;
+    });
+  }
 
   // 상태 setter 는 프로토타입의 accessor 를 인스턴스 own property 로 덮어써서 센다
   const proto = Object.getPrototypeOf(ctx);
@@ -162,6 +220,7 @@
   // ── 7. 해제 ────────────────────────────────────────────────────────────
   ctx.drawImage = origDrawImage;
   for (const p of restoreProps) delete ctx[p];
+  for (const fn of miniRestore) fn();
   for (const fn of Object.keys(origPathFns)) ctx[fn] = origPathFns[fn];
   if (typeof origListener === "function") engine.snapListener = origListener;
   window.requestAnimationFrame = origRaf;
@@ -218,7 +277,12 @@
   const sumBytes = (arr) => arr.reduce((n, r) => n + (r.transferSize || 0), 0);
   const js = res.filter((r) => r.name.endsWith(".js") || r.name.includes("/_next/static/chunks/"));
   const imgs = res.filter((r) => r.initiatorType === "img" || /\.(png|jpe?g|webp|avif|gif|svg)(\?|$)/.test(r.name));
-  const songsReq = res.filter((r) => r.name.includes("/api/map/songs")).at(-1);
+  /*
+   * 지도 응답은 **`/bff/map/songs`** 다 (S15P21A405-438). 목 시절 경로 `/api/map/songs` 로 찾아서
+   * 실데이터가 붙은 뒤로는 map/songs 칸이 늘 비어 있었다 — 배포에서 `/api/` 는 백엔드 몫이라
+   * 우리 라우트는 전부 `/bff/` 로 옮겨 갔다 (S15P21A405-273).
+   */
+  const songsReq = res.filter((r) => r.name.includes("/bff/map/songs")).at(-1);
   const paint = Object.fromEntries(performance.getEntriesByType("paint").map((p) => [p.name, num(p.startTime)]));
 
   const vitals = {};
@@ -297,6 +361,19 @@
         "프레임당_globalAlpha": frames ? num(stateSets.globalAlpha / frames, 1) : null,
       },
       경로연산: pathOps,
+    },
+    /*
+     * 미니맵은 **메인 지도와 따로 센다** (S15P21A405-438).
+     * 전체 조망이라 뷰포트 컬링이 원천적으로 불가능해서, 화면 안 개수가 아니라 **N 그 자체**에
+     * 비례한다 — 곡 수를 올릴 때 유일하게 선형으로 커지는 그리기다.
+     */
+    미니맵: {
+      캔버스수: mini.canvases,
+      "총_fillRect": mini.fillRect,
+      "프레임당_fillRect": frames ? num(mini.fillRect / frames, 1) : null,
+      "프레임당_ms": frames ? num(mini.ms / frames) : null,
+      "fillStyle_변경": mini.fillStyle,
+      비고: "컬링 없음 — 화면 안 개수가 아니라 N 에 비례. step 은 N>3000 에서 2",
     },
     엔진: engineBench,
     React: {
@@ -431,6 +508,18 @@
     "",
     `합계 **${draw.calls ? report.그리기["프레임당_drawImage"] : 0}회/프레임**, ${cell(drawPerFrame, "ms")} ` +
       `(관찰자 효과 보정 후 ${cell(report.관찰자효과["보정후_그리기_프레임당_ms"], "ms")})`,
+    "",
+    "### 미니맵 (지도와 별개 — 컬링이 없어 N 에 정비례)",
+    "| 캔버스 | 프레임당 fillRect | 프레임당 ms | fillStyle 변경 |",
+    "|---|---|---|---|",
+    t([
+      [
+        report.미니맵.캔버스수,
+        report.미니맵["프레임당_fillRect"] ?? "미측정",
+        cell(report.미니맵["프레임당_ms"], "ms"),
+        report.미니맵["fillStyle_변경"],
+      ],
+    ]),
     "",
     "### 캔버스 상태 변경 (프레임당)",
     "| globalAlpha | compositeOp | fillStyle | strokeStyle | font |",

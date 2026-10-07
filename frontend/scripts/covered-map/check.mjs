@@ -14,6 +14,7 @@
  *   node scripts/covered-map/check.mjs return-next [회수]         재생·곡 넘김 뒤 돌아오기 (LOCATE=1 이면 "내 위치로 가기" 를 켜 따라가기)
  *   node scripts/covered-map/check.mjs cost [회수] [cpu]          랭킹 탭에서 live · shift · engine · engine15 비용 번갈아
  *   node scripts/covered-map/check.mjs far-return [회수]          따라가기 중 덮인 동안 먼 곡으로 옮긴 뒤 돌아오기 — 커버·커버 그림 요청 시점
+ *   node scripts/covered-map/check.mjs fly-return [회수]          탭에서 곡 확대를 시키고 곧바로 돌아오기 (LAYER=1 이면 겹 전환) — 새 별이 0 부터 밝아지나
  * 환경변수: ORIGIN(기본 http://localhost:3000) · MODES(live,naive,shift …) · LOCATE · NEXT_WAIT(ms) · FAR_WAIT(ms) · TAG · OUT(결과 폴더)
  * 준비(측정용 크롬·로그인)는 scripts/README.md.
  */
@@ -422,10 +423,57 @@ async function farReturn(rounds = 1) {
   fs.writeFileSync(path.join(OUT, `far-return-${process.env.TAG || "x"}.json`), JSON.stringify(all, null, 1));
 }
 
+// 탭 화면에서 무언가를 눌러 지도로 돌아가며 지도가 날아가는 흐름 (S15P21A405-737 확인용)
+// 랭킹 탭에 있는 채로 엔진에 곡 확대(focusSong)를 시키고 곧바로 지도 탭으로 돌아온다. LAYER=1 이면 다음 겹으로 전환하며 날아간다.
+// 돌아온 뒤 프레임마다 곡 별 수와 평균 밝기(밝기 합 ÷ 별 수)를 남긴다 — 새로 나타난 별이 0 부터 밝아지는지 본다.
+const FLY_EXPR = (layerShift) => `(async () => {
+  const cv = [...document.querySelectorAll('canvas')].sort((a, b) => b.width * b.height - a.width * a.height)[0];
+  const k = Object.keys(cv).find((k) => k.startsWith('__reactFiber$')); let f = cv[k], e = null;
+  while (f) { const p = f.memoizedProps; if (p && p.engine && typeof p.engine.frame === 'function') { e = p.engine; break; } f = f.return; }
+  if (!e) return { err: 'no-engine' };
+  // 지금 화면 가운데에서 70% 분위쯤 떨어진 곡 — 날아가는 동안 새 별이 들어온다
+  const c = { x: e.cam.cx, y: e.cam.cy }, ds = [];
+  for (let i = 0; i < e.N; i++) { if (!e.subset[i]) continue; const id = e.songs[i].musicId; const w = e.worldOf(id); if (w) ds.push([(w.x - c.x) ** 2 + (w.y - c.y) ** 2, id]); }
+  ds.sort((a, b) => a[0] - b[0]);
+  const id = ds[Math.floor(ds.length * 0.7)][1];
+  const layer = e.layer, target = ${layerShift} ? Math.min(layer + 1, 7) : null;
+  const m = window.__m; m.frames = []; m.rec = true;
+  e.focusSong(id, target);
+  const b = document.querySelector('[data-tabbar] button[aria-label="지도"]');
+  const tClick = performance.now(); b.click();
+  while (document.querySelector('[data-panel-screen]')) await new Promise((r) => setTimeout(r, 2));
+  const tGone = performance.now();
+  return { id, layer, target, anim: !!e.anim, tClick, tGone };
+})()`;
+async function flyReturn(rounds = 1) {
+  const all = [];
+  for (let r = 0; r < rounds; r++) {
+    const tab = await openTab(); const s = tab.s; const res = { round: r, origin: ORIGIN, layerShift: !!process.env.LAYER };
+    try {
+      await loadMap(s); await sleep(4000);
+      res.tabClick = await clickTab(s, "랭킹"); await sleep(1500);
+      res.visible = await ensureVisible(s, tab.targetId);
+      res.fly = await ev(s, FLY_EXPR(!!process.env.LAYER));
+      await sleep(1800);
+      const frames = await ev(s, "(window.__m.rec = false, window.__m.frames)");
+      const after = frames.filter((x) => x[0] >= res.fly.tGone);
+      res.after = after.map((x) => [Math.round(x[0] - res.fly.tGone), x[3], x[3] ? +(x[4] / x[3]).toFixed(3) : null]);
+    } catch (e) { res.error = String(e); }
+    finally { await tab.close(); }
+    all.push(res);
+    const a = res.after || [];
+    const at = (t) => { const x = a.find((y) => y[0] >= t); return x ? `${x[1]}개·${x[2]}` : "-"; };
+    console.log(JSON.stringify({ origin: ORIGIN, layerShift: res.layerShift, err: res.error || res.fly?.err, anim: res.fly?.anim, gone: res.fly && Math.round(res.fly.tGone - res.fly.tClick), frames: a.length,
+      "곡 별 수·평균 밝기": Object.fromEntries([0, 50, 100, 200, 300, 500, 800, 1500].map((t) => [t, at(t)])) }));
+  }
+  fs.writeFileSync(path.join(OUT, `fly-return-${process.env.TAG || "x"}.json`), JSON.stringify(all, null, 1));
+}
+
 if (CMD === "glass") await glass(A1 || "랭킹", A2 === "play" || A3 === "play", A2 === "next" || A3 === "next");
 else if (CMD === "return") await returnTest(Number(A1 || 2));
 else if (CMD === "playdebug") await playDebug();
 else if (CMD === "return-next") await returnNext(Number(A1 || 1));
 else if (CMD === "cost") await costBench(Number(A1 || 3), Number(A2 || 4));
 else if (CMD === "far-return") await farReturn(Number(A1 || 1));
+else if (CMD === "fly-return") await flyReturn(Number(A1 || 1));
 process.exit(0);

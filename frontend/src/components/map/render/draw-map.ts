@@ -51,18 +51,15 @@ const seenAt = new Map<number, { first: number; last: number }>();
  * 지도가 통째로 덮여 그리기를 건너뛰다가 다시 그리는 첫 프레임의 시각 (S15P21A405-737, `map-canvas.tsx`).
  *
  * 건너뛴 동안은 `last` 가 그때에 멈춰 있다. 그대로 두면 보이던 별이 전부 "한동안 안 그려진 별" 이 되어
- * 0 부터 다시 밝아진다(0.38초). 계속 그렸다면 이미 다 떠 있었을 별들이므로, 이 프레임에 만나는 별은
- * 다 밝아진 것으로 친다.
+ * 0 부터 다시 밝아지고(0.38초), 기억이 불었으면 아예 잊힌다. **건너뛴 시간은 안 그려진 시간으로 치지
+ * 않는다** — 이 프레임에는 다시 밝히지도 잊지도 않는다. 처음 보는 별은 그대로 0 부터 밝아진다
+ * (돌아오며 곡을 골라 지도가 날아가거나 겹이 바뀌면 새로 나타나는 별이 있다).
  */
 let settleAt = Number.NEGATIVE_INFINITY;
 export function settleAppear(t: number) {
   settleAt = t;
 }
 function appear(id: number, t: number) {
-  if (t === settleAt) {
-    seenAt.set(id, { first: t - STAR_VIEW.appearMs / 1000, last: t });
-    return 1;
-  }
   const e = seenAt.get(id);
   if (!e) {
     seenAt.set(id, { first: t, last: t });
@@ -70,7 +67,7 @@ function appear(id: number, t: number) {
   }
   // 한동안 안 그려졌다면(집합에서 빠졌다가 돌아온 별) 다시 처음부터 밝아진다 — 안 그러면 예전에 본
   // 별은 기록이 남아 있어 **뚝** 하고 나온다 (S15P21A405-284)
-  if ((t - e.last) * 1000 > STAR_VIEW.reappearGapMs) e.first = t;
+  if (t !== settleAt && (t - e.last) * 1000 > STAR_VIEW.reappearGapMs) e.first = t;
   e.last = t;
   return Math.min(1, ((t - e.first) * 1000) / STAR_VIEW.appearMs);
 }
@@ -84,7 +81,7 @@ function appear(id: number, t: number) {
  * 화면에 있는 별은 절대 대상이 되지 않는다.
  */
 function forgetStale(t: number) {
-  if (seenAt.size <= STAR_VIEW.memoryCap) return;
+  if (seenAt.size <= STAR_VIEW.memoryCap || t === settleAt) return;
   for (const [id, e] of seenAt) if ((t - e.last) * 1000 > STAR_VIEW.forgetMs) seenAt.delete(id);
 }
 
@@ -95,8 +92,7 @@ function forgetStale(t: number) {
 function touch(id: number, t: number) {
   const e = seenAt.get(id);
   if (e) e.last = t;
-  // 덮였다 돌아온 프레임에 처음 만난 화면 밖 별도 이미 떠 있던 것으로 친다 (S15P21A405-737, `settleAppear`)
-  else seenAt.set(id, { first: t === settleAt ? t - STAR_VIEW.appearMs / 1000 : t, last: t });
+  else seenAt.set(id, { first: t, last: t });
 }
 
 /**

@@ -8,6 +8,8 @@
 | `../PERF-LOG.md` | 측정 기록 (표 + 상세 JSON). 스크립트가 자동으로 덧붙인다 |
 | `../src/app/dev-perf-log/route.ts` | 자동 기록을 받는 **개발 전용** 라우트 |
 | `login-bench.mjs` | **배포본 로딩**을 잰다 — 로그인 상태에서 첫 곡이 그려지기까지, 망·CPU 를 고정해서. 쓰는 법은 파일 머리 주석 |
+| `baseline-bench.mjs` | **로컬 배포용 빌드**의 기준선 — 첫 화면 JS·첫 곡까지·탭 화면에 덮인 지도 비용, 그리고 묶음 앞뒤 **기준 측정** (S15P21A405-737) |
+| `covered-map/` | 탭 화면에 가려진 지도 멈춤의 비포·애프터 비용(`bench.mjs`), 화면 확인·대안 흉내(`check.mjs`), 유리 뒤 픽셀 비교(`pixels*.mjs`), 로딩 중 그리기 실험(`loading-hold.mjs`). 결과는 [성능 기록 007](../docs/performance/007-covered-map-pause.md) |
 
 `perf-bench.js` 는 개발 빌드의 **그리기**를, `login-bench.mjs` 는 배포본의 **로딩**을 잰다. 배포 빌드엔 `__odyEngine` 이 없어서
 `perf-bench.js` 는 배포본에서 돌지 않는다.
@@ -52,6 +54,27 @@
 
 측정할 동작이 있으면 **스크립트를 붙여넣은 뒤 5초 동안 직접 조작한다.** 예를 들어 "줌 중
 리렌더가 몇 번인가"는 그 5초 동안 휠을 굴려야 나온다. 가만히 두면 정지 상태의 숫자만 나온다.
+
+## 로컬 배포용 빌드를 폰 조건으로 잴 때 (`baseline-bench.mjs` · `covered-map/`)
+
+개발 빌드는 배포본보다 느려서 비교에 못 쓴다. 배포용 빌드를 로컬에 띄우고 측정용 크롬에 CDP 로 붙는다.
+
+1. **빌드를 띄운다.** `npm run build` 뒤 `.next/static` 을 `.next/standalone/.next/static` 으로, `public` 을
+   `.next/standalone/public` 으로 복사하고 `node .next/standalone/server.js` (3000). 비포·애프터를 같이 재려면 비포 빌드의
+   `standalone` 폴더를 다른 곳에 복사해 두고 `PORT=3001` 로 띄운다 — `covered-map/bench.mjs` 는 비포 3001 · 애프터 3000 을 본다.
+2. **측정용 크롬을 띄운다.** 가려지거나 최소화되면 rAF 가 멈춰 숫자가 망가지므로 가려짐 방지 플래그를 꼭 붙인다.
+   ```
+   "C:/Program Files/Google/Chrome/Application/chrome.exe" --remote-debugging-port=9335 --user-data-dir=<임시폴더>
+     --no-first-run --no-default-browser-check --disable-extensions --disable-site-isolation-trials
+     --disable-features=IsolateOrigins,site-per-process --disable-backgrounding-occluded-windows
+     --disable-renderer-backgrounding --disable-background-timer-throttling --disable-background-networking
+   ```
+3. **로그인한다.** 그 창에서 `http://localhost:3000` 에 직접 로그인한다(`node scripts/baseline-bench.mjs wait-login` 이 기다린다).
+   3001 도 재려면 `node scripts/covered-map/copy-login.mjs` 로 로그인 상태를 옮긴다.
+4. **충전기를 꽂고, 기준 측정으로 묶는다.** 같은 빌드·같은 데이터인데 배터리로 연속 부하를 주면 지도 한 프레임이
+   21.9 → 약 50ms 로 느려졌다. 묶음 앞뒤로 `COVER_CPU=1 node scripts/baseline-bench.mjs cover 1` 의 지도 한 프레임을 재고
+   15% 넘게 흔들린 묶음은 버린다. `covered-map/run.sh` 가 이 순서로 돈다. **날을 넘겨 비교하지 않는다.**
+5. 캡처·JSON 결과는 `OUT` 환경변수 폴더(기본: OS 임시 폴더의 `ody-covered-map`)에 쌓인다.
 
 ## 무엇을 재나
 

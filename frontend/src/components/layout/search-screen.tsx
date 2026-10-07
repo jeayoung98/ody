@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useEffect } from "react";
 import { CloseIcon, SearchIcon } from "@/components/common/icons";
 import { ROUTES } from "@/constants";
+import { useCoverMap } from "@/hooks/use-cover-map";
 import { CHIP_LABEL, useMusicSearch } from "@/hooks/use-music-search";
 import type { MusicSearchResult } from "@/types";
 import SearchResultList from "./search-result-list";
@@ -22,6 +23,9 @@ export default function SearchScreen() {
   const { input, setInput, chip, inputRef, condition, results, query, select, promote, removeChip, analytics } =
     useMusicSearch({ visible: true, source: "search_page" });
   const { isSuccess, isError, refetch, hasNextPage, isFetchingNextPage, fetchNextPage } = query;
+
+  // 바탕이 불투명해 지도가 아예 안 보인다 — 그동안 지도는 그리기를 쉰다 (S15P21A405-737)
+  useCoverMap();
 
   // 들어오자마자 키보드가 올라오게 한다 — 검색하러 온 화면이다
   useEffect(() => {

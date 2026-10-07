@@ -47,7 +47,22 @@ function twinkle(id: number, t: number, mag: number) {
  * 한동안 안 보인 별은 잊어서, 다시 나타날 때 또 부드럽게 밝아진다.
  */
 const seenAt = new Map<number, { first: number; last: number }>();
+/**
+ * 지도가 통째로 덮여 그리기를 건너뛰다가 다시 그리는 첫 프레임의 시각 (S15P21A405-737, `map-canvas.tsx`).
+ *
+ * 건너뛴 동안은 `last` 가 그때에 멈춰 있다. 그대로 두면 보이던 별이 전부 "한동안 안 그려진 별" 이 되어
+ * 0 부터 다시 밝아진다(0.38초). 계속 그렸다면 이미 다 떠 있었을 별들이므로, 이 프레임에 만나는 별은
+ * 다 밝아진 것으로 친다.
+ */
+let settleAt = Number.NEGATIVE_INFINITY;
+export function settleAppear(t: number) {
+  settleAt = t;
+}
 function appear(id: number, t: number) {
+  if (t === settleAt) {
+    seenAt.set(id, { first: t - STAR_VIEW.appearMs / 1000, last: t });
+    return 1;
+  }
   const e = seenAt.get(id);
   if (!e) {
     seenAt.set(id, { first: t, last: t });
@@ -80,7 +95,8 @@ function forgetStale(t: number) {
 function touch(id: number, t: number) {
   const e = seenAt.get(id);
   if (e) e.last = t;
-  else seenAt.set(id, { first: t, last: t });
+  // 덮였다 돌아온 프레임에 처음 만난 화면 밖 별도 이미 떠 있던 것으로 친다 (S15P21A405-737, `settleAppear`)
+  else seenAt.set(id, { first: t === settleAt ? t - STAR_VIEW.appearMs / 1000 : t, last: t });
 }
 
 /**

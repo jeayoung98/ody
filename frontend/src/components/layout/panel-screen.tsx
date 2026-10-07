@@ -3,6 +3,7 @@
 import { useRouter } from "next/navigation";
 import { useEffect, type ReactNode } from "react";
 import { ROUTES } from "@/constants";
+import { useCoverMap } from "@/hooks/use-cover-map";
 import { usePanelEnabled } from "@/hooks/use-features";
 import type { PanelType } from "@/constants";
 
@@ -62,6 +63,9 @@ export default function PanelScreen({ panel, children }: { panel: PanelType; chi
   useEffect(() => {
     if (!enabled) router.replace(ROUTES.home);
   }, [enabled, router]);
+
+  // 화면 전체를 덮으므로 그동안 지도는 그리기를 쉰다 (S15P21A405-737)
+  useCoverMap(enabled);
 
   if (!enabled) return null;
 

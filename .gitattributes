@@ -20,3 +20,6 @@
 *.nvmrc text eol=lf
 *.bat text eol=crlf
 *.jar binary
+
+specs/realtime-diagrams/*.html linguist-generated=true
+data/specs/19_videoid_api/*.html linguist-generated=true
